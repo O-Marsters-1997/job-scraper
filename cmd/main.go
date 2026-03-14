@@ -3,18 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
+	"github.com/ollymarsters/job-scraper/internal/utils"
 )
 
 func main() {
+	slog.SetDefault(logger.New())
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -23,11 +27,10 @@ func main() {
 
 	db, err := db.New(ctx, connString)
 	if err != nil {
-		log.Fatalf("db init: %v", err)
+		slog.Error("db init failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 	defer db.Close()
-
-	fmt.Println("connected to postgres")
 
 	// ── Valkey ────────────────────────────────────────────────────────────────
 	valkeyAddr := os.Getenv("VALKEY_ADDR")
@@ -37,26 +40,34 @@ func main() {
 
 	q, err := queue.New(valkeyAddr)
 	if err != nil {
-		log.Fatalf("queue init: %v", err)
+		slog.Error("queue init failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 	defer q.Close()
-
-	fmt.Println("connected to valkey")
 
 	// ── Scrape ───────────────────────────────────────────────────────────────
 	scraper, err := greenhouse.New(greenhouse.Config{
 		BoardTokens: []string{"greenhouse"},
 	})
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("scraper init failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	jobs, err := scraper.FetchJobs(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrape error: %v\n", err)
+		slog.Error("scrape error", slog.String("source", scraper.Name()), slog.Any("err", err))
 	}
 
-	fmt.Printf("scraped %d jobs from %s\n", len(jobs), scraper.Name())
+	slog.Info("scrape complete", slog.String("source", scraper.Name()), slog.Int("count", len(jobs)))
+
+	// ── Persist ──────────────────────────────────────────────────────────────
+	if err := db.UpsertJobs(ctx, jobs); err != nil {
+		slog.Error("upsert jobs failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+
+	slog.Info("jobs persisted", slog.Int("count", len(jobs)))
 
 	// ── Deduplicate ──────────────────────────────────────────────────────────
 	seen := make(map[string]struct{}, len(jobs))
@@ -72,15 +83,15 @@ func main() {
 		urls = append(urls, j.URL)
 	}
 
-	fmt.Printf("unique urls: %d\n", len(urls))
+	slog.Info("deduplication complete", slog.Int("unique", len(urls)))
 
 	// ── Enqueue ──────────────────────────────────────────────────────────────
 	if err := q.Enqueue(ctx, urls, time.Now()); err != nil {
-		log.Fatalf("enqueue: %v", err)
+		slog.Error("enqueue failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 
-	fmt.Printf("enqueued %d urls into jobs:pending\n", len(urls))
-
+	slog.Info("enqueue complete", slog.Int("count", len(urls)))
 }
 
 func postgresConnString() string {
@@ -88,18 +99,11 @@ func postgresConnString() string {
 		return dsn
 	}
 
-	host := envOr("POSTGRES_HOST", "localhost")
-	port := envOr("POSTGRES_PORT", "5433")
-	user := envOr("POSTGRES_USER", "postgres")
-	pass := envOr("POSTGRES_PASSWORD", "postgres")
-	name := envOr("POSTGRES_DB", "job_scraper")
+	host := utils.MustGetEnv("POSTGRES_HOST")
+	port := utils.MustGetEnv("POSTGRES_PORT")
+	user := utils.MustGetEnv("POSTGRES_USER")
+	pass := utils.MustGetEnv("POSTGRES_PASSWORD")
+	name := utils.MustGetEnv("POSTGRES_DB")
 
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, port, name)
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -63,12 +64,16 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]sources.Job, error) {
 			return all, err
 		}
 
+		slog.Debug("fetching board", slog.String("source", s.Name()), slog.String("token", token))
+
 		jobs, err := s.fetchBoard(ctx, token)
 		if err != nil {
+			slog.Error("board fetch failed", slog.String("source", s.Name()), slog.String("token", token), slog.Any("err", err))
 			errs = append(errs, fmt.Errorf("greenhouse/%s: %w", token, err))
 			continue
 		}
 
+		slog.Info("board fetch complete", slog.String("source", s.Name()), slog.String("token", token), slog.Int("count", len(jobs)))
 		all = append(all, jobs...)
 	}
 

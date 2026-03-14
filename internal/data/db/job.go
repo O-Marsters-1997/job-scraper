@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
@@ -10,6 +11,7 @@ import (
 )
 
 func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
+	slog.Debug("upserting job", slog.String("url", job.URL), slog.String("source", job.Source))
 	_, err := pgsqlc.New(db.pool).UpsertJob(ctx, pgsqlc.UpsertJobParams{
 		Title:       job.Title,
 		Location:    job.Location,
@@ -22,6 +24,8 @@ func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
 }
 
 func (db *DB) UpsertJobs(ctx context.Context, jobs []sources.Job) error {
+	slog.Debug("upserting jobs", slog.Int("count", len(jobs)))
+
 	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
 	for i, job := range jobs {
 		params[i] = pgsqlc.UpsertJobsParams{
@@ -33,13 +37,18 @@ func (db *DB) UpsertJobs(ctx context.Context, jobs []sources.Job) error {
 			UpdatedAt:   pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true},
 		}
 	}
+
 	results := pgsqlc.New(db.pool).UpsertJobs(ctx, params)
 	defer results.Close()
+
 	var errs []error
-	results.Exec(func(_ int, err error) {
+	results.Exec(func(i int, err error) {
 		if err != nil {
+			slog.Error("job upsert failed", slog.String("url", jobs[i].URL), slog.Any("err", err))
 			errs = append(errs, err)
 		}
 	})
+
+	slog.Info("jobs upserted", slog.Int("count", len(jobs)-len(errs)))
 	return errors.Join(errs...)
 }
