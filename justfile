@@ -14,6 +14,12 @@ build:
 run *args:
     go run ./cmd {{args}}
 
+# ── Code generation ───────────────────────────────────────────────────────────
+
+# generate typed Go code from SQL files (requires sqlc: brew install sqlc)
+generate:
+    sqlc generate
+
 # ── Code quality ──────────────────────────────────────────────────────────────
 
 # format all Go files
