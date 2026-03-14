@@ -81,7 +81,6 @@ func main() {
 
 	fmt.Printf("enqueued %d urls into jobs:pending\n", len(urls))
 
-	_ = db // db will be used by repository layer once added
 }
 
 func postgresConnString() string {

@@ -1,5 +1,8 @@
 # job-scraper dev tasks
 
+DB_URL         := "postgres://postgres:postgres@localhost:5433/job_scraper"
+MIGRATIONS_DIR := "scripts/migrations"
+
 # list available recipes
 default:
     @just --list
@@ -9,6 +12,7 @@ default:
 # build the binary
 build:
     go build -o bin/scraper ./cmd
+    go build -o bin/migrate ./scripts/migrate
 
 # run the scraper
 run *args:
@@ -49,6 +53,24 @@ up:
 # stop all services
 down:
     docker compose down
+
+# ── Migrations ────────────────────────────────────────────────────────────────
+
+# show migration status
+migrate-status:
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" status
+
+# apply all pending migrations
+migrate-up:
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" up
+
+# rollback last migration
+migrate-down:
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" down
+
+# create a new named migration: just migrate-create add_index_on_url
+migrate-create name:
+    goose -dir {{MIGRATIONS_DIR}} create {{name}} sql
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
