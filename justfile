@@ -33,6 +33,17 @@ test:
 test-race:
     go test -race ./...
 
+# ── Services ──────────────────────────────────────────────────────────────────
+
+# start all services (postgres + valkey)
+up:
+    docker compose up -d
+    @echo "services ready"
+
+# stop all services
+down:
+    docker compose down
+
 # ── Database ──────────────────────────────────────────────────────────────────
 
 # start postgres
@@ -56,3 +67,13 @@ db-logs:
 # open a psql shell
 db-shell:
     docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB
+
+# ── Valkey ────────────────────────────────────────────────────────────────────
+
+# open a valkey-cli shell
+valkey-shell:
+    docker compose exec valkey valkey-cli
+
+# list all URLs in the pending jobs sorted set (with scores)
+queue-list:
+    docker compose exec valkey valkey-cli ZRANGE jobs:pending 0 -1 WITHSCORES
