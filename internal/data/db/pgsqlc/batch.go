@@ -3,7 +3,7 @@
 //   sqlc v1.30.0
 // source: batch.go
 
-package repository
+package pgsqlc
 
 import (
 	"context"

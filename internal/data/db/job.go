@@ -5,12 +5,12 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	repository "github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
-	_, err := repository.New(db.pool).UpsertJob(ctx, repository.UpsertJobParams{
+	_, err := pgsqlc.New(db.pool).UpsertJob(ctx, pgsqlc.UpsertJobParams{
 		Title:       job.Title,
 		Location:    job.Location,
 		Url:         job.URL,
@@ -22,9 +22,9 @@ func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
 }
 
 func (db *DB) UpsertJobs(ctx context.Context, jobs []sources.Job) error {
-	params := make([]repository.UpsertJobsParams, len(jobs))
+	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
 	for i, job := range jobs {
-		params[i] = repository.UpsertJobsParams{
+		params[i] = pgsqlc.UpsertJobsParams{
 			Title:       job.Title,
 			Location:    job.Location,
 			Url:         job.URL,
@@ -33,7 +33,7 @@ func (db *DB) UpsertJobs(ctx context.Context, jobs []sources.Job) error {
 			UpdatedAt:   pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true},
 		}
 	}
-	results := repository.New(db.pool).UpsertJobs(ctx, params)
+	results := pgsqlc.New(db.pool).UpsertJobs(ctx, params)
 	defer results.Close()
 	var errs []error
 	results.Exec(func(_ int, err error) {
