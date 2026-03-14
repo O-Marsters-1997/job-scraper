@@ -113,11 +113,11 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]sources.Job, 
 	for _, gj := range payload.Jobs {
 		updatedAt, _ := time.Parse(time.RFC3339, gj.UpdatedAt)
 		jobs = append(jobs, sources.Job{
-			ID:          gj.ID,
 			Title:       gj.Title,
 			Location:    gj.Location.Name,
 			URL:         gj.AbsoluteURL,
 			CompanySlug: token,
+			Source:      s.Name(),
 			UpdatedAt:   updatedAt,
 		})
 	}

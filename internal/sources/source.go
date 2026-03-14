@@ -7,11 +7,11 @@ import (
 
 // Job is the normalised representation of a job posting across all sources.
 type Job struct {
-	ID          int64
 	Title       string
 	Location    string
 	URL         string
 	CompanySlug string // board token / slug used to fetch the job
+	Source      string // canonical source name, e.g. "greenhouse"
 	UpdatedAt   time.Time
 }
 

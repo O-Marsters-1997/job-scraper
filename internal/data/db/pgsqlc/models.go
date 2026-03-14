@@ -9,7 +9,7 @@ import (
 )
 
 type Job struct {
-	ID          int64
+	ID          pgtype.UUID
 	Title       string
 	Location    string
 	Url         string
