@@ -80,6 +80,12 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
 	return all, errors.Join(errs...)
 }
 
+// Iterate implements sources.Source. Greenhouse boards are not paginated at
+// the scrape level so this delegates directly to FetchJobs.
+func (s *Scraper) Iterate(ctx context.Context) ([]dto.Job, error) {
+	return s.FetchJobs(ctx)
+}
+
 func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
 	url := fmt.Sprintf("%s/%s/jobs", baseURL, token)
 
