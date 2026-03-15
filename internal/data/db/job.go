@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
+func (db *DB) UpsertJob(ctx context.Context, job dto.Job) error {
 	slog.Debug("upserting job", slog.String("url", job.URL), slog.String("source", job.Source))
 	_, err := pgsqlc.New(db.pool).UpsertJob(ctx, pgsqlc.UpsertJobParams{
 		Title:       job.Title,
@@ -23,7 +23,7 @@ func (db *DB) UpsertJob(ctx context.Context, job sources.Job) error {
 	return err
 }
 
-func (db *DB) UpsertJobs(ctx context.Context, jobs []sources.Job) error {
+func (db *DB) UpsertJobs(ctx context.Context, jobs []dto.Job) error {
 	slog.Debug("upserting jobs", slog.Int("count", len(jobs)))
 
 	params := make([]pgsqlc.UpsertJobsParams, len(jobs))

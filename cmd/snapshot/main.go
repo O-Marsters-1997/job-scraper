@@ -1,9 +1,3 @@
-// snapshot is a CLI for managing HTML snapshots used in scraper tests.
-//
-// Usage:
-//
-//	snapshot download <source> <name> <url>   — fetch URL and save HTML
-//	snapshot rebase <source>                   — re-run parser and update JSON
 package main
 
 import (
@@ -16,11 +10,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 )
 
-var parsers = map[string]func(io.Reader) ([]sources.Job, error){
+var parsers = map[string]func(io.Reader) ([]dto.Job, error){
 	"wis": wis.ParseHTML,
 }
 
@@ -137,11 +131,8 @@ func rebase(source string) error {
 	return nil
 }
 
-// snapshotDir returns the path to internal/sources/<source>/snapshots/ relative
-// to the module root, located via the source file's position at compile time.
 func snapshotDir(source string) string {
 	_, filename, _, _ := runtime.Caller(0)
-	// filename is .../cmd/snapshot/main.go; module root is two levels up
 	moduleRoot := filepath.Join(filepath.Dir(filename), "../..")
 	return filepath.Join(moduleRoot, "internal", "sources", source, "snapshots")
 }

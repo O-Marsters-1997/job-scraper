@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var baseJob = sources.Job{
+var baseJob = dto.Job{
 	Title:       "Software Engineer",
 	Location:    "London",
 	URL:         "https://example.com/jobs/1",
@@ -34,7 +34,7 @@ var jobCmpOpts = cmp.Options{
 
 // jobFromSource builds the expected pgsqlc.Job from a sources.Job for use in
 // cmp.Diff assertions.
-func jobFromSource(j sources.Job) pgsqlc.Job {
+func jobFromSource(j dto.Job) pgsqlc.Job {
 	return pgsqlc.Job{
 		Title:       j.Title,
 		Location:    j.Location,
@@ -97,7 +97,7 @@ func TestUpsertJobs(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		jobs := []sources.Job{
+		jobs := []dto.Job{
 			baseJob,
 			{
 				Title:       "Product Manager",
@@ -134,7 +134,7 @@ func TestUpsertJobs(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.UpsertJobs(ctx, []sources.Job{baseJob}); err != nil {
+		if err := testDB.UpsertJobs(ctx, []dto.Job{baseJob}); err != nil {
 			t.Fatalf("first UpsertJobs: %v", err)
 		}
 
@@ -143,7 +143,7 @@ func TestUpsertJobs(t *testing.T) {
 		updated.Location = "Remote"
 		updated.UpdatedAt = time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC)
 
-		if err := testDB.UpsertJobs(ctx, []sources.Job{updated}); err != nil {
+		if err := testDB.UpsertJobs(ctx, []dto.Job{updated}); err != nil {
 			t.Fatalf("second UpsertJobs: %v", err)
 		}
 
@@ -169,7 +169,7 @@ func TestUpsertJobs(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.UpsertJobs(ctx, []sources.Job{}); err != nil {
+		if err := testDB.UpsertJobs(ctx, []dto.Job{}); err != nil {
 			t.Fatalf("UpsertJobs with empty slice: %v", err)
 		}
 	})

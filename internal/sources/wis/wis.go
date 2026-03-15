@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 const (
@@ -37,7 +37,7 @@ func (s *Scraper) Name() string { return "wis" }
 
 // FetchJobs implements sources.Source. It fetches the WIS search page and
 // parses job listings from the HTML response.
-func (s *Scraper) FetchJobs(ctx context.Context) ([]sources.Job, error) {
+func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, startURL, nil)
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]sources.Job, error) {
 
 // ParseHTML parses a WIS search results page and returns job listings.
 // UpdatedAt is left as zero — callers that need a timestamp should set it themselves.
-func ParseHTML(r io.Reader) ([]sources.Job, error) {
+func ParseHTML(r io.Reader) ([]dto.Job, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, fmt.Errorf("parse html: %w", err)
@@ -80,8 +80,8 @@ func ParseHTML(r io.Reader) ([]sources.Job, error) {
 
 // extractJobs walks the HTML tree collecting job cards.
 // Each job is wrapped in a <div data-aid="..."> element.
-func extractJobs(n *html.Node) []sources.Job {
-	var jobs []sources.Job
+func extractJobs(n *html.Node) []dto.Job {
+	var jobs []dto.Job
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "div" {
@@ -100,7 +100,7 @@ func extractJobs(n *html.Node) []sources.Job {
 	return jobs
 }
 
-func parseJobCard(card *html.Node) (sources.Job, bool) {
+func parseJobCard(card *html.Node) (dto.Job, bool) {
 	var title, jobURL, company, location string
 
 	// h2 > a holds the title and job detail URL
@@ -118,7 +118,7 @@ func parseJobCard(card *html.Node) (sources.Job, bool) {
 	}
 
 	if title == "" || jobURL == "" {
-		return sources.Job{}, false
+		return dto.Job{}, false
 	}
 
 	// <div class="ui-company" data-company-name="...">
@@ -140,7 +140,7 @@ func parseJobCard(card *html.Node) (sources.Job, bool) {
 		location = strings.TrimSpace(textContent(locationDiv))
 	}
 
-	return sources.Job{
+	return dto.Job{
 		Title:       title,
 		URL:         jobURL,
 		CompanySlug: company,

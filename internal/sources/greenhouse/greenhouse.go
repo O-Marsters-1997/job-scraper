@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 const (
@@ -53,9 +53,9 @@ func (s *Scraper) Name() string { return "greenhouse" }
 // FetchJobs implements sources.Source. It calls the Greenhouse Job Board API
 // once per configured board token and returns all open job postings.
 // Per-token errors are collected; partial results are returned alongside errors.
-func (s *Scraper) FetchJobs(ctx context.Context) ([]sources.Job, error) {
+func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
 	var (
-		all  []sources.Job
+		all  []dto.Job
 		errs []error
 	)
 
@@ -80,7 +80,7 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]sources.Job, error) {
 	return all, errors.Join(errs...)
 }
 
-func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]sources.Job, error) {
+func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
 	url := fmt.Sprintf("%s/%s/jobs", baseURL, token)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -114,10 +114,10 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]sources.Job, 
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 
-	jobs := make([]sources.Job, 0, len(payload.Jobs))
+	jobs := make([]dto.Job, 0, len(payload.Jobs))
 	for _, gj := range payload.Jobs {
 		updatedAt, _ := time.Parse(time.RFC3339, gj.UpdatedAt)
-		jobs = append(jobs, sources.Job{
+		jobs = append(jobs, dto.Job{
 			Title:       gj.Title,
 			Location:    gj.Location.Name,
 			URL:         gj.AbsoluteURL,
