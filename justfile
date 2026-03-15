@@ -105,3 +105,9 @@ valkey-shell:
 # list all URLs in the pending jobs sorted set (with scores)
 queue-list:
     docker compose exec valkey valkey-cli ZRANGE jobs:pending 0 -1 WITHSCORES
+
+# ── Snapshots ─────────────────────────────────────────────────────────────────
+
+# run the snapshot CLI: just cli download wis page1 "https://..." | just cli rebase wis
+cli *args:
+    go run ./cmd/snapshot {{args}}

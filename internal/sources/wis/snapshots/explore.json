@@ -1,0 +1,402 @@
+[
+  {
+    "Title": "Senior Software Engineer (AIX)",
+    "Location": "London, ENG",
+    "URL": "https://workinstartups.com/details/5666303758",
+    "CompanySlug": "OVO Energy",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "FinOps Analyst",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5666302388",
+    "CompanySlug": "Octopus Energy",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Colocation Infrastructure",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5666301332",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Staff Machine Learning Engineer",
+    "Location": "London, London",
+    "URL": "https://workinstartups.com/details/5666299420",
+    "CompanySlug": "Permutive",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Applied Agentic AI Strategist",
+    "Location": "London, 30 Fenchurch Street",
+    "URL": "https://workinstartups.com/details/5666286858",
+    "CompanySlug": "Accenture",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Principal Architect",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5666285600",
+    "CompanySlug": "moo.com",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Software Engineer - Data/Backend",
+    "Location": "London, WC2H 9JA",
+    "URL": "https://workinstartups.com/details/5666068519",
+    "CompanySlug": "Captify",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Software Engineer - Semantics",
+    "Location": "London, WC2H 9JA",
+    "URL": "https://workinstartups.com/details/5666068482",
+    "CompanySlug": "Captify",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Software Engineer",
+    "Location": "City of London, London",
+    "URL": "https://workinstartups.com/details/5665888027",
+    "CompanySlug": "Grip",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Search Client Infrastructure Platform",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5665811636",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Interim Product Design Director",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5665230447",
+    "CompanySlug": "Moneybox",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Data center Colo Infrastructure",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5665229270",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Software Engineer - Platform",
+    "Location": "London, London, EC1Y 8LZ",
+    "URL": "https://workinstartups.com/details/5665229016",
+    "CompanySlug": "FundApps",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Product Manager - Mobile App",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5665228822",
+    "CompanySlug": "Zopa",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Principal Product Manager - Agentic Case Remediation",
+    "Location": "London, ENG",
+    "URL": "https://workinstartups.com/details/5665228749",
+    "CompanySlug": "ComplyAdvantage",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Developer Relations Engineer, Android and Play, Games",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5665228587",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Product Manager - Vault Payments",
+    "Location": "London, London",
+    "URL": "https://workinstartups.com/details/5665227842",
+    "CompanySlug": "Thought Machine",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Search Client Infrastructure Platform",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5665227578",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Principal Product Manager - Transaction Monitoring",
+    "Location": "London, ENG",
+    "URL": "https://workinstartups.com/details/5665225915",
+    "CompanySlug": "ComplyAdvantage",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Data Science Manager, Business Banking",
+    "Location": "Cardiff, London or Remote",
+    "URL": "https://workinstartups.com/details/5665225874",
+    "CompanySlug": "Monzo Bank",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Program Manager, Cloud Regulatory Response",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5665224929",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Operating Principal, CEO Office",
+    "Location": "London, ENG",
+    "URL": "https://workinstartups.com/details/5665223829",
+    "CompanySlug": "SumUp",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Software Engineer (Data \u0026 AI Platform)",
+    "Location": "London, ENG",
+    "URL": "https://workinstartups.com/details/5665223354",
+    "CompanySlug": "OVO Energy",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Engineering Manager (Product)",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5665217204",
+    "CompanySlug": "accuRx",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "GTM - AI Agents",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5665211769",
+    "CompanySlug": "Lottie",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Collections Operations Manager",
+    "Location": "London, London",
+    "URL": "https://workinstartups.com/details/5665201520",
+    "CompanySlug": "Marshmallow",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Web Analyst, Growth \u0026 Marketing",
+    "Location": "Cardiff, London or Remote",
+    "URL": "https://workinstartups.com/details/5665196476",
+    "CompanySlug": "Monzo Bank",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Applied Agentic AI Strategist",
+    "Location": "London, South East England",
+    "URL": "https://workinstartups.com/details/5664587594",
+    "CompanySlug": "Accenture",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Program Manager, Cloud Regulatory Response",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5664205169",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Colocation Infrastructure",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5664205174",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Data center Colo Infrastructure",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5664205177",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Developer Relations Engineer, Android and Play, Games",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5664205168",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Lead Engineer",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5662944128",
+    "CompanySlug": "Searchland",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Head of Engineering",
+    "Location": "London, W4 5PY",
+    "URL": "https://workinstartups.com/details/5662813417",
+    "CompanySlug": "So Energy",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Product Designer",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5662466851",
+    "CompanySlug": "Converge",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Product Specialist",
+    "Location": "London, EC2A 2AP",
+    "URL": "https://workinstartups.com/details/5662027052",
+    "CompanySlug": "Hadean",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Chief Product Officer - Digital Assets - eFinancialCareers",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5661817834",
+    "CompanySlug": "eFinancialCareers",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Junior Prompt Product Engineer",
+    "Location": "London,",
+    "URL": "https://workinstartups.com/details/5661494775",
+    "CompanySlug": "Focaldata",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Product Analyst (Current Account)",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5661489337",
+    "CompanySlug": "Zopa",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Clinical Director",
+    "Location": "London, London",
+    "URL": "https://workinstartups.com/details/5661487104",
+    "CompanySlug": "Heidi",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Account Executive",
+    "Location": "London, London",
+    "URL": "https://workinstartups.com/details/5661482041",
+    "CompanySlug": "9fin",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Talent Partner - Product \u0026 Engineering",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5661475278",
+    "CompanySlug": "DICE",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Program Manager, Data Center Infrastructure, 3PDC, Quality",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5661020909",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Solutions Consultant III, Applied AI",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5661020907",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Strategic Accounts - Delivery Manager (All Levels) - 2026 UK",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5660498756",
+    "CompanySlug": "Suade",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Product Manager - Payments",
+    "Location": "London",
+    "URL": "https://workinstartups.com/details/5660395626",
+    "CompanySlug": "Yapily",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Senior Localization Specialist",
+    "Location": "London, UK,",
+    "URL": "https://workinstartups.com/details/5660389842",
+    "CompanySlug": "TaskRabbit",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Technical Solutions Consultant III, Applied AI",
+    "Location": "London, UK",
+    "URL": "https://workinstartups.com/details/5660381485",
+    "CompanySlug": "Google",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Director of Non-Functional Testing",
+    "Location": "London - Hybrid, London",
+    "URL": "https://workinstartups.com/details/5660380731",
+    "CompanySlug": "ClearBank",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  },
+  {
+    "Title": "Staff Product Designer",
+    "Location": "4 Fulwood Place, London, WC1V 6HG",
+    "URL": "https://workinstartups.com/details/5660377396",
+    "CompanySlug": "Birdie",
+    "Source": "wis",
+    "UpdatedAt": "0001-01-01T00:00:00Z"
+  }
+]
