@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 const (
-	baseURL        = "https://boards-api.greenhouse.io/v1/boards"
-	defaultTimeout = 10 * time.Second
+	baseURL         = "https://boards-api.greenhouse.io/v1/boards"
+	defaultTimeout  = 10 * time.Second
+	defaultSchedule = "0 0 * * *" // once daily
 )
 
 // Config holds configuration for the Greenhouse scraper.
@@ -48,7 +48,9 @@ func New(cfg Config) (*Scraper, error) {
 }
 
 // Name implements sources.Source.
-func (s *Scraper) Name() string { return "greenhouse" }
+func (s *Scraper) Name() string                     { return "greenhouse" }
+func (s *Scraper) FetchSchedule() string            { return defaultSchedule }
+func (s *Scraper) MinScrapeInterval() time.Duration { return 23 * time.Hour }
 
 // FetchURLs implements sources.Source. It calls the Greenhouse Job Board API
 // once per configured board token and returns all open job URLs.
@@ -81,13 +83,14 @@ func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
 }
 
 // Iterate implements sources.Source. Greenhouse boards are not paginated at
-// the scrape level so this fetches all URLs then passes them through the filter.
-func (s *Scraper) Iterate(ctx context.Context, filter sources.URLFilter) ([]string, error) {
+// the scrape level so this fetches all URLs and passes them to fn in one call.
+func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
 	urls, err := s.FetchURLs(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return filter(ctx, urls)
+	_, err = fn(ctx, urls)
+	return err
 }
 
 func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]string, error) {

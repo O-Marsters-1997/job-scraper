@@ -12,16 +12,15 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-
-	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 const (
-	startURL       = "https://workinstartups.com/search?loc=86384&pp=50&sb=date&sd=down&q=product%20engineer&per_page=50"
-	defaultTimeout = 15 * time.Second
-	resultsPerPage = 50
-	minWait        = 2 * time.Second
-	maxWait        = 7 * time.Second
+	startURL        = "https://workinstartups.com/search?loc=86384&pp=50&sb=date&sd=down&q=product%20engineer&per_page=50"
+	defaultTimeout  = 15 * time.Second
+	resultsPerPage  = 50
+	minWait         = 2 * time.Second
+	maxWait         = 7 * time.Second
+	defaultSchedule = "0 */6 * * *" // every 6 hours
 )
 
 type Scraper struct {
@@ -34,7 +33,9 @@ func New() *Scraper {
 	}
 }
 
-func (s *Scraper) Name() string { return "wis" }
+func (s *Scraper) Name() string                        { return "wis" }
+func (s *Scraper) FetchSchedule() string               { return defaultSchedule }
+func (s *Scraper) MinScrapeInterval() time.Duration    { return 5 * time.Hour }
 
 func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, startURL, nil)
@@ -108,34 +109,25 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, total
 	return urls, totalCount, nil
 }
 
-func (s *Scraper) Iterate(ctx context.Context, filter sources.URLFilter) ([]string, error) {
+func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
 	page1, total, err := s.fetchPage(ctx, 1)
 	if err != nil {
-		return nil, fmt.Errorf("wis page 1: %w", err)
+		return fmt.Errorf("wis page 1: %w", err)
 	}
 
 	pages := TotalPages(total)
 	slog.Info("wis iterating", slog.String("source", "wis"), slog.Int("total", total), slog.Int("pages", pages))
 
-	newURLs, err := filter(ctx, page1)
-	if err != nil {
-		slog.Error("wis filter failed", slog.String("source", "wis"), slog.Int("page", 1), slog.Any("err", err))
-		newURLs = page1
-	}
-
-	all := make([]string, 0, total)
-	all = append(all, newURLs...)
-
-	if len(newURLs) == 0 {
-		slog.Info("wis early stop", slog.String("source", "wis"), slog.Int("page", 1))
-		return all, nil
+	stop, err := fn(ctx, page1)
+	if err != nil || stop {
+		return err
 	}
 
 	for p := 2; p <= pages; p++ {
 		wait := minWait + time.Duration(rand.Int64N(int64(maxWait-minWait)))
 		select {
 		case <-ctx.Done():
-			return all, ctx.Err()
+			return ctx.Err()
 		case <-time.After(wait):
 		}
 
@@ -147,22 +139,17 @@ func (s *Scraper) Iterate(ctx context.Context, filter sources.URLFilter) ([]stri
 			continue
 		}
 
-		newURLs, err = filter(ctx, pageURLs)
+		stop, err = fn(ctx, pageURLs)
 		if err != nil {
-			slog.Error("wis filter failed", slog.String("source", "wis"), slog.Int("page", p), slog.Any("err", err))
-			newURLs = pageURLs
+			return err
 		}
-
-		all = append(all, newURLs...)
-
-		if len(newURLs) == 0 {
+		if stop {
 			slog.Info("wis early stop", slog.String("source", "wis"), slog.Int("page", p))
 			break
 		}
 	}
 
-	slog.Info("wis done", slog.String("source", "wis"), slog.Int("count", len(all)))
-	return all, nil
+	return nil
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {

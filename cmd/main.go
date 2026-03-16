@@ -10,9 +10,11 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
+	"github.com/ollymarsters/job-scraper/internal/worker"
 )
 
 func main() {
@@ -41,8 +43,21 @@ func main() {
 	defer q.Close()
 
 	srcs := []sources.Source{wis.New()}
-	if err := scraper.Run(ctx, srcs, db, q); err != nil {
-		slog.Error("run failed", slog.Any("err", err))
+
+	cr, err := schedule.New(srcs).Initialize(ctx, db, q)
+	if err != nil {
+		slog.Error("scheduler init failed", slog.Any("err", err))
 		os.Exit(1)
+	}
+	defer cr.Stop()
+
+	scraper.Seed(ctx, srcs, db, q)
+
+	slog.Info("queue processing worker starting")
+	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
+		slog.Info("processing", slog.String("url", url))
+		return nil
+	}); err != nil {
+		slog.Error("worker failed", slog.Any("err", err))
 	}
 }
