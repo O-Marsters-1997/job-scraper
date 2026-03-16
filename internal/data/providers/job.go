@@ -9,4 +9,5 @@ import (
 type JobProvider interface {
 	UpsertJobs(ctx context.Context, jobs []dto.Job) error
 	UpsertJob(ctx context.Context, job dto.Job) error
+	FilterNewURLs(ctx context.Context, urls []string) ([]string, error)
 }

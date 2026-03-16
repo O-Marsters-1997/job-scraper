@@ -10,12 +10,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 )
 
-var parsers = map[string]func(io.Reader) ([]dto.Job, error){
-	"wis": wis.ParseHTML,
+var parsers = map[string]func(io.Reader) ([]string, error){
+	"wis": wis.ParseURLs,
 }
 
 func main() {
@@ -110,13 +109,13 @@ func rebase(source string) error {
 			return fmt.Errorf("open %s: %w", htmlPath, err)
 		}
 
-		jobs, err := parse(f)
+		urls, err := parse(f)
 		f.Close()
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", htmlPath, err)
 		}
 
-		data, err := json.MarshalIndent(jobs, "", "  ")
+		data, err := json.MarshalIndent(urls, "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshal %s: %w", name, err)
 		}
@@ -126,7 +125,7 @@ func rebase(source string) error {
 			return fmt.Errorf("write %s: %w", jsonPath, err)
 		}
 
-		fmt.Printf("rebased %s (%d jobs)\n", jsonPath, len(jobs))
+		fmt.Printf("rebased %s (%d urls)\n", jsonPath, len(urls))
 	}
 	return nil
 }

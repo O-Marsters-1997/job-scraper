@@ -23,6 +23,24 @@ func (db *DB) UpsertJob(ctx context.Context, job dto.Job) error {
 	return err
 }
 
+func (db *DB) FilterNewURLs(ctx context.Context, urls []string) ([]string, error) {
+	existing, err := pgsqlc.New(db.pool).ExistingURLs(ctx, urls)
+	if err != nil {
+		return nil, err
+	}
+	known := make(map[string]struct{}, len(existing))
+	for _, u := range existing {
+		known[u] = struct{}{}
+	}
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if _, ok := known[u]; !ok {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
 func (db *DB) UpsertJobs(ctx context.Context, jobs []dto.Job) error {
 	slog.Debug("upserting jobs", slog.Int("count", len(jobs)))
 

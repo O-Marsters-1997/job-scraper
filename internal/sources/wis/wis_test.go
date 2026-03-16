@@ -8,5 +8,5 @@ import (
 )
 
 func TestSnapshots(t *testing.T) {
-	sources.RunSnapshotTests(t, wis.ParseHTML)
+	sources.RunSnapshotTestsURLs(t, wis.ParseURLs)
 }

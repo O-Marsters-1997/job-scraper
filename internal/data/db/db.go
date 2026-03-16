@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -39,4 +40,15 @@ func (db *DB) Close() {
 // Pool returns the underlying connection pool for use by repository types.
 func (db *DB) Pool() *pgxpool.Pool {
 	return db.pool
+}
+
+// ConnString builds a Postgres DSN from individual env vars:
+// POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB.
+func ConnString() string {
+	user := os.Getenv("POSTGRES_USER")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	host := os.Getenv("POSTGRES_HOST")
+	port := os.Getenv("POSTGRES_PORT")
+	dbname := os.Getenv("POSTGRES_DB")
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, dbname)
 }

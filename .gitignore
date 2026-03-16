@@ -1,2 +1,5 @@
 bin/
 .env
+.claude/*
+!.claude/plans/
+!.claude/plans/**

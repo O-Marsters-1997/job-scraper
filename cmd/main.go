@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
@@ -20,7 +21,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// ── Valkey ────────────────────────────────────────────────────────────────
+	db, err := jobsdb.New(ctx, jobsdb.ConnString())
+	if err != nil {
+		slog.Error("db init failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+	defer db.Close()
+
 	valkeyAddr := os.Getenv("VALKEY_ADDR")
 	if valkeyAddr == "" {
 		valkeyAddr = "localhost:6379"
@@ -33,9 +40,8 @@ func main() {
 	}
 	defer q.Close()
 
-	// ── Scrape + Enqueue ─────────────────────────────────────────────────────
 	srcs := []sources.Source{wis.New()}
-	if err := scraper.Run(ctx, srcs, q); err != nil {
+	if err := scraper.Run(ctx, srcs, db, q); err != nil {
 		slog.Error("run failed", slog.Any("err", err))
 		os.Exit(1)
 	}

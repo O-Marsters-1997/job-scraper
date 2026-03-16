@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 const (
@@ -50,12 +50,12 @@ func New(cfg Config) (*Scraper, error) {
 // Name implements sources.Source.
 func (s *Scraper) Name() string { return "greenhouse" }
 
-// FetchJobs implements sources.Source. It calls the Greenhouse Job Board API
-// once per configured board token and returns all open job postings.
+// FetchURLs implements sources.Source. It calls the Greenhouse Job Board API
+// once per configured board token and returns all open job URLs.
 // Per-token errors are collected; partial results are returned alongside errors.
-func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
+func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
 	var (
-		all  []dto.Job
+		all  []string
 		errs []error
 	)
 
@@ -66,27 +66,31 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
 
 		slog.Debug("fetching board", slog.String("source", s.Name()), slog.String("token", token))
 
-		jobs, err := s.fetchBoard(ctx, token)
+		urls, err := s.fetchBoard(ctx, token)
 		if err != nil {
 			slog.Error("board fetch failed", slog.String("source", s.Name()), slog.String("token", token), slog.Any("err", err))
 			errs = append(errs, fmt.Errorf("greenhouse/%s: %w", token, err))
 			continue
 		}
 
-		slog.Info("board fetch complete", slog.String("source", s.Name()), slog.String("token", token), slog.Int("count", len(jobs)))
-		all = append(all, jobs...)
+		slog.Info("board fetch complete", slog.String("source", s.Name()), slog.String("token", token), slog.Int("count", len(urls)))
+		all = append(all, urls...)
 	}
 
 	return all, errors.Join(errs...)
 }
 
 // Iterate implements sources.Source. Greenhouse boards are not paginated at
-// the scrape level so this delegates directly to FetchJobs.
-func (s *Scraper) Iterate(ctx context.Context) ([]dto.Job, error) {
-	return s.FetchJobs(ctx)
+// the scrape level so this fetches all URLs then passes them through the filter.
+func (s *Scraper) Iterate(ctx context.Context, filter sources.URLFilter) ([]string, error) {
+	urls, err := s.FetchURLs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return filter(ctx, urls)
 }
 
-func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
+func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]string, error) {
 	url := fmt.Sprintf("%s/%s/jobs", baseURL, token)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -106,12 +110,6 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 
 	var payload struct {
 		Jobs []struct {
-			ID        int64  `json:"id"`
-			Title     string `json:"title"`
-			UpdatedAt string `json:"updated_at"`
-			Location  struct {
-				Name string `json:"name"`
-			} `json:"location"`
 			AbsoluteURL string `json:"absolute_url"`
 		} `json:"jobs"`
 	}
@@ -120,18 +118,12 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 
-	jobs := make([]dto.Job, 0, len(payload.Jobs))
+	urls := make([]string, 0, len(payload.Jobs))
 	for _, gj := range payload.Jobs {
-		updatedAt, _ := time.Parse(time.RFC3339, gj.UpdatedAt)
-		jobs = append(jobs, dto.Job{
-			Title:       gj.Title,
-			Location:    gj.Location.Name,
-			URL:         gj.AbsoluteURL,
-			CompanySlug: token,
-			Source:      s.Name(),
-			UpdatedAt:   updatedAt,
-		})
+		if gj.AbsoluteURL != "" {
+			urls = append(urls, gj.AbsoluteURL)
+		}
 	}
 
-	return jobs, nil
+	return urls, nil
 }

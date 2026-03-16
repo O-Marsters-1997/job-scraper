@@ -8,14 +8,12 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 const (
@@ -38,7 +36,7 @@ func New() *Scraper {
 
 func (s *Scraper) Name() string { return "wis" }
 
-func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
+func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, startURL, nil)
 	if err != nil {
 		return nil, err
@@ -55,18 +53,13 @@ func (s *Scraper) FetchJobs(ctx context.Context) ([]dto.Job, error) {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
-	jobs, err := ParseHTML(resp.Body)
+	urls, err := ParseURLs(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now()
-	for i := range jobs {
-		jobs[i].UpdatedAt = now
-	}
-
-	slog.Debug("wis page parsed", slog.String("source", "wis"), slog.Int("count", len(jobs)))
-	return jobs, nil
+	slog.Debug("wis page parsed", slog.String("source", "wis"), slog.Int("count", len(urls)))
+	return urls, nil
 }
 
 func pageURL(page int) string {
@@ -76,9 +69,9 @@ func pageURL(page int) string {
 	return fmt.Sprintf("%s&p=%d", startURL, page)
 }
 
-// fetchPage fetches a single page and returns the jobs and, for page 1, the
+// fetchPage fetches a single page and returns the URLs and, for page 1, the
 // total result count. totalCount is 0 for pages other than 1.
-func (s *Scraper) fetchPage(ctx context.Context, page int) (jobs []dto.Job, totalCount int, err error) {
+func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, totalCount int, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL(page), nil)
 	if err != nil {
 		return nil, 0, err
@@ -100,7 +93,7 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (jobs []dto.Job, tota
 		return nil, 0, fmt.Errorf("read body: %w", err)
 	}
 
-	jobs, err = ParseHTML(bytes.NewReader(body))
+	urls, err = ParseURLs(bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -112,10 +105,10 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (jobs []dto.Job, tota
 		}
 	}
 
-	return jobs, totalCount, nil
+	return urls, totalCount, nil
 }
 
-func (s *Scraper) Iterate(ctx context.Context) ([]dto.Job, error) {
+func (s *Scraper) Iterate(ctx context.Context, filter sources.URLFilter) ([]string, error) {
 	page1, total, err := s.fetchPage(ctx, 1)
 	if err != nil {
 		return nil, fmt.Errorf("wis page 1: %w", err)
@@ -124,8 +117,19 @@ func (s *Scraper) Iterate(ctx context.Context) ([]dto.Job, error) {
 	pages := TotalPages(total)
 	slog.Info("wis iterating", slog.String("source", "wis"), slog.Int("total", total), slog.Int("pages", pages))
 
-	all := make([]dto.Job, 0, total)
-	all = append(all, page1...)
+	newURLs, err := filter(ctx, page1)
+	if err != nil {
+		slog.Error("wis filter failed", slog.String("source", "wis"), slog.Int("page", 1), slog.Any("err", err))
+		newURLs = page1
+	}
+
+	all := make([]string, 0, total)
+	all = append(all, newURLs...)
+
+	if len(newURLs) == 0 {
+		slog.Info("wis early stop", slog.String("source", "wis"), slog.Int("page", 1))
+		return all, nil
+	}
 
 	for p := 2; p <= pages; p++ {
 		wait := minWait + time.Duration(rand.Int64N(int64(maxWait-minWait)))
@@ -137,17 +141,24 @@ func (s *Scraper) Iterate(ctx context.Context) ([]dto.Job, error) {
 
 		slog.Debug("wis fetching page", slog.String("source", "wis"), slog.Int("page", p), slog.Int("of", pages))
 
-		pageJobs, _, err := s.fetchPage(ctx, p)
+		pageURLs, _, err := s.fetchPage(ctx, p)
 		if err != nil {
 			slog.Error("wis page failed", slog.String("source", "wis"), slog.Int("page", p), slog.Any("err", err))
 			continue
 		}
-		all = append(all, pageJobs...)
-	}
 
-	now := time.Now()
-	for i := range all {
-		all[i].UpdatedAt = now
+		newURLs, err = filter(ctx, pageURLs)
+		if err != nil {
+			slog.Error("wis filter failed", slog.String("source", "wis"), slog.Int("page", p), slog.Any("err", err))
+			newURLs = pageURLs
+		}
+
+		all = append(all, newURLs...)
+
+		if len(newURLs) == 0 {
+			slog.Info("wis early stop", slog.String("source", "wis"), slog.Int("page", p))
+			break
+		}
 	}
 
 	slog.Info("wis done", slog.String("source", "wis"), slog.Int("count", len(all)))
@@ -176,22 +187,22 @@ func TotalPages(totalCount int) int {
 	return (totalCount + resultsPerPage - 1) / resultsPerPage
 }
 
-func ParseHTML(r io.Reader) ([]dto.Job, error) {
+func ParseURLs(r io.Reader) ([]string, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, fmt.Errorf("parse html: %w", err)
 	}
-	return extractJobs(doc), nil
+	return extractURLs(doc), nil
 }
 
-func extractJobs(n *html.Node) []dto.Job {
-	var jobs []dto.Job
+func extractURLs(n *html.Node) []string {
+	var urls []string
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "div" {
 			if attr(n, "data-aid") != "" {
-				if j, ok := parseJobCard(n); ok {
-					jobs = append(jobs, j)
+				if u := parseJobCardURL(n); u != "" {
+					urls = append(urls, u)
 					return // don't recurse into the card
 				}
 			}
@@ -201,53 +212,23 @@ func extractJobs(n *html.Node) []dto.Job {
 		}
 	}
 	walk(n)
-	return jobs
+	return urls
 }
 
-func parseJobCard(card *html.Node) (dto.Job, bool) {
-	var title, jobURL, company, location string
-
+func parseJobCardURL(card *html.Node) string {
 	h2 := findFirst(card, func(n *html.Node) bool {
 		return n.Type == html.ElementNode && n.Data == "h2"
 	})
-	if h2 != nil {
-		a := findFirst(h2, func(n *html.Node) bool {
-			return n.Type == html.ElementNode && n.Data == "a"
-		})
-		if a != nil {
-			title = strings.TrimSpace(textContent(a))
-			jobURL = attr(a, "href")
-		}
+	if h2 == nil {
+		return ""
 	}
-
-	if title == "" || jobURL == "" {
-		return dto.Job{}, false
-	}
-
-	companyDiv := findFirst(card, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "div" && hasClass(n, "ui-company")
+	a := findFirst(h2, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "a"
 	})
-	if companyDiv != nil {
-		company = attr(companyDiv, "data-company-name")
-		if company == "" {
-			company = strings.TrimSpace(textContent(companyDiv))
-		}
+	if a == nil {
+		return ""
 	}
-
-	locationDiv := findFirst(card, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "div" && hasClass(n, "ui-location")
-	})
-	if locationDiv != nil {
-		location = strings.TrimSpace(textContent(locationDiv))
-	}
-
-	return dto.Job{
-		Title:       title,
-		URL:         jobURL,
-		CompanySlug: company,
-		Location:    location,
-		Source:      "wis",
-	}, true
+	return attr(a, "href")
 }
 
 func findFirst(n *html.Node, pred func(*html.Node) bool) *html.Node {
@@ -269,19 +250,4 @@ func attr(n *html.Node, key string) string {
 		}
 	}
 	return ""
-}
-
-func hasClass(n *html.Node, class string) bool {
-	return slices.Contains(strings.Fields(attr(n, "class")), class)
-}
-
-func textContent(n *html.Node) string {
-	if n.Type == html.TextNode {
-		return n.Data
-	}
-	var sb strings.Builder
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		sb.WriteString(textContent(c))
-	}
-	return sb.String()
 }

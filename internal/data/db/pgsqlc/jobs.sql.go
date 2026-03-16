@@ -11,6 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const existingURLs = `-- name: ExistingURLs :many
+SELECT url FROM jobs WHERE url = ANY($1::text[])
+`
+
+func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, existingURLs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, err
+		}
+		items = append(items, url)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJobByURL = `-- name: GetJobByURL :one
 SELECT id, title, location, url, company_slug, source, updated_at, scraped_at FROM jobs WHERE url = $1 LIMIT 1
 `

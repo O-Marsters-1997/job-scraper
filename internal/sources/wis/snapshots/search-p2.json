@@ -1,82 +1,12 @@
 [
-  {
-    "Title": "Interim Product Design Director",
-    "Location": "London",
-    "URL": "https://workinstartups.com/details/5665230447",
-    "CompanySlug": "Moneybox",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Technical Program Manager, Data center Colo Infrastructure",
-    "Location": "London, UK",
-    "URL": "https://workinstartups.com/details/5665229270",
-    "CompanySlug": "Google",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Software Engineer - Platform",
-    "Location": "London, London, EC1Y 8LZ",
-    "URL": "https://workinstartups.com/details/5665229016",
-    "CompanySlug": "FundApps",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Senior Product Manager - Mobile App",
-    "Location": "London",
-    "URL": "https://workinstartups.com/details/5665228822",
-    "CompanySlug": "Zopa",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Principal Product Manager - Agentic Case Remediation",
-    "Location": "London, ENG",
-    "URL": "https://workinstartups.com/details/5665228749",
-    "CompanySlug": "ComplyAdvantage",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Developer Relations Engineer, Android and Play, Games",
-    "Location": "London, UK",
-    "URL": "https://workinstartups.com/details/5665228587",
-    "CompanySlug": "Google",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Product Manager - Vault Payments",
-    "Location": "London, London",
-    "URL": "https://workinstartups.com/details/5665227842",
-    "CompanySlug": "Thought Machine",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Technical Program Manager, Search Client Infrastructure Platform",
-    "Location": "London, UK",
-    "URL": "https://workinstartups.com/details/5665227578",
-    "CompanySlug": "Google",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Principal Product Manager - Transaction Monitoring",
-    "Location": "London, ENG",
-    "URL": "https://workinstartups.com/details/5665225915",
-    "CompanySlug": "ComplyAdvantage",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  },
-  {
-    "Title": "Senior Data Science Manager, Business Banking",
-    "Location": "Cardiff, London or Remote",
-    "URL": "https://workinstartups.com/details/5665225874",
-    "CompanySlug": "Monzo Bank",
-    "Source": "wis",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
-  }
+  "https://workinstartups.com/details/5665230447",
+  "https://workinstartups.com/details/5665229270",
+  "https://workinstartups.com/details/5665229016",
+  "https://workinstartups.com/details/5665228822",
+  "https://workinstartups.com/details/5665228749",
+  "https://workinstartups.com/details/5665228587",
+  "https://workinstartups.com/details/5665227842",
+  "https://workinstartups.com/details/5665227578",
+  "https://workinstartups.com/details/5665225915",
+  "https://workinstartups.com/details/5665225874"
 ]

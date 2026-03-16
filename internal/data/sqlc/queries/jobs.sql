@@ -22,3 +22,6 @@ SELECT * FROM jobs WHERE url = $1 LIMIT 1;
 
 -- name: ListJobs :many
 SELECT * FROM jobs ORDER BY scraped_at DESC;
+
+-- name: ExistingURLs :many
+SELECT url FROM jobs WHERE url = ANY($1::text[]);
