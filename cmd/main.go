@@ -55,7 +55,16 @@ func main() {
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
-		slog.Info("processing", slog.String("url", url))
+		job, err := sources.Dispatch(ctx, srcs, url)
+		if err != nil {
+			slog.Error("dispatch failed", slog.String("url", url), slog.Any("err", err))
+			return err
+		}
+		if err := db.UpsertJob(ctx, job); err != nil {
+			slog.Error("upsert failed", slog.String("url", url), slog.Any("err", err))
+			return err
+		}
+		slog.Info("job upserted", slog.String("url", url), slog.String("title", job.Title))
 		return nil
 	}); err != nil {
 		slog.Error("worker failed", slog.Any("err", err))

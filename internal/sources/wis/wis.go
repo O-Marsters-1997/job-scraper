@@ -9,8 +9,11 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"golang.org/x/net/html"
 )
 
@@ -33,9 +36,9 @@ func New() *Scraper {
 	}
 }
 
-func (s *Scraper) Name() string                        { return "wis" }
-func (s *Scraper) FetchSchedule() string               { return defaultSchedule }
-func (s *Scraper) MinScrapeInterval() time.Duration    { return 5 * time.Hour }
+func (s *Scraper) Name() string                     { return "wis" }
+func (s *Scraper) FetchSchedule() string            { return defaultSchedule }
+func (s *Scraper) MinScrapeInterval() time.Duration { return 5 * time.Hour }
 
 func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, startURL, nil)
@@ -237,4 +240,118 @@ func attr(n *html.Node, key string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Scraper) CanHandle(url string) bool {
+	return strings.Contains(url, "workinstartups.com")
+}
+
+func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; job-scraper/1.0)")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return dto.Job{}, fmt.Errorf("unexpected status %s", resp.Status)
+	}
+
+	return ParseJobDetail(resp.Body, url)
+}
+
+func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
+	doc, err := html.Parse(r)
+	if err != nil {
+		return dto.Job{}, fmt.Errorf("parse html: %w", err)
+	}
+
+	title := strings.TrimSpace(textContent(findFirst(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "h1"
+	})))
+
+	companyName := ""
+	if companyNode := findFirst(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && hasClass(n, "ui-company")
+	}); companyNode != nil {
+		if v := attr(companyNode, "data-company-name"); v != "" {
+			companyName = v
+		} else {
+			companyName = strings.TrimSpace(textContent(companyNode))
+		}
+	}
+
+	location := ""
+	if locNode := findFirst(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && hasClass(n, "ui-location")
+	}); locNode != nil {
+		location = strings.TrimSpace(textContent(locNode))
+	}
+
+	updatedAt := time.Now().UTC()
+	if timeNode := findFirst(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "time" && attr(n, "datetime") != ""
+	}); timeNode != nil {
+		if t, err := time.Parse(time.RFC3339, attr(timeNode, "datetime")); err == nil {
+			updatedAt = t
+		} else if t, err := time.Parse("2006-01-02", attr(timeNode, "datetime")); err == nil {
+			updatedAt = t.UTC()
+		}
+	}
+
+	return dto.Job{
+		Title:       title,
+		Location:    location,
+		URL:         url,
+		CompanySlug: slugify(companyName),
+		Source:      "wis",
+		UpdatedAt:   updatedAt,
+	}, nil
+}
+
+func hasClass(n *html.Node, class string) bool {
+	for c := range strings.FieldsSeq(attr(n, "class")) {
+		if c == class {
+			return true
+		}
+	}
+	return false
+}
+
+func textContent(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
+	var b strings.Builder
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			b.WriteString(n.Data)
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return b.String()
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+		case unicode.IsSpace(r) || r == '-':
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
