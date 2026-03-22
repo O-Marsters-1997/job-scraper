@@ -11,21 +11,68 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func (db *DB) UpsertJob(ctx context.Context, job dto.Job) error {
-	slog.Debug("upserting job", slog.String("url", job.URL), slog.String("source", job.Source))
-	_, err := pgsqlc.New(db.pool).UpsertJob(ctx, pgsqlc.UpsertJobParams{
-		Title:       job.Title,
-		Location:    job.Location,
-		Url:         job.URL,
-		CompanySlug: job.CompanySlug,
-		Source:      job.Source,
-		UpdatedAt:   pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true},
-	})
-	return err
+func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
+	return pgsqlc.UpsertJobParams{
+		Title:       j.Title,
+		Location:    j.Location,
+		Url:         j.URL,
+		CompanySlug: j.CompanySlug,
+		Source:      j.Source,
+		UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+	}
 }
 
-func (db *DB) FilterNewURLs(ctx context.Context, urls []string) ([]string, error) {
-	existing, err := pgsqlc.New(db.pool).ExistingURLs(ctx, urls)
+func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
+	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
+	for i, j := range jobs {
+		params[i] = pgsqlc.UpsertJobsParams{
+			Title:       j.Title,
+			Location:    j.Location,
+			Url:         j.URL,
+			CompanySlug: j.CompanySlug,
+			Source:      j.Source,
+			UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+		}
+	}
+	return params
+}
+
+func fromRow(row pgsqlc.Job) dto.Job {
+	return dto.Job{
+		Title:       row.Title,
+		Location:    row.Location,
+		URL:         row.Url,
+		CompanySlug: row.CompanySlug,
+		Source:      row.Source,
+		UpdatedAt:   row.UpdatedAt.Time,
+	}
+}
+
+func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
+	if len(jobs) == 0 {
+		slog.Info("no jobs to save")
+		return nil
+	}
+	if len(jobs) == 1 {
+		_, err := db.queries.UpsertJob(ctx, toUpsertParams(jobs[0]))
+		return err
+	}
+	results := db.queries.UpsertJobs(ctx, toUpsertBatchParams(jobs))
+	defer results.Close()
+
+	var errs []error
+	results.Exec(func(i int, err error) {
+		if err != nil {
+			slog.Error("job save failed", slog.String("url", jobs[i].URL), slog.Any("err", err))
+			errs = append(errs, err)
+		}
+	})
+
+	return errors.Join(errs...)
+}
+
+func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {
+	existing, err := db.queries.ExistingURLs(ctx, urls)
 	if err != nil {
 		return nil, err
 	}
@@ -42,32 +89,14 @@ func (db *DB) FilterNewURLs(ctx context.Context, urls []string) ([]string, error
 	return out, nil
 }
 
-func (db *DB) UpsertJobs(ctx context.Context, jobs []dto.Job) error {
-	slog.Debug("upserting jobs", slog.Int("count", len(jobs)))
-
-	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
-	for i, job := range jobs {
-		params[i] = pgsqlc.UpsertJobsParams{
-			Title:       job.Title,
-			Location:    job.Location,
-			Url:         job.URL,
-			CompanySlug: job.CompanySlug,
-			Source:      job.Source,
-			UpdatedAt:   pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true},
-		}
+func (db *DB) List(ctx context.Context) ([]dto.Job, error) {
+	rows, err := db.queries.ListJobs(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	results := pgsqlc.New(db.pool).UpsertJobs(ctx, params)
-	defer func() { _ = results.Close() }()
-
-	var errs []error
-	results.Exec(func(i int, err error) {
-		if err != nil {
-			slog.Error("job upsert failed", slog.String("url", jobs[i].URL), slog.Any("err", err))
-			errs = append(errs, err)
-		}
-	})
-
-	slog.Info("jobs upserted", slog.Int("count", len(jobs)-len(errs)))
-	return errors.Join(errs...)
+	jobs := make([]dto.Job, len(rows))
+	for i, row := range rows {
+		jobs[i] = fromRow(row)
+	}
+	return jobs, nil
 }

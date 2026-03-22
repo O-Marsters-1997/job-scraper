@@ -55,7 +55,7 @@ func run(ctx context.Context, src sources.Source, db providers.JobProvider, q qu
 	seen := make(map[string]struct{})
 
 	return src.Iterate(ctx, func(ctx context.Context, rawURLs []string) (bool, error) {
-		newURLs, err := db.FilterNewURLs(ctx, rawURLs)
+		newURLs, err := db.NewURLs(ctx, rawURLs)
 		if err != nil {
 			slog.Error("filter failed", slog.String("source", name), slog.Any("err", err))
 			newURLs = rawURLs // fail open
