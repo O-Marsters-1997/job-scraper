@@ -1,4 +1,4 @@
-package orchestrator
+package scraper
 
 import (
 	"context"
@@ -14,8 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Orchestrator combines the startup seed and recurring cron schedule into a
-// single Start/Stop lifecycle. Callers no longer manage a *cron.Cron directly.
 type Orchestrator struct {
 	srcs []sources.Source
 	db   providers.JobProvider
@@ -24,18 +22,11 @@ type Orchestrator struct {
 	wg   sync.WaitGroup
 }
 
-// New wires together a scrape orchestrator. Dependencies are provided at
-// construction time; the context governing goroutine lifetimes is passed to Start.
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
 	return &Orchestrator{srcs: srcs, db: db, q: q}
 }
 
-// Start seeds all sources immediately (background, guarded by MinScrapeInterval)
-// and registers + starts the cron schedule for recurring scrapes.
-// Returns an error only if a cron expression is invalid.
-// Non-blocking — returns as soon as the cron scheduler is running.
 func (o *Orchestrator) Start(ctx context.Context) error {
-	// Seed all sources concurrently in the background.
 	go func() {
 		var wg sync.WaitGroup
 		for _, src := range o.srcs {
@@ -68,9 +59,6 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop halts the cron scheduler and waits for any in-flight cron-triggered
-// scrape to finish. Goroutine cancellation is the caller's responsibility via ctx.
-// Safe to call multiple times.
 func (o *Orchestrator) Stop() {
 	if o.cr != nil {
 		o.cr.Stop()
@@ -124,7 +112,7 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 		}
 
 		if len(deduped) == 0 {
-			return true, nil // nothing new — stop iterating
+			return true, nil
 		}
 
 		if err := o.q.Enqueue(ctx, deduped); err != nil {

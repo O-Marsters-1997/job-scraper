@@ -10,8 +10,8 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
-	"github.com/ollymarsters/job-scraper/internal/orchestrator"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker"
@@ -44,7 +44,7 @@ func main() {
 
 	srcs := []sources.Source{wis.New()}
 
-	orch := orchestrator.New(srcs, db, q)
+	orch := scraper.New(srcs, db, q)
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed", slog.Any("err", err))
 		os.Exit(1)
