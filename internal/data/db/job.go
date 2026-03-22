@@ -58,7 +58,7 @@ func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 		return err
 	}
 	results := db.queries.UpsertJobs(ctx, toUpsertBatchParams(jobs))
-	defer results.Close()
+	defer func() { _ = results.Close() }()
 
 	var errs []error
 	results.Exec(func(i int, err error) {
