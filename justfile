@@ -12,7 +12,6 @@ default:
 # build the binary
 build:
     go build -o bin/scraper ./cmd
-    go build -o bin/migrate ./scripts/migrate
 
 # run the scraper
 run *args:
@@ -42,6 +41,12 @@ test:
 # run tests with race detector
 test-race:
     go test -race ./...
+
+ci:
+    just lint
+    just generate
+    just test
+    just build
 
 # ── Services ──────────────────────────────────────────────────────────────────
 

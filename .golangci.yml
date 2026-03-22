@@ -3,16 +3,13 @@ version: "2"
 linters:
   default: none
   enable:
-    - errcheck      # unchecked errors
-    - gosimple      # simplify code
-    - govet         # vet checks
-    - ineffassign   # unused assignments
-    - staticcheck   # static analysis
-    - unused        # unused code
-    - gofmt         # formatting
-    - goimports     # import grouping/ordering
-    - misspell      # spelling
-    - exhaustive    # exhaustive enum switches
+    - errcheck # unchecked errors
+    - govet # vet checks
+    - ineffassign # unused assignments
+    - staticcheck # static analysis
+    - unused # unused code
+    - misspell # spelling
+    - exhaustive # exhaustive enum switches
 
 linters-settings:
   goimports:

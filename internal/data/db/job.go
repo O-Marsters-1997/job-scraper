@@ -57,7 +57,7 @@ func (db *DB) UpsertJobs(ctx context.Context, jobs []dto.Job) error {
 	}
 
 	results := pgsqlc.New(db.pool).UpsertJobs(ctx, params)
-	defer results.Close()
+	defer func() { _ = results.Close() }()
 
 	var errs []error
 	results.Exec(func(i int, err error) {
