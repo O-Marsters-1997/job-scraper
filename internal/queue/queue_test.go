@@ -148,9 +148,7 @@ func TestDequeue_Atomic(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			u, ok, err := q.Dequeue(ctx)
 			if err != nil {
 				t.Errorf("Dequeue error: %v", err)
@@ -161,7 +159,7 @@ func TestDequeue_Atomic(t *testing.T) {
 				results = append(results, u)
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 
