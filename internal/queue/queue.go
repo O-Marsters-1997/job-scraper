@@ -9,17 +9,46 @@ import (
 )
 
 const (
-	sortedSetKey     = "jobs:pending"
+	sortedSetKey      = "jobs:pending"
 	lastScrapedKeyFmt = "scrape:last:%s"
 )
 
+// JobQueue is the boundary all callers depend on.
+// Timing decisions (time.Now, UnixMilli conversion) are owned by the implementation.
+type JobQueue interface {
+	// Enqueue adds urls for immediate processing.
+	// ZADD NX semantics: already-queued URLs are silently skipped.
+	// All urls are enqueued in a single command.
+	Enqueue(ctx context.Context, urls []string) error
+
+	// Dequeue atomically removes and returns the next ready URL.
+	// Uses ZPOPMIN — guaranteed safe for concurrent workers.
+	// Returns ("", false, nil) when nothing is ready.
+	Dequeue(ctx context.Context) (string, bool, error)
+
+	// SetLastScraped records that source was scraped at the current time.
+	SetLastScraped(ctx context.Context, source string) error
+
+	// GetLastScraped returns the time of the last successful scrape for source.
+	// Returns (zero, false, nil) when the source has never been scraped.
+	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
+
+	Close()
+}
+
 // Queue wraps a Valkey client and owns the jobs pending sorted set.
 type Queue struct {
-	client valkey.Client
+	client  valkey.Client
+	nowFunc func() time.Time
 }
 
 // New connects to Valkey at addr and verifies connectivity with PING.
 func New(addr string) (*Queue, error) {
+	return newWithClock(addr, time.Now)
+}
+
+// newWithClock is New with an injectable clock, used by tests.
+func newWithClock(addr string, nowFunc func() time.Time) (*Queue, error) {
 	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{addr},
 	})
@@ -32,59 +61,45 @@ func New(addr string) (*Queue, error) {
 		return nil, fmt.Errorf("valkey ping: %w", err)
 	}
 
-	return &Queue{client: client}, nil
+	return &Queue{client: client, nowFunc: nowFunc}, nil
 }
 
-// Enqueue adds each URL to the sorted set with score = readyAt.UnixMilli().
-// ZADD NX ensures existing members are never overwritten — URLs already in
-// the set are silently skipped, providing deduplication at the queue level.
-func (q *Queue) Enqueue(ctx context.Context, urls []string, readyAt time.Time) error {
-	score := float64(readyAt.UnixMilli())
-
-	for _, url := range urls {
-		cmd := q.client.B().Zadd().Key(sortedSetKey).Nx().
-			ScoreMember().ScoreMember(score, url).
-			Build()
-
-		if err := q.client.Do(ctx, cmd).Error(); err != nil {
-			return fmt.Errorf("zadd %s: %w", url, err)
-		}
-	}
-
-	return nil
-}
-
-// Dequeue fetches the next ready URL (score <= now) and removes it from the
-// sorted set. Returns ("", false, nil) when the queue is empty.
-func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
-	nowMs := float64(time.Now().UnixMilli())
-
-	rangeCmd := q.client.B().Zrangebyscore().Key(sortedSetKey).
-		Min("0").Max(fmt.Sprintf("%g", nowMs)).
-		Limit(0, 1).
-		Build()
-
-	urls, err := q.client.Do(ctx, rangeCmd).AsStrSlice()
-	if err != nil {
-		return "", false, fmt.Errorf("zrangebyscore: %w", err)
-	}
+// Enqueue adds all urls to the sorted set with score = now.UnixMilli().
+// All urls are sent in a single ZADD NX command. Already-queued URLs are
+// silently skipped.
+func (q *Queue) Enqueue(ctx context.Context, urls []string) error {
 	if len(urls) == 0 {
+		return nil
+	}
+
+	score := float64(q.nowFunc().UnixMilli())
+	sm := q.client.B().Zadd().Key(sortedSetKey).Nx().ScoreMember()
+	for _, url := range urls {
+		sm = sm.ScoreMember(score, url)
+	}
+
+	return q.client.Do(ctx, sm.Build()).Error()
+}
+
+// Dequeue atomically removes and returns the next ready URL using ZPOPMIN.
+// Returns ("", false, nil) when the queue is empty.
+func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
+	cmd := q.client.B().Zpopmin().Key(sortedSetKey).Count(1).Build()
+	scores, err := q.client.Do(ctx, cmd).AsZScores()
+	if err != nil {
+		return "", false, fmt.Errorf("zpopmin: %w", err)
+	}
+	if len(scores) == 0 {
 		return "", false, nil
 	}
 
-	url := urls[0]
-	remCmd := q.client.B().Zrem().Key(sortedSetKey).Member(url).Build()
-	if err := q.client.Do(ctx, remCmd).Error(); err != nil {
-		return "", false, fmt.Errorf("zrem: %w", err)
-	}
-
-	return url, true, nil
+	return scores[0].Member, true, nil
 }
 
-// SetLastScraped records the time of the last successful scrape for a source.
-func (q *Queue) SetLastScraped(ctx context.Context, source string, t time.Time) error {
+// SetLastScraped records that source was scraped at the current time.
+func (q *Queue) SetLastScraped(ctx context.Context, source string) error {
 	key := fmt.Sprintf(lastScrapedKeyFmt, source)
-	val := fmt.Sprintf("%d", t.UnixMilli())
+	val := fmt.Sprintf("%d", q.nowFunc().UnixMilli())
 	cmd := q.client.B().Set().Key(key).Value(val).Build()
 	return q.client.Do(ctx, cmd).Error()
 }

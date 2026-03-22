@@ -14,7 +14,7 @@ type HandlerFunc func(ctx context.Context, url string) error
 
 // Run processes one job at a time with a random 10–15s pause between items.
 // When the queue is empty it backs off for 15 minutes. Respects ctx cancellation.
-func Run(ctx context.Context, q *queue.Queue, handler HandlerFunc) error {
+func Run(ctx context.Context, q queue.JobQueue, handler HandlerFunc) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil

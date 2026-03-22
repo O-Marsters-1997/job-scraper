@@ -8,13 +8,12 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 // Seed runs a startup scrape for every source concurrently.
 // It returns immediately; scrapes happen in the background.
-func Seed(ctx context.Context, srcs []sources.Source, db providers.JobProvider, q *queue.Queue) {
+func Seed(ctx context.Context, srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) {
 	go func() {
 		var wg sync.WaitGroup
 		for _, src := range srcs {
@@ -28,7 +27,7 @@ func Seed(ctx context.Context, srcs []sources.Source, db providers.JobProvider, 
 	}()
 }
 
-func RunIfReady(ctx context.Context, src sources.Source, db providers.JobProvider, q *queue.Queue) {
+func RunIfReady(ctx context.Context, src sources.Source, db providers.JobProvider, q queue.JobQueue) {
 	cfg := src.Cfg()
 	last, ok, err := q.GetLastScraped(ctx, cfg.Name)
 	if err != nil {
@@ -46,12 +45,12 @@ func RunIfReady(ctx context.Context, src sources.Source, db providers.JobProvide
 		slog.Error("scrape failed", slog.String("source", cfg.Name), slog.Any("err", err))
 		return
 	}
-	if err := q.SetLastScraped(ctx, cfg.Name, time.Now()); err != nil {
+	if err := q.SetLastScraped(ctx, cfg.Name); err != nil {
 		slog.Error("could not set last scraped", slog.String("source", cfg.Name), slog.Any("err", err))
 	}
 }
 
-func run(ctx context.Context, src sources.Source, db providers.JobProvider, q *queue.Queue) error {
+func run(ctx context.Context, src sources.Source, db providers.JobProvider, q queue.JobQueue) error {
 	name := src.Cfg().Name
 	seen := make(map[string]struct{})
 
@@ -77,7 +76,7 @@ func run(ctx context.Context, src sources.Source, db providers.JobProvider, q *q
 			return true, nil // nothing new — stop iterating
 		}
 
-		if err := q.Enqueue(ctx, deduped, time.Now()); err != nil {
+		if err := q.Enqueue(ctx, deduped); err != nil {
 			return false, err
 		}
 
