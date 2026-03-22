@@ -6,10 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -22,42 +19,41 @@ var baseJob = dto.Job{
 	UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 }
 
-// jobCmpOpts are the cmp options used when comparing pgsqlc.Job values.
-// ID and ScrapedAt are DB-generated so they are excluded from comparisons.
-// pgtype.Timestamptz is compared by its underlying time value.
+// jobCmpOpts compares dto.Job values, treating time.Time by value equality.
 var jobCmpOpts = cmp.Options{
-	cmpopts.IgnoreFields(pgsqlc.Job{}, "ID", "ScrapedAt"),
-	cmp.Comparer(func(x, y pgtype.Timestamptz) bool {
-		return x.Valid == y.Valid && x.Time.Equal(y.Time)
+	cmp.Comparer(func(x, y time.Time) bool {
+		return x.Equal(y)
 	}),
 }
 
-func jobFromSource(j dto.Job) pgsqlc.Job {
-	return pgsqlc.Job{
-		Title:       j.Title,
-		Location:    j.Location,
-		Url:         j.URL,
-		CompanySlug: j.CompanySlug,
-		Source:      j.Source,
-		UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+// findByURL returns the first job in jobs matching url, or (zero, false).
+func findByURL(jobs []dto.Job, url string) (dto.Job, bool) {
+	for _, j := range jobs {
+		if j.URL == url {
+			return j, true
+		}
 	}
+	return dto.Job{}, false
 }
 
-func TestUpsertJob(t *testing.T) {
+func TestSave_Single(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.UpsertJob(ctx, baseJob); err != nil {
-			t.Fatalf("UpsertJob: %v", err)
+		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+			t.Fatalf("Save: %v", err)
 		}
 
-		got, err := pgsqlc.New(testDB.Pool()).GetJobByURL(ctx, baseJob.URL)
+		jobs, err := testDB.List(ctx)
 		if err != nil {
-			t.Fatalf("GetJobByURL: %v", err)
+			t.Fatalf("List: %v", err)
 		}
-
-		if diff := cmp.Diff(jobFromSource(baseJob), got, jobCmpOpts...); diff != "" {
+		got, ok := findByURL(jobs, baseJob.URL)
+		if !ok {
+			t.Fatal("saved job not found in List")
+		}
+		if diff := cmp.Diff(baseJob, got, jobCmpOpts...); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
@@ -66,8 +62,8 @@ func TestUpsertJob(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.UpsertJob(ctx, baseJob); err != nil {
-			t.Fatalf("first UpsertJob: %v", err)
+		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+			t.Fatalf("first Save: %v", err)
 		}
 
 		updated := baseJob
@@ -75,22 +71,25 @@ func TestUpsertJob(t *testing.T) {
 		updated.Location = "Remote"
 		updated.UpdatedAt = time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
-		if err := testDB.UpsertJob(ctx, updated); err != nil {
-			t.Fatalf("second UpsertJob: %v", err)
+		if err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
+			t.Fatalf("second Save: %v", err)
 		}
 
-		got, err := pgsqlc.New(testDB.Pool()).GetJobByURL(ctx, baseJob.URL)
+		jobs, err := testDB.List(ctx)
 		if err != nil {
-			t.Fatalf("GetJobByURL: %v", err)
+			t.Fatalf("List: %v", err)
 		}
-
-		if diff := cmp.Diff(jobFromSource(updated), got, jobCmpOpts...); diff != "" {
+		got, ok := findByURL(jobs, baseJob.URL)
+		if !ok {
+			t.Fatal("updated job not found in List")
+		}
+		if diff := cmp.Diff(updated, got, jobCmpOpts...); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
 	})
 }
 
-func TestUpsertJobs(t *testing.T) {
+func TestSave_Batch(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
@@ -115,16 +114,16 @@ func TestUpsertJobs(t *testing.T) {
 			},
 		}
 
-		if err := testDB.UpsertJobs(ctx, jobs); err != nil {
-			t.Fatalf("UpsertJobs: %v", err)
+		if err := testDB.Save(ctx, jobs); err != nil {
+			t.Fatalf("Save: %v", err)
 		}
 
-		rows, err := pgsqlc.New(testDB.Pool()).ListJobs(ctx)
+		got, err := testDB.List(ctx)
 		if err != nil {
-			t.Fatalf("ListJobs: %v", err)
+			t.Fatalf("List: %v", err)
 		}
-		if len(rows) != len(jobs) {
-			t.Errorf("row count: got %d, want %d", len(rows), len(jobs))
+		if len(got) != len(jobs) {
+			t.Errorf("row count: got %d, want %d", len(got), len(jobs))
 		}
 	})
 
@@ -132,8 +131,8 @@ func TestUpsertJobs(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.UpsertJobs(ctx, []dto.Job{baseJob}); err != nil {
-			t.Fatalf("first UpsertJobs: %v", err)
+		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+			t.Fatalf("first Save: %v", err)
 		}
 
 		updated := baseJob
@@ -141,34 +140,102 @@ func TestUpsertJobs(t *testing.T) {
 		updated.Location = "Remote"
 		updated.UpdatedAt = time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC)
 
-		if err := testDB.UpsertJobs(ctx, []dto.Job{updated}); err != nil {
-			t.Fatalf("second UpsertJobs: %v", err)
+		if err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
+			t.Fatalf("second Save: %v", err)
 		}
 
-		got, err := pgsqlc.New(testDB.Pool()).GetJobByURL(ctx, baseJob.URL)
+		jobs, err := testDB.List(ctx)
 		if err != nil {
-			t.Fatalf("GetJobByURL: %v", err)
+			t.Fatalf("List: %v", err)
 		}
-
-		if diff := cmp.Diff(jobFromSource(updated), got, jobCmpOpts...); diff != "" {
+		if len(jobs) != 1 {
+			t.Errorf("row count: got %d, want 1 (upsert must not duplicate)", len(jobs))
+		}
+		got, ok := findByURL(jobs, baseJob.URL)
+		if !ok {
+			t.Fatal("updated job not found in List")
+		}
+		if diff := cmp.Diff(updated, got, jobCmpOpts...); diff != "" {
 			t.Errorf("mismatch (-want +got):\n%s", diff)
 		}
-
-		rows, err := pgsqlc.New(testDB.Pool()).ListJobs(ctx)
-		if err != nil {
-			t.Fatalf("ListJobs: %v", err)
-		}
-		if len(rows) != 1 {
-			t.Errorf("row count: got %d, want 1 (upsert must not duplicate)", len(rows))
-		}
 	})
+}
 
-	t.Run("empty", func(t *testing.T) {
-		truncate(t)
-		ctx := context.Background()
+func TestSave_Empty(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
 
-		if err := testDB.UpsertJobs(ctx, []dto.Job{}); err != nil {
-			t.Fatalf("UpsertJobs with empty slice: %v", err)
-		}
-	})
+	if err := testDB.Save(ctx, nil); err != nil {
+		t.Errorf("Save(nil): %v", err)
+	}
+	if err := testDB.Save(ctx, []dto.Job{}); err != nil {
+		t.Errorf("Save([]): %v", err)
+	}
+}
+
+func TestNewURLs_FiltersExisting(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	newJob := dto.Job{
+		Title:       "New Role",
+		URL:         "https://example.com/jobs/new",
+		CompanySlug: "example",
+		Source:      "greenhouse",
+		UpdatedAt:   time.Now(),
+	}
+
+	got, err := testDB.NewURLs(ctx, []string{baseJob.URL, newJob.URL})
+	if err != nil {
+		t.Fatalf("NewURLs: %v", err)
+	}
+	if len(got) != 1 || got[0] != newJob.URL {
+		t.Errorf("want [%q], got %v", newJob.URL, got)
+	}
+}
+
+func TestNewURLs_AllNew(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	urls := []string{"https://example.com/a", "https://example.com/b"}
+	got, err := testDB.NewURLs(ctx, urls)
+	if err != nil {
+		t.Fatalf("NewURLs: %v", err)
+	}
+	if len(got) != len(urls) {
+		t.Errorf("want %d URLs, got %d", len(urls), len(got))
+	}
+}
+
+func TestList_ReturnsAll(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	jobs := []dto.Job{
+		baseJob,
+		{
+			Title:       "Other Role",
+			URL:         "https://example.com/jobs/other",
+			CompanySlug: "example",
+			Source:      "greenhouse",
+			UpdatedAt:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	if err := testDB.Save(ctx, jobs); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := testDB.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != len(jobs) {
+		t.Errorf("want %d jobs, got %d", len(jobs), len(got))
+	}
 }

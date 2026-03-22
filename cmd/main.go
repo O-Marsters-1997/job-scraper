@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/schedule"
@@ -60,7 +61,7 @@ func main() {
 			slog.Error("dispatch failed", slog.String("url", url), slog.Any("err", err))
 			return err
 		}
-		if err := db.UpsertJob(ctx, job); err != nil {
+		if err := db.Save(ctx, []dto.Job{job}); err != nil {
 			slog.Error("upsert failed", slog.String("url", url), slog.Any("err", err))
 			return err
 		}

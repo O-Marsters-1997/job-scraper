@@ -6,8 +6,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// JobProvider is the single access point for job persistence.
+// Callers never import pgsqlc or pgtype directly.
 type JobProvider interface {
-	UpsertJobs(ctx context.Context, jobs []dto.Job) error
-	UpsertJob(ctx context.Context, job dto.Job) error
-	FilterNewURLs(ctx context.Context, urls []string) ([]string, error)
+	// Save writes one or more jobs, inserting or updating on URL conflict.
+	// The implementation selects the most efficient DB path based on input size.
+	// Passing an empty slice is a no-op.
+	Save(ctx context.Context, jobs []dto.Job) error
+
+	// NewURLs returns the subset of urls that do not yet exist in the DB.
+	NewURLs(ctx context.Context, urls []string) ([]string, error)
+
+	// List returns all stored jobs ordered by scrape time descending.
+	List(ctx context.Context) ([]dto.Job, error)
 }
