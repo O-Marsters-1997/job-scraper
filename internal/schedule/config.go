@@ -31,14 +31,15 @@ func (c *Config) Initialize(ctx context.Context, db providers.JobProvider, q *qu
 	cr := cron.New()
 
 	for _, src := range c.sources {
-		if _, err := cr.AddFunc(src.FetchSchedule(), func() {
-			slog.Info("cron: starting scrape", slog.String("source", src.Name()))
+		cfg := src.Cfg()
+		if _, err := cr.AddFunc(cfg.Schedule, func() {
+			slog.Info("cron: starting scrape", slog.String("source", cfg.Name))
 			scraper.RunIfReady(ctx, src, db, q)
 		}); err != nil {
 			cr.Stop()
-			return nil, fmt.Errorf("schedule %s (%s): %w", src.Name(), src.FetchSchedule(), err)
+			return nil, fmt.Errorf("schedule %s (%s): %w", cfg.Name, cfg.Schedule, err)
 		}
-		slog.Info("cron: scheduled", slog.String("source", src.Name()), slog.String("schedule", src.FetchSchedule()))
+		slog.Info("cron: scheduled", slog.String("source", cfg.Name), slog.String("schedule", cfg.Schedule))
 	}
 
 	cr.Start()

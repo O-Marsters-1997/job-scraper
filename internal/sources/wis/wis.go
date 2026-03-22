@@ -5,65 +5,32 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
-	"math/rand/v2"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 	"golang.org/x/net/html"
 )
 
 const (
-	startURL        = "https://workinstartups.com/search?loc=86384&pp=50&sb=date&sd=down&q=product%20engineer&per_page=50"
-	defaultTimeout  = 15 * time.Second
-	resultsPerPage  = 50
-	minWait         = 2 * time.Second
-	maxWait         = 7 * time.Second
-	defaultSchedule = "0 */6 * * *" // every 6 hours
+	startURL       = "https://workinstartups.com/search?loc=86384&pp=50&sb=date&sd=down&q=product%20engineer&per_page=50"
+	resultsPerPage = 50
 )
 
-type Scraper struct {
-	client *http.Client
-}
+type Scraper struct{ sources.PaginatedBase }
+
+var _ sources.Source = (*Scraper)(nil)
 
 func New() *Scraper {
-	return &Scraper{
-		client: &http.Client{Timeout: defaultTimeout},
-	}
-}
-
-func (s *Scraper) Name() string                     { return "wis" }
-func (s *Scraper) FetchSchedule() string            { return defaultSchedule }
-func (s *Scraper) MinScrapeInterval() time.Duration { return 5 * time.Hour }
-
-func (s *Scraper) FetchURLs(ctx context.Context) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, startURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; job-scraper/1.0)")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status %s", resp.Status)
-	}
-
-	urls, err := ParseURLs(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	slog.Debug("wis page parsed", slog.String("source", "wis"), slog.Int("count", len(urls)))
-	return urls, nil
+	return &Scraper{sources.NewBase(sources.Config{
+		Name:              "wis",
+		URLPrefix:         "https://workinstartups.com",
+		Schedule:          "0 */6 * * *",
+		MinScrapeInterval: 5 * time.Hour,
+	})}
 }
 
 func pageURL(page int) string {
@@ -73,28 +40,10 @@ func pageURL(page int) string {
 	return fmt.Sprintf("%s&p=%d", startURL, page)
 }
 
-// fetchPage fetches a single page and returns the URLs and, for page 1, the
-// total result count. totalCount is 0 for pages other than 1.
 func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, totalCount int, err error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL(page), nil)
+	body, err := s.Get(ctx, pageURL(page))
 	if err != nil {
 		return nil, 0, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; job-scraper/1.0)")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("unexpected status %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, 0, fmt.Errorf("read body: %w", err)
 	}
 
 	urls, err = ParseURLs(bytes.NewReader(body))
@@ -113,46 +62,15 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, total
 }
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
-	page1, total, err := s.fetchPage(ctx, 1)
+	return s.IteratePages(ctx, fn, s.fetchPage, resultsPerPage)
+}
+
+func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+	body, err := s.Get(ctx, url)
 	if err != nil {
-		return fmt.Errorf("wis page 1: %w", err)
+		return dto.Job{}, err
 	}
-
-	pages := TotalPages(total)
-	slog.Info("wis iterating", slog.String("source", "wis"), slog.Int("total", total), slog.Int("pages", pages))
-
-	stop, err := fn(ctx, page1)
-	if err != nil || stop {
-		return err
-	}
-
-	for p := 2; p <= pages; p++ {
-		wait := minWait + time.Duration(rand.Int64N(int64(maxWait-minWait)))
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(wait):
-		}
-
-		slog.Debug("wis fetching page", slog.String("source", "wis"), slog.Int("page", p), slog.Int("of", pages))
-
-		pageURLs, _, err := s.fetchPage(ctx, p)
-		if err != nil {
-			slog.Error("wis page failed", slog.String("source", "wis"), slog.Int("page", p), slog.Any("err", err))
-			continue
-		}
-
-		stop, err = fn(ctx, pageURLs)
-		if err != nil {
-			return err
-		}
-		if stop {
-			slog.Info("wis early stop", slog.String("source", "wis"), slog.Int("page", p))
-			break
-		}
-	}
-
-	return nil
+	return ParseJobDetail(bytes.NewReader(body), url)
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {
@@ -240,30 +158,6 @@ func attr(n *html.Node, key string) string {
 		}
 	}
 	return ""
-}
-
-func (s *Scraper) CanHandle(url string) bool {
-	return strings.Contains(url, "workinstartups.com")
-}
-
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return dto.Job{}, err
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; job-scraper/1.0)")
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return dto.Job{}, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return dto.Job{}, fmt.Errorf("unexpected status %s", resp.Status)
-	}
-
-	return ParseJobDetail(resp.Body, url)
 }
 
 func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {

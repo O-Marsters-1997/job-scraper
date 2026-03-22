@@ -29,34 +29,36 @@ func Seed(ctx context.Context, srcs []sources.Source, db providers.JobProvider, 
 }
 
 func RunIfReady(ctx context.Context, src sources.Source, db providers.JobProvider, q *queue.Queue) {
-	last, ok, err := q.GetLastScraped(ctx, src.Name())
+	cfg := src.Cfg()
+	last, ok, err := q.GetLastScraped(ctx, cfg.Name)
 	if err != nil {
-		slog.Error("could not read last scraped", slog.String("source", src.Name()), slog.Any("err", err))
+		slog.Error("could not read last scraped", slog.String("source", cfg.Name), slog.Any("err", err))
 		// fail open — proceed with the scrape
 	}
-	if ok && time.Since(last) < src.MinScrapeInterval() {
+	if ok && time.Since(last) < cfg.MinScrapeInterval {
 		slog.Info("skipping scrape: ran recently",
-			slog.String("source", src.Name()),
+			slog.String("source", cfg.Name),
 			slog.Duration("ago", time.Since(last)),
 		)
 		return
 	}
 	if err := run(ctx, src, db, q); err != nil {
-		slog.Error("scrape failed", slog.String("source", src.Name()), slog.Any("err", err))
+		slog.Error("scrape failed", slog.String("source", cfg.Name), slog.Any("err", err))
 		return
 	}
-	if err := q.SetLastScraped(ctx, src.Name(), time.Now()); err != nil {
-		slog.Error("could not set last scraped", slog.String("source", src.Name()), slog.Any("err", err))
+	if err := q.SetLastScraped(ctx, cfg.Name, time.Now()); err != nil {
+		slog.Error("could not set last scraped", slog.String("source", cfg.Name), slog.Any("err", err))
 	}
 }
 
 func run(ctx context.Context, src sources.Source, db providers.JobProvider, q *queue.Queue) error {
+	name := src.Cfg().Name
 	seen := make(map[string]struct{})
 
 	return src.Iterate(ctx, func(ctx context.Context, rawURLs []string) (bool, error) {
 		newURLs, err := db.FilterNewURLs(ctx, rawURLs)
 		if err != nil {
-			slog.Error("filter failed", slog.String("source", src.Name()), slog.Any("err", err))
+			slog.Error("filter failed", slog.String("source", name), slog.Any("err", err))
 			newURLs = rawURLs // fail open
 		}
 
@@ -79,7 +81,7 @@ func run(ctx context.Context, src sources.Source, db providers.JobProvider, q *q
 			return false, err
 		}
 
-		slog.Info("enqueued page", slog.String("source", src.Name()), slog.Int("count", len(deduped)))
+		slog.Info("enqueued page", slog.String("source", name), slog.Int("count", len(deduped)))
 		return false, nil
 	})
 }
