@@ -11,7 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
@@ -45,14 +44,12 @@ func main() {
 
 	srcs := []sources.Source{wis.New()}
 
-	cr, err := schedule.New(srcs).Initialize(ctx, db, q)
-	if err != nil {
-		slog.Error("scheduler init failed", slog.Any("err", err))
+	orch := scraper.New(srcs, db, q)
+	if err := orch.Start(ctx); err != nil {
+		slog.Error("orchestrator start failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer cr.Stop()
-
-	scraper.Seed(ctx, srcs, db, q)
+	defer orch.Stop()
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
