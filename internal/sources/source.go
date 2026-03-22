@@ -22,7 +22,6 @@ const (
 	userAgent                = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
-// Config holds the static metadata every source must declare.
 type Config struct {
 	// Name is the canonical identifier, e.g. "wis", "greenhouse".
 	Name string
@@ -39,9 +38,7 @@ type Config struct {
 	URLPrefix string
 }
 
-// Source is the interface every job board scraper must implement.
 type Source interface {
-	// Cfg returns the static configuration for this source.
 	Cfg() Config
 
 	// CanHandle reports whether this source produced url and can parse its
@@ -57,15 +54,11 @@ type Source interface {
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 
-// PaginatedBase is an embeddable struct that provides shared HTTP infrastructure
-// and a standard pagination loop for sources that paginate by page number.
-// Embed it in your source struct and call NewBase to initialise it.
 type PaginatedBase struct {
 	cfg    Config
 	client *http.Client
 }
 
-// NewBase constructs a PaginatedBase, filling in defaults for empty Config fields.
 func NewBase(cfg Config) PaginatedBase {
 	if cfg.Schedule == "" {
 		cfg.Schedule = DefaultSchedule
@@ -79,19 +72,14 @@ func NewBase(cfg Config) PaginatedBase {
 	}
 }
 
-// Cfg returns the source's static configuration.
 func (b *PaginatedBase) Cfg() Config { return b.cfg }
 
-// CanHandle reports whether url starts with the configured URLPrefix.
 func (b *PaginatedBase) CanHandle(url string) bool {
 	return strings.HasPrefix(url, b.cfg.URLPrefix)
 }
 
-// Client returns the shared HTTP client.
 func (b *PaginatedBase) Client() *http.Client { return b.client }
 
-// Get performs an HTTP GET with the standard User-Agent, asserts a 200 response,
-// and returns the body bytes.
 func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -103,7 +91,7 @@ func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
@@ -116,9 +104,6 @@ func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-// IteratePages runs a standard numbered-page loop, calling fn for each page's URLs.
-// fetchPage must return (urls, totalCount, err); totalCount is only used from page 1
-// to compute the total number of pages. A random jitter sleep is applied between pages.
 func (b *PaginatedBase) IteratePages(
 	ctx context.Context,
 	fn func(context.Context, []string) (bool, error),

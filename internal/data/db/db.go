@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DB wraps a pgxpool connection pool.
 type DB struct {
 	pool *pgxpool.Pool
 }
@@ -32,7 +31,6 @@ func New(ctx context.Context, connString string) (*DB, error) {
 	return &DB{pool: pool}, nil
 }
 
-// Close closes the connection pool.
 func (db *DB) Close() {
 	db.pool.Close()
 }

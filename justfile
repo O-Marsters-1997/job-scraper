@@ -12,7 +12,6 @@ default:
 # build the binary
 build:
     go build -o bin/scraper ./cmd
-    go build -o bin/migrate ./scripts/migrate
 
 # run the scraper
 run *args:
@@ -26,10 +25,9 @@ generate:
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 
-# format all Go files
+# format all Go files (uses .golangci.yml formatters, same as CI)
 fmt:
-    gofmt -w .
-    goimports -w .
+    golangci-lint fmt ./...
 
 # run linter
 lint:
@@ -42,6 +40,12 @@ test:
 # run tests with race detector
 test-race:
     go test -race ./...
+
+ci:
+    just lint
+    just generate
+    just test
+    just build
 
 # ── Services ──────────────────────────────────────────────────────────────────
 

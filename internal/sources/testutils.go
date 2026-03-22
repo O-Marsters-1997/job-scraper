@@ -27,7 +27,7 @@ func RunSnapshotTests(t *testing.T, parse func(io.Reader) ([]dto.Job, error)) {
 			if err != nil {
 				t.Fatalf("open html: %v", err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			got, err := parse(f)
 			if err != nil {
@@ -67,7 +67,7 @@ func RunSnapshotTestsURLs(t *testing.T, parse func(io.Reader) ([]string, error))
 			if err != nil {
 				t.Fatalf("open html: %v", err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			got, err := parse(f)
 			if err != nil {

@@ -13,12 +13,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Config holds the set of sources to schedule.
 type Config struct {
 	sources []sources.Source
 }
 
-// New constructs a Config from the given sources.
 func New(srcs []sources.Source) *Config {
 	return &Config{sources: srcs}
 }
@@ -27,7 +25,7 @@ func New(srcs []sources.Source) *Config {
 // runIfReady), registers one cron job per source, starts the scheduler, and
 // returns the running *cron.Cron. The caller is responsible for calling Stop()
 // on shutdown.
-func (c *Config) Initialize(ctx context.Context, db providers.JobProvider, q *queue.Queue) (*cron.Cron, error) {
+func (c *Config) Initialize(ctx context.Context, db providers.JobProvider, q queue.JobQueue) (*cron.Cron, error) {
 	cr := cron.New()
 
 	for _, src := range c.sources {

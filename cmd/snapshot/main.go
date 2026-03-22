@@ -65,7 +65,7 @@ func download(source, name, url string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status %s", resp.Status)
@@ -76,7 +76,7 @@ func download(source, name, url string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return err
@@ -110,7 +110,7 @@ func rebase(source string) error {
 		}
 
 		urls, err := parse(f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", htmlPath, err)
 		}
