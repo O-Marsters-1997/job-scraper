@@ -25,10 +25,9 @@ generate:
 
 # ── Code quality ──────────────────────────────────────────────────────────────
 
-# format all Go files
+# format all Go files (uses .golangci.yml formatters, same as CI)
 fmt:
-    gofmt -w .
-    goimports -w .
+    golangci-lint fmt ./...
 
 # run linter
 lint:

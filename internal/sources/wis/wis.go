@@ -10,9 +10,10 @@ import (
 	"time"
 	"unicode"
 
+	"golang.org/x/net/html"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
-	"golang.org/x/net/html"
 )
 
 const (

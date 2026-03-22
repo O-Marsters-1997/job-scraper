@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
