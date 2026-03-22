@@ -38,17 +38,11 @@ type JobQueue interface {
 
 // Queue wraps a Valkey client and owns the jobs pending sorted set.
 type Queue struct {
-	client  valkey.Client
-	nowFunc func() time.Time
+	client valkey.Client
 }
 
 // New connects to Valkey at addr and verifies connectivity with PING.
 func New(addr string) (*Queue, error) {
-	return newWithClock(addr, time.Now)
-}
-
-// newWithClock is New with an injectable clock, used by tests.
-func newWithClock(addr string, nowFunc func() time.Time) (*Queue, error) {
 	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{addr},
 	})
@@ -61,7 +55,7 @@ func newWithClock(addr string, nowFunc func() time.Time) (*Queue, error) {
 		return nil, fmt.Errorf("valkey ping: %w", err)
 	}
 
-	return &Queue{client: client, nowFunc: nowFunc}, nil
+	return &Queue{client: client}, nil
 }
 
 // Enqueue adds all urls to the sorted set with score = now.UnixMilli().
@@ -72,7 +66,7 @@ func (q *Queue) Enqueue(ctx context.Context, urls []string) error {
 		return nil
 	}
 
-	score := float64(q.nowFunc().UnixMilli())
+	score := float64(time.Now().UnixMilli())
 	sm := q.client.B().Zadd().Key(sortedSetKey).Nx().ScoreMember()
 	for _, url := range urls {
 		sm = sm.ScoreMember(score, url)
@@ -99,7 +93,7 @@ func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
 // SetLastScraped records that source was scraped at the current time.
 func (q *Queue) SetLastScraped(ctx context.Context, source string) error {
 	key := fmt.Sprintf(lastScrapedKeyFmt, source)
-	val := fmt.Sprintf("%d", q.nowFunc().UnixMilli())
+	val := fmt.Sprintf("%d", time.Now().UnixMilli())
 	cmd := q.client.B().Set().Key(key).Value(val).Build()
 	return q.client.Do(ctx, cmd).Error()
 }

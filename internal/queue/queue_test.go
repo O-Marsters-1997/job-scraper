@@ -48,13 +48,13 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// newTestQueue returns a Queue connected to the test Valkey instance with a fixed clock.
-// It registers a Cleanup to close the connection and flush the DB after the test.
-func newTestQueue(t *testing.T, now time.Time) *Queue {
+// newTestQueue returns a Queue connected to the test Valkey instance.
+// It registers a Cleanup to flush the DB and close the connection after the test.
+func newTestQueue(t *testing.T) *Queue {
 	t.Helper()
-	q, err := newWithClock(testAddr, func() time.Time { return now })
+	q, err := New(testAddr)
 	if err != nil {
-		t.Fatalf("newWithClock: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = q.client.Do(context.Background(), q.client.B().Flushdb().Build()).Error()
@@ -65,8 +65,7 @@ func newTestQueue(t *testing.T, now time.Time) *Queue {
 
 func TestEnqueue_Deduplication(t *testing.T) {
 	ctx := context.Background()
-	now := time.Now()
-	q := newTestQueue(t, now)
+	q := newTestQueue(t)
 
 	url := "https://example.com/job/1"
 
@@ -88,7 +87,7 @@ func TestEnqueue_Deduplication(t *testing.T) {
 
 func TestEnqueue_Batch(t *testing.T) {
 	ctx := context.Background()
-	q := newTestQueue(t, time.Now())
+	q := newTestQueue(t)
 
 	urls := make([]string, 20)
 	for i := range urls {
@@ -110,7 +109,7 @@ func TestEnqueue_Batch(t *testing.T) {
 
 func TestEnqueue_Empty(t *testing.T) {
 	ctx := context.Background()
-	q := newTestQueue(t, time.Now())
+	q := newTestQueue(t)
 
 	if err := q.Enqueue(ctx, nil); err != nil {
 		t.Errorf("Enqueue(nil): %v", err)
@@ -122,7 +121,7 @@ func TestEnqueue_Empty(t *testing.T) {
 
 func TestDequeue_Empty(t *testing.T) {
 	ctx := context.Background()
-	q := newTestQueue(t, time.Now())
+	q := newTestQueue(t)
 
 	url, ok, err := q.Dequeue(ctx)
 	if err != nil {
@@ -135,7 +134,7 @@ func TestDequeue_Empty(t *testing.T) {
 
 func TestDequeue_Atomic(t *testing.T) {
 	ctx := context.Background()
-	q := newTestQueue(t, time.Now())
+	q := newTestQueue(t)
 
 	url := "https://example.com/job/atomic"
 	if err := q.Enqueue(ctx, []string{url}); err != nil {
@@ -170,14 +169,15 @@ func TestDequeue_Atomic(t *testing.T) {
 
 func TestSetLastScraped_GetLastScraped(t *testing.T) {
 	ctx := context.Background()
-	fixedTime := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	q := newTestQueue(t, fixedTime)
+	q := newTestQueue(t)
 
 	source := "test-source"
 
+	before := time.Now().Truncate(time.Millisecond)
 	if err := q.SetLastScraped(ctx, source); err != nil {
 		t.Fatalf("SetLastScraped: %v", err)
 	}
+	after := time.Now().Truncate(time.Millisecond).Add(time.Millisecond)
 
 	got, ok, err := q.GetLastScraped(ctx, source)
 	if err != nil {
@@ -186,16 +186,14 @@ func TestSetLastScraped_GetLastScraped(t *testing.T) {
 	if !ok {
 		t.Fatal("want ok=true, got false")
 	}
-
-	// Compare at millisecond precision (UnixMilli round-trip).
-	if !got.Equal(fixedTime.Truncate(time.Millisecond)) {
-		t.Errorf("want %v, got %v", fixedTime, got)
+	if got.Before(before) || got.After(after) {
+		t.Errorf("got time %v outside expected window [%v, %v]", got, before, after)
 	}
 }
 
 func TestGetLastScraped_NeverScraped(t *testing.T) {
 	ctx := context.Background()
-	q := newTestQueue(t, time.Now())
+	q := newTestQueue(t)
 
 	got, ok, err := q.GetLastScraped(ctx, "unknown-source")
 	if err != nil {
