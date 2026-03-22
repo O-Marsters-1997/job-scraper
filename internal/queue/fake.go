@@ -18,7 +18,6 @@ type FakeQueue struct {
 	DequeueErr error
 }
 
-// NewFakeQueue returns a ready-to-use FakeQueue.
 func NewFakeQueue() *FakeQueue {
 	return &FakeQueue{lastScraped: make(map[string]time.Time)}
 }

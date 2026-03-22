@@ -26,7 +26,6 @@ type JobQueue interface {
 	// Returns ("", false, nil) when nothing is ready.
 	Dequeue(ctx context.Context) (string, bool, error)
 
-	// SetLastScraped records that source was scraped at the current time.
 	SetLastScraped(ctx context.Context, source string) error
 
 	// GetLastScraped returns the time of the last successful scrape for source.
@@ -58,9 +57,6 @@ func New(addr string) (*Queue, error) {
 	return &Queue{client: client}, nil
 }
 
-// Enqueue adds all urls to the sorted set with score = now.UnixMilli().
-// All urls are sent in a single ZADD NX command. Already-queued URLs are
-// silently skipped.
 func (q *Queue) Enqueue(ctx context.Context, urls []string) error {
 	if len(urls) == 0 {
 		return nil
@@ -75,8 +71,6 @@ func (q *Queue) Enqueue(ctx context.Context, urls []string) error {
 	return q.client.Do(ctx, sm.Build()).Error()
 }
 
-// Dequeue atomically removes and returns the next ready URL using ZPOPMIN.
-// Returns ("", false, nil) when the queue is empty.
 func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
 	cmd := q.client.B().Zpopmin().Key(sortedSetKey).Count(1).Build()
 	scores, err := q.client.Do(ctx, cmd).AsZScores()
@@ -90,7 +84,6 @@ func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
 	return scores[0].Member, true, nil
 }
 
-// SetLastScraped records that source was scraped at the current time.
 func (q *Queue) SetLastScraped(ctx context.Context, source string) error {
 	key := fmt.Sprintf(lastScrapedKeyFmt, source)
 	val := fmt.Sprintf("%d", time.Now().UnixMilli())
@@ -98,8 +91,6 @@ func (q *Queue) SetLastScraped(ctx context.Context, source string) error {
 	return q.client.Do(ctx, cmd).Error()
 }
 
-// GetLastScraped returns the time of the last successful scrape for a source.
-// ok is false when the key does not exist (source has never been scraped).
 func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, bool, error) {
 	key := fmt.Sprintf(lastScrapedKeyFmt, source)
 	cmd := q.client.B().Get().Key(key).Build()
@@ -113,7 +104,6 @@ func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, b
 	return time.UnixMilli(val), true, nil
 }
 
-// Close closes the underlying Valkey connection.
 func (q *Queue) Close() {
 	q.client.Close()
 }

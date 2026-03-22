@@ -13,12 +13,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Config holds the set of sources to schedule.
 type Config struct {
 	sources []sources.Source
 }
 
-// New constructs a Config from the given sources.
 func New(srcs []sources.Source) *Config {
 	return &Config{sources: srcs}
 }

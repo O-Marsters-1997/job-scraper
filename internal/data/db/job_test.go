@@ -32,8 +32,6 @@ var jobCmpOpts = cmp.Options{
 	}),
 }
 
-// jobFromSource builds the expected pgsqlc.Job from a sources.Job for use in
-// cmp.Diff assertions.
 func jobFromSource(j dto.Job) pgsqlc.Job {
 	return pgsqlc.Job{
 		Title:       j.Title,

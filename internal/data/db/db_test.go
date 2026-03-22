@@ -62,7 +62,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// truncate clears the jobs table so each test starts from a clean state.
 func truncate(t *testing.T) {
 	t.Helper()
 	if _, err := testDB.Pool().Exec(context.Background(), "TRUNCATE jobs"); err != nil {

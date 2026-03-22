@@ -9,7 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
-// HandlerFunc processes a single URL.
 type HandlerFunc func(ctx context.Context, url string) error
 
 // Run processes one job at a time with a random 10–15s pause between items.
@@ -30,7 +29,6 @@ func Run(ctx context.Context, q queue.JobQueue, handler HandlerFunc) error {
 		}
 
 		if !ok {
-			// Queue empty — back off for 15 minutes.
 			slog.Info("worker: queue empty, sleeping", slog.Duration("for", 15*time.Minute))
 			if !sleep(ctx, 15*time.Minute) {
 				return nil
