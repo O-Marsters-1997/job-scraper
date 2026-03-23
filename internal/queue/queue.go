@@ -16,7 +16,6 @@ const (
 // JobQueue is the boundary all callers depend on.
 // Timing decisions (time.Now, UnixMilli conversion) are owned by the implementation.
 type JobQueue interface {
-	// Enqueue adds urls for immediate processing.
 	// ZADD NX semantics: already-queued URLs are silently skipped.
 	// All urls are enqueued in a single command.
 	Enqueue(ctx context.Context, urls []string) error
@@ -28,7 +27,6 @@ type JobQueue interface {
 
 	SetLastScraped(ctx context.Context, source string) error
 
-	// GetLastScraped returns the time of the last successful scrape for source.
 	// Returns (zero, false, nil) when the source has never been scraped.
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 

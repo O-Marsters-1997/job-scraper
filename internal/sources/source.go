@@ -50,7 +50,6 @@ type Source interface {
 	// Respects ctx cancellation.
 	Iterate(ctx context.Context, fn func(ctx context.Context, urls []string) (stop bool, err error)) error
 
-	// GetDetails fetches url and returns a fully-populated Job.
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 

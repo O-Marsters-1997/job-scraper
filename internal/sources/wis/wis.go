@@ -47,9 +47,13 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, total
 		return nil, 0, err
 	}
 
-	urls, err = ParseURLs(bytes.NewReader(body))
+	jobs, err := ParseURLs(bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
+	}
+	urls = make([]string, len(jobs))
+	for i, j := range jobs {
+		urls[i] = j.URL
 	}
 
 	if page == 1 {
@@ -60,6 +64,14 @@ func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, total
 	}
 
 	return urls, totalCount, nil
+}
+
+func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
+	return ParseURLs(r)
+}
+
+func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
+	return ParseJobDetail(r, url)
 }
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
@@ -96,7 +108,7 @@ func TotalPages(totalCount int) int {
 	return (totalCount + resultsPerPage - 1) / resultsPerPage
 }
 
-func ParseURLs(r io.Reader) ([]string, error) {
+func ParseURLs(r io.Reader) ([]dto.Job, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, fmt.Errorf("parse html: %w", err)
@@ -104,14 +116,14 @@ func ParseURLs(r io.Reader) ([]string, error) {
 	return extractURLs(doc), nil
 }
 
-func extractURLs(n *html.Node) []string {
-	var urls []string
+func extractURLs(n *html.Node) []dto.Job {
+	var jobs []dto.Job
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "div" {
 			if attr(n, "data-aid") != "" {
 				if u := parseJobCardURL(n); u != "" {
-					urls = append(urls, u)
+					jobs = append(jobs, dto.Job{URL: u})
 					return // don't recurse into the card
 				}
 			}
@@ -121,7 +133,7 @@ func extractURLs(n *html.Node) []string {
 		}
 	}
 	walk(n)
-	return urls
+	return jobs
 }
 
 func parseJobCardURL(card *html.Node) string {

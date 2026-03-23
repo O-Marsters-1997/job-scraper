@@ -10,11 +10,12 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 )
 
-var parsers = map[string]func(io.Reader) ([]string, error){
-	"wis": wis.ParseURLs,
+var parsers = map[string]sources.SnapshotSource{
+	"wis": wis.New(),
 }
 
 func main() {
@@ -81,13 +82,23 @@ func download(source, name, url string) error {
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		return err
 	}
-
 	fmt.Printf("saved %s\n", outPath)
+
+	// For detail snapshots, write a sidecar URL file so rebase knows which
+	// URL to pass to ParseJobDetail.
+	if strings.HasPrefix(name, "detail_") {
+		urlPath := filepath.Join(dir, name+".url")
+		if err := os.WriteFile(urlPath, []byte(url), 0o644); err != nil {
+			return fmt.Errorf("write url sidecar %s: %w", urlPath, err)
+		}
+		fmt.Printf("saved %s\n", urlPath)
+	}
+
 	return nil
 }
 
 func rebase(source string) error {
-	parse, ok := parsers[source]
+	src, ok := parsers[source]
 	if !ok {
 		return fmt.Errorf("unknown source %q (known: %s)", source, knownSources())
 	}
@@ -109,23 +120,43 @@ func rebase(source string) error {
 			return fmt.Errorf("open %s: %w", htmlPath, err)
 		}
 
-		urls, err := parse(f)
-		_ = f.Close()
-		if err != nil {
-			return fmt.Errorf("parse %s: %w", htmlPath, err)
+		var result any
+		var count int
+		if strings.HasPrefix(name, "detail_") {
+			urlPath := filepath.Join(dir, name+".url")
+			urlBytes, err := os.ReadFile(urlPath)
+			if err != nil {
+				_ = f.Close()
+				return fmt.Errorf("read url sidecar %s: %w (run `just cli download %s %s <url>` to create it)", urlPath, err, source, name)
+			}
+			job, err := src.ParseJobDetail(f, strings.TrimSpace(string(urlBytes)))
+			_ = f.Close()
+			if err != nil {
+				return fmt.Errorf("parse %s: %w", htmlPath, err)
+			}
+			result = []any{job}
+			count = 1
+		} else {
+			jobs, err := src.ParseURLs(f)
+			_ = f.Close()
+			if err != nil {
+				return fmt.Errorf("parse %s: %w", htmlPath, err)
+			}
+			result = jobs
+			count = len(jobs)
 		}
 
-		data, err := json.MarshalIndent(urls, "", "  ")
+		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshal %s: %w", name, err)
 		}
 
 		jsonPath := filepath.Join(dir, name+".json")
-		if err := os.WriteFile(jsonPath, data, 0o644); err != nil {
+		if err := os.WriteFile(jsonPath, append(data, '\n'), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", jsonPath, err)
 		}
 
-		fmt.Printf("rebased %s (%d urls)\n", jsonPath, len(urls))
+		fmt.Printf("rebased %s (%d entries)\n", jsonPath, count)
 	}
 	return nil
 }

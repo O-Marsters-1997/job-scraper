@@ -14,7 +14,6 @@ type JobProvider interface {
 	// Passing an empty slice is a no-op.
 	Save(ctx context.Context, jobs []dto.Job) error
 
-	// NewURLs returns the subset of urls that do not yet exist in the DB.
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 
 	// List returns all stored jobs ordered by scrape time descending.

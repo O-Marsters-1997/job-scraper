@@ -26,7 +26,6 @@ var jobCmpOpts = cmp.Options{
 	}),
 }
 
-// findByURL returns the first job in jobs matching url, or (zero, false).
 func findByURL(jobs []dto.Job, url string) (dto.Job, bool) {
 	for _, j := range jobs {
 		if j.URL == url {

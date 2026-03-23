@@ -89,14 +89,22 @@ Copy `.env.example` to `.env` and adjust if your local setup differs from the de
    srcs := []sources.Source{wis.New(), mynewsource.New()}
    ```
 
-3. **Add snapshot tests**:
+3. **Add snapshot tests** — capture one list page and at least one detail page:
    ```sh
-   # Capture HTML snapshots
-   just cli download <source> <name> <url>
+   # Capture a list-page snapshot
+   just cli download <source> list_page1 <url>
+   # Capture a detail-page snapshot (also writes a .url sidecar for rebase)
+   just cli download <source> detail_job1 <url>
    # Generate JSON fixtures from current parser output
    just cli rebase <source>
    ```
-   Then write a test that calls `testutils.RunSnapshotTestsURLs` or `RunSnapshotTests`.
+   Then write a single test:
+   ```go
+   func TestSnapshots(t *testing.T) {
+       sources.RunSnapshotTests(t, mynewsource.New())
+   }
+   ```
+   The framework routes `list_*.html` to `ParseURLs` and `detail_*.html` to `ParseJobDetail` automatically. All fixtures use `[]dto.Job` as their JSON schema.
 
 ## Testing
 
@@ -106,7 +114,42 @@ just test-race   # with race detector
 just ci          # fmt + lint + test
 ```
 
-Queue integration tests use [testcontainers](https://testcontainers.com) to spin up a real Valkey instance. Parser tests use committed HTML snapshots — no network required.
+### Strategy
+
+Tests are grouped by layer, each with a different scope and dependency profile:
+
+| Layer | Approach | Dependencies |
+|---|---|---|
+| **Parsers** (`ParseURLs`, `ParseJobDetail`) | Snapshot tests — parse committed HTML fixtures, compare against committed JSON | None (zero network) |
+| **DB** (`Save`, `NewURLs`, `List`) | Integration — real PostgreSQL via testcontainers | Docker |
+| **Queue** (`Enqueue`, `Dequeue`, etc.) | Integration — real Valkey via testcontainers | Docker |
+| **Orchestrator** | Unit — `MockQueue`, `MockJobProvider`, stub `Source` | None |
+| **Worker** | Unit — `MockQueue`, stub `HandlerFunc` | None |
+
+**Snapshot tests** are the primary pattern for new sources. All parser fixtures share a single `[]dto.Job` JSON schema — list pages produce URL-only entries, detail pages produce fully-populated entries. File prefix determines which parser the framework calls: `list_*.html` → `ParseURLs`, `detail_*.html` → `ParseJobDetail`.
+
+**Integration tests** (DB and queue) prove the real infrastructure implementations work and are the only tests that require Docker. They are isolated — each test truncates or flushes to avoid cross-contamination.
+
+**Unit tests** (orchestrator and worker) use mock implementations (`MockQueue` in `internal/queue/`, `MockJobProvider` in `internal/data/providers/`) that live outside `_test.go` so they can be imported across packages. These tests run in milliseconds with no infrastructure.
+
+### Adding snapshot tests for a new source
+
+```sh
+# Capture fixtures
+just cli download <source> list_page1 <listing-url>
+just cli download <source> detail_job1 <detail-url>
+# Generate JSON from current parser output
+just cli rebase <source>
+```
+
+Write one test:
+```go
+func TestSnapshots(t *testing.T) {
+    sources.RunSnapshotTests(t, mynewsource.New())
+}
+```
+
+To update fixtures after a parser change: `just cli rebase <source>`.
 
 ## Future Directions
 
