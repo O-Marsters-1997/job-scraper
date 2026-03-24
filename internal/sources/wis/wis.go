@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	"golang.org/x/net/html"
+	"github.com/PuerkitoBio/goquery"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -19,6 +19,14 @@ import (
 const (
 	startURL       = "https://workinstartups.com/search?q=product+engineer&w=uk&per_page=50"
 	resultsPerPage = 50
+
+	selJobCard    = `div[data-aid]`
+	selJobLink    = `h2 a`
+	selTotalCount = `span[data-cy-count]`
+	selTitle      = `h1`
+	selCompany    = `.ui-company`
+	selLocation   = `.ui-location`
+	selTime       = `time[datetime]`
 )
 
 type Scraper struct{ sources.PaginatedBase }
@@ -87,17 +95,15 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {
-	doc, err := html.Parse(r)
+	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return 0, fmt.Errorf("parse html: %w", err)
 	}
-	span := findFirst(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "span" && attr(n, "data-cy-count") != ""
-	})
-	if span == nil {
+	val := doc.Find(selTotalCount).First().AttrOr("data-cy-count", "")
+	if val == "" {
 		return 0, fmt.Errorf("data-cy-count element not found")
 	}
-	count, err := strconv.Atoi(attr(span, "data-cy-count"))
+	count, err := strconv.Atoi(val)
 	if err != nil {
 		return 0, fmt.Errorf("parse data-cy-count: %w", err)
 	}
@@ -109,105 +115,44 @@ func TotalPages(totalCount int) int {
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
-	doc, err := html.Parse(r)
+	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return nil, fmt.Errorf("parse html: %w", err)
 	}
-	return extractURLs(doc), nil
-}
-
-func extractURLs(n *html.Node) []dto.Job {
 	var jobs []dto.Job
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "div" {
-			if attr(n, "data-aid") != "" {
-				if u := parseJobCardURL(n); u != "" {
-					jobs = append(jobs, dto.Job{URL: u})
-					return // don't recurse into the card
-				}
-			}
+	doc.Find(selJobCard).Each(func(_ int, card *goquery.Selection) {
+		href, ok := card.Find(selJobLink).Attr("href")
+		if ok && href != "" {
+			jobs = append(jobs, dto.Job{URL: href})
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(n)
-	return jobs
-}
-
-func parseJobCardURL(card *html.Node) string {
-	h2 := findFirst(card, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "h2"
 	})
-	if h2 == nil {
-		return ""
-	}
-	a := findFirst(h2, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "a"
-	})
-	if a == nil {
-		return ""
-	}
-	return attr(a, "href")
-}
-
-func findFirst(n *html.Node, pred func(*html.Node) bool) *html.Node {
-	if pred(n) {
-		return n
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if found := findFirst(c, pred); found != nil {
-			return found
-		}
-	}
-	return nil
-}
-
-func attr(n *html.Node, key string) string {
-	for _, a := range n.Attr {
-		if a.Key == key {
-			return a.Val
-		}
-	}
-	return ""
+	return jobs, nil
 }
 
 func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
-	doc, err := html.Parse(r)
+	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {
 		return dto.Job{}, fmt.Errorf("parse html: %w", err)
 	}
 
-	title := strings.TrimSpace(textContent(findFirst(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "h1"
-	})))
-
-	companyName := ""
-	if companyNode := findFirst(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && hasClass(n, "ui-company")
-	}); companyNode != nil {
-		if v := attr(companyNode, "data-company-name"); v != "" {
-			companyName = v
-		} else {
-			companyName = strings.TrimSpace(textContent(companyNode))
-		}
+	title := strings.TrimSpace(doc.Find(selTitle).First().Text())
+	if title == "" {
+		return dto.Job{}, fmt.Errorf("title not found (selector: %q)", selTitle)
 	}
 
-	location := ""
-	if locNode := findFirst(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && hasClass(n, "ui-location")
-	}); locNode != nil {
-		location = strings.TrimSpace(textContent(locNode))
+	companyNode := doc.Find(selCompany).First()
+	company := companyNode.AttrOr("data-company-name", "")
+	if company == "" {
+		company = strings.TrimSpace(companyNode.Text())
 	}
+
+	location := strings.TrimSpace(doc.Find(selLocation).First().Text())
 
 	updatedAt := time.Now().UTC()
-	if timeNode := findFirst(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "time" && attr(n, "datetime") != ""
-	}); timeNode != nil {
-		if t, err := time.Parse(time.RFC3339, attr(timeNode, "datetime")); err == nil {
+	if dt, ok := doc.Find(selTime).First().Attr("datetime"); ok && dt != "" {
+		if t, err := time.Parse(time.RFC3339, dt); err == nil {
 			updatedAt = t
-		} else if t, err := time.Parse("2006-01-02", attr(timeNode, "datetime")); err == nil {
+		} else if t, err := time.Parse("2006-01-02", dt); err == nil {
 			updatedAt = t.UTC()
 		}
 	}
@@ -216,37 +161,10 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		Title:       title,
 		Location:    location,
 		URL:         url,
-		CompanySlug: slugify(companyName),
+		CompanySlug: slugify(company),
 		Source:      "wis",
 		UpdatedAt:   updatedAt,
 	}, nil
-}
-
-func hasClass(n *html.Node, class string) bool {
-	for c := range strings.FieldsSeq(attr(n, "class")) {
-		if c == class {
-			return true
-		}
-	}
-	return false
-}
-
-func textContent(n *html.Node) string {
-	if n == nil {
-		return ""
-	}
-	var b strings.Builder
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.TextNode {
-			b.WriteString(n.Data)
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(n)
-	return b.String()
 }
 
 func slugify(s string) string {
