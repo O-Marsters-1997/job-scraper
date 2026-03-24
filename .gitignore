@@ -1,5 +1,8 @@
 bin/
 .env
+.env.test
 .claude/*
 !.claude/plans/
 !.claude/plans/**
+.idea
+.vscode

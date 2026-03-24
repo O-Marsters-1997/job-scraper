@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	startURL       = "https://workinstartups.com/search?loc=86384&pp=50&sb=date&sd=down&q=product%20engineer&per_page=50"
+	startURL       = "https://workinstartups.com/search?q=product+engineer&w=uk&per_page=50"
 	resultsPerPage = 50
 )
 

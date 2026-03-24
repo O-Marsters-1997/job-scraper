@@ -28,7 +28,7 @@ type worker struct {
 func newWorker() worker {
 	return worker{
 		itemDelay:  func() time.Duration { return 10*time.Second + time.Duration(rand.Int64N(int64(5*time.Second))) },
-		emptyDelay: 15 * time.Minute,
+		emptyDelay: 30 * time.Second,
 		errDelay:   5 * time.Second,
 	}
 }
