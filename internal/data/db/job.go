@@ -39,12 +39,14 @@ func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
 
 func fromRow(row pgsqlc.Job) dto.Job {
 	return dto.Job{
+		ID:          row.ID.String(),
 		Title:       row.Title,
 		Location:    row.Location,
 		URL:         row.Url,
 		CompanySlug: row.CompanySlug,
 		Source:      row.Source,
 		UpdatedAt:   row.UpdatedAt.Time,
+		ScrapedAt:   row.ScrapedAt.Time,
 	}
 }
 
