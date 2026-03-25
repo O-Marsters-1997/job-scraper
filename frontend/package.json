@@ -15,6 +15,7 @@
     "@kobalte/core": "^0.13.11",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/router-plugin": "^1.133.21",
+    "@tanstack/solid-query": "^5.95.2",
     "@tanstack/solid-router": "latest",
     "@tanstack/solid-router-devtools": "latest",
     "class-variance-authority": "^0.7.1",
