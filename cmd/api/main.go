@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
+	"github.com/ollymarsters/job-scraper/internal/auth"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -41,13 +42,24 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{allowedOrigin},
-		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		AllowedOrigins:   []string{allowedOrigin},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowCredentials: true,
 	}))
 
-	h := handlers.New(db)
-	r.Get("/jobs", h.ListJobs)
+	h := handlers.New(db, db, db)
+
+	// Public routes.
+	r.Post("/auth/login", h.Login)
+
+	// Protected routes — auth middleware applied to all.
+	r.Group(func(r chi.Router) {
+		r.Use(auth.Middleware(db))
+		r.Get("/jobs", h.ListJobs)
+		r.Post("/auth/logout", h.Logout)
+		r.Get("/auth/me", h.Me)
+	})
 
 	srv := &http.Server{Addr: port, Handler: r}
 
