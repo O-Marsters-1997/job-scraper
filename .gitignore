@@ -1,4 +1,6 @@
 bin/
+.ralph/bin/
+.ralph/.ralph-last-*
 .env
 .env.test
 .claude/*

@@ -18,3 +18,17 @@ type Job struct {
 	UpdatedAt   pgtype.Timestamptz
 	ScrapedAt   pgtype.Timestamptz
 }
+
+type Session struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+}
+
+type User struct {
+	ID           pgtype.UUID
+	Username     string
+	PasswordHash string
+	CreatedAt    pgtype.Timestamptz
+}
