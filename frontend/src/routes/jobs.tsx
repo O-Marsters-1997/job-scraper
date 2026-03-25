@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/solid-router"
-import { For } from "solid-js"
+import { createFileRoute, Link } from "@tanstack/solid-router"
+import { For, Show } from "solid-js"
 import { Badge } from "../components/ui/badge"
 import {
 	Card,
@@ -10,7 +10,12 @@ import {
 } from "../components/ui/card"
 import type { Job } from "../types/job"
 
+const PAGE_SIZE = 12
+
 export const Route = createFileRoute("/jobs")({
+	validateSearch: (search: Record<string, unknown>) => ({
+		page: Math.max(1, Number(search.page) || 1),
+	}),
 	loader: async (): Promise<Job[]> => {
 		const res = await fetch("http://localhost:8080/jobs")
 		if (!res.ok) throw new Error(`Failed to fetch jobs: ${res.status}`)
@@ -23,17 +28,34 @@ export const Route = createFileRoute("/jobs")({
 
 function JobsPage() {
 	const jobs = Route.useLoaderData()
+	const search = Route.useSearch()
+
+	const page = () => search().page
+	const totalPages = () => Math.ceil(jobs().length / PAGE_SIZE)
+	const start = () => (page() - 1) * PAGE_SIZE
+	const paginated = () => jobs().slice(start(), start() + PAGE_SIZE)
+	const showingEnd = () => Math.min(start() + PAGE_SIZE, jobs().length)
+
+	const pageNumbers = () => {
+		const total = totalPages()
+		const current = page()
+		if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+		if (current <= 4) return [1, 2, 3, 4, 5, -1, total]
+		if (current >= total - 3) return [1, -1, total - 4, total - 3, total - 2, total - 1, total]
+		return [1, -1, current - 1, current, current + 1, -1, total]
+	}
 
 	return (
-		<main class="page-wrap px-4 pb-12 pt-8">
+		<div class="px-6 pb-12 pt-8">
 			<div class="mb-8">
 				<p class="island-kicker mb-2">Live Listings</p>
 				<h1 class="display-title text-4xl font-bold text-[var(--sea-ink)] sm:text-5xl">
 					Open Roles
 				</h1>
 			</div>
+
 			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-				<For each={jobs()}>
+				<For each={paginated()}>
 					{(job, index) => (
 						<div
 							class="rise-in"
@@ -69,25 +91,85 @@ function JobsPage() {
 					)}
 				</For>
 			</div>
-		</main>
+
+			<Show when={totalPages() > 1}>
+				<div class="mt-10 flex flex-col items-center gap-4">
+					<p class="text-xs text-[var(--sea-ink-soft)]">
+						Showing {start() + 1}–{showingEnd()} of {jobs().length} jobs
+					</p>
+					<div class="flex items-center gap-1">
+						<Link
+							to="/jobs"
+							search={{ page: page() - 1 }}
+							disabled={page() === 1}
+							aria-disabled={page() === 1}
+							class={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium no-underline transition ${
+								page() === 1
+									? "pointer-events-none border-[var(--line)] text-[var(--sea-ink-soft)] opacity-40"
+									: "border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] text-[var(--lagoon-deep)] hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
+							}`}
+						>
+							← Prev
+						</Link>
+
+						<For each={pageNumbers()}>
+							{(n) => (
+								<Show
+									when={n !== -1}
+									fallback={
+										<span class="px-1 text-sm text-[var(--sea-ink-soft)]">…</span>
+									}
+								>
+									<Link
+										to="/jobs"
+										search={{ page: n }}
+										class={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-medium no-underline transition ${
+											n === page()
+												? "border-[rgba(50,143,151,0.5)] bg-[rgba(79,184,178,0.28)] text-[var(--sea-ink)]"
+												: "border-transparent text-[var(--sea-ink-soft)] hover:border-[var(--line)] hover:text-[var(--sea-ink)]"
+										}`}
+									>
+										{n}
+									</Link>
+								</Show>
+							)}
+						</For>
+
+						<Link
+							to="/jobs"
+							search={{ page: page() + 1 }}
+							disabled={page() === totalPages()}
+							aria-disabled={page() === totalPages()}
+							class={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium no-underline transition ${
+								page() === totalPages()
+									? "pointer-events-none border-[var(--line)] text-[var(--sea-ink-soft)] opacity-40"
+									: "border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] text-[var(--lagoon-deep)] hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)]"
+							}`}
+						>
+							Next →
+						</Link>
+					</div>
+				</div>
+			</Show>
+		</div>
 	)
 }
 
 function JobsPending() {
 	return (
-		<main class="page-wrap px-4 pb-12 pt-8">
+		<div class="px-6 pt-8">
 			<p class="text-sm text-[var(--sea-ink-soft)]">Loading jobs…</p>
-		</main>
+		</div>
 	)
 }
 
 function JobsError({ error }: { error: Error }) {
 	return (
-		<main class="page-wrap px-4 pb-12 pt-8">
+		<div class="px-6 pt-8">
 			<div class="island-shell rounded-xl p-6">
 				<p class="island-kicker mb-2 text-red-600">Error</p>
 				<p class="text-sm text-[var(--sea-ink-soft)]">{error.message}</p>
 			</div>
-		</main>
+		</div>
 	)
 }
