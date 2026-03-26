@@ -4,20 +4,35 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
 type Handler struct {
-	db providers.JobProvider
+	jobs     providers.JobProvider
+	users    providers.UserProvider
+	sessions providers.SessionProvider
 }
 
-func New(db providers.JobProvider) *Handler {
-	return &Handler{db: db}
+func New(jobs providers.JobProvider, users providers.UserProvider, sessions providers.SessionProvider) *Handler {
+	return &Handler{jobs: jobs, users: users, sessions: sessions}
+}
+
+func newSessionCookie(id string, maxAge int) *http.Cookie {
+	return &http.Cookie{
+		Name:     "session_id",
+		Value:    id,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
+		Path:     "/",
+		MaxAge:   maxAge,
+	}
 }
 
 func (h *Handler) ListJobs(w http.ResponseWriter, r *http.Request) {
-	jobs, err := h.db.List(r.Context())
+	jobs, err := h.jobs.List(r.Context())
 	if err != nil {
 		slog.Error("list jobs failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
