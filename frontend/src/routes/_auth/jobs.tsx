@@ -1,19 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/solid-router"
 import { For, Show } from "solid-js"
-import { Badge } from "../components/ui/badge"
+import { Badge } from "../../components/ui/badge"
 import {
 	Card,
 	CardContent,
 	CardFooter,
 	CardHeader,
 	CardTitle,
-} from "../components/ui/card"
-import { queryClient } from "../lib/queryClient"
-import { jobsQueryOptions, useJobs } from "../hooks/useJobs"
+} from "../../components/ui/card"
+import { queryClient } from "../../lib/queryClient"
+import { jobsQueryOptions, useJobs } from "../../hooks/useJobs"
 
 const PAGE_SIZE = 12
 
-export const Route = createFileRoute("/jobs")({
+export const Route = createFileRoute("/_auth/jobs")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		page: Math.max(1, Number(search.page) || 1),
 	}),

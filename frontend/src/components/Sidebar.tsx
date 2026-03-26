@@ -1,9 +1,16 @@
 import { createSignal } from "solid-js";
-import { Link, useMatch } from "@tanstack/solid-router";
+import { Link, useMatch, useNavigate } from "@tanstack/solid-router";
+import { logout } from "../api/auth";
 
 export default function Sidebar() {
   const [expanded, setExpanded] = createSignal(true);
-  const isJobsActive = useMatch({ from: "/jobs" });
+  const isJobsActive = useMatch({ from: "/_auth/jobs" });
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate({ to: "/login" });
+  };
 
   return (
     <aside
@@ -66,8 +73,32 @@ export default function Sidebar() {
         </Link>
       </nav>
 
-      {/* Toggle */}
-      <div class="px-2 py-3 border-t border-[var(--line)] shrink-0">
+      {/* Bottom actions */}
+      <div class="px-2 py-3 border-t border-[var(--line)] shrink-0 flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="Sign out"
+          class="flex items-center gap-3 px-2 py-2 w-full rounded-lg text-sm text-[var(--sea-ink-soft)] transition-colors hover:bg-[rgba(79,184,178,0.1)] hover:text-[var(--sea-ink)]"
+        >
+          <svg
+            aria-hidden="true"
+            class="shrink-0"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          {expanded() && <span class="whitespace-nowrap text-xs">Sign out</span>}
+        </button>
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
