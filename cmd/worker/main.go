@@ -44,7 +44,7 @@ func main() {
 
 	srcs := []sources.Source{wis.New()}
 
-	orch := scraper.New(srcs, db, q)
+	orch := scraper.New(srcs, db, db, q)
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed", slog.Any("err", err))
 		os.Exit(1)
