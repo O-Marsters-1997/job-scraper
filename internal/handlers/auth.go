@@ -103,6 +103,10 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.applicationStatuses.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
+		slog.Error("seed default statuses failed", slog.Any("err", err))
+	}
+
 	session, err := h.sessions.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
 		slog.Error("create session after signup failed", slog.Any("err", err))

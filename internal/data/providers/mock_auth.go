@@ -9,6 +9,28 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// MockApplicationStatusProvider is a no-op mock for use in tests.
+type MockApplicationStatusProvider struct{}
+
+func (m *MockApplicationStatusProvider) SeedDefaultStatuses(_ context.Context, _ string) error {
+	return nil
+}
+func (m *MockApplicationStatusProvider) CreateApplicationStatus(_ context.Context, _, _, _ string) (dto.ApplicationStatus, error) {
+	return dto.ApplicationStatus{}, nil
+}
+func (m *MockApplicationStatusProvider) ListApplicationStatusesByUser(_ context.Context, _ string) ([]dto.ApplicationStatus, error) {
+	return nil, nil
+}
+func (m *MockApplicationStatusProvider) UpdateApplicationStatus(_ context.Context, _, _, _, _ string) (dto.ApplicationStatus, error) {
+	return dto.ApplicationStatus{}, nil
+}
+func (m *MockApplicationStatusProvider) DeleteApplicationStatus(_ context.Context, _, _ string) error {
+	return nil
+}
+func (m *MockApplicationStatusProvider) CountApplicationsUsingStatus(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
 // MockUserProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockUserProvider struct {
 	mu    sync.Mutex

@@ -13,7 +13,10 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
+import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
+import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -34,23 +37,44 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthSettingsRoute = AuthSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthJobsRoute = AuthJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
   getParentRoute: () => AuthRoute,
+} as any)
+const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
+  id: '/statuses',
+  path: '/statuses',
+  getParentRoute: () => AuthSettingsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/applications': typeof AuthApplicationsRoute
   '/jobs': typeof AuthJobsRoute
+  '/settings': typeof AuthSettingsRouteWithChildren
+  '/settings/statuses': typeof AuthSettingsStatusesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/applications': typeof AuthApplicationsRoute
   '/jobs': typeof AuthJobsRoute
+  '/settings': typeof AuthSettingsRouteWithChildren
+  '/settings/statuses': typeof AuthSettingsStatusesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,14 +82,40 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/jobs': typeof AuthJobsRoute
+  '/_auth/settings': typeof AuthSettingsRouteWithChildren
+  '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/signup' | '/jobs'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/applications'
+    | '/jobs'
+    | '/settings'
+    | '/settings/statuses'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/signup' | '/jobs'
-  id: '__root__' | '/' | '/_auth' | '/login' | '/signup' | '/_auth/jobs'
+  to:
+    | '/'
+    | '/login'
+    | '/signup'
+    | '/applications'
+    | '/jobs'
+    | '/settings'
+    | '/settings/statuses'
+  id:
+    | '__root__'
+    | '/'
+    | '/_auth'
+    | '/login'
+    | '/signup'
+    | '/_auth/applications'
+    | '/_auth/jobs'
+    | '/_auth/settings'
+    | '/_auth/settings/statuses'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -105,6 +155,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_auth/settings': {
+      id: '/_auth/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthSettingsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/jobs': {
       id: '/_auth/jobs'
       path: '/jobs'
@@ -112,15 +169,45 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthJobsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/applications': {
+      id: '/_auth/applications'
+      path: '/applications'
+      fullPath: '/applications'
+      preLoaderRoute: typeof AuthApplicationsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/settings/statuses': {
+      id: '/_auth/settings/statuses'
+      path: '/statuses'
+      fullPath: '/settings/statuses'
+      preLoaderRoute: typeof AuthSettingsStatusesRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
   }
 }
 
+interface AuthSettingsRouteChildren {
+  AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
+}
+
+const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
+  AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
+}
+
+const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
+  AuthSettingsRouteChildren,
+)
+
 interface AuthRouteChildren {
+  AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthJobsRoute: typeof AuthJobsRoute
+  AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthApplicationsRoute: AuthApplicationsRoute,
   AuthJobsRoute: AuthJobsRoute,
+  AuthSettingsRoute: AuthSettingsRouteWithChildren,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

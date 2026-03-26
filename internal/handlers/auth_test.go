@@ -22,7 +22,7 @@ func TestLogin_ValidCredentials(t *testing.T) {
 	users.Seed(dto.User{ID: "user-1", Username: "alice", PasswordHash: string(hash)})
 	sessions := providers.NewMockSessionProvider()
 
-	h := New(nil, users, sessions)
+	h := New(nil, users, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "secret"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -54,7 +54,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	users.Seed(dto.User{ID: "user-1", Username: "alice", PasswordHash: string(hash)})
 	sessions := providers.NewMockSessionProvider()
 
-	h := New(nil, users, sessions)
+	h := New(nil, users, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "wrong"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -71,7 +71,7 @@ func TestLogin_UnknownUser(t *testing.T) {
 	users := providers.NewMockUserProvider()
 	sessions := providers.NewMockSessionProvider()
 
-	h := New(nil, users, sessions)
+	h := New(nil, users, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	body, _ := json.Marshal(map[string]string{"username": "nobody", "password": "secret"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -93,7 +93,7 @@ func TestLogout_ClearsSessionAndCookie(t *testing.T) {
 		ExpiresAt: time.Now().Add(time.Hour),
 	})
 
-	h := New(nil, nil, sessions)
+	h := New(nil, nil, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 	req = req.WithContext(auth.WithSession(context.Background(), dto.Session{
 		ID: "session-abc", UserID: "user-1", Username: "alice",
@@ -125,7 +125,7 @@ func TestSignup_Success(t *testing.T) {
 	users := providers.NewMockUserProvider()
 	sessions := providers.NewMockSessionProvider()
 
-	h := New(nil, users, sessions)
+	h := New(nil, users, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	body, _ := json.Marshal(map[string]string{"username": "bob", "password": "hunter2"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -163,7 +163,7 @@ func TestSignup_DuplicateUsername(t *testing.T) {
 	users.CreateErr = providers.ErrUsernameTaken
 	sessions := providers.NewMockSessionProvider()
 
-	h := New(nil, users, sessions)
+	h := New(nil, users, sessions, &providers.MockApplicationStatusProvider{}, nil)
 	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "pass"})
 	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -178,7 +178,7 @@ func TestSignup_DuplicateUsername(t *testing.T) {
 
 func TestSignup_InvalidJSON(t *testing.T) {
 	bcryptCost = bcrypt.MinCost
-	h := New(nil, providers.NewMockUserProvider(), providers.NewMockSessionProvider())
+	h := New(nil, providers.NewMockUserProvider(), providers.NewMockSessionProvider(), &providers.MockApplicationStatusProvider{}, nil)
 	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader([]byte(`not-json`)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -191,7 +191,7 @@ func TestSignup_InvalidJSON(t *testing.T) {
 }
 
 func TestMe_ReturnsCurrentUser(t *testing.T) {
-	h := New(nil, nil, nil)
+	h := New(nil, nil, nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
 	req = req.WithContext(auth.WithSession(context.Background(), dto.Session{
 		ID: "s1", UserID: "u1", Username: "alice",

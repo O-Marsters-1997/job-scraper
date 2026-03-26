@@ -10,13 +10,27 @@ import (
 )
 
 type Handler struct {
-	jobs     providers.JobProvider
-	users    providers.UserProvider
-	sessions providers.SessionProvider
+	jobs               providers.JobProvider
+	users              providers.UserProvider
+	sessions           providers.SessionProvider
+	applicationStatuses providers.ApplicationStatusProvider
+	applications       providers.ApplicationProvider
 }
 
-func New(jobs providers.JobProvider, users providers.UserProvider, sessions providers.SessionProvider) *Handler {
-	return &Handler{jobs: jobs, users: users, sessions: sessions}
+func New(
+	jobs providers.JobProvider,
+	users providers.UserProvider,
+	sessions providers.SessionProvider,
+	applicationStatuses providers.ApplicationStatusProvider,
+	applications providers.ApplicationProvider,
+) *Handler {
+	return &Handler{
+		jobs:                jobs,
+		users:               users,
+		sessions:            sessions,
+		applicationStatuses: applicationStatuses,
+		applications:        applications,
+	}
 }
 
 func newSessionCookie(id string, maxAge int) *http.Cookie {

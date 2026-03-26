@@ -48,7 +48,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	h := handlers.New(db, db, db)
+	h := handlers.New(db, db, db, db, db)
 
 	// Public routes.
 	r.Post("/auth/login", h.Login)
@@ -60,6 +60,17 @@ func main() {
 		r.Get("/jobs", h.ListJobs)
 		r.Post("/auth/logout", h.Logout)
 		r.Get("/auth/me", h.Me)
+
+		r.Get("/application-statuses", h.ListApplicationStatuses)
+		r.Post("/application-statuses", h.CreateApplicationStatus)
+		r.Patch("/application-statuses/{id}", h.UpdateApplicationStatus)
+		r.Delete("/application-statuses/{id}", h.DeleteApplicationStatus)
+
+		r.Get("/applications", h.ListApplications)
+		r.Post("/applications", h.CreateApplication)
+		r.Patch("/applications/{id}", h.UpdateApplication)
+		r.Delete("/applications/{id}", h.DeleteApplication)
+		r.Get("/applications/for-jobs", h.GetApplicationsForJobs)
 	})
 
 	srv := &http.Server{Addr: port, Handler: r}
