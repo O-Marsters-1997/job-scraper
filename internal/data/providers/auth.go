@@ -2,10 +2,14 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+// ErrUsernameTaken is returned by CreateUser when the username already exists.
+var ErrUsernameTaken = errors.New("username already taken")
 
 // UserProvider is the single access point for user persistence.
 // Callers never import pgsqlc or pgtype directly.

@@ -52,6 +52,7 @@ func main() {
 
 	// Public routes.
 	r.Post("/auth/login", h.Login)
+	r.Post("/auth/signup", h.Signup)
 
 	// Protected routes — auth middleware applied to all.
 	r.Group(func(r chi.Router) {

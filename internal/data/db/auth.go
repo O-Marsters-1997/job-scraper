@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -58,6 +61,10 @@ func (db *DB) CreateUser(ctx context.Context, username, passwordHash string) (dt
 		PasswordHash: passwordHash,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return dto.User{}, providers.ErrUsernameTaken
+		}
 		return dto.User{}, err
 	}
 	return fromUser(u), nil

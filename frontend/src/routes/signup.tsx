@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/solid-router'
 import { createSignal } from 'solid-js'
-import { login } from '../api/auth'
+import { signup } from '../api/auth'
 
-export const Route = createFileRoute('/login')({
-  component: LoginPage,
+export const Route = createFileRoute('/signup')({
+  component: SignupPage,
 })
 
-function LoginPage() {
+function SignupPage() {
   const navigate = useNavigate()
   const [username, setUsername] = createSignal('')
   const [password, setPassword] = createSignal('')
@@ -18,11 +18,13 @@ function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const res = await login(username(), password())
+      const res = await signup(username(), password())
       if (res.ok) {
         navigate({ to: '/jobs', search: { page: 1 } })
+      } else if (res.status === 409) {
+        setError('That username is already taken.')
       } else {
-        setError('Invalid username or password.')
+        setError('Something went wrong. Please try again.')
       }
     } catch {
       setError('Could not reach the server. Please try again.')
@@ -47,13 +49,15 @@ function LoginPage() {
               stroke-linecap="round"
               stroke-linejoin="round"
             >
-              <rect x="2" y="7" width="20" height="14" rx="2" />
-              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="22" y1="11" x2="16" y2="11" />
             </svg>
           </div>
           <div class="text-center">
-            <p class="island-kicker mb-1">Welcome back</p>
-            <h1 class="text-xl font-bold text-[var(--sea-ink)]">Job Scraper</h1>
+            <p class="island-kicker mb-1">Get started</p>
+            <h1 class="text-xl font-bold text-[var(--sea-ink)]">Create account</h1>
           </div>
         </div>
 
@@ -87,7 +91,7 @@ function LoginPage() {
             <input
               id="password"
               type="password"
-              autocomplete="current-password"
+              autocomplete="new-password"
               required
               value={password()}
               onInput={(e) => setPassword(e.currentTarget.value)}
@@ -107,14 +111,14 @@ function LoginPage() {
             disabled={loading()}
             class="mt-2 inline-flex items-center justify-center rounded-full border border-[rgba(50,143,151,0.3)] bg-[rgba(79,184,178,0.14)] px-4 py-2 text-sm font-semibold text-[var(--lagoon-deep)] transition hover:-translate-y-0.5 hover:bg-[rgba(79,184,178,0.24)] disabled:pointer-events-none disabled:opacity-50"
           >
-            {loading() ? 'Signing in…' : 'Sign in'}
+            {loading() ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
         <p class="mt-6 text-center text-xs text-[var(--sea-ink-soft)]">
-          Don't have an account?{' '}
-          <a href="/signup" class="font-semibold text-[var(--lagoon-deep)] hover:underline">
-            Sign up
+          Already have an account?{' '}
+          <a href="/login" class="font-semibold text-[var(--lagoon-deep)] hover:underline">
+            Sign in
           </a>
         </p>
       </div>

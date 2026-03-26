@@ -120,6 +120,76 @@ func TestLogout_ClearsSessionAndCookie(t *testing.T) {
 	}
 }
 
+func TestSignup_Success(t *testing.T) {
+	bcryptCost = bcrypt.MinCost
+	users := providers.NewMockUserProvider()
+	sessions := providers.NewMockSessionProvider()
+
+	h := New(nil, users, sessions)
+	body, _ := json.Marshal(map[string]string{"username": "bob", "password": "hunter2"})
+	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Signup(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d", w.Code)
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["username"] != "bob" {
+		t.Errorf("want username bob, got %q", resp["username"])
+	}
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == "session_id" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		t.Fatal("expected session_id cookie to be set after signup")
+	}
+	if !cookie.HttpOnly {
+		t.Error("cookie should be HttpOnly")
+	}
+}
+
+func TestSignup_DuplicateUsername(t *testing.T) {
+	bcryptCost = bcrypt.MinCost
+	users := providers.NewMockUserProvider()
+	users.CreateErr = providers.ErrUsernameTaken
+	sessions := providers.NewMockSessionProvider()
+
+	h := New(nil, users, sessions)
+	body, _ := json.Marshal(map[string]string{"username": "alice", "password": "pass"})
+	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Signup(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Fatalf("want 409, got %d", w.Code)
+	}
+}
+
+func TestSignup_InvalidJSON(t *testing.T) {
+	bcryptCost = bcrypt.MinCost
+	h := New(nil, providers.NewMockUserProvider(), providers.NewMockSessionProvider())
+	req := httptest.NewRequest(http.MethodPost, "/auth/signup", bytes.NewReader([]byte(`not-json`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Signup(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+}
+
 func TestMe_ReturnsCurrentUser(t *testing.T) {
 	h := New(nil, nil, nil)
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
