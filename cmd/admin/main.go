@@ -8,10 +8,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 
-	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/data"
-	"github.com/ollymarsters/job-scraper/internal/logger"
 	"log/slog"
+
+	"github.com/ollymarsters/job-scraper/internal/data"
+	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 func main() {

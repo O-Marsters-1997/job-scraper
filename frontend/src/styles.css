@@ -2,6 +2,25 @@
 @import 'tailwindcss';
 @plugin "tailwindcss-animate";
 
+@theme {
+  --color-background: #f8fdf9;
+  --color-foreground: #173a40;
+  --color-muted: rgba(23, 58, 64, 0.06);
+  --color-muted-foreground: #416166;
+  --color-popover: #f6fcf7;
+  --color-popover-foreground: #173a40;
+  --color-primary: #4fb8b2;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: rgba(79, 184, 178, 0.14);
+  --color-secondary-foreground: #328f97;
+  --color-accent: rgba(79, 184, 178, 0.12);
+  --color-accent-foreground: #173a40;
+  --color-destructive: #ef4444;
+  --color-border: rgba(23, 58, 64, 0.14);
+  --color-input: rgba(23, 58, 64, 0.14);
+  --color-ring: #4fb8b2;
+}
+
 :root {
   --sea-ink: #173a40;
   --sea-ink-soft: #416166;

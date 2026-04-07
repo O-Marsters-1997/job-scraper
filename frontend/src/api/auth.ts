@@ -9,6 +9,15 @@ export function login(username: string, password: string) {
   })
 }
 
+export function signup(username: string, password: string) {
+  return fetch(`${API_BASE}/auth/signup`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+}
+
 export function logout() {
   return fetch(`${API_BASE}/auth/logout`, {
     method: 'POST',

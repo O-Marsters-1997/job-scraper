@@ -18,7 +18,7 @@ type stubSource struct {
 	urls []string
 }
 
-func (s *stubSource) Cfg() sources.Config { return s.cfg }
+func (s *stubSource) Cfg() sources.Config     { return s.cfg }
 func (s *stubSource) CanHandle(_ string) bool { return false }
 func (s *stubSource) GetDetails(_ context.Context, _ string) (dto.Job, error) {
 	return dto.Job{}, nil

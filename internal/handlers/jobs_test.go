@@ -60,7 +60,7 @@ func TestListJobs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := New(tt.db, nil, nil)
+			h := New(tt.db, nil, nil, nil, nil)
 			req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
 			w := httptest.NewRecorder()
 

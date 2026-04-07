@@ -42,6 +42,7 @@ test-race:
     go test -race ./...
 
 ci:
+    just fmt
     just lint
     just generate
     just test

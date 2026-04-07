@@ -8,6 +8,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Application struct {
+	ID         pgtype.UUID
+	UserID     pgtype.UUID
+	JobID      pgtype.UUID
+	StatusID   pgtype.UUID
+	Notes      pgtype.Text
+	AppliedAt  pgtype.Date
+	SalaryInfo pgtype.Text
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
+type ApplicationStatus struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Name      string
+	Colour    string
+	CreatedAt pgtype.Timestamptz
+}
+
 type Job struct {
 	ID          pgtype.UUID
 	Title       string
