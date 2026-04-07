@@ -172,46 +172,41 @@ func TestSave_Empty(t *testing.T) {
 	}
 }
 
-func TestNewURLs_FiltersExisting(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
+func TestNewURLs(t *testing.T) {
+	t.Run("filters existing URLs", func(t *testing.T) {
+		truncate(t)
+		ctx := context.Background()
 
-	if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
+		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
 
-	newJob := dto.Job{
-		Title:       "New Role",
-		URL:         "https://example.com/jobs/new",
-		CompanySlug: "example",
-		Source:      "greenhouse",
-		UpdatedAt:   time.Now(),
-	}
+		newJobURL := "https://example.com/jobs/new"
+		got, err := testDB.NewURLs(ctx, []string{baseJob.URL, newJobURL})
+		if err != nil {
+			t.Fatalf("NewURLs: %v", err)
+		}
+		if len(got) != 1 || got[0] != newJobURL {
+			t.Errorf("want [%q], got %v", newJobURL, got)
+		}
+	})
 
-	got, err := testDB.NewURLs(ctx, []string{baseJob.URL, newJob.URL})
-	if err != nil {
-		t.Fatalf("NewURLs: %v", err)
-	}
-	if len(got) != 1 || got[0] != newJob.URL {
-		t.Errorf("want [%q], got %v", newJob.URL, got)
-	}
+	t.Run("all new URLs returned unchanged", func(t *testing.T) {
+		truncate(t)
+		ctx := context.Background()
+
+		urls := []string{"https://example.com/a", "https://example.com/b"}
+		got, err := testDB.NewURLs(ctx, urls)
+		if err != nil {
+			t.Fatalf("NewURLs: %v", err)
+		}
+		if len(got) != len(urls) {
+			t.Errorf("want %d URLs, got %d", len(urls), len(got))
+		}
+	})
 }
 
-func TestNewURLs_AllNew(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-
-	urls := []string{"https://example.com/a", "https://example.com/b"}
-	got, err := testDB.NewURLs(ctx, urls)
-	if err != nil {
-		t.Fatalf("NewURLs: %v", err)
-	}
-	if len(got) != len(urls) {
-		t.Errorf("want %d URLs, got %d", len(urls), len(got))
-	}
-}
-
-func TestList_ReturnsAll(t *testing.T) {
+func TestList(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
