@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -19,8 +20,9 @@ var baseJob = dto.Job{
 	UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 }
 
-// jobCmpOpts compares dto.Job values, treating time.Time by value equality.
+// jobCmpOpts compares dto.Job values, ignoring DB-generated fields (ID, ScrapedAt).
 var jobCmpOpts = cmp.Options{
+	cmpopts.IgnoreFields(dto.Job{}, "ID", "ScrapedAt"),
 	cmp.Comparer(func(x, y time.Time) bool {
 		return x.Equal(y)
 	}),
