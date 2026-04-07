@@ -10,11 +10,11 @@ import (
 )
 
 type Handler struct {
-	jobs               providers.JobProvider
-	users              providers.UserProvider
-	sessions           providers.SessionProvider
+	jobs                providers.JobProvider
+	users               providers.UserProvider
+	sessions            providers.SessionProvider
 	applicationStatuses providers.ApplicationStatusProvider
-	applications       providers.ApplicationProvider
+	applications        providers.ApplicationProvider
 }
 
 func New(
