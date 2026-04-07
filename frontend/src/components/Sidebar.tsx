@@ -1,14 +1,13 @@
 import { createSignal } from "solid-js";
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { logout } from "../api/auth";
-import { Show } from "solid-js";
 
 export default function Sidebar() {
   const [expanded, setExpanded] = createSignal(true);
   const location = useLocation();
-  const isJobsActive = () => location.pathname === "/jobs";
-  const isApplicationsActive = () => location.pathname === "/applications";
-  const isStatusesActive = () => location.pathname === "/settings/statuses";
+  const isJobsActive = () => location().pathname === "/jobs";
+  const isApplicationsActive = () => location()?.pathname === "/applications";
+  const isStatusesActive = () => location().pathname === "/settings/statuses";
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -50,7 +49,6 @@ export default function Sidebar() {
       <nav class="flex-1 px-2 py-3">
         <Link
           to="/jobs"
-          search={{ page: 1 }}
           title="Jobs"
           class={`flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors ${
             isJobsActive()
