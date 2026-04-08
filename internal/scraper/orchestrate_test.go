@@ -36,7 +36,7 @@ func TestRun_EnqueuesNewURLs(t *testing.T) {
 		urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
 	}
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	if err := o.run(context.Background(), src); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestRun_FiltersExistingURLs(t *testing.T) {
 		urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
 	}
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	if err := o.run(context.Background(), src); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestRun_DeduplicatesWithinPage(t *testing.T) {
 		urls: []string{"https://example.com/job/1", "https://example.com/job/1"},
 	}
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	if err := o.run(context.Background(), src); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestRunIfReady_SkipsIfRecentlyScraped(t *testing.T) {
 
 	_ = q.SetLastScraped(context.Background(), "test")
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	o.runIfReady(context.Background(), src)
 
 	if len(q.Items()) != 0 {
@@ -123,7 +123,7 @@ func TestRunIfReady_RunsIfNotRecentlyScraped(t *testing.T) {
 
 	q.SetLastScrapedAt("test", time.Now().Add(-time.Hour))
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	o.runIfReady(context.Background(), src)
 
 	if len(q.Items()) == 0 {
@@ -139,7 +139,7 @@ func TestRunIfReady_SetsLastScraped(t *testing.T) {
 		urls: []string{"https://example.com/job/1"},
 	}
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	o.runIfReady(context.Background(), src)
 
 	_, ok, _ := q.GetLastScraped(context.Background(), "test")
@@ -157,7 +157,7 @@ func TestRun_MultiplePages(t *testing.T) {
 
 	src := &multiPageSource{pages: [][]string{page1, page2}}
 
-	o := New([]sources.Source{src}, db, nil, q)
+	o := New([]sources.Source{src}, db, q)
 	if err := o.run(context.Background(), src); err != nil {
 		t.Fatal(err)
 	}

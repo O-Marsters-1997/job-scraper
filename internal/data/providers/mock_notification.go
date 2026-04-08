@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// MockNotificationProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockNotificationProvider struct {
 	Digests []DigestRecord
 

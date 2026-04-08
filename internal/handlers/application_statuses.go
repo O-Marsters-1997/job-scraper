@@ -8,11 +8,20 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-func (h *Handler) ListApplicationStatuses(w http.ResponseWriter, r *http.Request) {
+type ApplicationStatusHandler struct {
+	statuses providers.ApplicationStatusProvider
+}
+
+func NewApplicationStatusHandler(statuses providers.ApplicationStatusProvider) *ApplicationStatusHandler {
+	return &ApplicationStatusHandler{statuses: statuses}
+}
+
+func (h *ApplicationStatusHandler) ListApplicationStatuses(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
-	statuses, err := h.applicationStatuses.ListApplicationStatusesByUser(r.Context(), session.UserID)
+	statuses, err := h.statuses.ListApplicationStatusesByUser(r.Context(), session.UserID)
 	if err != nil {
 		slog.Error("list application statuses failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -22,7 +31,7 @@ func (h *Handler) ListApplicationStatuses(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(statuses)
 }
 
-func (h *Handler) CreateApplicationStatus(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationStatusHandler) CreateApplicationStatus(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		Name   string `json:"name"`
@@ -32,7 +41,7 @@ func (h *Handler) CreateApplicationStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	s, err := h.applicationStatuses.CreateApplicationStatus(r.Context(), session.UserID, body.Name, body.Colour)
+	s, err := h.statuses.CreateApplicationStatus(r.Context(), session.UserID, body.Name, body.Colour)
 	if err != nil {
 		slog.Error("create application status failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -43,7 +52,7 @@ func (h *Handler) CreateApplicationStatus(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(s)
 }
 
-func (h *Handler) UpdateApplicationStatus(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationStatusHandler) UpdateApplicationStatus(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
@@ -54,7 +63,7 @@ func (h *Handler) UpdateApplicationStatus(w http.ResponseWriter, r *http.Request
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	s, err := h.applicationStatuses.UpdateApplicationStatus(r.Context(), id, session.UserID, body.Name, body.Colour)
+	s, err := h.statuses.UpdateApplicationStatus(r.Context(), id, session.UserID, body.Name, body.Colour)
 	if err != nil {
 		slog.Error("update application status failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -64,11 +73,11 @@ func (h *Handler) UpdateApplicationStatus(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(s)
 }
 
-func (h *Handler) DeleteApplicationStatus(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationStatusHandler) DeleteApplicationStatus(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 
-	count, err := h.applicationStatuses.CountApplicationsUsingStatus(r.Context(), id, session.UserID)
+	count, err := h.statuses.CountApplicationsUsingStatus(r.Context(), id, session.UserID)
 	if err != nil {
 		slog.Error("count applications using status failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -84,7 +93,7 @@ func (h *Handler) DeleteApplicationStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.applicationStatuses.DeleteApplicationStatus(r.Context(), id, session.UserID); err != nil {
+	if err := h.statuses.DeleteApplicationStatus(r.Context(), id, session.UserID); err != nil {
 		slog.Error("delete application status failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return

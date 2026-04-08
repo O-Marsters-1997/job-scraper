@@ -9,28 +9,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-type Handler struct {
-	jobs                providers.JobProvider
-	users               providers.UserProvider
-	sessions            providers.SessionProvider
-	applicationStatuses providers.ApplicationStatusProvider
-	applications        providers.ApplicationProvider
+type JobHandler struct {
+	jobs providers.JobProvider
 }
 
-func New(
-	jobs providers.JobProvider,
-	users providers.UserProvider,
-	sessions providers.SessionProvider,
-	applicationStatuses providers.ApplicationStatusProvider,
-	applications providers.ApplicationProvider,
-) *Handler {
-	return &Handler{
-		jobs:                jobs,
-		users:               users,
-		sessions:            sessions,
-		applicationStatuses: applicationStatuses,
-		applications:        applications,
-	}
+func NewJobHandler(jobs providers.JobProvider) *JobHandler {
+	return &JobHandler{jobs: jobs}
 }
 
 func newSessionCookie(id string, maxAge int) *http.Cookie {
@@ -45,7 +29,7 @@ func newSessionCookie(id string, maxAge int) *http.Cookie {
 	}
 }
 
-func (h *Handler) ListJobs(w http.ResponseWriter, r *http.Request) {
+func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := h.jobs.List(r.Context())
 	if err != nil {
 		slog.Error("list jobs failed", slog.Any("err", err))

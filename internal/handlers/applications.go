@@ -11,9 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
+type ApplicationHandler struct {
+	applications providers.ApplicationProvider
+}
+
+func NewApplicationHandler(applications providers.ApplicationProvider) *ApplicationHandler {
+	return &ApplicationHandler{applications: applications}
+}
+
+func (h *ApplicationHandler) ListApplications(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	statusID := r.URL.Query().Get("status_id")
 
@@ -35,7 +44,7 @@ func (h *Handler) ListApplications(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(apps)
 }
 
-func (h *Handler) CreateApplication(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		JobID      string  `json:"job_id"`
@@ -67,7 +76,7 @@ func (h *Handler) CreateApplication(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(app)
 }
 
-func (h *Handler) UpdateApplication(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
@@ -94,7 +103,7 @@ func (h *Handler) UpdateApplication(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(app)
 }
 
-func (h *Handler) DeleteApplication(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationHandler) DeleteApplication(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	if err := h.applications.DeleteApplication(r.Context(), id, session.UserID); err != nil {
@@ -105,7 +114,7 @@ func (h *Handler) DeleteApplication(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) GetApplicationsForJobs(w http.ResponseWriter, r *http.Request) {
+func (h *ApplicationHandler) GetApplicationsForJobs(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	raw := r.URL.Query().Get("job_ids")
 	if raw == "" {

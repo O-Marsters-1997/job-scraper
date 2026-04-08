@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -45,31 +46,70 @@ func main() {
 	}
 	defer q.Close()
 
-	notifSvc := setupNotifications(db)
+	notifSvc := setupNotifications()
 
 	srcs := []sources.Source{wis.New()}
 
-	orch := scraper.New(srcs, db, db, q)
+	orch := scraper.New(srcs, db, q)
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 	defer orch.Stop()
 
+	cr := cron.New()
+
+	if _, err := cr.AddFunc("@daily", func() {
+		if err := db.DeleteExpiredSessions(ctx); err != nil {
+			slog.Error("session cleanup failed", slog.Any("err", err))
+		}
+	}); err != nil {
+		slog.Error("session cleanup cron schedule failed", slog.Any("err", err))
+	} else {
+		slog.Info("cron: scheduled session cleanup", slog.String("schedule", "@daily"))
+	}
+
 	if notifSvc != nil {
 		digestSchedule := os.Getenv("NOTIFY_DIGEST_CRON")
 		if digestSchedule == "" {
 			digestSchedule = "0 9 * * *"
 		}
-		cr := cron.New()
-		if _, err := cr.AddFunc(digestSchedule, func() { notifSvc.SendDigest(ctx) }); err != nil {
+		if _, err := cr.AddFunc(digestSchedule, func() {
+			lastSent, err := db.GetLastDigestSentAt(ctx)
+			if err != nil {
+				slog.Error("digest: get last sent failed", slog.Any("err", err))
+				return
+			}
+			var jobs []dto.Job
+			if lastSent.IsZero() {
+				jobs, err = db.List(ctx)
+			} else {
+				jobs, err = db.ListSince(ctx, lastSent)
+			}
+			if err != nil {
+				slog.Error("digest: list jobs failed", slog.Any("err", err))
+				return
+			}
+			if len(jobs) == 0 {
+				slog.Info("digest: no new jobs, skipping")
+				return
+			}
+			if err := notifSvc.SendDigest(ctx, jobs); err != nil {
+				slog.Error("digest: send failed", slog.Any("err", err))
+				return
+			}
+			if err := db.RecordDigest(ctx, time.Now(), len(jobs)); err != nil {
+				slog.Error("digest: record failed", slog.Any("err", err))
+			}
+		}); err != nil {
 			slog.Error("digest cron schedule failed", slog.Any("err", err))
 		} else {
-			cr.Start()
-			defer cr.Stop()
 			slog.Info("cron: scheduled digest", slog.String("schedule", digestSchedule))
 		}
 	}
+
+	cr.Start()
+	defer cr.Stop()
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
@@ -92,7 +132,7 @@ func main() {
 	}
 }
 
-func setupNotifications(db *jobsdb.DB) *notify.NotificationService {
+func setupNotifications() *notify.NotificationService {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	to := os.Getenv("NOTIFY_EMAIL_TO")
 	from := os.Getenv("NOTIFY_EMAIL_FROM")
@@ -119,8 +159,6 @@ func setupNotifications(db *jobsdb.DB) *notify.NotificationService {
 
 	return notify.NewNotificationService(
 		notify.NewResendNotifier(apiKey, from),
-		db,
-		db,
 		renderer,
 		cfg,
 	)

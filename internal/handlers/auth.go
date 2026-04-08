@@ -16,7 +16,17 @@ import (
 // bcryptCost is the work factor for hashing passwords. Overridden to bcrypt.MinCost in tests.
 var bcryptCost = bcrypt.DefaultCost
 
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+type AuthHandler struct {
+	users    providers.UserProvider
+	sessions providers.SessionProvider
+	statuses providers.ApplicationStatusProvider
+}
+
+func NewAuthHandler(users providers.UserProvider, sessions providers.SessionProvider, statuses providers.ApplicationStatusProvider) *AuthHandler {
+	return &AuthHandler{users: users, sessions: sessions, statuses: statuses}
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -49,7 +59,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"username": user.Username})
 }
 
-func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if ok {
 		if err := h.sessions.DeleteSession(r.Context(), session.ID); err != nil {
@@ -60,7 +70,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -69,7 +79,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -103,7 +113,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.applicationStatuses.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
+	if err := h.statuses.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
 		slog.Error("seed default statuses failed", slog.Any("err", err))
 	}
 

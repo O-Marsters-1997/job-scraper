@@ -15,16 +15,15 @@ import (
 )
 
 type Orchestrator struct {
-	srcs     []sources.Source
-	db       providers.JobProvider
-	sessions providers.SessionProvider
-	q        queue.JobQueue
-	cr       *cron.Cron
-	wg       sync.WaitGroup
+	srcs []sources.Source
+	db   providers.JobProvider
+	q    queue.JobQueue
+	cr   *cron.Cron
+	wg   sync.WaitGroup
 }
 
-func New(srcs []sources.Source, db providers.JobProvider, sessions providers.SessionProvider, q queue.JobQueue) *Orchestrator {
-	return &Orchestrator{srcs: srcs, db: db, sessions: sessions, q: q}
+func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
+	return &Orchestrator{srcs: srcs, db: db, q: q}
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
@@ -41,20 +40,6 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	}()
 
 	o.cr = cron.New()
-
-	if o.sessions != nil {
-		if _, err := o.cr.AddFunc("@daily", func() {
-			o.wg.Add(1)
-			defer o.wg.Done()
-			if err := o.sessions.DeleteExpiredSessions(ctx); err != nil {
-				slog.Error("session cleanup failed", slog.Any("err", err))
-			}
-		}); err != nil {
-			o.cr.Stop()
-			return fmt.Errorf("schedule session cleanup: %w", err)
-		}
-		slog.Info("cron: scheduled session cleanup", slog.String("schedule", "@daily"))
-	}
 
 	for _, src := range o.srcs {
 		cfg := src.Cfg()
