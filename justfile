@@ -23,6 +23,10 @@ run *args:
 generate:
     sqlc generate
 
+# build react-email templates to Go .tmpl files (requires bun)
+build-emails:
+    cd emails && bun run build.tsx
+
 # ── Code quality ──────────────────────────────────────────────────────────────
 
 # format all Go files (uses .golangci.yml formatters, same as CI)

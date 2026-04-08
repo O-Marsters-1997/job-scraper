@@ -39,6 +39,12 @@ type Job struct {
 	ScrapedAt   pgtype.Timestamptz
 }
 
+type NotificationDigest struct {
+	ID       pgtype.UUID
+	SentAt   pgtype.Timestamptz
+	JobCount int32
+}
+
 type Session struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID

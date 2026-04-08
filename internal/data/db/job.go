@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -93,6 +94,18 @@ func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 
 func (db *DB) List(ctx context.Context) ([]dto.Job, error) {
 	rows, err := db.queries.ListJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	jobs := make([]dto.Job, len(rows))
+	for i, row := range rows {
+		jobs[i] = fromRow(row)
+	}
+	return jobs, nil
+}
+
+func (db *DB) ListSince(ctx context.Context, since time.Time) ([]dto.Job, error) {
+	rows, err := db.queries.ListJobsSince(ctx, pgtype.Timestamptz{Time: since, Valid: true})
 	if err != nil {
 		return nil, err
 	}

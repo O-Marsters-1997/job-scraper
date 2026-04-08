@@ -7,9 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/robfig/cron/v3"
+
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -42,6 +45,9 @@ func main() {
 	}
 	defer q.Close()
 
+	// Notification service setup.
+	notifSvc := setupNotifications(db)
+
 	srcs := []sources.Source{wis.New()}
 
 	orch := scraper.New(srcs, db, db, q)
@@ -50,6 +56,22 @@ func main() {
 		os.Exit(1)
 	}
 	defer orch.Stop()
+
+	// Digest cron — runs independently of the scrape cron.
+	if notifSvc != nil {
+		digestSchedule := os.Getenv("NOTIFY_DIGEST_CRON")
+		if digestSchedule == "" {
+			digestSchedule = "0 9 * * *"
+		}
+		cr := cron.New()
+		if _, err := cr.AddFunc(digestSchedule, func() { notifSvc.SendDigest(ctx) }); err != nil {
+			slog.Error("digest cron schedule failed", slog.Any("err", err))
+		} else {
+			cr.Start()
+			defer cr.Stop()
+			slog.Info("cron: scheduled digest", slog.String("schedule", digestSchedule))
+		}
+	}
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
@@ -63,8 +85,47 @@ func main() {
 			return err
 		}
 		slog.Info("job upserted", slog.String("url", url), slog.String("title", job.Title))
+		if notifSvc != nil {
+			notifSvc.NotifyNewJob(ctx, job)
+		}
 		return nil
 	}); err != nil {
 		slog.Error("worker failed", slog.Any("err", err))
 	}
+}
+
+// setupNotifications returns a configured NotificationService, or nil if
+// required env vars are missing.
+func setupNotifications(db *jobsdb.DB) *notify.NotificationService {
+	apiKey := os.Getenv("RESEND_API_KEY")
+	to := os.Getenv("NOTIFY_EMAIL_TO")
+	from := os.Getenv("NOTIFY_EMAIL_FROM")
+	if from == "" {
+		from = "onboarding@resend.dev"
+	}
+
+	if apiKey == "" || to == "" {
+		slog.Info("notifications disabled: RESEND_API_KEY or NOTIFY_EMAIL_TO not set")
+		return nil
+	}
+
+	renderer, err := notify.NewRenderer()
+	if err != nil {
+		slog.Error("notify: failed to load templates", slog.Any("err", err))
+		return nil
+	}
+
+	cfg := notify.Config{
+		To:              to,
+		OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
+		DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
+	}
+
+	return notify.NewNotificationService(
+		notify.NewResendNotifier(apiKey, from),
+		db,
+		db,
+		renderer,
+		cfg,
+	)
 }

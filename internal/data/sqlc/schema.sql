@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS notification_digests (
+    id        UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    sent_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    job_count INT         NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS applications (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,

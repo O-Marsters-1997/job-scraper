@@ -88,6 +88,39 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 	return items, nil
 }
 
+const listJobsSince = `-- name: ListJobsSince :many
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
+`
+
+func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestamptz) ([]Job, error) {
+	rows, err := q.db.Query(ctx, listJobsSince, scrapedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Job
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Location,
+			&i.Url,
+			&i.CompanySlug,
+			&i.Source,
+			&i.UpdatedAt,
+			&i.ScrapedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertJob = `-- name: UpsertJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at)
 VALUES ($1, $2, $3, $4, $5, $6, NOW())
