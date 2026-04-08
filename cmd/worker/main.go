@@ -56,7 +56,6 @@ func main() {
 	}
 	defer orch.Stop()
 
-	// Digest cron — runs independently of the scrape cron.
 	if notifSvc != nil {
 		digestSchedule := os.Getenv("NOTIFY_DIGEST_CRON")
 		if digestSchedule == "" {
@@ -93,8 +92,6 @@ func main() {
 	}
 }
 
-// setupNotifications returns a configured NotificationService, or nil if
-// required env vars are missing.
 func setupNotifications(db *jobsdb.DB) *notify.NotificationService {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	to := os.Getenv("NOTIFY_EMAIL_TO")

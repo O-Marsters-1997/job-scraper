@@ -9,13 +9,16 @@ default:
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-# build the binary
+# build all binaries
 build:
-    go build -o bin/scraper ./cmd
+    go build -o bin/api      ./cmd/api
+    go build -o bin/worker   ./cmd/worker
+    go build -o bin/admin    ./cmd/admin
+    go build -o bin/snapshot ./cmd/snapshot
 
-# run the scraper
+# run the worker
 run *args:
-    go run ./cmd {{args}}
+    go run ./cmd/worker {{args}}
 
 # ── Code generation ───────────────────────────────────────────────────────────
 

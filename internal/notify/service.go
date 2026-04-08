@@ -10,17 +10,17 @@ import (
 )
 
 type Config struct {
-	To             string
+	To              string
 	OnIngestEnabled bool
-	DigestEnabled  bool
+	DigestEnabled   bool
 }
 
 type NotificationService struct {
-	notifier     Notifier
-	notifDB      providers.NotificationProvider
-	jobDB        providers.JobProvider
-	renderer     *Renderer
-	cfg          Config
+	notifier Notifier
+	notifDB  providers.NotificationProvider
+	jobDB    providers.JobProvider
+	renderer *Renderer
+	cfg      Config
 }
 
 func NewNotificationService(

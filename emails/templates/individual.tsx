@@ -1,8 +1,6 @@
 import { Html, Body, Container, Heading } from "@react-email/components";
 import { JobCard } from "../components/job-card";
 
-// IndividualEmail renders the single-job notification template.
-// Go template directives are embedded as literal strings.
 export default function IndividualEmail() {
   return (
     <Html lang="en">

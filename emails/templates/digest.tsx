@@ -1,9 +1,6 @@
 import { Html, Body, Container, Heading, Text } from "@react-email/components";
 import { JobCard } from "../components/job-card";
 
-// DigestEmail renders the job digest template.
-// Go template directives are embedded as literal strings.
-// When rendered at runtime, Go's html/template loops over .Jobs and fills in each field.
 export default function DigestEmail() {
   return (
     <Html lang="en">

@@ -11,7 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 )
 
-// RecordDigest inserts a notification digest record.
 func (db *DB) RecordDigest(ctx context.Context, sentAt time.Time, jobCount int) error {
 	_, err := db.queries.InsertNotificationDigest(ctx, pgsqlc.InsertNotificationDigestParams{
 		SentAt:   pgtype.Timestamptz{Time: sentAt, Valid: true},
@@ -20,8 +19,6 @@ func (db *DB) RecordDigest(ctx context.Context, sentAt time.Time, jobCount int) 
 	return err
 }
 
-// GetLastDigestSentAt returns when the last digest was sent.
-// Returns a zero time.Time if no digest has ever been sent.
 func (db *DB) GetLastDigestSentAt(ctx context.Context) (time.Time, error) {
 	ts, err := db.queries.GetLastNotificationDigestSentAt(ctx)
 	if err != nil {

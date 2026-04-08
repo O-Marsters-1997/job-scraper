@@ -1,8 +1,5 @@
 import { Section, Heading, Text, Link, Hr } from "@react-email/components";
 
-// JobCard renders a single job card using Go template directive strings as props.
-// React-email handles layout/styling at build time;
-// Go's html/template substitutes actual values at runtime.
 interface JobCardProps {
   titleDirective: string;
   companyDirective: string;
@@ -33,7 +30,16 @@ export function JobCard({
 }
 
 const sectionStyle = { padding: "16px 0" };
-const titleStyle = { fontSize: "18px", fontWeight: "600", color: "#111827", margin: "0 0 4px" };
+const titleStyle = {
+  fontSize: "18px",
+  fontWeight: "600",
+  color: "#111827",
+  margin: "0 0 4px",
+};
 const metaStyle = { fontSize: "14px", color: "#6b7280", margin: "0 0 8px" };
-const linkStyle = { fontSize: "14px", color: "#2563eb", textDecoration: "none" };
+const linkStyle = {
+  fontSize: "14px",
+  color: "#2563eb",
+  textDecoration: "none",
+};
 const hrStyle = { borderColor: "#e5e7eb", margin: "16px 0 0" };
