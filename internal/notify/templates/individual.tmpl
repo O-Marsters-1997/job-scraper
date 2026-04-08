@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html dir="ltr" lang="en">
   <head></head>
-  <body style="background-color:#f9fafb">
+  <body style="background-color:rgb(249,250,251)">
     <!--$--><!--html--><!--body-->
     <table
       border="0"
@@ -13,7 +13,7 @@
       <tbody>
         <tr>
           <td
-            style='background-color:#f9fafb;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'>
+            style='background-color:rgb(249,250,251);font-family:ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji"'>
             <table
               align="center"
               width="100%"
@@ -21,12 +21,12 @@
               cellpadding="0"
               cellspacing="0"
               role="presentation"
-              style="max-width:600px;margin:0 auto;background-color:#ffffff;padding:32px;border-radius:8px">
+              style="max-width:600px;margin-right:auto;margin-left:auto;background-color:rgb(255,255,255);padding:2rem;border-radius:0.5rem">
               <tbody>
                 <tr style="width:100%">
                   <td>
                     <h1
-                      style="font-size:24px;font-weight:700;color:#111827;margin:0 0 24px">
+                      style="font-size:1.5rem;line-height:1.3333333333333333;font-weight:700;color:rgb(16,24,40);margin:0rem;margin-bottom:1.5rem">
                       New Job Posted
                     </h1>
                     <table
@@ -36,28 +36,30 @@
                       cellpadding="0"
                       cellspacing="0"
                       role="presentation"
-                      style="padding:16px 0">
+                      style="padding-bottom:1rem;padding-top:1rem">
                       <tbody>
                         <tr>
                           <td>
                             <h2
-                              style="font-size:18px;font-weight:600;color:#111827;margin:0 0 4px">
+                              style="font-size:1.125rem;line-height:1.5555555555555556;font-weight:600;color:rgb(16,24,40);margin:0rem;margin-bottom:0.25rem">
                               {{.Title}}
                             </h2>
                             <p
-                              style="font-size:14px;line-height:24px;color:#6b7280;margin:0 0 8px;margin-top:0;margin-right:0;margin-bottom:8px;margin-left:0">
+                              style="font-size:0.875rem;line-height:1.4285714285714286;color:rgb(106,114,130);margin:0rem;margin-bottom:0.5rem;margin-top:0rem;margin-left:0rem;margin-right:0rem">
                               {{.Company}}<!-- -->
                               ·
                               <!-- -->{{.Location}}
                             </p>
+                            {{if .Remuneration}}<p
+                              style="font-size:0.875rem;line-height:1.4285714285714286;color:rgb(106,114,130);margin:0rem;margin-bottom:0.5rem;margin-top:0rem;margin-left:0rem;margin-right:0rem">{{.Remuneration}}</p>{{end}}
                             <a
                               href="{{.URL}}"
-                              style="color:#2563eb;text-decoration-line:none;font-size:14px;text-decoration:none"
+                              style="color:rgb(21,93,252);text-decoration-line:none;font-size:0.875rem;line-height:1.4285714285714286"
                               target="_blank"
                               >View Job →</a
                             >
                             <hr
-                              style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:#e5e7eb;margin:16px 0 0" />
+                              style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:rgb(229,231,235);margin-top:1rem" />
                           </td>
                         </tr>
                       </tbody>
