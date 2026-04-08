@@ -45,7 +45,6 @@ func main() {
 	}
 	defer q.Close()
 
-	// Notification service setup.
 	notifSvc := setupNotifications(db)
 
 	srcs := []sources.Source{wis.New()}

@@ -7,7 +7,6 @@ import (
 
 // NotificationProvider manages notification state persistence.
 type NotificationProvider interface {
-	// RecordDigest records that a digest email was sent.
 	RecordDigest(ctx context.Context, sentAt time.Time, jobCount int) error
 
 	// GetLastDigestSentAt returns when the last digest was sent.

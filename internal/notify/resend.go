@@ -7,13 +7,11 @@ import (
 	"github.com/resend/resend-go/v3"
 )
 
-// ResendNotifier sends emails via the Resend API.
 type ResendNotifier struct {
 	client *resend.Client
 	from   string
 }
 
-// NewResendNotifier creates a notifier backed by the Resend API.
 func NewResendNotifier(apiKey, from string) *ResendNotifier {
 	return &ResendNotifier{
 		client: resend.NewClient(apiKey),

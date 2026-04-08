@@ -9,14 +9,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// Config holds the runtime configuration for the notification service.
 type Config struct {
 	To             string
 	OnIngestEnabled bool
 	DigestEnabled  bool
 }
 
-// NotificationService orchestrates rendering and sending notifications.
 type NotificationService struct {
 	notifier     Notifier
 	notifDB      providers.NotificationProvider
@@ -25,7 +23,6 @@ type NotificationService struct {
 	cfg          Config
 }
 
-// NewNotificationService creates a ready-to-use NotificationService.
 func NewNotificationService(
 	notifier Notifier,
 	notifDB providers.NotificationProvider,
