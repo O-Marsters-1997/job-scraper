@@ -44,7 +44,9 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	for _, src := range o.srcs {
 		cfg := src.Cfg()
 		if _, err := o.cr.AddFunc(cfg.Schedule, func() {
-			slog.Info("cron: starting scrape", slog.String("source", cfg.Name))
+			slog.Info("cron: starting scrape",
+				slog.String("source", cfg.Name),
+			)
 			o.wg.Add(1)
 			defer o.wg.Done()
 			o.runIfReady(ctx, src)
@@ -52,7 +54,10 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 			o.cr.Stop()
 			return fmt.Errorf("schedule %s (%s): %w", cfg.Name, cfg.Schedule, err)
 		}
-		slog.Info("cron: scheduled", slog.String("source", cfg.Name), slog.String("schedule", cfg.Schedule))
+		slog.Info("cron: scheduled",
+			slog.String("source", cfg.Name),
+			slog.String("schedule", cfg.Schedule),
+		)
 	}
 
 	o.cr.Start()
@@ -68,35 +73,36 @@ func (o *Orchestrator) Stop() {
 
 func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	cfg := src.Cfg()
+	log := slog.With(slog.String("source", cfg.Name))
+
 	last, ok, err := o.q.GetLastScraped(ctx, cfg.Name)
 	if err != nil {
-		slog.Error("could not read last scraped", slog.String("source", cfg.Name), slog.Any("err", err))
-		// fail open — proceed with the scrape
+		log.Warn("could not read last scraped, proceeding",
+			slog.Any("err", err),
+		)
 	}
 	if ok && time.Since(last) < cfg.MinScrapeInterval {
-		slog.Info("skipping scrape: ran recently",
-			slog.String("source", cfg.Name),
-			slog.Duration("ago", time.Since(last)),
-		)
+		log.Info("skipping scrape: ran recently", slog.Duration("ago", time.Since(last)))
 		return
 	}
 	if err := o.run(ctx, src); err != nil {
-		slog.Error("scrape failed", slog.String("source", cfg.Name), slog.Any("err", err))
+		log.Error("scrape failed", slog.Any("err", err))
 		return
 	}
 	if err := o.q.SetLastScraped(ctx, cfg.Name); err != nil {
-		slog.Error("could not set last scraped", slog.String("source", cfg.Name), slog.Any("err", err))
+		log.Error("could not set last scraped", slog.Any("err", err))
 	}
 }
 
 func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	name := src.Cfg().Name
+	log := slog.With(slog.String("source", name))
 	seen := make(map[string]struct{})
 
 	return src.Iterate(ctx, func(ctx context.Context, rawURLs []string) (bool, error) {
 		newURLs, err := o.db.NewURLs(ctx, rawURLs)
 		if err != nil {
-			slog.Error("filter failed", slog.String("source", name), slog.Any("err", err))
+			log.Warn("filter failed, using all URLs", slog.Any("err", err))
 			newURLs = rawURLs // fail open
 		}
 
@@ -119,7 +125,7 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			return false, err
 		}
 
-		slog.Info("enqueued page", slog.String("source", name), slog.Int("count", len(deduped)))
+		log.Info("enqueued page", slog.Int("count", len(deduped)))
 		return false, nil
 	})
 }

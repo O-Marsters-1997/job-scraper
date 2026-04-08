@@ -53,12 +53,17 @@ func fromRow(row pgsqlc.Job) dto.Job {
 
 func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 	if len(jobs) == 0 {
-		slog.Info("no jobs to save")
 		return nil
 	}
 	if len(jobs) == 1 {
 		_, err := db.queries.UpsertJob(ctx, toUpsertParams(jobs[0]))
-		return err
+		if err != nil {
+			return err
+		}
+		slog.Debug("job saved",
+			slog.String("url", jobs[0].URL),
+		)
+		return nil
 	}
 	results := db.queries.UpsertJobs(ctx, toUpsertBatchParams(jobs))
 	defer func() { _ = results.Close() }()
@@ -66,12 +71,21 @@ func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 	var errs []error
 	results.Exec(func(i int, err error) {
 		if err != nil {
-			slog.Error("job save failed", slog.String("url", jobs[i].URL), slog.Any("err", err))
+			slog.Error("job save failed",
+				slog.String("url", jobs[i].URL),
+				slog.Any("err", err),
+			)
 			errs = append(errs, err)
 		}
 	})
 
-	return errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return err
+	}
+	slog.Debug("jobs saved",
+		slog.Int("count", len(jobs)),
+	)
+	return nil
 }
 
 func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {

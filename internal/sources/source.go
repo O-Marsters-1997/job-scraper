@@ -117,7 +117,8 @@ func (b *PaginatedBase) IteratePages(
 	}
 
 	pages := (total + resultsPerPage - 1) / resultsPerPage
-	slog.Info("iterating source", slog.String("source", b.cfg.Name), slog.Int("total", total), slog.Int("pages", pages))
+	log := slog.With(slog.String("source", b.cfg.Name))
+	log.Info("iterating source", slog.Int("total", total), slog.Int("pages", pages))
 
 	stop, err := fn(ctx, page1)
 	if err != nil || stop {
@@ -132,11 +133,11 @@ func (b *PaginatedBase) IteratePages(
 		case <-time.After(wait):
 		}
 
-		slog.Debug("fetching page", slog.String("source", b.cfg.Name), slog.Int("page", p), slog.Int("of", pages))
+		log.Debug("fetching page", slog.Int("page", p), slog.Int("of", pages))
 
 		pageURLs, _, err := fetchPage(ctx, p)
 		if err != nil {
-			slog.Error("page failed", slog.String("source", b.cfg.Name), slog.Int("page", p), slog.Any("err", err))
+			log.Error("page failed", slog.Int("page", p), slog.Any("err", err))
 			continue
 		}
 
@@ -145,7 +146,7 @@ func (b *PaginatedBase) IteratePages(
 			return err
 		}
 		if stop {
-			slog.Info("early stop", slog.String("source", b.cfg.Name), slog.Int("page", p))
+			log.Info("early stop", slog.Int("page", p))
 			break
 		}
 	}

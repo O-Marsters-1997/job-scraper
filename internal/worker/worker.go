@@ -41,7 +41,7 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 
 		url, ok, err := q.Dequeue(ctx)
 		if err != nil {
-			slog.Error("worker dequeue failed", slog.Any("err", err))
+			slog.Error("dequeue failed", slog.Any("err", err))
 			if !sleep(ctx, w.errDelay) {
 				return nil
 			}
@@ -49,7 +49,7 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 		}
 
 		if !ok {
-			slog.Info("worker: queue empty, sleeping", slog.Duration("for", w.emptyDelay))
+			slog.Info("queue empty, sleeping", slog.Duration("for", w.emptyDelay))
 			if !sleep(ctx, w.emptyDelay) {
 				return nil
 			}
@@ -57,9 +57,9 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 		}
 
 		if err := handler(ctx, url); err != nil {
-			slog.Error("worker handler failed", slog.String("url", url), slog.Any("err", err))
+			slog.Error("handler failed", slog.String("url", url), slog.Any("err", err))
 		} else {
-			slog.Info("worker processed", slog.String("url", url))
+			slog.Info("processed", slog.String("url", url))
 		}
 
 		if !sleep(ctx, w.itemDelay()) {

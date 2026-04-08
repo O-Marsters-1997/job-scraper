@@ -49,7 +49,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.sessions.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
-		slog.Error("create session failed", slog.Any("err", err))
+		slog.Error("create session failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -63,7 +65,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if ok {
 		if err := h.sessions.DeleteSession(r.Context(), session.ID); err != nil {
-			slog.Error("delete session failed", slog.Any("err", err))
+			slog.Error("delete session failed",
+				slog.Any("err", err),
+			)
 		}
 	}
 	http.SetCookie(w, newSessionCookie("", -1))
@@ -95,7 +99,9 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcryptCost)
 	if err != nil {
-		slog.Error("bcrypt failed", slog.Any("err", err))
+		slog.Error("bcrypt failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -108,18 +114,24 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"error":"username already taken"}`))
 			return
 		}
-		slog.Error("create user failed", slog.Any("err", err))
+		slog.Error("create user failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if err := h.statuses.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
-		slog.Error("seed default statuses failed", slog.Any("err", err))
+		slog.Error("seed default statuses failed",
+			slog.Any("err", err),
+		)
 	}
 
 	session, err := h.sessions.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
-		slog.Error("create session after signup failed", slog.Any("err", err))
+		slog.Error("create session after signup failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

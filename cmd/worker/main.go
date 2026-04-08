@@ -29,7 +29,9 @@ func main() {
 
 	db, err := jobsdb.New(ctx, jobsdb.ConnString())
 	if err != nil {
-		slog.Error("db init failed", slog.Any("err", err))
+		slog.Error("db init failed",
+			slog.Any("err", err),
+		)
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -41,9 +43,12 @@ func main() {
 
 	q, err := queue.New(valkeyAddr)
 	if err != nil {
-		slog.Error("queue init failed", slog.Any("err", err))
+		slog.Error("queue init failed",
+			slog.Any("err", err),
+		)
 		os.Exit(1)
 	}
+	slog.Info("queue client ready", slog.String("addr", valkeyAddr))
 	defer q.Close()
 
 	notifSvc := setupNotifications()
@@ -52,7 +57,9 @@ func main() {
 
 	orch := scraper.New(srcs, db, q)
 	if err := orch.Start(ctx); err != nil {
-		slog.Error("orchestrator start failed", slog.Any("err", err))
+		slog.Error("orchestrator start failed",
+			slog.Any("err", err),
+		)
 		os.Exit(1)
 	}
 	defer orch.Stop()
@@ -61,10 +68,14 @@ func main() {
 
 	if _, err := cr.AddFunc("@daily", func() {
 		if err := db.DeleteExpiredSessions(ctx); err != nil {
-			slog.Error("session cleanup failed", slog.Any("err", err))
+			slog.Error("session cleanup failed",
+				slog.Any("err", err),
+			)
 		}
 	}); err != nil {
-		slog.Error("session cleanup cron schedule failed", slog.Any("err", err))
+		slog.Error("session cleanup cron schedule failed",
+			slog.Any("err", err),
+		)
 	} else {
 		slog.Info("cron: scheduled session cleanup", slog.String("schedule", "@daily"))
 	}
@@ -77,7 +88,9 @@ func main() {
 		if _, err := cr.AddFunc(digestSchedule, func() {
 			lastSent, err := db.GetLastDigestSentAt(ctx)
 			if err != nil {
-				slog.Error("digest: get last sent failed", slog.Any("err", err))
+				slog.Error("digest: get last sent failed",
+					slog.Any("err", err),
+				)
 				return
 			}
 			var jobs []dto.Job
@@ -87,7 +100,9 @@ func main() {
 				jobs, err = db.ListSince(ctx, lastSent)
 			}
 			if err != nil {
-				slog.Error("digest: list jobs failed", slog.Any("err", err))
+				slog.Error("digest: list jobs failed",
+					slog.Any("err", err),
+				)
 				return
 			}
 			if len(jobs) == 0 {
@@ -95,14 +110,20 @@ func main() {
 				return
 			}
 			if err := notifSvc.SendDigest(ctx, jobs); err != nil {
-				slog.Error("digest: send failed", slog.Any("err", err))
+				slog.Error("digest: send failed",
+					slog.Any("err", err),
+				)
 				return
 			}
 			if err := db.RecordDigest(ctx, time.Now(), len(jobs)); err != nil {
-				slog.Error("digest: record failed", slog.Any("err", err))
+				slog.Error("digest: record failed",
+					slog.Any("err", err),
+				)
 			}
 		}); err != nil {
-			slog.Error("digest cron schedule failed", slog.Any("err", err))
+			slog.Error("digest cron schedule failed",
+				slog.Any("err", err),
+			)
 		} else {
 			slog.Info("cron: scheduled digest", slog.String("schedule", digestSchedule))
 		}
@@ -113,22 +134,25 @@ func main() {
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
+		log := slog.With(slog.String("url", url))
 		job, err := sources.Dispatch(ctx, srcs, url)
 		if err != nil {
-			slog.Error("dispatch failed", slog.String("url", url), slog.Any("err", err))
+			log.Error("dispatch failed", slog.Any("err", err))
 			return err
 		}
 		if err := db.Save(ctx, []dto.Job{job}); err != nil {
-			slog.Error("upsert failed", slog.String("url", url), slog.Any("err", err))
+			log.Error("upsert failed", slog.Any("err", err))
 			return err
 		}
-		slog.Info("job upserted", slog.String("url", url), slog.String("title", job.Title))
+		log.Info("job upserted", slog.String("title", job.Title))
 		if notifSvc != nil {
 			notifSvc.NotifyNewJob(ctx, job)
 		}
 		return nil
 	}); err != nil {
-		slog.Error("worker failed", slog.Any("err", err))
+		slog.Error("worker failed",
+			slog.Any("err", err),
+		)
 	}
 }
 
@@ -147,7 +171,9 @@ func setupNotifications() *notify.NotificationService {
 
 	renderer, err := notify.NewRenderer()
 	if err != nil {
-		slog.Error("notify: failed to load templates", slog.Any("err", err))
+		slog.Error("notify: failed to load templates",
+			slog.Any("err", err),
+		)
 		return nil
 	}
 

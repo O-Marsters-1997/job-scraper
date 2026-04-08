@@ -23,7 +23,9 @@ func (h *ApplicationStatusHandler) ListApplicationStatuses(w http.ResponseWriter
 	session, _ := auth.SessionFromContext(r.Context())
 	statuses, err := h.statuses.ListApplicationStatusesByUser(r.Context(), session.UserID)
 	if err != nil {
-		slog.Error("list application statuses failed", slog.Any("err", err))
+		slog.Error("list application statuses failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -43,7 +45,9 @@ func (h *ApplicationStatusHandler) CreateApplicationStatus(w http.ResponseWriter
 	}
 	s, err := h.statuses.CreateApplicationStatus(r.Context(), session.UserID, body.Name, body.Colour)
 	if err != nil {
-		slog.Error("create application status failed", slog.Any("err", err))
+		slog.Error("create application status failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -65,7 +69,9 @@ func (h *ApplicationStatusHandler) UpdateApplicationStatus(w http.ResponseWriter
 	}
 	s, err := h.statuses.UpdateApplicationStatus(r.Context(), id, session.UserID, body.Name, body.Colour)
 	if err != nil {
-		slog.Error("update application status failed", slog.Any("err", err))
+		slog.Error("update application status failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -79,7 +85,9 @@ func (h *ApplicationStatusHandler) DeleteApplicationStatus(w http.ResponseWriter
 
 	count, err := h.statuses.CountApplicationsUsingStatus(r.Context(), id, session.UserID)
 	if err != nil {
-		slog.Error("count applications using status failed", slog.Any("err", err))
+		slog.Error("count applications using status failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -94,7 +102,9 @@ func (h *ApplicationStatusHandler) DeleteApplicationStatus(w http.ResponseWriter
 	}
 
 	if err := h.statuses.DeleteApplicationStatus(r.Context(), id, session.UserID); err != nil {
-		slog.Error("delete application status failed", slog.Any("err", err))
+		slog.Error("delete application status failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

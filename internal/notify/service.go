@@ -36,13 +36,14 @@ func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job) {
 	if !s.cfg.OnIngestEnabled {
 		return
 	}
+	log := slog.With(slog.String("title", job.Title))
 	html, err := s.renderer.RenderIndividual(job)
 	if err != nil {
-		slog.Error("notify: render individual failed", slog.Any("err", err))
+		log.Error("render individual failed", slog.Any("err", err))
 		return
 	}
 	if err := s.notifier.Send(ctx, s.cfg.To, "New job: "+job.Title, html); err != nil {
-		slog.Error("notify: send individual failed", slog.String("title", job.Title), slog.Any("err", err))
+		log.Error("send individual failed", slog.Any("err", err))
 	}
 }
 

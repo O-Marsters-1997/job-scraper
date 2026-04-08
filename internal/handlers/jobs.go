@@ -32,13 +32,17 @@ func newSessionCookie(id string, maxAge int) *http.Cookie {
 func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := h.jobs.List(r.Context())
 	if err != nil {
-		slog.Error("list jobs failed", slog.Any("err", err))
+		slog.Error("list jobs failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(jobs); err != nil {
-		slog.Error("encode jobs failed", slog.Any("err", err))
+		slog.Error("encode jobs failed",
+			slog.Any("err", err),
+		)
 	}
 }

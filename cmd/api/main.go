@@ -25,7 +25,9 @@ func main() {
 
 	db, err := jobsdb.New(ctx, jobsdb.ConnString())
 	if err != nil {
-		slog.Error("db init failed", slog.Any("err", err))
+		slog.Error("db init failed",
+			slog.Any("err", err),
+		)
 		os.Exit(1)
 	}
 	defer db.Close()

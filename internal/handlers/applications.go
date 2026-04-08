@@ -36,7 +36,9 @@ func (h *ApplicationHandler) ListApplications(w http.ResponseWriter, r *http.Req
 		apps, err = h.applications.ListApplicationsByUser(r.Context(), session.UserID)
 	}
 	if err != nil {
-		slog.Error("list applications failed", slog.Any("err", err))
+		slog.Error("list applications failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -67,7 +69,9 @@ func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Re
 			_, _ = w.Write([]byte(`{"error":"application already exists for this job"}`))
 			return
 		}
-		slog.Error("create application failed", slog.Any("err", err))
+		slog.Error("create application failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -95,7 +99,9 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		slog.Error("update application failed", slog.Any("err", err))
+		slog.Error("update application failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -107,7 +113,9 @@ func (h *ApplicationHandler) DeleteApplication(w http.ResponseWriter, r *http.Re
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	if err := h.applications.DeleteApplication(r.Context(), id, session.UserID); err != nil {
-		slog.Error("delete application failed", slog.Any("err", err))
+		slog.Error("delete application failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -125,7 +133,9 @@ func (h *ApplicationHandler) GetApplicationsForJobs(w http.ResponseWriter, r *ht
 	jobIDs := strings.Split(raw, ",")
 	m, err := h.applications.GetApplicationsForJobs(r.Context(), session.UserID, jobIDs)
 	if err != nil {
-		slog.Error("get applications for jobs failed", slog.Any("err", err))
+		slog.Error("get applications for jobs failed",
+			slog.Any("err", err),
+		)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
