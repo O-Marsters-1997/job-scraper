@@ -1,45 +1,35 @@
 import { Section, Heading, Text, Link, Hr } from "@react-email/components";
 
-interface JobCardProps {
-  titleDirective: string;
-  companyDirective: string;
-  locationDirective: string;
-  urlDirective: string;
+export interface JobCardProps {
+  title: string;
+  company: string;
+  location: string;
+  url: string;
+  remuneration?: string;
 }
 
 export function JobCard({
-  titleDirective,
-  companyDirective,
-  locationDirective,
-  urlDirective,
+  title,
+  company,
+  location,
+  url,
+  remuneration,
 }: JobCardProps) {
   return (
-    <Section style={sectionStyle}>
-      <Heading as="h2" style={titleStyle}>
-        {titleDirective}
+    <Section className="py-4">
+      <Heading as="h2" className="text-lg font-semibold text-gray-900 m-0 mb-1">
+        {title}
       </Heading>
-      <Text style={metaStyle}>
-        {companyDirective} &middot; {locationDirective}
+      <Text className="text-sm text-gray-500 m-0 mb-2">
+        {company} &middot; {location}
       </Text>
-      <Link href={urlDirective} style={linkStyle}>
+      {remuneration && (
+        <Text className="text-sm text-gray-500 m-0 mb-2">{remuneration}</Text>
+      )}
+      <Link href={url} className="text-sm text-blue-600 no-underline">
         View Job &rarr;
       </Link>
-      <Hr style={hrStyle} />
+      <Hr className="border-gray-200 mt-4" />
     </Section>
   );
 }
-
-const sectionStyle = { padding: "16px 0" };
-const titleStyle = {
-  fontSize: "18px",
-  fontWeight: "600",
-  color: "#111827",
-  margin: "0 0 4px",
-};
-const metaStyle = { fontSize: "14px", color: "#6b7280", margin: "0 0 8px" };
-const linkStyle = {
-  fontSize: "14px",
-  color: "#2563eb",
-  textDecoration: "none",
-};
-const hrStyle = { borderColor: "#e5e7eb", margin: "16px 0 0" };
