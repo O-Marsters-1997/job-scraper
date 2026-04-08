@@ -12,13 +12,11 @@ type contextKey struct{}
 
 var ctxKeySession = contextKey{}
 
-// SessionFromContext returns the authenticated session stored by Middleware.
 func SessionFromContext(ctx context.Context) (dto.Session, bool) {
 	s, ok := ctx.Value(ctxKeySession).(dto.Session)
 	return s, ok
 }
 
-// WithSession returns a copy of ctx with the given session injected.
 // Intended for use in tests.
 func WithSession(ctx context.Context, s dto.Session) context.Context {
 	return context.WithValue(ctx, ctxKeySession, s)

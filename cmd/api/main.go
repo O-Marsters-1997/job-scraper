@@ -50,7 +50,6 @@ func main() {
 
 	h := handlers.New(db, db, db, db, db)
 
-	// Public routes.
 	r.Post("/auth/login", h.Login)
 	r.Post("/auth/signup", h.Signup)
 

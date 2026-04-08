@@ -8,3 +8,5 @@ bin/
 !.claude/plans/**
 .idea
 .vscode
+*/**/node_modules
+emails/node_modules

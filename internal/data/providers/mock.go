@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -54,6 +55,18 @@ func (m *MockJobProvider) List(_ context.Context) ([]dto.Job, error) {
 	out := make([]dto.Job, 0, len(m.jobs))
 	for _, j := range m.jobs {
 		out = append(out, j)
+	}
+	return out, nil
+}
+
+func (m *MockJobProvider) ListSince(_ context.Context, since time.Time) ([]dto.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []dto.Job
+	for _, j := range m.jobs {
+		if j.ScrapedAt.After(since) {
+			out = append(out, j)
+		}
 	}
 	return out, nil
 }

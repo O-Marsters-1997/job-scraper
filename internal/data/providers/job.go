@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -18,4 +19,7 @@ type JobProvider interface {
 
 	// List returns all stored jobs ordered by scrape time descending.
 	List(ctx context.Context) ([]dto.Job, error)
+
+	// ListSince returns jobs scraped after the given time, ordered by scrape time descending.
+	ListSince(ctx context.Context, since time.Time) ([]dto.Job, error)
 }
