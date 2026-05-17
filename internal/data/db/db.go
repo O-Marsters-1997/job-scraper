@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -40,11 +41,25 @@ func (db *DB) Pool() *pgxpool.Pool {
 	return db.pool
 }
 
-func ConnString() string {
-	user := os.Getenv("POSTGRES_USER")
-	password := os.Getenv("POSTGRES_PASSWORD")
-	host := os.Getenv("POSTGRES_HOST")
-	port := os.Getenv("POSTGRES_PORT")
-	dbname := os.Getenv("POSTGRES_DB")
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, dbname)
+func ConnString() (string, error) {
+	vars := map[string]string{
+		"POSTGRES_USER":     os.Getenv("POSTGRES_USER"),
+		"POSTGRES_PASSWORD": os.Getenv("POSTGRES_PASSWORD"),
+		"POSTGRES_HOST":     os.Getenv("POSTGRES_HOST"),
+		"POSTGRES_PORT":     os.Getenv("POSTGRES_PORT"),
+		"POSTGRES_DB":       os.Getenv("POSTGRES_DB"),
+	}
+	var missing []string
+	for k, v := range vars {
+		if v == "" {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		return "", fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+		vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"],
+		vars["POSTGRES_HOST"], vars["POSTGRES_PORT"], vars["POSTGRES_DB"],
+	), nil
 }

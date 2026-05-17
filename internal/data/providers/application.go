@@ -7,7 +7,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrApplicationExists = errors.New("application already exists for this job")
+var (
+	ErrApplicationExists = errors.New("application already exists for this job")
+	ErrNotFound          = errors.New("not found")
+)
 
 type ApplicationStatusProvider interface {
 	SeedDefaultStatuses(ctx context.Context, userID string) error
@@ -19,10 +22,10 @@ type ApplicationStatusProvider interface {
 }
 
 type ApplicationProvider interface {
-	CreateApplication(ctx context.Context, userID, jobID, statusID, notes, salaryInfo string, appliedAt *string) (dto.Application, error)
+	CreateApplication(ctx context.Context, input dto.CreateApplicationInput) (dto.Application, error)
 	ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error)
 	ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
-	UpdateApplication(ctx context.Context, id, userID, statusID, notes, salaryInfo string, appliedAt *string) (dto.Application, error)
+	UpdateApplication(ctx context.Context, input dto.UpdateApplicationInput) (dto.Application, error)
 	DeleteApplication(ctx context.Context, id, userID string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 }

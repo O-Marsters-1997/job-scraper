@@ -38,12 +38,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.users.GetUserByUsername(r.Context(), body.Username)
 	if err != nil {
-		writeUnauthorized(w)
+		auth.WriteUnauthorized(w)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)); err != nil {
-		writeUnauthorized(w)
+		auth.WriteUnauthorized(w)
 		return
 	}
 
@@ -140,10 +140,4 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"username": user.Username})
-}
-
-func writeUnauthorized(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
 }

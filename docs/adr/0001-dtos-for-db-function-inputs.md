@@ -1,0 +1,3 @@
+# DTOs for DB function inputs
+
+When a db method requires more than a handful of scalar arguments, the input struct lives in the `dto` package — not in `providers`. The `providers` package had been used as a dumping ground for these structs (e.g. `CreateApplicationParams`, `UpdateApplicationParams`), but that conflates transport-layer plumbing with domain data shapes. Input structs are renamed to reflect what they carry (`CreateApplicationInput`, `UpdateApplicationInput`) and owned by `dto`, where all data shapes passed between layers already live. The `providers` package retains only interface definitions and sentinel errors.

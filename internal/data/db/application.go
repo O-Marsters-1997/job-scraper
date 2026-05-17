@@ -2,10 +2,14 @@ package db
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -63,18 +67,18 @@ func fromApplicationListStatusRow(r pgsqlc.ListApplicationsByUserAndStatusRow) d
 	}
 }
 
-func (db *DB) CreateApplication(ctx context.Context, userID, jobID, statusID, notes, salaryInfo string, appliedAt *string) (dto.Application, error) {
-	uid, err := parseUUID(userID)
+func (db *DB) CreateApplication(ctx context.Context, input dto.CreateApplicationInput) (dto.Application, error) {
+	uid, err := parseUUID(input.UserID)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	jid, err := parseUUID(jobID)
+	jid, err := parseUUID(input.JobID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
-	if statusID != "" {
-		sid, err = parseUUID(statusID)
+	if input.StatusID != "" {
+		sid, err = parseUUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -83,12 +87,12 @@ func (db *DB) CreateApplication(ctx context.Context, userID, jobID, statusID, no
 		UserID:     uid,
 		JobID:      jid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: notes, Valid: notes != ""},
-		AppliedAt:  toOptionalDate(appliedAt),
-		SalaryInfo: pgtype.Text{String: salaryInfo, Valid: salaryInfo != ""},
+		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		AppliedAt:  toOptionalDate(input.AppliedAt),
+		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
-		return dto.Application{}, err
+		return dto.Application{}, fmt.Errorf("db.CreateApplication: %w", err)
 	}
 	return fromApplication(a), nil
 }
@@ -100,7 +104,7 @@ func (db *DB) ListApplicationsByUser(ctx context.Context, userID string) ([]dto.
 	}
 	rows, err := db.queries.ListApplicationsByUser(ctx, uid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListApplicationsByUser: %w", err)
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
@@ -123,7 +127,7 @@ func (db *DB) ListApplicationsByUserAndStatus(ctx context.Context, userID, statu
 		StatusID: sid,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListApplicationsByUserAndStatus: %w", err)
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
@@ -132,18 +136,18 @@ func (db *DB) ListApplicationsByUserAndStatus(ctx context.Context, userID, statu
 	return out, nil
 }
 
-func (db *DB) UpdateApplication(ctx context.Context, id, userID, statusID, notes, salaryInfo string, appliedAt *string) (dto.Application, error) {
-	aid, err := parseUUID(id)
+func (db *DB) UpdateApplication(ctx context.Context, input dto.UpdateApplicationInput) (dto.Application, error) {
+	aid, err := parseUUID(input.ID)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := parseUUID(input.UserID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
-	if statusID != "" {
-		sid, err = parseUUID(statusID)
+	if input.StatusID != "" {
+		sid, err = parseUUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -152,12 +156,15 @@ func (db *DB) UpdateApplication(ctx context.Context, id, userID, statusID, notes
 		ID:         aid,
 		UserID:     uid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: notes, Valid: notes != ""},
-		AppliedAt:  toOptionalDate(appliedAt),
-		SalaryInfo: pgtype.Text{String: salaryInfo, Valid: salaryInfo != ""},
+		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		AppliedAt:  toOptionalDate(input.AppliedAt),
+		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
-		return dto.Application{}, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dto.Application{}, providers.ErrNotFound
+		}
+		return dto.Application{}, fmt.Errorf("db.UpdateApplication: %w", err)
 	}
 	return fromApplication(a), nil
 }
@@ -171,10 +178,13 @@ func (db *DB) DeleteApplication(ctx context.Context, id, userID string) error {
 	if err != nil {
 		return err
 	}
-	return db.queries.DeleteApplication(ctx, pgsqlc.DeleteApplicationParams{
+	if err := db.queries.DeleteApplication(ctx, pgsqlc.DeleteApplicationParams{
 		ID:     aid,
 		UserID: uid,
-	})
+	}); err != nil {
+		return fmt.Errorf("db.DeleteApplication: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
@@ -195,7 +205,7 @@ func (db *DB) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs 
 		Column2: pgIDs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.GetApplicationsForJobs: %w", err)
 	}
 	out := make(map[string]dto.JobApplicationSummary, len(rows))
 	for _, row := range rows {

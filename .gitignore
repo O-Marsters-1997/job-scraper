@@ -3,9 +3,7 @@ bin/
 .ralph/.ralph-last-*
 .env
 .env.test
-.claude/*
-!.claude/plans/
-!.claude/plans/**
+.claude/
 .idea
 .vscode
 */**/node_modules

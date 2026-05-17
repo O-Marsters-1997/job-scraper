@@ -44,7 +44,12 @@ func main() {
 	}
 
 	ctx := context.Background()
-	db, err := jobsdb.New(ctx, jobsdb.ConnString())
+	connStr, err := jobsdb.ConnString()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "db config invalid: %v\n", err)
+		os.Exit(1)
+	}
+	db, err := jobsdb.New(ctx, connStr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
 		os.Exit(1)

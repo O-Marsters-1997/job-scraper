@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -58,7 +59,7 @@ func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 	if len(jobs) == 1 {
 		_, err := db.queries.UpsertJob(ctx, toUpsertParams(jobs[0]))
 		if err != nil {
-			return err
+			return fmt.Errorf("db.Save: %w", err)
 		}
 		slog.Debug("job saved",
 			slog.String("url", jobs[0].URL),
@@ -80,7 +81,7 @@ func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 	})
 
 	if err := errors.Join(errs...); err != nil {
-		return err
+		return fmt.Errorf("db.Save: %w", err)
 	}
 	slog.Debug("jobs saved",
 		slog.Int("count", len(jobs)),
@@ -91,7 +92,7 @@ func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 	existing, err := db.queries.ExistingURLs(ctx, urls)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.NewURLs: %w", err)
 	}
 	known := make(map[string]struct{}, len(existing))
 	for _, u := range existing {
@@ -109,7 +110,7 @@ func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 func (db *DB) List(ctx context.Context) ([]dto.Job, error) {
 	rows, err := db.queries.ListJobs(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.List: %w", err)
 	}
 	jobs := make([]dto.Job, len(rows))
 	for i, row := range rows {
@@ -121,7 +122,7 @@ func (db *DB) List(ctx context.Context) ([]dto.Job, error) {
 func (db *DB) ListSince(ctx context.Context, since time.Time) ([]dto.Job, error) {
 	rows, err := db.queries.ListJobsSince(ctx, pgtype.Timestamptz{Time: since, Valid: true})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListSince: %w", err)
 	}
 	jobs := make([]dto.Job, len(rows))
 	for i, row := range rows {

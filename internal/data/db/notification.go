@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,7 +17,10 @@ func (db *DB) RecordDigest(ctx context.Context, sentAt time.Time, jobCount int) 
 		SentAt:   pgtype.Timestamptz{Time: sentAt, Valid: true},
 		JobCount: int32(jobCount),
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("db.RecordDigest: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) GetLastDigestSentAt(ctx context.Context) (time.Time, error) {
@@ -25,7 +29,7 @@ func (db *DB) GetLastDigestSentAt(ctx context.Context) (time.Time, error) {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return time.Time{}, nil
 		}
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("db.GetLastDigestSentAt: %w", err)
 	}
 	return ts.Time, nil
 }
