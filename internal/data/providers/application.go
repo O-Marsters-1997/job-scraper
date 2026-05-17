@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
 var (
@@ -27,7 +28,7 @@ type CreateApplicationParams struct {
 	StatusID   string
 	Notes      string
 	SalaryInfo string
-	AppliedAt  *string
+	AppliedAt  fp.Option[string]
 }
 
 type UpdateApplicationParams struct {
@@ -36,7 +37,7 @@ type UpdateApplicationParams struct {
 	StatusID   string
 	Notes      string
 	SalaryInfo string
-	AppliedAt  *string
+	AppliedAt  fp.Option[string]
 }
 
 type ApplicationProvider interface {

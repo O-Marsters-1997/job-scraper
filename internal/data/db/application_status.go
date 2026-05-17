@@ -8,6 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
 func fromApplicationStatus(s pgsqlc.ApplicationStatus) dto.ApplicationStatus {
@@ -111,13 +112,12 @@ func (db *DB) CountApplicationsUsingStatus(ctx context.Context, statusID, userID
 	})
 }
 
-// toOptionalDate converts a *string in "YYYY-MM-DD" format to pgtype.Date.
-func toOptionalDate(s *string) pgtype.Date {
-	if s == nil {
+func toOptionalDate(s fp.Option[string]) pgtype.Date {
+	if s.IsNone() {
 		return pgtype.Date{}
 	}
 	var d pgtype.Date
-	_ = d.Scan(*s)
+	_ = d.Scan(s.Unwrap())
 	return d
 }
 
