@@ -50,11 +50,11 @@ func (h *ApplicationHandler) ListApplications(w http.ResponseWriter, r *http.Req
 func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
-		JobID      string          `json:"job_id"`
-		StatusID   string          `json:"status_id"`
-		Notes      string          `json:"notes"`
+		JobID      string            `json:"job_id"`
+		StatusID   string            `json:"status_id"`
+		Notes      string            `json:"notes"`
 		AppliedAt  fp.Option[string] `json:"applied_at"`
-		SalaryInfo string          `json:"salary_info"`
+		SalaryInfo string            `json:"salary_info"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.JobID == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -92,10 +92,10 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
-		StatusID   string          `json:"status_id"`
-		Notes      string          `json:"notes"`
+		StatusID   string            `json:"status_id"`
+		Notes      string            `json:"notes"`
 		AppliedAt  fp.Option[string] `json:"applied_at"`
-		SalaryInfo string          `json:"salary_info"`
+		SalaryInfo string            `json:"salary_info"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
