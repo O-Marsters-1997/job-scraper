@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -91,7 +92,7 @@ func (db *DB) CreateApplication(ctx context.Context, params providers.CreateAppl
 		SalaryInfo: pgtype.Text{String: params.SalaryInfo, Valid: params.SalaryInfo != ""},
 	})
 	if err != nil {
-		return dto.Application{}, err
+		return dto.Application{}, fmt.Errorf("db.CreateApplication: %w", err)
 	}
 	return fromApplication(a), nil
 }
@@ -103,7 +104,7 @@ func (db *DB) ListApplicationsByUser(ctx context.Context, userID string) ([]dto.
 	}
 	rows, err := db.queries.ListApplicationsByUser(ctx, uid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListApplicationsByUser: %w", err)
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
@@ -126,7 +127,7 @@ func (db *DB) ListApplicationsByUserAndStatus(ctx context.Context, userID, statu
 		StatusID: sid,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListApplicationsByUserAndStatus: %w", err)
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
@@ -163,7 +164,7 @@ func (db *DB) UpdateApplication(ctx context.Context, params providers.UpdateAppl
 		if errors.Is(err, pgx.ErrNoRows) {
 			return dto.Application{}, providers.ErrNotFound
 		}
-		return dto.Application{}, err
+		return dto.Application{}, fmt.Errorf("db.UpdateApplication: %w", err)
 	}
 	return fromApplication(a), nil
 }
@@ -177,10 +178,13 @@ func (db *DB) DeleteApplication(ctx context.Context, id, userID string) error {
 	if err != nil {
 		return err
 	}
-	return db.queries.DeleteApplication(ctx, pgsqlc.DeleteApplicationParams{
+	if err := db.queries.DeleteApplication(ctx, pgsqlc.DeleteApplicationParams{
 		ID:     aid,
 		UserID: uid,
-	})
+	}); err != nil {
+		return fmt.Errorf("db.DeleteApplication: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
@@ -201,7 +205,7 @@ func (db *DB) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs 
 		Column2: pgIDs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.GetApplicationsForJobs: %w", err)
 	}
 	out := make(map[string]dto.JobApplicationSummary, len(rows))
 	for _, row := range rows {

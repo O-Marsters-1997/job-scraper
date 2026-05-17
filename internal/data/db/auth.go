@@ -50,7 +50,7 @@ func parseUUID(s string) (pgtype.UUID, error) {
 func (db *DB) GetUserByUsername(ctx context.Context, username string) (dto.User, error) {
 	u, err := db.queries.GetUserByUsername(ctx, username)
 	if err != nil {
-		return dto.User{}, err
+		return dto.User{}, fmt.Errorf("db.GetUserByUsername: %w", err)
 	}
 	return fromUser(u), nil
 }
@@ -65,7 +65,7 @@ func (db *DB) CreateUser(ctx context.Context, username, passwordHash string) (dt
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return dto.User{}, providers.ErrUsernameTaken
 		}
-		return dto.User{}, err
+		return dto.User{}, fmt.Errorf("db.CreateUser: %w", err)
 	}
 	return fromUser(u), nil
 }
@@ -80,7 +80,7 @@ func (db *DB) CreateSession(ctx context.Context, userID string, expiresAt time.T
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
-		return dto.Session{}, err
+		return dto.Session{}, fmt.Errorf("db.CreateSession: %w", err)
 	}
 	return fromSession(s), nil
 }
@@ -92,7 +92,7 @@ func (db *DB) GetSession(ctx context.Context, id string) (dto.Session, error) {
 	}
 	row, err := db.queries.GetSession(ctx, uid)
 	if err != nil {
-		return dto.Session{}, err
+		return dto.Session{}, fmt.Errorf("db.GetSession: %w", err)
 	}
 	return fromSessionRow(row), nil
 }
@@ -102,9 +102,15 @@ func (db *DB) DeleteSession(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return db.queries.DeleteSession(ctx, uid)
+	if err := db.queries.DeleteSession(ctx, uid); err != nil {
+		return fmt.Errorf("db.DeleteSession: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) DeleteExpiredSessions(ctx context.Context) error {
-	return db.queries.DeleteExpiredSessions(ctx)
+	if err := db.queries.DeleteExpiredSessions(ctx); err != nil {
+		return fmt.Errorf("db.DeleteExpiredSessions: %w", err)
+	}
+	return nil
 }

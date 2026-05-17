@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,7 +27,10 @@ func (db *DB) SeedDefaultStatuses(ctx context.Context, userID string) error {
 	if err != nil {
 		return err
 	}
-	return db.queries.SeedDefaultStatuses(ctx, uid)
+	if err := db.queries.SeedDefaultStatuses(ctx, uid); err != nil {
+		return fmt.Errorf("db.SeedDefaultStatuses: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
@@ -40,7 +44,7 @@ func (db *DB) CreateApplicationStatus(ctx context.Context, userID, name, colour 
 		Colour: colour,
 	})
 	if err != nil {
-		return dto.ApplicationStatus{}, err
+		return dto.ApplicationStatus{}, fmt.Errorf("db.CreateApplicationStatus: %w", err)
 	}
 	return fromApplicationStatus(s), nil
 }
@@ -52,7 +56,7 @@ func (db *DB) ListApplicationStatusesByUser(ctx context.Context, userID string) 
 	}
 	rows, err := db.queries.ListApplicationStatusesByUser(ctx, uid)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("db.ListApplicationStatusesByUser: %w", err)
 	}
 	out := make([]dto.ApplicationStatus, len(rows))
 	for i, row := range rows {
@@ -77,7 +81,7 @@ func (db *DB) UpdateApplicationStatus(ctx context.Context, id, userID, name, col
 		Colour: colour,
 	})
 	if err != nil {
-		return dto.ApplicationStatus{}, err
+		return dto.ApplicationStatus{}, fmt.Errorf("db.UpdateApplicationStatus: %w", err)
 	}
 	return fromApplicationStatus(s), nil
 }
@@ -91,10 +95,13 @@ func (db *DB) DeleteApplicationStatus(ctx context.Context, id, userID string) er
 	if err != nil {
 		return err
 	}
-	return db.queries.DeleteApplicationStatus(ctx, pgsqlc.DeleteApplicationStatusParams{
+	if err := db.queries.DeleteApplicationStatus(ctx, pgsqlc.DeleteApplicationStatusParams{
 		ID:     sid,
 		UserID: uid,
-	})
+	}); err != nil {
+		return fmt.Errorf("db.DeleteApplicationStatus: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error) {
@@ -106,10 +113,14 @@ func (db *DB) CountApplicationsUsingStatus(ctx context.Context, statusID, userID
 	if err != nil {
 		return 0, err
 	}
-	return db.queries.CountApplicationsUsingStatus(ctx, pgsqlc.CountApplicationsUsingStatusParams{
+	count, err := db.queries.CountApplicationsUsingStatus(ctx, pgsqlc.CountApplicationsUsingStatusParams{
 		StatusID: sid,
 		UserID:   uid,
 	})
+	if err != nil {
+		return 0, fmt.Errorf("db.CountApplicationsUsingStatus: %w", err)
+	}
+	return count, nil
 }
 
 func toOptionalDate(s fp.Option[string]) pgtype.Date {
@@ -121,7 +132,6 @@ func toOptionalDate(s fp.Option[string]) pgtype.Date {
 	return d
 }
 
-// fromOptionalDate converts a pgtype.Date to *time.Time.
 func fromOptionalDate(d pgtype.Date) *time.Time {
 	if !d.Valid {
 		return nil
