@@ -10,3 +10,8 @@ bin/
 .vscode
 */**/node_modules
 emails/node_modules
+
+# Utilities
+.DS_Store
+.treepad.toml
+.codemap
