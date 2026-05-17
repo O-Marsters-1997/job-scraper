@@ -95,7 +95,7 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 	}
 	app, err := h.applications.UpdateApplication(r.Context(), id, session.UserID, body.StatusID, body.Notes, body.SalaryInfo, body.AppliedAt)
 	if err != nil {
-		if strings.Contains(err.Error(), "no rows") {
+		if errors.Is(err, providers.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}

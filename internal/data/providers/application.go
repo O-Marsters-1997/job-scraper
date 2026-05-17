@@ -7,7 +7,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrApplicationExists = errors.New("application already exists for this job")
+var (
+	ErrApplicationExists = errors.New("application already exists for this job")
+	ErrNotFound          = errors.New("not found")
+)
 
 type ApplicationStatusProvider interface {
 	SeedDefaultStatuses(ctx context.Context, userID string) error

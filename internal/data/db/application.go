@@ -2,10 +2,13 @@ package db
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -157,6 +160,9 @@ func (db *DB) UpdateApplication(ctx context.Context, id, userID, statusID, notes
 		SalaryInfo: pgtype.Text{String: salaryInfo, Valid: salaryInfo != ""},
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dto.Application{}, providers.ErrNotFound
+		}
 		return dto.Application{}, err
 	}
 	return fromApplication(a), nil
