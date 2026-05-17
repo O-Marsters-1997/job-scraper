@@ -27,7 +27,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	db, err := jobsdb.New(ctx, jobsdb.ConnString())
+	connStr, err := jobsdb.ConnString()
+	if err != nil {
+		slog.Error("db config invalid", slog.Any("err", err))
+		os.Exit(1)
+	}
+	db, err := jobsdb.New(ctx, connStr)
 	if err != nil {
 		slog.Error("db init failed",
 			slog.Any("err", err),
