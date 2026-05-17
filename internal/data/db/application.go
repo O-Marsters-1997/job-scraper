@@ -67,18 +67,18 @@ func fromApplicationListStatusRow(r pgsqlc.ListApplicationsByUserAndStatusRow) d
 	}
 }
 
-func (db *DB) CreateApplication(ctx context.Context, params providers.CreateApplicationParams) (dto.Application, error) {
-	uid, err := parseUUID(params.UserID)
+func (db *DB) CreateApplication(ctx context.Context, input dto.CreateApplicationInput) (dto.Application, error) {
+	uid, err := parseUUID(input.UserID)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	jid, err := parseUUID(params.JobID)
+	jid, err := parseUUID(input.JobID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
-	if params.StatusID != "" {
-		sid, err = parseUUID(params.StatusID)
+	if input.StatusID != "" {
+		sid, err = parseUUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -87,9 +87,9 @@ func (db *DB) CreateApplication(ctx context.Context, params providers.CreateAppl
 		UserID:     uid,
 		JobID:      jid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: params.Notes, Valid: params.Notes != ""},
-		AppliedAt:  toOptionalDate(params.AppliedAt),
-		SalaryInfo: pgtype.Text{String: params.SalaryInfo, Valid: params.SalaryInfo != ""},
+		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		AppliedAt:  toOptionalDate(input.AppliedAt),
+		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
 		return dto.Application{}, fmt.Errorf("db.CreateApplication: %w", err)
@@ -136,18 +136,18 @@ func (db *DB) ListApplicationsByUserAndStatus(ctx context.Context, userID, statu
 	return out, nil
 }
 
-func (db *DB) UpdateApplication(ctx context.Context, params providers.UpdateApplicationParams) (dto.Application, error) {
-	aid, err := parseUUID(params.ID)
+func (db *DB) UpdateApplication(ctx context.Context, input dto.UpdateApplicationInput) (dto.Application, error) {
+	aid, err := parseUUID(input.ID)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	uid, err := parseUUID(params.UserID)
+	uid, err := parseUUID(input.UserID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
-	if params.StatusID != "" {
-		sid, err = parseUUID(params.StatusID)
+	if input.StatusID != "" {
+		sid, err = parseUUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -156,9 +156,9 @@ func (db *DB) UpdateApplication(ctx context.Context, params providers.UpdateAppl
 		ID:         aid,
 		UserID:     uid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: params.Notes, Valid: params.Notes != ""},
-		AppliedAt:  toOptionalDate(params.AppliedAt),
-		SalaryInfo: pgtype.Text{String: params.SalaryInfo, Valid: params.SalaryInfo != ""},
+		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		AppliedAt:  toOptionalDate(input.AppliedAt),
+		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

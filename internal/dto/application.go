@@ -1,6 +1,28 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/fp"
+)
+
+type CreateApplicationInput struct {
+	UserID     string
+	JobID      string
+	StatusID   string
+	Notes      string
+	SalaryInfo string
+	AppliedAt  fp.Option[string]
+}
+
+type UpdateApplicationInput struct {
+	ID         string
+	UserID     string
+	StatusID   string
+	Notes      string
+	SalaryInfo string
+	AppliedAt  fp.Option[string]
+}
 
 type ApplicationStatus struct {
 	ID        string

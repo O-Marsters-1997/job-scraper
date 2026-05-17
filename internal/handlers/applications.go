@@ -12,6 +12,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
@@ -61,7 +62,7 @@ func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	app, err := h.applications.CreateApplication(r.Context(), providers.CreateApplicationParams{
+	app, err := h.applications.CreateApplication(r.Context(), dto.CreateApplicationInput{
 		UserID:     session.UserID,
 		JobID:      body.JobID,
 		StatusID:   body.StatusID,
@@ -101,7 +102,7 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	app, err := h.applications.UpdateApplication(r.Context(), providers.UpdateApplicationParams{
+	app, err := h.applications.UpdateApplication(r.Context(), dto.UpdateApplicationInput{
 		ID:         id,
 		UserID:     session.UserID,
 		StatusID:   body.StatusID,
