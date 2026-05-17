@@ -29,12 +29,12 @@ func Middleware(sp providers.SessionProvider) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("session_id")
 			if err != nil {
-				writeUnauthorized(w)
+				WriteUnauthorized(w)
 				return
 			}
 			session, err := sp.GetSession(r.Context(), cookie.Value)
 			if err != nil {
-				writeUnauthorized(w)
+				WriteUnauthorized(w)
 				return
 			}
 			ctx := context.WithValue(r.Context(), ctxKeySession, session)
@@ -43,7 +43,7 @@ func Middleware(sp providers.SessionProvider) func(http.Handler) http.Handler {
 	}
 }
 
-func writeUnauthorized(w http.ResponseWriter) {
+func WriteUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
