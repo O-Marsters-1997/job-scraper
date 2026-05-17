@@ -12,7 +12,7 @@
 
 ## Project decisions
 
-When implementing features or making design decisions, consult if they exist:
+When making structural or architectural decisions — refactoring package boundaries, choosing where a new type or layer belongs, or resolving naming ambiguity — consult if they exist. Not for routine implementation.
 
 - `CONTEXT.md` — domain language glossary
 - `docs/adr/` — architectural decisions
