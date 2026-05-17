@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(gh pr create*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/pre-pr-ci.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
