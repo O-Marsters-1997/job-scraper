@@ -60,7 +60,14 @@ func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	app, err := h.applications.CreateApplication(r.Context(), session.UserID, body.JobID, body.StatusID, body.Notes, body.SalaryInfo, body.AppliedAt)
+	app, err := h.applications.CreateApplication(r.Context(), providers.CreateApplicationParams{
+		UserID:     session.UserID,
+		JobID:      body.JobID,
+		StatusID:   body.StatusID,
+		Notes:      body.Notes,
+		SalaryInfo: body.SalaryInfo,
+		AppliedAt:  body.AppliedAt,
+	})
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -93,7 +100,14 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	app, err := h.applications.UpdateApplication(r.Context(), id, session.UserID, body.StatusID, body.Notes, body.SalaryInfo, body.AppliedAt)
+	app, err := h.applications.UpdateApplication(r.Context(), providers.UpdateApplicationParams{
+		ID:         id,
+		UserID:     session.UserID,
+		StatusID:   body.StatusID,
+		Notes:      body.Notes,
+		SalaryInfo: body.SalaryInfo,
+		AppliedAt:  body.AppliedAt,
+	})
 	if err != nil {
 		if errors.Is(err, providers.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
