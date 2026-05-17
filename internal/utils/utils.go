@@ -1,14 +1,15 @@
 package utils
 
 import (
-	"log"
+	"log/slog"
 	"os"
 )
 
 func MustGetEnv(key string) string {
 	value := os.Getenv(key)
 	if value == "" {
-		log.Fatalf("Environment variable %s is not set", key)
+		slog.Error("required environment variable not set", slog.String("key", key))
+		os.Exit(1)
 	}
 	return value
 }
