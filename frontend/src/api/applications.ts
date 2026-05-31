@@ -1,6 +1,6 @@
 import type { Application, ApplicationWithDetails, JobApplicationSummary } from '../types/application'
 
-const API_BASE = 'http://localhost:8080'
+import { API_BASE } from './config'
 
 export async function fetchApplications(statusId?: string): Promise<ApplicationWithDetails[]> {
   const url = statusId

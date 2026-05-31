@@ -58,7 +58,7 @@ func ConnString() (string, error) {
 	if len(missing) > 0 {
 		return "", fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s",
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require",
 		vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"],
 		vars["POSTGRES_HOST"], vars["POSTGRES_PORT"], vars["POSTGRES_DB"],
 	), nil

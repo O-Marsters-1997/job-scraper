@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8080'
+import { API_BASE } from './config'
 
 export function login(username: string, password: string) {
   return fetch(`${API_BASE}/auth/login`, {

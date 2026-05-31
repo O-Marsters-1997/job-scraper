@@ -1,6 +1,6 @@
 import type { ApplicationStatus } from '../types/applicationStatus'
 
-const API_BASE = 'http://localhost:8080'
+import { API_BASE } from './config'
 
 export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
   const res = await fetch(`${API_BASE}/application-statuses`, { credentials: 'include' })
