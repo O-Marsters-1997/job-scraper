@@ -1,6 +1,6 @@
 # job-scraper dev tasks
 
-DB_URL         := "postgres://postgres:postgres@localhost:5433/job_scraper"
+DB_URL         := "postgres://" + env_var("POSTGRES_USER") + ":" + env_var("POSTGRES_PASSWORD") + "@" + env_var("POSTGRES_HOST") + ":" + env_var("POSTGRES_PORT") + "/" + env_var("POSTGRES_DB") + "?sslmode=" + env_var_or_default("POSTGRES_SSLMODE", "disable")
 MIGRATIONS_DIR := "scripts/migrations"
 
 # list available recipes
