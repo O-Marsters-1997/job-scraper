@@ -3,6 +3,7 @@
 set dotenv-load
 
 DB_URL         := "postgres://" + env_var("POSTGRES_USER") + ":" + env_var("POSTGRES_PASSWORD") + "@" + env_var("POSTGRES_HOST") + ":" + env_var("POSTGRES_PORT") + "/" + env_var("POSTGRES_DB") + "?sslmode=" + env_var_or_default("POSTGRES_SSLMODE", "disable")
+MIGRATION_URL  := "postgres://" + env_var("POSTGRES_USER") + ":" + env_var("POSTGRES_PASSWORD") + "@localhost:5433/" + env_var("POSTGRES_DB") + "?sslmode=" + env_var_or_default("POSTGRES_SSLMODE", "disable")
 MIGRATIONS_DIR := "scripts/migrations"
 
 # list available recipes
@@ -72,15 +73,15 @@ down:
 
 # show migration status
 migrate-status:
-    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" status
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{MIGRATION_URL}}" status
 
 # apply all pending migrations
 migrate-up:
-    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" up
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{MIGRATION_URL}}" up
 
 # rollback last migration
 migrate-down:
-    goose -dir {{MIGRATIONS_DIR}} postgres "{{DB_URL}}" down
+    goose -dir {{MIGRATIONS_DIR}} postgres "{{MIGRATION_URL}}" down
 
 # create a new named migration: just migrate-create add_index_on_url
 migrate-create name:
