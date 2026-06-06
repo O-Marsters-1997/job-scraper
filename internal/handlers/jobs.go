@@ -18,12 +18,17 @@ func NewJobHandler(jobs providers.JobProvider) *JobHandler {
 }
 
 func newSessionCookie(id string, maxAge int) *http.Cookie {
+	secure := os.Getenv("COOKIE_SECURE") == "true"
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
 	return &http.Cookie{
 		Name:     "session_id",
 		Value:    id,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("COOKIE_SECURE") == "true",
+		SameSite: sameSite,
+		Secure:   secure,
 		Path:     "/",
 		MaxAge:   maxAge,
 	}
