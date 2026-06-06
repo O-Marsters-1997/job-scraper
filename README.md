@@ -71,6 +71,100 @@ just run
 
 Copy `.env.example` to `.env` and adjust if your local setup differs from the defaults.
 
+## VPS Deployment
+
+These steps cover deploying to a fresh Linux VPS (e.g. Hetzner, DigitalOcean).
+
+### 1. SSH access
+
+Generate a key locally if you don't have one:
+
+```sh
+ssh-keygen -t ed25519 -C "your@email.com"
+```
+
+Add your public key to the server (substitute your VPS IP):
+
+```sh
+ssh-copy-id root@<server-ip>
+```
+
+Then connect:
+
+```sh
+ssh root@<server-ip>
+```
+
+### 2. Install dependencies
+
+```sh
+# Go
+wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
+
+# just
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+# goose (for migrations)
+go install github.com/pressly/goose/v3/cmd/goose@latest
+echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc && source ~/.bashrc
+
+# Docker (for Valkey)
+curl -fsSL https://get.docker.com | sh
+```
+
+### 3. Clone the repo
+
+```sh
+git clone https://github.com/O-Marsters-1997/job-scraper.git
+cd job-scraper
+```
+
+### 4. Configure environment
+
+```sh
+cp .env.example .env
+```
+
+Edit `.env` with your values. All values must be **quoted** — `just`'s dotenv parser requires this for values containing spaces or special characters (e.g. cron expressions):
+
+```sh
+NOTIFY_DIGEST_CRON="0 9 * * *"   # must be quoted
+```
+
+**Database**: you can use any PostgreSQL instance — Docker locally, or a managed service like [Neon](https://neon.tech). Set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_SSLMODE` accordingly.
+
+> **Neon / pooler note**: if your `POSTGRES_HOST` contains `-pooler.` in the hostname, migrations will hang because `goose` uses session-level advisory locks which are incompatible with PgBouncer transaction mode. Use the **direct** (non-pooler) endpoint and port `5432` when running `just migrate-up`. You can use the pooler URL for the application at runtime.
+
+**Valkey**: start it via Docker:
+
+```sh
+docker run -d --name valkey -p 6379:6379 valkey/valkey:latest
+```
+
+Set `VALKEY_ADDR="localhost:6379"` in `.env`.
+
+### 5. Run migrations
+
+```sh
+just migrate-up
+```
+
+### 6. Build and run
+
+```sh
+just build
+
+# Run the worker (long-running process)
+./bin/worker
+
+# Or run the API server
+./bin/api
+```
+
+To keep the process running after you disconnect, use `systemd` or a simple `screen`/`tmux` session.
+
 ## Adding a New Source
 
 1. **Implement the `Source` interface** (`internal/sources/source.go`):

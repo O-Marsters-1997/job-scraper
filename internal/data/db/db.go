@@ -58,8 +58,12 @@ func ConnString() (string, error) {
 	if len(missing) > 0 {
 		return "", fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=require",
+	sslmode := os.Getenv("POSTGRES_SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"],
-		vars["POSTGRES_HOST"], vars["POSTGRES_PORT"], vars["POSTGRES_DB"],
+		vars["POSTGRES_HOST"], vars["POSTGRES_PORT"], vars["POSTGRES_DB"], sslmode,
 	), nil
 }
