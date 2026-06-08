@@ -27,7 +27,7 @@ export default function Sidebar() {
 	return (
 		<aside
 			class="flex h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-300"
-			style={{ width: expanded() ? "13.75rem" : "3.5rem" }}
+			style={{ width: expanded() ? "var(--sidebar-w, 13.75rem)" : "3.5rem" }}
 		>
 			{/* Brand */}
 			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">

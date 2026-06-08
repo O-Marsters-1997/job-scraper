@@ -1,109 +1,127 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&family=Fira+Code:wght@400;500&family=Space+Mono:wght@400&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @theme {
-	--font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-	--font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 
-	/* Canvas + surfaces */
-	--color-background: oklch(0.9842 0.0034 247.86);
-	--color-surface: oklch(1 0 0);
-	--color-surface-muted: oklch(0.9876 0.0017 247.84);
+  /* Canvas + surfaces */
+  --color-background: oklch(0.9842 0.0034 247.86);
+  --color-surface: oklch(1 0 0);
+  --color-surface-muted: oklch(0.9876 0.0017 247.84);
 
-	/* Text */
-	--color-foreground: oklch(0.2077 0.0398 265.75);
-	--color-muted: oklch(0.4455 0.0374 257.28);
-	--color-faint: oklch(0.7107 0.0351 256.79);
+  /* Text */
+  --color-foreground: oklch(0.2077 0.0398 265.75);
+  --color-muted: oklch(0.4455 0.0374 257.28);
+  --color-faint: oklch(0.7107 0.0351 256.79);
 
-	/* Lines */
-	--color-border: oklch(0.9288 0.0126 255.51);
-	--color-border-strong: oklch(0.869 0.0198 252.89);
+  /* Lines */
+  --color-border: oklch(0.9288 0.0126 255.51);
+  --color-border-strong: oklch(0.869 0.0198 252.89);
 
-	/* Teal brand accent */
-	--color-primary: oklch(0.6274 0.1078 185.99);
-	--color-primary-hover: oklch(0.5254 0.0902 185.8);
-	--color-primary-foreground: oklch(1 0 0);
-	--color-accent-subtle: oklch(0.9836 0.0142 180.72);
-	--color-accent-border: oklch(0.91 0.0927 180.43);
-	--color-accent-text: oklch(0.3861 0.059 188.42);
+  /* Teal brand accent */
+  --color-primary: oklch(0.6274 0.1078 185.99);
+  --color-primary-hover: oklch(0.5254 0.0902 185.8);
+  --color-primary-foreground: oklch(1 0 0);
+  --color-accent-subtle: oklch(0.9836 0.0142 180.72);
+  --color-accent-border: oklch(0.91 0.0927 180.43);
+  --color-accent-text: oklch(0.3861 0.059 188.42);
 
-	/* Dark sidebar panel */
-	--color-sidebar: oklch(0.2094 0.0199 248.8);
-	--color-sidebar-hover: oklch(0.2783 0.033 247.38);
-	--color-sidebar-border: oklch(0.2783 0.033 247.38);
-	--color-sidebar-foreground: oklch(0.6417 0.0422 250.84);
-	--color-sidebar-foreground-strong: oklch(0.9243 0.0169 236.7);
-	--color-sidebar-active: oklch(0.7038 0.123 182.5 / 0.13);
-	--color-sidebar-active-foreground: oklch(0.8549 0.1251 181.07);
+  /* Dark sidebar panel */
+  --color-sidebar: oklch(0.2094 0.0199 248.8);
+  --color-sidebar-hover: oklch(0.2783 0.033 247.38);
+  --color-sidebar-border: oklch(0.2783 0.033 247.38);
+  --color-sidebar-foreground: oklch(0.6417 0.0422 250.84);
+  --color-sidebar-foreground-strong: oklch(0.9243 0.0169 236.7);
+  --color-sidebar-active: oklch(0.7038 0.123 182.5 / 0.13);
+  --color-sidebar-active-foreground: oklch(0.8549 0.1251 181.07);
 
-	/* Danger */
-	--color-destructive: oklch(0.6368 0.2078 25.33);
-	--color-destructive-strong: oklch(0.5771 0.2152 27.33);
-	--color-destructive-subtle: oklch(0.9705 0.0129 17.38);
+  /* Danger */
+  --color-destructive: oklch(0.6368 0.2078 25.33);
+  --color-destructive-strong: oklch(0.5771 0.2152 27.33);
+  --color-destructive-subtle: oklch(0.9705 0.0129 17.38);
 
-	/* Status palette (defaults / chips) */
-	--color-status-saved: oklch(0.5544 0.0407 257.42);
-	--color-status-applied: oklch(0.5461 0.2152 262.88);
-	--color-status-phone: oklch(0.5413 0.2466 293.01);
-	--color-status-interview: oklch(0.6658 0.1574 58.32);
-	--color-status-offer: oklch(0.596 0.1274 163.23);
-	--color-status-rejected: oklch(0.5771 0.2152 27.33);
+  /* Status palette (defaults / chips) */
+  --color-status-saved: oklch(0.5544 0.0407 257.42);
+  --color-status-applied: oklch(0.5461 0.2152 262.88);
+  --color-status-phone: oklch(0.5413 0.2466 293.01);
+  --color-status-interview: oklch(0.6658 0.1574 58.32);
+  --color-status-offer: oklch(0.596 0.1274 163.23);
+  --color-status-rejected: oklch(0.5771 0.2152 27.33);
 }
 
 @layer base {
-	*,
-	*::before,
-	*::after {
-		box-sizing: border-box;
-	}
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-	html,
-	body,
-	#app {
-		height: 100%;
-	}
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
 
-	body {
-		margin: 0;
-		background: var(--color-background);
-		color: var(--color-foreground);
-		font-family: var(--font-sans);
-		font-size: 14px;
-		line-height: 1.5;
-		overflow-x: hidden;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		@apply bg-background text-foreground;
-	}
+  body {
+    margin: 0;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
 
-	a {
-		color: inherit;
-		text-decoration: none;
-	}
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 
-	* {
-		@apply border-border;
-	}
+  * {
+    @apply border-border;
+  }
 
-	html {
-		@apply font-sans;
-	}
+  html {
+    @apply font-sans;
+  }
 }
 
 @layer components {
-	/* Shared form field styling — used for select and textarea (no primitive yet) */
-	.field {
-		@apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none;
-	}
+  /* Shared form field styling — used for select and textarea (no primitive yet) */
+  .field {
+    @apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none;
+  }
 }
+
+/* Density tweaks — applied via data-density on <html> */
+html[data-density="compact"] table td,
+html[data-density="compact"] table th {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+html[data-density="spacious"] table td {
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+
+/* Size-scale tweaks — scale the html root so all rem units resize proportionally.
+   body { font-size: 0.875rem } means body tracks html × 0.875.
+   xs ≈ 12px body, md ≈ 15px body, lg ≈ 16px body. sm = default (no rule). */
+html[data-size="xs"] { font-size: 85.7%; }
+html[data-size="md"] { font-size: 107.1%; }
+html[data-size="lg"] { font-size: 114.3%; }
 
 /* Slim scrollbars for the main scroll region */
 .scroll-slim::-webkit-scrollbar {
-	width: 6px;
-	height: 6px;
+  width: 6px;
+  height: 6px;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-	background: var(--color-border-strong);
-	border-radius: 3px;
+  background: var(--color-border-strong);
+  border-radius: 3px;
 }
