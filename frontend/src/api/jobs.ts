@@ -1,8 +1,8 @@
 import type { Job } from "../types/job";
-import { API_BASE, mockDelay, USE_MOCKS } from "./config";
+import { API_BASE, mockDelay, useMocks } from "./config";
 
 export async function fetchJobs(): Promise<Job[]> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { getJobs } = await import("../mocks/db");
 		await mockDelay();
 		return getJobs();

@@ -1,7 +1,7 @@
-import { API_BASE, USE_MOCKS } from "./config";
+import { API_BASE, MOCK_BUILD } from "./config";
 
 export function login(username: string, password: string) {
-	if (USE_MOCKS) {
+	if (MOCK_BUILD) {
 		void username;
 		void password;
 		return Promise.resolve(
@@ -20,7 +20,7 @@ export function login(username: string, password: string) {
 }
 
 export function signup(username: string, password: string) {
-	if (USE_MOCKS) {
+	if (MOCK_BUILD) {
 		void username;
 		void password;
 		return Promise.resolve(
@@ -39,7 +39,7 @@ export function signup(username: string, password: string) {
 }
 
 export function logout() {
-	if (USE_MOCKS) {
+	if (MOCK_BUILD) {
 		return Promise.resolve(new Response(null, { status: 200 }));
 	}
 	return fetch(`${API_BASE}/auth/logout`, {
@@ -49,7 +49,7 @@ export function logout() {
 }
 
 export function getMe() {
-	if (USE_MOCKS) {
+	if (MOCK_BUILD) {
 		return Promise.resolve(
 			new Response(JSON.stringify({ id: "user-1", username: "demo" }), {
 				status: 200,
