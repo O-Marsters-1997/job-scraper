@@ -19,6 +19,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface JobsDataTableProps<TData> {
 	columns: ColumnDef<TData, unknown>[];
@@ -67,7 +69,7 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 		Math.min((pageIndex() + 1) * pagination().pageSize, filteredCount());
 
 	return (
-		<div class="space-y-3">
+		<div class="flex flex-col gap-3">
 			{/* Search */}
 			<div class="relative max-w-xs">
 				<svg
@@ -85,7 +87,7 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 					<circle cx="11" cy="11" r="8" />
 					<line x1="21" y1="21" x2="16.65" y2="16.65" />
 				</svg>
-				<input
+				<Input
 					type="search"
 					placeholder="Search by role or company…"
 					value={globalFilter()}
@@ -93,7 +95,7 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 						setGlobalFilter(e.currentTarget.value);
 						setPagination((p) => ({ ...p, pageIndex: 0 }));
 					}}
-					class="w-full rounded-md border border-border bg-surface py-2 pr-3 pl-9 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
+					class="pr-3 pl-9"
 				/>
 			</div>
 
@@ -180,25 +182,25 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 						Showing {start()}–{end()} of {filteredCount()} jobs
 					</p>
 					<div class="flex items-center gap-2">
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="sm"
 							onClick={() => table.previousPage()}
 							disabled={!table.getCanPreviousPage()}
-							class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
 						>
 							← Prev
-						</button>
+						</Button>
 						<span class="text-sm text-faint">
 							Page {pageIndex() + 1} of {pageCount()}
 						</span>
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="sm"
 							onClick={() => table.nextPage()}
 							disabled={!table.getCanNextPage()}
-							class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
 						>
 							Next →
-						</button>
+						</Button>
 					</div>
 				</div>
 			</Show>

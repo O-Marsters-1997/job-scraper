@@ -9,6 +9,16 @@ import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { StatusBadge } from "../../components/StatusBadge";
 import { cn } from "@/lib/utils";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { ApplicationWithDetails } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/applications")({
@@ -24,6 +34,7 @@ function ApplicationsPage() {
 	const updateMutation = useUpdateApplication();
 	const deleteMutation = useDeleteApplication();
 
+	const [modalOpen, setModalOpen] = createSignal(false);
 	const [editingApp, setEditingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
 	const [editStatusId, setEditStatusId] = createSignal("");
@@ -37,9 +48,10 @@ function ApplicationsPage() {
 		setEditNotes(app.Notes);
 		setEditAppliedAt(app.AppliedAt ?? "");
 		setEditSalary(app.SalaryInfo);
+		setModalOpen(true);
 	};
 
-	const closeEdit = () => setEditingApp(null);
+	const closeEdit = () => setModalOpen(false);
 
 	const handleSave = async () => {
 		const app = editingApp();
@@ -173,87 +185,71 @@ function ApplicationsPage() {
 			</Show>
 
 			{/* Edit modal */}
-			<Show when={editingApp()}>
-				<div
-					class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]"
-					onClick={(e) => e.target === e.currentTarget && closeEdit()}
-				>
-					<div class="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-2xl">
-						<h2 class="text-base font-semibold text-foreground">
-							Edit application
-						</h2>
-						<p class="mb-5 text-sm text-faint">{editingApp()?.JobTitle}</p>
+			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Edit application</DialogTitle>
+						<p class="text-sm text-faint">{editingApp()?.JobTitle}</p>
+					</DialogHeader>
 
-						<div class="space-y-4">
+					<div class="flex flex-col gap-4">
+						<div>
+							<Label class="field-label">Status</Label>
+							<select
+								class="field"
+								value={editStatusId()}
+								onChange={(e) => setEditStatusId(e.currentTarget.value)}
+							>
+								<option value="">— No status —</option>
+								<For each={statusesQuery.data}>
+									{(s) => <option value={s.ID}>{s.Name}</option>}
+								</For>
+							</select>
+						</div>
+
+						<div class="grid grid-cols-2 gap-3">
 							<div>
-								<label class="field-label">Status</label>
-								<select
-									class="field"
-									value={editStatusId()}
-									onChange={(e) => setEditStatusId(e.currentTarget.value)}
-								>
-									<option value="">— No status —</option>
-									<For each={statusesQuery.data}>
-										{(s) => <option value={s.ID}>{s.Name}</option>}
-									</For>
-								</select>
-							</div>
-
-							<div class="grid grid-cols-2 gap-3">
-								<div>
-									<label class="field-label">Applied date</label>
-									<input
-										type="date"
-										class="field"
-										value={editAppliedAt()}
-										onInput={(e) => setEditAppliedAt(e.currentTarget.value)}
-									/>
-								</div>
-
-								<div>
-									<label class="field-label">Salary / comp</label>
-									<input
-										type="text"
-										class="field"
-										placeholder="e.g. £80,000"
-										value={editSalary()}
-										onInput={(e) => setEditSalary(e.currentTarget.value)}
-									/>
-								</div>
+								<Label class="field-label">Applied date</Label>
+								<Input
+									type="date"
+									value={editAppliedAt()}
+									onInput={(e) => setEditAppliedAt(e.currentTarget.value)}
+								/>
 							</div>
 
 							<div>
-								<label class="field-label">Notes</label>
-								<textarea
-									class="field resize-y"
-									rows={3}
-									placeholder="Any notes about this application…"
-									value={editNotes()}
-									onInput={(e) => setEditNotes(e.currentTarget.value)}
+								<Label class="field-label">Salary / comp</Label>
+								<Input
+									type="text"
+									placeholder="e.g. £80,000"
+									value={editSalary()}
+									onInput={(e) => setEditSalary(e.currentTarget.value)}
 								/>
 							</div>
 						</div>
 
-						<div class="mt-5 flex justify-end gap-2 border-t border-border pt-4">
-							<button
-								type="button"
-								onClick={closeEdit}
-								class="rounded-md border border-border bg-surface px-4 py-1.5 text-sm font-medium text-muted transition hover:border-border-strong hover:text-foreground"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								onClick={handleSave}
-								disabled={updateMutation.isPending}
-								class="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
-							>
-								Save
-							</button>
+						<div>
+							<Label class="field-label">Notes</Label>
+							<textarea
+								class="field resize-y"
+								rows={3}
+								placeholder="Any notes about this application…"
+								value={editNotes()}
+								onInput={(e) => setEditNotes(e.currentTarget.value)}
+							/>
 						</div>
 					</div>
-				</div>
-			</Show>
+
+					<DialogFooter class="border-t border-border pt-4">
+						<Button variant="outline" onClick={closeEdit}>
+							Cancel
+						</Button>
+						<Button onClick={handleSave} disabled={updateMutation.isPending}>
+							Save
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
