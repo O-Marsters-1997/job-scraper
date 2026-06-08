@@ -1,4 +1,11 @@
-export type ThemeKey = "teal" | "midnight" | "ember" | "forest" | "plum" | "graphite";
+export type ThemeKey =
+	| "teal"
+	| "midnight"
+	| "ember"
+	| "forest"
+	| "plum"
+	| "graphite"
+	| "custom";
 export type FontKey = "jakarta" | "dm" | "sora" | "outfit" | "ibm";
 export type SizeKey = "xs" | "sm" | "md" | "lg";
 export type SidebarWidthKey = "narrow" | "default" | "wide";
@@ -12,7 +19,33 @@ export interface Tweaks {
 	sidebarWidth: SidebarWidthKey;
 	density: DensityKey;
 	radius: RadiusKey;
+	customColors: Record<string, string>;
 }
+
+// OKLCH defaults mirroring the teal @theme block in src/styles.css.
+// Keeping oklch so custom palette storage stays consistent with the design system.
+export const CUSTOM_DEFAULTS: Record<string, string> = {
+	"--color-sidebar": "oklch(0.2094 0.0199 248.8)",
+	"--color-sidebar-hover": "oklch(0.2783 0.033 247.38)",
+	"--color-sidebar-active": "oklch(0.7038 0.123 182.5 / 0.13)",
+	"--color-sidebar-active-foreground": "oklch(0.8549 0.1251 181.07)",
+	"--color-sidebar-foreground": "oklch(0.6417 0.0422 250.84)",
+	"--color-sidebar-foreground-strong": "oklch(0.9243 0.0169 236.7)",
+	"--color-sidebar-border": "oklch(0.2783 0.033 247.38)",
+	"--color-background": "oklch(0.9842 0.0034 247.86)",
+	"--color-surface": "oklch(1 0 0)",
+	"--color-surface-muted": "oklch(0.9876 0.0017 247.84)",
+	"--color-foreground": "oklch(0.2077 0.0398 265.75)",
+	"--color-muted": "oklch(0.4455 0.0374 257.28)",
+	"--color-faint": "oklch(0.7107 0.0351 256.79)",
+	"--color-border": "oklch(0.9288 0.0126 255.51)",
+	"--color-border-strong": "oklch(0.869 0.0198 252.89)",
+	"--color-primary": "oklch(0.6274 0.1078 185.99)",
+	"--color-primary-hover": "oklch(0.5254 0.0902 185.8)",
+	"--color-accent-subtle": "oklch(0.9836 0.0142 180.72)",
+	"--color-accent-border": "oklch(0.91 0.0927 180.43)",
+	"--color-accent-text": "oklch(0.3861 0.059 188.42)",
+};
 
 export const DEFAULTS: Tweaks = {
 	theme: "teal",
@@ -21,12 +54,13 @@ export const DEFAULTS: Tweaks = {
 	sidebarWidth: "default",
 	density: "default",
 	radius: "default",
+	customColors: CUSTOM_DEFAULTS,
 };
 
 export const STORAGE_KEY = "job-scraper-tweaks";
 
 // CSS variable names that theme switching can override
-const THEME_VAR_NAMES = [
+export const THEME_VAR_NAMES = [
 	"--color-sidebar",
 	"--color-sidebar-hover",
 	"--color-sidebar-active",
@@ -47,6 +81,59 @@ const THEME_VAR_NAMES = [
 	"--color-accent-subtle",
 	"--color-accent-border",
 	"--color-accent-text",
+];
+
+export interface ThemeVarGroup {
+	label: string;
+	vars: { key: string; label: string }[];
+}
+
+export const THEME_VAR_GROUPS: ThemeVarGroup[] = [
+	{
+		label: "Sidebar",
+		vars: [
+			{ key: "--color-sidebar", label: "Background" },
+			{ key: "--color-sidebar-hover", label: "Hover" },
+			{ key: "--color-sidebar-active", label: "Active bg" },
+			{ key: "--color-sidebar-active-foreground", label: "Active text" },
+			{ key: "--color-sidebar-foreground", label: "Text" },
+			{ key: "--color-sidebar-foreground-strong", label: "Text strong" },
+			{ key: "--color-sidebar-border", label: "Border" },
+		],
+	},
+	{
+		label: "Surfaces",
+		vars: [
+			{ key: "--color-background", label: "Canvas" },
+			{ key: "--color-surface", label: "Surface" },
+			{ key: "--color-surface-muted", label: "Surface muted" },
+		],
+	},
+	{
+		label: "Text",
+		vars: [
+			{ key: "--color-foreground", label: "Foreground" },
+			{ key: "--color-muted", label: "Muted" },
+			{ key: "--color-faint", label: "Faint" },
+		],
+	},
+	{
+		label: "Borders",
+		vars: [
+			{ key: "--color-border", label: "Border" },
+			{ key: "--color-border-strong", label: "Border strong" },
+		],
+	},
+	{
+		label: "Accent",
+		vars: [
+			{ key: "--color-primary", label: "Primary" },
+			{ key: "--color-primary-hover", label: "Primary hover" },
+			{ key: "--color-accent-subtle", label: "Subtle bg" },
+			{ key: "--color-accent-border", label: "Border" },
+			{ key: "--color-accent-text", label: "Text" },
+		],
+	},
 ];
 
 interface ThemeEntry {
@@ -193,6 +280,12 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 			"--color-accent-text": "#111111",
 		},
 	},
+	// Custom theme: swatch is a placeholder; actual colours come from customColors at runtime
+	custom: {
+		name: "Custom",
+		swatch: { sb: "#111921", cv: "#f8fafc", ac: "#0f9d92" },
+		vars: {},
+	},
 };
 
 export const THEME_KEYS: ThemeKey[] = [
@@ -202,6 +295,7 @@ export const THEME_KEYS: ThemeKey[] = [
 	"forest",
 	"plum",
 	"graphite",
+	"custom",
 ];
 
 interface FontEntry {
@@ -278,8 +372,19 @@ const SIDEBAR_W: Record<SidebarWidthKey, string | null> = {
 export function loadTweaks(): Tweaks {
 	try {
 		const stored = localStorage.getItem(STORAGE_KEY);
-		if (stored) return { ...DEFAULTS, ...JSON.parse(stored) };
-	} catch { }
+		if (stored) {
+			const parsed = JSON.parse(stored);
+			return {
+				...DEFAULTS,
+				...parsed,
+				// Deep-merge so new vars added to CUSTOM_DEFAULTS are present for existing users
+				customColors: {
+					...DEFAULTS.customColors,
+					...(parsed.customColors ?? {}),
+				},
+			};
+		}
+	} catch {}
 	return { ...DEFAULTS };
 }
 
@@ -289,14 +394,24 @@ export function saveTweaks(t: Tweaks): void {
 
 // ── Apply functions ─────────────────────────────────────────────────────────
 
-export function applyTheme(key: ThemeKey): void {
+export function applyTheme(
+	key: ThemeKey,
+	customColors?: Record<string, string>,
+): void {
 	const root = document.documentElement;
-	const theme = THEMES[key];
 	// Remove all theme var overrides first (restores @theme values for teal)
 	for (const v of THEME_VAR_NAMES) root.style.removeProperty(v);
-	// Apply overrides for non-default themes
-	for (const [v, val] of Object.entries(theme.vars)) {
-		root.style.setProperty(v, val);
+	if (key === "custom") {
+		// Apply every custom colour entry
+		const colors = customColors ?? CUSTOM_DEFAULTS;
+		for (const [v, val] of Object.entries(colors)) {
+			root.style.setProperty(v, val);
+		}
+	} else {
+		// Apply overrides for preset themes (empty for teal = uses @theme defaults)
+		for (const [v, val] of Object.entries(THEMES[key].vars)) {
+			root.style.setProperty(v, val);
+		}
 	}
 }
 
@@ -344,7 +459,7 @@ export function applyDensity(key: DensityKey): void {
 }
 
 export function applyAll(t: Tweaks): void {
-	applyTheme(t.theme);
+	applyTheme(t.theme, t.customColors);
 	applyFont(t.font);
 	applyRadius(t.radius);
 	applySidebarWidth(t.sidebarWidth);
