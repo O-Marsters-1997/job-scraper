@@ -1,8 +1,8 @@
 import type { ApplicationStatus } from "../types/applicationStatus";
-import { API_BASE, mockDelay, USE_MOCKS } from "./config";
+import { API_BASE, mockDelay, useMocks } from "./config";
 
 export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { getStatuses } = await import("../mocks/db");
 		await mockDelay();
 		return getStatuses();
@@ -18,7 +18,7 @@ export async function createApplicationStatus(
 	name: string,
 	colour: string,
 ): Promise<ApplicationStatus> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { createStatus } = await import("../mocks/db");
 		await mockDelay(80);
 		return createStatus(name, colour);
@@ -38,7 +38,7 @@ export async function updateApplicationStatus(
 	name: string,
 	colour: string,
 ): Promise<ApplicationStatus> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { updateStatus } = await import("../mocks/db");
 		await mockDelay(80);
 		return updateStatus(id, name, colour);
@@ -56,7 +56,7 @@ export async function updateApplicationStatus(
 export async function deleteApplicationStatus(
 	id: string,
 ): Promise<{ count?: number }> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { deleteStatus } = await import("../mocks/db");
 		await mockDelay(80);
 		return deleteStatus(id);

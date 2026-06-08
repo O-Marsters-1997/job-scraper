@@ -1,4 +1,5 @@
 import { useLocation } from "@tanstack/solid-router";
+import SettingsPanel from "./SettingsPanel";
 
 const PAGE_LABELS: Record<string, string> = {
 	"/overview": "Overview",
@@ -18,25 +19,7 @@ export default function Topbar() {
 				<span class="text-border-strong">/</span>
 				<span class="font-semibold text-foreground">{page()}</span>
 			</nav>
-			<div
-				class="flex h-8 w-8 items-center justify-center rounded-full border border-accent-border bg-accent-subtle text-accent-text"
-				aria-hidden="true"
-			>
-				<svg
-					aria-hidden="true"
-					width="15"
-					height="15"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-					<circle cx="12" cy="7" r="4" />
-				</svg>
-			</div>
+			<SettingsPanel />
 		</header>
 	);
 }

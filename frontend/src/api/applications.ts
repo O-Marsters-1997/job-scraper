@@ -3,12 +3,12 @@ import type {
 	ApplicationWithDetails,
 	JobApplicationSummary,
 } from "../types/application";
-import { API_BASE, mockDelay, USE_MOCKS } from "./config";
+import { API_BASE, mockDelay, useMocks } from "./config";
 
 export async function fetchApplications(
 	statusId?: string,
 ): Promise<ApplicationWithDetails[]> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { getApplications } = await import("../mocks/db");
 		await mockDelay();
 		return getApplications(statusId);
@@ -28,7 +28,7 @@ export async function createApplication(data: {
 	applied_at?: string | null;
 	salary_info?: string;
 }): Promise<Application> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { createApplication: mockCreate } = await import("../mocks/db");
 		await mockDelay(80);
 		return mockCreate(data);
@@ -53,7 +53,7 @@ export async function updateApplication(
 		salary_info?: string;
 	},
 ): Promise<Application> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { updateApplication: mockUpdate } = await import("../mocks/db");
 		await mockDelay(80);
 		return mockUpdate(id, data);
@@ -69,7 +69,7 @@ export async function updateApplication(
 }
 
 export async function deleteApplication(id: string): Promise<void> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { deleteApplication: mockDelete } = await import("../mocks/db");
 		await mockDelay(80);
 		return mockDelete(id);
@@ -84,7 +84,7 @@ export async function deleteApplication(id: string): Promise<void> {
 export async function fetchApplicationsForJobs(
 	jobIds: string[],
 ): Promise<Record<string, JobApplicationSummary>> {
-	if (USE_MOCKS) {
+	if (useMocks()) {
 		const { getApplicationsForJobs } = await import("../mocks/db");
 		await mockDelay();
 		return getApplicationsForJobs(jobIds);
