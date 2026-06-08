@@ -92,12 +92,9 @@
 }
 
 @layer components {
-	/* Shared form field styling — used across modals and the statuses page */
+	/* Shared form field styling — used for select and textarea (no primitive yet) */
 	.field {
 		@apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none;
-	}
-	.field-label {
-		@apply mb-1 block text-xs font-medium text-muted;
 	}
 }
 

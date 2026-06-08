@@ -194,7 +194,7 @@ function ApplicationsPage() {
 
 					<div class="flex flex-col gap-4">
 						<div>
-							<Label class="field-label">Status</Label>
+							<Label>Status</Label>
 							<select
 								class="field"
 								value={editStatusId()}
@@ -209,7 +209,7 @@ function ApplicationsPage() {
 
 						<div class="grid grid-cols-2 gap-3">
 							<div>
-								<Label class="field-label">Applied date</Label>
+								<Label>Applied date</Label>
 								<Input
 									type="date"
 									value={editAppliedAt()}
@@ -218,7 +218,7 @@ function ApplicationsPage() {
 							</div>
 
 							<div>
-								<Label class="field-label">Salary / comp</Label>
+								<Label>Salary / comp</Label>
 								<Input
 									type="text"
 									placeholder="e.g. £80,000"
@@ -229,7 +229,7 @@ function ApplicationsPage() {
 						</div>
 
 						<div>
-							<Label class="field-label">Notes</Label>
+							<Label>Notes</Label>
 							<textarea
 								class="field resize-y"
 								rows={3}
