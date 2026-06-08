@@ -102,8 +102,7 @@ function JobsPage() {
 		onEdit: openEdit,
 	});
 
-	const currentJob = () =>
-		jobs().find((j) => j.ID === trackingJobId());
+	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
 
 	return (
 		<div class="px-7 py-6">
@@ -197,9 +196,7 @@ function JobsPage() {
 						</Button>
 						<Button
 							onClick={handleSubmit}
-							disabled={
-								createMutation.isPending || updateMutation.isPending
-							}
+							disabled={createMutation.isPending || updateMutation.isPending}
 						>
 							{modalMode() === "create" ? "Save" : "Update"}
 						</Button>

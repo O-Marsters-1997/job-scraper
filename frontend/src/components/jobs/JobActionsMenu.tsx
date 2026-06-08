@@ -91,7 +91,9 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 						<DropdownMenuItem onSelect={props.onEdit}>
 							<span
 								class="h-2 w-2 shrink-0 rounded-full"
-								style={{ background: summary().StatusColour || STATUS_FALLBACK_COLOUR }}
+								style={{
+									background: summary().StatusColour || STATUS_FALLBACK_COLOUR,
+								}}
 							/>
 							{summary().StatusName || "Edit status"}
 						</DropdownMenuItem>

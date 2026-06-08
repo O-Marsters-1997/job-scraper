@@ -11,7 +11,11 @@ import {
 } from "@kobalte/core/dialog";
 import { cn } from "@/lib/utils";
 
-export { DialogRoot as Dialog, DialogTrigger, DialogCloseButton as DialogClose };
+export {
+	DialogRoot as Dialog,
+	DialogTrigger,
+	DialogCloseButton as DialogClose,
+};
 
 export type DialogOverlayProps<T extends ValidComponent = "div"> =
 	ComponentProps<typeof DialogOverlayPrimitive<T>>;

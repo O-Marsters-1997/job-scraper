@@ -1,7 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal } from "solid-js";
 import { login } from "../api/auth";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+	Card,
+	CardContent,
+	CardFooter,
+	CardHeader,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -66,7 +71,11 @@ function LoginPage() {
 				</CardHeader>
 
 				<CardContent>
-					<form id="login-form" onSubmit={handleSubmit} class="flex flex-col gap-4">
+					<form
+						id="login-form"
+						onSubmit={handleSubmit}
+						class="flex flex-col gap-4"
+					>
 						<div class="flex flex-col gap-1.5">
 							<Label for="username" variant="uppercase">
 								Username
@@ -117,7 +126,10 @@ function LoginPage() {
 
 					<p class="text-center text-xs text-faint">
 						Don't have an account?{" "}
-						<a href="/signup" class="font-semibold text-primary hover:underline">
+						<a
+							href="/signup"
+							class="font-semibold text-primary hover:underline"
+						>
 							Sign up
 						</a>
 					</p>
