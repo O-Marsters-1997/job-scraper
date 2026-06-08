@@ -42,6 +42,16 @@
   --color-destructive-strong: oklch(0.5771 0.2152 27.33);
   --color-destructive-subtle: oklch(0.9705 0.0129 17.38);
 
+  /* Source badge palette — text colours; use /10 for background tints */
+  --color-source-linkedin: oklch(0.4554 0.2388 264.06);
+  --color-source-indeed: oklch(0.4274 0.2357 295.82);
+  --color-source-greenhouse: oklch(0.3862 0.1078 157.07);
+  --color-source-lever: oklch(0.4661 0.1461 36.24);
+
+  /* Sidebar count-badge surfaces */
+  --color-sidebar-badge: oklch(1 0 0 / 0.07);
+  --color-sidebar-badge-active: oklch(0.7038 0.123 182.5 / 0.1);
+
   /* Status palette (defaults / chips) */
   --color-status-saved: oklch(0.5544 0.0407 257.42);
   --color-status-applied: oklch(0.5461 0.2152 262.88);
@@ -82,6 +92,14 @@
     text-decoration: none;
   }
 
+  button:not(:disabled),
+  [role="button"],
+  a[href],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+
   * {
     @apply border-border;
   }
@@ -112,9 +130,15 @@ html[data-density="spacious"] table td {
 /* Size-scale tweaks — scale the html root so all rem units resize proportionally.
    body { font-size: 0.875rem } means body tracks html × 0.875.
    xs ≈ 12px body, md ≈ 15px body, lg ≈ 16px body. sm = default (no rule). */
-html[data-size="xs"] { font-size: 85.7%; }
-html[data-size="md"] { font-size: 107.1%; }
-html[data-size="lg"] { font-size: 114.3%; }
+html[data-size="xs"] {
+  font-size: 85.7%;
+}
+html[data-size="md"] {
+  font-size: 107.1%;
+}
+html[data-size="lg"] {
+  font-size: 114.3%;
+}
 
 /* Slim scrollbars for the main scroll region */
 .scroll-slim::-webkit-scrollbar {

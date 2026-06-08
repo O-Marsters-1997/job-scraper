@@ -1,6 +1,7 @@
 import { useLocation } from "@tanstack/solid-router";
 
 const PAGE_LABELS: Record<string, string> = {
+	"/overview": "Overview",
 	"/jobs": "Jobs",
 	"/applications": "Applications",
 	"/settings/statuses": "Statuses",
@@ -22,6 +23,7 @@ export default function Topbar() {
 				aria-hidden="true"
 			>
 				<svg
+					aria-hidden="true"
 					width="15"
 					height="15"
 					viewBox="0 0 24 24"

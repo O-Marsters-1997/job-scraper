@@ -1,35 +1,37 @@
-import { createFileRoute } from "@tanstack/solid-router";
+import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
-import {
-	useApplications,
-	useUpdateApplication,
-	useDeleteApplication,
-} from "../../hooks/useApplications";
-import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
-import { StatusBadge } from "../../components/StatusBadge";
-import { cn } from "@/lib/utils";
-import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
+	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import { cn } from "@/lib/utils";
+import { StatusBadge } from "../../components/StatusBadge";
+import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
+import {
+	useApplications,
+	useDeleteApplication,
+	useUpdateApplication,
+} from "../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/applications")({
+	validateSearch: (search: Record<string, unknown>) => ({
+		status: typeof search.status === "string" ? search.status : undefined,
+	}),
 	component: ApplicationsPage,
 });
 
 function ApplicationsPage() {
-	const [statusFilter, setStatusFilter] = createSignal<string | undefined>(
-		undefined,
-	);
-	const query = useApplications(statusFilter);
+	const search = Route.useSearch();
+	const navigate = useNavigate();
+	const query = useApplications(() => search().status);
 	const statusesQuery = useApplicationStatuses();
 	const updateMutation = useUpdateApplication();
 	const deleteMutation = useDeleteApplication();
@@ -80,7 +82,7 @@ function ApplicationsPage() {
 
 	const chipClass = (active: boolean) =>
 		cn(
-			"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+			"inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
 			active
 				? "border-primary bg-accent-subtle text-accent-text"
 				: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
@@ -101,8 +103,10 @@ function ApplicationsPage() {
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
 				<button
 					type="button"
-					onClick={() => setStatusFilter(undefined)}
-					class={chipClass(statusFilter() === undefined)}
+					onClick={() =>
+						navigate({ to: "/applications", search: { status: undefined } })
+					}
+					class={chipClass(!search().status)}
 				>
 					All
 				</button>
@@ -110,8 +114,10 @@ function ApplicationsPage() {
 					{(s) => (
 						<button
 							type="button"
-							onClick={() => setStatusFilter(s.ID)}
-							class={chipClass(statusFilter() === s.ID)}
+							onClick={() =>
+								navigate({ to: "/applications", search: { status: s.ID } })
+							}
+							class={chipClass(search().status === s.ID)}
 						>
 							<span
 								class="inline-block h-2 w-2 rounded-full"
