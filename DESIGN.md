@@ -16,47 +16,53 @@ Do not invent values outside the palette and scale below.
 ## 1. Product Context & Visual Theme & Atmosphere
 
 A focused operator's dashboard, not a marketing site. The mood is **calm, dense,
-and trustworthy** — a quiet light canvas (`#f8fafc`) holding white cards, framed on
-the left by a single near-black sidebar (`#111921`). One teal brand accent
-(`#0f9d92`) carries every primary action and active state; everything else is
-slate-neutral. The feeling is "admin console you live in all day": shadcn / Tabler /
-TailAdmin light-mode lineage — information per square inch over vibes, with just
-enough colour to signal state. No gradients, no hero imagery, no decoration for its
-own sake.
+and trustworthy** — a quiet light canvas (`oklch(0.9842 0.0034 247.86)`) holding
+white cards, framed on the left by a single near-black sidebar
+(`oklch(0.2094 0.0199 248.8)`). One teal brand accent (`oklch(0.6274 0.1078 185.99)`)
+carries every primary action and active state; everything else is slate-neutral. The
+feeling is "admin console you live in all day": shadcn / Tabler / TailAdmin light-mode
+lineage — information per square inch over vibes, with just enough colour to signal
+state. No gradients, no hero imagery, no decoration for its own sake.
+
+> **Tokens:** all colour tokens are defined as OKLCH values in `frontend/src/styles.css`
+> under `@theme`. The hex equivalents shown in §2 below are for reference only.
 
 ## 2. Color
 
 Light mode only. Borders and surface tints — not shadows — do the structural work.
 
+All tokens are OKLCH. Hex equivalents shown for visual reference.
+
 **Canvas & surfaces**
-- `--color-background` `#f8fafc` — app canvas
-- `--color-surface` `#ffffff` — cards, panels, inputs, menus
-- `--color-surface-muted` `#fafbfc` — table headers, hover rows, secondary chips
+- `--color-background` `oklch(0.9842 0.0034 247.86)` — app canvas (`#f8fafc`)
+- `--color-surface` `oklch(1 0 0)` — cards, panels, inputs, menus (`#ffffff`)
+- `--color-surface-muted` `oklch(0.9876 0.0017 247.84)` — table headers, hover rows, secondary chips (`#fafbfc`)
 
 **Text**
-- `--color-foreground` `#0f172a` — primary text, headings, cell values
-- `--color-muted` `#475569` — secondary text, company/location cells
-- `--color-faint` `#94a3b8` — metadata, placeholders, empty `—`, table heads
+- `--color-foreground` `oklch(0.2077 0.0398 265.75)` — primary text, headings, cell values (`#0f172a`)
+- `--color-muted` `oklch(0.4455 0.0374 257.28)` — secondary text, company/location cells (`#475569`)
+- `--color-faint` `oklch(0.7107 0.0351 256.79)` — metadata, placeholders, empty `—`, table heads (`#94a3b8`)
 
 **Lines**
-- `--color-border` `#e2e8f0` — default hairline
-- `--color-border-strong` `#cbd5e1` — hover borders, breadcrumb divider
+- `--color-border` `oklch(0.9288 0.0126 255.51)` — default hairline (`#e2e8f0`)
+- `--color-border-strong` `oklch(0.869 0.0198 252.89)` — hover borders, breadcrumb divider (`#cbd5e1`)
 
 **Teal brand accent** (used at most twice per screen)
-- `--color-primary` `#0f9d92` / hover `--color-primary-hover` `#0a7b72`
-- `--color-primary-foreground` `#ffffff`
-- `--color-accent-subtle` `#f0fdfa` · `--color-accent-border` `#99f6e4` · `--color-accent-text` `#134e4a` — secondary/"soft teal" buttons, avatar chip, ghost hovers
+- `--color-primary` `oklch(0.6274 0.1078 185.99)` / hover `--color-primary-hover` `oklch(0.5254 0.0902 185.8)` (`#0f9d92` / `#0a7b72`)
+- `--color-primary-foreground` `oklch(1 0 0)` (`#ffffff`)
+- `--color-accent-subtle` `oklch(0.9836 0.0142 180.72)` · `--color-accent-border` `oklch(0.91 0.0927 180.43)` · `--color-accent-text` `oklch(0.3861 0.059 188.42)` — secondary/"soft teal" buttons, avatar chip, ghost hovers (`#f0fdfa` · `#99f6e4` · `#134e4a`)
 
 **Dark sidebar panel** (its own self-contained scale)
-- `--color-sidebar` `#111921` · hover `--color-sidebar-hover` `#1b2a38` · border `--color-sidebar-border` `#1b2a38`
-- foreground `--color-sidebar-foreground` `#7a8fa6` → strong `--color-sidebar-foreground-strong` `#dce8f0`
-- active background `--color-sidebar-active` `rgba(20,184,166,0.13)` · active foreground `--color-sidebar-active-foreground` `#5eead4`
+- `--color-sidebar` `oklch(0.2094 0.0199 248.8)` · hover `--color-sidebar-hover` `oklch(0.2783 0.033 247.38)` · border `--color-sidebar-border` `oklch(0.2783 0.033 247.38)` (`#111921` · `#1b2a38`)
+- foreground `--color-sidebar-foreground` `oklch(0.6417 0.0422 250.84)` → strong `--color-sidebar-foreground-strong` `oklch(0.9243 0.0169 236.7)` (`#7a8fa6` → `#dce8f0`)
+- active background `--color-sidebar-active` `oklch(0.7038 0.123 182.5 / 0.13)` · active foreground `--color-sidebar-active-foreground` `oklch(0.8549 0.1251 181.07)` (`rgba(20,184,166,0.13)` · `#5eead4`)
 
 **Danger**
-- `--color-destructive` `#ef4444` / strong `--color-destructive-strong` `#dc2626` / subtle `--color-destructive-subtle` `#fef2f2`
+- `--color-destructive` `oklch(0.6368 0.2078 25.33)` / strong `--color-destructive-strong` `oklch(0.5771 0.2152 27.33)` / subtle `--color-destructive-subtle` `oklch(0.9705 0.0129 17.38)` (`#ef4444` / `#dc2626` / `#fef2f2`)
 
 **Application-status palette** (chip defaults; tinted via `color-mix`)
-- saved `#64748b` · applied `#2563eb` · phone `#7c3aed` · interview `#d97706` · offer `#059669` · rejected `#dc2626`
+- saved `oklch(0.5544 0.0407 257.42)` · applied `oklch(0.5461 0.2152 262.88)` · phone `oklch(0.5413 0.2466 293.01)` · interview `oklch(0.6658 0.1574 58.32)` · offer `oklch(0.596 0.1274 163.23)` · rejected `oklch(0.5771 0.2152 27.33)`
+- Hex equivalents: saved `#64748b` · applied `#2563eb` · phone `#7c3aed` · interview `#d97706` · offer `#059669` · rejected `#dc2626`
 
 > Status chips derive their background and text from the status's own hex at runtime:
 > `background: color-mix(in srgb, <hex> 14%, white)`, `color: color-mix(in srgb, <hex> 78%, black)`. Custom user statuses render consistently this way.
