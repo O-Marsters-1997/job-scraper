@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "tailwind-shadcn": {
+      "source": "O-Marsters-1997/my-claude-code",
+      "sourceType": "github",
+      "skillPath": "skills/code/tailwind-shadcn/SKILL.md",
+      "computedHash": "32a56a758779507385b5f5dddf4afe0341ce520bb2fa55bd14980551adf6a211"
+    }
+  }
+}
