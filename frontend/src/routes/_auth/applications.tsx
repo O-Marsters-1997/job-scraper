@@ -7,7 +7,8 @@ import {
 } from "../../hooks/useApplications";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { StatusBadge } from "../../components/StatusBadge";
-import { cn } from "../../lib/utils";
+import { cn } from "@/lib/utils";
+import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import type { ApplicationWithDetails } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/applications")({
@@ -62,7 +63,7 @@ function ApplicationsPage() {
 	const statusColour = (app: ApplicationWithDetails) => {
 		if (app.StatusColour) return app.StatusColour;
 		const status = statusesQuery.data?.find((s) => s.ID === app.StatusID);
-		return status?.Colour ?? "#64748b";
+		return status?.Colour ?? STATUS_FALLBACK_COLOUR;
 	};
 
 	const chipClass = (active: boolean) =>

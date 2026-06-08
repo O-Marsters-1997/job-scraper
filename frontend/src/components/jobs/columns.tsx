@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { JobActionsMenu } from "./JobActionsMenu";
 import type { Job } from "@/types/job";
 import type { JobApplicationSummary } from "@/types/application";
+import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
@@ -72,7 +73,7 @@ export function createJobColumns(
 				return summary?.StatusName ? (
 					<StatusBadge
 						name={summary.StatusName}
-						colour={summary.StatusColour || "#64748b"}
+						colour={summary.StatusColour || STATUS_FALLBACK_COLOUR}
 					/>
 				) : (
 					<span class="text-faint">—</span>

@@ -6,18 +6,8 @@ import {
 	useUpdateApplicationStatus,
 	useDeleteApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
+import { STATUS_PALETTE } from "@/lib/status";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
-
-const PALETTE = [
-	{ hex: "#6366f1", label: "Indigo" },
-	{ hex: "#22c55e", label: "Green" },
-	{ hex: "#ef4444", label: "Red" },
-	{ hex: "#f59e0b", label: "Amber" },
-	{ hex: "#3b82f6", label: "Blue" },
-	{ hex: "#a855f7", label: "Purple" },
-	{ hex: "#64748b", label: "Slate" },
-	{ hex: "#ec4899", label: "Pink" },
-];
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
 	component: StatusesPage,
@@ -31,7 +21,7 @@ function StatusesPage() {
 
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [newName, setNewName] = createSignal("");
-	const [newColour, setNewColour] = createSignal(PALETTE[0].hex);
+	const [newColour, setNewColour] = createSignal(STATUS_PALETTE[0].hex);
 
 	const [editingId, setEditingId] = createSignal<string | null>(null);
 	const [editName, setEditName] = createSignal("");
@@ -46,7 +36,7 @@ function StatusesPage() {
 			colour: newColour(),
 		});
 		setNewName("");
-		setNewColour(PALETTE[0].hex);
+		setNewColour(STATUS_PALETTE[0].hex);
 		setShowAdd(false);
 	};
 
@@ -133,7 +123,7 @@ function StatusesPage() {
 								>
 									<div class="flex flex-1 items-center gap-2">
 										<div class="flex gap-1">
-											<For each={PALETTE}>
+											<For each={STATUS_PALETTE}>
 												{(p) => (
 													<button
 														type="button"
@@ -180,7 +170,7 @@ function StatusesPage() {
 					<Show when={showAdd()}>
 						<div class="flex items-center gap-2 px-4 py-3">
 							<div class="flex gap-1">
-								<For each={PALETTE}>
+								<For each={STATUS_PALETTE}>
 									{(p) => (
 										<button
 											type="button"

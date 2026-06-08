@@ -1,6 +1,6 @@
 import { type ComponentProps, splitProps } from "solid-js";
 import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "../../lib/utils";
+import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
 	"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
@@ -11,7 +11,7 @@ const badgeVariants = cva(
 				secondary: "bg-surface-muted text-muted",
 				outline: "border border-border text-muted",
 				source:
-					"bg-slate-100 font-mono text-xs font-medium uppercase tracking-wide text-slate-600",
+					"bg-surface-muted font-mono text-xs font-medium uppercase tracking-wide text-muted",
 			},
 		},
 		defaultVariants: {
