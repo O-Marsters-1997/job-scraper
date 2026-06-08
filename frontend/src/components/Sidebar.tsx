@@ -1,7 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { logout } from "../api/auth";
-import { cn } from "../lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function Sidebar() {
 	const [expanded, setExpanded] = createSignal(true);

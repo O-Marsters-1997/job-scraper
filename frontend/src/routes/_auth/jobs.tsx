@@ -10,6 +10,16 @@ import {
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/_auth/jobs")({
 	loader: () => queryClient.ensureQueryData(jobsQueryOptions),
@@ -27,6 +37,7 @@ function JobsPage() {
 	const createMutation = useCreateApplication();
 	const updateMutation = useUpdateApplication();
 
+	const [modalOpen, setModalOpen] = createSignal(false);
 	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
 	const [modalMode, setModalMode] = createSignal<"create" | "edit">("create");
 	const [modalStatusId, setModalStatusId] = createSignal("");
@@ -41,6 +52,7 @@ function JobsPage() {
 		setModalNotes("");
 		setModalAppliedAt("");
 		setModalSalary("");
+		setModalOpen(true);
 	};
 
 	const openEdit = (jobId: string) => {
@@ -52,9 +64,10 @@ function JobsPage() {
 		setModalNotes("");
 		setModalAppliedAt("");
 		setModalSalary("");
+		setModalOpen(true);
 	};
 
-	const closeModal = () => setTrackingJobId(null);
+	const closeModal = () => setModalOpen(false);
 
 	const handleSubmit = async () => {
 		const jobId = trackingJobId();
@@ -89,6 +102,8 @@ function JobsPage() {
 		onEdit: openEdit,
 	});
 
+	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
+
 	return (
 		<div class="px-7 py-6">
 			<div class="mb-5">
@@ -116,98 +131,78 @@ function JobsPage() {
 			</Show>
 
 			{/* Track / Edit modal */}
-			<Show when={trackingJobId()}>
-				{(jobId) => {
-					const job = () => jobs().find((j) => j.ID === jobId());
-					return (
-						<div
-							class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[2px]"
-							onClick={(e) => e.target === e.currentTarget && closeModal()}
-						>
-							<div class="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-2xl">
-								<h2 class="text-base font-semibold text-foreground">
-									{modalMode() === "create"
-										? "Track application"
-										: "Edit application"}
-								</h2>
-								<p class="mb-5 text-sm text-faint">{job()?.Title}</p>
+			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>
+							{modalMode() === "create"
+								? "Track application"
+								: "Edit application"}
+						</DialogTitle>
+						<p class="text-sm text-faint">{currentJob()?.Title}</p>
+					</DialogHeader>
 
-								<div class="space-y-4">
-									<div>
-										<label class="field-label">Status</label>
-										<select
-											class="field"
-											value={modalStatusId()}
-											onChange={(e) => setModalStatusId(e.currentTarget.value)}
-										>
-											<option value="">— No status —</option>
-											<For each={statusesQuery.data}>
-												{(s) => <option value={s.ID}>{s.Name}</option>}
-											</For>
-										</select>
-									</div>
+					<div class="flex flex-col gap-4">
+						<div>
+							<Label>Status</Label>
+							<select
+								class="field"
+								value={modalStatusId()}
+								onChange={(e) => setModalStatusId(e.currentTarget.value)}
+							>
+								<option value="">— No status —</option>
+								<For each={statusesQuery.data}>
+									{(s) => <option value={s.ID}>{s.Name}</option>}
+								</For>
+							</select>
+						</div>
 
-									<div class="grid grid-cols-2 gap-3">
-										<div>
-											<label class="field-label">Applied date</label>
-											<input
-												type="date"
-												class="field"
-												value={modalAppliedAt()}
-												onInput={(e) =>
-													setModalAppliedAt(e.currentTarget.value)
-												}
-											/>
-										</div>
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<Label>Applied date</Label>
+								<Input
+									type="date"
+									value={modalAppliedAt()}
+									onInput={(e) => setModalAppliedAt(e.currentTarget.value)}
+								/>
+							</div>
 
-										<div>
-											<label class="field-label">Salary / comp</label>
-											<input
-												type="text"
-												class="field"
-												placeholder="e.g. £80,000"
-												value={modalSalary()}
-												onInput={(e) => setModalSalary(e.currentTarget.value)}
-											/>
-										</div>
-									</div>
-
-									<div>
-										<label class="field-label">Notes</label>
-										<textarea
-											class="field resize-y"
-											rows={3}
-											placeholder="Any notes…"
-											value={modalNotes()}
-											onInput={(e) => setModalNotes(e.currentTarget.value)}
-										/>
-									</div>
-								</div>
-
-								<div class="mt-5 flex justify-end gap-2 border-t border-border pt-4">
-									<button
-										type="button"
-										onClick={closeModal}
-										class="rounded-md border border-border bg-surface px-4 py-1.5 text-sm font-medium text-muted transition hover:border-border-strong hover:text-foreground"
-									>
-										Cancel
-									</button>
-									<button
-										type="button"
-										onClick={handleSubmit}
-										disabled={
-											createMutation.isPending || updateMutation.isPending
-										}
-										class="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
-									>
-										{modalMode() === "create" ? "Save" : "Update"}
-									</button>
-								</div>
+							<div>
+								<Label>Salary / comp</Label>
+								<Input
+									type="text"
+									placeholder="e.g. £80,000"
+									value={modalSalary()}
+									onInput={(e) => setModalSalary(e.currentTarget.value)}
+								/>
 							</div>
 						</div>
-					);
-				}}
-			</Show>
+
+						<div>
+							<Label>Notes</Label>
+							<textarea
+								class="field resize-y"
+								rows={3}
+								placeholder="Any notes…"
+								value={modalNotes()}
+								onInput={(e) => setModalNotes(e.currentTarget.value)}
+							/>
+						</div>
+					</div>
+
+					<DialogFooter class="border-t border-border pt-4">
+						<Button variant="outline" onClick={closeModal}>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleSubmit}
+							disabled={createMutation.isPending || updateMutation.isPending}
+						>
+							{modalMode() === "create" ? "Save" : "Update"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
