@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -28,9 +29,13 @@ export function createJobColumns(
 			accessorKey: "Title",
 			header: "Title",
 			cell: (info) => (
-				<span class="font-medium text-foreground">
+				<Link
+					to="/jobs/$id"
+					params={{ id: info.row.original.ID }}
+					class="font-medium text-foreground transition-colors hover:text-primary"
+				>
 					{info.getValue() as string}
-				</span>
+				</Link>
 			),
 		},
 		{
