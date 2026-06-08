@@ -1,134 +1,103 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap');
-@import 'tailwindcss';
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
 @plugin "tailwindcss-animate";
 
 @theme {
-  --color-background: #f8fdf9;
-  --color-foreground: #173a40;
-  --color-muted: rgba(23, 58, 64, 0.06);
-  --color-muted-foreground: #416166;
-  --color-popover: #f6fcf7;
-  --color-popover-foreground: #173a40;
-  --color-primary: #4fb8b2;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: rgba(79, 184, 178, 0.14);
-  --color-secondary-foreground: #328f97;
-  --color-accent: rgba(79, 184, 178, 0.12);
-  --color-accent-foreground: #173a40;
-  --color-destructive: #ef4444;
-  --color-border: rgba(23, 58, 64, 0.14);
-  --color-input: rgba(23, 58, 64, 0.14);
-  --color-ring: #4fb8b2;
+	--font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+	/* Canvas + surfaces */
+	--color-background: #f8fafc;
+	--color-surface: #ffffff;
+	--color-surface-muted: #fafbfc;
+
+	/* Text */
+	--color-foreground: #0f172a;
+	--color-muted: #475569;
+	--color-faint: #94a3b8;
+
+	/* Lines */
+	--color-border: #e2e8f0;
+	--color-border-strong: #cbd5e1;
+
+	/* Teal brand accent */
+	--color-primary: #0f9d92;
+	--color-primary-hover: #0a7b72;
+	--color-primary-foreground: #ffffff;
+	--color-accent-subtle: #f0fdfa;
+	--color-accent-border: #99f6e4;
+	--color-accent-text: #134e4a;
+
+	/* Dark sidebar panel */
+	--color-sidebar: #111921;
+	--color-sidebar-hover: #1b2a38;
+	--color-sidebar-border: #1b2a38;
+	--color-sidebar-foreground: #7a8fa6;
+	--color-sidebar-foreground-strong: #dce8f0;
+	--color-sidebar-active: rgba(20, 184, 166, 0.13);
+	--color-sidebar-active-foreground: #5eead4;
+
+	/* Danger */
+	--color-destructive: #ef4444;
+	--color-destructive-strong: #dc2626;
+	--color-destructive-subtle: #fef2f2;
+
+	/* Status palette (defaults / chips) */
+	--color-status-saved: #64748b;
+	--color-status-applied: #2563eb;
+	--color-status-phone: #7c3aed;
+	--color-status-interview: #d97706;
+	--color-status-offer: #059669;
+	--color-status-rejected: #dc2626;
 }
 
-:root {
-  --sea-ink: #173a40;
-  --sea-ink-soft: #416166;
-  --lagoon: #4fb8b2;
-  --lagoon-deep: #328f97;
-  --palm: #2f6a4a;
-  --sand: #e7f0e8;
-  --foam: #f3faf5;
-  --surface: rgba(255, 255, 255, 0.74);
-  --surface-strong: rgba(255, 255, 255, 0.9);
-  --line: rgba(23, 58, 64, 0.14);
-  --inset-glint: rgba(255, 255, 255, 0.82);
-  --kicker: rgba(47, 106, 74, 0.9);
-  --bg-base: #e7f3ec;
-  --header-bg: rgba(251, 255, 248, 0.84);
-  --chip-bg: rgba(255, 255, 255, 0.8);
-  --chip-line: rgba(47, 106, 74, 0.18);
-  --link-bg-hover: rgba(255, 255, 255, 0.9);
-  --hero-a: rgba(79, 184, 178, 0.36);
-  --hero-b: rgba(47, 106, 74, 0.2);
+@layer base {
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+
+	html,
+	body,
+	#app {
+		height: 100%;
+	}
+
+	body {
+		margin: 0;
+		background: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--font-sans);
+		font-size: 14px;
+		line-height: 1.5;
+		overflow-x: hidden;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	a {
+		color: inherit;
+		text-decoration: none;
+	}
 }
 
-* {
-  box-sizing: border-box;
+@layer components {
+	/* Shared form field styling — used across both modals and the statuses page */
+	.field {
+		@apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none;
+	}
+	.field-label {
+		@apply mb-1 block text-xs font-medium text-muted;
+	}
 }
 
-html,
-body,
-#app {
-  min-height: 100%;
+/* Slim scrollbars for the main scroll region */
+.scroll-slim::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
 }
-
-body {
-  margin: 0;
-  color: var(--sea-ink);
-  font-family: 'Manrope', ui-sans-serif, system-ui, sans-serif;
-  background:
-    radial-gradient(1100px 620px at -8% -10%, var(--hero-a), transparent 58%),
-    radial-gradient(1050px 620px at 112% -12%, var(--hero-b), transparent 62%),
-    radial-gradient(720px 380px at 50% 115%, rgba(79, 184, 178, 0.1), transparent 68%),
-    linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--sand) 68%, white) 0%,
-      var(--foam) 44%,
-      var(--bg-base) 100%
-    );
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  color: var(--lagoon-deep);
-  text-decoration-color: rgba(50, 143, 151, 0.4);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
-
-a:hover {
-  color: #246f76;
-}
-
-code {
-  font-size: 0.9em;
-  border: 1px solid var(--line);
-  background: color-mix(in oklab, var(--surface-strong) 82%, white 18%);
-  border-radius: 7px;
-  padding: 2px 7px;
-}
-
-.page-wrap {
-  width: min(1080px, calc(100% - 2rem));
-  margin-inline: auto;
-}
-
-.display-title {
-  font-family: 'Fraunces', Georgia, serif;
-}
-
-.island-shell {
-  border: 1px solid var(--line);
-  background: linear-gradient(165deg, var(--surface-strong), var(--surface));
-  box-shadow:
-    0 1px 0 var(--inset-glint) inset,
-    0 22px 44px rgba(30, 90, 72, 0.1),
-    0 6px 18px rgba(23, 58, 64, 0.08);
-  backdrop-filter: blur(4px);
-}
-
-.island-kicker {
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-weight: 700;
-  font-size: 0.69rem;
-  color: var(--kicker);
-}
-
-.rise-in {
-  animation: rise-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.scroll-slim::-webkit-scrollbar-thumb {
+	background: var(--color-border-strong);
+	border-radius: 3px;
 }

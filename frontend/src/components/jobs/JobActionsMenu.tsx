@@ -1,19 +1,19 @@
-import { Show } from "solid-js"
+import { Show } from "solid-js";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import type { Job } from "@/types/job"
-import type { JobApplicationSummary } from "@/types/application"
+} from "@/components/ui/dropdown-menu";
+import type { Job } from "@/types/job";
+import type { JobApplicationSummary } from "@/types/application";
 
 interface JobActionsMenuProps {
-	job: Job
-	appSummary: JobApplicationSummary | undefined
-	onTrack: () => void
-	onEdit: () => void
+	job: Job;
+	appSummary: JobApplicationSummary | undefined;
+	onTrack: () => void;
+	onEdit: () => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
@@ -21,7 +21,7 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				as="button"
-				class="flex h-8 w-8 items-center justify-center rounded-md text-[var(--sea-ink-soft)] transition-colors hover:bg-[rgba(79,184,178,0.1)] hover:text-[var(--sea-ink)] focus:outline-none"
+				class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground focus:outline-none"
 				aria-label="Job actions"
 			>
 				<svg
@@ -98,5 +98,5 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 				</Show>
 			</DropdownMenuContent>
 		</DropdownMenu>
-	)
+	);
 }

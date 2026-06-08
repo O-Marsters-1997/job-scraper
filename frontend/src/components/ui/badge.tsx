@@ -1,36 +1,37 @@
-import { type ComponentProps, splitProps } from "solid-js"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "../../lib/utils"
+import { type ComponentProps, splitProps } from "solid-js";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../lib/utils";
 
 const badgeVariants = cva(
-	"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+	"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
 	{
 		variants: {
 			variant: {
-				default:
-					"bg-[var(--lagoon)] text-white",
-				secondary:
-					"border border-[var(--chip-line)] bg-[var(--chip-bg)] text-[var(--sea-ink-soft)]",
-				outline:
-					"border border-[var(--line)] text-[var(--sea-ink-soft)]",
+				default: "bg-primary text-primary-foreground",
+				secondary: "bg-surface-muted text-muted",
+				outline: "border border-border text-muted",
+				source:
+					"bg-slate-100 font-mono text-xs font-medium uppercase tracking-wide text-slate-600",
 			},
 		},
 		defaultVariants: {
 			variant: "default",
 		},
 	},
-)
+);
 
-interface BadgeProps extends ComponentProps<"span">, VariantProps<typeof badgeVariants> {}
+interface BadgeProps
+	extends ComponentProps<"span">,
+		VariantProps<typeof badgeVariants> {}
 
 function Badge(props: BadgeProps) {
-	const [local, others] = splitProps(props, ["class", "variant"])
+	const [local, others] = splitProps(props, ["class", "variant"]);
 	return (
 		<span
 			class={cn(badgeVariants({ variant: local.variant }), local.class)}
 			{...others}
 		/>
-	)
+	);
 }
 
-export { Badge, badgeVariants }
+export { Badge, badgeVariants };
