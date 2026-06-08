@@ -16,3 +16,9 @@ When making structural or architectural decisions — refactoring package bounda
 
 - `CONTEXT.md` — domain language glossary
 - `docs/adr/` — architectural decisions
+
+## UI / design
+
+When implementing or changing frontend UI, read `DESIGN.md` (repo root) first — it is the source of truth for colours, typography, spacing, components, and voice. Use its tokens and patterns; do not invent values outside its palette.
+
+- Before adding a new UI pattern, check whether `DESIGN.md` already defines one.
