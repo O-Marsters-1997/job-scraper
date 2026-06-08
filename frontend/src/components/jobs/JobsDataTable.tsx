@@ -1,16 +1,16 @@
-import { For, Show } from "solid-js";
-import { createSignal } from "solid-js";
 import {
+	type ColumnDef,
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
 	getFilteredRowModel,
 	getPaginationRowModel,
 	getSortedRowModel,
-	type ColumnDef,
 	type PaginationState,
 	type SortingState,
 } from "@tanstack/solid-table";
+import { createSignal, For, Show } from "solid-js";
+import { Input } from "@/components/ui/input";
 import {
 	Table,
 	TableBody,
@@ -19,12 +19,32 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface JobsDataTableProps<TData> {
 	columns: ColumnDef<TData, unknown>[];
 	data: TData[];
+}
+
+// Returns a windowed list of page numbers with null for ellipsis gaps.
+function pageWindow(current: number, total: number): (number | null)[] {
+	if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+	const pages = new Set([
+		1,
+		Math.max(1, current - 1),
+		current,
+		Math.min(total, current + 1),
+		total,
+	]);
+	const sorted = [...pages].sort((a, b) => a - b);
+	const result: (number | null)[] = [];
+	for (let i = 0; i < sorted.length; i++) {
+		if (i > 0 && (sorted[i] as number) - (sorted[i - 1] as number) > 1) {
+			result.push(null);
+		}
+		result.push(sorted[i] as number);
+	}
+	return result;
 }
 
 export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
@@ -32,7 +52,7 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
-		pageSize: 20,
+		pageSize: 10,
 	});
 
 	const table = createSolidTable({
@@ -68,6 +88,15 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 	const end = () =>
 		Math.min((pageIndex() + 1) * pagination().pageSize, filteredCount());
 
+	const pgBtnClass = (active: boolean, disabled: boolean) =>
+		cn(
+			"flex size-7 items-center justify-center rounded-md border text-xs font-medium transition-colors",
+			active
+				? "border-primary bg-primary text-primary-foreground"
+				: "border-border text-muted hover:border-border-strong hover:text-foreground",
+			disabled && "opacity-40",
+		);
+
 	return (
 		<div class="flex flex-col gap-3">
 			{/* Search */}
@@ -99,7 +128,7 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 				/>
 			</div>
 
-			{/* Table */}
+			{/* Table card — pagination lives inside so it shares the rounded border */}
 			<div class="overflow-hidden rounded-xl border border-border bg-surface">
 				<Table>
 					<TableHeader>
@@ -173,37 +202,57 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 						</Show>
 					</TableBody>
 				</Table>
-			</div>
 
-			{/* Pagination */}
-			<Show when={pageCount() > 1}>
-				<div class="flex items-center justify-between px-1">
-					<p class="text-xs text-faint">
-						Showing {start()}–{end()} of {filteredCount()} jobs
-					</p>
-					<div class="flex items-center gap-2">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => table.previousPage()}
-							disabled={!table.getCanPreviousPage()}
-						>
-							← Prev
-						</Button>
-						<span class="text-sm text-faint">
-							Page {pageIndex() + 1} of {pageCount()}
-						</span>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => table.nextPage()}
-							disabled={!table.getCanNextPage()}
-						>
-							Next →
-						</Button>
+				{/* Numbered pagination — inside card, separated by a top border */}
+				<Show when={pageCount() > 1}>
+					<div class="flex items-center justify-between border-t border-border px-4 py-2.5">
+						<p class="text-xs text-faint">
+							Showing {start()}–{end()} of {filteredCount()} jobs
+						</p>
+						<div class="flex items-center gap-1">
+							<button
+								type="button"
+								onClick={() => table.previousPage()}
+								disabled={!table.getCanPreviousPage()}
+								class={pgBtnClass(false, !table.getCanPreviousPage())}
+								aria-label="Previous page"
+							>
+								←
+							</button>
+
+							<For each={pageWindow(pageIndex() + 1, pageCount())}>
+								{(p) =>
+									p === null ? (
+										<span class="flex size-7 items-center justify-center text-xs text-faint">
+											…
+										</span>
+									) : (
+										<button
+											type="button"
+											onClick={() => table.setPageIndex((p as number) - 1)}
+											class={pgBtnClass(p === pageIndex() + 1, false)}
+											aria-label={`Page ${p}`}
+											aria-current={p === pageIndex() + 1 ? "page" : undefined}
+										>
+											{p}
+										</button>
+									)
+								}
+							</For>
+
+							<button
+								type="button"
+								onClick={() => table.nextPage()}
+								disabled={!table.getCanNextPage()}
+								class={pgBtnClass(false, !table.getCanNextPage())}
+								aria-label="Next page"
+							>
+								→
+							</button>
+						</div>
 					</div>
-				</div>
-			</Show>
+				</Show>
+			</div>
 		</div>
 	);
 }

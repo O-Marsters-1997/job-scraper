@@ -1,15 +1,21 @@
-import { createSignal, Show } from "solid-js";
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
-import { logout } from "../api/auth";
+import { createSignal, Show } from "solid-js";
 import { cn } from "@/lib/utils";
+import { logout } from "../api/auth";
+import { useApplications } from "../hooks/useApplications";
+import { useJobs } from "../hooks/useJobs";
 
 export default function Sidebar() {
 	const [expanded, setExpanded] = createSignal(true);
 	const location = useLocation();
+	const isOverviewActive = () => location().pathname === "/overview";
 	const isJobsActive = () => location().pathname === "/jobs";
 	const isApplicationsActive = () => location()?.pathname === "/applications";
 	const isStatusesActive = () => location().pathname === "/settings/statuses";
 	const navigate = useNavigate();
+
+	const jobsQuery = useJobs();
+	const appsQuery = useApplications();
 
 	const handleLogout = async () => {
 		await logout();
@@ -22,6 +28,14 @@ export default function Sidebar() {
 			active
 				? "bg-sidebar-active text-sidebar-active-foreground"
 				: "text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-foreground-strong",
+		);
+
+	const badgeClass = (active: boolean) =>
+		cn(
+			"ml-auto rounded-full px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums",
+			active
+				? "bg-sidebar-badge-active text-sidebar-active-foreground"
+				: "bg-sidebar-badge text-sidebar-foreground",
 		);
 
 	return (
@@ -48,7 +62,7 @@ export default function Sidebar() {
 					</svg>
 				</div>
 				<Show when={expanded()}>
-					<span class="text-sm font-semibold tracking-tight text-sidebar-foreground-strong whitespace-nowrap">
+					<span class="whitespace-nowrap text-sm font-semibold tracking-tight text-sidebar-foreground-strong">
 						Job Scraper
 					</span>
 				</Show>
@@ -57,11 +71,40 @@ export default function Sidebar() {
 			{/* Nav */}
 			<nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
 				<Show when={expanded()}>
-					<span class="px-2.5 pt-2.5 pb-1 text-[10px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">
+					<span class="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
 						Main
 					</span>
 				</Show>
 
+				{/* Overview */}
+				<Link
+					to="/overview"
+					title="Overview"
+					class={navLink(isOverviewActive())}
+				>
+					<svg
+						aria-hidden="true"
+						class="shrink-0"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<rect width="7" height="9" x="3" y="3" rx="1" />
+						<rect width="7" height="5" x="14" y="3" rx="1" />
+						<rect width="7" height="9" x="14" y="12" rx="1" />
+						<rect width="7" height="5" x="3" y="16" rx="1" />
+					</svg>
+					<Show when={expanded()}>
+						<span class="whitespace-nowrap">Overview</span>
+					</Show>
+				</Link>
+
+				{/* Jobs */}
 				<Link to="/jobs" title="Jobs" class={navLink(isJobsActive())}>
 					<svg
 						aria-hidden="true"
@@ -80,11 +123,18 @@ export default function Sidebar() {
 					</svg>
 					<Show when={expanded()}>
 						<span class="whitespace-nowrap">Jobs</span>
+						<Show when={(jobsQuery.data?.length ?? 0) > 0}>
+							<span class={badgeClass(isJobsActive())}>
+								{jobsQuery.data?.length}
+							</span>
+						</Show>
 					</Show>
 				</Link>
 
+				{/* Applications */}
 				<Link
 					to="/applications"
+					search={{ status: undefined }}
 					title="Applications"
 					class={navLink(isApplicationsActive())}
 				>
@@ -108,11 +158,16 @@ export default function Sidebar() {
 					</svg>
 					<Show when={expanded()}>
 						<span class="whitespace-nowrap">Applications</span>
+						<Show when={(appsQuery.data?.length ?? 0) > 0}>
+							<span class={badgeClass(isApplicationsActive())}>
+								{appsQuery.data?.length}
+							</span>
+						</Show>
 					</Show>
 				</Link>
 
 				<Show when={expanded()}>
-					<span class="px-2.5 pt-4 pb-1 text-[10px] font-semibold tracking-wider text-sidebar-foreground/60 uppercase">
+					<span class="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
 						Settings
 					</span>
 				</Show>

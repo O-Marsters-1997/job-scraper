@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
+    "@faker-js/faker": "^10.4.0",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-plugin": "latest",
     "typescript": "^5.7.2",

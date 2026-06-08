@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
+import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
@@ -42,6 +43,11 @@ const AuthSettingsRoute = AuthSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthOverviewRoute = AuthOverviewRouteImport.update({
+  id: '/overview',
+  path: '/overview',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthJobsRoute = AuthJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/applications': typeof AuthApplicationsRoute
   '/jobs': typeof AuthJobsRoute
+  '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/settings/statuses': typeof AuthSettingsStatusesRoute
 }
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/applications': typeof AuthApplicationsRoute
   '/jobs': typeof AuthJobsRoute
+  '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/settings/statuses': typeof AuthSettingsStatusesRoute
 }
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/jobs': typeof AuthJobsRoute
+  '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
 }
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/applications'
     | '/jobs'
+    | '/overview'
     | '/settings'
     | '/settings/statuses'
   fileRoutesByTo: FileRoutesByTo
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/applications'
     | '/jobs'
+    | '/overview'
     | '/settings'
     | '/settings/statuses'
   id:
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_auth/applications'
     | '/_auth/jobs'
+    | '/_auth/overview'
     | '/_auth/settings'
     | '/_auth/settings/statuses'
   fileRoutesById: FileRoutesById
@@ -162,6 +174,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/overview': {
+      id: '/_auth/overview'
+      path: '/overview'
+      fullPath: '/overview'
+      preLoaderRoute: typeof AuthOverviewRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/jobs': {
       id: '/_auth/jobs'
       path: '/jobs'
@@ -201,12 +220,14 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 interface AuthRouteChildren {
   AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthJobsRoute: typeof AuthJobsRoute
+  AuthOverviewRoute: typeof AuthOverviewRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthApplicationsRoute: AuthApplicationsRoute,
   AuthJobsRoute: AuthJobsRoute,
+  AuthOverviewRoute: AuthOverviewRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
 }
 

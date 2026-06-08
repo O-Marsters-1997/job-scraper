@@ -1,10 +1,18 @@
 import type { ColumnDef } from "@tanstack/solid-table";
-import { Badge } from "@/components/ui/badge";
+import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { JobActionsMenu } from "./JobActionsMenu";
-import type { Job } from "@/types/job";
-import type { JobApplicationSummary } from "@/types/application";
+import { formatDate, formatRelative } from "@/lib/datetime";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import type { JobApplicationSummary } from "@/types/application";
+import type { Job } from "@/types/job";
+import { JobActionsMenu } from "./JobActionsMenu";
+
+export function titleCase(slug: string): string {
+	return slug
+		.split(/[-_\s]+/)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ");
+}
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
@@ -29,7 +37,7 @@ export function createJobColumns(
 			accessorKey: "CompanySlug",
 			header: "Company",
 			cell: (info) => (
-				<span class="text-muted">{info.getValue() as string}</span>
+				<span class="text-muted">{titleCase(info.getValue() as string)}</span>
 			),
 		},
 		{
@@ -40,11 +48,27 @@ export function createJobColumns(
 			),
 		},
 		{
+			accessorKey: "DaysInOffice",
+			header: "Office",
+			enableSorting: false,
+			enableGlobalFilter: false,
+			cell: (info) => {
+				const val = info.getValue() as number | null | undefined;
+				if (val === null || val === undefined) {
+					return <span class="text-faint">—</span>;
+				}
+				if (val === 0) return <span class="text-muted">Remote</span>;
+				return (
+					<span class="font-mono text-xs tabular-nums text-muted">
+						{val}d/wk
+					</span>
+				);
+			},
+		},
+		{
 			accessorKey: "Source",
 			header: "Source",
-			cell: (info) => (
-				<Badge variant="source">{info.getValue() as string}</Badge>
-			),
+			cell: (info) => <SourceBadge source={info.getValue() as string} />,
 		},
 		{
 			accessorKey: "ScrapedAt",
@@ -53,13 +77,12 @@ export function createJobColumns(
 			cell: (info) => {
 				const raw = info.getValue() as string;
 				return (
-					<span class="font-mono text-xs tabular-nums text-faint">
-						{new Date(raw).toLocaleDateString("en-GB", {
-							day: "numeric",
-							month: "short",
-							year: "numeric",
-						})}
-					</span>
+					<div class="flex flex-col gap-0.5">
+						<span class="font-mono text-xs tabular-nums text-foreground">
+							{formatDate(raw)}
+						</span>
+						<span class="text-[10px] text-faint">{formatRelative(raw)}</span>
+					</div>
 				);
 			},
 		},

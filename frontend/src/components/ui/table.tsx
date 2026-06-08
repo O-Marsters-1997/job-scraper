@@ -77,7 +77,7 @@ export const TableCell = (props: TableCellProps) => {
 	return (
 		<td
 			class={cn(
-				"px-4 py-2.5 align-middle text-sm text-foreground",
+				"px-4 py-2 align-middle text-[13px] text-foreground",
 				local.class,
 			)}
 			{...rest}
