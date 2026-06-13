@@ -17,6 +17,20 @@ When making structural or architectural decisions — refactoring package bounda
 - `CONTEXT.md` — domain language glossary
 - `docs/adr/` — architectural decisions
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`O-Marsters-1997/job-scraper`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
 ## UI / design
 
 When implementing or changing frontend UI, read `DESIGN.md` (repo root) first — it is the source of truth for colours, typography, spacing, components, and voice. Use its tokens and patterns; do not invent values outside its palette.
