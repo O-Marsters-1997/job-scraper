@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "jsxImportSource": "react",
+    "types": ["node"],
     "strict": true,
     "skipLibCheck": true
   }

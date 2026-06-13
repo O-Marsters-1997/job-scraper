@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "bun run build.tsx",
+    "typecheck": "tsgo --noEmit",
     "email:dev": "email dev --dir ./templates --port 3001"
   },
   "devDependencies": {
@@ -14,6 +15,7 @@
     "@types/react": "^19.0.0",
     "react": "19.2.5",
     "react-email": "5.2.10",
+    "@typescript/native-preview": "7.0.0-dev.20260613.1",
     "typescript": "^5.0.0"
   },
   "dependencies": {

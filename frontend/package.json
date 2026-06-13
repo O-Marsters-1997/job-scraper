@@ -7,10 +7,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:report": "playwright show-report .playwright/report",
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",
-    "add-component": "bun run scripts/add-component.ts"
+    "add-component": "bun run scripts/add-component.ts",
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.11",
@@ -28,8 +32,10 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260613.1",
     "@biomejs/biome": "2.4.5",
     "@faker-js/faker": "^10.4.0",
+    "@playwright/test": "^1.52.0",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-plugin": "latest",
     "typescript": "^5.7.2",
