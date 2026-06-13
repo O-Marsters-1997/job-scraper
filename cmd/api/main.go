@@ -72,7 +72,7 @@ func main() {
 	googleH := handlers.NewGoogleHandler(googleClient, db)
 
 	cvSvc := cvtemplates.NewService(googleClient, db, db)
-	cvH := handlers.NewCVTemplatesHandler(cvSvc)
+	cvH := handlers.NewCVTemplatesHandler(cvSvc, googleClient)
 
 	r.Post("/auth/login", authH.Login)
 	r.Post("/auth/signup", authH.Signup)
@@ -106,6 +106,7 @@ func main() {
 		r.Get("/cv-templates", cvH.ListCVTemplates)
 		r.Post("/tracked-docs", cvH.AddTrackedDoc)
 		r.Delete("/tracked-docs/{docId}", cvH.RemoveTrackedDoc)
+		r.Get("/cv-templates/{docId}/{tabId}/pdf", cvH.ExportCV)
 	})
 
 	srv := &http.Server{Addr: port, Handler: r}

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,16 +13,18 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/google"
 )
 
 // CVTemplatesHandler handles CV template and tracked-doc endpoints.
 type CVTemplatesHandler struct {
-	svc *cvtemplates.Service
+	svc    *cvtemplates.Service
+	google *google.Client
 }
 
 // NewCVTemplatesHandler constructs a CVTemplatesHandler.
-func NewCVTemplatesHandler(svc *cvtemplates.Service) *CVTemplatesHandler {
-	return &CVTemplatesHandler{svc: svc}
+func NewCVTemplatesHandler(svc *cvtemplates.Service, gc *google.Client) *CVTemplatesHandler {
+	return &CVTemplatesHandler{svc: svc, google: gc}
 }
 
 // ListCVTemplates returns all CV tabs for the authenticated user.
@@ -82,6 +85,26 @@ func (h *CVTemplatesHandler) RemoveTrackedDoc(w http.ResponseWriter, r *http.Req
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ExportCV streams the Google Doc as a PDF for the authenticated user.
+func (h *CVTemplatesHandler) ExportCV(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	docID := chi.URLParam(r, "docId")
+
+	body, err := h.google.ExportPDF(r.Context(), session.UserID, docID)
+	if err != nil {
+		slog.Error("ExportCV", slog.Any("err", err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "failed to export CV"})
+		return
+	}
+	defer body.Close()
+
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `inline; filename="cv.pdf"`)
+	_, _ = io.Copy(w, body)
 }
 
 // isClientError reports whether err represents an input/access error (400-range).

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -170,6 +171,31 @@ func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, 
 	}
 
 	return FileMeta{Title: body.Name, ModifiedAt: modifiedAt}, nil
+}
+
+// ExportPDF streams the full Google Doc as a PDF. The caller must close the
+// returned body.
+//
+// TODO: when spike #37 resolves per-tab isolation, append &tab=t.{tabID} to the
+// export URL so only the relevant tab is exported.
+func (c *Client) ExportPDF(ctx context.Context, userID, docID string) (io.ReadCloser, error) {
+	httpClient, err := c.HTTPClientForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("google.ExportPDF: %w", err)
+	}
+
+	url := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=pdf", docID)
+	resp, err := httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("google.ExportPDF request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("export failed: %s", resp.Status)
+	}
+
+	return resp.Body, nil
 }
 
 func (s *savingSource) Token() (*oauth2.Token, error) {
