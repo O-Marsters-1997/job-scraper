@@ -13,6 +13,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
@@ -60,8 +61,21 @@ func main() {
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 
+	tokenStore := jobsdb.NewGoogleTokenStore(db)
+	googleClient := igoogle.NewClient(
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URL"),
+		tokenStore,
+	)
+	googleH := handlers.NewGoogleHandler(googleClient, db)
+
 	r.Post("/auth/login", authH.Login)
 	r.Post("/auth/signup", authH.Signup)
+
+	// Google OAuth — start is accessible without auth so the redirect URL is clean,
+	// but callback and status/disconnect require the session cookie.
+	r.Get("/google/oauth/start", googleH.OAuthStart)
 
 	// Protected routes — auth middleware applied to all.
 	r.Group(func(r chi.Router) {
@@ -80,6 +94,10 @@ func main() {
 		r.Patch("/applications/{id}", appH.UpdateApplication)
 		r.Delete("/applications/{id}", appH.DeleteApplication)
 		r.Get("/applications/for-jobs", appH.GetApplicationsForJobs)
+
+		r.Get("/google/oauth/callback", googleH.OAuthCallback)
+		r.Get("/google/status", googleH.GetStatus)
+		r.Delete("/google/link", googleH.Disconnect)
 	})
 
 	srv := &http.Server{Addr: port, Handler: r}
