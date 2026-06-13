@@ -1,4 +1,4 @@
-import { API_BASE } from "./config";
+import { API_BASE, MOCK_BUILD } from "./config";
 
 export interface GoogleStatus {
   connected: boolean;
@@ -6,6 +6,9 @@ export interface GoogleStatus {
 }
 
 export async function fetchGoogleStatus(): Promise<GoogleStatus> {
+  if (MOCK_BUILD) {
+    return { connected: false };
+  }
   const res = await fetch(`${API_BASE}/google/status`, {
     credentials: "include",
   });

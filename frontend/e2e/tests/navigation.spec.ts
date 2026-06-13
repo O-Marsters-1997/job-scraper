@@ -3,6 +3,7 @@ import { expect, test } from "../src/fixtures";
 test.describe("Sidebar navigation", () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto("/overview");
+		await page.locator("aside").waitFor({ timeout: 15_000 });
 	});
 
 	test("should load the overview page", async ({ page }) => {
