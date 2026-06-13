@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -73,7 +74,6 @@ func (c *Client) HTTPClientForUser(ctx context.Context, userID string) (*http.Cl
 		return nil, err
 	}
 
-	// savingSource wraps the token source and persists refreshed tokens.
 	ts := &savingSource{
 		ctx:    ctx,
 		userID: userID,
@@ -163,15 +163,23 @@ func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, 
 }
 
 // The caller must close the returned body.
-// TODO: when spike #37 resolves per-tab isolation, append &tab=t.{tabID} to the export URL.
-func (c *Client) ExportPDF(ctx context.Context, userID, docID string) (io.ReadCloser, error) {
+// tabID is the Google Docs tab id (e.g. "t.0"); the "t." prefix is normalised
+// defensively. Pass an empty string to export the whole document.
+func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
 	httpClient, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("google.ExportPDF: %w", err)
 	}
 
-	url := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=pdf", docID)
-	resp, err := httpClient.Get(url)
+	exportURL := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=pdf", docID)
+	if tabID != "" {
+		tab := tabID
+		if !strings.HasPrefix(tab, "t.") {
+			tab = "t." + tab
+		}
+		exportURL += "&tab=" + tab
+	}
+	resp, err := httpClient.Get(exportURL)
 	if err != nil {
 		return nil, fmt.Errorf("google.ExportPDF request: %w", err)
 	}

@@ -10,11 +10,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@/components/ui/switch";
 import {
 	cvTemplatesQueryOptions,
 	useAddTrackedDoc,
 	useCVTemplates,
-	useRemoveTrackedDoc,
+	useHideTab,
+	useShowTab,
 } from "../../hooks/useCVTemplates";
 import { queryClient } from "../../lib/queryClient";
 import type { CV } from "../../types/cv";
@@ -24,7 +32,7 @@ export const Route = createFileRoute("/_auth/cv-templates")({
 	component: CVTemplatesPage,
 });
 
-type SortKey = "title" | "modifiedAt";
+type SortKey = "Title" | "ModifiedAt";
 type SortDir = "asc" | "desc";
 
 function formatDate(iso: string): string {
@@ -42,11 +50,21 @@ function CVTemplatesPage() {
 	const query = useCVTemplates();
 	const navigate = useNavigate();
 	const addMutation = useAddTrackedDoc();
-	const removeMutation = useRemoveTrackedDoc();
+	const hideMutation = useHideTab();
+	const showMutation = useShowTab();
+
+	const handleHide = (cv: CV) => {
+		hideMutation.mutate({ docId: cv.DocID, tabId: cv.TabID });
+	};
+
+	const handleRestore = (cv: CV) => {
+		showMutation.mutate({ docId: cv.DocID, tabId: cv.TabID });
+	};
 
 	const [searchQuery, setSearchQuery] = createSignal("");
-	const [sortKey, setSortKey] = createSignal<SortKey>("title");
+	const [sortKey, setSortKey] = createSignal<SortKey>("Title");
 	const [sortDir, setSortDir] = createSignal<SortDir>("asc");
+	const [showHidden, setShowHidden] = createSignal(false);
 
 	const [dialogOpen, setDialogOpen] = createSignal(false);
 	const [docUrl, setDocUrl] = createSignal("");
@@ -71,13 +89,14 @@ function CVTemplatesPage() {
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
 		const data = query.data ?? [];
+		const visibilityFiltered = showHidden() ? data : data.filter((cv) => cv.Visible);
 		const filtered = q
-			? data.filter(
+			? visibilityFiltered.filter(
 					(cv) =>
-						cv.title.toLowerCase().includes(q) ||
-						cv.sourceDoc.toLowerCase().includes(q),
+						cv.Title.toLowerCase().includes(q) ||
+						cv.SourceDoc.toLowerCase().includes(q),
 				)
-			: data;
+			: visibilityFiltered;
 
 		const key = sortKey();
 		const dir = sortDir();
@@ -88,6 +107,8 @@ function CVTemplatesPage() {
 			return dir === "asc" ? cmp : -cmp;
 		});
 	});
+
+	const hasHiddenCVs = () => (query.data ?? []).some((cv) => !cv.Visible);
 
 	const openDialog = () => {
 		batch(() => {
@@ -105,6 +126,10 @@ function CVTemplatesPage() {
 		} catch (err) {
 			if (err instanceof Error && err.message === "invalid-url") {
 				setUrlError("Invalid Google Docs URL or ID");
+			} else if (err instanceof Error && err.message === "access-denied") {
+				setUrlError(
+					"Cannot access this document. Make sure it's shared with your Google account.",
+				);
 			} else {
 				setUrlError("Something went wrong. Please try again.");
 			}
@@ -122,10 +147,10 @@ function CVTemplatesPage() {
 			<div class="mb-5 flex items-start justify-between gap-4">
 				<div>
 					<h1 class="text-lg font-bold tracking-tight text-foreground">
-						CV Templates
+						CVs
 					</h1>
 					<p class="mt-0.5 text-xs text-faint">
-						Google Docs tracked as CV templates
+						Google Docs tracked as CVs
 					</p>
 				</div>
 				<button
@@ -218,7 +243,7 @@ function CVTemplatesPage() {
 				</Show>
 
 				<Show when={(query.data?.length ?? 0) > 0}>
-					<div class="mb-3">
+					<div class="mb-3 flex items-center gap-3">
 						<input
 							type="search"
 							placeholder="Search by title or source…"
@@ -226,111 +251,173 @@ function CVTemplatesPage() {
 							onInput={(e) => setSearchQuery(e.currentTarget.value)}
 							class="h-9 w-full max-w-xs rounded-md border border-border bg-surface px-3 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
 						/>
+						<Switch checked={showHidden()} onChange={setShowHidden}>
+							<SwitchLabel class="inline-flex items-center gap-2">
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+								Show hidden
+							</SwitchLabel>
+						</Switch>
 					</div>
 
-					<div class="overflow-hidden rounded-xl border border-border bg-surface">
-						<div class="overflow-x-auto">
-							<table class="w-full text-sm">
-								<thead class="border-b border-border bg-surface-muted">
-									<tr>
-										<th
-											class={thClass("title")}
-											onClick={() => handleSort("title")}
-										>
-											Title{" "}
-											<span class="font-mono text-[10px]">
-												{sortIcon("title")}
-											</span>
-										</th>
-										<th class="h-9 px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint">
-											Source doc
-										</th>
-										<th
-											class={thClass("modifiedAt")}
-											onClick={() => handleSort("modifiedAt")}
-										>
-											Last modified{" "}
-											<span class="font-mono text-[10px]">
-												{sortIcon("modifiedAt")}
-											</span>
-										</th>
-										<th class="h-9 w-10 px-4" />
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-border">
-									<For each={filteredSorted()}>
-										{(cv) => (
-											<tr
-												class="cursor-pointer transition-colors hover:bg-surface-muted"
-												onClick={() => {
-													navigate({
-														to: "/cv-templates/$docId/$tabId",
-														params: { docId: cv.docId, tabId: cv.tabId },
-													});
-												}}
-											>
-												<td class="px-4 py-2.5">
-													<a
-														href={cv.docUrl}
-														target="_blank"
-														rel="noreferrer"
-														onClick={(e) => e.stopPropagation()}
-														class="font-medium text-foreground hover:text-primary hover:underline underline-offset-2"
-													>
-														{cv.title || "—"}
-													</a>
-												</td>
-												<td class="px-4 py-2.5 text-muted">
-													{cv.sourceDoc || "—"}
-												</td>
-												<td class="px-4 py-2.5">
-													<span class="font-mono text-xs tabular-nums text-faint">
-														{formatDate(cv.modifiedAt)}
-													</span>
-												</td>
-												<td
-													class="px-4 py-2.5 text-right"
-													onClick={(e) => e.stopPropagation()}
-												>
-													<button
-														type="button"
-														title="Remove"
-														onClick={() => removeMutation.mutate(cv.docId)}
-														disabled={removeMutation.isPending}
-														class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
-													>
-														<svg
-															aria-hidden="true"
-															width="14"
-															height="14"
-															viewBox="0 0 24 24"
-															fill="none"
-															stroke="currentColor"
-															stroke-width="2"
-															stroke-linecap="round"
-															stroke-linejoin="round"
-														>
-															<polyline points="3 6 5 6 21 6" />
-															<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-															<path d="M10 11v6" />
-															<path d="M14 11v6" />
-															<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-														</svg>
-													</button>
-												</td>
-											</tr>
-										)}
-									</For>
-								</tbody>
-							</table>
+					<Show
+						when={filteredSorted().length === 0 && !searchQuery() && !showHidden() && hasHiddenCVs()}
+					>
+						<div class="rounded-xl border border-border bg-surface p-10 text-center">
+							<p class="mb-1 text-sm text-muted">All CVs are hidden.</p>
+							<p class="text-xs text-faint">
+								Toggle{" "}
+								<button
+									type="button"
+									class="font-medium text-primary hover:underline underline-offset-2"
+									onClick={() => setShowHidden(true)}
+								>
+									Show hidden
+								</button>{" "}
+								to restore them.
+							</p>
 						</div>
+					</Show>
 
-						<Show when={filteredSorted().length === 0 && searchQuery()}>
-							<div class="px-4 py-8 text-center text-sm text-muted">
-								No CVs match "{searchQuery()}"
+					<Show when={filteredSorted().length > 0 || searchQuery()}>
+						<div class="overflow-hidden rounded-xl border border-border bg-surface">
+							<div class="overflow-x-auto">
+								<table class="w-full text-sm">
+									<thead class="border-b border-border bg-surface-muted">
+										<tr>
+											<th
+												class={thClass("Title")}
+												onClick={() => handleSort("Title")}
+											>
+												Title{" "}
+												<span class="font-mono text-[10px]">
+													{sortIcon("Title")}
+												</span>
+											</th>
+											<th class="h-9 px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint">
+												Source doc
+											</th>
+											<th
+												class={thClass("ModifiedAt")}
+												onClick={() => handleSort("ModifiedAt")}
+											>
+												Last modified{" "}
+												<span class="font-mono text-[10px]">
+													{sortIcon("ModifiedAt")}
+												</span>
+											</th>
+											<th class="h-9 w-10 px-4" />
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-border">
+										<For each={filteredSorted()}>
+											{(cv) => (
+												<tr
+													class={`cursor-pointer transition-colors hover:bg-surface-muted ${!cv.Visible ? "opacity-60" : ""}`}
+													onClick={() => {
+														navigate({
+															to: "/cv-templates/$docId/$tabId",
+															params: { docId: cv.DocID, tabId: cv.TabID },
+														});
+													}}
+												>
+													<td class="px-4 py-2.5">
+														<div class="flex items-center gap-2">
+															<a
+																href={cv.DocURL}
+																target="_blank"
+																rel="noreferrer"
+																onClick={(e) => e.stopPropagation()}
+																class="font-medium text-foreground hover:text-primary hover:underline underline-offset-2"
+															>
+																{cv.Title || "—"}
+															</a>
+															<Show when={!cv.Visible}>
+																<Badge variant="secondary">Hidden</Badge>
+															</Show>
+														</div>
+													</td>
+													<td class="px-4 py-2.5 text-muted">
+														{cv.SourceDoc || "—"}
+													</td>
+													<td class="px-4 py-2.5">
+														<span class="font-mono text-xs tabular-nums text-faint">
+															{formatDate(cv.ModifiedAt)}
+														</span>
+													</td>
+													<td
+														class="px-4 py-2.5 text-right"
+														onClick={(e) => e.stopPropagation()}
+													>
+														<Show when={cv.Visible}>
+															<button
+																type="button"
+																title="Hide tab"
+																onClick={() => handleHide(cv)}
+																disabled={hideMutation.isPending}
+																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
+															>
+																{/* trash */}
+																<svg
+																	aria-hidden="true"
+																	width="14"
+																	height="14"
+																	viewBox="0 0 24 24"
+																	fill="none"
+																	stroke="currentColor"
+																	stroke-width="2"
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																>
+																	<polyline points="3 6 5 6 21 6" />
+																	<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+																	<path d="M10 11v6" />
+																	<path d="M14 11v6" />
+																	<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+																</svg>
+															</button>
+														</Show>
+														<Show when={!cv.Visible}>
+															<button
+																type="button"
+																title="Restore tab"
+																onClick={() => handleRestore(cv)}
+																disabled={showMutation.isPending}
+																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-primary disabled:opacity-50"
+															>
+																{/* rotate-ccw (restore) */}
+																<svg
+																	aria-hidden="true"
+																	width="14"
+																	height="14"
+																	viewBox="0 0 24 24"
+																	fill="none"
+																	stroke="currentColor"
+																	stroke-width="2"
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																>
+																	<path d="M1 4v6h6" />
+																	<path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+																</svg>
+															</button>
+														</Show>
+													</td>
+												</tr>
+											)}
+										</For>
+									</tbody>
+								</table>
 							</div>
-						</Show>
-					</div>
+
+							<Show when={filteredSorted().length === 0 && searchQuery()}>
+								<div class="px-4 py-8 text-center text-sm text-muted">
+									No CVs match "{searchQuery()}"
+								</div>
+							</Show>
+						</div>
+					</Show>
 				</Show>
 			</Show>
 

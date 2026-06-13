@@ -52,6 +52,22 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
+type TrackedDoc struct {
+	ID      pgtype.UUID
+	UserID  pgtype.UUID
+	DocID   string
+	AddedAt pgtype.Timestamptz
+}
+
+type TrackedDocTab struct {
+	ID           pgtype.UUID
+	TrackedDocID pgtype.UUID
+	TabID        string
+	Title        string
+	Visible      bool
+	CreatedAt    pgtype.Timestamptz
+}
+
 type User struct {
 	ID           pgtype.UUID
 	Username     string

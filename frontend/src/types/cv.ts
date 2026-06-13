@@ -1,8 +1,9 @@
 export type CV = {
-	docId: string
-	tabId: string
-	title: string
-	sourceDoc: string
-	modifiedAt: string
-	docUrl: string
+	DocID: string
+	TabID: string
+	Title: string
+	SourceDoc: string
+	ModifiedAt: string
+	DocURL: string
+	Visible: boolean
 }

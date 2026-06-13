@@ -58,7 +58,7 @@ func main() {
 	}))
 
 	jobH := handlers.NewJobHandler(db)
-	authH := handlers.NewAuthHandler(db, db, db)
+	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 
@@ -71,7 +71,7 @@ func main() {
 	)
 	googleH := handlers.NewGoogleHandler(googleClient, db)
 
-	cvSvc := cvtemplates.NewService(googleClient, db, db)
+	cvSvc := cvtemplates.NewService(googleClient, db)
 	cvH := handlers.NewCVTemplatesHandler(cvSvc, googleClient)
 
 	r.Post("/auth/login", authH.Login)
@@ -106,6 +106,8 @@ func main() {
 		r.Get("/cv-templates", cvH.ListCVTemplates)
 		r.Post("/tracked-docs", cvH.AddTrackedDoc)
 		r.Delete("/tracked-docs/{docId}", cvH.RemoveTrackedDoc)
+		r.Post("/tracked-docs/{docId}/tabs/{tabId}/hide", cvH.HideTab)
+		r.Post("/tracked-docs/{docId}/tabs/{tabId}/show", cvH.ShowTab)
 		r.Get("/cv-templates/{docId}/{tabId}/pdf", cvH.ExportCV)
 	})
 

@@ -85,8 +85,9 @@ func (h *CVTemplatesHandler) RemoveTrackedDoc(w http.ResponseWriter, r *http.Req
 func (h *CVTemplatesHandler) ExportCV(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	docID := chi.URLParam(r, "docId")
+	tabID := chi.URLParam(r, "tabId")
 
-	body, err := h.google.ExportPDF(r.Context(), session.UserID, docID)
+	body, err := h.google.ExportPDF(r.Context(), session.UserID, docID, tabID)
 	if err != nil {
 		slog.Error("ExportCV", slog.Any("err", err))
 		w.Header().Set("Content-Type", "application/json")
@@ -101,7 +102,40 @@ func (h *CVTemplatesHandler) ExportCV(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, body)
 }
 
-// isClientError reports whether err represents an input/access error (400-range).
+func (h *CVTemplatesHandler) HideTab(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	docID := chi.URLParam(r, "docId")
+	tabID := chi.URLParam(r, "tabId")
+
+	if err := h.svc.HideTab(r.Context(), session.UserID, docID, tabID); err != nil {
+		if errors.Is(err, providers.ErrTabNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		slog.Error("hide tab failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CVTemplatesHandler) ShowTab(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	docID := chi.URLParam(r, "docId")
+	tabID := chi.URLParam(r, "tabId")
+
+	if err := h.svc.ShowTab(r.Context(), session.UserID, docID, tabID); err != nil {
+		if errors.Is(err, providers.ErrTabNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		slog.Error("show tab failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func isClientError(err error) bool {
 	msg := err.Error()
 	return strings.HasPrefix(msg, "invalid Google Docs") ||

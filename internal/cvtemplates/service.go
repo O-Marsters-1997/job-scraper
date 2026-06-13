@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -14,47 +15,56 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/google"
 )
 
-// googleClient is the subset of google.Client used by this service.
+// The Docs API returns tabId values that already include the "t." prefix (e.g. "t.0"),
+// so we normalise defensively rather than assuming the format.
+func docTabURL(docID, tabID string) string {
+	tab := tabID
+	if !strings.HasPrefix(tab, "t.") {
+		tab = "t." + tab
+	}
+	return fmt.Sprintf("https://docs.google.com/document/d/%s/edit?tab=%s", docID, tab)
+}
+
 type googleClient interface {
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
 }
 
-type tokenChecker interface {
+type store interface {
 	GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error)
+	providers.TrackedDocProvider
+	providers.TabProvider
 }
 
-// CV represents a single CV tab derived from a tracked Google Doc.
 type CV struct {
-	DocID      string    `json:"doc_id"`
-	TabID      string    `json:"tab_id"`
-	Title      string    `json:"title"`
-	SourceDoc  string    `json:"source_doc"`
-	ModifiedAt time.Time `json:"modified_at"`
-	DocURL     string    `json:"doc_url"`
+	DocID      string
+	TabID      string
+	Title      string
+	SourceDoc  string
+	ModifiedAt time.Time
+	DocURL     string
+	Visible    bool
 }
 
 type Service struct {
-	gc  googleClient
-	tc  tokenChecker
-	tdp providers.TrackedDocProvider
+	gc    googleClient
+	store store
 }
 
-func NewService(gc googleClient, tc tokenChecker, tdp providers.TrackedDocProvider) *Service {
-	return &Service{gc: gc, tc: tc, tdp: tdp}
+func NewService(gc googleClient, s store) *Service {
+	return &Service{gc: gc, store: s}
 }
 
-// List returns all CV tabs across all tracked docs for the user.
 // Docs that are inaccessible (deleted, permissions revoked) are logged and skipped.
 func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
-	if _, err := s.tc.GetGoogleToken(ctx, userID); err != nil {
+	if _, err := s.store.GetGoogleToken(ctx, userID); err != nil {
 		if errors.Is(err, providers.ErrGoogleTokenNotFound) {
 			return nil, fmt.Errorf("google account not connected")
 		}
 		return nil, fmt.Errorf("cvtemplates.List check token: %w", err)
 	}
 
-	tracked, err := s.tdp.ListTrackedDocs(ctx, userID)
+	tracked, err := s.store.ListTrackedDocs(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("cvtemplates.List list docs: %w", err)
 	}
@@ -77,6 +87,23 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 			)
 			continue
 		}
+		tabIDs := make([]string, len(tabs))
+		tabTitles := make([]string, len(tabs))
+		for i, tab := range tabs {
+			tabIDs[i] = tab.ID
+			tabTitles[i] = tab.Title
+		}
+		if err := s.store.EnsureTabs(ctx, doc.ID, tabIDs, tabTitles); err != nil {
+			return nil, fmt.Errorf("cvtemplates.List ensure tabs: %w", err)
+		}
+		persisted, err := s.store.ListTabs(ctx, doc.ID)
+		if err != nil {
+			return nil, fmt.Errorf("cvtemplates.List list tabs: %w", err)
+		}
+		visibilityOf := make(map[string]bool, len(persisted))
+		for _, p := range persisted {
+			visibilityOf[p.TabID] = p.Visible
+		}
 		for _, tab := range tabs {
 			cvs = append(cvs, CV{
 				DocID:      doc.DocID,
@@ -84,7 +111,8 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 				Title:      tab.Title,
 				SourceDoc:  meta.Title,
 				ModifiedAt: meta.ModifiedAt,
-				DocURL:     fmt.Sprintf("https://docs.google.com/document/d/%s/edit?tab=t.%s", doc.DocID, tab.ID),
+				DocURL:     docTabURL(doc.DocID, tab.ID),
+				Visible:    visibilityOf[tab.ID],
 			})
 		}
 	}
@@ -106,9 +134,17 @@ func (s *Service) AddDoc(ctx context.Context, userID, urlOrID string) error {
 	if _, err := s.gc.FileMeta(ctx, userID, docID); err != nil {
 		return fmt.Errorf("cannot access document: %w", err)
 	}
-	return s.tdp.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
+	return s.store.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
 }
 
 func (s *Service) RemoveDoc(ctx context.Context, userID, docID string) error {
-	return s.tdp.RemoveTrackedDoc(ctx, userID, docID)
+	return s.store.RemoveTrackedDoc(ctx, userID, docID)
+}
+
+func (s *Service) HideTab(ctx context.Context, userID, docID, tabID string) error {
+	return s.store.HideTab(ctx, userID, docID, tabID)
+}
+
+func (s *Service) ShowTab(ctx context.Context, userID, docID, tabID string) error {
+	return s.store.ShowTab(ctx, userID, docID, tabID)
 }
