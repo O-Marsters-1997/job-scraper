@@ -349,6 +349,7 @@ function CVTemplatesPage() {
 													<td
 														class="px-4 py-2.5 text-right"
 														onClick={(e) => e.stopPropagation()}
+														onKeyDown={(e) => e.stopPropagation()}
 													>
 														<Show when={cv.Visible}>
 															<button
