@@ -1,0 +1,92 @@
+package handlers
+
+import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
+)
+
+// CVTemplatesHandler handles CV template and tracked-doc endpoints.
+type CVTemplatesHandler struct {
+	svc *cvtemplates.Service
+}
+
+// NewCVTemplatesHandler constructs a CVTemplatesHandler.
+func NewCVTemplatesHandler(svc *cvtemplates.Service) *CVTemplatesHandler {
+	return &CVTemplatesHandler{svc: svc}
+}
+
+// ListCVTemplates returns all CV tabs for the authenticated user.
+func (h *CVTemplatesHandler) ListCVTemplates(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	cvs, err := h.svc.List(r.Context(), session.UserID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not connected") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"google account not connected"}`))
+			return
+		}
+		slog.Error("list cv templates failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(cvs)
+}
+
+// AddTrackedDoc adds a Google Doc (by URL or doc ID) to the user's tracked docs.
+func (h *CVTemplatesHandler) AddTrackedDoc(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	session, _ := auth.SessionFromContext(r.Context())
+	if err := h.svc.AddDoc(r.Context(), session.UserID, body.URL); err != nil {
+		// Parse errors and access errors are client faults.
+		if isClientError(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
+		slog.Error("add tracked doc failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+}
+
+// RemoveTrackedDoc removes a tracked doc for the authenticated user.
+func (h *CVTemplatesHandler) RemoveTrackedDoc(w http.ResponseWriter, r *http.Request) {
+	docID := chi.URLParam(r, "docId")
+	session, _ := auth.SessionFromContext(r.Context())
+	if err := h.svc.RemoveDoc(r.Context(), session.UserID, docID); err != nil {
+		if errors.Is(err, providers.ErrTrackedDocNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		slog.Error("remove tracked doc failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// isClientError reports whether err represents an input/access error (400-range).
+func isClientError(err error) bool {
+	msg := err.Error()
+	return strings.HasPrefix(msg, "invalid Google Docs") ||
+		strings.HasPrefix(msg, "cannot access document")
+}

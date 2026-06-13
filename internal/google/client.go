@@ -2,11 +2,26 @@ package google
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"golang.org/x/oauth2"
 	googleoauth "golang.org/x/oauth2/google"
 )
+
+// Tab represents a tab within a Google Doc.
+type Tab struct {
+	ID    string
+	Title string
+}
+
+// FileMeta holds basic metadata for a Google Drive file.
+type FileMeta struct {
+	Title      string
+	ModifiedAt time.Time
+}
 
 // TokenStore persists OAuth tokens keyed by user ID.
 type TokenStore interface {
@@ -84,6 +99,77 @@ type savingSource struct {
 	userID string
 	store  TokenStore
 	src    oauth2.TokenSource
+}
+
+// ListTabs returns the tabs for the given Google Doc.
+func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, error) {
+	hc, err := c.HTTPClientForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("google.ListTabs: %w", err)
+	}
+
+	url := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?fields=tabs.tabProperties", docID)
+	resp, err := hc.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("google.ListTabs request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google.ListTabs: unexpected status %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Tabs []struct {
+			TabProperties struct {
+				TabID string `json:"tabId"`
+				Title string `json:"title"`
+			} `json:"tabProperties"`
+		} `json:"tabs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("google.ListTabs decode: %w", err)
+	}
+
+	tabs := make([]Tab, len(body.Tabs))
+	for i, t := range body.Tabs {
+		tabs[i] = Tab{ID: t.TabProperties.TabID, Title: t.TabProperties.Title}
+	}
+	return tabs, nil
+}
+
+// FileMeta returns basic metadata (title and modified time) for the given Drive file.
+func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, error) {
+	hc, err := c.HTTPClientForUser(ctx, userID)
+	if err != nil {
+		return FileMeta{}, fmt.Errorf("google.FileMeta: %w", err)
+	}
+
+	url := fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s?fields=name,modifiedTime", docID)
+	resp, err := hc.Get(url)
+	if err != nil {
+		return FileMeta{}, fmt.Errorf("google.FileMeta request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return FileMeta{}, fmt.Errorf("google.FileMeta: unexpected status %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Name         string `json:"name"`
+		ModifiedTime string `json:"modifiedTime"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return FileMeta{}, fmt.Errorf("google.FileMeta decode: %w", err)
+	}
+
+	modifiedAt, err := time.Parse(time.RFC3339, body.ModifiedTime)
+	if err != nil {
+		return FileMeta{}, fmt.Errorf("google.FileMeta parse time: %w", err)
+	}
+
+	return FileMeta{Title: body.Name, ModifiedAt: modifiedAt}, nil
 }
 
 func (s *savingSource) Token() (*oauth2.Token, error) {

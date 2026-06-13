@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
@@ -70,6 +71,9 @@ func main() {
 	)
 	googleH := handlers.NewGoogleHandler(googleClient, db)
 
+	cvSvc := cvtemplates.NewService(googleClient, db, db)
+	cvH := handlers.NewCVTemplatesHandler(cvSvc)
+
 	r.Post("/auth/login", authH.Login)
 	r.Post("/auth/signup", authH.Signup)
 
@@ -98,6 +102,10 @@ func main() {
 		r.Get("/google/oauth/callback", googleH.OAuthCallback)
 		r.Get("/google/status", googleH.GetStatus)
 		r.Delete("/google/link", googleH.Disconnect)
+
+		r.Get("/cv-templates", cvH.ListCVTemplates)
+		r.Post("/tracked-docs", cvH.AddTrackedDoc)
+		r.Delete("/tracked-docs/{docId}", cvH.RemoveTrackedDoc)
 	})
 
 	srv := &http.Server{Addr: port, Handler: r}
