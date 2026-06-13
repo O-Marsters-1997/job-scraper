@@ -1,3 +1,4 @@
+import { type JSX } from "solid-js";
 import { Label } from "@/components/ui/label";
 import {
 	Sheet,
@@ -77,7 +78,7 @@ export default function SettingsPanel() {
 function SettingRow(props: {
 	label: string;
 	description: string;
-	children: unknown;
+	children: JSX.Element;
 }) {
 	return (
 		<div class="flex items-start justify-between gap-4">

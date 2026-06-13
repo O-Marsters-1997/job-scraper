@@ -13,7 +13,8 @@
     "format": "biome format",
     "lint": "biome lint",
     "check": "biome check",
-    "add-component": "bun run scripts/add-component.ts"
+    "add-component": "bun run scripts/add-component.ts",
+    "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.11",
@@ -31,6 +32,7 @@
     "vite-tsconfig-paths": "^5.1.4"
   },
   "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260613.1",
     "@biomejs/biome": "2.4.5",
     "@faker-js/faker": "^10.4.0",
     "@playwright/test": "^1.52.0",
