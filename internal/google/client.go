@@ -12,31 +12,26 @@ import (
 	googleoauth "golang.org/x/oauth2/google"
 )
 
-// Tab represents a tab within a Google Doc.
 type Tab struct {
 	ID    string
 	Title string
 }
 
-// FileMeta holds basic metadata for a Google Drive file.
 type FileMeta struct {
 	Title      string
 	ModifiedAt time.Time
 }
 
-// TokenStore persists OAuth tokens keyed by user ID.
 type TokenStore interface {
 	GetToken(ctx context.Context, userID string) (*oauth2.Token, error)
 	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
 }
 
-// Client wraps an oauth2.Config and a TokenStore for Google OAuth.
 type Client struct {
 	cfg   *oauth2.Config
 	store TokenStore
 }
 
-// NewClient constructs a Client with the given credentials and redirect URL.
 func NewClient(clientID, clientSecret, redirectURL string, store TokenStore) *Client {
 	cfg := &oauth2.Config{
 		ClientID:     clientID,
@@ -48,22 +43,18 @@ func NewClient(clientID, clientSecret, redirectURL string, store TokenStore) *Cl
 	return &Client{cfg: cfg, store: store}
 }
 
-// AuthURL returns the Google OAuth consent page URL for the given state token.
 func (c *Client) AuthURL(state string) string {
 	return c.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
 }
 
-// Exchange converts an authorization code into an OAuth token.
 func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {
 	return c.cfg.Exchange(ctx, code)
 }
 
-// SaveToken persists a token for the given user.
 func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error {
 	return c.store.SaveToken(ctx, userID, tok)
 }
 
-// DeleteToken removes the stored token for the given user.
 func (c *Client) DeleteToken(ctx context.Context, userID string) error {
 	type deleter interface {
 		DeleteToken(ctx context.Context, userID string) error
@@ -102,7 +93,6 @@ type savingSource struct {
 	src    oauth2.TokenSource
 }
 
-// ListTabs returns the tabs for the given Google Doc.
 func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, error) {
 	hc, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {
@@ -139,7 +129,6 @@ func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, err
 	return tabs, nil
 }
 
-// FileMeta returns basic metadata (title and modified time) for the given Drive file.
 func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, error) {
 	hc, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {
@@ -173,11 +162,8 @@ func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, 
 	return FileMeta{Title: body.Name, ModifiedAt: modifiedAt}, nil
 }
 
-// ExportPDF streams the full Google Doc as a PDF. The caller must close the
-// returned body.
-//
-// TODO: when spike #37 resolves per-tab isolation, append &tab=t.{tabID} to the
-// export URL so only the relevant tab is exported.
+// The caller must close the returned body.
+// TODO: when spike #37 resolves per-tab isolation, append &tab=t.{tabID} to the export URL.
 func (c *Client) ExportPDF(ctx context.Context, userID, docID string) (io.ReadCloser, error) {
 	httpClient, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {

@@ -16,18 +16,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/google"
 )
 
-// CVTemplatesHandler handles CV template and tracked-doc endpoints.
 type CVTemplatesHandler struct {
 	svc    *cvtemplates.Service
 	google *google.Client
 }
 
-// NewCVTemplatesHandler constructs a CVTemplatesHandler.
 func NewCVTemplatesHandler(svc *cvtemplates.Service, gc *google.Client) *CVTemplatesHandler {
 	return &CVTemplatesHandler{svc: svc, google: gc}
 }
 
-// ListCVTemplates returns all CV tabs for the authenticated user.
 func (h *CVTemplatesHandler) ListCVTemplates(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	cvs, err := h.svc.List(r.Context(), session.UserID)
@@ -46,7 +43,6 @@ func (h *CVTemplatesHandler) ListCVTemplates(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(cvs)
 }
 
-// AddTrackedDoc adds a Google Doc (by URL or doc ID) to the user's tracked docs.
 func (h *CVTemplatesHandler) AddTrackedDoc(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		URL string `json:"url"`
@@ -71,7 +67,6 @@ func (h *CVTemplatesHandler) AddTrackedDoc(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusCreated)
 }
 
-// RemoveTrackedDoc removes a tracked doc for the authenticated user.
 func (h *CVTemplatesHandler) RemoveTrackedDoc(w http.ResponseWriter, r *http.Request) {
 	docID := chi.URLParam(r, "docId")
 	session, _ := auth.SessionFromContext(r.Context())
@@ -87,7 +82,6 @@ func (h *CVTemplatesHandler) RemoveTrackedDoc(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ExportCV streams the Google Doc as a PDF for the authenticated user.
 func (h *CVTemplatesHandler) ExportCV(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	docID := chi.URLParam(r, "docId")

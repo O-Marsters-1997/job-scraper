@@ -82,7 +82,6 @@ func (db *DB) UpsertGoogleToken(ctx context.Context, input dto.UpsertGoogleToken
 	return nil
 }
 
-// DeleteGoogleToken removes the stored OAuth token for the user.
 func (db *DB) DeleteGoogleToken(ctx context.Context, userID string) error {
 	const q = `DELETE FROM google_oauth_tokens WHERE user_id = $1`
 	if _, err := db.pool.Exec(ctx, q, userID); err != nil {
@@ -102,7 +101,6 @@ func NewGoogleTokenStore(db *DB) *GoogleTokenStore {
 	return &GoogleTokenStore{db: db}
 }
 
-// GetToken retrieves and decrypts the OAuth token for the given user.
 func (s *GoogleTokenStore) GetToken(ctx context.Context, userID string) (*oauth2.Token, error) {
 	row, err := s.db.GetGoogleToken(ctx, userID)
 	if err != nil {
@@ -152,7 +150,6 @@ func (s *GoogleTokenStore) SaveToken(ctx context.Context, userID string, tok *oa
 	})
 }
 
-// DeleteToken removes the stored OAuth token for the given user.
 func (s *GoogleTokenStore) DeleteToken(ctx context.Context, userID string) error {
 	return s.db.DeleteGoogleToken(ctx, userID)
 }

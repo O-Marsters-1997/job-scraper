@@ -7,7 +7,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// MockTrackedDocProvider is an in-memory implementation of TrackedDocProvider for tests.
 type MockTrackedDocProvider struct {
 	docs []dto.TrackedDoc
 }
@@ -42,7 +41,6 @@ func (m *MockTrackedDocProvider) ListTrackedDocs(_ context.Context, userID strin
 	return out, nil
 }
 
-// Seed adds a doc directly to the mock store.
 func (m *MockTrackedDocProvider) Seed(d dto.TrackedDoc) {
 	m.docs = append(m.docs, d)
 }

@@ -3,8 +3,6 @@ import * as pdfjsLib from "pdfjs-dist";
 import type { PDFPageProxy } from "pdfjs-dist";
 import { createResource, createSignal, For, onCleanup, Show } from "solid-js";
 
-// Configure the pdf.js worker. When spike #37 resolves per-tab isolation,
-// the pdfUrl can include &tab=t.{tabId} once the backend supports it.
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 	"pdfjs-dist/build/pdf.worker.min.mjs",
 	import.meta.url,
@@ -63,7 +61,6 @@ function CVDetailPage() {
 
 	return (
 		<div class="flex min-h-screen flex-col bg-background">
-			{/* Top bar */}
 			<div class="sticky top-0 z-10 flex h-12 items-center justify-between border-b border-border bg-surface px-7">
 				<Link
 					to="/cv-templates"
@@ -110,9 +107,7 @@ function CVDetailPage() {
 				</a>
 			</div>
 
-			{/* Content */}
 			<div class="flex flex-1 flex-col items-center px-7 py-8">
-				{/* Loading skeleton */}
 				<Show when={pdfResource.loading}>
 					<div class="flex w-full max-w-3xl flex-col gap-4">
 						<For each={[1, 2, 3]}>
@@ -123,7 +118,6 @@ function CVDetailPage() {
 					</div>
 				</Show>
 
-				{/* Error state */}
 				<Show when={error()}>
 					{(msg) => (
 						<div class="w-full max-w-3xl rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
@@ -135,7 +129,6 @@ function CVDetailPage() {
 					)}
 				</Show>
 
-				{/* PDF pages — stacked vertically */}
 				<Show when={!pdfResource.loading && pages().length > 0}>
 					<div class="flex w-full max-w-3xl flex-col gap-4">
 						<For each={pages()}>
@@ -167,7 +160,6 @@ function PDFCanvas(props: { page: PDFPageProxy }) {
 			<canvas
 				ref={(el) => {
 					canvasRef = el;
-					// Render once mounted
 					render();
 				}}
 				width={viewport.width}

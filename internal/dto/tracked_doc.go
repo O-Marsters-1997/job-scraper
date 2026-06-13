@@ -10,7 +10,6 @@ type TrackedDoc struct {
 	AddedAt time.Time
 }
 
-// AddTrackedDocInput carries the values needed to add a tracked doc.
 type AddTrackedDocInput struct {
 	UserID string
 	DocID  string

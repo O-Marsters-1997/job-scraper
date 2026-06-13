@@ -6,7 +6,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// MockGoogleTokenProvider is an in-memory implementation of GoogleTokenProvider for tests.
 type MockGoogleTokenProvider struct {
 	token *dto.GoogleToken
 }
@@ -34,7 +33,6 @@ func (m *MockGoogleTokenProvider) DeleteGoogleToken(_ context.Context, _ string)
 	return nil
 }
 
-// Seed sets the stored token directly.
 func (m *MockGoogleTokenProvider) Seed(tok dto.GoogleToken) {
 	m.token = &tok
 }

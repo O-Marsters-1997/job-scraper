@@ -21,18 +21,15 @@ import (
 
 const oauthStateCookie = "oauth_state"
 
-// GoogleHandler handles Google OAuth flows and token management endpoints.
 type GoogleHandler struct {
 	client   *igoogle.Client
 	sessions providers.SessionProvider
 }
 
-// NewGoogleHandler constructs a GoogleHandler.
 func NewGoogleHandler(client *igoogle.Client, sessions providers.SessionProvider) *GoogleHandler {
 	return &GoogleHandler{client: client, sessions: sessions}
 }
 
-// OAuthStart redirects the user to the Google consent page.
 func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
 	state, err := generateState()
 	if err != nil {
@@ -44,14 +41,12 @@ func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.client.AuthURL(state), http.StatusTemporaryRedirect)
 }
 
-// OAuthCallback handles the redirect from Google after user consent.
 func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if !validateStateCookie(r, r.URL.Query().Get("state")) {
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
 	}
 
-	// Clear the state cookie.
 	http.SetCookie(w, &http.Cookie{
 		Name:   oauthStateCookie,
 		Value:  "",
@@ -87,7 +82,6 @@ func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
 }
 
-// GetStatus returns the Google connection status for the authenticated user.
 func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if !ok {
@@ -133,7 +127,6 @@ func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(response{Connected: true, Email: info.Email})
 }
 
-// Disconnect removes the stored Google OAuth token for the authenticated user.
 func (h *GoogleHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if !ok {
@@ -178,7 +171,6 @@ func setStateCookie(w http.ResponseWriter, state string) {
 	})
 }
 
-// validateStateCookie checks that the state query param matches the signed cookie.
 func validateStateCookie(r *http.Request, state string) bool {
 	cookie, err := r.Cookie(oauthStateCookie)
 	if err != nil || cookie.Value == "" {

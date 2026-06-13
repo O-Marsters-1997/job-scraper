@@ -119,7 +119,6 @@ function CVTemplatesPage() {
 
 	return (
 		<div class="px-7 py-6">
-			{/* Page header */}
 			<div class="mb-5 flex items-start justify-between gap-4">
 				<div>
 					<h1 class="text-lg font-bold tracking-tight text-foreground">
@@ -151,7 +150,6 @@ function CVTemplatesPage() {
 				</button>
 			</div>
 
-			{/* Loading */}
 			<Show when={query.isPending}>
 				<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
 					<For each={[1, 2, 3]}>
@@ -166,7 +164,6 @@ function CVTemplatesPage() {
 				</div>
 			</Show>
 
-			{/* Not connected error */}
 			<Show when={query.isError && isNotConnected()}>
 				<div class="rounded-xl border border-border bg-surface p-10 text-center">
 					<p class="text-sm text-muted">
@@ -182,7 +179,6 @@ function CVTemplatesPage() {
 				</div>
 			</Show>
 
-			{/* General error */}
 			<Show when={query.isError && !isNotConnected()}>
 				<div class="rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
 					<p class="mb-1 text-sm font-semibold text-destructive-strong">
@@ -192,9 +188,7 @@ function CVTemplatesPage() {
 				</div>
 			</Show>
 
-			{/* Success */}
 			<Show when={query.isSuccess}>
-				{/* Empty state */}
 				<Show when={(query.data?.length ?? 0) === 0}>
 					<div class="rounded-xl border border-border bg-surface p-10 text-center">
 						<p class="mb-3 text-sm text-muted">
@@ -223,9 +217,7 @@ function CVTemplatesPage() {
 					</div>
 				</Show>
 
-				{/* Table */}
 				<Show when={(query.data?.length ?? 0) > 0}>
-					{/* Search */}
 					<div class="mb-3">
 						<input
 							type="search"
@@ -342,7 +334,6 @@ function CVTemplatesPage() {
 				</Show>
 			</Show>
 
-			{/* Add doc dialog */}
 			<Dialog open={dialogOpen()} onOpenChange={setDialogOpen}>
 				<DialogContent>
 					<DialogHeader>

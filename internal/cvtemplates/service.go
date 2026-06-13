@@ -20,7 +20,6 @@ type googleClient interface {
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
 }
 
-// tokenChecker checks whether a user has a connected Google account.
 type tokenChecker interface {
 	GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error)
 }
@@ -35,14 +34,12 @@ type CV struct {
 	DocURL     string    `json:"doc_url"`
 }
 
-// Service orchestrates CV template listing and tracked-doc management.
 type Service struct {
 	gc  googleClient
 	tc  tokenChecker
 	tdp providers.TrackedDocProvider
 }
 
-// NewService constructs a Service.
 func NewService(gc googleClient, tc tokenChecker, tdp providers.TrackedDocProvider) *Service {
 	return &Service{gc: gc, tc: tc, tdp: tdp}
 }
@@ -101,7 +98,6 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 	return cvs, nil
 }
 
-// AddDoc validates and tracks a new Google Doc by URL or raw doc ID.
 func (s *Service) AddDoc(ctx context.Context, userID, urlOrID string) error {
 	docID, err := docref.ParseDocID(urlOrID)
 	if err != nil {
@@ -113,7 +109,6 @@ func (s *Service) AddDoc(ctx context.Context, userID, urlOrID string) error {
 	return s.tdp.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
 }
 
-// RemoveDoc removes a tracked doc for the user.
 func (s *Service) RemoveDoc(ctx context.Context, userID, docID string) error {
 	return s.tdp.RemoveTrackedDoc(ctx, userID, docID)
 }
