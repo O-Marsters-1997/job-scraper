@@ -1,6 +1,24 @@
 {
   "version": 1,
   "skills": {
+    "playwright-ci": {
+      "source": "testdino-hq/playwright-skill",
+      "sourceType": "github",
+      "skillPath": "ci/SKILL.md",
+      "computedHash": "283e7644079fafd681bb07897b1b17bb617d22cbee827e83b0744b4e2b3836d6"
+    },
+    "playwright-core": {
+      "source": "testdino-hq/playwright-skill",
+      "sourceType": "github",
+      "skillPath": "core/SKILL.md",
+      "computedHash": "9f67f5e0443fa4b5b8efb7be12c193eec12ec1821412b01b0259940735790cba"
+    },
+    "playwright-pom": {
+      "source": "testdino-hq/playwright-skill",
+      "sourceType": "github",
+      "skillPath": "pom/SKILL.md",
+      "computedHash": "b7bf9f8cec29b3878cf503c6dbf19cafe181ac4eb0c63e94168d16942345707f"
+    },
     "tailwind-shadcn": {
       "source": "O-Marsters-1997/my-claude-code",
       "sourceType": "github",

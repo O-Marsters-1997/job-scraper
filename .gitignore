@@ -13,3 +13,4 @@ emails/node_modules
 .DS_Store
 .treepad.toml
 .codemap
+.agents/
