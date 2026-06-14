@@ -38,106 +38,116 @@ func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job) {
 	n.jobs = append(n.jobs, job)
 }
 
-func TestIngest_ValidJobs(t *testing.T) {
-	db := &stubSaver{}
-	scorer := &stubScorer{}
-	notifier := &stubNotifier{}
-	ing := ingest.New(db, scorer, notifier)
+func TestIngest(t *testing.T) {
+	t.Parallel()
 
-	jobs := []dto.Job{
-		{Title: "Engineer", URL: "https://example.com/1"},
-		{Title: "Manager", URL: "https://example.com/2"},
-	}
-	if err := ing.Ingest(context.Background(), jobs); err != nil {
-		t.Fatal(err)
+	errSave := errors.New("db down")
+
+	tests := []struct {
+		name         string
+		jobs         []dto.Job
+		saveErr      error
+		nilScorer    bool
+		nilNotifier  bool
+		wantErr      bool
+		wantSaved    int
+		wantScored   int
+		wantNotified int
+	}{
+		{
+			name: "valid batch is saved, scored, and notified",
+			jobs: []dto.Job{
+				{Title: "Engineer", URL: "https://example.com/1"},
+				{Title: "Manager", URL: "https://example.com/2"},
+			},
+			wantSaved:    2,
+			wantScored:   2,
+			wantNotified: 2,
+		},
+		{
+			name: "jobs missing title or url are filtered out",
+			jobs: []dto.Job{
+				{Title: "", URL: "https://example.com/1"},
+				{Title: "Engineer", URL: ""},
+				{Title: "Valid", URL: "https://example.com/3"},
+			},
+			wantSaved:    1,
+			wantScored:   1,
+			wantNotified: 1,
+		},
+		{
+			name:      "all invalid - nothing saved",
+			jobs:      []dto.Job{{Title: "", URL: ""}},
+			wantSaved: 0,
+		},
+		{
+			name:      "nil input - nothing saved",
+			wantSaved: 0,
+		},
+		{
+			name:    "save error propagates; scorer and notifier not called",
+			jobs:    []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
+			saveErr: errSave,
+			wantErr: true,
+		},
+		{
+			name:        "nil scorer and notifier do not panic",
+			jobs:        []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
+			nilScorer:   true,
+			nilNotifier: true,
+			wantSaved:   1,
+		},
 	}
 
-	if len(db.calls) != 1 || len(db.calls[0]) != 2 {
-		t.Errorf("Save called with %d batches / %v jobs, want 1 batch of 2", len(db.calls), db.calls)
-	}
-	if len(scorer.jobs) != 2 {
-		t.Errorf("scorer called %d times, want 2", len(scorer.jobs))
-	}
-	if len(notifier.jobs) != 2 {
-		t.Errorf("notifier called %d times, want 2", len(notifier.jobs))
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestIngest_FiltersInvalidJobs(t *testing.T) {
-	db := &stubSaver{}
-	scorer := &stubScorer{}
-	ing := ingest.New(db, scorer, nil)
+			db := &stubSaver{err: tt.saveErr}
+			sc := &stubScorer{}
+			nc := &stubNotifier{}
 
-	jobs := []dto.Job{
-		{Title: "", URL: "https://example.com/1"}, // missing title
-		{Title: "Engineer", URL: ""},              // missing url
-		{Title: "Valid", URL: "https://example.com/3"},
-	}
-	if err := ing.Ingest(context.Background(), jobs); err != nil {
-		t.Fatal(err)
-	}
+			var scorer ingest.Scorer
+			if !tt.nilScorer {
+				scorer = sc
+			}
+			var notifier ingest.Notifier
+			if !tt.nilNotifier {
+				notifier = nc
+			}
 
-	if len(db.calls) != 1 || len(db.calls[0]) != 1 {
-		t.Errorf("expected 1 valid job saved, got batches: %v", db.calls)
-	}
-	if db.calls[0][0].Title != "Valid" {
-		t.Errorf("wrong job saved: %q", db.calls[0][0].Title)
-	}
-	if len(scorer.jobs) != 1 {
-		t.Errorf("scorer called %d times, want 1", len(scorer.jobs))
-	}
-}
+			err := ingest.New(db, scorer, notifier).Ingest(context.Background(), tt.jobs)
 
-func TestIngest_AllInvalid_ReturnsNil(t *testing.T) {
-	db := &stubSaver{}
-	ing := ingest.New(db, nil, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Ingest: expected error, got nil")
+				}
+				if len(sc.jobs) != 0 {
+					t.Errorf("scorer called %d times after save error; want 0", len(sc.jobs))
+				}
+				if len(nc.jobs) != 0 {
+					t.Errorf("notifier called %d times after save error; want 0", len(nc.jobs))
+				}
+				return
+			}
 
-	if err := ing.Ingest(context.Background(), []dto.Job{{Title: "", URL: ""}}); err != nil {
-		t.Errorf("want nil error for all-invalid input, got %v", err)
-	}
-	if len(db.calls) != 0 {
-		t.Errorf("expected no Save calls, got %d", len(db.calls))
-	}
-}
+			if err != nil {
+				t.Fatalf("Ingest: unexpected error: %v", err)
+			}
 
-func TestIngest_SaveError_Propagates(t *testing.T) {
-	db := &stubSaver{err: errors.New("db down")}
-	scorer := &stubScorer{}
-	notifier := &stubNotifier{}
-	ing := ingest.New(db, scorer, notifier)
-
-	err := ing.Ingest(context.Background(), []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}})
-	if err == nil {
-		t.Error("expected error from Save, got nil")
-	}
-	if len(scorer.jobs) != 0 {
-		t.Error("scorer must not be called after Save error")
-	}
-	if len(notifier.jobs) != 0 {
-		t.Error("notifier must not be called after Save error")
-	}
-}
-
-func TestIngest_NilScorerAndNotifier_NoPanic(t *testing.T) {
-	db := &stubSaver{}
-	ing := ingest.New(db, nil, nil)
-
-	if err := ing.Ingest(context.Background(), []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}); err != nil {
-		t.Errorf("unexpected error with nil scorer/notifier: %v", err)
-	}
-	if len(db.calls) != 1 {
-		t.Errorf("expected Save called once, got %d", len(db.calls))
-	}
-}
-
-func TestIngest_EmptySlice(t *testing.T) {
-	db := &stubSaver{}
-	ing := ingest.New(db, nil, nil)
-
-	if err := ing.Ingest(context.Background(), nil); err != nil {
-		t.Errorf("unexpected error for empty input: %v", err)
-	}
-	if len(db.calls) != 0 {
-		t.Errorf("expected no Save calls for empty input, got %d", len(db.calls))
+			var saved int
+			if len(db.calls) > 0 {
+				saved = len(db.calls[0])
+			}
+			if saved != tt.wantSaved {
+				t.Errorf("saved %d jobs; want %d", saved, tt.wantSaved)
+			}
+			if len(sc.jobs) != tt.wantScored {
+				t.Errorf("scorer called %d times; want %d", len(sc.jobs), tt.wantScored)
+			}
+			if len(nc.jobs) != tt.wantNotified {
+				t.Errorf("notifier called %d times; want %d", len(nc.jobs), tt.wantNotified)
+			}
+		})
 	}
 }

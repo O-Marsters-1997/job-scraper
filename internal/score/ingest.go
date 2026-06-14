@@ -7,17 +7,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// ScoreWriter persists a suitability score for a job.
 type ScoreWriter interface {
 	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int) error
 }
 
-// ConfigReader retrieves the search config for a user.
 type ConfigReader interface {
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 }
 
-// IngestScorer scores a job immediately after it is saved and writes the result.
 type IngestScorer struct {
 	scorer SuitabilityScorer
 	db     ScoreWriter
@@ -29,8 +26,8 @@ func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReade
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
 }
 
-// ScoreAndSave scores job and writes the suitability score. Errors are logged
-// rather than returned so that a scoring failure never blocks the ingest path.
+// ScoreAndSave logs errors rather than returning them so a scoring failure
+// never blocks the ingest path.
 func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) {
 	cfg, err := s.cfgDB.GetSearchConfig(ctx, s.userID)
 	if err != nil {

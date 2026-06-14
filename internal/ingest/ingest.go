@@ -7,7 +7,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// Saver persists a batch of jobs.
 type Saver interface {
 	Save(ctx context.Context, jobs []dto.Job) error
 }
@@ -34,17 +33,14 @@ type Ingester struct {
 	notifier Notifier
 }
 
-// New constructs an Ingester. scorer and notifier may be nil.
-// Callers must pass a nil interface value (not a nil concrete pointer) to
-// avoid the typed-nil pitfall — use a declared interface variable set
-// conditionally rather than casting a nil pointer directly.
+// New creates an Ingester. scorer and notifier may be nil; pass a nil
+// interface value (not a nil concrete pointer) to avoid the typed-nil pitfall.
 func New(db Saver, scorer Scorer, notifier Notifier) *Ingester {
 	return &Ingester{db: db, scorer: scorer, notifier: notifier}
 }
 
-// Ingest validates jobs (non-empty Title and URL), batch-saves the valid ones,
-// then calls scorer and notifier per job. Returns the Save error if it fails;
-// scoring and notify failures are fire-and-forget.
+// Ingest saves valid jobs and fires scorer and notifier per job.
+// Save errors are returned; scorer and notifier failures are fire-and-forget.
 func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	valid := make([]dto.Job, 0, len(jobs))
 	for _, j := range jobs {
