@@ -17,15 +17,16 @@ import (
 )
 
 type Orchestrator struct {
-	srcs    []sources.Source
-	db      providers.JobProvider
-	q       queue.JobQueue
-	scorer  score.RelevanceScorer          // nil means no gate
-	cfgDB   providers.SearchConfigProvider // nil means no gate
-	scoreDB providers.JobScoreProvider     // nil means no score writes
-	userID  string
-	cr      *cron.Cron
-	wg      sync.WaitGroup
+	srcs         []sources.Source
+	db           providers.JobProvider
+	q            queue.JobQueue
+	scorer       score.RelevanceScorer          // nil means no gate
+	cfgDB        providers.SearchConfigProvider  // nil means no gate
+	scoreDB      providers.JobScoreProvider      // nil means no score writes
+	ingestScorer *score.IngestScorer             // nil means no suitability scoring
+	userID       string
+	cr           *cron.Cron
+	wg           sync.WaitGroup
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -40,6 +41,13 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB pro
 	o.cfgDB = cfgDB
 	o.scoreDB = scoreDB
 	o.userID = userID
+	return o
+}
+
+// WithSuitabilityScorer wires in a score-on-ingest helper that writes a
+// suitability score after every ATS job save.
+func (o *Orchestrator) WithSuitabilityScorer(is *score.IngestScorer) *Orchestrator {
+	o.ingestScorer = is
 	return o
 }
 
@@ -161,6 +169,12 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			}
 			if err := o.db.Save(ctx, validJobs); err != nil {
 				return false, err
+			}
+
+			if o.ingestScorer != nil {
+				for _, s := range survivors {
+					o.ingestScorer.ScoreAndSave(ctx, s.job)
+				}
 			}
 
 			if gating && o.scoreDB != nil {

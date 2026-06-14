@@ -106,9 +106,17 @@ func main() {
 
 	orch := scraper.New(srcs, db, q)
 
+	var ingestScorer *score.IngestScorer
 	if scoringUserID := os.Getenv("SCORING_USER_ID"); scoringUserID != "" {
 		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
 		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
+
+		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+			ingestScorer = score.NewIngestScorer(claudeScorer, db, db, scoringUserID)
+			orch.WithSuitabilityScorer(ingestScorer)
+			slog.Info("suitability scorer enabled", slog.String("user_id", scoringUserID))
+		}
 	}
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
@@ -203,6 +211,9 @@ func main() {
 			return err
 		}
 		log.Info("job upserted", slog.String("title", job.Title))
+		if ingestScorer != nil {
+			ingestScorer.ScoreAndSave(ctx, job)
+		}
 		if notifSvc != nil {
 			notifSvc.NotifyNewJob(ctx, job)
 		}

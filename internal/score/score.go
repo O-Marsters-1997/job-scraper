@@ -1,10 +1,16 @@
 package score
 
 import (
+	"context"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+// SuitabilityScorer scores a job's full description against the user's rubric.
+type SuitabilityScorer interface {
+	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (int, TokenUsage, error)
+}
 
 // RelevanceScorer scores a job card against the user's search criteria.
 type RelevanceScorer interface {
