@@ -104,7 +104,7 @@ func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, err
 	if err != nil {
 		return nil, fmt.Errorf("google.ListTabs request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("google.ListTabs: unexpected status %d", resp.StatusCode)
@@ -140,7 +140,7 @@ func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, 
 	if err != nil {
 		return FileMeta{}, fmt.Errorf("google.FileMeta request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return FileMeta{}, fmt.Errorf("google.FileMeta: unexpected status %d", resp.StatusCode)

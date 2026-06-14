@@ -92,12 +92,3 @@ func (m *MockTabProvider) SeedTab(userID, docID, trackedDocID, tabID string, vis
 		visible:      visible,
 	})
 }
-
-func (m *MockTabProvider) hasTab(trackedDocID, tabID string) bool {
-	for _, t := range m.tabs {
-		if t.trackedDocID == trackedDocID && t.tabID == tabID {
-			return true
-		}
-	}
-	return false
-}

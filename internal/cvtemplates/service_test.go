@@ -115,7 +115,7 @@ func TestService_List(t *testing.T) {
 		{
 			name: "not connected",
 			setup: func(_ *mockGoogleClient, st *mockStore) {
-				st.mockTokenChecker.err = providers.ErrGoogleTokenNotFound
+				st.err = providers.ErrGoogleTokenNotFound
 			},
 			wantErr: "not connected",
 		},
@@ -152,7 +152,7 @@ func TestService_List(t *testing.T) {
 					"docA": {Title: "Doc A", ModifiedAt: modTime},
 					"docB": {Title: "Doc B", ModifiedAt: modTime},
 				}
-				st.MockTabProvider.SeedTab("u1", "docA", "1", "t1", false)
+				st.SeedTab("u1", "docA", "1", "t1", false)
 			},
 			wantN: 4,
 			check: func(t *testing.T, cvs []cvtemplates.CV, _ *mockStore) {
@@ -176,7 +176,7 @@ func TestService_List(t *testing.T) {
 			},
 			wantN: 2,
 			check: func(t *testing.T, _ []cvtemplates.CV, st *mockStore) {
-				rows, err := st.MockTabProvider.ListTabs(context.Background(), "1")
+				rows, err := st.ListTabs(context.Background(), "1")
 				if err != nil {
 					t.Fatalf("ListTabs: %v", err)
 				}
@@ -200,11 +200,11 @@ func TestService_List(t *testing.T) {
 				gc.meta = map[string]google.FileMeta{
 					"docA": {Title: "Doc A", ModifiedAt: modTime},
 				}
-				st.MockTabProvider.SeedTab("u1", "docA", "1", "t1", false)
+				st.SeedTab("u1", "docA", "1", "t1", false)
 			},
 			wantN: 1,
 			check: func(t *testing.T, cvs []cvtemplates.CV, st *mockStore) {
-				rows, _ := st.MockTabProvider.ListTabs(context.Background(), "1")
+				rows, _ := st.ListTabs(context.Background(), "1")
 				for _, r := range rows {
 					if r.TabID == "t1" && r.Visible {
 						t.Error("reconcile must not un-hide a previously hidden tab")
@@ -261,7 +261,7 @@ func TestService_HideTab(t *testing.T) {
 		{
 			name: "hides a tab",
 			setup: func(st *mockStore) {
-				st.MockTabProvider.SeedTab("u1", "docA", "1", "t1", true)
+				st.SeedTab("u1", "docA", "1", "t1", true)
 			},
 		},
 		{
@@ -293,7 +293,7 @@ func TestService_HideTab(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			rows, _ := st.MockTabProvider.ListTabs(context.Background(), "1")
+			rows, _ := st.ListTabs(context.Background(), "1")
 			for _, r := range rows {
 				if r.TabID == "t1" && r.Visible {
 					t.Error("tab t1 should be hidden after HideTab")
@@ -358,7 +358,7 @@ func TestService_ShowTab(t *testing.T) {
 		{
 			name: "restores a hidden tab",
 			setup: func(st *mockStore) {
-				st.MockTabProvider.SeedTab("u1", "docA", "1", "t1", false)
+				st.SeedTab("u1", "docA", "1", "t1", false)
 			},
 		},
 		{
@@ -390,7 +390,7 @@ func TestService_ShowTab(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			rows, _ := st.MockTabProvider.ListTabs(context.Background(), "1")
+			rows, _ := st.ListTabs(context.Background(), "1")
 			for _, r := range rows {
 				if r.TabID == "t1" && !r.Visible {
 					t.Error("tab t1 should be visible after ShowTab")

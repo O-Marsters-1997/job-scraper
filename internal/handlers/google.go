@@ -112,7 +112,7 @@ func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var info struct {
 		Email string `json:"email"`
