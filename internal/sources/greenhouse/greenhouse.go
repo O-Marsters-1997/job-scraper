@@ -10,7 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Config holds Greenhouse-specific settings.
 type Config struct {
 	// Boards is the list of Greenhouse board tokens to scrape (e.g. "acmecorp").
 	Boards []string
@@ -65,12 +64,12 @@ type boardResponse struct {
 }
 
 type boardJob struct {
-	ID          int64      `json:"id"`
-	Title       string     `json:"title"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
 	Location    jobLocation `json:"location"`
-	AbsoluteURL string     `json:"absolute_url"`
-	Content     string     `json:"content"`
-	UpdatedAt   string     `json:"updated_at"`
+	AbsoluteURL string      `json:"absolute_url"`
+	Content     string      `json:"content"`
+	UpdatedAt   string      `json:"updated_at"`
 }
 
 type jobLocation struct {
