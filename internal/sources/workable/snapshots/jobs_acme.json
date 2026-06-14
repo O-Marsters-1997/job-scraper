@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "shortcode": "ABC123",
+      "title": "Frontend Engineer",
+      "location": {"city": "London"},
+      "url": "https://apply.workable.com/acme/j/ABC123/",
+      "full_description": "<p>We are looking for a Frontend Engineer.</p>"
+    },
+    {
+      "shortcode": "DEF456",
+      "title": "DevOps Engineer",
+      "location": {"city": "Remote"},
+      "url": "https://apply.workable.com/acme/j/DEF456/",
+      "full_description": "<p>Join our infrastructure team as a DevOps Engineer.</p>"
+    }
+  ]
+}

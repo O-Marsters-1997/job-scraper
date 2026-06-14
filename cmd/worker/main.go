@@ -18,8 +18,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/ashby"
 	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
+	"github.com/ollymarsters/job-scraper/internal/sources/lever"
+	"github.com/ollymarsters/job-scraper/internal/sources/personio"
+	"github.com/ollymarsters/job-scraper/internal/sources/recruitee"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
+	"github.com/ollymarsters/job-scraper/internal/sources/workable"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 )
 
@@ -63,12 +68,39 @@ func main() {
 	srcs := []sources.Source{wis.New()}
 
 	if boards := os.Getenv("GREENHOUSE_BOARDS"); boards != "" {
-		tokens := strings.Split(boards, ",")
-		for i := range tokens {
-			tokens[i] = strings.TrimSpace(tokens[i])
-		}
+		tokens := splitBoards(boards)
 		srcs = append(srcs, greenhouse.New(greenhouse.Config{Boards: tokens}))
 		slog.Info("greenhouse source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if boards := os.Getenv("LEVER_BOARDS"); boards != "" {
+		tokens := splitBoards(boards)
+		srcs = append(srcs, lever.New(lever.Config{Boards: tokens}))
+		slog.Info("lever source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if boards := os.Getenv("ASHBY_BOARDS"); boards != "" {
+		tokens := splitBoards(boards)
+		srcs = append(srcs, ashby.New(ashby.Config{Boards: tokens}))
+		slog.Info("ashby source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if boards := os.Getenv("WORKABLE_BOARDS"); boards != "" {
+		tokens := splitBoards(boards)
+		srcs = append(srcs, workable.New(workable.Config{Boards: tokens}))
+		slog.Info("workable source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if boards := os.Getenv("RECRUITEE_BOARDS"); boards != "" {
+		tokens := splitBoards(boards)
+		srcs = append(srcs, recruitee.New(recruitee.Config{Boards: tokens}))
+		slog.Info("recruitee source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if boards := os.Getenv("PERSONIO_BOARDS"); boards != "" {
+		tokens := splitBoards(boards)
+		srcs = append(srcs, personio.New(personio.Config{Boards: tokens}))
+		slog.Info("personio source registered", slog.Int("boards", len(tokens)))
 	}
 
 	orch := scraper.New(srcs, db, q)
@@ -174,6 +206,14 @@ func main() {
 			slog.Any("err", err),
 		)
 	}
+}
+
+func splitBoards(env string) []string {
+	parts := strings.Split(env, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
 }
 
 func setupNotifications() *notify.NotificationService {
