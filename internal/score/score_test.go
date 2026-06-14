@@ -11,30 +11,30 @@ func TestHeuristicScorer(t *testing.T) {
 	scorer := score.NewHeuristicScorer()
 
 	tests := []struct {
-		name      string
-		card      dto.Job
-		cfg       dto.SearchConfig
+		name        string
+		card        dto.Job
+		cfg         dto.SearchConfig
 		wantAtLeast int
 		wantAtMost  int
 	}{
 		{
-			name: "role exact match scores at least 50",
-			card: dto.Job{Title: "Product Engineer", Location: "London"},
-			cfg:  dto.SearchConfig{Role: "product engineer"},
+			name:        "role exact match scores at least 50",
+			card:        dto.Job{Title: "Product Engineer", Location: "London"},
+			cfg:         dto.SearchConfig{Role: "product engineer"},
 			wantAtLeast: 50,
 			wantAtMost:  100,
 		},
 		{
-			name: "no match scores 0",
-			card: dto.Job{Title: "Data Analyst", Location: "Manchester"},
-			cfg:  dto.SearchConfig{Role: "software engineer", Location: "London"},
+			name:        "no match scores 0",
+			card:        dto.Job{Title: "Data Analyst", Location: "Manchester"},
+			cfg:         dto.SearchConfig{Role: "software engineer", Location: "London"},
 			wantAtLeast: 0,
 			wantAtMost:  0,
 		},
 		{
-			name: "location match adds to score",
-			card: dto.Job{Title: "Unrelated Role", Location: "London"},
-			cfg:  dto.SearchConfig{Location: "london"},
+			name:        "location match adds to score",
+			card:        dto.Job{Title: "Unrelated Role", Location: "London"},
+			cfg:         dto.SearchConfig{Location: "london"},
 			wantAtLeast: 20,
 			wantAtMost:  100,
 		},
@@ -50,16 +50,16 @@ func TestHeuristicScorer(t *testing.T) {
 			wantAtMost:  100,
 		},
 		{
-			name: "partial keyword match adds partial score",
-			card: dto.Job{Title: "Go Developer"},
-			cfg:  dto.SearchConfig{Keywords: []string{"go", "platform"}},
+			name:        "partial keyword match adds partial score",
+			card:        dto.Job{Title: "Go Developer"},
+			cfg:         dto.SearchConfig{Keywords: []string{"go", "platform"}},
 			wantAtLeast: 15,
 			wantAtMost:  15,
 		},
 		{
-			name: "empty config scores 0",
-			card: dto.Job{Title: "Senior Software Engineer", Location: "London"},
-			cfg:  dto.SearchConfig{},
+			name:        "empty config scores 0",
+			card:        dto.Job{Title: "Senior Software Engineer", Location: "London"},
+			cfg:         dto.SearchConfig{},
 			wantAtLeast: 0,
 			wantAtMost:  0,
 		},

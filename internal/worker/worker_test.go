@@ -115,6 +115,54 @@ func TestRun_HandlerErrorContinues(t *testing.T) {
 	}
 }
 
+func TestRun_NackOnHandlerError(t *testing.T) {
+	q := queue.NewMockQueue()
+	enqueueURLs(t, q, []string{"https://example.com/job/1"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	calls := 0
+	handler := func(ctx context.Context, job dto.QueuedJob) error {
+		calls++
+		cancel()
+		return errors.New("handler error")
+	}
+
+	w := instantWorker()
+	_ = w.run(ctx, q, handler)
+
+	if q.Attempts("https://example.com/job/1") != 1 {
+		t.Errorf("want 1 attempt recorded, got %d", q.Attempts("https://example.com/job/1"))
+	}
+}
+
+func TestRun_ClearAttemptsOnSuccess(t *testing.T) {
+	q := queue.NewMockQueue()
+	url := "https://example.com/job/1"
+	enqueueURLs(t, q, []string{url})
+
+	// Seed an existing attempt count so ClearAttempts has something to clear.
+	if err := q.Nack(context.Background(), url); err != nil {
+		t.Fatalf("Nack: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handler := func(ctx context.Context, job dto.QueuedJob) error {
+		cancel()
+		return nil
+	}
+
+	w := instantWorker()
+	_ = w.run(ctx, q, handler)
+
+	if got := q.Attempts(url); got != 0 {
+		t.Errorf("want 0 attempts after success, got %d", got)
+	}
+}
+
 func TestRun_DequeueError(t *testing.T) {
 	q := queue.NewMockQueue()
 	q.DequeueErr = errors.New("valkey unavailable")

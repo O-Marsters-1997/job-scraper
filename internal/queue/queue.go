@@ -14,25 +14,34 @@ import (
 const (
 	sortedSetKey      = "jobs:pending"
 	payloadKey        = "jobs:payload"
+	attemptsKey       = "jobs:attempts"
+	deadLetterKey     = "jobs:deadletter"
 	lastScrapedKeyFmt = "scrape:last:%s"
+	backoffBase       = 30 * time.Second
+	maxAttempts       = 3
 )
 
 // JobQueue is the boundary all callers depend on.
-// Timing decisions (time.Now, UnixMilli conversion) are owned by the implementation.
 type JobQueue interface {
 	// EnqueueJobs stores each job's URL in the sorted set (ZADD NX — already-queued
 	// URLs are silently skipped) and persists the full payload in a hash.
 	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
 
-	// Dequeue atomically removes and returns the next ready job.
-	// Uses ZPOPMIN — guaranteed safe for concurrent workers.
+	// Dequeue atomically removes and returns the next ready job via ZPOPMIN.
 	// Returns (zero, false, nil) when nothing is ready.
 	Dequeue(ctx context.Context) (dto.QueuedJob, bool, error)
 
 	SetLastScraped(ctx context.Context, source string) error
 
-	// Returns (zero, false, nil) when the source has never been scraped.
+	// GetLastScraped returns (zero, false, nil) when the source has never been scraped.
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
+
+	// Nack increments the attempt counter for url. After maxAttempts the URL
+	// moves to the dead-letter set; otherwise it is re-queued with exponential backoff.
+	Nack(ctx context.Context, url string) error
+
+	// ClearAttempts removes the retry counter for url. Call on successful processing.
+	ClearAttempts(ctx context.Context, url string) error
 
 	Close()
 }
@@ -121,6 +130,27 @@ func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, b
 		return time.Time{}, false, fmt.Errorf("get last scraped %s: %w", source, err)
 	}
 	return time.UnixMilli(val), true, nil
+}
+
+func (q *Queue) Nack(ctx context.Context, url string) error {
+	count, err := q.client.Do(ctx, q.client.B().Hincrby().Key(attemptsKey).Field(url).Increment(1).Build()).AsInt64()
+	if err != nil {
+		return fmt.Errorf("nack increment: %w", err)
+	}
+	if int(count) >= maxAttempts {
+		score := float64(time.Now().UnixMilli())
+		if err := q.client.Do(ctx, q.client.B().Zadd().Key(deadLetterKey).ScoreMember().ScoreMember(score, url).Build()).Error(); err != nil {
+			return fmt.Errorf("nack dead letter: %w", err)
+		}
+		return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
+	}
+	backoff := time.Duration(count) * backoffBase
+	score := float64(time.Now().Add(backoff).UnixMilli())
+	return q.client.Do(ctx, q.client.B().Zadd().Key(sortedSetKey).ScoreMember().ScoreMember(score, url).Build()).Error()
+}
+
+func (q *Queue) ClearAttempts(ctx context.Context, url string) error {
+	return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
 }
 
 func (q *Queue) Close() {
