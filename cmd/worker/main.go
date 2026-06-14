@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/ashby"
@@ -104,6 +105,11 @@ func main() {
 	}
 
 	orch := scraper.New(srcs, db, q)
+
+	if scoringUserID := os.Getenv("SCORING_USER_ID"); scoringUserID != "" {
+		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
+		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
+	}
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
 			slog.Any("err", err),
@@ -181,9 +187,9 @@ func main() {
 	defer cr.Stop()
 
 	slog.Info("queue processing worker starting")
-	if err := worker.Run(ctx, q, func(ctx context.Context, url string) error {
-		log := slog.With(slog.String("url", url))
-		job, err := sources.Dispatch(ctx, srcs, url)
+	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
+		log := slog.With(slog.String("url", qj.URL))
+		job, err := sources.Dispatch(ctx, srcs, qj.URL)
 		if err != nil {
 			log.Error("dispatch failed", slog.Any("err", err))
 			return err

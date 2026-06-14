@@ -12,19 +12,35 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 type Orchestrator struct {
-	srcs []sources.Source
-	db   providers.JobProvider
-	q    queue.JobQueue
-	cr   *cron.Cron
-	wg   sync.WaitGroup
+	srcs    []sources.Source
+	db      providers.JobProvider
+	q       queue.JobQueue
+	scorer  score.RelevanceScorer          // nil means no gate
+	cfgDB   providers.SearchConfigProvider // nil means no gate
+	scoreDB providers.JobScoreProvider     // nil means no score writes
+	userID  string
+	cr      *cron.Cron
+	wg      sync.WaitGroup
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
 	return &Orchestrator{srcs: srcs, db: db, q: q}
+}
+
+// WithRelevanceGate wires in a scorer, search config provider, and job score
+// provider so that both ingestion paths filter jobs below cfg.RelevanceCutoff.
+// Scores for ATS jobs are persisted via scoreDB.
+func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB providers.SearchConfigProvider, scoreDB providers.JobScoreProvider, userID string) *Orchestrator {
+	o.scorer = scorer
+	o.cfgDB = cfgDB
+	o.scoreDB = scoreDB
+	o.userID = userID
+	return o
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
@@ -100,40 +116,84 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	log := slog.With(slog.String("source", name))
 	seen := make(map[string]struct{})
 
-	var totalSeen, totalSaved, totalErrors int
+	// Load search config once per run (only when gating is enabled).
+	var searchCfg dto.SearchConfig
+	gating := o.scorer != nil && o.cfgDB != nil
+	if gating {
+		cfg, err := o.cfgDB.GetSearchConfig(ctx, o.userID)
+		if err != nil {
+			log.Warn("could not load search config, skipping relevance gate", slog.Any("err", err))
+			gating = false
+		} else {
+			searchCfg = cfg
+		}
+	}
 
-	err := src.Iterate(ctx, func(ctx context.Context, jobs []dto.Job) (bool, error) {
+	return src.Iterate(ctx, func(ctx context.Context, jobs []dto.Job) (bool, error) {
 		if !src.NeedsDetail() {
-			// ATS path: jobs arrive fully-populated — save directly, no queue.
-			totalSeen += len(jobs)
-			validJobs := make([]dto.Job, 0, len(jobs))
+			// ATS path: jobs arrive fully-populated — apply relevance gate then save.
+			type scored struct {
+				job   dto.Job
+				score int
+			}
+			survivors := make([]scored, 0, len(jobs))
 			for _, j := range jobs {
-				if j.Title == "" || j.URL == "" {
-					slog.Warn("skipping invalid job", slog.String("source", name), slog.String("url", j.URL), slog.String("title", j.Title))
-					totalErrors++
+				if j.URL == "" {
 					continue
 				}
-				validJobs = append(validJobs, j)
+				if gating {
+					s := o.scorer.Score(j, searchCfg)
+					if s < searchCfg.RelevanceCutoff {
+						continue
+					}
+					survivors = append(survivors, scored{job: j, score: s})
+				} else {
+					survivors = append(survivors, scored{job: j})
+				}
 			}
-			if len(validJobs) == 0 {
+			if len(survivors) == 0 {
 				return false, nil
+			}
+
+			validJobs := make([]dto.Job, len(survivors))
+			for i, s := range survivors {
+				validJobs[i] = s.job
 			}
 			if err := o.db.Save(ctx, validJobs); err != nil {
 				return false, err
 			}
-			totalSaved += len(validJobs)
+
+			if gating && o.scoreDB != nil {
+				for _, s := range survivors {
+					if err := o.scoreDB.UpsertJobScoreRelevance(ctx, s.job.ID, o.userID, s.score); err != nil {
+						log.Warn("could not write relevance score",
+							slog.String("job_id", s.job.ID),
+							slog.Any("err", err),
+						)
+					}
+				}
+			}
+
 			log.Info("ats jobs saved", slog.Int("count", len(validJobs)))
 			return false, nil
 		}
 
-		// HTML path (NeedsDetail=true): extract URLs, filter new, enqueue.
-		urls := make([]string, 0, len(jobs))
+		// HTML path (NeedsDetail=true): extract URLs, filter new, enqueue with payload.
+		type partial struct {
+			url string
+			job dto.Job
+		}
+		candidates := make([]partial, 0, len(jobs))
 		for _, j := range jobs {
 			if j.URL != "" {
-				urls = append(urls, j.URL)
+				candidates = append(candidates, partial{url: j.URL, job: j})
 			}
 		}
-		totalSeen += len(urls)
+
+		urls := make([]string, len(candidates))
+		for i, c := range candidates {
+			urls[i] = c.url
+		}
 
 		newURLs, err := o.db.NewURLs(ctx, urls)
 		if err != nil {
@@ -141,33 +201,41 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			newURLs = urls
 		}
 
-		deduped := make([]string, 0, len(newURLs))
+		newSet := make(map[string]struct{}, len(newURLs))
 		for _, u := range newURLs {
-			if _, ok := seen[u]; !ok {
-				seen[u] = struct{}{}
-				deduped = append(deduped, u)
-			}
+			newSet[u] = struct{}{}
 		}
 
-		if len(deduped) == 0 {
+		queued := make([]dto.QueuedJob, 0, len(candidates))
+		for _, c := range candidates {
+			if _, isNew := newSet[c.url]; !isNew {
+				continue
+			}
+			if _, alreadySeen := seen[c.url]; alreadySeen {
+				continue
+			}
+			seen[c.url] = struct{}{}
+
+			qj := dto.QueuedJob{URL: c.url, Card: c.job}
+			if gating {
+				s := o.scorer.Score(c.job, searchCfg)
+				if s < searchCfg.RelevanceCutoff {
+					continue
+				}
+				qj.Relevance = s
+			}
+			queued = append(queued, qj)
+		}
+
+		if len(queued) == 0 {
 			return true, nil
 		}
 
-		if err := o.q.Enqueue(ctx, deduped); err != nil {
+		if err := o.q.EnqueueJobs(ctx, queued); err != nil {
 			return false, err
 		}
-		totalSaved += len(deduped)
 
-		log.Info("enqueued page", slog.Int("count", len(deduped)))
+		log.Info("enqueued page", slog.Int("count", len(queued)))
 		return false, nil
 	})
-
-	slog.Info("source run complete",
-		slog.String("source", name),
-		slog.Int("seen", totalSeen),
-		slog.Int("saved", totalSaved),
-		slog.Int("errors", totalErrors),
-	)
-
-	return err
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
@@ -18,16 +19,27 @@ func instantWorker() worker {
 	}
 }
 
+func enqueueURLs(t *testing.T, q *queue.MockQueue, urls []string) {
+	t.Helper()
+	jobs := make([]dto.QueuedJob, len(urls))
+	for i, u := range urls {
+		jobs[i] = dto.QueuedJob{URL: u}
+	}
+	if err := q.EnqueueJobs(context.Background(), jobs); err != nil {
+		t.Fatalf("EnqueueJobs: %v", err)
+	}
+}
+
 func TestRun_HappyPath(t *testing.T) {
 	q := queue.NewMockQueue()
-	_ = q.Enqueue(context.Background(), []string{"https://example.com/job/1", "https://example.com/job/2"})
+	enqueueURLs(t, q, []string{"https://example.com/job/1", "https://example.com/job/2"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var handled []string
-	handler := func(ctx context.Context, url string) error {
-		handled = append(handled, url)
+	handler := func(ctx context.Context, job dto.QueuedJob) error {
+		handled = append(handled, job.URL)
 		if len(handled) == 2 {
 			cancel() // queue is now empty; cancel so the worker exits cleanly
 		}
@@ -46,7 +58,7 @@ func TestRun_HappyPath(t *testing.T) {
 func TestRun_EmptyQueue(t *testing.T) {
 	q := queue.NewMockQueue()
 	called := 0
-	handler := func(ctx context.Context, url string) error {
+	handler := func(ctx context.Context, job dto.QueuedJob) error {
 		called++
 		return nil
 	}
@@ -64,13 +76,13 @@ func TestRun_EmptyQueue(t *testing.T) {
 
 func TestRun_ContextCancellation(t *testing.T) {
 	q := queue.NewMockQueue()
-	_ = q.Enqueue(context.Background(), []string{"https://example.com/job/1"})
+	enqueueURLs(t, q, []string{"https://example.com/job/1"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancel
 
 	w := instantWorker()
-	err := w.run(ctx, q, func(ctx context.Context, url string) error { return nil })
+	err := w.run(ctx, q, func(ctx context.Context, job dto.QueuedJob) error { return nil })
 	if err != nil {
 		t.Errorf("run returned %v, want nil", err)
 	}
@@ -78,7 +90,7 @@ func TestRun_ContextCancellation(t *testing.T) {
 
 func TestRun_HandlerErrorContinues(t *testing.T) {
 	q := queue.NewMockQueue()
-	_ = q.Enqueue(context.Background(), []string{
+	enqueueURLs(t, q, []string{
 		"https://example.com/job/1",
 		"https://example.com/job/2",
 	})
@@ -87,8 +99,8 @@ func TestRun_HandlerErrorContinues(t *testing.T) {
 	defer cancel()
 
 	var handled []string
-	handler := func(ctx context.Context, url string) error {
-		handled = append(handled, url)
+	handler := func(ctx context.Context, job dto.QueuedJob) error {
+		handled = append(handled, job.URL)
 		if len(handled) == 2 {
 			cancel()
 		}
@@ -111,7 +123,7 @@ func TestRun_DequeueError(t *testing.T) {
 	cancel() // pre-cancel so the errDelay sleep exits immediately
 
 	w := instantWorker()
-	err := w.run(ctx, q, func(ctx context.Context, url string) error { return nil })
+	err := w.run(ctx, q, func(ctx context.Context, job dto.QueuedJob) error { return nil })
 	if err != nil {
 		t.Errorf("run returned %v, want nil", err)
 	}

@@ -6,10 +6,11 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
-type HandlerFunc func(ctx context.Context, url string) error
+type HandlerFunc func(ctx context.Context, job dto.QueuedJob) error
 
 // Run processes one job at a time with a random 10–15s pause between items.
 // When the queue is empty it backs off for 15 minutes. Respects ctx cancellation.
@@ -39,7 +40,7 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 			return nil
 		}
 
-		url, ok, err := q.Dequeue(ctx)
+		job, ok, err := q.Dequeue(ctx)
 		if err != nil {
 			slog.Error("dequeue failed", slog.Any("err", err))
 			if !sleep(ctx, w.errDelay) {
@@ -56,10 +57,10 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 			continue
 		}
 
-		if err := handler(ctx, url); err != nil {
-			slog.Error("handler failed", slog.String("url", url), slog.Any("err", err))
+		if err := handler(ctx, job); err != nil {
+			slog.Error("handler failed", slog.String("url", job.URL), slog.Any("err", err))
 		} else {
-			slog.Info("processed", slog.String("url", url))
+			slog.Info("processed", slog.String("url", job.URL))
 		}
 
 		if !sleep(ctx, w.itemDelay()) {
