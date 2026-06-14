@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -16,14 +17,18 @@ import (
 // bcryptCost is the work factor for hashing passwords. Overridden to bcrypt.MinCost in tests.
 var bcryptCost = bcrypt.DefaultCost
 
-type AuthHandler struct {
-	users    providers.UserProvider
-	sessions providers.SessionProvider
-	statuses providers.ApplicationStatusProvider
+type authStore interface {
+	providers.UserProvider
+	providers.SessionProvider
+	SeedDefaultStatuses(ctx context.Context, userID string) error
 }
 
-func NewAuthHandler(users providers.UserProvider, sessions providers.SessionProvider, statuses providers.ApplicationStatusProvider) *AuthHandler {
-	return &AuthHandler{users: users, sessions: sessions, statuses: statuses}
+type AuthHandler struct {
+	store authStore
+}
+
+func NewAuthHandler(store authStore) *AuthHandler {
+	return &AuthHandler{store: store}
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +41,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.GetUserByUsername(r.Context(), body.Username)
+	user, err := h.store.GetUserByUsername(r.Context(), body.Username)
 	if err != nil {
 		auth.WriteUnauthorized(w)
 		return
@@ -47,7 +52,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.sessions.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
+	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
 		slog.Error("create session failed",
 			slog.Any("err", err),
@@ -64,7 +69,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if ok {
-		if err := h.sessions.DeleteSession(r.Context(), session.ID); err != nil {
+		if err := h.store.DeleteSession(r.Context(), session.ID); err != nil {
 			slog.Error("delete session failed",
 				slog.Any("err", err),
 			)
@@ -106,7 +111,7 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.CreateUser(r.Context(), body.Username, string(hash))
+	user, err := h.store.CreateUser(r.Context(), body.Username, string(hash))
 	if err != nil {
 		if errors.Is(err, providers.ErrUsernameTaken) {
 			w.Header().Set("Content-Type", "application/json")
@@ -121,13 +126,13 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.statuses.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
+	if err := h.store.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
 		slog.Error("seed default statuses failed",
 			slog.Any("err", err),
 		)
 	}
 
-	session, err := h.sessions.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
+	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
 		slog.Error("create session after signup failed",
 			slog.Any("err", err),

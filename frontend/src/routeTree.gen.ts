@@ -16,9 +16,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
+import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
+import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
+import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -54,6 +57,11 @@ const AuthJobsRoute = AuthJobsRouteImport.update({
   path: '/jobs',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthCvTemplatesRoute = AuthCvTemplatesRouteImport.update({
+  id: '/cv-templates',
+  path: '/cv-templates',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   id: '/applications',
   path: '/applications',
@@ -64,33 +72,51 @@ const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
   path: '/statuses',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsIntegrationsRoute =
+  AuthSettingsIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => AuthSettingsRoute,
+  } as any)
 const AuthJobsIdRoute = AuthJobsIdRouteImport.update({
   id: '/jobs_/$id',
   path: '/jobs/$id',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthCvTemplatesDocIdTabIdRoute =
+  AuthCvTemplatesDocIdTabIdRouteImport.update({
+    id: '/cv-templates_/$docId/$tabId',
+    path: '/cv-templates/$docId/$tabId',
+    getParentRoute: () => AuthRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/applications': typeof AuthApplicationsRoute
+  '/cv-templates': typeof AuthCvTemplatesRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
+  '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/applications': typeof AuthApplicationsRoute
+  '/cv-templates': typeof AuthCvTemplatesRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
+  '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -99,11 +125,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
   '/_auth/applications': typeof AuthApplicationsRoute
+  '/_auth/cv-templates': typeof AuthCvTemplatesRoute
   '/_auth/jobs': typeof AuthJobsRoute
   '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
+  '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
+  '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -112,22 +141,28 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/applications'
+    | '/cv-templates'
     | '/jobs'
     | '/overview'
     | '/settings'
     | '/jobs/$id'
+    | '/settings/integrations'
     | '/settings/statuses'
+    | '/cv-templates/$docId/$tabId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/signup'
     | '/applications'
+    | '/cv-templates'
     | '/jobs'
     | '/overview'
     | '/settings'
     | '/jobs/$id'
+    | '/settings/integrations'
     | '/settings/statuses'
+    | '/cv-templates/$docId/$tabId'
   id:
     | '__root__'
     | '/'
@@ -135,11 +170,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/signup'
     | '/_auth/applications'
+    | '/_auth/cv-templates'
     | '/_auth/jobs'
     | '/_auth/overview'
     | '/_auth/settings'
     | '/_auth/jobs_/$id'
+    | '/_auth/settings/integrations'
     | '/_auth/settings/statuses'
+    | '/_auth/cv-templates_/$docId/$tabId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -200,6 +238,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthJobsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/cv-templates': {
+      id: '/_auth/cv-templates'
+      path: '/cv-templates'
+      fullPath: '/cv-templates'
+      preLoaderRoute: typeof AuthCvTemplatesRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/applications': {
       id: '/_auth/applications'
       path: '/applications'
@@ -214,6 +259,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsStatusesRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/integrations': {
+      id: '/_auth/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof AuthSettingsIntegrationsRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/jobs_/$id': {
       id: '/_auth/jobs_/$id'
       path: '/jobs/$id'
@@ -221,14 +273,23 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthJobsIdRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/cv-templates_/$docId/$tabId': {
+      id: '/_auth/cv-templates_/$docId/$tabId'
+      path: '/cv-templates/$docId/$tabId'
+      fullPath: '/cv-templates/$docId/$tabId'
+      preLoaderRoute: typeof AuthCvTemplatesDocIdTabIdRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthSettingsRouteChildren {
+  AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
 }
 
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
+  AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
 }
 
@@ -238,18 +299,22 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 
 interface AuthRouteChildren {
   AuthApplicationsRoute: typeof AuthApplicationsRoute
+  AuthCvTemplatesRoute: typeof AuthCvTemplatesRoute
   AuthJobsRoute: typeof AuthJobsRoute
   AuthOverviewRoute: typeof AuthOverviewRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
   AuthJobsIdRoute: typeof AuthJobsIdRoute
+  AuthCvTemplatesDocIdTabIdRoute: typeof AuthCvTemplatesDocIdTabIdRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthApplicationsRoute: AuthApplicationsRoute,
+  AuthCvTemplatesRoute: AuthCvTemplatesRoute,
   AuthJobsRoute: AuthJobsRoute,
   AuthOverviewRoute: AuthOverviewRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
   AuthJobsIdRoute: AuthJobsIdRoute,
+  AuthCvTemplatesDocIdTabIdRoute: AuthCvTemplatesDocIdTabIdRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)

@@ -20,6 +20,7 @@ export type LabelProps = ComponentProps<"label"> &
 export function Label(props: LabelProps) {
 	const [local, others] = splitProps(props, ["class", "variant"]);
 	return (
+		// biome-ignore lint/a11y/noLabelWithoutControl: for/htmlFor passed via spread props
 		<label
 			class={cn(labelVariants({ variant: local.variant }), local.class)}
 			{...others}

@@ -1,4 +1,4 @@
-import { type JSX } from "solid-js";
+import type { JSX } from "solid-js";
 import { Label } from "@/components/ui/label";
 import {
 	Sheet,

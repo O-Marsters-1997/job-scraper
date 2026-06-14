@@ -19,7 +19,7 @@ export default defineConfig({
 				["list"],
 			],
 	use: {
-		baseURL: "http://localhost:3000",
+		baseURL: "http://localhost:4444",
 		trace: "on-first-retry",
 		screenshot: "only-on-failure",
 	},
@@ -38,8 +38,8 @@ export default defineConfig({
 		},
 	],
 	webServer: {
-		command: "bun run dev",
-		url: "http://localhost:3000",
+		command: "bun run dev:test",
+		url: "http://localhost:4444",
 		env: { VITE_MOCK: "true" },
 		reuseExistingServer: !isCI,
 		timeout: 120_000,

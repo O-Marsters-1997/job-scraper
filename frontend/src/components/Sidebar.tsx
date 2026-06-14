@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useJobs } from "../hooks/useJobs";
+import { useGoogleStatus } from "../hooks/useGoogle";
 
 export default function Sidebar() {
 	const [expanded, setExpanded] = createSignal(true);
@@ -12,10 +13,14 @@ export default function Sidebar() {
 	const isJobsActive = () => location().pathname === "/jobs";
 	const isApplicationsActive = () => location()?.pathname === "/applications";
 	const isStatusesActive = () => location().pathname === "/settings/statuses";
+	const isIntegrationsActive = () =>
+		location().pathname === "/settings/integrations";
+	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 	const navigate = useNavigate();
 
 	const jobsQuery = useJobs();
 	const appsQuery = useApplications();
+	const googleStatus = useGoogleStatus();
 
 	const handleLogout = async () => {
 		await logout();
@@ -43,7 +48,6 @@ export default function Sidebar() {
 			class="flex h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-300"
 			style={{ width: expanded() ? "var(--sidebar-w, 13.75rem)" : "3.5rem" }}
 		>
-			{/* Brand */}
 			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
 				<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-active text-sidebar-active-foreground">
 					<svg
@@ -68,7 +72,6 @@ export default function Sidebar() {
 				</Show>
 			</div>
 
-			{/* Nav */}
 			<nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
 				<Show when={expanded()}>
 					<span class="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
@@ -76,7 +79,6 @@ export default function Sidebar() {
 					</span>
 				</Show>
 
-				{/* Overview */}
 				<Link
 					to="/overview"
 					title="Overview"
@@ -104,7 +106,6 @@ export default function Sidebar() {
 					</Show>
 				</Link>
 
-				{/* Jobs */}
 				<Link to="/jobs" title="Jobs" class={navLink(isJobsActive())}>
 					<svg
 						aria-hidden="true"
@@ -131,7 +132,6 @@ export default function Sidebar() {
 					</Show>
 				</Link>
 
-				{/* Applications */}
 				<Link
 					to="/applications"
 					search={{ status: undefined }}
@@ -166,6 +166,36 @@ export default function Sidebar() {
 					</Show>
 				</Link>
 
+				{/* CVs — only shown when Google is connected */}
+				<Show when={googleStatus.data?.connected}>
+					<Link
+						to="/cv-templates"
+						title="CVs"
+						class={navLink(isCVTemplatesActive())}
+					>
+						<svg
+							aria-hidden="true"
+							class="shrink-0"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+							<polyline points="14 2 14 8 20 8" />
+							<line x1="16" y1="13" x2="8" y2="13" />
+							<line x1="16" y1="17" x2="8" y2="17" />
+						</svg>
+						<Show when={expanded()}>
+							<span class="whitespace-nowrap">CVs</span>
+						</Show>
+					</Link>
+				</Show>
+
 				<Show when={expanded()}>
 					<span class="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
 						Settings
@@ -196,9 +226,33 @@ export default function Sidebar() {
 						<span class="whitespace-nowrap">Statuses</span>
 					</Show>
 				</Link>
+
+				<Link
+					to="/settings/integrations"
+					title="Integrations"
+					class={navLink(isIntegrationsActive())}
+				>
+					<svg
+						aria-hidden="true"
+						class="shrink-0"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+						<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+					</svg>
+					<Show when={expanded()}>
+						<span class="whitespace-nowrap">Integrations</span>
+					</Show>
+				</Link>
 			</nav>
 
-			{/* Bottom actions */}
 			<div class="flex shrink-0 flex-col gap-0.5 border-t border-sidebar-border px-2 py-2">
 				<button
 					type="button"

@@ -1,5 +1,6 @@
 import {
 	Control as SwitchControlPrimitive,
+	Label as SwitchLabelPrimitive,
 	Root as SwitchRoot,
 	Thumb as SwitchThumbPrimitive,
 } from "@kobalte/core/switch";
@@ -8,6 +9,21 @@ import { splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 export { SwitchRoot as Switch };
+
+export type SwitchLabelProps<T extends ValidComponent = "label"> =
+	ComponentProps<typeof SwitchLabelPrimitive<T>>;
+
+export const SwitchLabel = <T extends ValidComponent = "label">(
+	props: SwitchLabelProps<T>,
+) => {
+	const [local, rest] = splitProps(props as SwitchLabelProps, ["class"]);
+	return (
+		<SwitchLabelPrimitive
+			class={cn("cursor-pointer select-none text-sm text-muted", local.class)}
+			{...rest}
+		/>
+	);
+};
 
 export type SwitchControlProps<T extends ValidComponent = "div"> =
 	ComponentProps<typeof SwitchControlPrimitive<T>>;

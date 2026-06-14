@@ -36,11 +36,15 @@ A Google Doc a user has registered to pull CVs from. Persisted as a reference (`
 _Avoid_: Document, file, source doc (the latter is only a UI column label)
 
 **CV**:
-A single **Tab** within a Tracked Doc, treated as one CV variant. Enumerated live from the Docs API, never persisted.
+A single **Tab** within a Tracked Doc, treated as one CV variant. Enumerated live from the Docs API; a per-tab **visibility** flag is persisted in `tracked_doc_tabs` so hidden tabs stay hidden across reloads.
 _Avoid_: Resume, template, document. (The sidebar section is labelled "CV Templates", but a single item is a CV.)
 
 **Tab**:
 A native Google Docs tab. One Tracked Doc has one or more Tabs; each Tab is exactly one CV.
+
+**Hidden Tab**:
+A Tab whose persisted `visible` flag is `false`. It remains in the Google Doc and in `tracked_doc_tabs` but is filtered from the CV list. The visibility row is created automatically on the first `List` call for that doc (reconcile-on-list). Removing a hidden tab row from the DB is only needed when the whole Tracked Doc is removed (handled by FK cascade).
+_Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 
 ## Relationships
 

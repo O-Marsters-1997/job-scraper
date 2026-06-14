@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
+    "dev:test": "vite dev --port 4444",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -25,6 +26,7 @@
     "@tanstack/solid-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "pdfjs-dist": "^6.0.227",
     "solid-js": "^1.9.11",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.1.18",
