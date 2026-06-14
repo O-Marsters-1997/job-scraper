@@ -21,7 +21,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/ashby"
 	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
+	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/sources/lever"
+	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/personio"
 	"github.com/ollymarsters/job-scraper/internal/sources/recruitee"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
@@ -102,6 +104,16 @@ func main() {
 		tokens := splitBoards(boards)
 		srcs = append(srcs, personio.New(personio.Config{Boards: tokens}))
 		slog.Info("personio source registered", slog.Int("boards", len(tokens)))
+	}
+
+	if os.Getenv("LINKEDIN_ENABLED") == "true" {
+		srcs = append(srcs, linkedin.New())
+		slog.Info("linkedin source registered")
+	}
+
+	if os.Getenv("INDEED_ENABLED") == "true" {
+		srcs = append(srcs, indeed.New())
+		slog.Info("indeed source registered")
 	}
 
 	orch := scraper.New(srcs, db, q)

@@ -32,19 +32,63 @@ func TestDetect(t *testing.T) {
 }
 
 func TestRewriteToATS(t *testing.T) {
-	inputs := []string{
-		"https://www.linkedin.com/jobs/view/1234567890",
-		"https://indeed.com/viewjob?jk=abc123",
-		"https://boards.greenhouse.io/acme/jobs/123",
-		"",
+	tests := []struct {
+		name     string
+		input    string
+		wantURL  string
+		wantType ATSType
+		wantOK   bool
+	}{
+		{
+			name:     "linkedin with greenhouse externalUrl",
+			input:    "https://www.linkedin.com/jobs/view/123?externalUrl=https%3A%2F%2Fboards.greenhouse.io%2Facme%2Fjobs%2F456",
+			wantURL:  "https://boards.greenhouse.io/acme/jobs/456",
+			wantType: Greenhouse,
+			wantOK:   true,
+		},
+		{
+			name:     "linkedin without externalUrl",
+			input:    "https://www.linkedin.com/jobs/view/1234567890",
+			wantURL:  "",
+			wantType: UnknownHTML,
+			wantOK:   false,
+		},
+		{
+			name:     "indeed with lever url param",
+			input:    "https://indeed.com/viewjob?url=https%3A%2F%2Fjobs.lever.co%2Facme%2Fabc-123",
+			wantURL:  "https://jobs.lever.co/acme/abc-123",
+			wantType: Lever,
+			wantOK:   true,
+		},
+		{
+			name:     "indeed without url param",
+			input:    "https://indeed.com/viewjob?jk=abc123",
+			wantURL:  "",
+			wantType: UnknownHTML,
+			wantOK:   false,
+		},
+		{
+			name:     "non-aggregator URL",
+			input:    "https://boards.greenhouse.io/acme/jobs/123",
+			wantURL:  "",
+			wantType: UnknownHTML,
+			wantOK:   false,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			wantURL:  "",
+			wantType: UnknownHTML,
+			wantOK:   false,
+		},
 	}
 
-	for _, input := range inputs {
-		t.Run(input, func(t *testing.T) {
-			gotURL, gotType, gotOK := RewriteToATS(input)
-			if gotURL != "" || gotType != UnknownHTML || gotOK != false {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotURL, gotType, gotOK := RewriteToATS(tt.input)
+			if gotURL != tt.wantURL || gotType != tt.wantType || gotOK != tt.wantOK {
 				t.Errorf("RewriteToATS(%q) = (%q, %v, %v), want (%q, %v, %v)",
-					input, gotURL, gotType, gotOK, "", UnknownHTML, false)
+					tt.input, gotURL, gotType, gotOK, tt.wantURL, tt.wantType, tt.wantOK)
 			}
 		})
 	}
