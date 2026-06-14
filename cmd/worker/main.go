@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -186,7 +187,14 @@ func main() {
 	cr.Start()
 	defer cr.Stop()
 
-	slog.Info("queue processing worker starting")
+	maxAttempts := 3
+	if v := os.Getenv("MAX_JOB_ATTEMPTS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxAttempts = n
+		}
+	}
+
+	slog.Info("queue processing worker starting", slog.Int("max_attempts", maxAttempts))
 	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
 		log := slog.With(slog.String("url", qj.URL))
 		job, err := sources.Dispatch(ctx, srcs, qj.URL)
@@ -207,7 +215,7 @@ func main() {
 			notifSvc.NotifyNewJob(ctx, job)
 		}
 		return nil
-	}); err != nil {
+	}, maxAttempts); err != nil {
 		slog.Error("worker failed",
 			slog.Any("err", err),
 		)

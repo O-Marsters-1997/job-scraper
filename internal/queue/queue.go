@@ -14,7 +14,10 @@ import (
 const (
 	sortedSetKey      = "jobs:pending"
 	payloadKey        = "jobs:payload"
+	attemptsKey       = "jobs:attempts"
+	deadLetterKey     = "jobs:deadletter"
 	lastScrapedKeyFmt = "scrape:last:%s"
+	backoffBase       = 30 * time.Second
 )
 
 // JobQueue is the boundary all callers depend on.
@@ -33,6 +36,12 @@ type JobQueue interface {
 
 	// Returns (zero, false, nil) when the source has never been scraped.
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
+
+	// Nack increments the attempt counter for url. If the counter reaches
+	// maxAttempts the URL is moved to the dead-letter sorted set and its
+	// attempt counter is cleared; otherwise it is re-queued with a backoff
+	// delay proportional to the attempt count.
+	Nack(ctx context.Context, url string, maxAttempts int) error
 
 	Close()
 }
@@ -121,6 +130,30 @@ func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, b
 		return time.Time{}, false, fmt.Errorf("get last scraped %s: %w", source, err)
 	}
 	return time.UnixMilli(val), true, nil
+}
+
+func (q *Queue) Nack(ctx context.Context, url string, maxAttempts int) error {
+	count, err := q.client.Do(ctx, q.client.B().Hincrby().Key(attemptsKey).Field(url).Increment(1).Build()).AsInt64()
+	if err != nil {
+		return fmt.Errorf("nack increment: %w", err)
+	}
+	if int(count) >= maxAttempts {
+		score := float64(time.Now().UnixMilli())
+		if err := q.client.Do(ctx, q.client.B().Zadd().Key(deadLetterKey).ScoreMember().ScoreMember(score, url).Build()).Error(); err != nil {
+			return fmt.Errorf("nack dead letter: %w", err)
+		}
+		return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
+	}
+	backoff := time.Duration(count) * backoffBase
+	score := float64(time.Now().Add(backoff).UnixMilli())
+	return q.client.Do(ctx, q.client.B().Zadd().Key(sortedSetKey).ScoreMember().ScoreMember(score, url).Build()).Error()
+}
+
+// ClearAttempts removes the attempt counter for url. Called on successful processing.
+// Not on the JobQueue interface — callers that hold a *Queue can call it directly,
+// and worker does a type-assert to reach it.
+func (q *Queue) ClearAttempts(ctx context.Context, url string) error {
+	return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
 }
 
 func (q *Queue) Close() {
