@@ -60,7 +60,7 @@ func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Jo
 }
 
 type workzagJobs struct {
-	XMLName xml.Name    `xml:"workzag-jobs"`
+	XMLName xml.Name      `xml:"workzag-jobs"`
 	Jobs    []personioJob `xml:"job"`
 }
 

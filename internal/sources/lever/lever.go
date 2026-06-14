@@ -60,12 +60,12 @@ func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Jo
 }
 
 type posting struct {
-	ID               string           `json:"id"`
-	Text             string           `json:"text"`
+	ID               string            `json:"id"`
+	Text             string            `json:"text"`
 	Categories       postingCategories `json:"categories"`
-	HostedURL        string           `json:"hostedUrl"`
-	DescriptionPlain string           `json:"descriptionPlain"`
-	CreatedAt        int64            `json:"createdAt"`
+	HostedURL        string            `json:"hostedUrl"`
+	DescriptionPlain string            `json:"descriptionPlain"`
+	CreatedAt        int64             `json:"createdAt"`
 }
 
 type postingCategories struct {

@@ -10,6 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -191,16 +192,24 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			return false, nil
 		}
 
-		// HTML path (NeedsDetail=true): extract URLs, filter new, enqueue with payload.
+		// HTML path (NeedsDetail=true): extract URLs, rewrite aggregator links,
+		// filter new, enqueue with payload.
 		type partial struct {
 			url string
 			job dto.Job
 		}
 		candidates := make([]partial, 0, len(jobs))
 		for _, j := range jobs {
-			if j.URL != "" {
-				candidates = append(candidates, partial{url: j.URL, job: j})
+			u := j.URL
+			if u == "" {
+				continue
 			}
+			if detect.Detect(u) == detect.Aggregator {
+				if rewritten, _, ok := detect.RewriteToATS(u); ok {
+					u = rewritten
+				}
+			}
+			candidates = append(candidates, partial{url: u, job: j})
 		}
 
 		urls := make([]string, len(candidates))

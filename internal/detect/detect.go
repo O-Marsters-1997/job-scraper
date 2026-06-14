@@ -1,7 +1,7 @@
 package detect
 
 import (
-	"net/url"
+	neturl "net/url"
 	"strings"
 )
 
@@ -19,7 +19,7 @@ const (
 )
 
 func Detect(rawURL string) ATSType {
-	u, err := url.Parse(rawURL)
+	u, err := neturl.Parse(rawURL)
 	if err != nil {
 		return UnknownHTML
 	}
@@ -44,7 +44,34 @@ func Detect(rawURL string) ATSType {
 	}
 }
 
-// Stub for Phase 7 — always returns false.
+// RewriteToATS attempts to extract the underlying ATS URL from an aggregator URL.
+// Returns the ATS URL, its type, and true on success; ("", UnknownHTML, false) otherwise.
 func RewriteToATS(rawURL string) (string, ATSType, bool) {
+	u, err := neturl.Parse(rawURL)
+	if err != nil {
+		return "", UnknownHTML, false
+	}
+	host := strings.ToLower(u.Host)
+
+	if strings.Contains(host, "linkedin.com") {
+		if ext := u.Query().Get("externalUrl"); ext != "" {
+			t := Detect(ext)
+			if t != Aggregator && t != UnknownHTML {
+				return ext, t, true
+			}
+		}
+	}
+
+	if strings.Contains(host, "indeed.com") {
+		if dest := u.Query().Get("url"); dest != "" {
+			if unescaped, err := neturl.QueryUnescape(dest); err == nil {
+				t := Detect(unescaped)
+				if t != Aggregator && t != UnknownHTML {
+					return unescaped, t, true
+				}
+			}
+		}
+	}
+
 	return "", UnknownHTML, false
 }
