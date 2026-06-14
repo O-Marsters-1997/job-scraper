@@ -36,7 +36,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJobByURL = `-- name: GetJobByURL :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at FROM jobs WHERE url = $1 LIMIT 1
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw FROM jobs WHERE url = $1 LIMIT 1
 `
 
 func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
@@ -51,12 +51,14 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 		&i.Source,
 		&i.UpdatedAt,
 		&i.ScrapedAt,
+		&i.Description,
+		&i.SalaryRaw,
 	)
 	return i, err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at FROM jobs ORDER BY scraped_at DESC
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw FROM jobs ORDER BY scraped_at DESC
 `
 
 func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
@@ -77,6 +79,8 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 			&i.Source,
 			&i.UpdatedAt,
 			&i.ScrapedAt,
+			&i.Description,
+			&i.SalaryRaw,
 		); err != nil {
 			return nil, err
 		}
@@ -89,7 +93,7 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 }
 
 const listJobsSince = `-- name: ListJobsSince :many
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
 `
 
 func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestamptz) ([]Job, error) {
@@ -110,6 +114,8 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 			&i.Source,
 			&i.UpdatedAt,
 			&i.ScrapedAt,
+			&i.Description,
+			&i.SalaryRaw,
 		); err != nil {
 			return nil, err
 		}
@@ -122,14 +128,16 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 }
 
 const upsertJob = `-- name: UpsertJob :one
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW())
+INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw)
+VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
 ON CONFLICT (url) DO UPDATE SET
-    title      = EXCLUDED.title,
-    location   = EXCLUDED.location,
-    updated_at = EXCLUDED.updated_at,
-    scraped_at = NOW()
-RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at
+    title       = EXCLUDED.title,
+    location    = EXCLUDED.location,
+    updated_at  = EXCLUDED.updated_at,
+    scraped_at  = NOW(),
+    description = EXCLUDED.description,
+    salary_raw  = EXCLUDED.salary_raw
+RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw
 `
 
 type UpsertJobParams struct {
@@ -139,6 +147,8 @@ type UpsertJobParams struct {
 	CompanySlug string
 	Source      string
 	UpdatedAt   pgtype.Timestamptz
+	Description string
+	SalaryRaw   string
 }
 
 func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, error) {
@@ -149,6 +159,8 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, erro
 		arg.CompanySlug,
 		arg.Source,
 		arg.UpdatedAt,
+		arg.Description,
+		arg.SalaryRaw,
 	)
 	var i Job
 	err := row.Scan(
@@ -160,6 +172,8 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, erro
 		&i.Source,
 		&i.UpdatedAt,
 		&i.ScrapedAt,
+		&i.Description,
+		&i.SalaryRaw,
 	)
 	return i, err
 }

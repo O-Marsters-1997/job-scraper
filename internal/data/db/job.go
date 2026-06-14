@@ -21,6 +21,8 @@ func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
 		CompanySlug: j.CompanySlug,
 		Source:      j.Source,
 		UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+		Description: j.Description,
+		SalaryRaw:   j.SalaryRaw,
 	}
 }
 
@@ -34,6 +36,8 @@ func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
 			CompanySlug: j.CompanySlug,
 			Source:      j.Source,
 			UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+			Description: j.Description,
+			SalaryRaw:   j.SalaryRaw,
 		}
 	}
 	return params
@@ -49,6 +53,8 @@ func fromRow(row pgsqlc.Job) dto.Job {
 		Source:      row.Source,
 		UpdatedAt:   row.UpdatedAt.Time,
 		ScrapedAt:   row.ScrapedAt.Time,
+		Description: row.Description,
+		SalaryRaw:   row.SalaryRaw,
 	}
 }
 

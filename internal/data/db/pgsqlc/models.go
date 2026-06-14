@@ -37,6 +37,8 @@ type Job struct {
 	Source      string
 	UpdatedAt   pgtype.Timestamptz
 	ScrapedAt   pgtype.Timestamptz
+	Description string
+	SalaryRaw   string
 }
 
 type NotificationDigest struct {

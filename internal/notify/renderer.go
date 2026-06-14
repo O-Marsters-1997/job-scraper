@@ -60,10 +60,11 @@ func (r *Renderer) RenderIndividual(job dto.Job) (string, error) {
 
 func toJobData(j dto.Job) JobData {
 	return JobData{
-		Title:    j.Title,
-		Company:  j.CompanySlug,
-		Location: j.Location,
-		URL:      j.URL,
+		Title:        j.Title,
+		Company:      j.CompanySlug,
+		Location:     j.Location,
+		URL:          j.URL,
+		Remuneration: j.SalaryRaw,
 	}
 }
 

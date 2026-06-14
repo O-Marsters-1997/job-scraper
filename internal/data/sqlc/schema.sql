@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     company_slug TEXT         NOT NULL,
     source       TEXT         NOT NULL,
     updated_at   TIMESTAMPTZ  NOT NULL,
-    scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    description  TEXT         NOT NULL DEFAULT '',
+    salary_raw   TEXT         NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS users (
