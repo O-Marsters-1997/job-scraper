@@ -1,21 +1,25 @@
 -- name: UpsertJob :one
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW())
+INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw)
+VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
 ON CONFLICT (url) DO UPDATE SET
-    title      = EXCLUDED.title,
-    location   = EXCLUDED.location,
-    updated_at = EXCLUDED.updated_at,
-    scraped_at = NOW()
+    title       = EXCLUDED.title,
+    location    = EXCLUDED.location,
+    updated_at  = EXCLUDED.updated_at,
+    scraped_at  = NOW(),
+    description = EXCLUDED.description,
+    salary_raw  = EXCLUDED.salary_raw
 RETURNING *;
 
 -- name: UpsertJobs :batchexec
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at)
-VALUES ($1, $2, $3, $4, $5, $6, NOW())
+INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw)
+VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
 ON CONFLICT (url) DO UPDATE SET
-    title      = EXCLUDED.title,
-    location   = EXCLUDED.location,
-    updated_at = EXCLUDED.updated_at,
-    scraped_at = NOW();
+    title       = EXCLUDED.title,
+    location    = EXCLUDED.location,
+    updated_at  = EXCLUDED.updated_at,
+    scraped_at  = NOW(),
+    description = EXCLUDED.description,
+    salary_raw  = EXCLUDED.salary_raw;
 
 -- name: GetJobByURL :one
 SELECT * FROM jobs WHERE url = $1 LIMIT 1;
