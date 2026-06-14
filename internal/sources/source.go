@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/proxy"
 )
 
 const (
@@ -36,6 +37,10 @@ type Config struct {
 
 	// URLPrefix is used by PaginatedBase.CanHandle to claim URLs by prefix.
 	URLPrefix string
+
+	// ProxyTier controls the proxy used for outbound requests.
+	// Zero value is proxy.Direct (no proxy).
+	ProxyTier proxy.Tier
 }
 
 type Source interface {
@@ -71,9 +76,13 @@ func NewBase(cfg Config) PaginatedBase {
 	if cfg.MinScrapeInterval == 0 {
 		cfg.MinScrapeInterval = DefaultMinScrapeInterval
 	}
+	transport, err := proxy.Transport(cfg.ProxyTier)
+	if err != nil || transport == nil {
+		transport = http.DefaultTransport
+	}
 	return PaginatedBase{
 		cfg:    cfg,
-		client: &http.Client{Timeout: DefaultTimeout},
+		client: &http.Client{Timeout: DefaultTimeout, Transport: transport},
 	}
 }
 

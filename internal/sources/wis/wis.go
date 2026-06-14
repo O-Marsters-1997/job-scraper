@@ -13,6 +13,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/proxy"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
@@ -39,6 +40,7 @@ func New() *Scraper {
 		URLPrefix:         "https://workinstartups.com",
 		Schedule:          "0 */6 * * *",
 		MinScrapeInterval: 5 * time.Hour,
+		ProxyTier:         proxy.Datacenter,
 	})}
 }
 
