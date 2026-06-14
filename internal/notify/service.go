@@ -12,6 +12,7 @@ type Config struct {
 	To              string
 	OnIngestEnabled bool
 	DigestEnabled   bool
+	NotifyThreshold int // 0 = no gate; > 0 requires suitability_score >= threshold
 }
 
 type NotificationService struct {
@@ -32,8 +33,16 @@ func NewNotificationService(
 	}
 }
 
-func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job) {
+func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job, suitabilityScore int) {
 	if !s.cfg.OnIngestEnabled {
+		return
+	}
+	if s.cfg.NotifyThreshold > 0 && suitabilityScore < s.cfg.NotifyThreshold {
+		slog.Debug("notify: skipping job below threshold",
+			slog.String("title", job.Title),
+			slog.Int("score", suitabilityScore),
+			slog.Int("threshold", s.cfg.NotifyThreshold),
+		)
 		return
 	}
 	log := slog.With(slog.String("title", job.Title))
@@ -45,6 +54,11 @@ func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job) {
 	if err := s.notifier.Send(ctx, s.cfg.To, "New job: "+job.Title, html); err != nil {
 		log.Error("send individual failed", slog.Any("err", err))
 	}
+}
+
+// Threshold returns the configured notification threshold (0 = no gate).
+func (s *NotificationService) Threshold() int {
+	return s.cfg.NotifyThreshold
 }
 
 func (s *NotificationService) SendDigest(ctx context.Context, jobs []dto.Job) error {
