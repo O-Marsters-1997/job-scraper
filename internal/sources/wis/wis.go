@@ -121,10 +121,28 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 	}
 	var jobs []dto.Job
 	doc.Find(selJobCard).Each(func(_ int, card *goquery.Selection) {
-		href, ok := card.Find(selJobLink).Attr("href")
-		if ok && href != "" {
-			jobs = append(jobs, dto.Job{URL: href})
+		linkEl := card.Find(selJobLink)
+		href, ok := linkEl.Attr("href")
+		if !ok || href == "" {
+			return
 		}
+
+		title := strings.TrimSpace(linkEl.Text())
+
+		companyNode := card.Find(selCompany).First()
+		company := companyNode.AttrOr("data-company-name", "")
+		if company == "" {
+			company = strings.TrimSpace(companyNode.Text())
+		}
+
+		location := strings.TrimSpace(card.Find(selLocation).First().Text())
+
+		jobs = append(jobs, dto.Job{
+			Title:       title,
+			Location:    location,
+			URL:         href,
+			CompanySlug: slugify(company),
+		})
 	})
 	return jobs, nil
 }
