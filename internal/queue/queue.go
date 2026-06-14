@@ -2,28 +2,32 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 const (
 	sortedSetKey      = "jobs:pending"
+	payloadKey        = "jobs:payload"
 	lastScrapedKeyFmt = "scrape:last:%s"
 )
 
 // JobQueue is the boundary all callers depend on.
 // Timing decisions (time.Now, UnixMilli conversion) are owned by the implementation.
 type JobQueue interface {
-	// ZADD NX semantics: already-queued URLs are silently skipped.
-	// All urls are enqueued in a single command.
-	Enqueue(ctx context.Context, urls []string) error
+	// EnqueueJobs stores each job's URL in the sorted set (ZADD NX — already-queued
+	// URLs are silently skipped) and persists the full payload in a hash.
+	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
 
-	// Dequeue atomically removes and returns the next ready URL.
+	// Dequeue atomically removes and returns the next ready job.
 	// Uses ZPOPMIN — guaranteed safe for concurrent workers.
-	// Returns ("", false, nil) when nothing is ready.
-	Dequeue(ctx context.Context) (string, bool, error)
+	// Returns (zero, false, nil) when nothing is ready.
+	Dequeue(ctx context.Context) (dto.QueuedJob, bool, error)
 
 	SetLastScraped(ctx context.Context, source string) error
 
@@ -55,31 +59,48 @@ func New(addr string) (*Queue, error) {
 	return &Queue{client: client}, nil
 }
 
-func (q *Queue) Enqueue(ctx context.Context, urls []string) error {
-	if len(urls) == 0 {
+func (q *Queue) EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error {
+	if len(jobs) == 0 {
 		return nil
 	}
 
 	score := float64(time.Now().UnixMilli())
 	sm := q.client.B().Zadd().Key(sortedSetKey).Nx().ScoreMember()
-	for _, url := range urls {
-		sm = sm.ScoreMember(score, url)
+	for _, job := range jobs {
+		sm = sm.ScoreMember(score, job.URL)
+	}
+	if err := q.client.Do(ctx, sm.Build()).Error(); err != nil {
+		return err
 	}
 
-	return q.client.Do(ctx, sm.Build()).Error()
+	for _, job := range jobs {
+		data, _ := json.Marshal(job)
+		_ = q.client.Do(ctx, q.client.B().Hset().Key(payloadKey).FieldValue().FieldValue(job.URL, string(data)).Build()).Error()
+	}
+	return nil
 }
 
-func (q *Queue) Dequeue(ctx context.Context) (string, bool, error) {
-	cmd := q.client.B().Zpopmin().Key(sortedSetKey).Count(1).Build()
-	scores, err := q.client.Do(ctx, cmd).AsZScores()
+func (q *Queue) Dequeue(ctx context.Context) (dto.QueuedJob, bool, error) {
+	scores, err := q.client.Do(ctx, q.client.B().Zpopmin().Key(sortedSetKey).Count(1).Build()).AsZScores()
 	if err != nil {
-		return "", false, fmt.Errorf("zpopmin: %w", err)
+		return dto.QueuedJob{}, false, fmt.Errorf("zpopmin: %w", err)
 	}
 	if len(scores) == 0 {
-		return "", false, nil
+		return dto.QueuedJob{}, false, nil
 	}
 
-	return scores[0].Member, true, nil
+	url := scores[0].Member
+	data, err := q.client.Do(ctx, q.client.B().Hget().Key(payloadKey).Field(url).Build()).AsBytes()
+	_ = q.client.Do(ctx, q.client.B().Hdel().Key(payloadKey).Field(url).Build()).Error()
+	if err != nil {
+		return dto.QueuedJob{URL: url}, true, nil
+	}
+
+	var job dto.QueuedJob
+	if err := json.Unmarshal(data, &job); err != nil {
+		return dto.QueuedJob{URL: url}, true, nil
+	}
+	return job, true, nil
 }
 
 func (q *Queue) SetLastScraped(ctx context.Context, source string) error {

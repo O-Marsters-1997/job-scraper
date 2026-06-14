@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
 )
 
@@ -55,17 +56,25 @@ func newTestQueue(t *testing.T) *Queue {
 	return q
 }
 
-func TestEnqueue(t *testing.T) {
+func jobsFromURLs(urls []string) []dto.QueuedJob {
+	jobs := make([]dto.QueuedJob, len(urls))
+	for i, u := range urls {
+		jobs[i] = dto.QueuedJob{URL: u}
+	}
+	return jobs
+}
+
+func TestEnqueueJobs(t *testing.T) {
 	t.Run("deduplicates repeated URLs", func(t *testing.T) {
 		ctx := context.Background()
 		q := newTestQueue(t)
 
 		url := "https://example.com/job/1"
-		if err := q.Enqueue(ctx, []string{url}); err != nil {
-			t.Fatalf("first Enqueue: %v", err)
+		if err := q.EnqueueJobs(ctx, jobsFromURLs([]string{url})); err != nil {
+			t.Fatalf("first EnqueueJobs: %v", err)
 		}
-		if err := q.Enqueue(ctx, []string{url}); err != nil {
-			t.Fatalf("second Enqueue: %v", err)
+		if err := q.EnqueueJobs(ctx, jobsFromURLs([]string{url})); err != nil {
+			t.Fatalf("second EnqueueJobs: %v", err)
 		}
 
 		got, err := q.client.Do(ctx, q.client.B().Zcard().Key(sortedSetKey).Build()).AsInt64()
@@ -86,8 +95,8 @@ func TestEnqueue(t *testing.T) {
 			urls[i] = fmt.Sprintf("https://example.com/job/%d", i)
 		}
 
-		if err := q.Enqueue(ctx, urls); err != nil {
-			t.Fatalf("Enqueue: %v", err)
+		if err := q.EnqueueJobs(ctx, jobsFromURLs(urls)); err != nil {
+			t.Fatalf("EnqueueJobs: %v", err)
 		}
 
 		got, err := q.client.Do(ctx, q.client.B().Zcard().Key(sortedSetKey).Build()).AsInt64()
@@ -103,11 +112,35 @@ func TestEnqueue(t *testing.T) {
 		ctx := context.Background()
 		q := newTestQueue(t)
 
-		if err := q.Enqueue(ctx, nil); err != nil {
-			t.Errorf("Enqueue(nil): %v", err)
+		if err := q.EnqueueJobs(ctx, nil); err != nil {
+			t.Errorf("EnqueueJobs(nil): %v", err)
 		}
-		if err := q.Enqueue(ctx, []string{}); err != nil {
-			t.Errorf("Enqueue([]): %v", err)
+		if err := q.EnqueueJobs(ctx, []dto.QueuedJob{}); err != nil {
+			t.Errorf("EnqueueJobs([]): %v", err)
+		}
+	})
+
+	t.Run("payload round-trips through hash", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+
+		job := dto.QueuedJob{URL: "https://example.com/job/payload", Relevance: 75}
+		if err := q.EnqueueJobs(ctx, []dto.QueuedJob{job}); err != nil {
+			t.Fatalf("EnqueueJobs: %v", err)
+		}
+
+		got, ok, err := q.Dequeue(ctx)
+		if err != nil {
+			t.Fatalf("Dequeue: %v", err)
+		}
+		if !ok {
+			t.Fatal("want ok=true")
+		}
+		if got.URL != job.URL {
+			t.Errorf("URL: got %q, want %q", got.URL, job.URL)
+		}
+		if got.Relevance != job.Relevance {
+			t.Errorf("Relevance: got %d, want %d", got.Relevance, job.Relevance)
 		}
 	})
 }
@@ -117,12 +150,12 @@ func TestDequeue(t *testing.T) {
 		ctx := context.Background()
 		q := newTestQueue(t)
 
-		url, ok, err := q.Dequeue(ctx)
+		job, ok, err := q.Dequeue(ctx)
 		if err != nil {
 			t.Fatalf("Dequeue: %v", err)
 		}
-		if ok || url != "" {
-			t.Errorf("want (\"\" false nil) on empty queue, got (%q %v %v)", url, ok, err)
+		if ok || job.URL != "" {
+			t.Errorf("want (zero, false, nil) on empty queue, got (%v %v %v)", job, ok, err)
 		}
 	})
 
@@ -131,8 +164,8 @@ func TestDequeue(t *testing.T) {
 		q := newTestQueue(t)
 
 		url := "https://example.com/job/atomic"
-		if err := q.Enqueue(ctx, []string{url}); err != nil {
-			t.Fatalf("Enqueue: %v", err)
+		if err := q.EnqueueJobs(ctx, jobsFromURLs([]string{url})); err != nil {
+			t.Fatalf("EnqueueJobs: %v", err)
 		}
 
 		const workers = 10
@@ -142,14 +175,14 @@ func TestDequeue(t *testing.T) {
 
 		for range workers {
 			wg.Go(func() {
-				u, ok, err := q.Dequeue(ctx)
+				job, ok, err := q.Dequeue(ctx)
 				if err != nil {
 					t.Errorf("Dequeue error: %v", err)
 					return
 				}
 				if ok {
 					mu.Lock()
-					results = append(results, u)
+					results = append(results, job.URL)
 					mu.Unlock()
 				}
 			})
