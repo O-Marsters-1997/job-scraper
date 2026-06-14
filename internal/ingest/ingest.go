@@ -11,16 +11,17 @@ type Saver interface {
 	Save(ctx context.Context, jobs []dto.Job) error
 }
 
-// Scorer runs suitability scoring after a job is saved.
-// Implementations handle their own errors internally.
+// Scorer runs suitability scoring after a job is saved and returns the score (0 on error).
+// Implementations handle their own errors internally and never block ingest.
 type Scorer interface {
-	ScoreAndSave(ctx context.Context, job dto.Job)
+	ScoreAndSave(ctx context.Context, job dto.Job) int
 }
 
 // Notifier sends a notification for a newly ingested job.
+// score is the suitability score from Scorer (0 if no scorer is configured).
 // Implementations handle their own errors internally.
 type Notifier interface {
-	NotifyNewJob(ctx context.Context, job dto.Job)
+	NotifyNewJob(ctx context.Context, job dto.Job, score int)
 }
 
 // Ingester is the ingest seam: validate → Save → score → notify.
@@ -60,11 +61,12 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	slog.Info("jobs ingested", slog.Int("count", len(valid)))
 
 	for _, j := range valid {
+		var score int
 		if i.scorer != nil {
-			i.scorer.ScoreAndSave(ctx, j)
+			score = i.scorer.ScoreAndSave(ctx, j)
 		}
 		if i.notifier != nil {
-			i.notifier.NotifyNewJob(ctx, j)
+			i.notifier.NotifyNewJob(ctx, j, score)
 		}
 	}
 	return nil

@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 var testAddr string

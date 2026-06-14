@@ -26,30 +26,31 @@ func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReade
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
 }
 
-// ScoreAndSave logs errors rather than returning them so a scoring failure
-// never blocks the ingest path.
-func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) {
+// ScoreAndSave scores the job, persists the result, and returns the score (0 on any error).
+// Errors are logged internally so a scoring failure never blocks the ingest path.
+func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 	cfg, err := s.cfgDB.GetSearchConfig(ctx, s.userID)
 	if err != nil {
 		slog.Warn("suitability: could not load search config", slog.Any("err", err))
-		return
+		return 0
 	}
 
-	score, usage, err := s.scorer.Score(ctx, job, cfg)
+	sc, usage, err := s.scorer.Score(ctx, job, cfg)
 	if err != nil {
 		slog.Error("suitability score failed", slog.String("url", job.URL), slog.Any("err", err))
-		return
+		return 0
 	}
 
 	slog.Info("suitability scored",
 		slog.String("url", job.URL),
-		slog.Int("score", score),
+		slog.Int("score", sc),
 		slog.Int("input_tokens", usage.InputTokens),
 		slog.Int("output_tokens", usage.OutputTokens),
 		slog.Float64("cost_usd", usage.CostUSD),
 	)
 
-	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, score); err != nil {
+	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, sc); err != nil {
 		slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 	}
+	return sc
 }

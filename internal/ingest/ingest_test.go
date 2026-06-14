@@ -26,15 +26,16 @@ type stubScorer struct {
 	jobs []dto.Job
 }
 
-func (s *stubScorer) ScoreAndSave(_ context.Context, job dto.Job) {
+func (s *stubScorer) ScoreAndSave(_ context.Context, job dto.Job) int {
 	s.jobs = append(s.jobs, job)
+	return 0
 }
 
 type stubNotifier struct {
 	jobs []dto.Job
 }
 
-func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job) {
+func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int) {
 	n.jobs = append(n.jobs, job)
 }
 

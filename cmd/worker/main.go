@@ -67,7 +67,9 @@ func main() {
 	slog.Info("queue client ready", slog.String("addr", valkeyAddr))
 	defer q.Close()
 
-	notifSvc := setupNotifications()
+	scoringUserID := os.Getenv("SCORING_USER_ID")
+
+	notifSvc := setupNotifications(ctx, db, scoringUserID)
 
 	srcs := []sources.Source{wis.New()}
 
@@ -120,7 +122,7 @@ func main() {
 	orch := scraper.New(srcs, db, q)
 
 	var ingestScorer *score.IngestScorer
-	if scoringUserID := os.Getenv("SCORING_USER_ID"); scoringUserID != "" {
+	if scoringUserID != "" {
 		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
 		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
 
@@ -131,7 +133,6 @@ func main() {
 		}
 	}
 
-	// Build the ingest seam shared by both the ATS and HTML/queue paths.
 	// Use typed interface vars to avoid the nil-concrete-pointer pitfall.
 	var scorer ingest.Scorer
 	if ingestScorer != nil {
@@ -192,8 +193,9 @@ func main() {
 				)
 				return
 			}
+			jobs = filterByThreshold(ctx, db, jobs, notifSvc.Threshold(), scoringUserID)
 			if len(jobs) == 0 {
-				slog.Info("digest: no new jobs, skipping")
+				slog.Info("digest: no new jobs above threshold, skipping")
 				return
 			}
 			if err := notifSvc.SendDigest(ctx, jobs); err != nil {
@@ -242,7 +244,25 @@ func splitBoards(env string) []string {
 	return parts
 }
 
-func setupNotifications() *notify.NotificationService {
+// filterByThreshold returns only jobs whose suitability score meets the threshold.
+// When threshold is 0 or userID is empty, all jobs are returned unchanged.
+// Jobs with no score entry are excluded when a threshold is active.
+func filterByThreshold(ctx context.Context, db *jobsdb.DB, jobs []dto.Job, threshold int, userID string) []dto.Job {
+	if threshold <= 0 || userID == "" {
+		return jobs
+	}
+	out := make([]dto.Job, 0, len(jobs))
+	for _, j := range jobs {
+		js, err := db.GetJobScore(ctx, j.ID, userID)
+		if err != nil || js.SuitabilityScore == nil || *js.SuitabilityScore < threshold {
+			continue
+		}
+		out = append(out, j)
+	}
+	return out
+}
+
+func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *notify.NotificationService {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	to := os.Getenv("NOTIFY_EMAIL_TO")
 	from := os.Getenv("NOTIFY_EMAIL_FROM")
@@ -263,10 +283,20 @@ func setupNotifications() *notify.NotificationService {
 		return nil
 	}
 
+	var threshold int
+	if userID != "" {
+		if cfg, err := db.GetSearchConfig(ctx, userID); err == nil {
+			threshold = cfg.NotifyThreshold
+		} else {
+			slog.Warn("notify: could not load search config for threshold", slog.Any("err", err))
+		}
+	}
+
 	cfg := notify.Config{
 		To:              to,
 		OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
 		DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
+		NotifyThreshold: threshold,
 	}
 
 	return notify.NewNotificationService(
