@@ -21,9 +21,9 @@ type Orchestrator struct {
 	db           providers.JobProvider
 	q            queue.JobQueue
 	scorer       score.RelevanceScorer          // nil means no gate
-	cfgDB        providers.SearchConfigProvider  // nil means no gate
-	scoreDB      providers.JobScoreProvider      // nil means no score writes
-	ingestScorer *score.IngestScorer             // nil means no suitability scoring
+	cfgDB        providers.SearchConfigProvider // nil means no gate
+	scoreDB      providers.JobScoreProvider     // nil means no score writes
+	ingestScorer *score.IngestScorer            // nil means no suitability scoring
 	userID       string
 	cr           *cron.Cron
 	wg           sync.WaitGroup

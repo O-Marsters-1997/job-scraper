@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultModelID       = "claude-haiku-4-5-20251001"
+	defaultModelID        = "claude-haiku-4-5-20251001"
 	defaultMaxInputTokens = 4096
 
 	// haiku4_5 pricing (per million tokens, USD)

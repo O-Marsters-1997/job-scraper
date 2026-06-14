@@ -11,7 +11,7 @@ import (
 
 // stubScorer is a deterministic SuitabilityScorer for tests.
 type stubScorer struct {
-	fixedScore       int
+	fixedScore         int
 	lastDescriptionLen int
 }
 
@@ -121,8 +121,8 @@ func TestIngestScorer_ScoreAndSave_descriptionTruncation(t *testing.T) {
 
 // recordingScorer records the description length received by Score.
 type recordingScorer struct {
-	inner            *stubScorer
-	receivedDescLen  int
+	inner           *stubScorer
+	receivedDescLen int
 }
 
 func (r *recordingScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (int, score.TokenUsage, error) {
@@ -141,7 +141,7 @@ func TestTruncate_viaClaude(t *testing.T) {
 	const maxChars = maxTokens * 4 // 20
 
 	desc := "abcdefghijklmnopqrstuvwxyz" // 26 chars
-	want := desc[:maxChars]               // 20 chars
+	want := desc[:maxChars]              // 20 chars
 
 	got := truncateExported(desc, maxChars)
 	if got != want {
