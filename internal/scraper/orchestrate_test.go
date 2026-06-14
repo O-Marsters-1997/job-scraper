@@ -20,11 +20,16 @@ type stubSource struct {
 
 func (s *stubSource) Cfg() sources.Config     { return s.cfg }
 func (s *stubSource) CanHandle(_ string) bool { return false }
+func (s *stubSource) NeedsDetail() bool       { return true }
 func (s *stubSource) GetDetails(_ context.Context, _ string) (dto.Job, error) {
 	return dto.Job{}, nil
 }
-func (s *stubSource) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
-	_, err := fn(ctx, s.urls)
+func (s *stubSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
+	jobs := make([]dto.Job, len(s.urls))
+	for i, u := range s.urls {
+		jobs[i] = dto.Job{URL: u}
+	}
+	_, err := fn(ctx, jobs)
 	return err
 }
 
@@ -183,12 +188,17 @@ func (s *multiPageSource) Cfg() sources.Config {
 	return sources.Config{Name: "multi"}
 }
 func (s *multiPageSource) CanHandle(_ string) bool { return false }
+func (s *multiPageSource) NeedsDetail() bool       { return true }
 func (s *multiPageSource) GetDetails(_ context.Context, _ string) (dto.Job, error) {
 	return dto.Job{}, nil
 }
-func (s *multiPageSource) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
+func (s *multiPageSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
 	for _, page := range s.pages {
-		stop, err := fn(ctx, page)
+		jobs := make([]dto.Job, len(page))
+		for i, u := range page {
+			jobs[i] = dto.Job{URL: u}
+		}
+		stop, err := fn(ctx, jobs)
 		if err != nil || stop {
 			return err
 		}

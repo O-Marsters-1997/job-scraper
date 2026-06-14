@@ -45,10 +45,16 @@ type Source interface {
 	// detail page. Used by Dispatch to route dequeued URLs to the right source.
 	CanHandle(url string) bool
 
-	// Iterate pages through all job URLs from the source, calling fn for each
-	// page's raw URLs. fn returning stop=true triggers early termination.
-	// Respects ctx cancellation.
-	Iterate(ctx context.Context, fn func(ctx context.Context, urls []string) (stop bool, err error)) error
+	// Iterate pages through all jobs from the source, calling fn for each
+	// page's jobs. ATS sources yield fully-populated dto.Job; HTML sources
+	// yield partial dto.Job{URL: url}. fn returning stop=true triggers early
+	// termination. Respects ctx cancellation.
+	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
+
+	// NeedsDetail reports whether jobs from this source require a separate
+	// GetDetails fetch to be fully populated. ATS sources return false (jobs
+	// arrive complete); HTML scrape sources return true.
+	NeedsDetail() bool
 
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }

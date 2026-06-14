@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 )
@@ -59,6 +61,15 @@ func main() {
 	notifSvc := setupNotifications()
 
 	srcs := []sources.Source{wis.New()}
+
+	if boards := os.Getenv("GREENHOUSE_BOARDS"); boards != "" {
+		tokens := strings.Split(boards, ",")
+		for i := range tokens {
+			tokens[i] = strings.TrimSpace(tokens[i])
+		}
+		srcs = append(srcs, greenhouse.New(greenhouse.Config{Boards: tokens}))
+		slog.Info("greenhouse source registered", slog.Int("boards", len(tokens)))
+	}
 
 	orch := scraper.New(srcs, db, q)
 	if err := orch.Start(ctx); err != nil {

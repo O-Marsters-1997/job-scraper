@@ -1,0 +1,20 @@
+{
+  "jobs": [
+    {
+      "id": 1001,
+      "title": "Senior Product Engineer",
+      "location": {"name": "London, UK"},
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/1001",
+      "content": "<p>We are looking for a Senior Product Engineer...</p>",
+      "updated_at": "2024-06-01T09:00:00Z"
+    },
+    {
+      "id": 1002,
+      "title": "Staff Engineer",
+      "location": {"name": "Remote"},
+      "absolute_url": "https://boards.greenhouse.io/acme/jobs/1002",
+      "content": "<p>Join our engineering team as a Staff Engineer.</p>",
+      "updated_at": "2024-06-02T10:30:00Z"
+    }
+  ]
+}

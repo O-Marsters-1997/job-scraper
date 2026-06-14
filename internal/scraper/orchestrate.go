@@ -10,6 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
@@ -99,18 +100,41 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	log := slog.With(slog.String("source", name))
 	seen := make(map[string]struct{})
 
-	return src.Iterate(ctx, func(ctx context.Context, rawURLs []string) (bool, error) {
-		newURLs, err := o.db.NewURLs(ctx, rawURLs)
+	return src.Iterate(ctx, func(ctx context.Context, jobs []dto.Job) (bool, error) {
+		if !src.NeedsDetail() {
+			// ATS path: jobs arrive fully-populated — save directly, no queue.
+			validJobs := make([]dto.Job, 0, len(jobs))
+			for _, j := range jobs {
+				if j.URL != "" {
+					validJobs = append(validJobs, j)
+				}
+			}
+			if len(validJobs) == 0 {
+				return false, nil
+			}
+			if err := o.db.Save(ctx, validJobs); err != nil {
+				return false, err
+			}
+			log.Info("ats jobs saved", slog.Int("count", len(validJobs)))
+			return false, nil
+		}
+
+		// HTML path (NeedsDetail=true): extract URLs, filter new, enqueue.
+		urls := make([]string, 0, len(jobs))
+		for _, j := range jobs {
+			if j.URL != "" {
+				urls = append(urls, j.URL)
+			}
+		}
+
+		newURLs, err := o.db.NewURLs(ctx, urls)
 		if err != nil {
 			log.Warn("filter failed, using all URLs", slog.Any("err", err))
-			newURLs = rawURLs // fail open
+			newURLs = urls
 		}
 
 		deduped := make([]string, 0, len(newURLs))
 		for _, u := range newURLs {
-			if u == "" {
-				continue
-			}
 			if _, ok := seen[u]; !ok {
 				seen[u] = struct{}{}
 				deduped = append(deduped, u)

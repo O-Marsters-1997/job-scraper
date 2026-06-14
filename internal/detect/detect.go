@@ -18,7 +18,6 @@ const (
 	Aggregator
 )
 
-// Detect classifies rawURL to its ATSType by hostname/path patterns.
 func Detect(rawURL string) ATSType {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -45,7 +44,6 @@ func Detect(rawURL string) ATSType {
 	}
 }
 
-// RewriteToATS attempts to extract the underlying ATS URL from an aggregator URL.
 // Stub for Phase 7 — always returns false.
 func RewriteToATS(rawURL string) (string, ATSType, bool) {
 	return "", UnknownHTML, false

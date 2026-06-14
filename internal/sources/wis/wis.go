@@ -82,8 +82,16 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	return ParseJobDetail(r, url)
 }
 
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []string) (bool, error)) error {
-	return s.IteratePages(ctx, fn, s.fetchPage, resultsPerPage)
+func (s *Scraper) NeedsDetail() bool { return true }
+
+func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
+	return s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
+		jobs := make([]dto.Job, len(urls))
+		for i, u := range urls {
+			jobs[i] = dto.Job{URL: u}
+		}
+		return fn(ctx, jobs)
+	}, s.fetchPage, resultsPerPage)
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
