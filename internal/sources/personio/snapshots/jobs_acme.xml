@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs>
+  <job>
+    <jobPosition>Platform Engineer</jobPosition>
+    <office>London, UK</office>
+    <applyOnline>https://acme.personio.de/job/12345</applyOnline>
+    <jobDescription>&lt;p&gt;We are looking for a Platform Engineer.&lt;/p&gt;</jobDescription>
+  </job>
+  <job>
+    <jobPosition>Security Engineer</jobPosition>
+    <office>Remote</office>
+    <applyOnline>https://acme.personio.de/job/67890</applyOnline>
+    <jobDescription>&lt;p&gt;Join our security team as a Security Engineer.&lt;/p&gt;</jobDescription>
+  </job>
+</workzag-jobs>
