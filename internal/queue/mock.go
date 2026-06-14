@@ -13,14 +13,20 @@ type MockQueue struct {
 	mu          sync.Mutex
 	items       []dto.QueuedJob
 	lastScraped map[string]time.Time
+	attempts    map[string]int
+	deadLetter  []string
 
 	// Injectable errors for failure-path tests.
 	EnqueueErr error
 	DequeueErr error
+	NackErr    error
 }
 
 func NewMockQueue() *MockQueue {
-	return &MockQueue{lastScraped: make(map[string]time.Time)}
+	return &MockQueue{
+		lastScraped: make(map[string]time.Time),
+		attempts:    make(map[string]int),
+	}
 }
 
 func (m *MockQueue) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
@@ -61,7 +67,44 @@ func (m *MockQueue) GetLastScraped(_ context.Context, source string) (time.Time,
 	return t, ok, nil
 }
 
+func (m *MockQueue) Nack(_ context.Context, url string, maxAttempts int) error {
+	if m.NackErr != nil {
+		return m.NackErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.attempts[url]++
+	if m.attempts[url] >= maxAttempts {
+		m.deadLetter = append(m.deadLetter, url)
+		delete(m.attempts, url)
+	}
+	return nil
+}
+
+func (m *MockQueue) ClearAttempts(_ context.Context, url string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.attempts, url)
+	return nil
+}
+
 func (m *MockQueue) Close() {}
+
+// DeadLetter returns the URLs that have been dead-lettered.
+func (m *MockQueue) DeadLetter() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, len(m.deadLetter))
+	copy(out, m.deadLetter)
+	return out
+}
+
+// Attempts returns the current attempt count for a URL.
+func (m *MockQueue) Attempts(url string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.attempts[url]
+}
 
 func (m *MockQueue) SetLastScrapedAt(source string, t time.Time) {
 	m.mu.Lock()

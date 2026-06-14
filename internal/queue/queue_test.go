@@ -195,6 +195,108 @@ func TestDequeue(t *testing.T) {
 	})
 }
 
+func TestNack(t *testing.T) {
+	t.Run("increments attempt counter and re-queues with backoff", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+		url := "https://example.com/job/nack1"
+
+		if err := q.Nack(ctx, url, 3); err != nil {
+			t.Fatalf("Nack: %v", err)
+		}
+
+		count, err := q.client.Do(ctx, q.client.B().Hget().Key(attemptsKey).Field(url).Build()).AsInt64()
+		if err != nil {
+			t.Fatalf("HGET attempts: %v", err)
+		}
+		if count != 1 {
+			t.Errorf("want attempt count 1, got %d", count)
+		}
+
+		card, err := q.client.Do(ctx, q.client.B().Zcard().Key(sortedSetKey).Build()).AsInt64()
+		if err != nil {
+			t.Fatalf("ZCARD: %v", err)
+		}
+		if card != 1 {
+			t.Errorf("want 1 member re-queued in pending set, got %d", card)
+		}
+	})
+
+	t.Run("dead-letters after maxAttempts and clears counter", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+		url := "https://example.com/job/nack2"
+		maxAttempts := 3
+
+		for range maxAttempts {
+			if err := q.Nack(ctx, url, maxAttempts); err != nil {
+				t.Fatalf("Nack: %v", err)
+			}
+		}
+
+		dlCard, err := q.client.Do(ctx, q.client.B().Zcard().Key(deadLetterKey).Build()).AsInt64()
+		if err != nil {
+			t.Fatalf("ZCARD deadletter: %v", err)
+		}
+		if dlCard != 1 {
+			t.Errorf("want 1 member in dead-letter set, got %d", dlCard)
+		}
+
+		exists, err := q.client.Do(ctx, q.client.B().Hexists().Key(attemptsKey).Field(url).Build()).AsBool()
+		if err != nil {
+			t.Fatalf("HEXISTS attempts: %v", err)
+		}
+		if exists {
+			t.Error("want attempt counter cleared after dead-lettering")
+		}
+	})
+
+	t.Run("no duplicate entries — re-queuing does not stack", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+		url := "https://example.com/job/nack3"
+
+		// Nack twice but below maxAttempts; URL should appear once in pending.
+		for range 2 {
+			if err := q.Nack(ctx, url, 5); err != nil {
+				t.Fatalf("Nack: %v", err)
+			}
+		}
+
+		card, err := q.client.Do(ctx, q.client.B().Zcard().Key(sortedSetKey).Build()).AsInt64()
+		if err != nil {
+			t.Fatalf("ZCARD: %v", err)
+		}
+		if card != 1 {
+			t.Errorf("want 1 member in pending (ZADD overwrites score), got %d", card)
+		}
+	})
+}
+
+func TestClearAttempts(t *testing.T) {
+	t.Run("removes attempt counter for url", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+		url := "https://example.com/job/clear1"
+
+		if err := q.Nack(ctx, url, 5); err != nil {
+			t.Fatalf("Nack: %v", err)
+		}
+
+		if err := q.ClearAttempts(ctx, url); err != nil {
+			t.Fatalf("ClearAttempts: %v", err)
+		}
+
+		exists, err := q.client.Do(ctx, q.client.B().Hexists().Key(attemptsKey).Field(url).Build()).AsBool()
+		if err != nil {
+			t.Fatalf("HEXISTS: %v", err)
+		}
+		if exists {
+			t.Error("want attempt counter removed after ClearAttempts")
+		}
+	})
+}
+
 func TestGetLastScraped(t *testing.T) {
 	t.Run("returns time within window after set", func(t *testing.T) {
 		ctx := context.Background()
