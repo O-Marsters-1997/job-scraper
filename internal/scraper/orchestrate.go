@@ -11,21 +11,23 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 type Orchestrator struct {
-	srcs    []sources.Source
-	db      providers.JobProvider
-	q       queue.JobQueue
-	scorer  score.RelevanceScorer          // nil means no gate
-	cfgDB   providers.SearchConfigProvider // nil means no gate
-	scoreDB providers.JobScoreProvider     // nil means no score writes
-	userID  string
-	cr      *cron.Cron
-	wg      sync.WaitGroup
+	srcs     []sources.Source
+	db       providers.JobProvider
+	q        queue.JobQueue
+	scorer   score.RelevanceScorer          // nil means no gate
+	cfgDB    providers.SearchConfigProvider // nil means no gate
+	scoreDB  providers.JobScoreProvider     // nil means no score writes
+	ingester *ingest.Ingester               // nil means save-only (no scoring, no notify)
+	userID   string
+	cr       *cron.Cron
+	wg       sync.WaitGroup
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -40,6 +42,13 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB pro
 	o.cfgDB = cfgDB
 	o.scoreDB = scoreDB
 	o.userID = userID
+	return o
+}
+
+// WithIngester wires in the ingest seam used by the ATS path. When set, Ingest
+// replaces the direct db.Save call and also runs scoring and notifications.
+func (o *Orchestrator) WithIngester(ing *ingest.Ingester) *Orchestrator {
+	o.ingester = ing
 	return o
 }
 
@@ -159,7 +168,11 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			for i, s := range survivors {
 				validJobs[i] = s.job
 			}
-			if err := o.db.Save(ctx, validJobs); err != nil {
+			if o.ingester != nil {
+				if err := o.ingester.Ingest(ctx, validJobs); err != nil {
+					return false, err
+				}
+			} else if err := o.db.Save(ctx, validJobs); err != nil {
 				return false, err
 			}
 
