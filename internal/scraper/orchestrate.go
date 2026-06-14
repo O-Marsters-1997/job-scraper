@@ -100,14 +100,20 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	log := slog.With(slog.String("source", name))
 	seen := make(map[string]struct{})
 
-	return src.Iterate(ctx, func(ctx context.Context, jobs []dto.Job) (bool, error) {
+	var totalSeen, totalSaved, totalErrors int
+
+	err := src.Iterate(ctx, func(ctx context.Context, jobs []dto.Job) (bool, error) {
 		if !src.NeedsDetail() {
 			// ATS path: jobs arrive fully-populated — save directly, no queue.
+			totalSeen += len(jobs)
 			validJobs := make([]dto.Job, 0, len(jobs))
 			for _, j := range jobs {
-				if j.URL != "" {
-					validJobs = append(validJobs, j)
+				if j.Title == "" || j.URL == "" {
+					slog.Warn("skipping invalid job", slog.String("source", name), slog.String("url", j.URL), slog.String("title", j.Title))
+					totalErrors++
+					continue
 				}
+				validJobs = append(validJobs, j)
 			}
 			if len(validJobs) == 0 {
 				return false, nil
@@ -115,6 +121,7 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 			if err := o.db.Save(ctx, validJobs); err != nil {
 				return false, err
 			}
+			totalSaved += len(validJobs)
 			log.Info("ats jobs saved", slog.Int("count", len(validJobs)))
 			return false, nil
 		}
@@ -126,6 +133,7 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 				urls = append(urls, j.URL)
 			}
 		}
+		totalSeen += len(urls)
 
 		newURLs, err := o.db.NewURLs(ctx, urls)
 		if err != nil {
@@ -148,8 +156,18 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 		if err := o.q.Enqueue(ctx, deduped); err != nil {
 			return false, err
 		}
+		totalSaved += len(deduped)
 
 		log.Info("enqueued page", slog.Int("count", len(deduped)))
 		return false, nil
 	})
+
+	slog.Info("source run complete",
+		slog.String("source", name),
+		slog.Int("seen", totalSeen),
+		slog.Int("saved", totalSaved),
+		slog.Int("errors", totalErrors),
+	)
+
+	return err
 }
