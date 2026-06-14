@@ -41,10 +41,33 @@ type Job struct {
 	SalaryRaw   string
 }
 
+type JobScore struct {
+	ID               pgtype.UUID
+	JobID            pgtype.UUID
+	UserID           pgtype.UUID
+	RelevanceScore   pgtype.Int4
+	SuitabilityScore pgtype.Int4
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
 type NotificationDigest struct {
 	ID       pgtype.UUID
 	SentAt   pgtype.Timestamptz
 	JobCount int32
+}
+
+type SearchConfig struct {
+	ID                pgtype.UUID
+	UserID            pgtype.UUID
+	Role              string
+	Location          string
+	Keywords          []string
+	SuitabilityRubric string
+	RelevanceCutoff   int32
+	NotifyThreshold   int32
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type Session struct {

@@ -71,3 +71,27 @@ CREATE TABLE IF NOT EXISTS tracked_doc_tabs (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (tracked_doc_id, tab_id)
 );
+
+CREATE TABLE IF NOT EXISTS job_scores (
+    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id            UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id           UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    relevance_score   INT,
+    suitability_score INT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (job_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS search_config (
+    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id            UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    role               TEXT        NOT NULL DEFAULT '',
+    location           TEXT        NOT NULL DEFAULT '',
+    keywords           TEXT[]      NOT NULL DEFAULT '{}',
+    suitability_rubric TEXT        NOT NULL DEFAULT '',
+    relevance_cutoff   INT         NOT NULL DEFAULT 0,
+    notify_threshold   INT         NOT NULL DEFAULT 70,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
