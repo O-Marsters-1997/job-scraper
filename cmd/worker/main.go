@@ -183,7 +183,7 @@ func main() {
 			}
 			var jobs []dto.Job
 			if lastSent.IsZero() {
-				jobs, err = db.List(ctx)
+				jobs, err = db.List(ctx, "")
 			} else {
 				jobs, err = db.ListSince(ctx, lastSent)
 			}

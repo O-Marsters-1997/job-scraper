@@ -19,7 +19,7 @@ type mockDB struct {
 
 func (m *mockDB) Save(_ context.Context, _ []dto.Job) error                   { return nil }
 func (m *mockDB) NewURLs(_ context.Context, urls []string) ([]string, error)  { return urls, nil }
-func (m *mockDB) List(_ context.Context) ([]dto.Job, error)                   { return m.jobs, m.err }
+func (m *mockDB) List(_ context.Context, _ string) ([]dto.Job, error)         { return m.jobs, m.err }
 func (m *mockDB) ListSince(_ context.Context, _ time.Time) ([]dto.Job, error) { return m.jobs, m.err }
 
 func TestListJobs(t *testing.T) {

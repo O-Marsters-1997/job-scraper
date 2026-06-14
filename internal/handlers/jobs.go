@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
@@ -35,7 +36,8 @@ func newSessionCookie(id string, maxAge int) *http.Cookie {
 }
 
 func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
-	jobs, err := h.jobs.List(r.Context())
+	session, _ := auth.SessionFromContext(r.Context())
+	jobs, err := h.jobs.List(r.Context(), session.UserID)
 	if err != nil {
 		slog.Error("list jobs failed",
 			slog.Any("err", err),

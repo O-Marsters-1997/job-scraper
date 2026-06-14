@@ -71,6 +71,37 @@ export function createJobColumns(
 			},
 		},
 		{
+			accessorKey: "RelevanceScore",
+			header: "Relevance",
+			enableGlobalFilter: false,
+			sortUndefined: -1,
+			cell: (info) => {
+				const val = info.getValue() as number | null | undefined;
+				if (val === null || val === undefined) {
+					return <span class="text-faint">—</span>;
+				}
+				return (
+					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
+				);
+			},
+		},
+		{
+			accessorKey: "SuitabilityScore",
+			header: "Suitability",
+			enableGlobalFilter: false,
+			sortUndefined: -1,
+			filterFn: "suitabilityMin" as unknown as "auto",
+			cell: (info) => {
+				const val = info.getValue() as number | null | undefined;
+				if (val === null || val === undefined) {
+					return <span class="text-faint">—</span>;
+				}
+				return (
+					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
+				);
+			},
+		},
+		{
 			accessorKey: "Source",
 			header: "Source",
 			cell: (info) => <SourceBadge source={info.getValue() as string} />,

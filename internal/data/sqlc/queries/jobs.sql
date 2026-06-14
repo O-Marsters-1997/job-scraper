@@ -25,7 +25,10 @@ ON CONFLICT (url) DO UPDATE SET
 SELECT * FROM jobs WHERE url = $1 LIMIT 1;
 
 -- name: ListJobs :many
-SELECT * FROM jobs ORDER BY scraped_at DESC;
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, js.relevance_score, js.suitability_score
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC;
 
 -- name: ExistingURLs :many
 SELECT url FROM jobs WHERE url = ANY($1::text[]);
