@@ -1,3 +1,7 @@
+## Package manager
+
+Use **bun** exclusively for all JS/TS package management in this repo (`frontend/` and `emails/`). Never use pnpm, npm, or yarn — there are no pnpm workspace files and no `node_modules` managed by anything other than bun.
+
 ## Approach
 
 - Think before acting. Read existing files before writing code.
