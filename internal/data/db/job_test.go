@@ -46,7 +46,7 @@ func TestSave_Single(t *testing.T) {
 			t.Fatalf("Save: %v", err)
 		}
 
-		jobs, err := testDB.List(ctx)
+		jobs, err := testDB.List(ctx, "")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -76,7 +76,7 @@ func TestSave_Single(t *testing.T) {
 			t.Fatalf("second Save: %v", err)
 		}
 
-		jobs, err := testDB.List(ctx)
+		jobs, err := testDB.List(ctx, "")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestSave_Batch(t *testing.T) {
 			t.Fatalf("Save: %v", err)
 		}
 
-		got, err := testDB.List(ctx)
+		got, err := testDB.List(ctx, "")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -145,7 +145,7 @@ func TestSave_Batch(t *testing.T) {
 			t.Fatalf("second Save: %v", err)
 		}
 
-		jobs, err := testDB.List(ctx)
+		jobs, err := testDB.List(ctx, "")
 		if err != nil {
 			t.Fatalf("List: %v", err)
 		}
@@ -227,7 +227,7 @@ func TestList(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	got, err := testDB.List(ctx)
+	got, err := testDB.List(ctx, "")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}

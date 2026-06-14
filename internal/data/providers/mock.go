@@ -49,7 +49,7 @@ func (m *MockJobProvider) NewURLs(_ context.Context, urls []string) ([]string, e
 	return out, nil
 }
 
-func (m *MockJobProvider) List(_ context.Context) ([]dto.Job, error) {
+func (m *MockJobProvider) List(_ context.Context, _ string) ([]dto.Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]dto.Job, 0, len(m.jobs))

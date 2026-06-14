@@ -58,18 +58,36 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw FROM jobs ORDER BY scraped_at DESC
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, js.relevance_score, js.suitability_score
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC
 `
 
-func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
-	rows, err := q.db.Query(ctx, listJobs)
+type ListJobsRow struct {
+	ID               pgtype.UUID
+	Title            string
+	Location         string
+	Url              string
+	CompanySlug      string
+	Source           string
+	UpdatedAt        pgtype.Timestamptz
+	ScrapedAt        pgtype.Timestamptz
+	Description      string
+	SalaryRaw        string
+	RelevanceScore   pgtype.Int4
+	SuitabilityScore pgtype.Int4
+}
+
+func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsRow, error) {
+	rows, err := q.db.Query(ctx, listJobs, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Job
+	var items []ListJobsRow
 	for rows.Next() {
-		var i Job
+		var i ListJobsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -81,6 +99,8 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 			&i.ScrapedAt,
 			&i.Description,
 			&i.SalaryRaw,
+			&i.RelevanceScore,
+			&i.SuitabilityScore,
 		); err != nil {
 			return nil, err
 		}

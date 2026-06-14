@@ -1,5 +1,6 @@
 import {
 	type ColumnDef,
+	type ColumnFiltersState,
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
@@ -50,6 +51,8 @@ function pageWindow(current: number, total: number): (number | null)[] {
 export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 	const [globalFilter, setGlobalFilter] = createSignal("");
 	const [sorting, setSorting] = createSignal<SortingState>([]);
+	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>([]);
+	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
 		pageSize: 10,
@@ -65,6 +68,13 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
 		globalFilterFn: "includesString",
+		filterFns: {
+			suitabilityMin: (row, columnId, filterValue: number) => {
+				const val = row.getValue(columnId) as number | null | undefined;
+				if (val === null || val === undefined) return false;
+				return val >= filterValue;
+			},
+		},
 		state: {
 			get globalFilter() {
 				return globalFilter();
@@ -72,12 +82,16 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 			get sorting() {
 				return sorting();
 			},
+			get columnFilters() {
+				return columnFilters();
+			},
 			get pagination() {
 				return pagination();
 			},
 		},
 		onGlobalFilterChange: setGlobalFilter,
 		onSortingChange: setSorting,
+		onColumnFiltersChange: setColumnFilters,
 		onPaginationChange: setPagination,
 	});
 
@@ -99,33 +113,67 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 
 	return (
 		<div class="flex flex-col gap-3">
-			{/* Search */}
-			<div class="relative max-w-xs">
-				<svg
-					aria-hidden="true"
-					class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
-					width="14"
-					height="14"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<circle cx="11" cy="11" r="8" />
-					<line x1="21" y1="21" x2="16.65" y2="16.65" />
-				</svg>
-				<Input
-					type="search"
-					placeholder="Search by role or company…"
-					value={globalFilter()}
-					onInput={(e) => {
-						setGlobalFilter(e.currentTarget.value);
-						setPagination((p) => ({ ...p, pageIndex: 0 }));
-					}}
-					class="pr-3 pl-9"
-				/>
+			{/* Filters */}
+			<div class="flex flex-wrap items-center gap-2">
+				<div class="relative max-w-xs">
+					<svg
+						aria-hidden="true"
+						class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<circle cx="11" cy="11" r="8" />
+						<line x1="21" y1="21" x2="16.65" y2="16.65" />
+					</svg>
+					<Input
+						type="search"
+						placeholder="Search by role or company…"
+						value={globalFilter()}
+						onInput={(e) => {
+							setGlobalFilter(e.currentTarget.value);
+							setPagination((p) => ({ ...p, pageIndex: 0 }));
+						}}
+						class="pr-3 pl-9"
+					/>
+				</div>
+				<div class="flex items-center gap-1.5">
+					<label class="text-xs font-medium text-muted" for="suitability-min">
+						Min suitability
+					</label>
+					<Input
+						id="suitability-min"
+						type="number"
+						min="0"
+						max="100"
+						placeholder="—"
+						value={suitabilityMin()}
+						onInput={(e) => {
+							const raw = e.currentTarget.value.trim();
+							setSuitabilityMin(raw);
+							setPagination((p) => ({ ...p, pageIndex: 0 }));
+							if (raw === "") {
+								setColumnFilters((prev) =>
+									prev.filter((f) => f.id !== "SuitabilityScore"),
+								);
+							} else {
+								const n = Number(raw);
+								if (!Number.isNaN(n)) {
+									setColumnFilters((prev) => [
+										...prev.filter((f) => f.id !== "SuitabilityScore"),
+										{ id: "SuitabilityScore", value: n },
+									]);
+								}
+							}
+						}}
+						class="w-20"
+					/>
+				</div>
 			</div>
 
 			{/* Table card — pagination lives inside so it shares the rounded border */}

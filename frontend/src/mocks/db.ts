@@ -221,6 +221,10 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		UpdatedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
 		DaysInOffice: daysInOffice,
+		RelevanceScore:
+			i % 4 === 0 ? null : faker.number.int({ min: 40, max: 100 }),
+		SuitabilityScore:
+			i % 5 === 0 ? null : faker.number.int({ min: 30, max: 100 }),
 		// Optional rich fields — index-modular, no faker (seed preserved)
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length],
 		Skills: SKILL_SETS[i % SKILL_SETS.length],

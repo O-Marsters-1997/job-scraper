@@ -58,6 +58,30 @@ func fromRow(row pgsqlc.Job) dto.Job {
 	}
 }
 
+func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
+	j := dto.Job{
+		ID:          row.ID.String(),
+		Title:       row.Title,
+		Location:    row.Location,
+		URL:         row.Url,
+		CompanySlug: row.CompanySlug,
+		Source:      row.Source,
+		UpdatedAt:   row.UpdatedAt.Time,
+		ScrapedAt:   row.ScrapedAt.Time,
+		Description: row.Description,
+		SalaryRaw:   row.SalaryRaw,
+	}
+	if row.RelevanceScore.Valid {
+		v := int(row.RelevanceScore.Int32)
+		j.RelevanceScore = &v
+	}
+	if row.SuitabilityScore.Valid {
+		v := int(row.SuitabilityScore.Int32)
+		j.SuitabilityScore = &v
+	}
+	return j
+}
+
 func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
 	if len(jobs) == 0 {
 		return nil
@@ -113,14 +137,22 @@ func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 	return out, nil
 }
 
-func (db *DB) List(ctx context.Context) ([]dto.Job, error) {
-	rows, err := db.queries.ListJobs(ctx)
+func (db *DB) List(ctx context.Context, userID string) ([]dto.Job, error) {
+	var uid pgtype.UUID
+	if userID != "" {
+		var err error
+		uid, err = parseUUID(userID)
+		if err != nil {
+			return nil, fmt.Errorf("db.List: %w", err)
+		}
+	}
+	rows, err := db.queries.ListJobs(ctx, uid)
 	if err != nil {
 		return nil, fmt.Errorf("db.List: %w", err)
 	}
 	jobs := make([]dto.Job, len(rows))
 	for i, row := range rows {
-		jobs[i] = fromRow(row)
+		jobs[i] = fromListRow(row)
 	}
 	return jobs, nil
 }
