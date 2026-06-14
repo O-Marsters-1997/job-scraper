@@ -13,10 +13,9 @@ import (
 
 func instantWorker() worker {
 	return worker{
-		itemDelay:   func() time.Duration { return 0 },
-		emptyDelay:  0,
-		errDelay:    0,
-		maxAttempts: 3,
+		itemDelay:  func() time.Duration { return 0 },
+		emptyDelay: 0,
+		errDelay:   0,
 	}
 }
 
@@ -144,7 +143,7 @@ func TestRun_ClearAttemptsOnSuccess(t *testing.T) {
 	enqueueURLs(t, q, []string{url})
 
 	// Seed an existing attempt count so ClearAttempts has something to clear.
-	if err := q.Nack(context.Background(), url, 10); err != nil {
+	if err := q.Nack(context.Background(), url); err != nil {
 		t.Fatalf("Nack: %v", err)
 	}
 

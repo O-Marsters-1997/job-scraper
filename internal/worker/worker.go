@@ -12,33 +12,25 @@ import (
 
 type HandlerFunc func(ctx context.Context, job dto.QueuedJob) error
 
-// attemptClearer is an optional extension of JobQueue; *queue.Queue implements it.
-type attemptClearer interface {
-	ClearAttempts(ctx context.Context, url string) error
-}
-
 // Run processes one job at a time with a random 10–15s pause between items.
-// When the queue is empty it backs off for 15 minutes. Respects ctx cancellation.
-// maxAttempts controls how many Nack calls a URL tolerates before dead-lettering.
-func Run(ctx context.Context, q queue.JobQueue, handler HandlerFunc, maxAttempts int) error {
-	w := newWorker(maxAttempts)
+// When the queue is empty it backs off 30s. Respects ctx cancellation.
+func Run(ctx context.Context, q queue.JobQueue, handler HandlerFunc) error {
+	w := newWorker()
 	return w.run(ctx, q, handler)
 }
 
 // worker holds timing configuration, allowing tests to inject zero-duration sleeps.
 type worker struct {
-	itemDelay   func() time.Duration
-	emptyDelay  time.Duration
-	errDelay    time.Duration
-	maxAttempts int
+	itemDelay  func() time.Duration
+	emptyDelay time.Duration
+	errDelay   time.Duration
 }
 
-func newWorker(maxAttempts int) worker {
+func newWorker() worker {
 	return worker{
-		itemDelay:   func() time.Duration { return 10*time.Second + time.Duration(rand.Int64N(int64(5*time.Second))) },
-		emptyDelay:  30 * time.Second,
-		errDelay:    5 * time.Second,
-		maxAttempts: maxAttempts,
+		itemDelay:  func() time.Duration { return 10*time.Second + time.Duration(rand.Int64N(int64(5*time.Second))) },
+		emptyDelay: 30 * time.Second,
+		errDelay:   5 * time.Second,
 	}
 }
 
@@ -67,15 +59,13 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 
 		if err := handler(ctx, job); err != nil {
 			slog.Error("handler failed", slog.String("url", job.URL), slog.Any("err", err))
-			if nackErr := q.Nack(ctx, job.URL, w.maxAttempts); nackErr != nil {
+			if nackErr := q.Nack(ctx, job.URL); nackErr != nil {
 				slog.Error("nack failed", slog.String("url", job.URL), slog.Any("err", nackErr))
 			}
 		} else {
 			slog.Info("processed", slog.String("url", job.URL))
-			if ac, ok := q.(attemptClearer); ok {
-				if clearErr := ac.ClearAttempts(ctx, job.URL); clearErr != nil {
-					slog.Error("clear attempts failed", slog.String("url", job.URL), slog.Any("err", clearErr))
-				}
+			if clearErr := q.ClearAttempts(ctx, job.URL); clearErr != nil {
+				slog.Error("clear attempts failed", slog.String("url", job.URL), slog.Any("err", clearErr))
 			}
 		}
 
@@ -85,7 +75,6 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 	}
 }
 
-// sleep blocks for d, returning false if ctx is cancelled first.
 func sleep(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return ctx.Err() == nil

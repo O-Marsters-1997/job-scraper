@@ -18,30 +18,30 @@ const (
 	deadLetterKey     = "jobs:deadletter"
 	lastScrapedKeyFmt = "scrape:last:%s"
 	backoffBase       = 30 * time.Second
+	maxAttempts       = 3
 )
 
 // JobQueue is the boundary all callers depend on.
-// Timing decisions (time.Now, UnixMilli conversion) are owned by the implementation.
 type JobQueue interface {
 	// EnqueueJobs stores each job's URL in the sorted set (ZADD NX — already-queued
 	// URLs are silently skipped) and persists the full payload in a hash.
 	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
 
-	// Dequeue atomically removes and returns the next ready job.
-	// Uses ZPOPMIN — guaranteed safe for concurrent workers.
+	// Dequeue atomically removes and returns the next ready job via ZPOPMIN.
 	// Returns (zero, false, nil) when nothing is ready.
 	Dequeue(ctx context.Context) (dto.QueuedJob, bool, error)
 
 	SetLastScraped(ctx context.Context, source string) error
 
-	// Returns (zero, false, nil) when the source has never been scraped.
+	// GetLastScraped returns (zero, false, nil) when the source has never been scraped.
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 
-	// Nack increments the attempt counter for url. If the counter reaches
-	// maxAttempts the URL is moved to the dead-letter sorted set and its
-	// attempt counter is cleared; otherwise it is re-queued with a backoff
-	// delay proportional to the attempt count.
-	Nack(ctx context.Context, url string, maxAttempts int) error
+	// Nack increments the attempt counter for url. After maxAttempts the URL
+	// moves to the dead-letter set; otherwise it is re-queued with exponential backoff.
+	Nack(ctx context.Context, url string) error
+
+	// ClearAttempts removes the retry counter for url. Call on successful processing.
+	ClearAttempts(ctx context.Context, url string) error
 
 	Close()
 }
@@ -132,7 +132,7 @@ func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, b
 	return time.UnixMilli(val), true, nil
 }
 
-func (q *Queue) Nack(ctx context.Context, url string, maxAttempts int) error {
+func (q *Queue) Nack(ctx context.Context, url string) error {
 	count, err := q.client.Do(ctx, q.client.B().Hincrby().Key(attemptsKey).Field(url).Increment(1).Build()).AsInt64()
 	if err != nil {
 		return fmt.Errorf("nack increment: %w", err)
@@ -149,9 +149,6 @@ func (q *Queue) Nack(ctx context.Context, url string, maxAttempts int) error {
 	return q.client.Do(ctx, q.client.B().Zadd().Key(sortedSetKey).ScoreMember().ScoreMember(score, url).Build()).Error()
 }
 
-// ClearAttempts removes the attempt counter for url. Called on successful processing.
-// Not on the JobQueue interface — callers that hold a *Queue can call it directly,
-// and worker does a type-assert to reach it.
 func (q *Queue) ClearAttempts(ctx context.Context, url string) error {
 	return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
 }

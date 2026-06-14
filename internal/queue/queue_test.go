@@ -41,8 +41,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// newTestQueue returns a Queue connected to the test Valkey instance.
-// It registers a Cleanup to flush the DB and close the connection after the test.
 func newTestQueue(t *testing.T) *Queue {
 	t.Helper()
 	q, err := New(testAddr)
@@ -201,7 +199,7 @@ func TestNack(t *testing.T) {
 		q := newTestQueue(t)
 		url := "https://example.com/job/nack1"
 
-		if err := q.Nack(ctx, url, 3); err != nil {
+		if err := q.Nack(ctx, url); err != nil {
 			t.Fatalf("Nack: %v", err)
 		}
 
@@ -226,10 +224,9 @@ func TestNack(t *testing.T) {
 		ctx := context.Background()
 		q := newTestQueue(t)
 		url := "https://example.com/job/nack2"
-		maxAttempts := 3
 
 		for range maxAttempts {
-			if err := q.Nack(ctx, url, maxAttempts); err != nil {
+			if err := q.Nack(ctx, url); err != nil {
 				t.Fatalf("Nack: %v", err)
 			}
 		}
@@ -258,7 +255,7 @@ func TestNack(t *testing.T) {
 
 		// Nack twice but below maxAttempts; URL should appear once in pending.
 		for range 2 {
-			if err := q.Nack(ctx, url, 5); err != nil {
+			if err := q.Nack(ctx, url); err != nil {
 				t.Fatalf("Nack: %v", err)
 			}
 		}
@@ -279,7 +276,7 @@ func TestClearAttempts(t *testing.T) {
 		q := newTestQueue(t)
 		url := "https://example.com/job/clear1"
 
-		if err := q.Nack(ctx, url, 5); err != nil {
+		if err := q.Nack(ctx, url); err != nil {
 			t.Fatalf("Nack: %v", err)
 		}
 
