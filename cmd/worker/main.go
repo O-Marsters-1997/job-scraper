@@ -13,6 +13,7 @@ import (
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -114,10 +115,22 @@ func main() {
 		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
 			ingestScorer = score.NewIngestScorer(claudeScorer, db, db, scoringUserID)
-			orch.WithSuitabilityScorer(ingestScorer)
 			slog.Info("suitability scorer enabled", slog.String("user_id", scoringUserID))
 		}
 	}
+
+	// Build the ingest seam shared by both the ATS and HTML/queue paths.
+	// Use typed interface vars to avoid the nil-concrete-pointer pitfall.
+	var scorer ingest.Scorer
+	if ingestScorer != nil {
+		scorer = ingestScorer
+	}
+	var notifier ingest.Notifier
+	if notifSvc != nil {
+		notifier = notifSvc
+	}
+	ing := ingest.New(db, scorer, notifier)
+	orch.WithIngester(ing)
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
 			slog.Any("err", err),
@@ -196,28 +209,12 @@ func main() {
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
-		log := slog.With(slog.String("url", qj.URL))
 		job, err := sources.Dispatch(ctx, srcs, qj.URL)
 		if err != nil {
-			log.Error("dispatch failed", slog.Any("err", err))
+			slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
 			return err
 		}
-		if job.Title == "" || job.URL == "" {
-			log.Warn("skipping invalid job", slog.String("title", job.Title))
-			return nil
-		}
-		if err := db.Save(ctx, []dto.Job{job}); err != nil {
-			log.Error("upsert failed", slog.Any("err", err))
-			return err
-		}
-		log.Info("job upserted", slog.String("title", job.Title))
-		if ingestScorer != nil {
-			ingestScorer.ScoreAndSave(ctx, job)
-		}
-		if notifSvc != nil {
-			notifSvc.NotifyNewJob(ctx, job)
-		}
-		return nil
+		return ing.Ingest(ctx, []dto.Job{job})
 	}); err != nil {
 		slog.Error("worker failed",
 			slog.Any("err", err),
