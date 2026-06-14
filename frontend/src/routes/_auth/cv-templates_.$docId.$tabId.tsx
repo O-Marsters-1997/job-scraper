@@ -141,11 +141,9 @@ function PDFCanvas(props: { page: PDFPageProxy }) {
 
   const render = () => {
     if (!canvasRef) return;
-    const ctx = canvasRef.getContext("2d");
-    if (!ctx) return;
     canvasRef.width = viewport.width;
     canvasRef.height = viewport.height;
-    props.page.render({ canvasContext: ctx, viewport });
+    props.page.render({ canvas: canvasRef, viewport });
   };
 
   return (
