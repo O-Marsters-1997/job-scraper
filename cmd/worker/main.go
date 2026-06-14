@@ -156,6 +156,10 @@ func main() {
 			log.Error("dispatch failed", slog.Any("err", err))
 			return err
 		}
+		if job.Title == "" || job.URL == "" {
+			log.Warn("skipping invalid job", slog.String("title", job.Title))
+			return nil
+		}
 		if err := db.Save(ctx, []dto.Job{job}); err != nil {
 			log.Error("upsert failed", slog.Any("err", err))
 			return err

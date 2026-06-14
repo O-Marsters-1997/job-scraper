@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -163,6 +164,12 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		} else if t, err := time.Parse("2006-01-02", dt); err == nil {
 			updatedAt = t.UTC()
 		}
+	} else {
+		slog.Warn("defaulted field",
+			slog.String("source", "wis"),
+			slog.String("field", "UpdatedAt"),
+			slog.String("url", url),
+		)
 	}
 
 	return dto.Job{
