@@ -16,7 +16,6 @@ type MockQueue struct {
 	attempts    map[string]int
 	deadLetter  []string
 
-	// Injectable errors for failure-path tests.
 	EnqueueErr error
 	DequeueErr error
 	NackErr    error
@@ -67,7 +66,7 @@ func (m *MockQueue) GetLastScraped(_ context.Context, source string) (time.Time,
 	return t, ok, nil
 }
 
-func (m *MockQueue) Nack(_ context.Context, url string, maxAttempts int) error {
+func (m *MockQueue) Nack(_ context.Context, url string) error {
 	if m.NackErr != nil {
 		return m.NackErr
 	}
@@ -90,7 +89,6 @@ func (m *MockQueue) ClearAttempts(_ context.Context, url string) error {
 
 func (m *MockQueue) Close() {}
 
-// DeadLetter returns the URLs that have been dead-lettered.
 func (m *MockQueue) DeadLetter() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -99,7 +97,6 @@ func (m *MockQueue) DeadLetter() []string {
 	return out
 }
 
-// Attempts returns the current attempt count for a URL.
 func (m *MockQueue) Attempts(url string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -112,7 +109,6 @@ func (m *MockQueue) SetLastScrapedAt(source string, t time.Time) {
 	m.lastScraped[source] = t
 }
 
-// Items returns the URLs of all currently queued jobs.
 func (m *MockQueue) Items() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -123,7 +119,6 @@ func (m *MockQueue) Items() []string {
 	return out
 }
 
-// Jobs returns all currently queued jobs.
 func (m *MockQueue) Jobs() []dto.QueuedJob {
 	m.mu.Lock()
 	defer m.mu.Unlock()

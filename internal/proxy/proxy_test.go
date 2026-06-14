@@ -6,72 +6,46 @@ import (
 )
 
 func TestTransport(t *testing.T) {
-	t.Run("Direct returns default transport", func(t *testing.T) {
-		tr, err := Transport(Direct)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tr != http.DefaultTransport {
-			t.Fatal("expected http.DefaultTransport")
-		}
-	})
+	tests := []struct {
+		name        string
+		tier        Tier
+		envKey      string
+		envVal      string
+		wantDefault bool
+		wantErr     bool
+	}{
+		{name: "Direct returns default transport", tier: Direct, wantDefault: true},
+		{name: "Datacenter with valid URL uses proxy", tier: Datacenter, envKey: "PROXY_DATACENTER_URL", envVal: "http://proxy.example.com:8080"},
+		{name: "Datacenter without env var falls back to default", tier: Datacenter, envKey: "PROXY_DATACENTER_URL", envVal: "", wantDefault: true},
+		{name: "Residential with valid URL uses proxy", tier: Residential, envKey: "PROXY_RESIDENTIAL_URL", envVal: "http://residential.example.com:9090"},
+		{name: "Residential without env var falls back to default", tier: Residential, envKey: "PROXY_RESIDENTIAL_URL", envVal: "", wantDefault: true},
+		{name: "unknown tier returns error", tier: Tier(99), wantErr: true},
+		{name: "Datacenter with invalid URL returns error", tier: Datacenter, envKey: "PROXY_DATACENTER_URL", envVal: "://bad-url", wantErr: true},
+	}
 
-	t.Run("Datacenter with env var returns proxy transport", func(t *testing.T) {
-		t.Setenv("PROXY_DATACENTER_URL", "http://proxy.example.com:8080")
-		tr, err := Transport(Datacenter)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tr == http.DefaultTransport {
-			t.Fatal("expected a proxy transport, got DefaultTransport")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envKey != "" {
+				t.Setenv(tt.envKey, tt.envVal)
+			}
 
-	t.Run("Datacenter without env var falls back to default transport", func(t *testing.T) {
-		t.Setenv("PROXY_DATACENTER_URL", "")
-		tr, err := Transport(Datacenter)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tr != http.DefaultTransport {
-			t.Fatal("expected http.DefaultTransport when env var is unset")
-		}
-	})
+			tr, err := Transport(tt.tier)
 
-	t.Run("Residential with env var returns proxy transport", func(t *testing.T) {
-		t.Setenv("PROXY_RESIDENTIAL_URL", "http://residential.example.com:9090")
-		tr, err := Transport(Residential)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tr == http.DefaultTransport {
-			t.Fatal("expected a proxy transport, got DefaultTransport")
-		}
-	})
-
-	t.Run("Residential without env var falls back to default transport", func(t *testing.T) {
-		t.Setenv("PROXY_RESIDENTIAL_URL", "")
-		tr, err := Transport(Residential)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tr != http.DefaultTransport {
-			t.Fatal("expected http.DefaultTransport when env var is unset")
-		}
-	})
-
-	t.Run("Unknown tier returns error", func(t *testing.T) {
-		_, err := Transport(Tier(99))
-		if err == nil {
-			t.Fatal("expected error for unknown tier")
-		}
-	})
-
-	t.Run("Datacenter with invalid URL returns error", func(t *testing.T) {
-		t.Setenv("PROXY_DATACENTER_URL", "://bad-url")
-		_, err := Transport(Datacenter)
-		if err == nil {
-			t.Fatal("expected error for invalid proxy URL")
-		}
-	})
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantDefault && tr != http.DefaultTransport {
+				t.Fatal("expected http.DefaultTransport")
+			}
+			if !tt.wantDefault && tr == http.DefaultTransport {
+				t.Fatal("expected proxy transport, got DefaultTransport")
+			}
+		})
+	}
 }
