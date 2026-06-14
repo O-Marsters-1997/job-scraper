@@ -1,0 +1,18 @@
+{
+  "offers": [
+    {
+      "id": 5001,
+      "title": "Go Engineer",
+      "location": "London, UK",
+      "careers_url": "https://acme.recruitee.com/o/go-engineer",
+      "description": "<p>We are looking for a Go Engineer.</p>"
+    },
+    {
+      "id": 5002,
+      "title": "ML Engineer",
+      "location": "Remote",
+      "careers_url": "https://acme.recruitee.com/o/ml-engineer",
+      "description": "<p>Join our ML team as an ML Engineer.</p>"
+    }
+  ]
+}
