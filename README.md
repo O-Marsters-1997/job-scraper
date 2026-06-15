@@ -1,62 +1,96 @@
 # job-scraper
 
-An automated pipeline that crawls startup job boards, deduplicates listings, and persists enriched job records to a database.
+An automated pipeline that crawls startup job boards, deduplicates listings, enriches them with AI scoring, and emails a filtered digest.
 
 ## Overview
 
-The scraper operates in two decoupled phases:
+The entry point is `cmd/worker` — a single long-running process that runs three things concurrently:
 
-1. **Crawl** — A cron-driven orchestrator iterates each configured source on a schedule, filters out already-known URLs, and enqueues new ones.
-2. **Enrich** — A worker dequeues URLs one at a time, dispatches each to the owning source to fetch full job details, and upserts the result to the database.
+1. **Orchestrator** — a cron-driven loop that iterates each configured source on a schedule (default `0 */6 * * *`) and either saves jobs directly or enqueues URLs for detail fetching, depending on the source type.
+2. **Worker loop** — dequeues URLs one at a time, fetches the detail page via the owning source's `GetDetails`, then ingests the result.
+3. **Notification cron** — a daily digest (configurable via `NOTIFY_DIGEST_CRON`), plus optional per-ingest alerts.
 
-Decoupling via a queue means crawl throughput and enrichment throughput are independently controlled, and the two phases can be rate-limited differently (crawl runs on a 6-hour cron; enrichment adds a random 10-15s delay between requests to be polite to target sites).
+### Two source types
+
+The central design concept is `Source.NeedsDetail()`:
+
+- **ATS sources** (`NeedsDetail() == false`): greenhouse, lever, ashby, workable, recruitee, personio. Hit a JSON API and return fully-populated `dto.Job`s in one call. Jobs are ingested directly — no queue round-trip.
+- **HTML sources** (`NeedsDetail() == true`): wis (Work In Startups, always on), linkedin, indeed. Scrape an HTML listing page, yielding URLs plus partial card metadata. Each URL is enqueued; the worker fetches the detail page separately.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ Orchestrator (cron, per source)                     │
-│                                                     │
-│  Source.Iterate() ──► filter new URLs ──► Queue     │
-│  (paginated listing)   (db.NewURLs)     (Valkey     │
-│                                          sorted set) │
-└─────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────┐
-│ Worker                                              │
-│                                                     │
-│  Queue.Dequeue() ──► Source.GetDetails() ──► DB     │
-│                      (detail page parse)   (upsert) │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ Orchestrator (cron, per source)                                  │
+│                                                                  │
+│  ATS source (NeedsDetail=false)                                  │
+│    Iterate() ──► relevance gate ──► Ingest ──► DB + score        │
+│    (JSON API, full job)                                          │
+│                                                                  │
+│  HTML source (NeedsDetail=true)                                  │
+│    Iterate() ──► rewrite aggregator URLs ──► filter new          │
+│    (listing page, URL + card)   (detect.RewriteToATS)  (NewURLs) │
+│              ──► relevance gate ──► Queue (Valkey sorted set)    │
+└──────────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ Worker (HTML sources only)                                       │
+│                                                                  │
+│  Queue.Dequeue() ──► sources.Dispatch() ──► Ingest ──► DB        │
+│                      (GetDetails by URL)                         │
+└──────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    Ingest: validate → Save → ScoreAndSave → NotifyNewJob
 ```
 
-### Component Roles
+### Component roles
 
-| Package | Role | Key Types |
-|---|---|---|
-| `internal/scraper` | Cron orchestrator; schedules scrapes, deduplicates, enqueues | `Orchestrator` |
-| `internal/sources` | `Source` interface + `PaginatedBase` helper; URL routing via `Dispatch()` | `Source`, `PaginatedBase` |
-| `internal/sources/wis` | Concrete scraper for [WorkInStartups.com](https://workinstartups.com) | `Scraper` |
-| `internal/queue` | Valkey-backed sorted-set queue with `JobQueue` interface | `Queue`, `FakeQueue` |
-| `internal/worker` | Sequential consumer loop; respects context cancellation | `Run()`, `HandlerFunc` |
-| `internal/data/db` | pgx connection pool + sqlc-generated queries | `DB`, `Save`, `NewURLs`, `List` |
-| `internal/dto` | Shared job data transfer object | `Job` |
-| `cmd/snapshot` | CLI for capturing and rebasing HTML parser snapshots | `download`, `rebase` |
+| Package | Role |
+|---|---|
+| `cmd/worker` | Entry point; registers sources, wires scorer/notifier, runs orchestrator + worker + digest cron |
+| `internal/scraper` | Cron orchestrator; schedules scrapes, branches on `NeedsDetail`, enqueues or ingests |
+| `internal/sources` | `Source` interface, `PaginatedBase` helper, `Dispatch` URL router |
+| `internal/sources/wis` | HTML source — Work In Startups (always registered) |
+| `internal/sources/greenhouse` | ATS source — Greenhouse JSON API |
+| `internal/sources/lever` | ATS source — Lever JSON API |
+| `internal/sources/ashby` | ATS source — Ashby JSON API |
+| `internal/sources/workable` | ATS source — Workable JSON API |
+| `internal/sources/recruitee` | ATS source — Recruitee JSON API |
+| `internal/sources/personio` | ATS source — Personio XML API |
+| `internal/sources/linkedin` | HTML source — LinkedIn (env-gated, needs residential proxy) |
+| `internal/sources/indeed` | HTML source — Indeed (env-gated, needs residential proxy) |
+| `internal/detect` | Classifies URLs by ATS type; `RewriteToATS` strips aggregator wrappers |
+| `internal/queue` | Valkey-backed sorted-set queue; `ZADD NX` dedup, exponential backoff retry, dead-letter after 3 attempts |
+| `internal/worker` | Sequential consumer loop; random 10–15s between items, 30s when empty |
+| `internal/ingest` | validate → `db.Save` → `Scorer.ScoreAndSave` → `Notifier.NotifyNewJob` |
+| `internal/score` | Heuristic relevance scorer (cheap, runs at scrape time as gate) + Claude suitability scorer (LLM, runs at ingest) |
+| `internal/notify` | Resend-backed email; per-job alerts and daily digest, gated by suitability threshold |
+| `internal/data/db` | pgx pool + sqlc-generated queries |
+| `internal/dto` | Shared data transfer objects (`Job`, `QueuedJob`, `SearchConfig`) |
+| `internal/proxy` | Per-source proxy tiers: direct / datacenter / residential |
+| `cmd/snapshot` | CLI for capturing and rebasing HTML parser snapshots |
 
-### Key Design Decisions
+### Key design decisions
 
-**Interface-first** — `Source`, `JobQueue`, and `JobProvider` are all interfaces. This keeps the orchestrator, worker, and database fully decoupled and trivially testable with fakes.
+**`NeedsDetail()` splits the pipeline** — ATS sources collapse discovery + extraction into one cheap API call and skip the queue entirely. HTML sources use the two-phase URL-then-detail flow. The orchestrator branches on this at callback time.
 
-**sqlc for queries** — All SQL is written by hand in `internal/data/sqlc/queries/jobs.sql` and compiled to type-safe Go by sqlc. No ORM, no string interpolation, no runtime surprises.
+**Two scoring stages** — Relevance (`HeuristicScorer`) is keyword-only, runs cheap at scrape time as a gate before enqueueing or saving. Suitability (`ClaudeScorer`) is an LLM call on the full job description, runs once at ingest, and gates notifications. See ADRs 0005 and 0006.
 
-**Valkey sorted set as queue** — URLs are stored with a Unix-millisecond score. `ZADD NX` gives free deduplication at enqueue time; `ZPOPMIN` gives atomic dequeue. The same Valkey instance tracks last-scrape timestamps per source.
+**Valkey sorted set as queue** — `jobs:pending` sorted by Unix-ms timestamp. `ZADD NX` deduplicates at enqueue; `ZPOPMIN` gives atomic dequeue. Retry uses exponential backoff (`30s × attempt`); after 3 attempts URLs move to `jobs:deadletter`. See ADR 0008.
 
-**Snapshot testing for parsers** — HTML snapshots are committed alongside each source. Tests parse the snapshot HTML and compare against a committed JSON fixture. To update: `just cli rebase <source>`.
+**Aggregator URL rewriting** — When an HTML source (LinkedIn/Indeed) yields a URL that wraps an underlying ATS URL, `detect.RewriteToATS` extracts the real URL before enqueueing. This means the worker sees a clean ATS URL and routes it to the correct source. See ADR 0004.
+
+**Per-source proxy tiering** — Direct for ATS APIs, datacenter for friendly HTML boards (wis), residential for hostile aggregators (LinkedIn, Indeed). Configured via `ProxyTier` in `sources.Config`. See ADR 0009.
+
+**sqlc for queries** — All SQL is hand-written in `internal/data/sqlc/queries/` and compiled to type-safe Go. No ORM.
+
+**Snapshot testing for parsers** — HTML snapshots are committed alongside each HTML source. Tests parse the snapshot and compare against a committed JSON fixture. See [Adding a new source](docs/sources/adding-a-source.md).
 
 ## Getting Started
 
-**Prerequisites**: Docker, [just](https://github.com/casey/just), Go 1.23+
+**Prerequisites**: Docker, [just](https://github.com/casey/just), Go 1.26+
 
 ```sh
 # Start PostgreSQL and Valkey
@@ -65,11 +99,37 @@ just up
 # Apply migrations
 just migrate-up
 
-# Run the scraper
+# Run the worker
 just run
 ```
 
 Copy `.env.example` to `.env` and adjust if your local setup differs from the defaults.
+
+### Source registration
+
+All sources except `wis` are opt-in via environment variables:
+
+| Source | Env var | Value |
+|---|---|---|
+| Greenhouse | `GREENHOUSE_BOARDS` | Comma-separated board tokens, e.g. `acmecorp,widgets-inc` |
+| Lever | `LEVER_BOARDS` | Comma-separated board tokens |
+| Ashby | `ASHBY_BOARDS` | Comma-separated board tokens |
+| Workable | `WORKABLE_BOARDS` | Comma-separated board tokens |
+| Recruitee | `RECRUITEE_BOARDS` | Comma-separated board tokens |
+| Personio | `PERSONIO_BOARDS` | Comma-separated board tokens |
+| LinkedIn | `LINKEDIN_ENABLED` | `true` |
+| Indeed | `INDEED_ENABLED` | `true` |
+
+Scoring and notifications are also opt-in:
+
+| Feature | Env var(s) |
+|---|---|
+| Relevance gate + suitability scoring | `SCORING_USER_ID` + `ANTHROPIC_API_KEY` |
+| Email notifications | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
+| Per-ingest email | `NOTIFY_ON_INGEST=true` |
+| Daily digest | `NOTIFY_DIGEST_ENABLED=true` (default) + `NOTIFY_DIGEST_CRON` |
+| Proxy (datacenter) | `PROXY_DATACENTER_URL` |
+| Proxy (residential) | `PROXY_RESIDENTIAL_URL` |
 
 ## VPS Deployment
 
@@ -77,21 +137,9 @@ These steps cover deploying to a fresh Linux VPS (e.g. Hetzner, DigitalOcean).
 
 ### 1. SSH access
 
-Generate a key locally if you don't have one:
-
 ```sh
 ssh-keygen -t ed25519 -C "your@email.com"
-```
-
-Add your public key to the server (substitute your VPS IP):
-
-```sh
 ssh-copy-id root@<server-ip>
-```
-
-Then connect:
-
-```sh
 ssh root@<server-ip>
 ```
 
@@ -99,8 +147,8 @@ ssh root@<server-ip>
 
 ```sh
 # Go
-wget https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
-tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+wget https://go.dev/dl/go1.26.0.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.26.0.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
 
 # just
@@ -114,30 +162,25 @@ echo 'export PATH=$PATH:$(go env GOPATH)/bin' >> ~/.bashrc && source ~/.bashrc
 curl -fsSL https://get.docker.com | sh
 ```
 
-### 3. Clone the repo
+### 3. Clone and configure
 
 ```sh
 git clone https://github.com/O-Marsters-1997/job-scraper.git
 cd job-scraper
-```
-
-### 4. Configure environment
-
-```sh
 cp .env.example .env
 ```
 
-Edit `.env` with your values. All values must be **quoted** — `just`'s dotenv parser requires this for values containing spaces or special characters (e.g. cron expressions):
+Edit `.env` with your values. All values must be **quoted** — `just`'s dotenv parser requires this for values containing spaces or special characters:
 
 ```sh
-NOTIFY_DIGEST_CRON="0 9 * * *"   # must be quoted
+NOTIFY_DIGEST_CRON="0 9 * * *"
 ```
 
-**Database**: you can use any PostgreSQL instance — Docker locally, or a managed service like [Neon](https://neon.tech). Set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_SSLMODE` accordingly.
+**Database**: use any PostgreSQL instance — Docker locally, or a managed service like [Neon](https://neon.tech). Set `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_SSLMODE`.
 
-> **Neon / pooler note**: if your `POSTGRES_HOST` contains `-pooler.` in the hostname, migrations will hang because `goose` uses session-level advisory locks which are incompatible with PgBouncer transaction mode. Use the **direct** (non-pooler) endpoint and port `5432` when running `just migrate-up`. You can use the pooler URL for the application at runtime.
+> **Neon / pooler note**: if your `POSTGRES_HOST` contains `-pooler.` in the hostname, migrations will hang because `goose` uses session-level advisory locks incompatible with PgBouncer transaction mode. Use the direct (non-pooler) endpoint at port `5432` for `just migrate-up`. The pooler URL is fine at runtime.
 
-**Valkey**: start it via Docker:
+**Valkey**:
 
 ```sh
 docker run -d --name valkey -p 6379:6379 valkey/valkey:latest
@@ -145,112 +188,63 @@ docker run -d --name valkey -p 6379:6379 valkey/valkey:latest
 
 Set `VALKEY_ADDR="localhost:6379"` in `.env`.
 
-### 5. Run migrations
+### 4. Run migrations and start
 
 ```sh
 just migrate-up
-```
-
-### 6. Build and run
-
-```sh
 just build
 
-# Run the worker (long-running process)
-./bin/worker
-
-# Or run the API server
-./bin/api
+./bin/worker   # long-running process
+./bin/api      # API server (separate binary)
 ```
 
-To keep the process running after you disconnect, use `systemd` or a simple `screen`/`tmux` session.
+To keep the process running after disconnect, use `systemd` or `screen`/`tmux`.
 
 ## Adding a New Source
 
-1. **Implement the `Source` interface** (`internal/sources/source.go`):
-   ```go
-   type Source interface {
-       Cfg() Config
-       CanHandle(url string) bool
-       Iterate(ctx context.Context, fn func(ctx context.Context, urls []string) (stop bool, err error)) error
-       GetDetails(ctx context.Context, url string) (dto.Job, error)
-   }
-   ```
-   Embed `PaginatedBase` to get a pre-configured HTTP client, `CanHandle` implementation, and the `IteratePages` pagination helper.
-
-2. **Register it in `cmd/main.go`**:
-   ```go
-   srcs := []sources.Source{wis.New(), mynewsource.New()}
-   ```
-
-3. **Add snapshot tests** — capture one list page and at least one detail page:
-   ```sh
-   # Capture a list-page snapshot
-   just cli download <source> list_page1 <url>
-   # Capture a detail-page snapshot (also writes a .url sidecar for rebase)
-   just cli download <source> detail_job1 <url>
-   # Generate JSON fixtures from current parser output
-   just cli rebase <source>
-   ```
-   Then write a single test:
-   ```go
-   func TestSnapshots(t *testing.T) {
-       sources.RunSnapshotTests(t, mynewsource.New())
-   }
-   ```
-   The framework routes `list_*.html` to `ParseURLs` and `detail_*.html` to `ParseJobDetail` automatically. All fixtures use `[]dto.Job` as their JSON schema.
+See [docs/sources/adding-a-source.md](docs/sources/adding-a-source.md) for the full guide covering the ATS vs HTML decision, interface implementation, `PaginatedBase` helpers, snapshot testing, and registration.
 
 ## Testing
 
 ```sh
 just test        # unit + integration tests
 just test-race   # with race detector
-just ci          # fmt + lint + test
+just ci          # fmt + lint + generate + test + build
 ```
 
 ### Strategy
 
-Tests are grouped by layer, each with a different scope and dependency profile:
-
 | Layer | Approach | Dependencies |
 |---|---|---|
-| **Parsers** (`ParseURLs`, `ParseJobDetail`) | Snapshot tests — parse committed HTML fixtures, compare against committed JSON | None (zero network) |
+| **Parsers** (`ParseURLs`, `ParseJobDetail`) | Snapshot tests — parse committed HTML, compare against committed JSON | None |
 | **DB** (`Save`, `NewURLs`, `List`) | Integration — real PostgreSQL via testcontainers | Docker |
 | **Queue** (`Enqueue`, `Dequeue`, etc.) | Integration — real Valkey via testcontainers | Docker |
-| **Orchestrator** | Unit — `MockQueue`, `MockJobProvider`, stub `Source` | None |
-| **Worker** | Unit — `MockQueue`, stub `HandlerFunc` | None |
+| **Orchestrator** | Unit — `FakeQueue`, stub `Source` | None |
+| **Worker** | Unit — `FakeQueue`, stub handler | None |
 
-**Snapshot tests** are the primary pattern for new sources. All parser fixtures share a single `[]dto.Job` JSON schema — list pages produce URL-only entries, detail pages produce fully-populated entries. File prefix determines which parser the framework calls: `list_*.html` → `ParseURLs`, `detail_*.html` → `ParseJobDetail`.
+**Snapshot tests** are the primary pattern for HTML sources. All fixtures use `[]dto.Job` as their JSON schema. File prefix determines which parser the framework calls: `list_*.html` → `ParseURLs`, `detail_*.html` → `ParseJobDetail`. The URL for detail parsing is read from the fixture's first entry.
 
-**Integration tests** (DB and queue) prove the real infrastructure implementations work and are the only tests that require Docker. They are isolated — each test truncates or flushes to avoid cross-contamination.
+**Integration tests** (DB and queue) use testcontainers and are the only tests that require Docker. Each test truncates or flushes to avoid cross-contamination.
 
-**Unit tests** (orchestrator and worker) use mock implementations (`MockQueue` in `internal/queue/`, `MockJobProvider` in `internal/data/providers/`) that live outside `_test.go` so they can be imported across packages. These tests run in milliseconds with no infrastructure.
+**Unit tests** (orchestrator, worker, ingest, score) use fakes/mocks that live outside `_test.go` files so they can be imported across packages.
 
-### Adding snapshot tests for a new source
+### Snapshot workflow
 
 ```sh
 # Capture fixtures
 just cli download <source> list_page1 <listing-url>
 just cli download <source> detail_job1 <detail-url>
+
 # Generate JSON from current parser output
 just cli rebase <source>
 ```
 
-Write one test:
+Write one test per source:
+
 ```go
 func TestSnapshots(t *testing.T) {
-    sources.RunSnapshotTests(t, mynewsource.New())
+    sources.RunSnapshotTests(t, mysource.New())
 }
 ```
 
 To update fixtures after a parser change: `just cli rebase <source>`.
-
-## Future Directions
-
-Natural extension points in the current architecture:
-
-- **API / query layer** — `db.List()` already exists; a thin HTTP handler over it is the obvious next step for surfacing jobs to consumers.
-- **Additional sources** — implement `Source`, register, done. The orchestrator and worker need no changes.
-- **Notification hooks** — the worker's `HandlerFunc` is the right place to fan out to webhooks, email, or a notification queue after a successful upsert.
-- **Observability** — the cron schedule and last-scrape timestamps are already tracked in Valkey; exposing these as metrics (Prometheus, etc.) is straightforward.
-- **Filtering / relevance scoring** — a post-upsert enrichment stage could run keyword matching or an embedding model against `jobs.title` before notifying.
