@@ -90,10 +90,3 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 		}
 	}
 }
-
-func TestNeedsDetail_ReturnsFalse(t *testing.T) {
-	s := New(Config{Boards: []string{"acme"}})
-	if s.NeedsDetail() {
-		t.Error("NeedsDetail() = true, want false for ATS source")
-	}
-}

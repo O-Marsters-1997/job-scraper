@@ -34,6 +34,7 @@ const (
 type Scraper struct{ sources.PaginatedBase }
 
 var _ sources.Source = (*Scraper)(nil)
+var _ sources.DetailFetcher = (*Scraper)(nil)
 
 func New() *Scraper {
 	return &Scraper{sources.NewBase(sources.Config{
@@ -84,8 +85,6 @@ func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
 func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	return ParseJobDetail(r, url)
 }
-
-func (s *Scraper) NeedsDetail() bool { return true }
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
 	return s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
