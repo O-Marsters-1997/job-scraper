@@ -221,9 +221,16 @@ func main() {
 	cr.Start()
 	defer cr.Stop()
 
+	detailers := make([]sources.DetailFetcher, 0, len(srcs))
+	for _, s := range srcs {
+		if df, ok := s.(sources.DetailFetcher); ok {
+			detailers = append(detailers, df)
+		}
+	}
+
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
-		job, err := sources.Dispatch(ctx, srcs, qj.URL)
+		job, err := sources.Dispatch(ctx, detailers, qj.URL)
 		if err != nil {
 			slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
 			return err

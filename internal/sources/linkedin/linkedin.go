@@ -15,6 +15,7 @@ import (
 type Scraper struct{ sources.PaginatedBase }
 
 var _ sources.Source = (*Scraper)(nil)
+var _ sources.DetailFetcher = (*Scraper)(nil)
 
 func New() *Scraper {
 	return &Scraper{sources.NewBase(sources.Config{
@@ -25,8 +26,6 @@ func New() *Scraper {
 		ProxyTier:         proxy.Residential,
 	})}
 }
-
-func (s *Scraper) NeedsDetail() bool { return true }
 
 func (s *Scraper) CanHandle(url string) bool {
 	return strings.Contains(url, "linkedin.com")

@@ -46,21 +46,18 @@ type Config struct {
 type Source interface {
 	Cfg() Config
 
-	// CanHandle reports whether this source produced url and can parse its
-	// detail page. Used by Dispatch to route dequeued URLs to the right source.
-	CanHandle(url string) bool
-
 	// Iterate pages through all jobs from the source, calling fn for each
 	// page's jobs. ATS sources yield fully-populated dto.Job; HTML sources
 	// yield partial dto.Job{URL: url}. fn returning stop=true triggers early
 	// termination. Respects ctx cancellation.
 	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
+}
 
-	// NeedsDetail reports whether jobs from this source require a separate
-	// GetDetails fetch to be fully populated. ATS sources return false (jobs
-	// arrive complete); HTML scrape sources return true.
-	NeedsDetail() bool
-
+// DetailFetcher is an optional capability. Only two-phase (HTML) sources
+// implement it. Its presence — not a NeedsDetail() bool — is the single
+// source of truth for "this source needs a second detail fetch".
+type DetailFetcher interface {
+	CanHandle(url string) bool
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 
@@ -169,9 +166,9 @@ func (b *PaginatedBase) IteratePages(
 	return nil
 }
 
-// Dispatch routes url to the first source that claims it via CanHandle and
-// calls its GetDetails. Returns an error if no source claims the URL.
-func Dispatch(ctx context.Context, srcs []Source, url string) (dto.Job, error) {
+// Dispatch routes url to the first DetailFetcher that claims it via CanHandle
+// and calls its GetDetails. Returns an error if no fetcher claims the URL.
+func Dispatch(ctx context.Context, srcs []DetailFetcher, url string) (dto.Job, error) {
 	for _, src := range srcs {
 		if src.CanHandle(url) {
 			return src.GetDetails(ctx, url)

@@ -34,13 +34,6 @@ func New(cfg Config) *Scraper {
 	}
 }
 
-func (s *Scraper) NeedsDetail() bool { return false }
-
-// GetDetails is a no-op for ATS sources — jobs arrive fully populated from Iterate.
-func (s *Scraper) GetDetails(_ context.Context, _ string) (dto.Job, error) {
-	return dto.Job{}, fmt.Errorf("greenhouse: GetDetails must not be called (NeedsDetail=false)")
-}
-
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
 	for _, token := range s.cfg.Boards {
 		jobs, err := s.fetchBoard(ctx, token)
