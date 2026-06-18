@@ -16,7 +16,10 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
+	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/notify"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 func main() {
@@ -74,6 +77,10 @@ func main() {
 	cvSvc := cvtemplates.NewService(googleClient, db)
 	cvH := handlers.NewCVTemplatesHandler(cvSvc, googleClient)
 
+	scoringUserID := os.Getenv("SCORING_USER_ID")
+	ingestSvc := buildIngestSvc(ctx, db, scoringUserID)
+	ingestH := handlers.NewIngestHandler(ingestSvc)
+
 	r.Post("/auth/login", authH.Login)
 	r.Post("/auth/signup", authH.Signup)
 
@@ -111,6 +118,11 @@ func main() {
 		r.Get("/cv-templates/{docId}/{tabId}/pdf", cvH.ExportCV)
 	})
 
+	r.Group(func(r chi.Router) {
+		r.Use(auth.ServiceTokenMiddleware)
+		r.Post("/ingest", ingestH.Ingest)
+	})
+
 	srv := &http.Server{Addr: port, Handler: r}
 
 	go func() {
@@ -123,4 +135,61 @@ func main() {
 		slog.Error("server error", slog.Any("err", err))
 		os.Exit(1)
 	}
+}
+
+func buildIngestSvc(ctx context.Context, db *jobsdb.DB, scoringUserID string) *ingest.Ingester {
+	var scorer ingest.Scorer
+	if scoringUserID != "" {
+		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+			scorer = score.NewIngestScorer(claudeScorer, db, db, scoringUserID)
+		}
+	}
+	var notifier ingest.Notifier
+	if notifSvc := setupNotifications(ctx, db, scoringUserID); notifSvc != nil {
+		notifier = notifSvc
+	}
+	return ingest.New(db, scorer, notifier)
+}
+
+func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *notify.NotificationService {
+	apiKey := os.Getenv("RESEND_API_KEY")
+	to := os.Getenv("NOTIFY_EMAIL_TO")
+	from := os.Getenv("NOTIFY_EMAIL_FROM")
+	if from == "" {
+		from = "onboarding@resend.dev"
+	}
+
+	if apiKey == "" || to == "" {
+		slog.Info("notifications disabled: RESEND_API_KEY or NOTIFY_EMAIL_TO not set")
+		return nil
+	}
+
+	renderer, err := notify.NewRenderer()
+	if err != nil {
+		slog.Error("notify: failed to load templates", slog.Any("err", err))
+		return nil
+	}
+
+	var threshold int
+	if userID != "" {
+		if cfg, err := db.GetSearchConfig(ctx, userID); err == nil {
+			threshold = cfg.NotifyThreshold
+		} else {
+			slog.Warn("notify: could not load search config for threshold", slog.Any("err", err))
+		}
+	}
+
+	cfg := notify.Config{
+		To:              to,
+		OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
+		DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
+		NotifyThreshold: threshold,
+	}
+
+	return notify.NewNotificationService(
+		notify.NewResendNotifier(apiKey, from),
+		renderer,
+		cfg,
+	)
 }
