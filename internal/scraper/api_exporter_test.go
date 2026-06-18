@@ -10,7 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func TestAPIPublisher_CorrectRequestShape(t *testing.T) {
+func TestAPIExporter_CorrectRequestShape(t *testing.T) {
 	var gotMethod, gotPath, gotContentType, gotAuth string
 	var gotBody dto.Job
 
@@ -24,10 +24,10 @@ func TestAPIPublisher_CorrectRequestShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIPublisher(srv.URL, "test-token")
+	pub := NewAPIExporter(srv.URL, "test-token")
 	job := dto.Job{Title: "Engineer", URL: "https://example.com/job/1"}
 
-	if err := pub.Publish(context.Background(), []dto.Job{job}); err != nil {
+	if err := pub.BulkExport(context.Background(), []dto.Job{job}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,19 +48,19 @@ func TestAPIPublisher_CorrectRequestShape(t *testing.T) {
 	}
 }
 
-func TestAPIPublisher_2xx_ReturnsNil(t *testing.T) {
+func TestAPIExporter_2xx_ReturnsNil(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer srv.Close()
 
-	pub := NewAPIPublisher(srv.URL, "tok")
-	if err := pub.Publish(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err != nil {
+	pub := NewAPIExporter(srv.URL, "tok")
+	if err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err != nil {
 		t.Errorf("expected nil error on 201, got %v", err)
 	}
 }
 
-func TestAPIPublisher_4xx_ReturnsError(t *testing.T) {
+func TestAPIExporter_4xx_ReturnsError(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -68,8 +68,8 @@ func TestAPIPublisher_4xx_ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIPublisher(srv.URL, "tok")
-	err := pub.Publish(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
+	pub := NewAPIExporter(srv.URL, "tok")
+	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
 	if err == nil {
 		t.Error("expected error on 400, got nil")
 	}
@@ -78,7 +78,7 @@ func TestAPIPublisher_4xx_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestAPIPublisher_5xx_RetriesAndReturnsError(t *testing.T) {
+func TestAPIExporter_5xx_RetriesAndReturnsError(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -86,10 +86,10 @@ func TestAPIPublisher_5xx_RetriesAndReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIPublisher(srv.URL, "tok")
+	pub := NewAPIExporter(srv.URL, "tok")
 	pub.initialBackoff = 0 // no sleep between retries in tests
 
-	err := pub.Publish(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
+	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
 	if err == nil {
 		t.Error("expected error after 5xx retries, got nil")
 	}

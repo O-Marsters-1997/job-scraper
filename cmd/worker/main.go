@@ -70,7 +70,7 @@ func main() {
 		os.Exit(1)
 	}
 	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
-	publisher := scraper.NewAPIPublisher(apiBaseURL, ingestToken)
+	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 
 	scoringUserID := os.Getenv("SCORING_USER_ID")
 
@@ -123,7 +123,7 @@ func main() {
 	}
 
 	orch := scraper.New(srcs, db, q)
-	orch.WithPublisher(publisher)
+	orch.WithExporter(exporter)
 
 	if scoringUserID != "" {
 		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
@@ -171,7 +171,7 @@ func main() {
 			slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
 			return err
 		}
-		return publisher.Publish(ctx, []dto.Job{job})
+		return exporter.Export(ctx, job)
 	}); err != nil {
 		slog.Error("worker failed",
 			slog.Any("err", err),

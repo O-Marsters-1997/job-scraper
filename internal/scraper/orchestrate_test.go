@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 	"testing"
@@ -53,12 +54,12 @@ func (s *atsStubSource) Iterate(ctx context.Context, fn func(context.Context, []
 	return err
 }
 
-type recordingPublisher struct {
-	published []dto.Job
+type recordingExporter struct {
+	exported []dto.Job
 }
 
-func (r *recordingPublisher) Publish(_ context.Context, jobs []dto.Job) error {
-	r.published = append(r.published, jobs...)
+func (r *recordingExporter) BulkExport(_ context.Context, jobs []dto.Job) error {
+	r.exported = append(r.exported, jobs...)
 	return nil
 }
 
@@ -237,102 +238,89 @@ func (s *multiPageSource) Iterate(ctx context.Context, fn func(context.Context, 
 	return nil
 }
 
-func TestATSPath_PublishesJobs(t *testing.T) {
-	pub := &recordingPublisher{}
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
+func TestRun_Paths(t *testing.T) {
+	t.Parallel()
 
-	jobs := []dto.Job{
-		{Title: "Engineer", URL: "https://boards.greenhouse.io/acme/jobs/1"},
-		{Title: "Designer", URL: "https://boards.greenhouse.io/acme/jobs/2"},
+	atsSrc := func(n int) *atsStubSource {
+		jobs := make([]dto.Job, n)
+		for i := range jobs {
+			jobs[i] = dto.Job{
+				Title: "Engineer",
+				URL:   fmt.Sprintf("https://boards.greenhouse.io/acme/jobs/%d", i+1),
+			}
+		}
+		return &atsStubSource{jobs: jobs, name: "ats-test"}
 	}
-	src := &atsStubSource{jobs: jobs, name: "ats-test"}
-
-	o := New([]sources.Source{src}, db, q)
-	o.WithPublisher(pub)
-
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
-
-	if len(pub.published) != 2 {
-		t.Errorf("published %d jobs, want 2", len(pub.published))
-	}
-	if len(q.Items()) != 0 {
-		t.Errorf("expected nothing enqueued for ATS path, got %d", len(q.Items()))
-	}
-}
-
-func TestATSPath_RelevanceGateDropsBelowCutoff(t *testing.T) {
-	pub := &recordingPublisher{}
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-
-	jobs := []dto.Job{
-		{Title: "Engineer", URL: "https://boards.greenhouse.io/acme/jobs/1"},
-		{Title: "Designer", URL: "https://boards.greenhouse.io/acme/jobs/2"},
-	}
-	src := &atsStubSource{jobs: jobs, name: "ats-gate-test"}
-
-	o := New([]sources.Source{src}, db, q)
-	o.WithPublisher(pub)
-	// zeroScorer always scores 0; cutoff in mock config will be above 0 so all jobs are dropped.
-	o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, nil, "user1")
-
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
+	htmlSrc := func(n int) *stubSource {
+		urls := make([]string, n)
+		for i := range urls {
+			urls[i] = fmt.Sprintf("https://example.com/job/%d", i+1)
+		}
+		return &stubSource{cfg: sources.Config{Name: "html-test"}, urls: urls}
 	}
 
-	if len(pub.published) != 0 {
-		t.Errorf("expected 0 published (all below cutoff), got %d", len(pub.published))
-	}
-}
-
-func TestHTMLPath_EnqueuesNotPublishes(t *testing.T) {
-	pub := &recordingPublisher{}
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-
-	src := &stubSource{
-		cfg:  sources.Config{Name: "html-test"},
-		urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
-	}
-
-	o := New([]sources.Source{src}, db, q)
-	o.WithPublisher(pub)
-
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
-
-	if len(q.Items()) != 2 {
-		t.Errorf("expected 2 items enqueued, got %d", len(q.Items()))
-	}
-	if len(pub.published) != 0 {
-		t.Errorf("expected nothing published directly for HTML path, got %d", len(pub.published))
-	}
-}
-
-func TestHTMLPath_RelevanceGateDropsBelowCutoff(t *testing.T) {
-	pub := &recordingPublisher{}
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-
-	src := &stubSource{
-		cfg:  sources.Config{Name: "html-gate-test"},
-		urls: []string{"https://example.com/job/1"},
+	tests := []struct {
+		name         string
+		src          sources.Source
+		useGate      bool
+		wantExported int
+		wantQueued   int
+	}{
+		{
+			name:         "ats publishes jobs",
+			src:          atsSrc(2),
+			wantExported: 2,
+			wantQueued:   0,
+		},
+		{
+			name:         "ats gate drops below cutoff",
+			src:          atsSrc(2),
+			useGate:      true,
+			wantExported: 0,
+			wantQueued:   0,
+		},
+		{
+			name:         "html enqueues not publishes",
+			src:          htmlSrc(2),
+			wantExported: 0,
+			wantQueued:   2,
+		},
+		{
+			name:         "html gate drops below cutoff",
+			src:          htmlSrc(1),
+			useGate:      true,
+			wantExported: 0,
+			wantQueued:   0,
+		},
 	}
 
-	o := New([]sources.Source{src}, db, q)
-	o.WithPublisher(pub)
-	o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, nil, "user1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
+			q := queue.NewMockQueue()
+			db := providers.NewMockJobProvider()
+			exp := &recordingExporter{}
 
-	if len(q.Items()) != 0 {
-		t.Errorf("expected 0 items enqueued (all below cutoff), got %d", len(q.Items()))
+			o := New([]sources.Source{tt.src}, db, q)
+			o.WithExporter(exp)
+			if tt.useGate {
+				// zeroScorer always scores 0; highCutoffCfgDB sets cutoff above 0,
+				// so all jobs are dropped.
+				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, nil, "user1")
+			}
+
+			if err := o.run(context.Background(), tt.src); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := len(exp.exported); got != tt.wantExported {
+				t.Errorf("exported = %d, want %d", got, tt.wantExported)
+			}
+			if got := len(q.Items()); got != tt.wantQueued {
+				t.Errorf("queued = %d, want %d", got, tt.wantQueued)
+			}
+		})
 	}
 }
 

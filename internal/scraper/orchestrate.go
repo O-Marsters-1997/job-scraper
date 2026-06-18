@@ -18,16 +18,16 @@ import (
 )
 
 type Orchestrator struct {
-	srcs      []sources.Source
-	db        providers.JobProvider
-	q         queue.JobQueue
-	scorer    score.RelevanceScorer          // nil means no gate
-	cfgDB     providers.SearchConfigProvider // nil means no gate
-	scoreDB   providers.JobScoreProvider     // nil means no score writes
-	publisher JobPublisher                   // nil means no ATS egress
-	userID    string
-	cr        *cron.Cron
-	wg        sync.WaitGroup
+	srcs     []sources.Source
+	db       providers.JobProvider
+	q        queue.JobQueue
+	scorer   score.RelevanceScorer          // nil means no gate
+	cfgDB    providers.SearchConfigProvider // nil means no gate
+	scoreDB  providers.JobScoreProvider     // nil means no score writes
+	exporter JobExporter                    // nil means no ATS egress
+	userID   string
+	cr       *cron.Cron
+	wg       sync.WaitGroup
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -45,9 +45,9 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB pro
 	return o
 }
 
-// WithPublisher wires in the egress port used by the ATS path.
-func (o *Orchestrator) WithPublisher(pub JobPublisher) *Orchestrator {
-	o.publisher = pub
+// WithExporter wires in the egress port used by the ATS path.
+func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
+	o.exporter = exp
 	return o
 }
 
@@ -149,11 +149,11 @@ func (g relevanceGate) passes(job dto.Job) (int, bool) {
 }
 
 type atsPath struct {
-	publisher JobPublisher
-	scoreDB   providers.JobScoreProvider
-	name      string
-	gate      relevanceGate
-	userID    string
+	exporter JobExporter
+	scoreDB  providers.JobScoreProvider
+	name     string
+	gate     relevanceGate
+	userID   string
 }
 
 func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
@@ -182,7 +182,7 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	for i, s := range survivors {
 		validJobs[i] = s.job
 	}
-	if err := p.publisher.Publish(ctx, validJobs); err != nil {
+	if err := p.exporter.BulkExport(ctx, validJobs); err != nil {
 		return false, err
 	}
 
@@ -281,5 +281,5 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	if _, ok := src.(sources.DetailFetcher); ok {
 		return src.Iterate(ctx, (&htmlPath{db: o.db, q: o.q, gate: gate, seen: map[string]struct{}{}}).onPage)
 	}
-	return src.Iterate(ctx, (&atsPath{publisher: o.publisher, scoreDB: o.scoreDB, name: src.Cfg().Name, gate: gate, userID: o.userID}).onPage)
+	return src.Iterate(ctx, (&atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: src.Cfg().Name, gate: gate, userID: o.userID}).onPage)
 }
