@@ -7,15 +7,12 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/robfig/cron/v3"
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/logger"
-	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
@@ -67,9 +64,15 @@ func main() {
 	slog.Info("queue client ready", slog.String("addr", valkeyAddr))
 	defer q.Close()
 
-	scoringUserID := os.Getenv("SCORING_USER_ID")
+	apiBaseURL := os.Getenv("API_BASE_URL")
+	if apiBaseURL == "" {
+		slog.Error("API_BASE_URL is required")
+		os.Exit(1)
+	}
+	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
+	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 
-	notifSvc := setupNotifications(ctx, db, scoringUserID)
+	scoringUserID := os.Getenv("SCORING_USER_ID")
 
 	srcs := []sources.Source{wis.New()}
 
@@ -120,30 +123,13 @@ func main() {
 	}
 
 	orch := scraper.New(srcs, db, q)
+	orch.WithExporter(exporter)
 
-	var ingestScorer *score.IngestScorer
 	if scoringUserID != "" {
 		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
 		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
-
-		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
-			ingestScorer = score.NewIngestScorer(claudeScorer, db, db, scoringUserID)
-			slog.Info("suitability scorer enabled", slog.String("user_id", scoringUserID))
-		}
 	}
 
-	// Use typed interface vars to avoid the nil-concrete-pointer pitfall.
-	var scorer ingest.Scorer
-	if ingestScorer != nil {
-		scorer = ingestScorer
-	}
-	var notifier ingest.Notifier
-	if notifSvc != nil {
-		notifier = notifSvc
-	}
-	ing := ingest.New(db, scorer, notifier)
-	orch.WithIngester(ing)
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
 			slog.Any("err", err),
@@ -168,56 +154,6 @@ func main() {
 		slog.Info("cron: scheduled session cleanup", slog.String("schedule", "@daily"))
 	}
 
-	if notifSvc != nil {
-		digestSchedule := os.Getenv("NOTIFY_DIGEST_CRON")
-		if digestSchedule == "" {
-			digestSchedule = "0 9 * * *"
-		}
-		if _, err := cr.AddFunc(digestSchedule, func() {
-			lastSent, err := db.GetLastDigestSentAt(ctx)
-			if err != nil {
-				slog.Error("digest: get last sent failed",
-					slog.Any("err", err),
-				)
-				return
-			}
-			var jobs []dto.Job
-			if lastSent.IsZero() {
-				jobs, err = db.List(ctx, "")
-			} else {
-				jobs, err = db.ListSince(ctx, lastSent)
-			}
-			if err != nil {
-				slog.Error("digest: list jobs failed",
-					slog.Any("err", err),
-				)
-				return
-			}
-			jobs = filterByThreshold(ctx, db, jobs, notifSvc.Threshold(), scoringUserID)
-			if len(jobs) == 0 {
-				slog.Info("digest: no new jobs above threshold, skipping")
-				return
-			}
-			if err := notifSvc.SendDigest(ctx, jobs); err != nil {
-				slog.Error("digest: send failed",
-					slog.Any("err", err),
-				)
-				return
-			}
-			if err := db.RecordDigest(ctx, time.Now(), len(jobs)); err != nil {
-				slog.Error("digest: record failed",
-					slog.Any("err", err),
-				)
-			}
-		}); err != nil {
-			slog.Error("digest cron schedule failed",
-				slog.Any("err", err),
-			)
-		} else {
-			slog.Info("cron: scheduled digest", slog.String("schedule", digestSchedule))
-		}
-	}
-
 	cr.Start()
 	defer cr.Stop()
 
@@ -235,7 +171,7 @@ func main() {
 			slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
 			return err
 		}
-		return ing.Ingest(ctx, []dto.Job{job})
+		return exporter.Export(ctx, job)
 	}); err != nil {
 		slog.Error("worker failed",
 			slog.Any("err", err),
@@ -249,66 +185,4 @@ func splitBoards(env string) []string {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts
-}
-
-// filterByThreshold returns only jobs whose suitability score meets the threshold.
-// When threshold is 0 or userID is empty, all jobs are returned unchanged.
-// Jobs with no score entry are excluded when a threshold is active.
-func filterByThreshold(ctx context.Context, db *jobsdb.DB, jobs []dto.Job, threshold int, userID string) []dto.Job {
-	if threshold <= 0 || userID == "" {
-		return jobs
-	}
-	out := make([]dto.Job, 0, len(jobs))
-	for _, j := range jobs {
-		js, err := db.GetJobScore(ctx, j.ID, userID)
-		if err != nil || js.SuitabilityScore == nil || *js.SuitabilityScore < threshold {
-			continue
-		}
-		out = append(out, j)
-	}
-	return out
-}
-
-func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *notify.NotificationService {
-	apiKey := os.Getenv("RESEND_API_KEY")
-	to := os.Getenv("NOTIFY_EMAIL_TO")
-	from := os.Getenv("NOTIFY_EMAIL_FROM")
-	if from == "" {
-		from = "onboarding@resend.dev"
-	}
-
-	if apiKey == "" || to == "" {
-		slog.Info("notifications disabled: RESEND_API_KEY or NOTIFY_EMAIL_TO not set")
-		return nil
-	}
-
-	renderer, err := notify.NewRenderer()
-	if err != nil {
-		slog.Error("notify: failed to load templates",
-			slog.Any("err", err),
-		)
-		return nil
-	}
-
-	var threshold int
-	if userID != "" {
-		if cfg, err := db.GetSearchConfig(ctx, userID); err == nil {
-			threshold = cfg.NotifyThreshold
-		} else {
-			slog.Warn("notify: could not load search config for threshold", slog.Any("err", err))
-		}
-	}
-
-	cfg := notify.Config{
-		To:              to,
-		OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
-		DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
-		NotifyThreshold: threshold,
-	}
-
-	return notify.NewNotificationService(
-		notify.NewResendNotifier(apiKey, from),
-		renderer,
-		cfg,
-	)
 }

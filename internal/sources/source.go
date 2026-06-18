@@ -53,9 +53,9 @@ type Source interface {
 	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
 }
 
-// DetailFetcher is an optional capability. Only two-phase (HTML) sources
-// implement it. Its presence — not a NeedsDetail() bool — is the single
-// source of truth for "this source needs a second detail fetch".
+// DetailFetcher is an optional capability implemented by HTML scrape sources
+// that require a separate per-URL fetch to produce a fully-populated dto.Job.
+// ATS sources do not implement this interface.
 type DetailFetcher interface {
 	CanHandle(url string) bool
 	GetDetails(ctx context.Context, url string) (dto.Job, error)

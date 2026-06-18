@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 	"testing"
@@ -10,9 +11,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
+// stubSource is an HTML-like source: implements Source and DetailFetcher so
+// run() routes it through htmlPath (enqueue, not publish).
 type stubSource struct {
 	cfg  sources.Config
 	urls []string
@@ -33,6 +37,30 @@ func (s *stubSource) Iterate(ctx context.Context, fn func(context.Context, []dto
 	}
 	_, err := fn(ctx, jobs)
 	return err
+}
+
+// atsStubSource is an ATS-like source: implements Source only (not DetailFetcher)
+// so run() routes it through atsPath (publish, not enqueue).
+type atsStubSource struct {
+	jobs []dto.Job
+	name string
+}
+
+var _ sources.Source = (*atsStubSource)(nil)
+
+func (s *atsStubSource) Cfg() sources.Config { return sources.Config{Name: s.name} }
+func (s *atsStubSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
+	_, err := fn(ctx, s.jobs)
+	return err
+}
+
+type recordingExporter struct {
+	exported []dto.Job
+}
+
+func (r *recordingExporter) BulkExport(_ context.Context, jobs []dto.Job) error {
+	r.exported = append(r.exported, jobs...)
+	return nil
 }
 
 func TestRun_EnqueuesNewURLs(t *testing.T) {
@@ -209,3 +237,109 @@ func (s *multiPageSource) Iterate(ctx context.Context, fn func(context.Context, 
 	}
 	return nil
 }
+
+func TestRun_Paths(t *testing.T) {
+	t.Parallel()
+
+	atsSrc := func(n int) *atsStubSource {
+		jobs := make([]dto.Job, n)
+		for i := range jobs {
+			jobs[i] = dto.Job{
+				Title: "Engineer",
+				URL:   fmt.Sprintf("https://boards.greenhouse.io/acme/jobs/%d", i+1),
+			}
+		}
+		return &atsStubSource{jobs: jobs, name: "ats-test"}
+	}
+	htmlSrc := func(n int) *stubSource {
+		urls := make([]string, n)
+		for i := range urls {
+			urls[i] = fmt.Sprintf("https://example.com/job/%d", i+1)
+		}
+		return &stubSource{cfg: sources.Config{Name: "html-test"}, urls: urls}
+	}
+
+	tests := []struct {
+		name         string
+		src          sources.Source
+		useGate      bool
+		wantExported int
+		wantQueued   int
+	}{
+		{
+			name:         "ats publishes jobs",
+			src:          atsSrc(2),
+			wantExported: 2,
+			wantQueued:   0,
+		},
+		{
+			name:         "ats gate drops below cutoff",
+			src:          atsSrc(2),
+			useGate:      true,
+			wantExported: 0,
+			wantQueued:   0,
+		},
+		{
+			name:         "html enqueues not publishes",
+			src:          htmlSrc(2),
+			wantExported: 0,
+			wantQueued:   2,
+		},
+		{
+			name:         "html gate drops below cutoff",
+			src:          htmlSrc(1),
+			useGate:      true,
+			wantExported: 0,
+			wantQueued:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			q := queue.NewMockQueue()
+			db := providers.NewMockJobProvider()
+			exp := &recordingExporter{}
+
+			o := New([]sources.Source{tt.src}, db, q)
+			o.WithExporter(exp)
+			if tt.useGate {
+				// zeroScorer always scores 0; highCutoffCfgDB sets cutoff above 0,
+				// so all jobs are dropped.
+				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, nil, "user1")
+			}
+
+			if err := o.run(context.Background(), tt.src); err != nil {
+				t.Fatal(err)
+			}
+
+			if got := len(exp.exported); got != tt.wantExported {
+				t.Errorf("exported = %d, want %d", got, tt.wantExported)
+			}
+			if got := len(q.Items()); got != tt.wantQueued {
+				t.Errorf("queued = %d, want %d", got, tt.wantQueued)
+			}
+		})
+	}
+}
+
+// zeroScorer always returns 0.
+type zeroScorer struct{}
+
+func (z *zeroScorer) Score(_ dto.Job, _ dto.SearchConfig) int { return 0 }
+
+// highCutoffCfgDB returns a SearchConfig with a high cutoff so zeroScorer always fails.
+type highCutoffCfgDB struct{}
+
+func (h *highCutoffCfgDB) GetSearchConfig(_ context.Context, _ string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{RelevanceCutoff: 100}, nil
+}
+
+func (h *highCutoffCfgDB) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
+	return cfg, nil
+}
+
+// Verify zeroScorer and highCutoffCfgDB satisfy the required interfaces.
+var _ score.RelevanceScorer = (*zeroScorer)(nil)
+var _ providers.SearchConfigProvider = (*highCutoffCfgDB)(nil)
