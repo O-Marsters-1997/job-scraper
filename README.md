@@ -4,54 +4,68 @@ An automated pipeline that crawls startup job boards, deduplicates listings, enr
 
 ## Overview
 
-The entry point is `cmd/worker` — a single long-running process that runs three things concurrently:
+There are two long-running binaries:
 
-1. **Orchestrator** — a cron-driven loop that iterates each configured source on a schedule (default `0 */6 * * *`) and either saves jobs directly or enqueues URLs for detail fetching, depending on the source type.
-2. **Worker loop** — dequeues URLs one at a time, fetches the detail page via the owning source's `GetDetails`, then ingests the result.
-3. **Notification cron** — a daily digest (configurable via `NOTIFY_DIGEST_CRON`), plus optional per-ingest alerts.
+- **`cmd/worker`** — runs the orchestrator, the queue consumer loop, and a session-cleanup cron. It scrapes sources and ships every discovered job to the API via `POST /ingest`.
+- **`cmd/api`** — the HTTP API server. Handles all frontend routes, user auth, application tracking, CV templates, and the `POST /ingest` endpoint that persist/score/notifies incoming jobs.
+
+`cmd/worker` runs three things concurrently:
+
+1. **Orchestrator** — a cron-driven loop that iterates each configured source on a schedule (default `0 */6 * * *`) and either exports jobs directly (ATS sources) or enqueues URLs for detail fetching (HTML sources).
+2. **Worker loop** — dequeues URLs one at a time, fetches the detail page via the owning source's `GetDetails`, then exports the result to the API.
+3. **Session-cleanup cron** — a daily cron to purge expired sessions from the DB.
 
 ### Two source types
 
-The central design concept is `Source.NeedsDetail()`:
+The central design concept is the optional `DetailFetcher` interface:
 
-- **ATS sources** (`NeedsDetail() == false`): greenhouse, lever, ashby, workable, recruitee, personio. Hit a JSON API and return fully-populated `dto.Job`s in one call. Jobs are ingested directly — no queue round-trip.
-- **HTML sources** (`NeedsDetail() == true`): wis (Work In Startups, always on), linkedin, indeed. Scrape an HTML listing page, yielding URLs plus partial card metadata. Each URL is enqueued; the worker fetches the detail page separately.
+- **ATS sources** (implement `Source` only): greenhouse, lever, ashby, workable, recruitee, personio. Hit a JSON API and return fully-populated `dto.Job`s in one call. Jobs are exported directly via `APIExporter.BulkExport` — no queue round-trip.
+- **HTML sources** (implement `Source` + `DetailFetcher`): wis (Work In Startups, always on), linkedin, indeed. Scrape an HTML listing page, yielding URLs plus partial card metadata. Each URL is enqueued; the worker fetches the detail page separately via `DetailFetcher.GetDetails`, then exports via `APIExporter.Export`.
+
+The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetcher)` picks the HTML path; otherwise the ATS path runs.
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ Orchestrator (cron, per source)                                  │
+│ Orchestrator (cron, per source)                    cmd/worker    │
 │                                                                  │
-│  ATS source (NeedsDetail=false)                                  │
-│    Iterate() ──► relevance gate ──► Ingest ──► DB + score        │
-│    (JSON API, full job)                                          │
-│                                                                  │
-│  HTML source (NeedsDetail=true)                                  │
+│  ATS source (Source only, no DetailFetcher)                      │
+│    Iterate() ──► relevance gate ──► APIExporter.BulkExport()     │
+│    (JSON API, full job)                      │                   │
+│                                              ▼                   │
+│  HTML source (Source + DetailFetcher)    POST /ingest            │
 │    Iterate() ──► rewrite aggregator URLs ──► filter new          │
-│    (listing page, URL + card)   (detect.RewriteToATS)  (NewURLs) │
+│    (listing page, URL + card)  (detect.RewriteToATS)  (NewURLs)  │
 │              ──► relevance gate ──► Queue (Valkey sorted set)    │
 └──────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│ Worker (HTML sources only)                                       │
+│ Worker (HTML sources only)                         cmd/worker    │
 │                                                                  │
-│  Queue.Dequeue() ──► sources.Dispatch() ──► Ingest ──► DB        │
-│                      (GetDetails by URL)                         │
+│  Queue.Dequeue() ──► sources.Dispatch() ──► APIExporter.Export() │
+│                      (GetDetails by URL)         │               │
+│                                                  ▼               │
+│                                            POST /ingest          │
 └──────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
-                    Ingest: validate → Save → ScoreAndSave → NotifyNewJob
+┌──────────────────────────────────────────────────────────────────┐
+│ POST /ingest  (service-token auth)                 cmd/api       │
+│                                                                  │
+│  validate → db.Save → ScoreAndSave → NotifyNewJob                │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component roles
 
 | Package | Role |
 |---|---|
-| `cmd/worker` | Entry point; registers sources, wires scorer/notifier, runs orchestrator + worker + digest cron |
-| `internal/scraper` | Cron orchestrator; schedules scrapes, branches on `NeedsDetail`, enqueues or ingests |
-| `internal/sources` | `Source` interface, `PaginatedBase` helper, `Dispatch` URL router |
+| `cmd/worker` | Registers sources and exporter, wires relevance gate, runs orchestrator + worker loop + session-cleanup cron |
+| `cmd/api` | HTTP API server; frontend routes, user auth, application tracking, CV templates, and `POST /ingest` (persist/score/notify) |
+| `internal/scraper` | Cron orchestrator; schedules scrapes, branches on `DetailFetcher` interface, enqueues HTML URLs or bulk-exports ATS jobs; `JobExporter` egress interface + `APIExporter` HTTP implementation |
+| `internal/sources` | `Source` and `DetailFetcher` interfaces, `PaginatedBase` helper, `Dispatch` URL router |
 | `internal/sources/wis` | HTML source — Work In Startups (always registered) |
 | `internal/sources/greenhouse` | ATS source — Greenhouse JSON API |
 | `internal/sources/lever` | ATS source — Lever JSON API |
@@ -64,8 +78,10 @@ The central design concept is `Source.NeedsDetail()`:
 | `internal/detect` | Classifies URLs by ATS type; `RewriteToATS` strips aggregator wrappers |
 | `internal/queue` | Valkey-backed sorted-set queue; `ZADD NX` dedup, exponential backoff retry, dead-letter after 3 attempts |
 | `internal/worker` | Sequential consumer loop; random 10–15s between items, 30s when empty |
-| `internal/ingest` | validate → `db.Save` → `Scorer.ScoreAndSave` → `Notifier.NotifyNewJob` |
-| `internal/score` | Heuristic relevance scorer (cheap, runs at scrape time as gate) + Claude suitability scorer (LLM, runs at ingest) |
+| `internal/ingest` | validate → `db.Save` → `Scorer.ScoreAndSave` → `Notifier.NotifyNewJob`; wired into `cmd/api` |
+| `internal/auth` | Cookie session middleware (user routes) + `ServiceTokenMiddleware` (bearer token for `POST /ingest`) |
+| `internal/handlers` | HTTP handlers including `IngestHandler` for `POST /ingest` |
+| `internal/score` | Heuristic relevance scorer (cheap, runs at scrape time as gate) + Claude suitability scorer (LLM, runs at ingest in API) |
 | `internal/notify` | Resend-backed email; per-job alerts and daily digest, gated by suitability threshold |
 | `internal/data/db` | pgx pool + sqlc-generated queries |
 | `internal/dto` | Shared data transfer objects (`Job`, `QueuedJob`, `SearchConfig`) |
@@ -74,7 +90,9 @@ The central design concept is `Source.NeedsDetail()`:
 
 ### Key design decisions
 
-**`NeedsDetail()` splits the pipeline** — ATS sources collapse discovery + extraction into one cheap API call and skip the queue entirely. HTML sources use the two-phase URL-then-detail flow. The orchestrator branches on this at callback time.
+**`DetailFetcher` splits the pipeline** — ATS sources implement `Source` only; HTML sources also implement `DetailFetcher` (`CanHandle` + `GetDetails`). The orchestrator checks `src.(sources.DetailFetcher)` at callback time: HTML sources enqueue URLs for the worker; ATS sources export jobs immediately. This removes the need for a `NeedsDetail()` boolean on the interface — capability is declared by implementation, not by a flag.
+
+**Ingest is centralised in the API** — both scraper paths (ATS bulk-export and HTML worker) terminate at `POST /ingest` via `APIExporter`. Persist, suitability scoring, and notification run in `cmd/api`, not in `cmd/worker`. The worker never touches the DB directly. This simplifies the worker binary and makes the ingest logic testable and deployable independently.
 
 **Two scoring stages** — Relevance (`HeuristicScorer`) is keyword-only, runs cheap at scrape time as a gate before enqueueing or saving. Suitability (`ClaudeScorer`) is an LLM call on the full job description, runs once at ingest, and gates notifications. See ADRs 0005 and 0006.
 
@@ -120,12 +138,20 @@ All sources except `wis` are opt-in via environment variables:
 | LinkedIn | `LINKEDIN_ENABLED` | `true` |
 | Indeed | `INDEED_ENABLED` | `true` |
 
-Scoring and notifications are also opt-in:
+Worker → API connection (required):
+
+| Env var | Purpose |
+|---|---|
+| `API_BASE_URL` | Base URL of the running API server, e.g. `http://localhost:8080` (required by worker) |
+| `INGEST_SERVICE_TOKEN` | Shared bearer token authenticating worker → `POST /ingest` (set on both worker and API) |
+
+Scoring and notifications (configured on `cmd/api`):
 
 | Feature | Env var(s) |
 |---|---|
-| Relevance gate + suitability scoring | `SCORING_USER_ID` + `ANTHROPIC_API_KEY` |
-| Email notifications | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
+| Relevance gate (worker) | `SCORING_USER_ID` |
+| Suitability scoring (API) | `SCORING_USER_ID` + `ANTHROPIC_API_KEY` |
+| Email notifications (API) | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
 | Per-ingest email | `NOTIFY_ON_INGEST=true` |
 | Daily digest | `NOTIFY_DIGEST_ENABLED=true` (default) + `NOTIFY_DIGEST_CRON` |
 | Proxy (datacenter) | `PROXY_DATACENTER_URL` |
@@ -194,9 +220,11 @@ Set `VALKEY_ADDR="localhost:6379"` in `.env`.
 just migrate-up
 just build
 
-./bin/worker   # long-running process
-./bin/api      # API server (separate binary)
+./bin/api      # API server — must start first (worker POSTs to it)
+./bin/worker   # scraper + queue consumer
 ```
+
+Both processes must run together. Set `API_BASE_URL` in `.env` to the address the API server listens on, and set matching `INGEST_SERVICE_TOKEN` on both. Suitability scoring and notifications are configured on the API server via `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, etc.
 
 To keep the process running after disconnect, use `systemd` or `screen`/`tmux`.
 
