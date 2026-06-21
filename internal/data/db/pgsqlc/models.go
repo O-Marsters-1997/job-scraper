@@ -77,6 +77,16 @@ type Session struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
+type SourceTarget struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Source    string
+	Value     string
+	Enabled   bool
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type TrackedDoc struct {
 	ID      pgtype.UUID
 	UserID  pgtype.UUID

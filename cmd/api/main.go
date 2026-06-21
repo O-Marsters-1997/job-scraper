@@ -64,6 +64,7 @@ func main() {
 	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
+	stH := handlers.NewSourceTargetHandler(db)
 
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -109,6 +110,11 @@ func main() {
 		r.Get("/google/oauth/callback", googleH.OAuthCallback)
 		r.Get("/google/status", googleH.GetStatus)
 		r.Delete("/google/link", googleH.Disconnect)
+
+		r.Get("/source-targets", stH.List)
+		r.Post("/source-targets", stH.Create)
+		r.Patch("/source-targets/{id}", stH.Update)
+		r.Delete("/source-targets/{id}", stH.Delete)
 
 		r.Get("/cv-templates", cvH.ListCVTemplates)
 		r.Post("/tracked-docs", cvH.AddTrackedDoc)

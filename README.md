@@ -62,19 +62,20 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 
 | Package | Role |
 |---|---|
-| `cmd/worker` | Registers sources and exporter, wires relevance gate, runs orchestrator + worker loop + session-cleanup cron |
+| `cmd/worker` | Loads source targets from DB, registers exporter and relevance gate, runs orchestrator + worker loop + session-cleanup cron |
 | `cmd/api` | HTTP API server; frontend routes, user auth, application tracking, CV templates, and `POST /ingest` (persist/score/notify) |
 | `internal/scraper` | Cron orchestrator; schedules scrapes, branches on `DetailFetcher` interface, enqueues HTML URLs or bulk-exports ATS jobs; `JobExporter` egress interface + `APIExporter` HTTP implementation |
-| `internal/sources` | `Source` and `DetailFetcher` interfaces, `PaginatedBase` helper, `Dispatch` URL router |
-| `internal/sources/wis` | HTML source — Work In Startups (always registered) |
+| `internal/sources` | `Source` and `DetailFetcher` interfaces, `PaginatedBase` helper, `Dispatch` URL router, supported-source registry |
+| `internal/sources/builder` | Builds the active source set from per-user source targets loaded from the DB |
+| `internal/sources/wis` | HTML source — Work In Startups (always active) |
 | `internal/sources/greenhouse` | ATS source — Greenhouse JSON API |
 | `internal/sources/lever` | ATS source — Lever JSON API |
 | `internal/sources/ashby` | ATS source — Ashby JSON API |
 | `internal/sources/workable` | ATS source — Workable JSON API |
 | `internal/sources/recruitee` | ATS source — Recruitee JSON API |
 | `internal/sources/personio` | ATS source — Personio XML API |
-| `internal/sources/linkedin` | HTML source — LinkedIn (env-gated, needs residential proxy) |
-| `internal/sources/indeed` | HTML source — Indeed (env-gated, needs residential proxy) |
+| `internal/sources/linkedin` | HTML source — LinkedIn (needs residential proxy) |
+| `internal/sources/indeed` | HTML source — Indeed (needs residential proxy) |
 | `internal/detect` | Classifies URLs by ATS type; `RewriteToATS` strips aggregator wrappers |
 | `internal/queue` | Valkey-backed sorted-set queue; `ZADD NX` dedup, exponential backoff retry, dead-letter after 3 attempts |
 | `internal/worker` | Sequential consumer loop; random 10–15s between items, 30s when empty |
@@ -125,18 +126,36 @@ Copy `.env.example` to `.env` and adjust if your local setup differs from the de
 
 ### Source registration
 
-All sources except `wis` are opt-in via environment variables:
+Sources are configured per-user via the REST API and stored in the database. `wis` is always active and requires no configuration. All other sources are opt-in.
 
-| Source | Env var | Value |
+**ATS sources** take a board token as the value:
+
+| Source | `source` field | Example `value` |
 |---|---|---|
-| Greenhouse | `GREENHOUSE_BOARDS` | Comma-separated board tokens, e.g. `acmecorp,widgets-inc` |
-| Lever | `LEVER_BOARDS` | Comma-separated board tokens |
-| Ashby | `ASHBY_BOARDS` | Comma-separated board tokens |
-| Workable | `WORKABLE_BOARDS` | Comma-separated board tokens |
-| Recruitee | `RECRUITEE_BOARDS` | Comma-separated board tokens |
-| Personio | `PERSONIO_BOARDS` | Comma-separated board tokens |
-| LinkedIn | `LINKEDIN_ENABLED` | `true` |
-| Indeed | `INDEED_ENABLED` | `true` |
+| Greenhouse | `greenhouse` | `acmecorp` |
+| Lever | `lever` | `my-startup` |
+| Ashby | `ashby` | `widgetco` |
+| Workable | `workable` | `techco` |
+| Recruitee | `recruitee` | `startup-hq` |
+| Personio | `personio` | `mycompany` |
+
+**URL sources** take a search URL as the value:
+
+| Source | `source` field | Example `value` |
+|---|---|---|
+| LinkedIn | `linkedin` | `https://www.linkedin.com/jobs/search/?keywords=engineer` |
+| Indeed | `indeed` | `https://www.indeed.com/jobs?q=software+engineer` |
+
+Manage source targets via the authenticated API:
+
+```sh
+GET    /source-targets          # list your configured sources
+POST   /source-targets          # add a source: {"source":"greenhouse","value":"acmecorp"}
+PATCH  /source-targets/{id}     # toggle on/off: {"enabled":false}
+DELETE /source-targets/{id}     # remove a source
+```
+
+The worker loads all enabled source targets at startup and passes them to `sources/builder.BuildSources` to assemble the active source set.
 
 Worker → API connection (required):
 
