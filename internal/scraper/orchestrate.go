@@ -34,35 +34,30 @@ func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orc
 	return &Orchestrator{srcs: srcs, db: db, q: q}
 }
 
-// WithRelevanceGate wires in a scorer, search config provider, and job score
-// provider so that both ingestion paths filter jobs below cfg.RelevanceCutoff.
-// Scores for ATS jobs are persisted via scoreDB.
-func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB providers.SearchConfigProvider, scoreDB providers.JobScoreProvider, userID string) *Orchestrator {
+// RelevanceStore combines SearchConfigProvider and JobScoreProvider so callers pass db once.
+type RelevanceStore interface {
+	providers.SearchConfigProvider
+	providers.JobScoreProvider
+}
+
+// WithRelevanceGate wires in a scorer and store so both ingestion paths filter
+// jobs below cfg.RelevanceCutoff. ATS job scores are persisted via store.
+func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore, userID string) {
 	o.scorer = scorer
-	o.cfgDB = cfgDB
-	o.scoreDB = scoreDB
+	o.cfgDB = store
+	o.scoreDB = store
 	o.userID = userID
-	return o
 }
 
 // WithExporter wires in the egress port used by the ATS path.
-func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
+func (o *Orchestrator) WithExporter(exp JobExporter) {
 	o.exporter = exp
-	return o
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
-	go func() {
-		var wg sync.WaitGroup
-		for _, src := range o.srcs {
-			wg.Add(1)
-			go func(src sources.Source) {
-				defer wg.Done()
-				o.runIfReady(ctx, src)
-			}(src)
-		}
-		wg.Wait()
-	}()
+	for _, src := range o.srcs {
+		go o.runIfReady(ctx, src)
+	}
 
 	o.cr = cron.New()
 
@@ -159,11 +154,8 @@ type atsPath struct {
 func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	log := slog.With(slog.String("source", p.name))
 
-	type scored struct {
-		job   dto.Job
-		score int
-	}
-	survivors := make([]scored, 0, len(jobs))
+	var valid []dto.Job
+	var scores []int
 	for _, j := range jobs {
 		if j.URL == "" {
 			continue
@@ -172,32 +164,29 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 		if !ok {
 			continue
 		}
-		survivors = append(survivors, scored{job: j, score: s})
+		valid = append(valid, j)
+		scores = append(scores, s)
 	}
-	if len(survivors) == 0 {
+	if len(valid) == 0 {
 		return false, nil
 	}
 
-	validJobs := make([]dto.Job, len(survivors))
-	for i, s := range survivors {
-		validJobs[i] = s.job
-	}
-	if err := p.exporter.BulkExport(ctx, validJobs); err != nil {
+	if err := p.exporter.BulkExport(ctx, valid); err != nil {
 		return false, err
 	}
 
 	if p.gate.enabled && p.scoreDB != nil {
-		for _, s := range survivors {
-			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, s.job.ID, p.userID, s.score); err != nil {
+		for i, j := range valid {
+			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, j.ID, p.userID, scores[i]); err != nil {
 				log.Warn("could not write relevance score",
-					slog.String("job_id", s.job.ID),
+					slog.String("job_id", j.ID),
 					slog.Any("err", err),
 				)
 			}
 		}
 	}
 
-	log.Info("ats jobs published", slog.Int("count", len(validJobs)))
+	log.Info("ats jobs published", slog.Int("count", len(valid)))
 	return false, nil
 }
 
@@ -277,9 +266,12 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 }
 
 func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
-	gate := o.loadGate(ctx, src.Cfg().Name)
+	cfg := src.Cfg()
+	gate := o.loadGate(ctx, cfg.Name)
 	if _, ok := src.(sources.DetailFetcher); ok {
-		return src.Iterate(ctx, (&htmlPath{db: o.db, q: o.q, gate: gate, seen: map[string]struct{}{}}).onPage)
+		p := &htmlPath{db: o.db, q: o.q, gate: gate, seen: map[string]struct{}{}}
+		return src.Iterate(ctx, p.onPage)
 	}
-	return src.Iterate(ctx, (&atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: src.Cfg().Name, gate: gate, userID: o.userID}).onPage)
+	p := &atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: cfg.Name, gate: gate, userID: o.userID}
+	return src.Iterate(ctx, p.onPage)
 }

@@ -77,7 +77,7 @@ func main() {
 	orch.WithExporter(exporter)
 
 	if scoringUserID != "" {
-		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, db, scoringUserID)
+		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, scoringUserID)
 		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
 	}
 
