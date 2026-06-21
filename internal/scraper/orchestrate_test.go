@@ -307,7 +307,7 @@ func TestRun_Paths(t *testing.T) {
 			if tt.useGate {
 				// zeroScorer always scores 0; highCutoffCfgDB sets cutoff above 0,
 				// so all jobs are dropped.
-				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, nil, "user1")
+				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, "user1")
 			}
 
 			if err := o.run(context.Background(), tt.src); err != nil {
@@ -324,22 +324,27 @@ func TestRun_Paths(t *testing.T) {
 	}
 }
 
-// zeroScorer always returns 0.
 type zeroScorer struct{}
 
 func (z *zeroScorer) Score(_ dto.Job, _ dto.SearchConfig) int { return 0 }
 
-// highCutoffCfgDB returns a SearchConfig with a high cutoff so zeroScorer always fails.
 type highCutoffCfgDB struct{}
 
 func (h *highCutoffCfgDB) GetSearchConfig(_ context.Context, _ string) (dto.SearchConfig, error) {
 	return dto.SearchConfig{RelevanceCutoff: 100}, nil
 }
-
 func (h *highCutoffCfgDB) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	return cfg, nil
 }
+func (h *highCutoffCfgDB) UpsertJobScoreRelevance(_ context.Context, _, _ string, _ int) error {
+	return nil
+}
+func (h *highCutoffCfgDB) UpsertJobScoreSuitability(_ context.Context, _, _ string, _ int) error {
+	return nil
+}
+func (h *highCutoffCfgDB) GetJobScore(_ context.Context, _, _ string) (dto.JobScore, error) {
+	return dto.JobScore{}, nil
+}
 
-// Verify zeroScorer and highCutoffCfgDB satisfy the required interfaces.
 var _ score.RelevanceScorer = (*zeroScorer)(nil)
-var _ providers.SearchConfigProvider = (*highCutoffCfgDB)(nil)
+var _ RelevanceStore = (*highCutoffCfgDB)(nil)
