@@ -1,34 +1,40 @@
 # Adding a New Source
 
-_Last updated: 2026-06-15_
+_Last updated: 2026-06-21_
 
 ## Step 0: choose source type
 
 The first decision determines almost everything else. Look at the target site:
 
-- **Does it expose a public JSON (or XML) job-board API?** Greenhouse, Lever, Ashby, Workable, Recruitee, and Personio all do. Use an **ATS source** (`NeedsDetail() == false`). One HTTP call returns all jobs fully populated — no queue, no detail fetch, no HTML parsing.
-- **Is it an HTML listing page only?** Use an **HTML source** (`NeedsDetail() == true`). The listing page yields URLs and partial cards; a second fetch per URL gets the full detail.
+- **Does it expose a public JSON (or XML) job-board API?** Greenhouse, Lever, Ashby, Workable, Recruitee, and Personio all do. Use an **ATS source** — implement `Source` only. One HTTP call returns all jobs fully populated — no queue, no detail fetch, no HTML parsing.
+- **Is it an HTML listing page only?** Use an **HTML source** — implement both `Source` and `DetailFetcher`. The listing page yields URLs and partial cards; a second fetch per URL gets the full detail.
 
 Never use an HTML source when a public API exists. API sources are cheaper, more robust, and skip the queue entirely.
 
-## The `Source` interface
+## The source interfaces
 
 ```go
 // internal/sources/source.go
 type Source interface {
     Cfg() Config
-    CanHandle(url string) bool
     Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
-    NeedsDetail() bool
+}
+
+// DetailFetcher is an optional capability implemented by HTML scrape sources
+// that require a separate per-URL fetch to produce a fully-populated dto.Job.
+// ATS sources do not implement this interface.
+type DetailFetcher interface {
+    CanHandle(url string) bool
     GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 ```
 
 - `Cfg()` — returns name, schedule, `MinScrapeInterval`, `URLPrefix`, and `ProxyTier`. Embed `PaginatedBase` and this is provided for free.
-- `CanHandle(url)` — returns true if this source owns `url`. `PaginatedBase` implements this as `strings.HasPrefix(url, cfg.URLPrefix)`.
 - `Iterate` — pages through all jobs. **ATS sources** yield fully-populated `dto.Job`s. **HTML sources** yield `dto.Job{URL: u, Title: ..., Location: ...}` partials with whatever card metadata is available.
-- `NeedsDetail()` — return `false` for ATS, `true` for HTML.
-- `GetDetails` — fetch and parse a single job detail page. ATS sources must implement it but should return an error (it must never be called on them). HTML sources use it as the second-phase fetch.
+- `CanHandle(url)` — (`DetailFetcher` only) returns true if this source owns `url`. `PaginatedBase` implements this as `strings.HasPrefix(url, cfg.URLPrefix)`.
+- `GetDetails` — (`DetailFetcher` only) fetch and parse a single job detail page. HTML sources use it as the second-phase fetch.
+
+The orchestrator detects the HTML path via `if _, ok := src.(sources.DetailFetcher); ok`. **ATS sources must not implement `DetailFetcher`.**
 
 ### `PaginatedBase`
 
@@ -63,11 +69,7 @@ func New(cfg Config) *Scraper {
     }
 }
 
-func (s *Scraper) NeedsDetail() bool { return false }
-
-func (s *Scraper) GetDetails(_ context.Context, _ string) (dto.Job, error) {
-    return dto.Job{}, fmt.Errorf("myats: GetDetails must not be called (NeedsDetail=false)")
-}
+// ATS sources implement Source only — do NOT implement DetailFetcher.
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
     for _, token := range s.cfg.Boards {
@@ -89,14 +91,16 @@ Key points:
 - Return fully-populated `dto.Job` from `Iterate` (title, location, URL, company slug, source name, description, salary if available).
 - Set `Source` field to a stable identifier, e.g. `"greenhouse"`.
 - Set `CompanySlug` to the board token — it's used as the dedup-friendly company identifier.
-- `GetDetails` must exist to satisfy the interface; make it return an error so a misconfiguration is obvious.
+- Do **not** implement `DetailFetcher`. The orchestrator uses interface detection to pick the ATS path; implementing `DetailFetcher` would route jobs through the HTML queue path instead.
 
 ## Implementing an HTML source
 
 See `internal/sources/wis/wis.go` as the canonical example. HTML sources require `goquery` for parsing. There is a `goquery-parser` agent skill in this repo — consult it before writing selector logic.
 
 ```go
-func (s *Scraper) NeedsDetail() bool { return true }
+// HTML sources implement both Source and DetailFetcher.
+
+func (s *Scraper) CanHandle(url string) bool { return s.PaginatedBase.CanHandle(url) }
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
     return s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
@@ -201,9 +205,9 @@ Add the new env var to `.env.example` with an empty default and a comment explai
 
 ## Checklist
 
-- [ ] Correct `NeedsDetail()` return value
-- [ ] `URLPrefix` uniquely matches all URLs this source will produce
-- [ ] `GetDetails` errors loudly for ATS sources; works correctly for HTML sources
+- [ ] ATS source: implements `Source` only (not `DetailFetcher`)
+- [ ] HTML source: implements both `Source` and `DetailFetcher` (`CanHandle` + `GetDetails`)
+- [ ] `URLPrefix` uniquely matches all URLs this source will produce (HTML sources; used by `CanHandle`)
 - [ ] `Iterate` yields partial jobs with at least URL set; title/location set if extractable from listing page
 - [ ] Correct `ProxyTier` set in `sources.Config`
 - [ ] Snapshot tests added and passing (HTML sources only)
