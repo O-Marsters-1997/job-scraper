@@ -83,6 +83,7 @@ type SourceTarget struct {
 	Source    string
 	Value     string
 	Enabled   bool
+	Filters   []byte
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }

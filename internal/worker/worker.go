@@ -75,6 +75,44 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 	}
 }
 
+// ScrapeHandlerFunc handles a single on-demand scrape request.
+type ScrapeHandlerFunc func(ctx context.Context, req dto.ScrapeRequest) error
+
+// RunScrapeRequests polls the scrape-request queue and calls handler for each
+// entry. When the queue is empty it backs off emptyDelay. Respects ctx cancellation.
+// It mirrors Run's structure but is simpler: no Nack/ClearAttempts logic needed
+// since scrape-now failures are best-effort (the regular schedule will cover it).
+func RunScrapeRequests(ctx context.Context, q queue.JobQueue, handler ScrapeHandlerFunc) {
+	const emptyDelay = 5 * time.Second
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		req, ok, err := q.DequeueScrapeRequest(ctx)
+		if err != nil {
+			slog.Error("dequeue scrape request failed", slog.Any("err", err))
+			if !sleep(ctx, emptyDelay) {
+				return
+			}
+			continue
+		}
+		if !ok {
+			if !sleep(ctx, emptyDelay) {
+				return
+			}
+			continue
+		}
+		slog.Info("scrape request received", slog.String("source", req.Target.Source), slog.String("value", req.Target.Value))
+		if err := handler(ctx, req); err != nil {
+			slog.Error("scrape request handler failed",
+				slog.String("source", req.Target.Source),
+				slog.String("value", req.Target.Value),
+				slog.Any("err", err),
+			)
+		}
+	}
+}
+
 func sleep(ctx context.Context, d time.Duration) bool {
 	if d <= 0 {
 		return ctx.Err() == nil

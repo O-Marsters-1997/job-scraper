@@ -20,9 +20,20 @@ import (
 func BuildSources(targets []dto.SourceTarget) []sources.Source {
 	boards := make(map[string][]string) // source name → board tokens
 	urlSources := make(map[string]bool)
+	var wisSearches []wis.Search
 
 	for _, t := range targets {
 		if !t.Enabled {
+			continue
+		}
+		if sources.IsFilterSource(t.Source) {
+			switch t.Source {
+			case "wis":
+				wisSearches = append(wisSearches, wis.Search{
+					Keywords: t.Value,
+					Region:   t.Filters["region"],
+				})
+			}
 			continue
 		}
 		_, isURL, ok := sources.LookupSource(t.Source)
@@ -37,7 +48,10 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 	}
 
 	var srcs []sources.Source
-	srcs = append(srcs, wis.New())
+
+	if len(wisSearches) > 0 {
+		srcs = append(srcs, wis.New(wis.Config{Searches: wisSearches}))
+	}
 
 	if tokens := boards["greenhouse"]; len(tokens) > 0 {
 		srcs = append(srcs, greenhouse.New(greenhouse.Config{Boards: tokens}))

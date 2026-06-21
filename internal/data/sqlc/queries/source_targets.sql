@@ -5,8 +5,8 @@ SELECT * FROM source_targets WHERE user_id = $1 ORDER BY source, value;
 SELECT * FROM source_targets WHERE enabled = TRUE ORDER BY source, value;
 
 -- name: CreateSourceTarget :one
-INSERT INTO source_targets (user_id, source, value, enabled)
-VALUES ($1, $2, $3, $4)
+INSERT INTO source_targets (user_id, source, value, enabled, filters)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateSourceTarget :one

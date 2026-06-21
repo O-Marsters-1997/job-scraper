@@ -17,7 +17,7 @@ import (
 )
 
 var parsers = map[string]sources.SnapshotSource{
-	"wis": wis.New(),
+	"wis": wis.New(wis.Config{}),
 }
 
 func main() {
