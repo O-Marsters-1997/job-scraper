@@ -51,6 +51,10 @@ _Avoid_: Match score, filter score — keep distinct from Suitability
 A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, computed from full job text against a rubric after persistence; gates notification and ranks the list.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
+**Source Target**:
+A user-defined board token (for ATS sources) or URL (for URL-based sources) that the scraper watches on that user's behalf. Each target names a supported Source and a value — e.g. a Greenhouse board token `"acme"` or a LinkedIn search URL. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets.
+_Avoid_: Board config, source config, integration
+
 **Search Config**:
 A User's editable search criteria (role, location, keywords), suitability rubric, relevance cutoff, and notify threshold — exactly one per User; the single source of truth feeding the relevance gate, the suitability scorer, and notifications.
 _Avoid_: Settings, preferences, query
@@ -83,6 +87,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - A **Job** is pursued via at most one **Application** per user
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
+- A **User** defines zero or more **Source Targets**; each Target maps to a supported **Source**
 - A **Job** carries a **Relevance** and **Suitability** score per **User** — a per-user assessment, sibling to **Application**, not a property of the shared **Job**
 - A **User** has exactly one **Search Config**
 
