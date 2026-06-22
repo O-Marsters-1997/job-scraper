@@ -20,9 +20,10 @@ func (k sourceKind) string() string {
 		return "board"
 	case kindURL:
 		return "url"
-	default:
+	case kindFilter:
 		return "filter"
 	}
+	return ""
 }
 
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
