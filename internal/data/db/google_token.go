@@ -109,11 +109,11 @@ func (s *GoogleTokenStore) GetToken(ctx context.Context, userID string) (*oauth2
 
 	access, err := tokencrypt.Decrypt(row.AccessTokenEnc)
 	if err != nil {
-		return nil, fmt.Errorf("GoogleTokenStore.GetToken decrypt access: %w", err)
+		return nil, fmt.Errorf("%w: decrypt access: %v", providers.ErrGoogleTokenUnusable, err)
 	}
 	refresh, err := tokencrypt.Decrypt(row.RefreshTokenEnc)
 	if err != nil {
-		return nil, fmt.Errorf("GoogleTokenStore.GetToken decrypt refresh: %w", err)
+		return nil, fmt.Errorf("%w: decrypt refresh: %v", providers.ErrGoogleTokenUnusable, err)
 	}
 
 	return &oauth2.Token{
