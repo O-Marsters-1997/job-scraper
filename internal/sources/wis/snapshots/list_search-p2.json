@@ -1,82 +1,152 @@
 [
   {
+    "ID": "",
     "Title": "Interim Product Design Director",
     "Location": "London",
     "URL": "https://workinstartups.com/details/5665230447",
     "CompanySlug": "moneybox",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Technical Program Manager, Data center Colo Infrastructure",
     "Location": "London, UK",
     "URL": "https://workinstartups.com/details/5665229270",
     "CompanySlug": "google",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Software Engineer - Platform",
     "Location": "London, London, EC1Y 8LZ",
     "URL": "https://workinstartups.com/details/5665229016",
     "CompanySlug": "fundapps",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Senior Product Manager - Mobile App",
     "Location": "London",
     "URL": "https://workinstartups.com/details/5665228822",
     "CompanySlug": "zopa",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Principal Product Manager - Agentic Case Remediation",
     "Location": "London, ENG",
     "URL": "https://workinstartups.com/details/5665228749",
     "CompanySlug": "complyadvantage",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Developer Relations Engineer, Android and Play, Games",
     "Location": "London, UK",
     "URL": "https://workinstartups.com/details/5665228587",
     "CompanySlug": "google",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Product Manager - Vault Payments",
     "Location": "London, London",
     "URL": "https://workinstartups.com/details/5665227842",
     "CompanySlug": "thought-machine",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Technical Program Manager, Search Client Infrastructure Platform",
     "Location": "London, UK",
     "URL": "https://workinstartups.com/details/5665227578",
     "CompanySlug": "google",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Principal Product Manager - Transaction Monitoring",
     "Location": "London, ENG",
     "URL": "https://workinstartups.com/details/5665225915",
     "CompanySlug": "complyadvantage",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   },
   {
+    "ID": "",
     "Title": "Senior Data Science Manager, Business Banking",
     "Location": "Cardiff, London or Remote",
     "URL": "https://workinstartups.com/details/5665225874",
     "CompanySlug": "monzo-bank",
     "Source": "",
-    "UpdatedAt": "0001-01-01T00:00:00Z"
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null
   }
 ]

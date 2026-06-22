@@ -29,16 +29,17 @@ type ApplicationStatus struct {
 }
 
 type Job struct {
-	ID          pgtype.UUID
-	Title       string
-	Location    string
-	Url         string
-	CompanySlug string
-	Source      string
-	UpdatedAt   pgtype.Timestamptz
-	ScrapedAt   pgtype.Timestamptz
-	Description string
-	SalaryRaw   string
+	ID              pgtype.UUID
+	Title           string
+	Location        string
+	Url             string
+	CompanySlug     string
+	Source          string
+	UpdatedAt       pgtype.Timestamptz
+	ScrapedAt       pgtype.Timestamptz
+	Description     string
+	SalaryRaw       string
+	WorkArrangement string
 }
 
 type JobScore struct {

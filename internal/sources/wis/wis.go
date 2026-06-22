@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -23,14 +24,44 @@ const (
 	baseURL  = "https://workinstartups.com/search"
 	pageSize = 50
 
-	selJobCard    = `div[data-aid]`
-	selJobLink    = `h2 a`
-	selTotalCount = `span[data-cy-count]`
-	selTitle      = `h1`
-	selCompany    = `.ui-company`
-	selLocation   = `.ui-location`
-	selTime       = `time[datetime]`
+	selJobCard     = `div[data-aid]`
+	selJobLink     = `h2 a`
+	selTotalCount  = `span[data-cy-count]`
+	selTitle       = `h1`
+	selCompany     = `.ui-company`
+	selLocation    = `.ui-location`
+	selTime        = `time[datetime]`
+	selDescription = `.adp-body`
+	selBadge       = `.inline-flex.flex-wrap span`
 )
+
+var (
+	// salaryRe matches a currency amount or range in plain text, e.g.
+	// "£80,000 to £95,000", "$120,000", "€70,000 – €90,000".
+	// Intentionally not matching "£80k"-style; refine if real snapshots show it.
+	salaryRe = regexp.MustCompile(`[£$€]\s?\d{1,3}(?:,\d{3})+(?:\s*(?:-|–|to)\s*[£$€]?\s?\d{1,3}(?:,\d{3})+)?`)
+
+	// hybridRe and onsiteRe match explicit mentions in description text only.
+	// Remote is derived from the REMOTE badge, which is the authoritative signal.
+	hybridRe = regexp.MustCompile(`(?i)\bhybrid\b`)
+	onsiteRe = regexp.MustCompile(`(?i)\bon[\s-]?site\b|\bin[\s-]?office\b|\boffice[\s-]?based\b`)
+)
+
+func DetectWorkArrangement(badges []string, descText string) string {
+	for _, b := range badges {
+		if strings.EqualFold(strings.TrimSpace(b), "remote") {
+			return "remote"
+		}
+	}
+	switch {
+	case hybridRe.MatchString(descText):
+		return "hybrid"
+	case onsiteRe.MatchString(descText):
+		return "onsite"
+	default:
+		return ""
+	}
+}
 
 type Search struct {
 	Keywords string // maps to the q URL param, e.g. "product engineer"
@@ -226,14 +257,43 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		)
 	}
 
+	descNode := doc.Find(selDescription).First()
+	desc, _ := descNode.Html()
+	description := strings.TrimSpace(desc)
+	if description == "" {
+		slog.Warn("defaulted field",
+			slog.String("source", "wis"),
+			slog.String("field", "Description"),
+			slog.String("url", url),
+		)
+	}
+
+	descText := descNode.Text()
+	salaryRaw := strings.TrimSpace(salaryRe.FindString(descText))
+
+	var badges []string
+	doc.Find(selBadge).Each(func(_ int, s *goquery.Selection) {
+		badges = append(badges, s.Text())
+	})
+	workArrangement := DetectWorkArrangement(badges, descText)
+
 	return dto.Job{
-		Title:       title,
-		Location:    location,
-		URL:         url,
-		CompanySlug: slugify(company),
-		Source:      "wis",
-		UpdatedAt:   updatedAt,
+		Title:           title,
+		Location:        location,
+		URL:             url,
+		CompanySlug:     slugify(company),
+		Source:          "wis",
+		UpdatedAt:       updatedAt,
+		Description:     description,
+		SalaryRaw:       salaryRaw,
+		WorkArrangement: workArrangement,
 	}, nil
+}
+
+// ParseSalaryRaw extracts a raw salary string from text using a currency regex.
+// Returns an empty string when no salary is found.
+func ParseSalaryRaw(text string) string {
+	return strings.TrimSpace(salaryRe.FindString(text))
 }
 
 func slugify(s string) string {
