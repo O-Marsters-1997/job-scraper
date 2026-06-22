@@ -26,6 +26,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { SkeletonList } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_auth/settings/searches")({
 	component: SearchesPage,
@@ -118,14 +119,14 @@ function SearchesPage() {
 					Tracked searches
 				</h1>
 				<p class="mt-0.5 text-xs text-faint">
-					Keywords, board tokens and URLs to track across supported job sources
-					— each runs on its own 6-hour cycle
+					Keywords, board tokens and URLs to track across supported job
+					sources. Each runs on its own 6-hour cycle.
 				</p>
 			</div>
 
 			<Show when={scrapeQueued()}>
 				<div class="mb-4 rounded-lg border border-primary/30 bg-accent-subtle px-4 py-3 text-sm text-primary">
-					Scrape queued — matching jobs will appear shortly.
+					Scrape queued. Matching jobs will appear shortly.
 				</div>
 			</Show>
 
@@ -136,7 +137,7 @@ function SearchesPage() {
 			</Show>
 
 			<Show when={query.isPending}>
-				<p class="text-sm text-muted">Loading…</p>
+				<SkeletonList rows={3} />
 			</Show>
 
 			<Show when={query.isSuccess}>
@@ -360,8 +361,8 @@ function SearchesPage() {
 										onChange={(e) => setNewScrapeNow(e.currentTarget.checked)}
 										class="h-4 w-4 rounded border-border accent-primary"
 									/>
-									Scrape now — get results immediately instead of waiting up to
-									6 hours
+									Scrape now: get results immediately instead of waiting up
+									to 6 hours
 								</label>
 
 								<div class="flex items-center gap-2 pt-1">

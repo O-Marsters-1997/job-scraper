@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -55,6 +56,9 @@ function ApplicationsPage() {
 
 	const closeEdit = () => setModalOpen(false);
 
+	const [deletingApp, setDeletingApp] =
+		createSignal<ApplicationWithDetails | null>(null);
+
 	const handleSave = async () => {
 		const app = editingApp();
 		if (!app) return;
@@ -70,8 +74,11 @@ function ApplicationsPage() {
 		closeEdit();
 	};
 
-	const handleDelete = async (id: string) => {
-		await deleteMutation.mutateAsync(id);
+	const confirmDelete = async () => {
+		const app = deletingApp();
+		if (!app) return;
+		await deleteMutation.mutateAsync(app.ID);
+		setDeletingApp(null);
 	};
 
 	const statusColour = (app: ApplicationWithDetails) => {
@@ -130,7 +137,7 @@ function ApplicationsPage() {
 			</div>
 
 			<Show when={query.isPending}>
-				<p class="text-sm text-muted">Loading…</p>
+				<SkeletonList rows={5} />
 			</Show>
 
 			<Show when={query.isSuccess}>
@@ -177,9 +184,8 @@ function ApplicationsPage() {
 									</button>
 									<button
 										type="button"
-										onClick={() => handleDelete(app.ID)}
-										disabled={deleteMutation.isPending}
-										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-50"
+										onClick={() => setDeletingApp(app)}
+										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
 									>
 										Delete
 									</button>
@@ -252,6 +258,37 @@ function ApplicationsPage() {
 						</Button>
 						<Button onClick={handleSave} disabled={updateMutation.isPending}>
 							Save
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Delete confirmation */}
+			<Dialog
+				open={deletingApp() !== null}
+				onOpenChange={(open) => !open && setDeletingApp(null)}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Delete application?</DialogTitle>
+						<p class="text-sm text-muted">
+							This removes tracking for{" "}
+							<span class="font-medium text-foreground">
+								{deletingApp()?.JobTitle}
+							</span>
+							. The job stays on your Jobs list. This can't be undone.
+						</p>
+					</DialogHeader>
+					<DialogFooter class="border-t border-border pt-4">
+						<Button variant="outline" onClick={() => setDeletingApp(null)}>
+							Cancel
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={confirmDelete}
+							disabled={deleteMutation.isPending}
+						>
+							{deleteMutation.isPending ? "Deleting…" : "Delete application"}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

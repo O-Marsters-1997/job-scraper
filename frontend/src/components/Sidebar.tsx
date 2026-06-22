@@ -1,14 +1,38 @@
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useJobs } from "../hooks/useJobs";
 import { useGoogleStatus } from "../hooks/useGoogle";
 
-export default function Sidebar() {
+interface SidebarProps {
+  // Below the md breakpoint the sidebar is an off-canvas drawer driven by the
+  // app shell; on md+ it's an in-flow, collapsible rail.
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function Sidebar(props: SidebarProps) {
   const [expanded, setExpanded] = createSignal(true);
   const location = useLocation();
+  // Drawer always shows labels regardless of the desktop collapse state.
+  const showLabels = () => props.mobileOpen || expanded();
+
+  // Close the drawer on navigation so a tapped link doesn't leave it covering
+  // the page it just opened.
+  createEffect(() => {
+    location().pathname;
+    props.onMobileClose?.();
+  });
+
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") props.onMobileClose?.();
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
   const isOverviewActive = () => location().pathname === "/overview";
   const isJobsActive = () => location().pathname === "/jobs";
   const isApplicationsActive = () => location()?.pathname === "/applications";
@@ -46,9 +70,22 @@ export default function Sidebar() {
     );
 
   return (
-    <aside
-      class="flex h-screen shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar transition-[width] duration-300"
-      style={{ width: expanded() ? "var(--sidebar-w, 13.75rem)" : "3.5rem" }}
+    <>
+      <Show when={props.mobileOpen}>
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => props.onMobileClose?.()}
+          class="fixed inset-0 z-40 bg-black/40 md:hidden"
+        />
+      </Show>
+      <aside
+      class={cn(
+        "fixed inset-y-0 left-0 z-50 flex h-screen w-[13.75rem] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
+        "transition-transform duration-300 md:relative md:z-auto md:translate-x-0 md:shrink-0 md:transition-[width]",
+        props.mobileOpen ? "translate-x-0" : "-translate-x-full",
+        expanded() ? "md:w-[13.75rem]" : "md:w-14",
+      )}
     >
       <div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
         <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-active text-sidebar-active-foreground">
@@ -67,7 +104,7 @@ export default function Sidebar() {
             <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
           </svg>
         </div>
-        <Show when={expanded()}>
+        <Show when={showLabels()}>
           <span class="whitespace-nowrap text-sm font-semibold tracking-tight text-sidebar-foreground-strong">
             Job Scraper
           </span>
@@ -75,7 +112,7 @@ export default function Sidebar() {
       </div>
 
       <nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-        <Show when={expanded()}>
+        <Show when={showLabels()}>
           <span class="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
             Main
           </span>
@@ -103,7 +140,7 @@ export default function Sidebar() {
             <rect width="7" height="9" x="14" y="12" rx="1" />
             <rect width="7" height="5" x="3" y="16" rx="1" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Overview</span>
           </Show>
         </Link>
@@ -124,7 +161,7 @@ export default function Sidebar() {
             <rect x="2" y="7" width="20" height="14" rx="2" />
             <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Jobs</span>
             <Show when={(jobsQuery.data?.length ?? 0) > 0}>
               <span class={badgeClass(isJobsActive())}>
@@ -158,7 +195,7 @@ export default function Sidebar() {
             <line x1="16" y1="17" x2="8" y2="17" />
             <polyline points="10 9 9 9 8 9" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Applications</span>
             <Show when={(appsQuery.data?.length ?? 0) > 0}>
               <span class={badgeClass(isApplicationsActive())}>
@@ -192,7 +229,7 @@ export default function Sidebar() {
               <line x1="16" y1="13" x2="8" y2="13" />
               <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
-            <Show when={expanded()}>
+            <Show when={showLabels()}>
               <span class="whitespace-nowrap">CVs</span>
             </Show>
           </Link>
@@ -219,12 +256,12 @@ export default function Sidebar() {
             <line x1="12" y1="20" x2="12" y2="4" />
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Insights</span>
           </Show>
         </Link>
 
-        <Show when={expanded()}>
+        <Show when={showLabels()}>
           <span class="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
             Settings
           </span>
@@ -250,7 +287,7 @@ export default function Sidebar() {
             <circle cx="12" cy="12" r="3" />
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Statuses</span>
           </Show>
         </Link>
@@ -275,7 +312,7 @@ export default function Sidebar() {
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Searches</span>
           </Show>
         </Link>
@@ -300,7 +337,7 @@ export default function Sidebar() {
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Integrations</span>
           </Show>
         </Link>
@@ -329,7 +366,7 @@ export default function Sidebar() {
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Sign out</span>
           </Show>
         </button>
@@ -338,7 +375,7 @@ export default function Sidebar() {
           onClick={() => setExpanded((e) => !e)}
           title={expanded() ? "Collapse sidebar" : "Expand sidebar"}
           aria-label={expanded() ? "Collapse sidebar" : "Expand sidebar"}
-          class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-foreground-strong"
+          class="hidden w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-foreground-strong md:flex"
         >
           <svg
             aria-hidden="true"
@@ -357,11 +394,12 @@ export default function Sidebar() {
           >
             <polyline points="15 18 9 12 15 6" />
           </svg>
-          <Show when={expanded()}>
+          <Show when={showLabels()}>
             <span class="whitespace-nowrap">Collapse</span>
           </Show>
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

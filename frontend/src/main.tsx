@@ -1,31 +1,36 @@
-import { render } from 'solid-js/web'
-import { RouterProvider, createRouter } from '@tanstack/solid-router'
-import { QueryClientProvider } from '@tanstack/solid-query'
-import { routeTree } from './routeTree.gen'
-import { queryClient } from './lib/queryClient'
+import { QueryClientProvider } from "@tanstack/solid-query";
+import { createRouter, RouterProvider } from "@tanstack/solid-router";
+import { render } from "solid-js/web";
+import { ErrorState, NotFoundState } from "./components/ErrorState";
+import { queryClient } from "./lib/queryClient";
+import { routeTree } from "./routeTree.gen";
 
 const router = createRouter({
-  routeTree,
-  defaultPreload: 'intent',
-  defaultPreloadStaleTime: 0,
-  scrollRestoration: true,
-})
+	routeTree,
+	defaultPreload: "intent",
+	defaultPreloadStaleTime: 0,
+	scrollRestoration: true,
+	defaultErrorComponent: (props) => (
+		<ErrorState error={props.error} onRetry={props.reset} />
+	),
+	defaultNotFoundComponent: () => <NotFoundState />,
+});
 
-declare module '@tanstack/solid-router' {
-  interface Register {
-    router: typeof router
-  }
+declare module "@tanstack/solid-router" {
+	interface Register {
+		router: typeof router;
+	}
 }
 
-const rootElement = document.getElementById('app')
+const rootElement = document.getElementById("app");
 
 if (rootElement && !rootElement.innerHTML) {
-  render(
-    () => (
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    ),
-    rootElement,
-  )
+	render(
+		() => (
+			<QueryClientProvider client={queryClient}>
+				<RouterProvider router={router} />
+			</QueryClientProvider>
+		),
+		rootElement,
+	);
 }

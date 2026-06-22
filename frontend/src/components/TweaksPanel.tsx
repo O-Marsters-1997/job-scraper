@@ -104,15 +104,23 @@ export default function TweaksPanel() {
 
 	const t = () => tweaks();
 
-	// Derive a live swatch for the Custom button from saved customColors
+	// Derive a live swatch for the Custom button from saved customColors.
+	// Stored values are OKLCH; convert to hex for inline preview styling.
 	const customSwatch = () => {
 		const c = t().customColors ?? CUSTOM_DEFAULTS;
+		const hex = (key: string, fallback: string) =>
+			c[key] ? oklchToHex(c[key]) : fallback;
 		return {
-			sb: c["--color-sidebar"] ?? "#111921",
-			cv: c["--color-background"] ?? "#f8fafc",
-			ac: c["--color-primary"] ?? "#0f9d92",
+			sb: hex("--color-sidebar", "#111921"),
+			cv: hex("--color-background", "#f8fafc"),
+			ac: hex("--color-primary", "#0f9d92"),
+			su: hex("--color-surface", "#ffffff"),
+			bd: hex("--color-border", "#e2e8f0"),
 		};
 	};
+
+	const swatchFor = (key: ThemeKey) =>
+		key === "custom" ? customSwatch() : THEMES[key].swatch;
 
 	return (
 		<div
@@ -200,70 +208,103 @@ export default function TweaksPanel() {
 							when={view() === "custom"}
 							fallback={
 								<>
-									{/* Theme */}
-									<Section label="Theme" hint="colour + sidebar">
-										<div class="grid grid-cols-3 gap-1.5">
+									{/* Theme — the hero control: each swatch is a live mini-app preview */}
+									<Section label="Theme" hint="full palette preview">
+										<div class="grid grid-cols-2 gap-2">
 											<For each={THEME_KEYS}>
-												{(key) => (
-													<button
-														type="button"
-														onClick={() => {
-															if (key === "custom") {
-																openCustomEditor();
-															} else {
-																update("theme", key as ThemeKey);
-															}
-														}}
-														class={cn(
-															"overflow-hidden rounded-lg border-[1.5px] bg-transparent text-left transition-[border-color,transform]",
-															t().theme === key
-																? "border-primary"
-																: "border-border hover:-translate-y-px hover:border-border-strong",
-														)}
-													>
-														{/* Swatch preview */}
-														<div class="flex h-10">
-															<div
-																class="w-[30%] shrink-0"
-																style={{
-																	background:
-																		key === "custom"
-																			? customSwatch().sb
-																			: THEMES[key].swatch.sb,
-																}}
-															/>
-															<div
-																class="relative flex-1"
-																style={{
-																	background:
-																		key === "custom"
-																			? customSwatch().cv
-																			: THEMES[key].swatch.cv,
-																}}
-															>
-																<div
-																	class="absolute bottom-1 right-1 size-2.5 rounded-full"
-																	style={{
-																		background:
-																			key === "custom"
-																				? customSwatch().ac
-																				: THEMES[key].swatch.ac,
-																	}}
-																/>
-															</div>
-														</div>
-														<span
+												{(key) => {
+													const sw = () => swatchFor(key as ThemeKey);
+													const selected = () => t().theme === key;
+													return (
+														<button
+															type="button"
+															onClick={() => {
+																if (key === "custom") {
+																	openCustomEditor();
+																} else {
+																	update("theme", key as ThemeKey);
+																}
+															}}
+															aria-pressed={selected()}
 															class={cn(
-																"block py-1 text-center text-[10.5px] font-semibold",
-																t().theme === key
-																	? "text-accent-text"
-																	: "text-muted",
+																"group relative overflow-hidden rounded-lg border bg-transparent text-left transition-[transform,box-shadow,border-color] duration-150 ease-out",
+																selected()
+																	? "border-primary shadow-[0_0_0_2px_var(--color-primary)]"
+																	: "border-border hover:-translate-y-0.5 hover:border-border-strong hover:shadow-sm",
 															)}
 														>
-															{THEMES[key].name}
-														</span>
-													</button>
-												)}
+															{/* Mini-app preview: sidebar + content card + accent */}
+															<div class="flex h-[3.25rem]">
+																{/* Sidebar with one accent-lit nav item + muted lines */}
+																<div
+																	class="flex w-[36%] shrink-0 flex-col justify-center gap-[3px] px-2"
+																	style={{ background: sw().sb }}
+																>
+																	<span
+																		class="h-1 w-7 rounded-full"
+																		style={{ background: sw().ac }}
+																	/>
+																	<span class="h-1 w-5 rounded-full bg-white/25" />
+																	<span class="h-1 w-6 rounded-full bg-white/15" />
+																</div>
+																{/* Canvas holding a surface card */}
+																<div
+																	class="flex-1 p-1.5"
+																	style={{ background: sw().cv }}
+																>
+																	<div
+																		class="flex h-full w-full flex-col gap-[3px] rounded-[5px] border p-1.5"
+																		style={{
+																			background: sw().su,
+																			"border-color": sw().bd,
+																		}}
+																	>
+																		<span
+																			class="h-1.5 w-8 rounded-full"
+																			style={{ background: sw().ac }}
+																		/>
+																		<span
+																			class="h-1 w-full rounded-full"
+																			style={{ background: sw().bd }}
+																		/>
+																		<span
+																			class="h-1 w-2/3 rounded-full"
+																			style={{ background: sw().bd }}
+																		/>
+																	</div>
+																</div>
+															</div>
+															{/* Selected check, overlaid on the preview corner */}
+															<Show when={selected()}>
+																<span class="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+																	<svg
+																		width="10"
+																		height="10"
+																		viewBox="0 0 24 24"
+																		fill="none"
+																		stroke="currentColor"
+																		stroke-width="3"
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		aria-hidden="true"
+																	>
+																		<polyline points="20 6 9 17 4 12" />
+																	</svg>
+																</span>
+															</Show>
+															<span
+																class={cn(
+																	"block border-t py-1 text-center text-[11px] font-semibold transition-colors",
+																	selected()
+																		? "border-primary/30 bg-accent-subtle text-accent-text"
+																		: "border-border bg-surface text-muted group-hover:text-foreground",
+																)}
+															>
+																{THEMES[key].name}
+															</span>
+														</button>
+													);
+												}}
 											</For>
 										</div>
 									</Section>

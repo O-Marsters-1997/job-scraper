@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Chart as ChartJS } from "chart.js";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from "solid-js";
 import { Bar, Doughnut, Line } from "solid-chartjs";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -52,6 +59,13 @@ function InsightsPage() {
   const jobs = () => jobsQuery.data ?? [];
   const applications = () => appsQuery.data ?? [];
   const statuses = () => statusesQuery.data ?? [];
+
+  // Defer chart.js init until after a layout pass. During a client route
+  // transition the canvas can mount before its ownerDocument has a live
+  // defaultView, and chart.js throws reading getComputedStyle on it. A single
+  // rAF guarantees the canvas is connected and laid out before charts render.
+  const [chartsReady, setChartsReady] = createSignal(false);
+  onMount(() => requestAnimationFrame(() => setChartsReady(true)));
 
   // ── C1: range preset state + canvas ref ───────────────────────────────────
   const [activePreset, setActivePreset] = createSignal<Preset>("All");
@@ -260,7 +274,7 @@ function InsightsPage() {
 
           <div class="relative px-5 pt-4" style={{ height: "220px" }}>
             <Show
-              when={hasJobs()}
+              when={hasJobs() && chartsReady()}
               fallback={<p class="text-sm text-faint">No jobs scraped yet.</p>}
             >
               <Line
@@ -287,7 +301,7 @@ function InsightsPage() {
           </div>
           <div class="relative px-5 py-4" style={{ height: "220px" }}>
             <Show
-              when={hasJobs()}
+              when={hasJobs() && chartsReady()}
               fallback={<p class="text-sm text-faint">No jobs scraped yet.</p>}
             >
               <Doughnut data={jobsBySourceData()} options={donutChartOptions} />
@@ -380,7 +394,7 @@ function InsightsPage() {
 
             {/* Bar */}
             <Show
-              when={selectedStatuses().size > 0}
+              when={selectedStatuses().size > 0 && chartsReady()}
               fallback={
                 <p class="text-sm text-faint">Select at least one stage.</p>
               }

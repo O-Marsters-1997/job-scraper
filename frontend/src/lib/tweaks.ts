@@ -138,8 +138,9 @@ export const THEME_VAR_GROUPS: ThemeVarGroup[] = [
 
 interface ThemeEntry {
 	name: string;
-	// Preview swatch colours (inline styles only, independent of applied theme)
-	swatch: { sb: string; cv: string; ac: string };
+	// Preview swatch colours (inline styles only, independent of applied theme).
+	// sb=sidebar, cv=canvas, ac=accent, su=surface card, bd=border.
+	swatch: { sb: string; cv: string; ac: string; su: string; bd: string };
 	// CSS variable overrides — empty means "use pristine @theme values"
 	vars: Record<string, string>;
 }
@@ -147,12 +148,24 @@ interface ThemeEntry {
 export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	teal: {
 		name: "Teal",
-		swatch: { sb: "#111921", cv: "#f8fafc", ac: "#0f9d92" },
+		swatch: {
+			sb: "#111921",
+			cv: "#f8fafc",
+			ac: "#0f9d92",
+			su: "#ffffff",
+			bd: "#e2e8f0",
+		},
 		vars: {},
 	},
 	midnight: {
 		name: "Midnight",
-		swatch: { sb: "#0e1117", cv: "#f8f9ff", ac: "#2563eb" },
+		swatch: {
+			sb: "#0e1117",
+			cv: "#f8f9ff",
+			ac: "#2563eb",
+			su: "#ffffff",
+			bd: "#e2e6f0",
+		},
 		vars: {
 			"--color-sidebar": "#0e1117",
 			"--color-sidebar-hover": "#171e2e",
@@ -178,7 +191,13 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	},
 	ember: {
 		name: "Ember",
-		swatch: { sb: "#18110a", cv: "#fdfaf6", ac: "#d97706" },
+		swatch: {
+			sb: "#18110a",
+			cv: "#fdfaf6",
+			ac: "#d97706",
+			su: "#ffffff",
+			bd: "#ede8dc",
+		},
 		vars: {
 			"--color-sidebar": "#18110a",
 			"--color-sidebar-hover": "#251a0e",
@@ -204,7 +223,13 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	},
 	forest: {
 		name: "Forest",
-		swatch: { sb: "#0d1a0f", cv: "#f6fdf8", ac: "#059669" },
+		swatch: {
+			sb: "#0d1a0f",
+			cv: "#f6fdf8",
+			ac: "#059669",
+			su: "#ffffff",
+			bd: "#d8f0dc",
+		},
 		vars: {
 			"--color-sidebar": "#0d1a0f",
 			"--color-sidebar-hover": "#142218",
@@ -230,7 +255,13 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	},
 	plum: {
 		name: "Plum",
-		swatch: { sb: "#120d1e", cv: "#faf8ff", ac: "#7c3aed" },
+		swatch: {
+			sb: "#120d1e",
+			cv: "#faf8ff",
+			ac: "#7c3aed",
+			su: "#ffffff",
+			bd: "#ede8f8",
+		},
 		vars: {
 			"--color-sidebar": "#120d1e",
 			"--color-sidebar-hover": "#1e1530",
@@ -256,7 +287,13 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	},
 	graphite: {
 		name: "Graphite",
-		swatch: { sb: "#111111", cv: "#f7f7f7", ac: "#404040" },
+		swatch: {
+			sb: "#111111",
+			cv: "#f7f7f7",
+			ac: "#404040",
+			su: "#ffffff",
+			bd: "#e4e4e4",
+		},
 		vars: {
 			"--color-sidebar": "#111111",
 			"--color-sidebar-hover": "#1c1c1c",
@@ -283,7 +320,13 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	// Custom theme: swatch is a placeholder; actual colours come from customColors at runtime
 	custom: {
 		name: "Custom",
-		swatch: { sb: "#111921", cv: "#f8fafc", ac: "#0f9d92" },
+		swatch: {
+			sb: "#111921",
+			cv: "#f8fafc",
+			ac: "#0f9d92",
+			su: "#ffffff",
+			bd: "#e2e8f0",
+		},
 		vars: {},
 	},
 };

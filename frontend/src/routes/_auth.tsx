@@ -1,4 +1,5 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/solid-router";
+import { createSignal } from "solid-js";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import TweaksPanel from "../components/TweaksPanel";
@@ -15,11 +16,15 @@ export const Route = createFileRoute("/_auth")({
 });
 
 function AuthLayout() {
+  const [mobileNavOpen, setMobileNavOpen] = createSignal(false);
   return (
     <div class="flex h-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar
+        mobileOpen={mobileNavOpen()}
+        onMobileClose={() => setMobileNavOpen(false)}
+      />
       <div class="flex min-w-0 flex-1 flex-col">
-        <Topbar />
+        <Topbar onMenuClick={() => setMobileNavOpen(true)} />
         <main class="scroll-slim flex-1 overflow-y-auto">
           <Outlet />
         </main>

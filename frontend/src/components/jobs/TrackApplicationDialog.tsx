@@ -86,7 +86,7 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 					<DialogTitle>
 						{isEdit() ? "Edit application" : "Track application"}
 					</DialogTitle>
-					<p class="text-sm text-faint">{props.job?.Title}</p>
+					<p class="text-sm text-muted">{props.job?.Title}</p>
 				</DialogHeader>
 
 				<div class="flex flex-col gap-4">
@@ -144,7 +144,9 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 						onClick={handleSubmit}
 						disabled={createMutation.isPending || updateMutation.isPending}
 					>
-						{isEdit() ? "Update" : "Save"}
+						{createMutation.isPending || updateMutation.isPending
+							? isEdit() ? "Updating…" : "Saving…"
+							: isEdit() ? "Update" : "Save"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
