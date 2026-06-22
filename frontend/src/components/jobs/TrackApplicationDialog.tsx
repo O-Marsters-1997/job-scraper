@@ -145,8 +145,12 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 						disabled={createMutation.isPending || updateMutation.isPending}
 					>
 						{createMutation.isPending || updateMutation.isPending
-							? isEdit() ? "Updating…" : "Saving…"
-							: isEdit() ? "Update" : "Save"}
+							? isEdit()
+								? "Updating…"
+								: "Saving…"
+							: isEdit()
+								? "Update"
+								: "Save"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

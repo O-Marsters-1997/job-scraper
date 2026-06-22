@@ -119,8 +119,8 @@ function SearchesPage() {
 					Tracked searches
 				</h1>
 				<p class="mt-0.5 text-xs text-faint">
-					Keywords, board tokens and URLs to track across supported job
-					sources. Each runs on its own 6-hour cycle.
+					Keywords, board tokens and URLs to track across supported job sources.
+					Each runs on its own 6-hour cycle.
 				</p>
 			</div>
 
@@ -158,9 +158,7 @@ function SearchesPage() {
 									{(t) => (
 										<TableRow>
 											<TableCell>
-												<Badge variant="source">
-													{sourceLabel(t.Source)}
-												</Badge>
+												<Badge variant="source">{sourceLabel(t.Source)}</Badge>
 											</TableCell>
 											<TableCell class="max-w-[200px] truncate font-mono text-xs">
 												{t.Value}
@@ -215,9 +213,7 @@ function SearchesPage() {
 					<div class="mb-4 rounded-xl border border-border bg-surface px-4 py-4">
 						<Show
 							when={sourcesQuery.isSuccess}
-							fallback={
-								<p class="text-sm text-muted">Loading sources…</p>
-							}
+							fallback={<p class="text-sm text-muted">Loading sources…</p>}
 						>
 							<div class="flex flex-col gap-3">
 								<div class="flex flex-col gap-2">
@@ -290,9 +286,7 @@ function SearchesPage() {
 													id={`filter-${field.name}`}
 													class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 													placeholder={
-														field.name === "region"
-															? "e.g. uk, us, remote"
-															: ""
+														field.name === "region" ? "e.g. uk, us, remote" : ""
 													}
 													value={newFilters()[field.name] ?? ""}
 													onInput={(e) =>
@@ -361,8 +355,8 @@ function SearchesPage() {
 										onChange={(e) => setNewScrapeNow(e.currentTarget.checked)}
 										class="h-4 w-4 rounded border-border accent-primary"
 									/>
-									Scrape now: get results immediately instead of waiting up
-									to 6 hours
+									Scrape now: get results immediately instead of waiting up to 6
+									hours
 								</label>
 
 								<div class="flex items-center gap-2 pt-1">

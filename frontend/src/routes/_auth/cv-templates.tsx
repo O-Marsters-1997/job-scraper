@@ -89,7 +89,9 @@ function CVTemplatesPage() {
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
 		const data = query.data ?? [];
-		const visibilityFiltered = showHidden() ? data : data.filter((cv) => cv.Visible);
+		const visibilityFiltered = showHidden()
+			? data
+			: data.filter((cv) => cv.Visible);
 		const filtered = q
 			? visibilityFiltered.filter(
 					(cv) =>
@@ -146,12 +148,8 @@ function CVTemplatesPage() {
 		<div class="px-7 py-6">
 			<div class="mb-5 flex items-start justify-between gap-4">
 				<div>
-					<h1 class="text-lg font-bold tracking-tight text-foreground">
-						CVs
-					</h1>
-					<p class="mt-0.5 text-xs text-faint">
-						Google Docs tracked as CVs
-					</p>
+					<h1 class="text-lg font-bold tracking-tight text-foreground">CVs</h1>
+					<p class="mt-0.5 text-xs text-faint">Google Docs tracked as CVs</p>
 				</div>
 				<button
 					type="button"
@@ -262,7 +260,12 @@ function CVTemplatesPage() {
 					</div>
 
 					<Show
-						when={filteredSorted().length === 0 && !searchQuery() && !showHidden() && hasHiddenCVs()}
+						when={
+							filteredSorted().length === 0 &&
+							!searchQuery() &&
+							!showHidden() &&
+							hasHiddenCVs()
+						}
 					>
 						<div class="rounded-xl border border-border bg-surface p-10 text-center">
 							<p class="mb-1 text-sm text-muted">All CVs are hidden.</p>
@@ -451,10 +454,7 @@ function CVTemplatesPage() {
 					</div>
 
 					<DialogFooter class="border-t border-border pt-4">
-						<Button
-							variant="outline"
-							onClick={() => setDialogOpen(false)}
-						>
+						<Button variant="outline" onClick={() => setDialogOpen(false)}>
 							Cancel
 						</Button>
 						<Button

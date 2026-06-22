@@ -14,11 +14,7 @@ function linearToSrgb(c: number): number {
 }
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
-function rgbToOklch(
-	r: number,
-	g: number,
-	b: number,
-): [number, number, number] {
+function rgbToOklch(r: number, g: number, b: number): [number, number, number] {
 	const lr = srgbToLinear(r / 255);
 	const lg = srgbToLinear(g / 255);
 	const lb = srgbToLinear(b / 255);
@@ -32,7 +28,7 @@ function rgbToOklch(
 	const s_ = Math.cbrt(s);
 
 	const L = 0.210454256 * l_ + 0.793617785 * m_ - 0.004072047 * s_;
-	const a = 1.977998495 * l_ - 2.428592205 * m_ + 0.450593710 * s_;
+	const a = 1.977998495 * l_ - 2.428592205 * m_ + 0.45059371 * s_;
 	const bb = 0.025904037 * l_ + 0.782771766 * m_ - 0.808675766 * s_;
 
 	const C = Math.sqrt(a * a + bb * bb);
@@ -41,18 +37,14 @@ function rgbToOklch(
 	return [L, C, H];
 }
 
-function oklchToRgb(
-	L: number,
-	C: number,
-	H: number,
-): [number, number, number] {
+function oklchToRgb(L: number, C: number, H: number): [number, number, number] {
 	const hr = (H * Math.PI) / 180;
 	const a = C * Math.cos(hr);
 	const b = C * Math.sin(hr);
 
 	const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
 	const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-	const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+	const s_ = L - 0.0894841775 * a - 1.291485548 * b;
 
 	const lc = l_ ** 3;
 	const mc = m_ ** 3;
@@ -60,7 +52,7 @@ function oklchToRgb(
 
 	const lr = 4.0767416621 * lc - 3.3077115913 * mc + 0.2309699292 * sc;
 	const lg = -1.2684380046 * lc + 2.6097574011 * mc - 0.3413193965 * sc;
-	const lb = -0.0041960863 * lc - 0.7034186147 * mc + 1.7076147010 * sc;
+	const lb = -0.0041960863 * lc - 0.7034186147 * mc + 1.707614701 * sc;
 
 	return [
 		Math.round(clamp01(linearToSrgb(lr)) * 255),

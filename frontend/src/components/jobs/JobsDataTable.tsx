@@ -51,7 +51,9 @@ function pageWindow(current: number, total: number): (number | null)[] {
 export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 	const [globalFilter, setGlobalFilter] = createSignal("");
 	const [sorting, setSorting] = createSignal<SortingState>([]);
-	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>([]);
+	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
+		[],
+	);
 	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
