@@ -56,44 +56,65 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 	ingestSvc := buildIngestSvc(ctx, db, scoringUserID)
 	ingestH := handlers.NewIngestHandler(ingestSvc)
 
-	r.Post("/auth/login", authH.Login)
-	r.Post("/auth/signup", authH.Signup)
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/login", authH.Login)
+		r.Post("/signup", authH.Signup)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware(db))
+			r.Post("/logout", authH.Logout)
+			r.Get("/me", authH.Me)
+		})
+	})
 
-	// Google OAuth start is accessible without auth so the redirect URL is clean.
-	r.Get("/google/oauth/start", googleH.OAuthStart)
+	r.Route("/google", func(r chi.Router) {
+		// /start is public so the OAuth redirect URL stays clean.
+		r.Get("/oauth/start", googleH.OAuthStart)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.Middleware(db))
+			r.Get("/oauth/callback", googleH.OAuthCallback)
+			r.Get("/status", googleH.GetStatus)
+			r.Delete("/link", googleH.Disconnect)
+		})
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(db))
+
 		r.Get("/jobs", jobH.ListJobs)
-		r.Post("/auth/logout", authH.Logout)
-		r.Get("/auth/me", authH.Me)
 
-		r.Get("/application-statuses", statusH.ListApplicationStatuses)
-		r.Post("/application-statuses", statusH.CreateApplicationStatus)
-		r.Patch("/application-statuses/{id}", statusH.UpdateApplicationStatus)
-		r.Delete("/application-statuses/{id}", statusH.DeleteApplicationStatus)
+		r.Route("/application-statuses", func(r chi.Router) {
+			r.Get("/", statusH.ListApplicationStatuses)
+			r.Post("/", statusH.CreateApplicationStatus)
+			r.Patch("/{id}", statusH.UpdateApplicationStatus)
+			r.Delete("/{id}", statusH.DeleteApplicationStatus)
+		})
 
-		r.Get("/applications", appH.ListApplications)
-		r.Post("/applications", appH.CreateApplication)
-		r.Patch("/applications/{id}", appH.UpdateApplication)
-		r.Delete("/applications/{id}", appH.DeleteApplication)
-		r.Get("/applications/for-jobs", appH.GetApplicationsForJobs)
+		r.Route("/applications", func(r chi.Router) {
+			r.Get("/", appH.ListApplications)
+			r.Post("/", appH.CreateApplication)
+			r.Patch("/{id}", appH.UpdateApplication)
+			r.Delete("/{id}", appH.DeleteApplication)
+			r.Get("/for-jobs", appH.GetApplicationsForJobs)
+		})
 
-		r.Get("/google/oauth/callback", googleH.OAuthCallback)
-		r.Get("/google/status", googleH.GetStatus)
-		r.Delete("/google/link", googleH.Disconnect)
+		r.Route("/source-targets", func(r chi.Router) {
+			r.Get("/", stH.List)
+			r.Post("/", stH.Create)
+			r.Patch("/{id}", stH.Update)
+			r.Delete("/{id}", stH.Delete)
+		})
 
-		r.Get("/source-targets", stH.List)
-		r.Post("/source-targets", stH.Create)
-		r.Patch("/source-targets/{id}", stH.Update)
-		r.Delete("/source-targets/{id}", stH.Delete)
+		r.Route("/cv-templates", func(r chi.Router) {
+			r.Get("/", cvH.ListCVTemplates)
+			r.Get("/{docId}/{tabId}/pdf", cvH.ExportCV)
+		})
 
-		r.Get("/cv-templates", cvH.ListCVTemplates)
-		r.Post("/tracked-docs", cvH.AddTrackedDoc)
-		r.Delete("/tracked-docs/{docId}", cvH.RemoveTrackedDoc)
-		r.Post("/tracked-docs/{docId}/tabs/{tabId}/hide", cvH.HideTab)
-		r.Post("/tracked-docs/{docId}/tabs/{tabId}/show", cvH.ShowTab)
-		r.Get("/cv-templates/{docId}/{tabId}/pdf", cvH.ExportCV)
+		r.Route("/tracked-docs", func(r chi.Router) {
+			r.Post("/", cvH.AddTrackedDoc)
+			r.Delete("/{docId}", cvH.RemoveTrackedDoc)
+			r.Post("/{docId}/tabs/{tabId}/hide", cvH.HideTab)
+			r.Post("/{docId}/tabs/{tabId}/show", cvH.ShowTab)
+		})
 	})
 
 	r.Group(func(r chi.Router) {
