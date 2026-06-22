@@ -17,6 +17,7 @@ const (
 	attemptsKey       = "jobs:attempts"
 	deadLetterKey     = "jobs:deadletter"
 	lastScrapedKeyFmt = "scrape:last:%s"
+	scrapeRequestKey  = "scrape:requests"
 	backoffBase       = 30 * time.Second
 	maxAttempts       = 3
 )
@@ -43,10 +44,17 @@ type JobQueue interface {
 	// ClearAttempts removes the retry counter for url. Call on successful processing.
 	ClearAttempts(ctx context.Context, url string) error
 
+	// EnqueueScrapeRequest pushes a scrape request onto the scrape:requests list.
+	// The worker consumer pops it and runs a one-off scrape for the target.
+	EnqueueScrapeRequest(ctx context.Context, req dto.ScrapeRequest) error
+
+	// DequeueScrapeRequest pops the next scrape request from the list.
+	// Returns (zero, false, nil) when the list is empty.
+	DequeueScrapeRequest(ctx context.Context) (dto.ScrapeRequest, bool, error)
+
 	Close()
 }
 
-// Queue wraps a Valkey client and owns the jobs pending sorted set.
 type Queue struct {
 	client valkey.Client
 }
@@ -151,6 +159,29 @@ func (q *Queue) Nack(ctx context.Context, url string) error {
 
 func (q *Queue) ClearAttempts(ctx context.Context, url string) error {
 	return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
+}
+
+func (q *Queue) EnqueueScrapeRequest(ctx context.Context, req dto.ScrapeRequest) error {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal scrape request: %w", err)
+	}
+	return q.client.Do(ctx, q.client.B().Rpush().Key(scrapeRequestKey).Element(string(data)).Build()).Error()
+}
+
+func (q *Queue) DequeueScrapeRequest(ctx context.Context) (dto.ScrapeRequest, bool, error) {
+	val, err := q.client.Do(ctx, q.client.B().Lpop().Key(scrapeRequestKey).Build()).AsBytes()
+	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return dto.ScrapeRequest{}, false, nil
+		}
+		return dto.ScrapeRequest{}, false, fmt.Errorf("lpop scrape request: %w", err)
+	}
+	var req dto.ScrapeRequest
+	if err := json.Unmarshal(val, &req); err != nil {
+		return dto.ScrapeRequest{}, false, fmt.Errorf("unmarshal scrape request: %w", err)
+	}
+	return req, true, nil
 }
 
 func (q *Queue) Close() {

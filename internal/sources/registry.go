@@ -8,12 +8,24 @@ const (
 	kindBoard sourceKind = iota
 	// kindURL identifies sources whose value is a URL (e.g. a LinkedIn search URL).
 	kindURL
+	// kindFilter identifies sources whose value is a keyword string and whose structured
+	// parameters (e.g. region) are stored in the filters map. The source builds its own
+	// start URLs from the user input merged with hardcoded params.
+	kindFilter
 )
+
+// FilterField describes a structured filter parameter accepted by a kindFilter source.
+type FilterField struct {
+	Name     string // JSON/map key, e.g. "region"
+	Label    string // human-readable label, e.g. "Region"
+	Required bool
+}
 
 type registryEntry struct {
 	name      string
 	kind      sourceKind
 	urlPrefix string
+	filters   []FilterField // non-nil only for kindFilter sources
 }
 
 // The names here must match the Name field baked into each source's Config.
@@ -24,12 +36,13 @@ var entries = []registryEntry{
 	{name: "workable", kind: kindBoard, urlPrefix: "https://apply.workable.com"},
 	{name: "recruitee", kind: kindBoard, urlPrefix: "https://recruitee.com"},
 	{name: "personio", kind: kindBoard, urlPrefix: "https://personio.de"},
-	{name: "wis", kind: kindURL, urlPrefix: "https://workinstartups.com"},
+	{name: "wis", kind: kindFilter, urlPrefix: "https://workinstartups.com", filters: []FilterField{
+		{Name: "region", Label: "Region", Required: false},
+	}},
 	{name: "linkedin", kind: kindURL, urlPrefix: "https://www.linkedin.com/jobs"},
 	{name: "indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
 }
 
-// SupportedSources returns the names of all supported sources.
 func SupportedSources() []string {
 	names := make([]string, len(entries))
 	for i, e := range entries {
@@ -38,13 +51,36 @@ func SupportedSources() []string {
 	return names
 }
 
-// LookupSource returns the URL prefix and whether the source is URL-based, plus
-// whether the source name is known at all.
-func LookupSource(name string) (urlPrefix string, isURL bool, ok bool) {
+func findEntry(name string) (registryEntry, bool) {
 	for _, e := range entries {
 		if e.name == name {
-			return e.urlPrefix, e.kind == kindURL, true
+			return e, true
 		}
 	}
-	return "", false, false
+	return registryEntry{}, false
+}
+
+// LookupSource returns the URL prefix and whether the source is URL-based (kindURL), plus
+// whether the source name is known at all. kindFilter sources return isURL=false.
+func LookupSource(name string) (urlPrefix string, isURL bool, ok bool) {
+	e, ok := findEntry(name)
+	if !ok {
+		return "", false, false
+	}
+	return e.urlPrefix, e.kind == kindURL, true
+}
+
+// LookupFilterFields returns the declared filter fields for a kindFilter source,
+// plus whether the source is a filter source at all.
+func LookupFilterFields(name string) ([]FilterField, bool) {
+	e, ok := findEntry(name)
+	if !ok || e.kind != kindFilter {
+		return nil, false
+	}
+	return e.filters, true
+}
+
+func IsFilterSource(name string) bool {
+	e, ok := findEntry(name)
+	return ok && e.kind == kindFilter
 }

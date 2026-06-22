@@ -12,6 +12,7 @@ import (
 type MockQueue struct {
 	mu          sync.Mutex
 	items       []dto.QueuedJob
+	scrapeReqs  []dto.ScrapeRequest
 	lastScraped map[string]time.Time
 	attempts    map[string]int
 	deadLetter  []string
@@ -85,6 +86,32 @@ func (m *MockQueue) ClearAttempts(_ context.Context, url string) error {
 	defer m.mu.Unlock()
 	delete(m.attempts, url)
 	return nil
+}
+
+func (m *MockQueue) EnqueueScrapeRequest(_ context.Context, req dto.ScrapeRequest) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.scrapeReqs = append(m.scrapeReqs, req)
+	return nil
+}
+
+func (m *MockQueue) DequeueScrapeRequest(_ context.Context) (dto.ScrapeRequest, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.scrapeReqs) == 0 {
+		return dto.ScrapeRequest{}, false, nil
+	}
+	req := m.scrapeReqs[0]
+	m.scrapeReqs = m.scrapeReqs[1:]
+	return req, true, nil
+}
+
+func (m *MockQueue) ScrapeRequests() []dto.ScrapeRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]dto.ScrapeRequest, len(m.scrapeReqs))
+	copy(out, m.scrapeReqs)
+	return out
 }
 
 func (m *MockQueue) Close() {}

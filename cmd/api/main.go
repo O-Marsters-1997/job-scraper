@@ -19,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/notify"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
@@ -42,6 +43,18 @@ func main() {
 	}
 	defer db.Close()
 
+	valkeyAddr := os.Getenv("VALKEY_ADDR")
+	if valkeyAddr == "" {
+		valkeyAddr = "localhost:6379"
+	}
+	q, err := queue.New(valkeyAddr)
+	if err != nil {
+		slog.Error("queue init failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+	slog.Info("queue client ready", slog.String("addr", valkeyAddr))
+	defer q.Close()
+
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -64,7 +77,7 @@ func main() {
 	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
-	stH := handlers.NewSourceTargetHandler(db)
+	stH := handlers.NewSourceTargetHandler(db, q)
 
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -89,7 +102,6 @@ func main() {
 	// but callback and status/disconnect require the session cookie.
 	r.Get("/google/oauth/start", googleH.OAuthStart)
 
-	// Protected routes — auth middleware applied to all.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(db))
 		r.Get("/jobs", jobH.ListJobs)

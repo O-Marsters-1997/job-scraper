@@ -12,9 +12,9 @@ import (
 )
 
 const createSourceTarget = `-- name: CreateSourceTarget :one
-INSERT INTO source_targets (user_id, source, value, enabled)
-VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, source, value, enabled, created_at, updated_at
+INSERT INTO source_targets (user_id, source, value, enabled, filters)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, user_id, source, value, enabled, filters, created_at, updated_at
 `
 
 type CreateSourceTargetParams struct {
@@ -22,6 +22,7 @@ type CreateSourceTargetParams struct {
 	Source  string
 	Value   string
 	Enabled bool
+	Filters []byte
 }
 
 func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTargetParams) (SourceTarget, error) {
@@ -30,6 +31,7 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 		arg.Source,
 		arg.Value,
 		arg.Enabled,
+		arg.Filters,
 	)
 	var i SourceTarget
 	err := row.Scan(
@@ -38,6 +40,7 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 		&i.Source,
 		&i.Value,
 		&i.Enabled,
+		&i.Filters,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -59,7 +62,7 @@ func (q *Queries) DeleteSourceTarget(ctx context.Context, arg DeleteSourceTarget
 }
 
 const listEnabledSourceTargets = `-- name: ListEnabledSourceTargets :many
-SELECT id, user_id, source, value, enabled, created_at, updated_at FROM source_targets WHERE enabled = TRUE ORDER BY source, value
+SELECT id, user_id, source, value, enabled, filters, created_at, updated_at FROM source_targets WHERE enabled = TRUE ORDER BY source, value
 `
 
 func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget, error) {
@@ -77,6 +80,7 @@ func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget,
 			&i.Source,
 			&i.Value,
 			&i.Enabled,
+			&i.Filters,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -91,7 +95,7 @@ func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget,
 }
 
 const listSourceTargetsByUser = `-- name: ListSourceTargetsByUser :many
-SELECT id, user_id, source, value, enabled, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
+SELECT id, user_id, source, value, enabled, filters, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
 `
 
 func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUID) ([]SourceTarget, error) {
@@ -109,6 +113,7 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 			&i.Source,
 			&i.Value,
 			&i.Enabled,
+			&i.Filters,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -125,7 +130,7 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 const updateSourceTarget = `-- name: UpdateSourceTarget :one
 UPDATE source_targets SET enabled = $3, updated_at = NOW()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, source, value, enabled, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, created_at, updated_at
 `
 
 type UpdateSourceTargetParams struct {
@@ -143,6 +148,7 @@ func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTarget
 		&i.Source,
 		&i.Value,
 		&i.Enabled,
+		&i.Filters,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

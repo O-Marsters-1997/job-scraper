@@ -6,4 +6,5 @@ type SourceTarget struct {
 	Source  string
 	Value   string
 	Enabled bool
+	Filters map[string]string
 }

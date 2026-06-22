@@ -7,13 +7,28 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
 )
 
-func TestBuildSources_WisAlwaysIncluded(t *testing.T) {
-	srcs := builder.BuildSources(nil)
-	if len(srcs) == 0 {
-		t.Fatal("expected at least wis source")
+func TestBuildSources_WisIncludedWhenTargetPresent(t *testing.T) {
+	targets := []dto.SourceTarget{
+		{Source: "wis", Value: "product engineer", Filters: map[string]string{"region": "uk"}, Enabled: true},
 	}
-	if srcs[0].Cfg().Name != "wis" {
-		t.Errorf("want first source to be wis, got %s", srcs[0].Cfg().Name)
+	srcs := builder.BuildSources(targets)
+	found := false
+	for _, s := range srcs {
+		if s.Cfg().Name == "wis" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected wis source when wis target is present")
+	}
+}
+
+func TestBuildSources_WisExcludedWhenNoTarget(t *testing.T) {
+	srcs := builder.BuildSources(nil)
+	for _, s := range srcs {
+		if s.Cfg().Name == "wis" {
+			t.Error("expected wis to be absent when no wis targets configured")
+		}
 	}
 }
 
@@ -92,7 +107,10 @@ func TestBuildSources_UnknownSourceIgnored(t *testing.T) {
 		{Source: "unknown-ats", Value: "sometoken", Enabled: true},
 	}
 	srcs := builder.BuildSources(targets)
-	if len(srcs) == 0 {
-		t.Fatal("expected at least wis")
+	// Unknown source produces no output; result is an empty slice, not a panic.
+	for _, s := range srcs {
+		if s.Cfg().Name == "unknown-ats" {
+			t.Errorf("unexpected source for unknown-ats")
+		}
 	}
 }

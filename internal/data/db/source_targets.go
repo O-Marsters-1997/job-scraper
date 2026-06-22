@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,12 +14,17 @@ import (
 )
 
 func fromSourceTarget(row pgsqlc.SourceTarget) dto.SourceTarget {
+	filters := map[string]string{}
+	if len(row.Filters) > 0 {
+		_ = json.Unmarshal(row.Filters, &filters)
+	}
 	return dto.SourceTarget{
 		ID:      row.ID.String(),
 		UserID:  row.UserID.String(),
 		Source:  row.Source,
 		Value:   row.Value,
 		Enabled: row.Enabled,
+		Filters: filters,
 	}
 }
 
@@ -50,16 +56,21 @@ func (db *DB) ListEnabledSourceTargets(ctx context.Context) ([]dto.SourceTarget,
 	return out, nil
 }
 
-func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool) (dto.SourceTarget, error) {
+func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
+	}
+	filtersJSON, err := json.Marshal(filters)
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("db.CreateSourceTarget: marshal filters: %w", err)
 	}
 	row, err := db.queries.CreateSourceTarget(ctx, pgsqlc.CreateSourceTargetParams{
 		UserID:  uid,
 		Source:  source,
 		Value:   value,
 		Enabled: enabled,
+		Filters: filtersJSON,
 	})
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("db.CreateSourceTarget: %w", err)

@@ -20,6 +20,7 @@ import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
+import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
@@ -78,6 +79,11 @@ const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
   path: '/statuses',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsSearchesRoute = AuthSettingsSearchesRouteImport.update({
+  id: '/searches',
+  path: '/searches',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsIntegrationsRoute =
   AuthSettingsIntegrationsRouteImport.update({
     id: '/integrations',
@@ -108,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
@@ -140,6 +148,7 @@ export interface FileRoutesById {
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
   '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
 }
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/jobs/$id'
     | '/settings/integrations'
+    | '/settings/searches'
     | '/settings/statuses'
     | '/cv-templates/$docId/$tabId'
   fileRoutesByTo: FileRoutesByTo
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/jobs/$id'
     | '/settings/integrations'
+    | '/settings/searches'
     | '/settings/statuses'
     | '/cv-templates/$docId/$tabId'
   id:
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/_auth/settings'
     | '/_auth/jobs_/$id'
     | '/_auth/settings/integrations'
+    | '/_auth/settings/searches'
     | '/_auth/settings/statuses'
     | '/_auth/cv-templates_/$docId/$tabId'
   fileRoutesById: FileRoutesById
@@ -278,6 +290,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsStatusesRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/searches': {
+      id: '/_auth/settings/searches'
+      path: '/searches'
+      fullPath: '/settings/searches'
+      preLoaderRoute: typeof AuthSettingsSearchesRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/integrations': {
       id: '/_auth/settings/integrations'
       path: '/integrations'
@@ -304,11 +323,13 @@ declare module '@tanstack/solid-router' {
 
 interface AuthSettingsRouteChildren {
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
+  AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
 }
 
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
+  AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
 }
 

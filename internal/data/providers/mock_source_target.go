@@ -9,7 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// ErrDuplicateSourceTarget is returned by CreateSourceTarget when the (user_id, source, value) triple already exists.
+// ErrDuplicateSourceTarget is returned by CreateSourceTarget when the (user_id, source, value, filters) tuple already exists.
 var ErrDuplicateSourceTarget = errors.New("source target already exists")
 
 type MockSourceTargetProvider struct {
@@ -50,14 +50,17 @@ func (m *MockSourceTargetProvider) ListEnabledSourceTargets(_ context.Context) (
 	return out, nil
 }
 
-func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool) (dto.SourceTarget, error) {
+func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
 	if m.CreateErr != nil {
 		return dto.SourceTarget{}, m.CreateErr
+	}
+	if filters == nil {
+		filters = map[string]string{}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, t := range m.targets {
-		if t.UserID == userID && t.Source == source && t.Value == value {
+		if t.UserID == userID && t.Source == source && t.Value == value && mapsEqual(t.Filters, filters) {
 			return dto.SourceTarget{}, ErrDuplicateSourceTarget
 		}
 	}
@@ -67,10 +70,23 @@ func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID,
 		Source:  source,
 		Value:   value,
 		Enabled: enabled,
+		Filters: filters,
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)
 	return t, nil
+}
+
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *MockSourceTargetProvider) UpdateSourceTarget(_ context.Context, id, userID string, enabled bool) (dto.SourceTarget, error) {

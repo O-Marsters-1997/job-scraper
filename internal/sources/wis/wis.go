@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -19,8 +20,8 @@ import (
 )
 
 const (
-	startURL       = "https://workinstartups.com/search?q=product+engineer&w=uk&per_page=50"
-	resultsPerPage = 50
+	baseURL  = "https://workinstartups.com/search"
+	pageSize = 50
 
 	selJobCard    = `div[data-aid]`
 	selJobLink    = `h2 a`
@@ -31,30 +32,55 @@ const (
 	selTime       = `time[datetime]`
 )
 
-type Scraper struct{ sources.PaginatedBase }
+type Search struct {
+	Keywords string // maps to the q URL param, e.g. "product engineer"
+	Region   string // maps to the w URL param, e.g. "uk"; empty means no filter
+}
+
+func (s Search) startURL() string {
+	v := url.Values{}
+	v.Set("q", s.Keywords)
+	if s.Region != "" {
+		v.Set("w", s.Region)
+	}
+	v.Set("per_page", strconv.Itoa(pageSize))
+	return baseURL + "?" + v.Encode()
+}
+
+func pageURL(s Search, page int) string {
+	if page <= 1 {
+		return s.startURL()
+	}
+	return fmt.Sprintf("%s&p=%d", s.startURL(), page)
+}
+
+type Config struct {
+	Searches []Search
+}
+
+type Scraper struct {
+	sources.PaginatedBase
+	searches []Search
+}
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 
-func New() *Scraper {
-	return &Scraper{sources.NewBase(sources.Config{
-		Name:              "wis",
-		URLPrefix:         "https://workinstartups.com",
-		Schedule:          "0 */6 * * *",
-		MinScrapeInterval: 5 * time.Hour,
-		ProxyTier:         proxy.Datacenter,
-	})}
-}
-
-func pageURL(page int) string {
-	if page <= 1 {
-		return startURL
+func New(cfg Config) *Scraper {
+	return &Scraper{
+		PaginatedBase: sources.NewBase(sources.Config{
+			Name:              "wis",
+			URLPrefix:         "https://workinstartups.com",
+			Schedule:          "0 */6 * * *",
+			MinScrapeInterval: 5 * time.Hour,
+			ProxyTier:         proxy.Datacenter,
+		}),
+		searches: cfg.Searches,
 	}
-	return fmt.Sprintf("%s&p=%d", startURL, page)
 }
 
-func (s *Scraper) fetchPage(ctx context.Context, page int) (urls []string, totalCount int, err error) {
-	body, err := s.Get(ctx, pageURL(page))
+func (s *Scraper) fetchPage(ctx context.Context, search Search, page int) (urls []string, totalCount int, err error) {
+	body, err := s.Get(ctx, pageURL(search, page))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -87,13 +113,22 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	return s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
-		jobs := make([]dto.Job, len(urls))
-		for i, u := range urls {
-			jobs[i] = dto.Job{URL: u}
+	for _, search := range s.searches {
+		fetch := func(ctx context.Context, page int) ([]string, int, error) {
+			return s.fetchPage(ctx, search, page)
 		}
-		return fn(ctx, jobs)
-	}, s.fetchPage, resultsPerPage)
+		err := s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
+			jobs := make([]dto.Job, len(urls))
+			for i, u := range urls {
+				jobs[i] = dto.Job{URL: u}
+			}
+			return fn(ctx, jobs)
+		}, fetch, pageSize)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
@@ -121,7 +156,7 @@ func ParseTotalCount(r io.Reader) (int, error) {
 }
 
 func TotalPages(totalCount int) int {
-	return (totalCount + resultsPerPage - 1) / resultsPerPage
+	return (totalCount + pageSize - 1) / pageSize
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {

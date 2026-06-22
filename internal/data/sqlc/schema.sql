@@ -102,7 +102,8 @@ CREATE TABLE IF NOT EXISTS source_targets (
     source     TEXT        NOT NULL,
     value      TEXT        NOT NULL,
     enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
+    filters    JSONB       NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, source, value)
+    UNIQUE (user_id, source, value, filters)
 );

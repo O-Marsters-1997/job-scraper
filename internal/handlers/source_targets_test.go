@@ -36,7 +36,7 @@ func TestSourceTargetHandler_List(t *testing.T) {
 		{
 			name: "returns targets for current user",
 			setup: func(s *providers.MockSourceTargetProvider) {
-				_, _ = s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true)
+				_, _ = s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
 			},
 			wantStatus: http.StatusOK,
 			wantCount:  1,
@@ -53,7 +53,7 @@ func TestSourceTargetHandler_List(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSourceTargetProvider()
 			tt.setup(store)
-			h := NewSourceTargetHandler(store)
+			h := NewSourceTargetHandler(store, nil)
 
 			req := httptest.NewRequest(http.MethodGet, "/source-targets", nil)
 			req = withSession(req, "user-1")
@@ -116,7 +116,7 @@ func TestSourceTargetHandler_Create(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			h := NewSourceTargetHandler(store)
+			h := NewSourceTargetHandler(store, nil)
 
 			body, _ := json.Marshal(tt.body)
 			req := httptest.NewRequest(http.MethodPost, "/source-targets", bytes.NewReader(body))
@@ -142,7 +142,7 @@ func TestSourceTargetHandler_Update(t *testing.T) {
 		{
 			name: "updates enabled flag",
 			targetID: func(s *providers.MockSourceTargetProvider) string {
-				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true)
+				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
 				return created.ID
 			},
 			wantStatus: http.StatusOK,
@@ -158,7 +158,7 @@ func TestSourceTargetHandler_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSourceTargetProvider()
 			id := tt.targetID(store)
-			h := NewSourceTargetHandler(store)
+			h := NewSourceTargetHandler(store, nil)
 
 			body, _ := json.Marshal(map[string]bool{"enabled": false})
 			req := httptest.NewRequest(http.MethodPatch, "/source-targets/"+id, bytes.NewReader(body))
@@ -199,8 +199,8 @@ func TestSourceTargetHandler_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSourceTargetProvider()
-			created, _ := store.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true)
-			h := NewSourceTargetHandler(store)
+			created, _ := store.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
+			h := NewSourceTargetHandler(store, nil)
 
 			req := httptest.NewRequest(http.MethodDelete, "/source-targets/"+created.ID, nil)
 			req = withSession(req, tt.userID)

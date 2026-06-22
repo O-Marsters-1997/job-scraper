@@ -18,16 +18,18 @@ import (
 )
 
 type Orchestrator struct {
-	srcs     []sources.Source
-	db       providers.JobProvider
-	q        queue.JobQueue
-	scorer   score.RelevanceScorer          // nil means no gate
-	cfgDB    providers.SearchConfigProvider // nil means no gate
-	scoreDB  providers.JobScoreProvider     // nil means no score writes
-	exporter JobExporter                    // nil means no ATS egress
-	userID   string
-	cr       *cron.Cron
-	wg       sync.WaitGroup
+	srcs         []sources.Source
+	db           providers.JobProvider
+	q            queue.JobQueue
+	scorer       score.RelevanceScorer          // nil means no gate
+	cfgDB        providers.SearchConfigProvider // nil means no gate
+	scoreDB      providers.JobScoreProvider     // nil means no score writes
+	exporter     JobExporter                    // nil means no ATS egress
+	userID       string
+	cr           *cron.Cron
+	wg           sync.WaitGroup
+	buildSources func(ctx context.Context) ([]sources.Source, error) // nil → use static srcs
+	buildTarget  func(target dto.SourceTarget) []sources.Source      // nil → no on-demand scrape
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -40,6 +42,18 @@ type RelevanceStore interface {
 	providers.JobScoreProvider
 }
 
+// WithSourceReloader wires in functions to reload sources from DB at each tick
+// and to build a one-off source for on-demand scraping.
+// Calling this is optional; without it the static srcs slice is used.
+func (o *Orchestrator) WithSourceReloader(
+	buildAll func(ctx context.Context) ([]sources.Source, error),
+	buildOne func(target dto.SourceTarget) []sources.Source,
+) *Orchestrator {
+	o.buildSources = buildAll
+	o.buildTarget = buildOne
+	return o
+}
+
 // WithRelevanceGate wires in a scorer and store so both ingestion paths filter
 // jobs below cfg.RelevanceCutoff. ATS job scores are persisted via store.
 func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore, userID string) {
@@ -50,37 +64,80 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store Rel
 }
 
 // WithExporter wires in the egress port used by the ATS path.
-func (o *Orchestrator) WithExporter(exp JobExporter) {
+func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
 	o.exporter = exp
+	return o
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
-	for _, src := range o.srcs {
-		go o.runIfReady(ctx, src)
-	}
+	// Run an initial scrape immediately in the background.
+	o.wg.Add(1)
+	go func() {
+		defer o.wg.Done()
+		o.tick(ctx)
+	}()
 
 	o.cr = cron.New()
 
-	for _, src := range o.srcs {
-		cfg := src.Cfg()
-		if _, err := o.cr.AddFunc(cfg.Schedule, func() {
-			slog.Info("cron: starting scrape",
-				slog.String("source", cfg.Name),
-			)
-			o.wg.Add(1)
+	// Schedule one reload-driven tick using the default scrape schedule.
+	// If no reloader is set, tick falls back to the static srcs slice.
+	if _, err := o.cr.AddFunc(sources.DefaultSchedule, func() {
+		slog.Info("cron: starting scrape tick")
+		// wg.Add must be called before the goroutine starts; cron calls this
+		// func synchronously so it's safe here.
+		o.wg.Add(1)
+		go func() {
 			defer o.wg.Done()
-			o.runIfReady(ctx, src)
-		}); err != nil {
-			o.cr.Stop()
-			return fmt.Errorf("schedule %s (%s): %w", cfg.Name, cfg.Schedule, err)
-		}
-		slog.Info("cron: scheduled",
-			slog.String("source", cfg.Name),
-			slog.String("schedule", cfg.Schedule),
-		)
+			o.tick(ctx)
+		}()
+	}); err != nil {
+		o.cr.Stop()
+		return fmt.Errorf("schedule scrape tick (%s): %w", sources.DefaultSchedule, err)
 	}
+	slog.Info("cron: scheduled scrape tick", slog.String("schedule", sources.DefaultSchedule))
 
 	o.cr.Start()
+	return nil
+}
+
+// tick reloads the source list from DB (if a reloader is set) and fans out
+// runIfReady for every source. New targets join rotation automatically on the
+// next tick without a worker restart.
+func (o *Orchestrator) tick(ctx context.Context) {
+	srcs := o.srcs
+	if o.buildSources != nil {
+		rebuilt, err := o.buildSources(ctx)
+		if err != nil {
+			slog.Error("reload sources failed", slog.Any("err", err))
+		} else {
+			srcs = rebuilt
+		}
+	}
+
+	var wg sync.WaitGroup
+	for _, src := range srcs {
+		wg.Add(1)
+		go func(s sources.Source) {
+			defer wg.Done()
+			o.runIfReady(ctx, s)
+		}(src)
+	}
+	wg.Wait()
+}
+
+// ScrapeTarget builds a one-off source for the given target and runs a scrape
+// immediately. It bypasses the MinScrapeInterval gate (user-requested) and does
+// NOT write scrape:last, so the regular scheduled rotation is unaffected.
+func (o *Orchestrator) ScrapeTarget(ctx context.Context, target dto.SourceTarget) error {
+	if o.buildTarget == nil {
+		return fmt.Errorf("scraper: no buildTarget func registered")
+	}
+	srcs := o.buildTarget(target)
+	for _, src := range srcs {
+		if err := o.run(ctx, src); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
