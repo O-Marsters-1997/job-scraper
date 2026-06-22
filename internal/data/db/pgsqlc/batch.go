@@ -18,15 +18,16 @@ var (
 )
 
 const upsertJobs = `-- name: UpsertJobs :batchexec
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw)
-VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8)
+INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement)
+VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, $9)
 ON CONFLICT (url) DO UPDATE SET
-    title       = EXCLUDED.title,
-    location    = EXCLUDED.location,
-    updated_at  = EXCLUDED.updated_at,
-    scraped_at  = NOW(),
-    description = EXCLUDED.description,
-    salary_raw  = EXCLUDED.salary_raw
+    title            = EXCLUDED.title,
+    location         = EXCLUDED.location,
+    updated_at       = EXCLUDED.updated_at,
+    scraped_at       = NOW(),
+    description      = EXCLUDED.description,
+    salary_raw       = EXCLUDED.salary_raw,
+    work_arrangement = EXCLUDED.work_arrangement
 `
 
 type UpsertJobsBatchResults struct {
@@ -36,14 +37,15 @@ type UpsertJobsBatchResults struct {
 }
 
 type UpsertJobsParams struct {
-	Title       string
-	Location    string
-	Url         string
-	CompanySlug string
-	Source      string
-	UpdatedAt   pgtype.Timestamptz
-	Description string
-	SalaryRaw   string
+	Title           string
+	Location        string
+	Url             string
+	CompanySlug     string
+	Source          string
+	UpdatedAt       pgtype.Timestamptz
+	Description     string
+	SalaryRaw       string
+	WorkArrangement string
 }
 
 func (q *Queries) UpsertJobs(ctx context.Context, arg []UpsertJobsParams) *UpsertJobsBatchResults {
@@ -58,6 +60,7 @@ func (q *Queries) UpsertJobs(ctx context.Context, arg []UpsertJobsParams) *Upser
 			a.UpdatedAt,
 			a.Description,
 			a.SalaryRaw,
+			a.WorkArrangement,
 		}
 		batch.Queue(upsertJobs, vals...)
 	}

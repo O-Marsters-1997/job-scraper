@@ -13,6 +13,7 @@ type Job struct {
 	ScrapedAt        time.Time
 	Description      string
 	SalaryRaw        string
+	WorkArrangement  string
 	RelevanceScore   *int
 	SuitabilityScore *int
 }

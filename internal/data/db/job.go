@@ -15,14 +15,15 @@ import (
 
 func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
 	return pgsqlc.UpsertJobParams{
-		Title:       j.Title,
-		Location:    j.Location,
-		Url:         j.URL,
-		CompanySlug: j.CompanySlug,
-		Source:      j.Source,
-		UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
-		Description: j.Description,
-		SalaryRaw:   j.SalaryRaw,
+		Title:           j.Title,
+		Location:        j.Location,
+		Url:             j.URL,
+		CompanySlug:     j.CompanySlug,
+		Source:          j.Source,
+		UpdatedAt:       pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+		Description:     j.Description,
+		SalaryRaw:       j.SalaryRaw,
+		WorkArrangement: j.WorkArrangement,
 	}
 }
 
@@ -30,14 +31,15 @@ func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
 	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
 	for i, j := range jobs {
 		params[i] = pgsqlc.UpsertJobsParams{
-			Title:       j.Title,
-			Location:    j.Location,
-			Url:         j.URL,
-			CompanySlug: j.CompanySlug,
-			Source:      j.Source,
-			UpdatedAt:   pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
-			Description: j.Description,
-			SalaryRaw:   j.SalaryRaw,
+			Title:           j.Title,
+			Location:        j.Location,
+			Url:             j.URL,
+			CompanySlug:     j.CompanySlug,
+			Source:          j.Source,
+			UpdatedAt:       pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
+			Description:     j.Description,
+			SalaryRaw:       j.SalaryRaw,
+			WorkArrangement: j.WorkArrangement,
 		}
 	}
 	return params
@@ -45,31 +47,33 @@ func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
 
 func fromRow(row pgsqlc.Job) dto.Job {
 	return dto.Job{
-		ID:          row.ID.String(),
-		Title:       row.Title,
-		Location:    row.Location,
-		URL:         row.Url,
-		CompanySlug: row.CompanySlug,
-		Source:      row.Source,
-		UpdatedAt:   row.UpdatedAt.Time,
-		ScrapedAt:   row.ScrapedAt.Time,
-		Description: row.Description,
-		SalaryRaw:   row.SalaryRaw,
+		ID:              row.ID.String(),
+		Title:           row.Title,
+		Location:        row.Location,
+		URL:             row.Url,
+		CompanySlug:     row.CompanySlug,
+		Source:          row.Source,
+		UpdatedAt:       row.UpdatedAt.Time,
+		ScrapedAt:       row.ScrapedAt.Time,
+		Description:     row.Description,
+		SalaryRaw:       row.SalaryRaw,
+		WorkArrangement: row.WorkArrangement,
 	}
 }
 
 func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	j := dto.Job{
-		ID:          row.ID.String(),
-		Title:       row.Title,
-		Location:    row.Location,
-		URL:         row.Url,
-		CompanySlug: row.CompanySlug,
-		Source:      row.Source,
-		UpdatedAt:   row.UpdatedAt.Time,
-		ScrapedAt:   row.ScrapedAt.Time,
-		Description: row.Description,
-		SalaryRaw:   row.SalaryRaw,
+		ID:              row.ID.String(),
+		Title:           row.Title,
+		Location:        row.Location,
+		URL:             row.Url,
+		CompanySlug:     row.CompanySlug,
+		Source:          row.Source,
+		UpdatedAt:       row.UpdatedAt.Time,
+		ScrapedAt:       row.ScrapedAt.Time,
+		Description:     row.Description,
+		SalaryRaw:       row.SalaryRaw,
+		WorkArrangement: row.WorkArrangement,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)
