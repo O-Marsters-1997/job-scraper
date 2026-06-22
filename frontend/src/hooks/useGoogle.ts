@@ -4,6 +4,7 @@ import { fetchGoogleStatus, disconnectGoogle } from "../api/google";
 export const googleStatusQueryOptions = queryOptions({
   queryKey: ["google-status"],
   queryFn: fetchGoogleStatus,
+  retry: false,
 });
 
 export function useGoogleStatus() {

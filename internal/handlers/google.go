@@ -96,13 +96,18 @@ func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 	hc, err := h.client.HTTPClientForUser(r.Context(), session.UserID)
 	if err != nil {
-		if errors.Is(err, providers.ErrGoogleTokenNotFound) {
+		switch {
+		case errors.Is(err, providers.ErrGoogleTokenNotFound):
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(response{Connected: false})
-			return
+		case errors.Is(err, providers.ErrGoogleTokenUnusable):
+			slog.Warn("google token unusable, treating as disconnected", slog.Any("err", err))
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response{Connected: false})
+		default:
+			slog.Error("get google http client failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
-		slog.Error("get google http client failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
