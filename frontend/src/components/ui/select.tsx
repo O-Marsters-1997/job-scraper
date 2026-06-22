@@ -62,8 +62,9 @@ export const SelectContent = (props: SelectContentProps) => (
 	</SelectPrimitive.Portal>
 );
 
-export type SelectItemProps<T extends ValidComponent = "li"> =
-	ComponentProps<typeof SelectPrimitive.Item<T>>;
+export type SelectItemProps<T extends ValidComponent = "li"> = ComponentProps<
+	typeof SelectPrimitive.Item<T>
+>;
 
 export const SelectItem = <T extends ValidComponent = "li">(
 	props: SelectItemProps<T>,

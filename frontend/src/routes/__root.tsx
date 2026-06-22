@@ -1,17 +1,29 @@
-import { Outlet, createRootRoute } from '@tanstack/solid-router'
-import { TanStackRouterDevtools } from '@tanstack/solid-router-devtools'
+import { createRootRoute, Outlet } from "@tanstack/solid-router";
+import { lazy, Show } from "solid-js";
 
-import '../styles.css'
+import "../styles.css";
+
+// Dev-only: the dynamic import is gated on import.meta.env.DEV so Vite drops the
+// devtools chunk from the production bundle entirely.
+const TanStackRouterDevtools = import.meta.env.DEV
+	? lazy(() =>
+			import("@tanstack/solid-router-devtools").then((m) => ({
+				default: m.TanStackRouterDevtools,
+			})),
+		)
+	: () => null;
 
 export const Route = createRootRoute({
-  component: RootComponent,
-})
+	component: RootComponent,
+});
 
 function RootComponent() {
-  return (
-    <>
-      <Outlet />
-      <TanStackRouterDevtools position="bottom-right" />
-    </>
-  )
+	return (
+		<>
+			<Outlet />
+			<Show when={import.meta.env.DEV}>
+				<TanStackRouterDevtools position="bottom-right" />
+			</Show>
+		</>
+	);
 }

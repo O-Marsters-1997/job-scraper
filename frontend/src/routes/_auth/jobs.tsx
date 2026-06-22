@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { useApplicationsForJobs } from "../../hooks/useApplications";
@@ -61,7 +62,7 @@ function JobsPage() {
 			</div>
 
 			<Show when={query.isPending}>
-				<p class="text-sm text-muted">Loading jobs…</p>
+				<SkeletonList rows={6} />
 			</Show>
 
 			<Show when={query.isError}>

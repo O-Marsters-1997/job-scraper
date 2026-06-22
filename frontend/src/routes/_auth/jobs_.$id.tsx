@@ -332,14 +332,14 @@ function JobDetailPage() {
 										when={j().Description}
 										fallback={
 											<p class="text-sm text-faint">
-												No description captured —{" "}
+												No description captured.{" "}
 												<a
 													href={j().URL}
 													target="_blank"
 													rel="noopener noreferrer"
 													class="text-primary transition-colors hover:underline"
 												>
-													view the original listing ↗
+													View the original listing ↗
 												</a>
 											</p>
 										}

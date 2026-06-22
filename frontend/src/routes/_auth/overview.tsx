@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { For, type JSX, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
 	Table,
@@ -10,7 +10,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { formatDate } from "@/lib/datetime";
-import { cn } from "@/lib/utils";
+import { cn, titleCase } from "@/lib/utils";
 import { SourceBadge } from "../../components/SourceBadge";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
@@ -33,13 +33,6 @@ export const Route = createFileRoute("/_auth/overview")({
 		]),
 	component: OverviewPage,
 });
-
-function titleCase(slug: string): string {
-	return slug
-		.split(/[-_\s]+/)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(" ");
-}
 
 function isToday(iso: string): boolean {
 	const d = new Date(iso);
@@ -106,14 +99,9 @@ function OverviewPage() {
 				<p class="mt-0.5 text-xs text-faint">Your job search at a glance</p>
 			</div>
 
-			{/* Stat cards */}
-			<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-				<StatCard
-					label="Jobs in database"
-					value={totalJobs().toString()}
-					delta={`from ${sourceCount()} sources`}
-				/>
-				<StatCard
+			{/* Key metrics — lead with the two you act on daily, group the rest */}
+			<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1.2fr]">
+				<FeatureStat
 					label="New today"
 					value={newToday().toString()}
 					delta={
@@ -121,8 +109,16 @@ function OverviewPage() {
 							? `across ${todaySources()} ${todaySources() === 1 ? "source" : "sources"}`
 							: "none scraped today"
 					}
+					cta={
+						<Link
+							to="/jobs"
+							class="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary-hover"
+						>
+							Review jobs →
+						</Link>
+					}
 				/>
-				<StatCard
+				<FeatureStat
 					label="Active applications"
 					value={totalApps().toString()}
 					delta={
@@ -131,12 +127,30 @@ function OverviewPage() {
 							: "all responded to"
 					}
 					deltaUp={awaitingCount() > 0}
+					cta={
+						<Link
+							to="/applications"
+							search={{ status: undefined }}
+							class="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary-hover"
+						>
+							Manage →
+						</Link>
+					}
 				/>
-				<StatCard
-					label="Response rate"
-					value={`${responseRate()}%`}
-					delta={`${respondedCount()} of ${totalApps()} responded`}
-				/>
+				<Card class="sm:col-span-2 lg:col-span-1">
+					<div class="grid h-full grid-rows-2 divide-y divide-border">
+						<MiniStat
+							label="Jobs in database"
+							value={totalJobs().toString()}
+							hint={`from ${sourceCount()} ${sourceCount() === 1 ? "source" : "sources"}`}
+						/>
+						<MiniStat
+							label="Response rate"
+							value={`${responseRate()}%`}
+							hint={`${respondedCount()} of ${totalApps()} responded`}
+						/>
+					</div>
+				</Card>
 			</div>
 
 			{/* Application pipeline */}
@@ -197,36 +211,43 @@ function OverviewPage() {
 							View all →
 						</Link>
 					</div>
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>Role</TableHead>
-								<TableHead>Company</TableHead>
-								<TableHead>Source</TableHead>
-								<TableHead>Scraped</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							<For each={recentJobs()}>
-								{(job) => (
-									<TableRow>
-										<TableCell class="max-w-[220px] truncate font-medium text-foreground">
-											{job.Title}
-										</TableCell>
-										<TableCell class="text-muted">
-											{titleCase(job.CompanySlug)}
-										</TableCell>
-										<TableCell>
-											<SourceBadge source={job.Source} />
-										</TableCell>
-										<TableCell class="font-mono text-xs tabular-nums text-faint">
-											{formatDate(job.ScrapedAt)}
-										</TableCell>
-									</TableRow>
-								)}
-							</For>
-						</TableBody>
-					</Table>
+					<Show
+						when={recentJobs().length > 0}
+						fallback={
+							<p class="px-5 py-4 text-sm text-faint">No jobs scraped yet.</p>
+						}
+					>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Role</TableHead>
+									<TableHead>Company</TableHead>
+									<TableHead>Source</TableHead>
+									<TableHead>Scraped</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								<For each={recentJobs()}>
+									{(job) => (
+										<TableRow>
+											<TableCell class="max-w-[220px] truncate font-medium text-foreground">
+												{job.Title}
+											</TableCell>
+											<TableCell class="text-muted">
+												{titleCase(job.CompanySlug)}
+											</TableCell>
+											<TableCell>
+												<SourceBadge source={job.Source} />
+											</TableCell>
+											<TableCell class="font-mono text-xs tabular-nums text-faint">
+												{formatDate(job.ScrapedAt)}
+											</TableCell>
+										</TableRow>
+									)}
+								</For>
+							</TableBody>
+						</Table>
+					</Show>
 				</Card>
 
 				{/* Recent applications */}
@@ -257,7 +278,7 @@ function OverviewPage() {
 											{app.JobTitle}
 										</p>
 										<p class="text-xs text-faint">
-											{app.JobCompanySlug}
+											{titleCase(app.JobCompanySlug)}
 											{app.JobLocation ? ` · ${app.JobLocation}` : ""}
 										</p>
 									</div>
@@ -277,32 +298,57 @@ function OverviewPage() {
 	);
 }
 
-interface StatCardProps {
+interface FeatureStatProps {
 	label: string;
 	value: string;
 	delta: string;
 	deltaUp?: boolean;
+	cta?: JSX.Element;
 }
 
-function StatCard(props: StatCardProps) {
+// Primary metric tile: oversized number, optional action link. The two daily
+// decisions (what's new, what's in flight) get this treatment.
+function FeatureStat(props: FeatureStatProps) {
 	return (
 		<Card>
-			<div class="p-5">
-				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-faint">
-					{props.label}
-				</p>
-				<p class="font-mono text-3xl font-medium tabular-nums text-foreground">
+			<div class="flex h-full flex-col p-5">
+				<div class="flex items-center justify-between gap-2">
+					<p class="text-xs font-medium text-muted">{props.label}</p>
+					{props.cta}
+				</div>
+				<p class="mt-3 font-mono text-4xl font-medium tabular-nums text-foreground">
 					{props.value}
 				</p>
 				<p
 					class={cn(
-						"mt-1.5 text-xs",
-						props.deltaUp ? "text-status-offer" : "text-faint",
+						"mt-auto pt-2 text-xs",
+						props.deltaUp ? "text-primary" : "text-faint",
 					)}
 				>
 					{props.delta}
 				</p>
 			</div>
 		</Card>
+	);
+}
+
+interface MiniStatProps {
+	label: string;
+	value: string;
+	hint: string;
+}
+
+// Secondary metric row inside the grouped context card.
+function MiniStat(props: MiniStatProps) {
+	return (
+		<div class="flex items-center justify-between gap-3 px-5 py-3.5">
+			<div class="min-w-0">
+				<p class="text-xs font-medium text-muted">{props.label}</p>
+				<p class="mt-0.5 truncate text-[11px] text-faint">{props.hint}</p>
+			</div>
+			<p class="shrink-0 font-mono text-lg font-medium tabular-nums text-foreground">
+				{props.value}
+			</p>
+		</div>
 	);
 }

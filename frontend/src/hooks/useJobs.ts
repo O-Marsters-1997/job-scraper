@@ -1,11 +1,11 @@
-import { createQuery, queryOptions } from '@tanstack/solid-query'
-import { fetchJobs } from '../api/jobs'
+import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { fetchJobs } from "../api/jobs";
 
 export const jobsQueryOptions = queryOptions({
-  queryKey: ['jobs'],
-  queryFn: fetchJobs,
-})
+	queryKey: ["jobs"],
+	queryFn: fetchJobs,
+});
 
 export function useJobs() {
-  return createQuery(() => jobsQueryOptions)
+	return createQuery(() => jobsQueryOptions);
 }

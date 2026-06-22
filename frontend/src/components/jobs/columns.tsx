@@ -4,16 +4,12 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDate, formatRelative } from "@/lib/datetime";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
 
-export function titleCase(slug: string): string {
-	return slug
-		.split(/[-_\s]+/)
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(" ");
-}
+export { titleCase };
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
@@ -48,9 +44,14 @@ export function createJobColumns(
 		{
 			accessorKey: "Location",
 			header: "Location",
-			cell: (info) => (
-				<span class="text-muted">{info.getValue() as string}</span>
-			),
+			cell: (info) => {
+				const val = info.getValue() as string | null | undefined;
+				return val ? (
+					<span class="text-muted">{val}</span>
+				) : (
+					<span class="text-faint">—</span>
+				);
+			},
 		},
 		{
 			accessorKey: "DaysInOffice",

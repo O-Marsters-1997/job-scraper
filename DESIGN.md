@@ -41,7 +41,7 @@ All tokens are OKLCH. Hex equivalents shown for visual reference.
 **Text**
 - `--color-foreground` `oklch(0.2077 0.0398 265.75)` — primary text, headings, cell values (`#0f172a`)
 - `--color-muted` `oklch(0.4455 0.0374 257.28)` — secondary text, company/location cells (`#475569`)
-- `--color-faint` `oklch(0.7107 0.0351 256.79)` — metadata, placeholders, empty `—`, table heads (`#94a3b8`)
+- `--color-faint` `oklch(0.5544 0.0407 256.79)` — metadata, placeholders, empty `—`, table heads (`#64748b`, ~4.76:1 on white for WCAG AA)
 
 **Lines**
 - `--color-border` `oklch(0.9288 0.0126 255.51)` — default hairline (`#e2e8f0`)

@@ -7,6 +7,7 @@ import {
 	useDeleteApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
 import { STATUS_PALETTE } from "@/lib/status";
+import { SkeletonList } from "@/components/ui/skeleton";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
@@ -74,7 +75,7 @@ function StatusesPage() {
 					Application statuses
 				</h1>
 				<p class="mt-0.5 text-xs text-faint">
-					Custom stages for your pipeline — assign any colour
+					Custom stages for your pipeline, each with its own colour
 				</p>
 			</div>
 
@@ -85,7 +86,7 @@ function StatusesPage() {
 			</Show>
 
 			<Show when={query.isPending}>
-				<p class="text-sm text-muted">Loading…</p>
+				<SkeletonList rows={5} />
 			</Show>
 
 			<Show when={query.isSuccess}>

@@ -29,8 +29,7 @@ export function ColorPicker(props: ColorPickerProps) {
 		const hsba = c.toFormat("hsba");
 		setColor(hsba);
 		const alpha = hsba.getChannelValue("alpha");
-		const out =
-			alpha < 1 ? hsba.toString("rgba") : hsba.toString("hex");
+		const out = alpha < 1 ? hsba.toString("rgba") : hsba.toString("hex");
 		props.onChange(out);
 	}
 

@@ -19,7 +19,9 @@ export async function addTrackedDoc(url: string): Promise<void> {
 	if (res.status === 400) {
 		const data = await res.json().catch(() => ({}));
 		const msg: string = data?.error ?? "";
-		throw new Error(msg.startsWith("cannot access") ? "access-denied" : "invalid-url");
+		throw new Error(
+			msg.startsWith("cannot access") ? "access-denied" : "invalid-url",
+		);
 	}
 	if (!res.ok) throw new Error(`Failed to add tracked doc: ${res.status}`);
 }
