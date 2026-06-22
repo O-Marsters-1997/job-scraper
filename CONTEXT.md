@@ -52,8 +52,20 @@ A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, com
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
-A user-defined board token (for ATS sources) or URL (for URL-based sources) that the scraper watches on that user's behalf. Each target names a supported Source and a value — e.g. a Greenhouse board token `"acme"` or a LinkedIn search URL. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets.
+A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets.
 _Avoid_: Board config, source config, integration
+
+**Filter Source**:
+A `kindFilter` source whose scraping targets are constructed from user-supplied keyword `value` and structured `filters` fields (e.g. `region`), rather than a fixed board token or URL. `wis` is currently the only filter source; its declared `FilterField` list is returned by `LookupFilterFields`. Contrast with `kindBoard` (ATS) and `kindURL` (aggregator) sources.
+_Avoid_: keyword source, search source
+
+**FilterField**:
+A structured parameter declaration on a filter source — carries `Name` (the map key, e.g. `"region"`), `Label` (human-readable), and `Required`. The registry exposes declared fields via `LookupFilterFields(name)`; the `Create` handler validates submitted `filters` maps against them.
+_Avoid_: filter param, filter key
+
+**ScrapeRequest**:
+A lightweight message enqueued by the API (via `queue.EnqueueScrapeRequest`) when a user creates a Source Target with `scrape_now: true`. The worker's `RunScrapeRequests` loop pops it and calls `Orchestrator.ScrapeTarget`, bypassing the `MinScrapeInterval` gate. Stored in the `scrape:requests` Valkey list. Failures are best-effort — the regular schedule covers any missed scrape.
+_Avoid_: immediate scrape, manual scrape, trigger
 
 **Search Config**:
 A User's editable search criteria (role, location, keywords), suitability rubric, relevance cutoff, and notify threshold — exactly one per User; the single source of truth feeding the relevance gate, the suitability scorer, and notifications.
@@ -88,6 +100,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
 - A **User** defines zero or more **Source Targets**; each Target maps to a supported **Source**
+- A **Filter Source** Target carries a keyword `value` plus optional **FilterField** values in `filters`; a **ScrapeRequest** may be enqueued at creation time when `scrape_now: true`
 - A **Job** carries a **Relevance** and **Suitability** score per **User** — a per-user assessment, sibling to **Application**, not a property of the shared **Job**
 - A **User** has exactly one **Search Config**
 
@@ -105,3 +118,4 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "board" meant both a **Source** and the per-company ATS unit — resolved: a **Source** is a platform/site adapter; a **Board** is one company's listings on an ATS (a `{board_token}`) that a Source iterates.
 - "relevance" vs "suitability" — resolved: **Relevance** is the cheap pre-persistence heuristic gate signal; **Suitability** is the post-persistence LLM fit score. Both are 0–100 and per **User**, but differ in input (card vs full text), cost (free vs LLM), and timing.
 - "score on a Job" read as a property of the shared **Job** — resolved: a score is per-**User** (a **Job**↔**User** assessment, modelled like **Application**), never a column on the shared catalog.
+- "source target value" for WIS was ambiguous — resolved: for **Filter Source** targets the `value` column is the keyword string (what to search for); additional structured parameters (e.g. region) live in the `filters` JSONB column, not in `value`.
