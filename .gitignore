@@ -9,6 +9,13 @@ bin/
 */**/node_modules
 emails/node_modules
 
+# Debug binaries
+/api
+/worker
+/admin
+/snapshot
+__debug_bin*
+
 # Utilities
 .DS_Store
 .treepad.toml

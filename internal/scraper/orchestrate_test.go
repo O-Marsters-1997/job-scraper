@@ -63,110 +63,111 @@ func (r *recordingExporter) BulkExport(_ context.Context, jobs []dto.Job) error 
 	return nil
 }
 
-func TestRun_EnqueuesNewURLs(t *testing.T) {
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-	src := &stubSource{
-		cfg:  sources.Config{Name: "test"},
-		urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
-	}
+func TestRun_Enqueue(t *testing.T) {
+	t.Parallel()
 
-	o := New([]sources.Source{src}, db, q)
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
-
-	got := q.Items()
-	want := []string{"https://example.com/job/1", "https://example.com/job/2"}
-	if !slices.Equal(got, want) {
-		t.Errorf("queue = %v, want %v", got, want)
-	}
-}
-
-func TestRun_FiltersExistingURLs(t *testing.T) {
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-	_ = db.Save(context.Background(), []dto.Job{{URL: "https://example.com/job/1"}})
-
-	src := &stubSource{
-		cfg:  sources.Config{Name: "test"},
-		urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
-	}
-
-	o := New([]sources.Source{src}, db, q)
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
-
-	got := q.Items()
-	want := []string{"https://example.com/job/2"}
-	if !slices.Equal(got, want) {
-		t.Errorf("queue = %v, want %v", got, want)
-	}
-}
-
-func TestRun_DeduplicatesWithinPage(t *testing.T) {
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-	src := &stubSource{
-		cfg:  sources.Config{Name: "test"},
-		urls: []string{"https://example.com/job/1", "https://example.com/job/1"},
-	}
-
-	o := New([]sources.Source{src}, db, q)
-	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
-	}
-
-	got := q.Items()
-	if len(got) != 1 {
-		t.Errorf("queue has %d items, want 1 (dedup failed): %v", len(got), got)
-	}
-}
-
-func TestRunIfReady_SkipsIfRecentlyScraped(t *testing.T) {
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-	src := &stubSource{
-		cfg: sources.Config{
-			Name:              "test",
-			MinScrapeInterval: time.Hour,
+	tests := []struct {
+		name     string
+		urls     []string // URLs the source returns
+		existing []string // URLs already saved in the DB
+		want     []string // URLs expected in the queue
+	}{
+		{
+			name: "enqueues new URLs",
+			urls: []string{"https://example.com/job/1", "https://example.com/job/2"},
+			want: []string{"https://example.com/job/1", "https://example.com/job/2"},
 		},
-		urls: []string{"https://example.com/job/1"},
+		{
+			name:     "filters URLs already in the DB",
+			urls:     []string{"https://example.com/job/1", "https://example.com/job/2"},
+			existing: []string{"https://example.com/job/1"},
+			want:     []string{"https://example.com/job/2"},
+		},
+		{
+			name: "deduplicates repeated URLs within a page",
+			urls: []string{"https://example.com/job/1", "https://example.com/job/1"},
+			want: []string{"https://example.com/job/1"},
+		},
 	}
 
-	_ = q.SetLastScraped(context.Background(), "test")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	o := New([]sources.Source{src}, db, q)
-	o.runIfReady(context.Background(), src)
+			q := queue.NewMockQueue()
+			db := providers.NewMockJobProvider()
+			if len(tt.existing) > 0 {
+				jobs := make([]dto.Job, len(tt.existing))
+				for i, u := range tt.existing {
+					jobs[i] = dto.Job{URL: u}
+				}
+				if err := db.Save(context.Background(), jobs); err != nil {
+					t.Fatalf("seed existing jobs: %v", err)
+				}
+			}
 
-	if len(q.Items()) != 0 {
-		t.Errorf("expected no items enqueued after recent scrape, got %d", len(q.Items()))
+			src := &stubSource{cfg: sources.Config{Name: "test"}, urls: tt.urls}
+
+			o := New([]sources.Source{src}, db, q)
+			if err := o.run(context.Background(), src); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+
+			if got := q.Items(); !slices.Equal(got, tt.want) {
+				t.Errorf("queue = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestRunIfReady_RunsIfNotRecentlyScraped(t *testing.T) {
-	q := queue.NewMockQueue()
-	db := providers.NewMockJobProvider()
-	src := &stubSource{
-		cfg: sources.Config{
-			Name:              "test",
-			MinScrapeInterval: time.Millisecond, // extremely short — already elapsed
+func TestRunIfReady_IntervalGate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		lastScrapedAgo time.Duration // how long ago the source was last scraped
+		minInterval    time.Duration
+		wantEnqueued   bool
+	}{
+		{
+			name:           "skips when scraped within the interval",
+			lastScrapedAgo: 0,
+			minInterval:    time.Hour,
+			wantEnqueued:   false,
 		},
-		urls: []string{"https://example.com/job/1"},
+		{
+			name:           "runs when the interval has elapsed",
+			lastScrapedAgo: time.Hour,
+			minInterval:    time.Millisecond,
+			wantEnqueued:   true,
+		},
 	}
 
-	q.SetLastScrapedAt("test", time.Now().Add(-time.Hour))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	o := New([]sources.Source{src}, db, q)
-	o.runIfReady(context.Background(), src)
+			q := queue.NewMockQueue()
+			db := providers.NewMockJobProvider()
+			src := &stubSource{
+				cfg:  sources.Config{Name: "test", MinScrapeInterval: tt.minInterval},
+				urls: []string{"https://example.com/job/1"},
+			}
+			q.SetLastScrapedAt("test", time.Now().Add(-tt.lastScrapedAgo))
 
-	if len(q.Items()) == 0 {
-		t.Error("expected URLs to be enqueued after interval elapsed")
+			o := New([]sources.Source{src}, db, q)
+			o.runIfReady(context.Background(), src)
+
+			if gotEnqueued := len(q.Items()) > 0; gotEnqueued != tt.wantEnqueued {
+				t.Errorf("enqueued = %v, want %v", gotEnqueued, tt.wantEnqueued)
+			}
+		})
 	}
 }
 
 func TestRunIfReady_SetsLastScraped(t *testing.T) {
+	t.Parallel()
+
 	q := queue.NewMockQueue()
 	db := providers.NewMockJobProvider()
 	src := &stubSource{
@@ -177,13 +178,14 @@ func TestRunIfReady_SetsLastScraped(t *testing.T) {
 	o := New([]sources.Source{src}, db, q)
 	o.runIfReady(context.Background(), src)
 
-	_, ok, _ := q.GetLastScraped(context.Background(), "test")
-	if !ok {
+	if _, ok, _ := q.GetLastScraped(context.Background(), "test"); !ok {
 		t.Error("expected last scraped to be recorded after run")
 	}
 }
 
 func TestRun_MultiplePages(t *testing.T) {
+	t.Parallel()
+
 	q := queue.NewMockQueue()
 	db := providers.NewMockJobProvider()
 
@@ -194,7 +196,7 @@ func TestRun_MultiplePages(t *testing.T) {
 
 	o := New([]sources.Source{src}, db, q)
 	if err := o.run(context.Background(), src); err != nil {
-		t.Fatal(err)
+		t.Fatalf("run: %v", err)
 	}
 
 	got := q.Items()
@@ -311,7 +313,7 @@ func TestRun_Paths(t *testing.T) {
 			}
 
 			if err := o.run(context.Background(), tt.src); err != nil {
-				t.Fatal(err)
+				t.Fatalf("run: %v", err)
 			}
 
 			if got := len(exp.exported); got != tt.wantExported {

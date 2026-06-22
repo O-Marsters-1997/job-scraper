@@ -289,6 +289,13 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 		newSet[u] = struct{}{}
 	}
 
+	if skipped := len(candidates) - len(newURLs); skipped > 0 {
+		slog.Info("skipping already scraped URLs",
+			slog.Int("total_urls", len(candidates)),
+			slog.Int("skipped", skipped),
+		)
+	}
+
 	queued := make([]dto.QueuedJob, 0, len(candidates))
 	for _, c := range candidates {
 		if _, isNew := newSet[c.url]; !isNew {
