@@ -36,19 +36,14 @@ func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orc
 	return &Orchestrator{srcs: srcs, db: db, q: q}
 }
 
-<<<<<<< HEAD
 // RelevanceStore combines SearchConfigProvider and JobScoreProvider so callers pass db once.
 type RelevanceStore interface {
 	providers.SearchConfigProvider
 	providers.JobScoreProvider
 }
 
-// WithRelevanceGate wires in a scorer and store so both ingestion paths filter
-// jobs below cfg.RelevanceCutoff. ATS job scores are persisted via store.
-func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore, userID string) {
-=======
 // WithSourceReloader wires in functions to reload sources from DB at each tick
-// (buildAll) and to build a one-off source for on-demand scraping (buildOne).
+// and to build a one-off source for on-demand scraping.
 // Calling this is optional; without it the static srcs slice is used.
 func (o *Orchestrator) WithSourceReloader(
 	buildAll func(ctx context.Context) ([]sources.Source, error),
@@ -59,11 +54,9 @@ func (o *Orchestrator) WithSourceReloader(
 	return o
 }
 
-// WithRelevanceGate wires in a scorer, search config provider, and job score
-// provider so that both ingestion paths filter jobs below cfg.RelevanceCutoff.
-// Scores for ATS jobs are persisted via scoreDB.
-func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB providers.SearchConfigProvider, scoreDB providers.JobScoreProvider, userID string) *Orchestrator {
->>>>>>> 896a898 (support being able to add specific urls for wis)
+// WithRelevanceGate wires in a scorer and store so both ingestion paths filter
+// jobs below cfg.RelevanceCutoff. ATS job scores are persisted via store.
+func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore, userID string) {
 	o.scorer = scorer
 	o.cfgDB = store
 	o.scoreDB = store
@@ -71,23 +64,18 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, cfgDB pro
 }
 
 // WithExporter wires in the egress port used by the ATS path.
-func (o *Orchestrator) WithExporter(exp JobExporter) {
+func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
 	o.exporter = exp
+	return o
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
-<<<<<<< HEAD
-	for _, src := range o.srcs {
-		go o.runIfReady(ctx, src)
-	}
-=======
 	// Run an initial scrape immediately in the background.
 	o.wg.Add(1)
 	go func() {
 		defer o.wg.Done()
 		o.tick(ctx)
 	}()
->>>>>>> 896a898 (support being able to add specific urls for wis)
 
 	o.cr = cron.New()
 

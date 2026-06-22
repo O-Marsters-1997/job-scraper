@@ -55,7 +55,6 @@ type JobQueue interface {
 	Close()
 }
 
-// Queue wraps a Valkey client and owns the jobs pending sorted set.
 type Queue struct {
 	client valkey.Client
 }

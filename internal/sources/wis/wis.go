@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	baseURL        = "https://workinstartups.com/search"
-	perPage        = 50
-	resultsPerPage = 50
+	baseURL  = "https://workinstartups.com/search"
+	pageSize = 50
 
 	selJobCard    = `div[data-aid]`
 	selJobLink    = `h2 a`
@@ -33,7 +32,6 @@ const (
 	selTime       = `time[datetime]`
 )
 
-// Search holds a single configured search: a keyword query and an optional region.
 type Search struct {
 	Keywords string // maps to the q URL param, e.g. "product engineer"
 	Region   string // maps to the w URL param, e.g. "uk"; empty means no filter
@@ -45,7 +43,7 @@ func (s Search) startURL() string {
 	if s.Region != "" {
 		v.Set("w", s.Region)
 	}
-	v.Set("per_page", strconv.Itoa(perPage))
+	v.Set("per_page", strconv.Itoa(pageSize))
 	return baseURL + "?" + v.Encode()
 }
 
@@ -56,7 +54,6 @@ func pageURL(s Search, page int) string {
 	return fmt.Sprintf("%s&p=%d", s.startURL(), page)
 }
 
-// Config holds all user-configured searches for this source.
 type Config struct {
 	Searches []Search
 }
@@ -126,7 +123,7 @@ func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Jo
 				jobs[i] = dto.Job{URL: u}
 			}
 			return fn(ctx, jobs)
-		}, fetch, resultsPerPage)
+		}, fetch, pageSize)
 		if err != nil {
 			return err
 		}
@@ -159,7 +156,7 @@ func ParseTotalCount(r io.Reader) (int, error) {
 }
 
 func TotalPages(totalCount int) int {
-	return (totalCount + resultsPerPage - 1) / resultsPerPage
+	return (totalCount + pageSize - 1) / pageSize
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {

@@ -75,7 +75,6 @@ func (w *worker) run(ctx context.Context, q queue.JobQueue, handler HandlerFunc)
 	}
 }
 
-// ScrapeHandlerFunc handles a single on-demand scrape request.
 type ScrapeHandlerFunc func(ctx context.Context, req dto.ScrapeRequest) error
 
 // RunScrapeRequests polls the scrape-request queue and calls handler for each

@@ -102,7 +102,6 @@ func main() {
 	// but callback and status/disconnect require the session cookie.
 	r.Get("/google/oauth/start", googleH.OAuthStart)
 
-	// Protected routes — auth middleware applied to all.
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(db))
 		r.Get("/jobs", jobH.ListJobs)

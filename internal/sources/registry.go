@@ -43,7 +43,6 @@ var entries = []registryEntry{
 	{name: "indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
 }
 
-// SupportedSources returns the names of all supported sources.
 func SupportedSources() []string {
 	names := make([]string, len(entries))
 	for i, e := range entries {
@@ -52,34 +51,36 @@ func SupportedSources() []string {
 	return names
 }
 
+func findEntry(name string) (registryEntry, bool) {
+	for _, e := range entries {
+		if e.name == name {
+			return e, true
+		}
+	}
+	return registryEntry{}, false
+}
+
 // LookupSource returns the URL prefix and whether the source is URL-based (kindURL), plus
 // whether the source name is known at all. kindFilter sources return isURL=false.
 func LookupSource(name string) (urlPrefix string, isURL bool, ok bool) {
-	for _, e := range entries {
-		if e.name == name {
-			return e.urlPrefix, e.kind == kindURL, true
-		}
+	e, ok := findEntry(name)
+	if !ok {
+		return "", false, false
 	}
-	return "", false, false
+	return e.urlPrefix, e.kind == kindURL, true
 }
 
 // LookupFilterFields returns the declared filter fields for a kindFilter source,
 // plus whether the source is a filter source at all.
 func LookupFilterFields(name string) ([]FilterField, bool) {
-	for _, e := range entries {
-		if e.name == name && e.kind == kindFilter {
-			return e.filters, true
-		}
+	e, ok := findEntry(name)
+	if !ok || e.kind != kindFilter {
+		return nil, false
 	}
-	return nil, false
+	return e.filters, true
 }
 
-// IsFilterSource reports whether name is a kindFilter source.
 func IsFilterSource(name string) bool {
-	for _, e := range entries {
-		if e.name == name {
-			return e.kind == kindFilter
-		}
-	}
-	return false
+	e, ok := findEntry(name)
+	return ok && e.kind == kindFilter
 }
