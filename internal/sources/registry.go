@@ -14,15 +14,36 @@ const (
 	kindFilter
 )
 
+func (k sourceKind) string() string {
+	switch k {
+	case kindBoard:
+		return "board"
+	case kindURL:
+		return "url"
+	default:
+		return "filter"
+	}
+}
+
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
 type FilterField struct {
-	Name     string // JSON/map key, e.g. "region"
-	Label    string // human-readable label, e.g. "Region"
-	Required bool
+	Name     string `json:"name"`
+	Label    string `json:"label"`
+	Required bool   `json:"required"`
+}
+
+// SourceInfo is the serialisable view of a registry entry, suitable for API responses.
+type SourceInfo struct {
+	Name      string        `json:"name"`
+	Label     string        `json:"label"`
+	Kind      string        `json:"kind"` // "board" | "url" | "filter"
+	URLPrefix string        `json:"url_prefix"`
+	Filters   []FilterField `json:"filters"` // non-empty only for kindFilter sources
 }
 
 type registryEntry struct {
 	name      string
+	label     string
 	kind      sourceKind
 	urlPrefix string
 	filters   []FilterField // non-nil only for kindFilter sources
@@ -30,17 +51,36 @@ type registryEntry struct {
 
 // The names here must match the Name field baked into each source's Config.
 var entries = []registryEntry{
-	{name: "greenhouse", kind: kindBoard, urlPrefix: "https://boards.greenhouse.io"},
-	{name: "lever", kind: kindBoard, urlPrefix: "https://jobs.lever.co"},
-	{name: "ashby", kind: kindBoard, urlPrefix: "https://jobs.ashbyhq.com"},
-	{name: "workable", kind: kindBoard, urlPrefix: "https://apply.workable.com"},
-	{name: "recruitee", kind: kindBoard, urlPrefix: "https://recruitee.com"},
-	{name: "personio", kind: kindBoard, urlPrefix: "https://personio.de"},
-	{name: "wis", kind: kindFilter, urlPrefix: "https://workinstartups.com", filters: []FilterField{
+	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, urlPrefix: "https://boards.greenhouse.io"},
+	{name: "lever", label: "Lever", kind: kindBoard, urlPrefix: "https://jobs.lever.co"},
+	{name: "ashby", label: "Ashby", kind: kindBoard, urlPrefix: "https://jobs.ashbyhq.com"},
+	{name: "workable", label: "Workable", kind: kindBoard, urlPrefix: "https://apply.workable.com"},
+	{name: "recruitee", label: "Recruitee", kind: kindBoard, urlPrefix: "https://recruitee.com"},
+	{name: "personio", label: "Personio", kind: kindBoard, urlPrefix: "https://personio.de"},
+	{name: "wis", label: "Work in Startups", kind: kindFilter, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "region", Label: "Region", Required: false},
 	}},
-	{name: "linkedin", kind: kindURL, urlPrefix: "https://www.linkedin.com/jobs"},
-	{name: "indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
+	{name: "linkedin", label: "LinkedIn", kind: kindURL, urlPrefix: "https://www.linkedin.com/jobs"},
+	{name: "indeed", label: "Indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
+}
+
+// Sources returns the full registry as a slice of serialisable SourceInfo values.
+func Sources() []SourceInfo {
+	infos := make([]SourceInfo, len(entries))
+	for i, e := range entries {
+		filters := e.filters
+		if filters == nil {
+			filters = []FilterField{}
+		}
+		infos[i] = SourceInfo{
+			Name:      e.name,
+			Label:     e.label,
+			Kind:      e.kind.string(),
+			URLPrefix: e.urlPrefix,
+			Filters:   filters,
+		}
+	}
+	return infos
 }
 
 func SupportedSources() []string {

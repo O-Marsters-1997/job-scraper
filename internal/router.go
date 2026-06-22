@@ -97,6 +97,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 			r.Get("/for-jobs", appH.GetApplicationsForJobs)
 		})
 
+		r.Get("/sources", stH.Sources)
+
 		r.Route("/source-targets", func(r chi.Router) {
 			r.Get("/", stH.List)
 			r.Post("/", stH.Create)

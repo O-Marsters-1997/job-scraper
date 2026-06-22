@@ -26,6 +26,11 @@ func NewSourceTargetHandler(targets providers.SourceTargetProvider, q queue.JobQ
 	return &SourceTargetHandler{targets: targets, q: q}
 }
 
+func (h *SourceTargetHandler) Sources(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sources.Sources())
+}
+
 func (h *SourceTargetHandler) List(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	ts, err := h.targets.ListSourceTargetsByUser(r.Context(), session.UserID)
