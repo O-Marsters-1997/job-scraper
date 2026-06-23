@@ -39,18 +39,6 @@ const JOBS: ReadonlyArray<readonly [string, SourceKey]> = [
 	["iOS Engineer", "lv"],
 ];
 
-// Scattered anchor points in normalized [0..1] field space, kept off the edges.
-const ANCHORS: ReadonlyArray<readonly [number, number]> = [
-	[0.18, 0.26],
-	[0.62, 0.18],
-	[0.43, 0.44],
-	[0.8, 0.32],
-	[0.16, 0.64],
-	[0.56, 0.7],
-	[0.33, 0.82],
-	[0.74, 0.74],
-];
-
 // Pill metrics (CSS px, scaled per-frame for depth).
 const ROLE_PX = 13;
 const SRC_PX = 10;
@@ -60,11 +48,20 @@ const DOT_GAP = 9;
 const LABEL_GAP = 7;
 const PILL_H = 31;
 
-// Depth → presentation. z in [0,1]: 0 far/small/faint, 1 near/large/bright.
-const SCALE_FAR = 0.66;
-const SCALE_NEAR = 1.14;
-const ALPHA_FAR = 0.5;
+// Depth → presentation. z in [0,1]: 0 far/small/faint/blurred, 1 near/large/sharp.
+const SCALE_FAR = 0.62;
+const SCALE_NEAR = 1.16;
+const ALPHA_FAR = 0.55;
 const ALPHA_NEAR = 1;
+const BLUR_FAR = 2.8; // px of defocus on the farthest pills
+const FOCUS_Z = 0.55; // z at/above which pills are perfectly sharp
+
+// Motion (normalized field units per second). Constant per pill — DVD-style:
+// straight-line travel, direction only ever flips on a wall bounce.
+const SPD_MIN = 0.026;
+const SPD_MAX = 0.07;
+const VZ_MIN = 0.05;
+const VZ_MAX = 0.13;
 
 const TAU = Math.PI * 2;
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -82,47 +79,18 @@ function mulberry32(seed: number) {
 	};
 }
 
-// A wander oscillator: two incommensurate sine harmonics give smooth, organic,
-// non-repeating motion (a Lissajous-style path) instead of a flat ping-pong.
-type Osc = {
-	a1: number;
-	f1: number;
-	p1: number;
-	a2: number;
-	f2: number;
-	p2: number;
-};
-const makeOsc = (
-	rng: () => number,
-	ampBase: number,
-	ampVar: number,
-	fLo: number,
-	fHi: number,
-): Osc => {
-	const f1 = fLo + rng() * (fHi - fLo);
-	return {
-		a1: ampBase + rng() * ampVar,
-		f1,
-		p1: rng() * TAU,
-		a2: (ampBase + rng() * ampVar) * 0.55,
-		f2: f1 * (1.7 + rng() * 0.6),
-		p2: rng() * TAU,
-	};
-};
-const evalOsc = (o: Osc, t: number) =>
-	o.a1 * Math.sin(o.f1 * t + o.p1) + o.a2 * Math.sin(o.f2 * t + o.p2);
-
 type Pill = {
 	role: string;
 	srcLabel: string;
 	srcKey: SourceKey;
-	ax: number;
-	ay: number;
-	ox: Osc;
-	oy: Osc;
-	oz: Osc;
-	zBase: number;
-	// metrics (filled once fonts are ready)
+	// live state in normalized field space ([0,1] x/y, z depth) + constant velocity
+	x: number;
+	y: number;
+	z: number;
+	vx: number;
+	vy: number;
+	vz: number;
+	// text metrics, re-measured each frame
 	w: number;
 	roleW: number;
 };
@@ -154,20 +122,31 @@ export function RoleCloud() {
 		const pillBorder = "oklch(1 0 0 / 0.16)";
 		const glow = "oklch(0.7 0.15 290 / 0.55)";
 
-		const pills: Pill[] = JOBS.map(([role, key], i) => {
-			const rng = mulberry32((i + 1) * 0x9e3779b1);
-			const [ax, ay] = ANCHORS[i % ANCHORS.length];
+		// One shared deterministic stream so every pill's coordinates are independent.
+		// Stratified start: one pill per cell of a jittered grid, so x/y are always
+		// evenly scattered (8 purely-random points clump together too often), while
+		// depth and heading stay fully random. Each keeps its direction forever.
+		const rng = mulberry32(0x9e3779b1);
+		const COLS = 4;
+		const ROWS = 2;
+		const pills: Pill[] = JOBS.map(([role, key], idx) => {
+			const col = idx % COLS;
+			const row = Math.floor(idx / COLS);
+			const cx = (col + 0.5 + (rng() - 0.5) * 0.8) / COLS;
+			const cy = (row + 0.5 + (rng() - 0.5) * 0.8) / ROWS;
+			const ang = rng() * TAU;
+			const spd = SPD_MIN + rng() * (SPD_MAX - SPD_MIN);
+			const vzMag = VZ_MIN + rng() * (VZ_MAX - VZ_MIN);
 			return {
 				role,
 				srcLabel: SOURCES[key].label.toUpperCase(),
 				srcKey: key,
-				ax,
-				ay,
-				// Bigger travel than the CSS version, varied per pill, all directions.
-				ox: makeOsc(rng, 0.07, 0.06, 0.1, 0.26),
-				oy: makeOsc(rng, 0.07, 0.06, 0.1, 0.26),
-				oz: makeOsc(rng, 0.32, 0.12, 0.07, 0.18),
-				zBase: 0.5 + (rng() - 0.5) * 0.32,
+				x: lerp(0.08, 0.92, cx),
+				y: lerp(0.12, 0.88, cy),
+				z: lerp(0.12, 0.9, rng()),
+				vx: Math.cos(ang) * spd,
+				vy: Math.sin(ang) * spd,
+				vz: rng() < 0.5 ? -vzMag : vzMag,
 				w: 0,
 				roleW: 0,
 			};
@@ -176,11 +155,17 @@ export function RoleCloud() {
 		let cssW = 0;
 		let cssH = 0;
 		let dpr = 1;
+		// False until the parent has a real layout box. The brand panel measures
+		// 0×0 on mount (laid out a frame later), and integrating then would divide
+		// by a ~1px width — the bounce margins balloon and clamp() piles every pill
+		// at dead center. We hold motion until a genuine size arrives.
+		let ready = false;
 		const resize = () => {
 			const parent = el.parentElement;
 			const rect = parent
 				? parent.getBoundingClientRect()
 				: el.getBoundingClientRect();
+			ready = rect.width > 1 && rect.height > 1;
 			cssW = Math.max(1, rect.width);
 			cssH = Math.max(1, rect.height);
 			dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -205,14 +190,16 @@ export function RoleCloud() {
 
 		const drawPill = (p: Pill, x: number, y: number, z: number) => {
 			const s = lerp(SCALE_FAR, SCALE_NEAR, z);
+			const blur = z >= FOCUS_Z ? 0 : lerp(BLUR_FAR, 0, z / FOCUS_Z);
 			const w = p.w;
 			const h = PILL_H;
 			ctx.save();
 			ctx.translate(x, y);
+			// depth-of-field: far pills defocus so an overlapping nearer pill reads as in front
+			if (blur > 0.05) ctx.filter = `blur(${blur}px)`;
 			ctx.scale(s, s);
 			ctx.globalAlpha = lerp(ALPHA_FAR, ALPHA_NEAR, z);
 
-			// pill body
 			ctx.beginPath();
 			ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
 			if (z > 0.62) {
@@ -230,14 +217,12 @@ export function RoleCloud() {
 			ctx.stroke();
 
 			let cx = -w / 2 + PAD_X;
-			// source dot (rounded square)
 			ctx.beginPath();
 			ctx.roundRect(cx, -DOT / 2, DOT, DOT, 5);
 			ctx.fillStyle = `color-mix(in oklch, ${srcColor[p.srcKey]} 50%, transparent)`;
 			ctx.fill();
 			cx += DOT + DOT_GAP;
 
-			// role label
 			ctx.textBaseline = "middle";
 			ctx.textAlign = "left";
 			ctx.font = roleFont;
@@ -246,7 +231,6 @@ export function RoleCloud() {
 			ctx.fillText(p.role, cx, 1);
 			cx += p.roleW + LABEL_GAP;
 
-			// source label
 			ctx.font = srcFont;
 			ctx.fillStyle = srcColor[p.srcKey];
 			ctx.letterSpacing = "0.05em";
@@ -257,58 +241,95 @@ export function RoleCloud() {
 		};
 
 		const order = pills.map((_, i) => i);
-		const render = (t: number) => {
+
+		// Physics step: constant-velocity straight-line travel with wall bounces on
+		// all three axes (x, y, depth). Direction is only ever flipped by a bounce —
+		// speed and heading are otherwise preserved forever, so motion never repeats
+		// or resets. A bounce negates one component, exactly like the DVD logo.
+		const integrate = (dt: number) => {
+			for (const p of pills) {
+				p.x += p.vx * dt;
+				p.y += p.vy * dt;
+				p.z += p.vz * dt;
+
+				const s = lerp(SCALE_FAR, SCALE_NEAR, p.z);
+				const mx = Math.min(0.45, ((p.w * s) / 2 + 2) / cssW);
+				const my = Math.min(0.45, ((PILL_H * s) / 2 + 2) / cssH);
+				if (p.x < mx) {
+					p.x = mx + (mx - p.x);
+					p.vx = Math.abs(p.vx);
+				} else if (p.x > 1 - mx) {
+					p.x = 1 - mx - (p.x - (1 - mx));
+					p.vx = -Math.abs(p.vx);
+				}
+				if (p.y < my) {
+					p.y = my + (my - p.y);
+					p.vy = Math.abs(p.vy);
+				} else if (p.y > 1 - my) {
+					p.y = 1 - my - (p.y - (1 - my));
+					p.vy = -Math.abs(p.vy);
+				}
+				p.x = clamp(p.x, mx, 1 - mx);
+				p.y = clamp(p.y, my, 1 - my);
+
+				if (p.z < 0.04) {
+					p.z = 0.08 - p.z;
+					p.vz = Math.abs(p.vz);
+				} else if (p.z > 0.96) {
+					p.z = 1.92 - p.z;
+					p.vz = -Math.abs(p.vz);
+				}
+			}
+		};
+
+		const paint = () => {
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			ctx.clearRect(0, 0, cssW, cssH);
 			measure();
-
-			const z = new Float32Array(pills.length);
-			for (let i = 0; i < pills.length; i++) {
-				z[i] = clamp(pills[i].zBase + evalOsc(pills[i].oz, t), 0, 1);
-			}
 			// painter's algorithm: far (small z) first, near last
-			order.sort((a, b) => z[a] - z[b]);
-
+			order.sort((a, b) => pills[a].z - pills[b].z);
 			for (const i of order) {
 				const p = pills[i];
-				const s = lerp(SCALE_FAR, SCALE_NEAR, z[i]);
-				const halfW = (p.w * s) / 2 + 2;
-				const halfH = (PILL_H * s) / 2 + 2;
-				const x = clamp(
-					p.ax * cssW + evalOsc(p.ox, t) * cssW,
-					halfW,
-					cssW - halfW,
-				);
-				const y = clamp(
-					p.ay * cssH + evalOsc(p.oy, t) * cssH,
-					halfH,
-					cssH - halfH,
-				);
-				drawPill(p, x, y, z[i]);
+				drawPill(p, p.x * cssW, p.y * cssH, p.z);
 			}
 		};
 
 		resize();
 
 		const ro =
-			typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
+			typeof ResizeObserver !== "undefined"
+				? new ResizeObserver(() => {
+						resize();
+						// The animation loop repaints itself; the static frame doesn't, so
+						// redraw it here once the parent finally reports a real size.
+						if (reduce.matches && ready) paint();
+					})
+				: null;
 		if (ro && el.parentElement) ro.observe(el.parentElement);
 
 		const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
 		let raf = 0;
-		let t0 = 0;
+		let prev = 0;
 		const loop = (now: number) => {
-			if (!t0) t0 = now;
-			render((now - t0) / 1000);
+			if (!prev) prev = now;
+			let dt = (now - prev) / 1000;
+			prev = now;
+			if (dt > 0.05) dt = 0.05; // cap big gaps (tab refocus) so nothing teleports
+			// Hold the seeded (stratified) layout until layout is real; otherwise the
+			// first frames would collapse every pill to the center.
+			if (ready) {
+				integrate(dt);
+				paint();
+			}
 			raf = requestAnimationFrame(loop);
 		};
 
 		const startMotion = () => {
 			cancelAnimationFrame(raf);
 			if (reduce.matches) {
-				t0 = 0;
-				render(0); // static, scattered frame
+				paint(); // static frame at the seeded positions
 			} else {
+				prev = 0;
 				raf = requestAnimationFrame(loop);
 			}
 		};
@@ -317,7 +338,7 @@ export function RoleCloud() {
 		// In the static (reduced-motion) case the rAF loop isn't re-measuring,
 		// so repaint once when webfonts finish loading.
 		document.fonts?.ready.then(() => {
-			if (reduce.matches) render(0);
+			if (reduce.matches) paint();
 		});
 
 		onCleanup(() => {
