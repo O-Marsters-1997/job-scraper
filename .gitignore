@@ -23,3 +23,6 @@ __debug_bin*
 .agents/
 .vercel
 .env*
+
+# impeccable live session scratch (transient)
+.impeccable/live/sessions/

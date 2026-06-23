@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
-import { useGoogleStatus, useDisconnectGoogle } from "../../../hooks/useGoogle";
 import { API_BASE } from "../../../api/config";
+import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
 export const Route = createFileRoute("/_auth/settings/integrations")({
 	component: IntegrationsPage,
@@ -92,7 +92,7 @@ function IntegrationsPage() {
 			</div>
 
 			<p class="mt-3 text-xs text-faint">
-				Google Drive access lets Job Scraper read your CV documents.
+				Google Drive access lets FastTrack read your CV documents.
 			</p>
 		</div>
 	);

@@ -74,13 +74,13 @@ export default function Topbar(props: TopbarProps) {
 						<line x1="3" y1="18" x2="21" y2="18" />
 					</svg>
 				</button>
-				<span class="text-faint">Job Scraper</span>
+				<span class="text-faint">FastTrack</span>
 				<span class="text-border-strong">/</span>
 				<Show
 					when={jobDetailId()}
 					fallback={
 						<span class="font-semibold text-foreground">
-							{pageLabel() ?? "Job Scraper"}
+							{pageLabel() ?? "FastTrack"}
 						</span>
 					}
 				>

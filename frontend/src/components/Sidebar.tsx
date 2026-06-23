@@ -1,10 +1,11 @@
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { FastTrackMark } from "@/components/brand-mark";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
-import { useJobs } from "../hooks/useJobs";
 import { useGoogleStatus } from "../hooks/useGoogle";
+import { useJobs } from "../hooks/useJobs";
 
 interface SidebarProps {
 	// Below the md breakpoint the sidebar is an off-canvas drawer driven by the
@@ -89,24 +90,11 @@ export default function Sidebar(props: SidebarProps) {
 			>
 				<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
 					<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-active text-sidebar-active-foreground">
-						<svg
-							aria-hidden="true"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<rect x="2" y="7" width="20" height="14" rx="2" />
-							<path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-						</svg>
+						<FastTrackMark size={15} />
 					</div>
 					<Show when={showLabels()}>
 						<span class="whitespace-nowrap text-sm font-semibold tracking-tight text-sidebar-foreground-strong">
-							Job Scraper
+							FastTrack
 						</span>
 					</Show>
 				</div>
