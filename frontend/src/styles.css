@@ -151,3 +151,151 @@ html[data-size="lg"] {
 	background: var(--color-border-strong);
 	border-radius: 3px;
 }
+
+/* ============================================================
+   Auth "front door" — bold purple split-screen.
+   Intentionally outside the in-app teal system per the design
+   front-door exception. Scoped to .auth-scope so it never leaks:
+   overriding --color-primary here recolours the shadcn Button,
+   Input focus ring, and links to violet automatically.
+   ============================================================ */
+.auth-scope {
+	--color-primary: oklch(0.55 0.18 285);
+	--color-primary-hover: oklch(0.47 0.17 285);
+	--color-primary-foreground: oklch(1 0 0);
+}
+
+.auth-brand {
+	--p1: oklch(0.3 0.1 278);
+	--p2: oklch(0.16 0.07 290);
+	--bright: oklch(0.8 0.13 290);
+	--auth-prose: oklch(0.87 0.03 290);
+	--auth-prose-strong: oklch(0.93 0.02 290);
+	--auth-li: oklch(0.72 0.15 264);
+	--auth-gh: oklch(0.8 0.14 157);
+	--auth-lv: oklch(0.78 0.15 40);
+	--auth-in: oklch(0.74 0.16 300);
+	--auth-ease: cubic-bezier(0.16, 1, 0.3, 1);
+	position: relative;
+	overflow: hidden;
+	background: linear-gradient(160deg, var(--p1) 0%, var(--p2) 100%);
+	color: oklch(0.97 0.01 290);
+}
+
+/* drifting "bubble" aurora behind the content */
+.auth-aurora {
+	position: absolute;
+	inset: -20%;
+	z-index: 0;
+	filter: blur(52px);
+	opacity: 0.75;
+	mix-blend-mode: screen;
+	pointer-events: none;
+}
+.auth-ribbon {
+	position: absolute;
+	border-radius: 50%;
+}
+.auth-ribbon-1 {
+	width: 70%;
+	height: 55%;
+	left: -10%;
+	top: -8%;
+	background: radial-gradient(circle, oklch(0.62 0.2 300), transparent 65%);
+	animation: authA1 17s var(--auth-ease) infinite alternate;
+}
+.auth-ribbon-2 {
+	width: 62%;
+	height: 60%;
+	right: -15%;
+	top: 18%;
+	background: radial-gradient(circle, oklch(0.6 0.16 232), transparent 65%);
+	animation: authA2 21s var(--auth-ease) infinite alternate;
+}
+.auth-ribbon-3 {
+	width: 55%;
+	height: 52%;
+	left: 14%;
+	bottom: -18%;
+	background: radial-gradient(circle, oklch(0.64 0.18 332), transparent 65%);
+	animation: authA3 19s var(--auth-ease) infinite alternate;
+}
+@keyframes authA1 {
+	to {
+		transform: translate(15%, 18%) scale(1.2);
+	}
+}
+@keyframes authA2 {
+	to {
+		transform: translate(-12%, 12%) scale(1.15);
+	}
+}
+@keyframes authA3 {
+	to {
+		transform: translate(10%, -16%) scale(1.25);
+	}
+}
+
+.auth-grain {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	opacity: 0.045;
+	mix-blend-mode: overlay;
+	pointer-events: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.auth-live-dot {
+	animation: authPulse 2s infinite;
+}
+@keyframes authPulse {
+	0% {
+		box-shadow: 0 0 0 0 oklch(0.8 0.13 290 / 0.5);
+	}
+	70% {
+		box-shadow: 0 0 0 9px transparent;
+	}
+	100% {
+		box-shadow: 0 0 0 0 transparent;
+	}
+}
+
+/* floating role cloud: source-tagged role pills wander omnidirectionally with
+   depth (forward/back), signifying the breadth of roles that stream in.
+   Rendered on a 2D canvas — see components/auth/role-cloud.tsx. */
+.auth-field {
+	position: relative;
+	width: 100%;
+	max-width: 100%;
+	height: clamp(320px, 38vh, 400px);
+}
+.auth-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+/* form entrance */
+.auth-rise {
+	animation: authRise 0.7s var(--auth-ease, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+@keyframes authRise {
+	from {
+		opacity: 0;
+		transform: translateY(14px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.auth-ribbon,
+	.auth-live-dot,
+	.auth-rise {
+		animation: none;
+	}
+	/* the role cloud freezes itself to a static frame (see role-cloud.tsx) */
+}
