@@ -7,9 +7,18 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// SuitabilityResult holds the structured output from a suitability scoring call.
+type SuitabilityResult struct {
+	Score     int
+	Matched   []string
+	Missing   []string
+	Rationale string
+	Usage     TokenUsage
+}
+
 // SuitabilityScorer scores a job's full description against the user's rubric.
 type SuitabilityScorer interface {
-	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (int, TokenUsage, error)
+	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (SuitabilityResult, error)
 }
 
 // RelevanceScorer scores a job card against the user's search criteria.

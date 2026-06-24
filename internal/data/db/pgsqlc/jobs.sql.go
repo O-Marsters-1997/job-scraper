@@ -59,7 +59,7 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, js.relevance_score, js.suitability_score
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC
@@ -79,6 +79,9 @@ type ListJobsRow struct {
 	WorkArrangement  string
 	RelevanceScore   pgtype.Int4
 	SuitabilityScore pgtype.Int4
+	Reasoning        pgtype.Text
+	Matched          []string
+	Missing          []string
 }
 
 func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsRow, error) {
@@ -104,6 +107,9 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 			&i.WorkArrangement,
 			&i.RelevanceScore,
 			&i.SuitabilityScore,
+			&i.Reasoning,
+			&i.Matched,
+			&i.Missing,
 		); err != nil {
 			return nil, err
 		}

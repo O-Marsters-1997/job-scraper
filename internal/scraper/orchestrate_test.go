@@ -341,7 +341,7 @@ func (h *highCutoffCfgDB) UpsertSearchConfig(_ context.Context, cfg dto.SearchCo
 func (h *highCutoffCfgDB) UpsertJobScoreRelevance(_ context.Context, _, _ string, _ int) error {
 	return nil
 }
-func (h *highCutoffCfgDB) UpsertJobScoreSuitability(_ context.Context, _, _ string, _ int) error {
+func (h *highCutoffCfgDB) UpsertJobScoreSuitability(_ context.Context, _, _ string, _ int, _ string, _, _ []string) error {
 	return nil
 }
 func (h *highCutoffCfgDB) GetJobScore(_ context.Context, _, _ string) (dto.JobScore, error) {

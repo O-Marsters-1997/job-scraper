@@ -8,7 +8,7 @@ import (
 )
 
 type ScoreWriter interface {
-	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int) error
+	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error
 }
 
 type ConfigReader interface {
@@ -35,7 +35,7 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		return 0
 	}
 
-	sc, usage, err := s.scorer.Score(ctx, job, cfg)
+	result, err := s.scorer.Score(ctx, job, cfg)
 	if err != nil {
 		slog.Error("suitability score failed", slog.String("url", job.URL), slog.Any("err", err))
 		return 0
@@ -43,14 +43,14 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 
 	slog.Info("suitability scored",
 		slog.String("url", job.URL),
-		slog.Int("score", sc),
-		slog.Int("input_tokens", usage.InputTokens),
-		slog.Int("output_tokens", usage.OutputTokens),
-		slog.Float64("cost_usd", usage.CostUSD),
+		slog.Int("score", result.Score),
+		slog.Int("input_tokens", result.Usage.InputTokens),
+		slog.Int("output_tokens", result.Usage.OutputTokens),
+		slog.Float64("cost_usd", result.Usage.CostUSD),
 	)
 
-	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, sc); err != nil {
+	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, result.Score, result.Rationale, result.Matched, result.Missing); err != nil {
 		slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 	}
-	return sc
+	return result.Score
 }

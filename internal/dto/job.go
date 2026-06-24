@@ -16,4 +16,7 @@ type Job struct {
 	WorkArrangement  string
 	RelevanceScore   *int
 	SuitabilityScore *int
+	Reasoning        *string
+	Matched          []string
+	Missing          []string
 }

@@ -12,8 +12,10 @@ import (
 
 func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
 	js := dto.JobScore{
-		JobID:  row.JobID.String(),
-		UserID: row.UserID.String(),
+		JobID:   row.JobID.String(),
+		UserID:  row.UserID.String(),
+		Matched: row.Matched,
+		Missing: row.Missing,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)
@@ -22,6 +24,9 @@ func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		js.SuitabilityScore = &v
+	}
+	if row.Reasoning.Valid {
+		js.Reasoning = &row.Reasoning.String
 	}
 	return js
 }
@@ -45,7 +50,7 @@ func (db *DB) UpsertJobScoreRelevance(ctx context.Context, jobID, userID string,
 	return nil
 }
 
-func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int) error {
+func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error {
 	jid, err := parseUUID(jobID)
 	if err != nil {
 		return err
@@ -58,6 +63,9 @@ func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID strin
 		JobID:            jid,
 		UserID:           uid,
 		SuitabilityScore: pgtype.Int4{Int32: int32(score), Valid: true},
+		Reasoning:        pgtype.Text{String: reasoning, Valid: reasoning != ""},
+		Matched:          matched,
+		Missing:          missing,
 	}); err != nil {
 		return fmt.Errorf("db.UpsertJobScoreSuitability: %w", err)
 	}

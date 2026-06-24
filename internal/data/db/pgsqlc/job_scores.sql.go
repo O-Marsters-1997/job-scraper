@@ -12,7 +12,7 @@ import (
 )
 
 const getJobScore = `-- name: GetJobScore :one
-SELECT id, job_id, user_id, relevance_score, suitability_score, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
+SELECT id, job_id, user_id, relevance_score, suitability_score, reasoning, matched, missing, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
 `
 
 type GetJobScoreParams struct {
@@ -29,6 +29,9 @@ func (q *Queries) GetJobScore(ctx context.Context, arg GetJobScoreParams) (JobSc
 		&i.UserID,
 		&i.RelevanceScore,
 		&i.SuitabilityScore,
+		&i.Reasoning,
+		&i.Matched,
+		&i.Missing,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -55,20 +58,33 @@ func (q *Queries) UpsertJobScoreRelevance(ctx context.Context, arg UpsertJobScor
 }
 
 const upsertJobScoreSuitability = `-- name: UpsertJobScoreSuitability :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score)
-VALUES ($1, $2, $3)
+INSERT INTO job_scores (job_id, user_id, suitability_score, reasoning, matched, missing)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
     suitability_score = EXCLUDED.suitability_score,
-    updated_at = NOW()
+    reasoning         = EXCLUDED.reasoning,
+    matched           = EXCLUDED.matched,
+    missing           = EXCLUDED.missing,
+    updated_at        = NOW()
 `
 
 type UpsertJobScoreSuitabilityParams struct {
 	JobID            pgtype.UUID
 	UserID           pgtype.UUID
 	SuitabilityScore pgtype.Int4
+	Reasoning        pgtype.Text
+	Matched          []string
+	Missing          []string
 }
 
 func (q *Queries) UpsertJobScoreSuitability(ctx context.Context, arg UpsertJobScoreSuitabilityParams) error {
-	_, err := q.db.Exec(ctx, upsertJobScoreSuitability, arg.JobID, arg.UserID, arg.SuitabilityScore)
+	_, err := q.db.Exec(ctx, upsertJobScoreSuitability,
+		arg.JobID,
+		arg.UserID,
+		arg.SuitabilityScore,
+		arg.Reasoning,
+		arg.Matched,
+		arg.Missing,
+	)
 	return err
 }

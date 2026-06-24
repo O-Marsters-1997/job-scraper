@@ -2,9 +2,9 @@ package score
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -51,32 +51,40 @@ func NewClaudeScorer(cfg ClaudeScorerConfig) *ClaudeScorer {
 	}
 }
 
-func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (int, TokenUsage, error) {
+// claudeResponse is the JSON shape expected from the model.
+type claudeResponse struct {
+	Score     int      `json:"score"`
+	Matched   []string `json:"matched"`
+	Missing   []string `json:"missing"`
+	Rationale string   `json:"rationale"`
+}
+
+func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (SuitabilityResult, error) {
 	desc := truncate(job.Description, c.maxInputTokens*4)
 
 	prompt := buildPrompt(job, desc, cfg)
 
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.modelID),
-		MaxTokens: 16,
+		MaxTokens: 512,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
 		},
 	})
 	if err != nil {
-		return 0, TokenUsage{}, fmt.Errorf("anthropic messages.new: %w", err)
+		return SuitabilityResult{}, fmt.Errorf("anthropic messages.new: %w", err)
 	}
 
 	raw := strings.TrimSpace(msg.Content[0].Text)
-	score, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, TokenUsage{}, fmt.Errorf("parse score %q: %w", raw, err)
+	var resp claudeResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return SuitabilityResult{}, fmt.Errorf("parse score response %q: %w", raw, err)
 	}
-	if score < 0 {
-		score = 0
+	if resp.Score < 0 {
+		resp.Score = 0
 	}
-	if score > 100 {
-		score = 100
+	if resp.Score > 100 {
+		resp.Score = 100
 	}
 
 	usage := TokenUsage{
@@ -87,18 +95,24 @@ func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchCon
 
 	slog.Info("suitability scored via claude",
 		slog.String("url", job.URL),
-		slog.Int("score", score),
+		slog.Int("score", resp.Score),
 		slog.Int("input_tokens", usage.InputTokens),
 		slog.Int("output_tokens", usage.OutputTokens),
 		slog.Float64("cost_usd", usage.CostUSD),
 	)
 
-	return score, usage, nil
+	return SuitabilityResult{
+		Score:     resp.Score,
+		Matched:   resp.Matched,
+		Missing:   resp.Missing,
+		Rationale: resp.Rationale,
+		Usage:     usage,
+	}, nil
 }
 
 func buildPrompt(job dto.Job, desc string, cfg dto.SearchConfig) string {
 	var sb strings.Builder
-	sb.WriteString("Score the following job posting for suitability on a scale of 0-100 (integers only).\n\n")
+	sb.WriteString("Score the following job posting for suitability on a scale of 0-100.\n\n")
 	if cfg.SuitabilityRubric != "" {
 		sb.WriteString("Rubric:\n")
 		sb.WriteString(cfg.SuitabilityRubric)
@@ -110,7 +124,8 @@ func buildPrompt(job dto.Job, desc string, cfg dto.SearchConfig) string {
 	sb.WriteString(job.URL)
 	sb.WriteString("\nDescription:\n")
 	sb.WriteString(desc)
-	sb.WriteString("\n\nRespond with a single integer between 0 and 100.")
+	sb.WriteString("\n\nRespond ONLY with valid JSON in this exact shape (no markdown, no extra text):\n")
+	sb.WriteString(`{"score":<int 0-100>,"matched":[<skills/criteria present>],"missing":[<skills/criteria absent>],"rationale":"<one sentence>"}`)
 	return sb.String()
 }
 

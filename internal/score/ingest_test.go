@@ -10,28 +10,34 @@ import (
 )
 
 type stubScorer struct {
-	fixedScore int
+	result score.SuitabilityResult
 }
 
-func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (int, score.TokenUsage, error) {
-	return s.fixedScore, score.TokenUsage{}, nil
+func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+	return s.result, nil
 }
 
 type errScorer struct{}
 
-func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (int, score.TokenUsage, error) {
-	return 0, score.TokenUsage{}, errors.New("api error")
+func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+	return score.SuitabilityResult{}, errors.New("api error")
 }
 
 type stubScoreWriter struct {
-	lastJobID string
-	lastScore int
-	err       error
+	lastJobID  string
+	lastScore  int
+	lastReason string
+	lastMatch  []string
+	lastMiss   []string
+	err        error
 }
 
-func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ string, sc int) error {
+func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ string, sc int, reasoning string, matched, missing []string) error {
 	w.lastJobID = jobID
 	w.lastScore = sc
+	w.lastReason = reasoning
+	w.lastMatch = matched
+	w.lastMiss = missing
 	return w.err
 }
 
@@ -55,14 +61,19 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 		wantScore   int
 	}{
 		{
-			name:        "writes score on success",
-			scorer:      &stubScorer{fixedScore: 75},
+			name: "writes score on success",
+			scorer: &stubScorer{result: score.SuitabilityResult{
+				Score:     75,
+				Matched:   []string{"Go", "Postgres"},
+				Missing:   []string{"Kubernetes"},
+				Rationale: "Strong backend match.",
+			}},
 			wantWritten: true,
 			wantScore:   75,
 		},
 		{
 			name:        "config read failure — no write",
-			scorer:      &stubScorer{fixedScore: 50},
+			scorer:      &stubScorer{result: score.SuitabilityResult{Score: 50}},
 			cfgErr:      errors.New("db down"),
 			wantWritten: false,
 		},
@@ -99,5 +110,37 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
+	t.Parallel()
+
+	matched := []string{"Go", "Postgres"}
+	missing := []string{"Kubernetes"}
+	rationale := "Strong backend match."
+
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
+
+	is := score.NewIngestScorer(
+		&stubScorer{result: score.SuitabilityResult{
+			Score:     80,
+			Matched:   matched,
+			Missing:   missing,
+			Rationale: rationale,
+		}},
+		writer, cfgReader, "user-1",
+	)
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-xyz", URL: "https://example.com/job2", Title: "Go Engineer"})
+
+	if writer.lastReason != rationale {
+		t.Errorf("reasoning = %q; want %q", writer.lastReason, rationale)
+	}
+	if len(writer.lastMatch) != len(matched) {
+		t.Errorf("matched len = %d; want %d", len(writer.lastMatch), len(matched))
+	}
+	if len(writer.lastMiss) != len(missing) {
+		t.Errorf("missing len = %d; want %d", len(writer.lastMiss), len(missing))
 	}
 }
