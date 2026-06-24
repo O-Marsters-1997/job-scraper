@@ -10,28 +10,26 @@ import (
 )
 
 type stubScorer struct {
-	fixedScore int
+	result score.SuitabilityResult
 }
 
-func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (int, score.TokenUsage, error) {
-	return s.fixedScore, score.TokenUsage{}, nil
+func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+	return s.result, nil
 }
 
 type errScorer struct{}
 
-func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (int, score.TokenUsage, error) {
-	return 0, score.TokenUsage{}, errors.New("api error")
+func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+	return score.SuitabilityResult{}, errors.New("api error")
 }
 
 type stubScoreWriter struct {
-	lastJobID string
-	lastScore int
-	err       error
+	last score.SuitabilityScore
+	err  error
 }
 
-func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ string, sc int) error {
-	w.lastJobID = jobID
-	w.lastScore = sc
+func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, s score.SuitabilityScore) error {
+	w.last = s
 	return w.err
 }
 
@@ -48,21 +46,32 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		scorer      score.SuitabilityScorer
-		cfgErr      error
-		wantWritten bool
-		wantScore   int
+		name          string
+		scorer        score.SuitabilityScorer
+		cfgErr        error
+		wantWritten   bool
+		wantScore     int
+		wantReasoning string
+		wantMatched   []string
+		wantMissing   []string
 	}{
 		{
-			name:        "writes score on success",
-			scorer:      &stubScorer{fixedScore: 75},
-			wantWritten: true,
-			wantScore:   75,
+			name: "writes score and reasoning fields on success",
+			scorer: &stubScorer{result: score.SuitabilityResult{
+				Score:     75,
+				Matched:   []string{"Go", "Postgres"},
+				Missing:   []string{"Kubernetes"},
+				Rationale: "Strong backend match.",
+			}},
+			wantWritten:   true,
+			wantScore:     75,
+			wantReasoning: "Strong backend match.",
+			wantMatched:   []string{"Go", "Postgres"},
+			wantMissing:   []string{"Kubernetes"},
 		},
 		{
 			name:        "config read failure — no write",
-			scorer:      &stubScorer{fixedScore: 50},
+			scorer:      &stubScorer{result: score.SuitabilityResult{Score: 50}},
 			cfgErr:      errors.New("db down"),
 			wantWritten: false,
 		},
@@ -87,15 +96,24 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 			is.ScoreAndSave(context.Background(), dto.Job{ID: "job-abc", URL: "https://example.com/job", Title: "Engineer"})
 
 			if tt.wantWritten {
-				if writer.lastJobID != "job-abc" {
-					t.Errorf("written job ID = %q; want %q", writer.lastJobID, "job-abc")
+				if writer.last.JobID != "job-abc" {
+					t.Errorf("written job ID = %q; want %q", writer.last.JobID, "job-abc")
 				}
-				if writer.lastScore != tt.wantScore {
-					t.Errorf("written score = %d; want %d", writer.lastScore, tt.wantScore)
+				if writer.last.Score != tt.wantScore {
+					t.Errorf("written score = %d; want %d", writer.last.Score, tt.wantScore)
+				}
+				if writer.last.Reasoning != tt.wantReasoning {
+					t.Errorf("reasoning = %q; want %q", writer.last.Reasoning, tt.wantReasoning)
+				}
+				if len(writer.last.Matched) != len(tt.wantMatched) {
+					t.Errorf("matched len = %d; want %d", len(writer.last.Matched), len(tt.wantMatched))
+				}
+				if len(writer.last.Missing) != len(tt.wantMissing) {
+					t.Errorf("missing len = %d; want %d", len(writer.last.Missing), len(tt.wantMissing))
 				}
 			} else {
-				if writer.lastJobID != "" {
-					t.Errorf("expected no write; got job ID %q", writer.lastJobID)
+				if writer.last.JobID != "" {
+					t.Errorf("expected no write; got job ID %q", writer.last.JobID)
 				}
 			}
 		})

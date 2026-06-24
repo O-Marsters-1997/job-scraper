@@ -8,6 +8,8 @@ import (
 )
 
 func TestHeuristicScorer(t *testing.T) {
+	t.Parallel()
+
 	scorer := score.NewHeuristicScorer()
 
 	tests := []struct {
@@ -67,6 +69,7 @@ func TestHeuristicScorer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := scorer.Score(tt.card, tt.cfg)
 			if got < tt.wantAtLeast || got > tt.wantAtMost {
 				t.Errorf("Score() = %d, want between %d and %d", got, tt.wantAtLeast, tt.wantAtMost)

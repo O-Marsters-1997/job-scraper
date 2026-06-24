@@ -7,9 +7,18 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// SuitabilityResult holds the structured output from a suitability scoring call.
+type SuitabilityResult struct {
+	Score     int
+	Matched   []string
+	Missing   []string
+	Rationale string
+	Usage     TokenUsage
+}
+
 // SuitabilityScorer scores a job's full description against the user's rubric.
 type SuitabilityScorer interface {
-	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (int, TokenUsage, error)
+	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (SuitabilityResult, error)
 }
 
 // RelevanceScorer scores a job card against the user's search criteria.
@@ -17,7 +26,7 @@ type RelevanceScorer interface {
 	Score(card dto.Job, cfg dto.SearchConfig) int
 }
 
-// TokenUsage records LLM token consumption (for SuitabilityScorer in a later issue).
+// TokenUsage records LLM token consumption for a suitability scoring call.
 type TokenUsage struct {
 	InputTokens  int
 	OutputTokens int
@@ -52,8 +61,5 @@ func (h *HeuristicScorer) Score(card dto.Job, cfg dto.SearchConfig) int {
 		score += 20
 	}
 
-	if score > 100 {
-		score = 100
-	}
-	return score
+	return min(score, 100)
 }
