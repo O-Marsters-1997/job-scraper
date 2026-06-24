@@ -1,5 +1,6 @@
 import {
 	type ColumnDef,
+	type ColumnFiltersState,
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
@@ -59,6 +60,11 @@ export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
+	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
+		[],
+	);
+	const [suitabilityMin, setSuitabilityMin] = createSignal("");
+	const [showSkipped, setShowSkipped] = createSignal(true);
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
 		pageSize: 10,
@@ -86,9 +92,14 @@ export function JobsDataTable<TData extends Job>(
 		});
 	};
 
+	const filteredData = () =>
+		showSkipped()
+			? props.data
+			: props.data.filter((job) => !job.SuitabilitySkipped);
+
 	const table = createSolidTable({
 		get data() {
-			return props.data;
+			return filteredData();
 		},
 		columns: props.columns,
 		getCoreRowModel: getCoreRowModel(),
@@ -184,6 +195,52 @@ export function JobsDataTable<TData extends Job>(
 						</Badge>
 					</Show>
 				</Button>
+				<div class="flex items-center gap-1.5">
+					<label class="text-xs font-medium text-muted" for="suitability-min">
+						Min suitability
+					</label>
+					<Input
+						id="suitability-min"
+						type="number"
+						min="0"
+						max="100"
+						placeholder="—"
+						value={suitabilityMin()}
+						onInput={(e) => {
+							const raw = e.currentTarget.value.trim();
+							setSuitabilityMin(raw);
+							setPagination((p) => ({ ...p, pageIndex: 0 }));
+							if (raw === "") {
+								setColumnFilters((prev) =>
+									prev.filter((f) => f.id !== "SuitabilityScore"),
+								);
+							} else {
+								const n = Number(raw);
+								if (!Number.isNaN(n)) {
+									setColumnFilters((prev) => [
+										...prev.filter((f) => f.id !== "SuitabilityScore"),
+										{ id: "SuitabilityScore", value: n },
+									]);
+								}
+							}
+						}}
+						class="w-20"
+					/>
+				</div>
+				<label class="flex cursor-pointer items-center gap-1.5">
+					<input
+						type="checkbox"
+						checked={showSkipped()}
+						onChange={(e) => {
+							setShowSkipped(e.currentTarget.checked);
+							setPagination((p) => ({ ...p, pageIndex: 0 }));
+						}}
+						class="h-3.5 w-3.5 rounded border-border accent-primary"
+					/>
+					<span class="text-xs font-medium text-muted">
+						Show below-cutoff jobs
+					</span>
+				</label>
 			</div>
 
 			{/* Table card — pagination lives inside so it shares the rounded border */}

@@ -63,19 +63,20 @@ func fromRow(row pgsqlc.Job) dto.Job {
 
 func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	j := dto.Job{
-		ID:              row.ID.String(),
-		Title:           row.Title,
-		Location:        row.Location,
-		URL:             row.Url,
-		CompanySlug:     row.CompanySlug,
-		Source:          row.Source,
-		UpdatedAt:       row.UpdatedAt.Time,
-		ScrapedAt:       row.ScrapedAt.Time,
-		Description:     row.Description,
-		SalaryRaw:       row.SalaryRaw,
-		WorkArrangement: row.WorkArrangement,
-		Matched:         row.Matched,
-		Missing:         row.Missing,
+		ID:                 row.ID.String(),
+		Title:              row.Title,
+		Location:           row.Location,
+		URL:                row.Url,
+		CompanySlug:        row.CompanySlug,
+		Source:             row.Source,
+		UpdatedAt:          row.UpdatedAt.Time,
+		ScrapedAt:          row.ScrapedAt.Time,
+		Description:        row.Description,
+		SalaryRaw:          row.SalaryRaw,
+		WorkArrangement:    row.WorkArrangement,
+		Matched:            row.Matched,
+		Missing:            row.Missing,
+		SuitabilitySkipped: row.SuitabilitySkipped,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)

@@ -74,16 +74,17 @@ CREATE TABLE IF NOT EXISTS tracked_doc_tabs (
 );
 
 CREATE TABLE IF NOT EXISTS job_scores (
-    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id            UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    user_id           UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    relevance_score   INT,
-    suitability_score INT,
-    reasoning         TEXT,
-    matched           TEXT[],
-    missing           TEXT[],
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    relevance_score      INT,
+    suitability_score    INT,
+    reasoning            TEXT,
+    matched              TEXT[],
+    missing              TEXT[],
+    suitability_skipped  BOOLEAN     NOT NULL DEFAULT false,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (job_id, user_id)
 );
 
