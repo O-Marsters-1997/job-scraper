@@ -16,12 +16,12 @@ func TestAIPrefsHandler_Get(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		setupStore   func(*providers.MockUserAIPrefsProvider)
-		userID       string
-		wantStatus   int
-		wantModel    string
-		wantModels   bool // expect non-empty availableModels
+		name       string
+		setupStore func(*providers.MockUserAIPrefsProvider)
+		userID     string
+		wantStatus int
+		wantModel  string
+		wantModels bool // expect non-empty availableModels
 	}{
 		{
 			name:       "new user gets default model",
