@@ -119,3 +119,35 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 		})
 	}
 }
+
+func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
+	t.Parallel()
+
+	matched := []string{"Go", "Postgres"}
+	missing := []string{"Kubernetes"}
+	rationale := "Strong backend match."
+
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
+
+	is := score.NewIngestScorer(
+		&stubScorer{result: score.SuitabilityResult{
+			Score:     80,
+			Matched:   matched,
+			Missing:   missing,
+			Rationale: rationale,
+		}},
+		writer, cfgReader, "user-1",
+	)
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-xyz", URL: "https://example.com/job2", Title: "Go Engineer"})
+
+	if writer.last.Reasoning != rationale {
+		t.Errorf("reasoning = %q; want %q", writer.last.Reasoning, rationale)
+	}
+	if len(writer.last.Matched) != len(matched) {
+		t.Errorf("matched len = %d; want %d", len(writer.last.Matched), len(matched))
+	}
+	if len(writer.last.Missing) != len(missing) {
+		t.Errorf("missing len = %d; want %d", len(writer.last.Missing), len(missing))
+	}
+}
