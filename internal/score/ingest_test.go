@@ -27,14 +27,14 @@ func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, _ st
 }
 
 type stubScoreWriter struct {
-	lastJobID       string
-	lastScore       int
-	lastReason      string
-	lastMatch       []string
-	lastMiss        []string
-	err             error
-	skippedJobID    string
-	skippedCalled   bool
+	lastJobID     string
+	lastScore     int
+	lastReason    string
+	lastMatch     []string
+	lastMiss      []string
+	err           error
+	skippedJobID  string
+	skippedCalled bool
 }
 
 func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ string, sc int, reasoning string, matched, missing []string) error {
