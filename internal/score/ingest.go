@@ -7,8 +7,20 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// SuitabilityScore groups the fields written to the database after a suitability
+// scoring call. It exists to keep ScoreWriter's method signature manageable as the
+// set of captured fields grows.
+type SuitabilityScore struct {
+	JobID     string
+	UserID    string
+	Score     int
+	Reasoning string
+	Matched   []string
+	Missing   []string
+}
+
 type ScoreWriter interface {
-	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int) error
+	UpsertJobScoreSuitability(ctx context.Context, s SuitabilityScore) error
 }
 
 type ConfigReader interface {
@@ -35,7 +47,7 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		return 0
 	}
 
-	sc, usage, err := s.scorer.Score(ctx, job, cfg)
+	result, err := s.scorer.Score(ctx, job, cfg)
 	if err != nil {
 		slog.Error("suitability score failed", slog.String("url", job.URL), slog.Any("err", err))
 		return 0
@@ -43,14 +55,21 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 
 	slog.Info("suitability scored",
 		slog.String("url", job.URL),
-		slog.Int("score", sc),
-		slog.Int("input_tokens", usage.InputTokens),
-		slog.Int("output_tokens", usage.OutputTokens),
-		slog.Float64("cost_usd", usage.CostUSD),
+		slog.Int("score", result.Score),
+		slog.Int("input_tokens", result.Usage.InputTokens),
+		slog.Int("output_tokens", result.Usage.OutputTokens),
+		slog.Float64("cost_usd", result.Usage.CostUSD),
 	)
 
-	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, sc); err != nil {
+	if err := s.db.UpsertJobScoreSuitability(ctx, SuitabilityScore{
+		JobID:     job.ID,
+		UserID:    s.userID,
+		Score:     result.Score,
+		Reasoning: result.Rationale,
+		Matched:   result.Matched,
+		Missing:   result.Missing,
+	}); err != nil {
 		slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 	}
-	return sc
+	return result.Score
 }

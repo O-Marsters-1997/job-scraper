@@ -8,12 +8,15 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
 	js := dto.JobScore{
-		JobID:  row.JobID.String(),
-		UserID: row.UserID.String(),
+		JobID:   row.JobID.String(),
+		UserID:  row.UserID.String(),
+		Matched: row.Matched,
+		Missing: row.Missing,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)
@@ -22,6 +25,9 @@ func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		js.SuitabilityScore = &v
+	}
+	if row.Reasoning.Valid {
+		js.Reasoning = &row.Reasoning.String
 	}
 	return js
 }
@@ -45,19 +51,22 @@ func (db *DB) UpsertJobScoreRelevance(ctx context.Context, jobID, userID string,
 	return nil
 }
 
-func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int) error {
-	jid, err := parseUUID(jobID)
+func (db *DB) UpsertJobScoreSuitability(ctx context.Context, s score.SuitabilityScore) error {
+	jid, err := parseUUID(s.JobID)
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := parseUUID(s.UserID)
 	if err != nil {
 		return err
 	}
 	if err := db.queries.UpsertJobScoreSuitability(ctx, pgsqlc.UpsertJobScoreSuitabilityParams{
 		JobID:            jid,
 		UserID:           uid,
-		SuitabilityScore: pgtype.Int4{Int32: int32(score), Valid: true},
+		SuitabilityScore: pgtype.Int4{Int32: int32(s.Score), Valid: true},
+		Reasoning:        pgtype.Text{String: s.Reasoning, Valid: s.Reasoning != ""},
+		Matched:          s.Matched,
+		Missing:          s.Missing,
 	}); err != nil {
 		return fmt.Errorf("db.UpsertJobScoreSuitability: %w", err)
 	}

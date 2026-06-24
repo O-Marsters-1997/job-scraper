@@ -74,6 +74,8 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 		Description:     row.Description,
 		SalaryRaw:       row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement,
+		Matched:         row.Matched,
+		Missing:         row.Missing,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)
@@ -82,6 +84,9 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		j.SuitabilityScore = &v
+	}
+	if row.Reasoning.Valid {
+		j.Reasoning = &row.Reasoning.String
 	}
 	return j
 }

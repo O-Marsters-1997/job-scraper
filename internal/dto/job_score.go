@@ -5,4 +5,7 @@ type JobScore struct {
 	UserID           string
 	RelevanceScore   *int
 	SuitabilityScore *int
+	Reasoning        *string
+	Matched          []string
+	Missing          []string
 }

@@ -48,6 +48,9 @@ type JobScore struct {
 	UserID           pgtype.UUID
 	RelevanceScore   pgtype.Int4
 	SuitabilityScore pgtype.Int4
+	Reasoning        pgtype.Text
+	Matched          []string
+	Missing          []string
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 }

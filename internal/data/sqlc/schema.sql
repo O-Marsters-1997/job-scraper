@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS job_scores (
     user_id           UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     relevance_score   INT,
     suitability_score INT,
+    reasoning         TEXT,
+    matched           TEXT[],
+    missing           TEXT[],
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (job_id, user_id)
