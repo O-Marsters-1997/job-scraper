@@ -40,7 +40,32 @@ export function AuthShell(props: { children: JSX.Element }) {
 	const authTone = sidebarL !== null && sidebarL > 0.5 ? "light" : "dark";
 
 	return (
-		<div class="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
+		<div class="flex min-h-screen flex-col lg:grid lg:grid-cols-[1.05fr_0.95fr]">
+			{/* Mobile-only brand header — aurora + grain + wordmark + mark.
+			    Below lg the desktop split-screen panel is replaced by this banded
+			    header so the screen is never blank. */}
+			<div
+				class="auth-brand relative flex h-[254px] shrink-0 flex-col px-5 pt-[max(1.5rem,env(safe-area-inset-top))] lg:hidden"
+				data-auth-tone={authTone}
+			>
+				<div class="auth-aurora">
+					<span class="auth-ribbon auth-ribbon-1" />
+					<span class="auth-ribbon auth-ribbon-2" />
+					<span class="auth-ribbon auth-ribbon-3" />
+				</div>
+				<div class="auth-grain" />
+
+				{/* Animated role cloud — compact desktop effect, below the wordmark. */}
+				<div
+					class="absolute inset-x-0 bottom-0 top-[72px] z-[1]"
+					aria-hidden="true"
+				>
+					<RoleCloud variant="compact" />
+				</div>
+
+				<Wordmark class="relative z-[2]" />
+			</div>
+
 			<section
 				class="auth-brand hidden flex-col px-14 py-12 lg:flex"
 				data-auth-tone={authTone}
@@ -74,9 +99,11 @@ export function AuthShell(props: { children: JSX.Element }) {
 				</div>
 			</section>
 
-			<section class="flex items-center justify-center bg-surface p-6 sm:p-8">
-				<div class="auth-rise w-full max-w-[380px]">
-					<Wordmark tone="light" class="mb-8 flex lg:hidden" />
+			{/* Form column. On mobile this is a white card pulled up over the
+			    header (-mt-5) with rounded top corners, exposing the indigo
+			    behind the notches; on lg it is the centred right-hand panel. */}
+			<section class="relative z-[1] flex flex-1 flex-col bg-surface lg:items-center lg:justify-center lg:p-8">
+				<div class="auth-rise -mt-5 w-full flex-1 rounded-t-[22px] bg-surface px-[22px] pt-7 pb-[max(2.75rem,env(safe-area-inset-bottom))] lg:mt-0 lg:max-w-[380px] lg:flex-none lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:pb-0">
 					{props.children}
 				</div>
 			</section>
