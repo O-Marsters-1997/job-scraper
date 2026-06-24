@@ -10,6 +10,10 @@ export interface Job {
 	DaysInOffice?: number | null;
 	RelevanceScore: number | null;
 	SuitabilityScore: number | null;
+	Reasoning?: string | null;
+	Matched?: string[] | null;
+	Missing?: string[] | null;
+	SuitabilitySkipped?: boolean;
 	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description?: string;
 	Skills?: string[];
