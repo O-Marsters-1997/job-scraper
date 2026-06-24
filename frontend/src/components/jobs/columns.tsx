@@ -99,7 +99,6 @@ export function createJobColumns(
 			header: "Suitability",
 			enableGlobalFilter: false,
 			sortUndefined: -1,
-			filterFn: "suitabilityMin" as unknown as "auto",
 			cell: (info) => {
 				const val = info.getValue() as number | null | undefined;
 				if (val === null || val === undefined) {

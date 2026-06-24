@@ -1,16 +1,17 @@
 import {
 	type ColumnDef,
-	type ColumnFiltersState,
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
-	getFilteredRowModel,
 	getPaginationRowModel,
 	getSortedRowModel,
 	type PaginationState,
 	type SortingState,
 } from "@tanstack/solid-table";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
+import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
 	Table,
@@ -20,11 +21,15 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import { cn } from "@/lib/utils";
 
 interface JobsDataTableProps<TData> {
 	columns: ColumnDef<TData, unknown>[];
 	data: TData[];
+	filters: JobFilters;
+	onChange: (patch: Partial<JobFilters>) => void;
+	sourceOptions: string[];
 }
 
 // Returns a windowed list of page numbers with null for ellipsis gaps.
@@ -49,15 +54,17 @@ function pageWindow(current: number, total: number): (number | null)[] {
 }
 
 export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
-	const [globalFilter, setGlobalFilter] = createSignal("");
 	const [sorting, setSorting] = createSignal<SortingState>([]);
-	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
-		[],
-	);
-	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
 		pageSize: 10,
+	});
+	const [filtersOpen, setFiltersOpen] = createSignal(false);
+
+	// Reset to page 1 whenever filtered data changes length.
+	createEffect(() => {
+		void props.data.length;
+		setPagination((p) => ({ ...p, pageIndex: 0 }));
 	});
 
 	const table = createSolidTable({
@@ -66,40 +73,24 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 		},
 		columns: props.columns,
 		getCoreRowModel: getCoreRowModel(),
-		getFilteredRowModel: getFilteredRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
-		globalFilterFn: "includesString",
-		filterFns: {
-			suitabilityMin: (row, columnId, filterValue: number) => {
-				const val = row.getValue(columnId) as number | null | undefined;
-				if (val === null || val === undefined) return false;
-				return val >= filterValue;
-			},
-		},
 		state: {
-			get globalFilter() {
-				return globalFilter();
-			},
 			get sorting() {
 				return sorting();
-			},
-			get columnFilters() {
-				return columnFilters();
 			},
 			get pagination() {
 				return pagination();
 			},
 		},
-		onGlobalFilterChange: setGlobalFilter,
 		onSortingChange: setSorting,
-		onColumnFiltersChange: setColumnFilters,
 		onPaginationChange: setPagination,
 	});
 
 	const pageIndex = () => table.getState().pagination.pageIndex;
 	const pageCount = () => table.getPageCount();
-	const filteredCount = () => table.getFilteredRowModel().rows.length;
+	// Data is pre-filtered; use its length for display rather than table's row model count.
+	const filteredCount = () => props.data.length;
 	const start = () => pageIndex() * pagination().pageSize + 1;
 	const end = () =>
 		Math.min((pageIndex() + 1) * pagination().pageSize, filteredCount());
@@ -113,11 +104,12 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 			disabled && "opacity-40",
 		);
 
+	const filterCount = () => activeFilterCount(props.filters);
+
 	return (
 		<div class="flex flex-col gap-3">
-			{/* Filters */}
-			<div class="flex flex-wrap items-center gap-2">
-				<div class="relative max-w-xs">
+			<div class="flex items-center gap-2">
+				<div class="relative max-w-xs flex-1">
 					<svg
 						aria-hidden="true"
 						class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
@@ -136,46 +128,39 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 					<Input
 						type="search"
 						placeholder="Search by role or company…"
-						value={globalFilter()}
-						onInput={(e) => {
-							setGlobalFilter(e.currentTarget.value);
-							setPagination((p) => ({ ...p, pageIndex: 0 }));
-						}}
+						value={props.filters.q}
+						onInput={(e) => props.onChange({ q: e.currentTarget.value })}
 						class="pr-3 pl-9"
 					/>
 				</div>
-				<div class="flex items-center gap-1.5">
-					<label class="text-xs font-medium text-muted" for="suitability-min">
-						Min suitability
-					</label>
-					<Input
-						id="suitability-min"
-						type="number"
-						min="0"
-						max="100"
-						placeholder="—"
-						value={suitabilityMin()}
-						onInput={(e) => {
-							const raw = e.currentTarget.value.trim();
-							setSuitabilityMin(raw);
-							setPagination((p) => ({ ...p, pageIndex: 0 }));
-							if (raw === "") {
-								setColumnFilters((prev) =>
-									prev.filter((f) => f.id !== "SuitabilityScore"),
-								);
-							} else {
-								const n = Number(raw);
-								if (!Number.isNaN(n)) {
-									setColumnFilters((prev) => [
-										...prev.filter((f) => f.id !== "SuitabilityScore"),
-										{ id: "SuitabilityScore", value: n },
-									]);
-								}
-							}
-						}}
-						class="w-20"
-					/>
-				</div>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => setFiltersOpen(true)}
+					class="relative shrink-0"
+				>
+					<svg
+						width="14"
+						height="14"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<line x1="4" y1="6" x2="20" y2="6" />
+						<line x1="8" y1="12" x2="16" y2="12" />
+						<line x1="11" y1="18" x2="13" y2="18" />
+					</svg>
+					Filters
+					<Show when={filterCount() > 0}>
+						<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+							{filterCount()}
+						</Badge>
+					</Show>
+				</Button>
 			</div>
 
 			{/* Table card — pagination lives inside so it shares the rounded border */}
@@ -253,7 +238,6 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 					</TableBody>
 				</Table>
 
-				{/* Numbered pagination — inside card, separated by a top border */}
 				<Show when={pageCount() > 1}>
 					<div class="flex items-center justify-between border-t border-border px-4 py-2.5">
 						<p class="text-xs text-faint">
@@ -303,6 +287,14 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 					</div>
 				</Show>
 			</div>
+
+			<JobFiltersDialog
+				open={filtersOpen()}
+				onOpenChange={setFiltersOpen}
+				filters={props.filters}
+				onChange={props.onChange}
+				sourceOptions={props.sourceOptions}
+			/>
 		</div>
 	);
 }

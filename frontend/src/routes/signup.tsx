@@ -27,7 +27,7 @@ function SignupPage() {
 		try {
 			const res = await signup(username(), password());
 			if (res.ok) {
-				navigate({ to: "/jobs", search: { page: 1 } });
+				navigate({ to: "/jobs" });
 			} else if (res.status === 409) {
 				setError("That username is already taken.");
 			} else {

@@ -8,6 +8,8 @@ export interface Job {
 	UpdatedAt: string;
 	ScrapedAt: string;
 	DaysInOffice?: number | null;
+	WorkArrangement?: string;
+	SalaryRaw?: string;
 	RelevanceScore: number | null;
 	SuitabilityScore: number | null;
 	// Optional rich fields — populated in demo mode; absent from the live backend

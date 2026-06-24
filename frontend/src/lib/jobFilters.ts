@@ -1,0 +1,124 @@
+import type { Job } from "@/types/job";
+
+export interface JobFilters {
+	q: string;
+	suit?: number;
+	rel?: number;
+	src: string[];
+	work: string[];
+	sal: boolean;
+	salMin?: number;
+	salMax?: number;
+}
+
+export const DEFAULT_FILTERS: JobFilters = {
+	q: "",
+	src: [],
+	work: [],
+	sal: false,
+};
+
+/** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
+export function parseSearch(raw: Record<string, unknown>): JobFilters {
+	const coerceNum = (v: unknown) => {
+		const n = Number(v);
+		return Number.isFinite(n) ? n : undefined;
+	};
+	const coerceArr = (v: unknown): string[] => {
+		if (Array.isArray(v)) return v.filter((x) => typeof x === "string");
+		if (typeof v === "string" && v) return [v];
+		return [];
+	};
+	return {
+		q: typeof raw.q === "string" ? raw.q : "",
+		suit: coerceNum(raw.suit),
+		rel: coerceNum(raw.rel),
+		src: coerceArr(raw.src),
+		work: coerceArr(raw.work),
+		sal: raw.sal === true || raw.sal === "true",
+		salMin: coerceNum(raw.salMin),
+		salMax: coerceNum(raw.salMax),
+	};
+}
+
+/** Parse free-text salary strings like "£80,000 to £95,000", "£80k-£95k", "Up to £90k". */
+export function parseSalary(
+	raw: string | undefined | null,
+): { min: number; max: number } | null {
+	if (!raw) return null;
+	// Strip currency symbols, whitespace; expand k/K suffix
+	const normalised = raw
+		.replace(/[£$€,]/g, "")
+		.replace(/\b(\d+(?:\.\d+)?)k\b/gi, (_, n) => String(Number(n) * 1000));
+	const nums = [...normalised.matchAll(/\d+(?:\.\d+)?/g)].map((m) =>
+		Number(m[0]),
+	);
+	if (nums.length === 0) return null;
+	const min = nums[0] as number;
+	const max = nums.length > 1 ? (nums[1] as number) : min;
+	return { min, max };
+}
+
+type Arrangement = "remote" | "hybrid" | "onsite" | "unknown";
+
+/** Derive a canonical work arrangement from the job, covering both live and demo data. */
+export function normalizeArrangement(job: Job): Arrangement {
+	const wa = job.WorkArrangement?.toLowerCase().trim();
+	if (wa === "remote") return "remote";
+	if (wa === "hybrid") return "hybrid";
+	if (wa === "onsite") return "onsite";
+	// Demo fallback via DaysInOffice
+	const d = job.DaysInOffice;
+	if (d === 0) return "remote";
+	if (typeof d === "number" && d >= 5) return "onsite";
+	if (typeof d === "number" && d >= 1) return "hybrid";
+	return "unknown";
+}
+
+export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
+	const q = f.q.toLowerCase();
+	return jobs.filter((j) => {
+		// Search
+		if (q) {
+			const hay =
+				`${j.Title} ${j.CompanySlug} ${j.Location} ${j.Source}`.toLowerCase();
+			if (!hay.includes(q)) return false;
+		}
+		// Scores (null scores never satisfy a minimum)
+		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
+			return false;
+		if (f.rel !== undefined && (j.RelevanceScore ?? -Infinity) < f.rel)
+			return false;
+		// Source
+		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
+		// Work arrangement
+		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
+			return false;
+		// Salary range
+		if (f.sal) {
+			// ponytail: use SalaryRaw from live backend; fall back to SalaryRange in demo mode
+			const parsed = parseSalary(j.SalaryRaw ?? j.SalaryRange);
+			if (!parsed) return false;
+			const reqMin = f.salMin ?? -Infinity;
+			const reqMax = f.salMax ?? Infinity;
+			if (parsed.max < reqMin || parsed.min > reqMax) return false;
+		}
+		return true;
+	});
+}
+
+/** Number of active filters (excluding search, which lives outside the panel). */
+export function activeFilterCount(f: JobFilters): number {
+	let n = 0;
+	if (f.suit !== undefined) n++;
+	if (f.rel !== undefined) n++;
+	if (f.src.length > 0) n++;
+	if (f.work.length > 0) n++;
+	if (f.sal) n++;
+	return n;
+}
+
+/** Unique Source values present in the dataset, sorted. */
+export function sourceOptions(jobs: Job[]): string[] {
+	return [...new Set(jobs.map((j) => j.Source))].sort();
+}
