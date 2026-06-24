@@ -12,10 +12,11 @@ import (
 
 func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
 	js := dto.JobScore{
-		JobID:   row.JobID.String(),
-		UserID:  row.UserID.String(),
-		Matched: row.Matched,
-		Missing: row.Missing,
+		JobID:              row.JobID.String(),
+		UserID:             row.UserID.String(),
+		Matched:            row.Matched,
+		Missing:            row.Missing,
+		SuitabilitySkipped: row.SuitabilitySkipped,
 	}
 	if row.RelevanceScore.Valid {
 		v := int(row.RelevanceScore.Int32)
@@ -68,6 +69,24 @@ func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID strin
 		Missing:          missing,
 	}); err != nil {
 		return fmt.Errorf("db.UpsertJobScoreSuitability: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) UpsertJobScoreSkipped(ctx context.Context, jobID, userID string) error {
+	jid, err := parseUUID(jobID)
+	if err != nil {
+		return err
+	}
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := db.queries.UpsertJobScoreSkipped(ctx, pgsqlc.UpsertJobScoreSkippedParams{
+		JobID:  jid,
+		UserID: uid,
+	}); err != nil {
+		return fmt.Errorf("db.UpsertJobScoreSkipped: %w", err)
 	}
 	return nil
 }

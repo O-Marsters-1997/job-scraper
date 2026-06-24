@@ -27,12 +27,14 @@ func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, _ st
 }
 
 type stubScoreWriter struct {
-	lastJobID  string
-	lastScore  int
-	lastReason string
-	lastMatch  []string
-	lastMiss   []string
-	err        error
+	lastJobID       string
+	lastScore       int
+	lastReason      string
+	lastMatch       []string
+	lastMiss        []string
+	err             error
+	skippedJobID    string
+	skippedCalled   bool
 }
 
 func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ string, sc int, reasoning string, matched, missing []string) error {
@@ -41,6 +43,12 @@ func (w *stubScoreWriter) UpsertJobScoreSuitability(_ context.Context, jobID, _ 
 	w.lastReason = reasoning
 	w.lastMatch = matched
 	w.lastMiss = missing
+	return w.err
+}
+
+func (w *stubScoreWriter) UpsertJobScoreSkipped(_ context.Context, jobID, _ string) error {
+	w.skippedJobID = jobID
+	w.skippedCalled = true
 	return w.err
 }
 
@@ -154,6 +162,52 @@ func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
 	}
 	if len(writer.lastMiss) != len(missing) {
 		t.Errorf("missing len = %d; want %d", len(writer.lastMiss), len(missing))
+	}
+}
+
+func TestIngestScorer_RelevanceGate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		relevanceScore int
+		cutoff         int
+		wantSkipped    bool
+		wantClaudeCall bool
+	}{
+		{name: "below cutoff skips claude", relevanceScore: 30, cutoff: 50, wantSkipped: true, wantClaudeCall: false},
+		{name: "at cutoff scores normally", relevanceScore: 50, cutoff: 50, wantSkipped: false, wantClaudeCall: true},
+		{name: "cutoff=0 disables gate", relevanceScore: 0, cutoff: 0, wantSkipped: false, wantClaudeCall: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			sc := &stubScorer{result: score.SuitabilityResult{Score: 80}}
+			writer := &stubScoreWriter{}
+			cfgReader := &stubConfigReader{cfg: dto.SearchConfig{
+				SuitabilityRubric: "be good",
+				RelevanceCutoff:   tc.cutoff,
+			}}
+			job := dto.Job{ID: "job-1", URL: "https://example.com/job", Title: "Engineer", RelevanceScore: &tc.relevanceScore}
+
+			is := score.NewIngestScorer(sc, writer, cfgReader, "user-1")
+			is.ScoreAndSave(context.Background(), job)
+
+			if tc.wantSkipped && !writer.skippedCalled {
+				t.Error("UpsertJobScoreSkipped was not called")
+			}
+			if !tc.wantSkipped && writer.skippedCalled {
+				t.Error("UpsertJobScoreSkipped was called unexpectedly")
+			}
+			if tc.wantClaudeCall && sc.lastModelID == "" {
+				t.Error("scorer was not called; expected Claude call")
+			}
+			if !tc.wantClaudeCall && sc.lastModelID != "" {
+				t.Error("scorer was called; expected no Claude call")
+			}
+		})
 	}
 }
 

@@ -67,13 +67,16 @@ function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
 	const reasoning = () => props.job.Reasoning ?? null;
 	const matched = () => props.job.Matched ?? [];
 	const missing = () => props.job.Missing ?? [];
+	const skipped = () => props.job.SuitabilitySkipped ?? false;
 
+	// skipped — below relevance cutoff, no Claude call made
+	const isSkipped = () => skipped() && score() == null;
 	// scored — has score + reasoning
-	const isScored = () => score() != null && reasoning() != null;
+	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
 	// legacy scored — has score but no reasoning
-	const isLegacy = () => score() != null && reasoning() == null;
-	// pending — no score (skipped state handled in ticket #104)
-	const isPending = () => score() == null;
+	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
+	// pending — no score, not skipped
+	const isPending = () => !isSkipped() && score() == null;
 
 	return (
 		<Card>
@@ -81,6 +84,13 @@ function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
 				<CardTitle>Suitability</CardTitle>
 			</CardHeader>
 			<CardContent class="gap-3">
+				<Show when={isSkipped()}>
+					<p class="rounded-md border border-border bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted">
+						Suitability scoring skipped — this job's relevance score was below
+						your cutoff.
+					</p>
+				</Show>
+
 				<Show when={isScored()}>
 					{/* Score display */}
 					<div class="flex items-baseline gap-1">

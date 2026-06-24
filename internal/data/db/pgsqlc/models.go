@@ -43,16 +43,17 @@ type Job struct {
 }
 
 type JobScore struct {
-	ID               pgtype.UUID
-	JobID            pgtype.UUID
-	UserID           pgtype.UUID
-	RelevanceScore   pgtype.Int4
-	SuitabilityScore pgtype.Int4
-	Reasoning        pgtype.Text
-	Matched          []string
-	Missing          []string
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
+	ID                 pgtype.UUID
+	JobID              pgtype.UUID
+	UserID             pgtype.UUID
+	RelevanceScore     pgtype.Int4
+	SuitabilityScore   pgtype.Int4
+	Reasoning          pgtype.Text
+	Matched            []string
+	Missing            []string
+	SuitabilitySkipped bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type NotificationDigest struct {

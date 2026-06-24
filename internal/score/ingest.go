@@ -13,6 +13,7 @@ const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
 
 type ScoreWriter interface {
 	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error
+	UpsertJobScoreSkipped(ctx context.Context, jobID, userID string) error
 }
 
 type ConfigReader interface {
@@ -46,6 +47,18 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 	cfg, err := s.cfgDB.GetSearchConfig(ctx, s.userID)
 	if err != nil {
 		slog.Warn("suitability: could not load search config", slog.Any("err", err))
+		return 0
+	}
+
+	if cfg.RelevanceCutoff > 0 && job.RelevanceScore != nil && *job.RelevanceScore < cfg.RelevanceCutoff {
+		slog.Info("suitability: skipped (below relevance cutoff)",
+			slog.String("url", job.URL),
+			slog.Int("relevance", *job.RelevanceScore),
+			slog.Int("cutoff", cfg.RelevanceCutoff),
+		)
+		if err := s.db.UpsertJobScoreSkipped(ctx, job.ID, s.userID); err != nil {
+			slog.Error("upsert skipped failed", slog.String("url", job.URL), slog.Any("err", err))
+		}
 		return 0
 	}
 

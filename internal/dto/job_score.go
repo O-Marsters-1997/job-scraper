@@ -1,11 +1,12 @@
 package dto
 
 type JobScore struct {
-	JobID            string
-	UserID           string
-	RelevanceScore   *int
-	SuitabilityScore *int
-	Reasoning        *string
-	Matched          []string
-	Missing          []string
+	JobID              string
+	UserID             string
+	RelevanceScore     *int
+	SuitabilityScore   *int
+	Reasoning          *string
+	Matched            []string
+	Missing            []string
+	SuitabilitySkipped bool
 }

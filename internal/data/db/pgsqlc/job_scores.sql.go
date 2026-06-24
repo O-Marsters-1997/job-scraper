@@ -12,7 +12,7 @@ import (
 )
 
 const getJobScore = `-- name: GetJobScore :one
-SELECT id, job_id, user_id, relevance_score, suitability_score, reasoning, matched, missing, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
+SELECT id, job_id, user_id, relevance_score, suitability_score, reasoning, matched, missing, suitability_skipped, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
 `
 
 type GetJobScoreParams struct {
@@ -32,6 +32,7 @@ func (q *Queries) GetJobScore(ctx context.Context, arg GetJobScoreParams) (JobSc
 		&i.Reasoning,
 		&i.Matched,
 		&i.Missing,
+		&i.SuitabilitySkipped,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -57,15 +58,38 @@ func (q *Queries) UpsertJobScoreRelevance(ctx context.Context, arg UpsertJobScor
 	return err
 }
 
-const upsertJobScoreSuitability = `-- name: UpsertJobScoreSuitability :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score, reasoning, matched, missing)
-VALUES ($1, $2, $3, $4, $5, $6)
+const upsertJobScoreSkipped = `-- name: UpsertJobScoreSkipped :exec
+INSERT INTO job_scores (job_id, user_id, suitability_skipped)
+VALUES ($1, $2, true)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score,
-    reasoning         = EXCLUDED.reasoning,
-    matched           = EXCLUDED.matched,
-    missing           = EXCLUDED.missing,
-    updated_at        = NOW()
+    suitability_skipped = true,
+    suitability_score   = NULL,
+    reasoning           = NULL,
+    matched             = NULL,
+    missing             = NULL,
+    updated_at          = NOW()
+`
+
+type UpsertJobScoreSkippedParams struct {
+	JobID  pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) UpsertJobScoreSkipped(ctx context.Context, arg UpsertJobScoreSkippedParams) error {
+	_, err := q.db.Exec(ctx, upsertJobScoreSkipped, arg.JobID, arg.UserID)
+	return err
+}
+
+const upsertJobScoreSuitability = `-- name: UpsertJobScoreSuitability :exec
+INSERT INTO job_scores (job_id, user_id, suitability_score, reasoning, matched, missing, suitability_skipped)
+VALUES ($1, $2, $3, $4, $5, $6, false)
+ON CONFLICT (job_id, user_id) DO UPDATE SET
+    suitability_score   = EXCLUDED.suitability_score,
+    reasoning           = EXCLUDED.reasoning,
+    matched             = EXCLUDED.matched,
+    missing             = EXCLUDED.missing,
+    suitability_skipped = false,
+    updated_at          = NOW()
 `
 
 type UpsertJobScoreSuitabilityParams struct {
