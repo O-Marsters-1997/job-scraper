@@ -22,22 +22,22 @@
 	--color-border: oklch(0.9288 0.0126 255.51);
 	--color-border-strong: oklch(0.869 0.0198 252.89);
 
-	/* Teal brand accent */
-	--color-primary: oklch(0.6274 0.1078 185.99);
-	--color-primary-hover: oklch(0.5254 0.0902 185.8);
+	/* Violet brand accent */
+	--color-primary: oklch(0.55 0.18 285);
+	--color-primary-hover: oklch(0.47 0.17 285);
 	--color-primary-foreground: oklch(1 0 0);
-	--color-accent-subtle: oklch(0.9836 0.0142 180.72);
-	--color-accent-border: oklch(0.91 0.0927 180.43);
-	--color-accent-text: oklch(0.3861 0.059 188.42);
+	--color-accent-subtle: oklch(0.97 0.015 290);
+	--color-accent-border: oklch(0.9 0.06 288);
+	--color-accent-text: oklch(0.4 0.13 285);
 
-	/* Dark sidebar panel */
-	--color-sidebar: oklch(0.2094 0.0199 248.8);
-	--color-sidebar-hover: oklch(0.2783 0.033 247.38);
-	--color-sidebar-border: oklch(0.2783 0.033 247.38);
-	--color-sidebar-foreground: oklch(0.6417 0.0422 250.84);
-	--color-sidebar-foreground-strong: oklch(0.9243 0.0169 236.7);
-	--color-sidebar-active: oklch(0.7038 0.123 182.5 / 0.13);
-	--color-sidebar-active-foreground: oklch(0.8549 0.1251 181.07);
+	/* Deep-indigo sidebar panel (login lineage) */
+	--color-sidebar: oklch(0.23 0.055 285);
+	--color-sidebar-hover: oklch(0.29 0.06 285);
+	--color-sidebar-border: oklch(0.31 0.06 285);
+	--color-sidebar-foreground: oklch(0.7 0.04 285);
+	--color-sidebar-foreground-strong: oklch(0.95 0.02 290);
+	--color-sidebar-active: oklch(0.62 0.2 300 / 0.16);
+	--color-sidebar-active-foreground: oklch(0.84 0.13 295);
 
 	/* Danger */
 	--color-destructive: oklch(0.6368 0.2078 25.33);
@@ -52,7 +52,7 @@
 
 	/* Sidebar count-badge surfaces */
 	--color-sidebar-badge: oklch(1 0 0 / 0.07);
-	--color-sidebar-badge-active: oklch(0.7038 0.123 182.5 / 0.1);
+	--color-sidebar-badge-active: oklch(0.62 0.2 300 / 0.12);
 
 	/* Status palette (defaults / chips) */
 	--color-status-saved: oklch(0.5544 0.0407 257.42);
@@ -61,6 +61,15 @@
 	--color-status-interview: oklch(0.6658 0.1574 58.32);
 	--color-status-offer: oklch(0.596 0.1274 163.23);
 	--color-status-rejected: oklch(0.5771 0.2152 27.33);
+
+	/* Radius scale — mirrors Tailwind v4 defaults so nothing shifts at "default"
+	   radius setting; the TweaksPanel Sharp/Round control overrides these at runtime */
+	--radius-sm: 0.25rem;
+	--radius-md: 0.375rem;
+	--radius-lg: 0.5rem;
+	--radius-xl: 0.75rem;
+	--radius-2xl: 1rem;
+	--radius-3xl: 1.5rem;
 }
 
 @layer base {
@@ -112,21 +121,22 @@
 }
 
 @layer components {
-	/* Shared form field styling — used for select and textarea (no primitive yet) */
+	/* Shared form field styling — canonical source for Input, select, and textarea */
 	.field {
-		@apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none;
+		@apply w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50;
 	}
 }
 
-/* Density tweaks — applied via data-density on <html> */
+/* Density tweaks — applied via data-density on <html>.
+   Default td/th padding is py-4 (1rem); compact/spacious step proportionally. */
 html[data-density="compact"] table td,
 html[data-density="compact"] table th {
-	padding-top: 0.25rem;
-	padding-bottom: 0.25rem;
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
 }
 html[data-density="spacious"] table td {
-	padding-top: 0.875rem;
-	padding-bottom: 0.875rem;
+	padding-top: 1.375rem;
+	padding-bottom: 1.375rem;
 }
 
 /* Size-scale tweaks — scale the html root so all rem units resize proportionally.
@@ -154,32 +164,49 @@ html[data-size="lg"] {
 
 /* ============================================================
    Auth "front door" — bold purple split-screen.
-   Intentionally outside the in-app teal system per the design
-   front-door exception. Scoped to .auth-scope so it never leaks:
-   overriding --color-primary here recolours the shadcn Button,
-   Input focus ring, and links to violet automatically.
+   The app and front door now share the same violet system;
+   auth is its fullest (animated) expression.
    ============================================================ */
-.auth-scope {
-	--color-primary: oklch(0.55 0.18 285);
-	--color-primary-hover: oklch(0.47 0.17 285);
-	--color-primary-foreground: oklch(1 0 0);
-}
-
 .auth-brand {
-	--p1: oklch(0.3 0.1 278);
-	--p2: oklch(0.16 0.07 290);
-	--bright: oklch(0.8 0.13 290);
+	/* Chrome derived from active Tweaks preset — sidebar for the panel gradient,
+	   primary for the brand highlight, aurora glow, and button accent. */
+	--p1: color-mix(in oklch, var(--color-sidebar), white 9%);
+	--p2: color-mix(in oklch, var(--color-sidebar), black 30%);
+	--bright: color-mix(in oklch, var(--color-primary), white 40%);
+	--auth-glow: color-mix(in oklch, var(--color-primary), white 14%);
+
+	/* Ink + pill surfaces — default: dark panel → light ink */
+	--auth-ink: oklch(0.97 0.01 290);
 	--auth-prose: oklch(0.87 0.03 290);
-	--auth-prose-strong: oklch(0.93 0.02 290);
+	--auth-prose-strong: oklch(0.95 0.015 290);
+	--auth-pill-bg: oklch(1 0 0 / 0.08);
+	--auth-pill-border: oklch(1 0 0 / 0.16);
+
+	/* Source pill accents: job-board brand hue, tuned for legibility on dark panel */
 	--auth-li: oklch(0.72 0.15 264);
 	--auth-gh: oklch(0.8 0.14 157);
 	--auth-lv: oklch(0.78 0.15 40);
 	--auth-in: oklch(0.74 0.16 300);
+
 	--auth-ease: cubic-bezier(0.16, 1, 0.3, 1);
 	position: relative;
 	overflow: hidden;
 	background: linear-gradient(160deg, var(--p1) 0%, var(--p2) 100%);
-	color: oklch(0.97 0.01 290);
+	color: var(--auth-ink);
+}
+
+/* Light custom-theme panel: flip ink to dark so prose + heading stay legible. */
+.auth-brand[data-auth-tone="light"] {
+	--auth-ink: oklch(0.24 0.04 290);
+	--auth-prose: oklch(0.4 0.04 290);
+	--auth-prose-strong: oklch(0.26 0.05 290);
+	--auth-pill-bg: oklch(0 0 0 / 0.05);
+	--auth-pill-border: oklch(0 0 0 / 0.12);
+	/* Source pills: use the richer (darker) app-token values for legibility */
+	--auth-li: var(--color-source-linkedin);
+	--auth-gh: var(--color-source-greenhouse);
+	--auth-lv: var(--color-source-lever);
+	--auth-in: var(--color-source-indeed);
 }
 
 /* drifting "bubble" aurora behind the content */
@@ -201,7 +228,7 @@ html[data-size="lg"] {
 	height: 55%;
 	left: -10%;
 	top: -8%;
-	background: radial-gradient(circle, oklch(0.62 0.2 300), transparent 65%);
+	background: radial-gradient(circle, var(--auth-glow), transparent 65%);
 	animation: authA1 17s var(--auth-ease) infinite alternate;
 }
 .auth-ribbon-2 {
@@ -209,7 +236,11 @@ html[data-size="lg"] {
 	height: 60%;
 	right: -15%;
 	top: 18%;
-	background: radial-gradient(circle, oklch(0.6 0.16 232), transparent 65%);
+	background: radial-gradient(
+		circle,
+		color-mix(in oklch, var(--color-primary), white 2%),
+		transparent 65%
+	);
 	animation: authA2 21s var(--auth-ease) infinite alternate;
 }
 .auth-ribbon-3 {
@@ -217,7 +248,11 @@ html[data-size="lg"] {
 	height: 52%;
 	left: 14%;
 	bottom: -18%;
-	background: radial-gradient(circle, oklch(0.64 0.18 332), transparent 65%);
+	background: radial-gradient(
+		circle,
+		color-mix(in oklch, var(--color-primary), white 26%),
+		transparent 65%
+	);
 	animation: authA3 19s var(--auth-ease) infinite alternate;
 }
 @keyframes authA1 {
@@ -251,7 +286,7 @@ html[data-size="lg"] {
 }
 @keyframes authPulse {
 	0% {
-		box-shadow: 0 0 0 0 oklch(0.8 0.13 290 / 0.5);
+		box-shadow: 0 0 0 0 color-mix(in oklch, var(--auth-glow), transparent 50%);
 	}
 	70% {
 		box-shadow: 0 0 0 9px transparent;
@@ -294,8 +329,59 @@ html[data-size="lg"] {
 @media (prefers-reduced-motion: reduce) {
 	.auth-ribbon,
 	.auth-live-dot,
-	.auth-rise {
+	.auth-rise,
+	.brand-ribbon {
 		animation: none;
 	}
 	/* the role cloud freezes itself to a static frame (see role-cloud.tsx) */
+}
+
+/* ============================================================
+   Reusable brand-aurora — faint violet glow for app shell
+   chrome, empty states, and dashboard headers (never behind
+   tabular data). Static by default; animated only in .auth-brand.
+   ============================================================ */
+
+/* The shell glow: a single absolutely-positioned decoration layer.
+   Use inside a position:relative container with overflow:hidden.
+   Keep pointer-events-none and z-0; put content at z-10. */
+.brand-aurora-shell {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	overflow: hidden;
+}
+
+.brand-ribbon {
+	position: absolute;
+	border-radius: 50%;
+	filter: blur(48px);
+	mix-blend-mode: multiply;
+}
+
+/* Top-of-shell wash: violet blob confined to upper region */
+.brand-ribbon-top {
+	width: 80%;
+	height: 160px;
+	left: 10%;
+	top: -60px;
+	background: radial-gradient(
+		ellipse,
+		color-mix(in oklch, var(--color-primary), transparent 93%),
+		transparent 70%
+	);
+}
+
+/* Empty-state / section glow: centred ambient wash */
+.brand-ribbon-center {
+	width: 60%;
+	height: 60%;
+	left: 20%;
+	top: 15%;
+	background: radial-gradient(
+		circle,
+		color-mix(in oklch, var(--color-primary), transparent 94%),
+		transparent 65%
+	);
 }

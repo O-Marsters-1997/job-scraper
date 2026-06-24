@@ -2,7 +2,7 @@ import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatDate, formatRelative } from "@/lib/datetime";
+import { formatRelative } from "@/lib/datetime";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
@@ -28,7 +28,8 @@ export function createJobColumns(
 				<Link
 					to="/jobs/$id"
 					params={{ id: info.row.original.ID }}
-					class="font-medium text-foreground transition-colors hover:text-primary"
+					class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
+					title={info.getValue() as string}
 				>
 					{info.getValue() as string}
 				</Link>
@@ -38,7 +39,12 @@ export function createJobColumns(
 			accessorKey: "CompanySlug",
 			header: "Company",
 			cell: (info) => (
-				<span class="text-muted">{titleCase(info.getValue() as string)}</span>
+				<span
+					class="block max-w-[180px] truncate text-muted"
+					title={titleCase(info.getValue() as string)}
+				>
+					{titleCase(info.getValue() as string)}
+				</span>
 			),
 		},
 		{
@@ -47,7 +53,9 @@ export function createJobColumns(
 			cell: (info) => {
 				const val = info.getValue() as string | null | undefined;
 				return val ? (
-					<span class="text-muted">{val}</span>
+					<span class="block max-w-[160px] truncate text-muted" title={val}>
+						{val}
+					</span>
 				) : (
 					<span class="text-faint">—</span>
 				);
@@ -111,17 +119,11 @@ export function createJobColumns(
 			accessorKey: "ScrapedAt",
 			header: "Scraped",
 			enableGlobalFilter: false,
-			cell: (info) => {
-				const raw = info.getValue() as string;
-				return (
-					<div class="flex flex-col gap-0.5">
-						<span class="font-mono text-xs tabular-nums text-foreground">
-							{formatDate(raw)}
-						</span>
-						<span class="text-[10px] text-faint">{formatRelative(raw)}</span>
-					</div>
-				);
-			},
+			cell: (info) => (
+				<span class="font-mono text-xs tabular-nums text-faint">
+					{formatRelative(info.getValue() as string)}
+				</span>
+			),
 		},
 		{
 			id: "status",

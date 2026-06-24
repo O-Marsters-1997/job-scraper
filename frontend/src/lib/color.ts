@@ -2,9 +2,9 @@ import { parseColor } from "@kobalte/core/colors";
 
 // ── sRGB ↔ oklch (no external deps) ─────────────────────────────────────────
 // Standard OKLab/OKLCH matrices. Validated against the project's @theme tokens:
-//   oklch(0.6274 0.1078 185.99) → #0F9D92
-//   oklch(0.9842 0.0034 247.86) → #F8FAFC
-//   oklch(0.2094 0.0199 248.8)  → #111921
+//   oklch(0.55 0.18 285)        → #6645D9  (violet primary)
+//   oklch(0.23 0.055 285)       → #2A1F57  (indigo sidebar)
+//   oklch(0.9842 0.0034 247.86) → #F8FAFC  (canvas)
 
 function srgbToLinear(c: number): number {
 	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -82,6 +82,27 @@ function parseOklch(
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Return the L (lightness) component of an oklch CSS string, or null if the
+ * string isn't oklch. Used to decide the auth brand panel's accessible ink tone.
+ */
+export function oklchLightness(css: string): number | null {
+	return parseOklch(css)?.L ?? null;
+}
+
+/**
+ * Read a CSS custom property off :root and return it as a hex string.
+ * Used by Chart.js utilities — Canvas can't consume CSS vars or oklch directly.
+ * Reuses oklchToHex, so oklch values are converted and hex/rgb values pass through.
+ */
+export function cssVarHex(name: string, fallback = "#000000"): string {
+	if (typeof document === "undefined") return fallback;
+	const raw = getComputedStyle(document.documentElement)
+		.getPropertyValue(name)
+		.trim();
+	return raw ? oklchToHex(raw) : fallback;
+}
 
 /**
  * Convert an oklch CSS string to a hex string suitable for Kobalte's ColorPicker.

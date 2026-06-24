@@ -1,6 +1,7 @@
 import type { JSX } from "solid-js";
 import { RoleCloud } from "@/components/auth/role-cloud";
 import { FastTrackMark } from "@/components/brand-mark";
+import { oklchLightness } from "@/lib/color";
 
 const Wordmark = (props: { class?: string; tone?: "dark" | "light" }) => (
 	<span
@@ -27,9 +28,23 @@ const Wordmark = (props: { class?: string; tone?: "dark" | "light" }) => (
 );
 
 export function AuthShell(props: { children: JSX.Element }) {
+	// Compute the panel tone synchronously so data-auth-tone is set as part of
+	// the initial DOM creation — before RoleCloud's onMount reads --auth-* vars.
+	// applyAll(loadTweaks()) has already run in main.tsx, so --color-sidebar is
+	// current on :root before any component renders.
+	const sidebarL = oklchLightness(
+		getComputedStyle(document.documentElement)
+			.getPropertyValue("--color-sidebar")
+			.trim(),
+	);
+	const authTone = sidebarL !== null && sidebarL > 0.5 ? "light" : "dark";
+
 	return (
-		<div class="auth-scope grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
-			<section class="auth-brand hidden flex-col px-14 py-12 lg:flex">
+		<div class="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
+			<section
+				class="auth-brand hidden flex-col px-14 py-12 lg:flex"
+				data-auth-tone={authTone}
+			>
 				<div class="auth-aurora">
 					<span class="auth-ribbon auth-ribbon-1" />
 					<span class="auth-ribbon auth-ribbon-2" />

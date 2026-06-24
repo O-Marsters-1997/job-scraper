@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Chart as ChartJS } from "chart.js";
+import { Bar, Doughnut, Line } from "solid-chartjs";
 import {
 	createEffect,
 	createMemo,
@@ -8,17 +9,17 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import { Bar, Doughnut, Line } from "solid-chartjs";
-import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import {
 	donutChartOptions,
 	hexAlpha,
 	lineChartOptions,
+	primaryHex,
 	registerCharts,
 	sourceHex,
 	stackedBarOptions,
 } from "@/lib/charts";
+import { cn } from "@/lib/utils";
 import {
 	applicationStatusesQueryOptions,
 	useApplicationStatuses,
@@ -124,8 +125,8 @@ function InsightsPage() {
 			datasets: [
 				{
 					data,
-					borderColor: "#0f9d92",
-					backgroundColor: hexAlpha("#0f9d92", "1a"),
+					borderColor: primaryHex(),
+					backgroundColor: hexAlpha(primaryHex(), "1a"),
 					fill: true,
 					tension: 0.35,
 					pointRadius: 2,
@@ -282,7 +283,7 @@ function InsightsPage() {
 									lineCanvas = c;
 								}}
 								data={jobsOverTimeData()}
-								options={lineChartOptions}
+								options={lineChartOptions()}
 							/>
 						</Show>
 					</div>
@@ -304,7 +305,10 @@ function InsightsPage() {
 							when={hasJobs() && chartsReady()}
 							fallback={<p class="text-sm text-faint">No jobs scraped yet.</p>}
 						>
-							<Doughnut data={jobsBySourceData()} options={donutChartOptions} />
+							<Doughnut
+								data={jobsBySourceData()}
+								options={donutChartOptions()}
+							/>
 						</Show>
 					</div>
 				</Card>
@@ -400,7 +404,7 @@ function InsightsPage() {
 							}
 						>
 							<div class="relative" style={{ height: "56px" }}>
-								<Bar data={pipelineData()} options={stackedBarOptions} />
+								<Bar data={pipelineData()} options={stackedBarOptions()} />
 							</div>
 						</Show>
 					</Show>

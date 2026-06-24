@@ -78,22 +78,27 @@ export function ErrorState(props: ErrorStateProps) {
 // Branded 404 for unmatched routes.
 export function NotFoundState() {
 	return (
-		<div class="flex min-h-[60vh] flex-col items-center justify-center px-6 py-12 text-center">
-			<span class="font-mono text-2xl font-bold tracking-tight text-faint">
-				404
-			</span>
-			<h1 class="mt-3 text-lg font-bold tracking-tight text-foreground">
-				Page not found
-			</h1>
-			<p class="mt-1.5 max-w-sm text-sm text-muted">
-				That page doesn't exist or has moved.
-			</p>
-			<Link
-				to="/jobs"
-				class="mt-6 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
-			>
-				Back to jobs
-			</Link>
+		<div class="relative flex min-h-[60vh] flex-col items-center justify-center overflow-hidden px-6 py-12 text-center">
+			<div class="brand-aurora-shell" aria-hidden="true">
+				<span class="brand-ribbon brand-ribbon-center" />
+			</div>
+			<div class="relative z-10 flex flex-col items-center">
+				<span class="font-mono text-2xl font-bold tracking-tight text-faint">
+					404
+				</span>
+				<h1 class="mt-3 text-lg font-bold tracking-tight text-foreground">
+					Page not found
+				</h1>
+				<p class="mt-1.5 max-w-sm text-sm text-muted">
+					That page doesn't exist or has moved.
+				</p>
+				<Link
+					to="/jobs"
+					class="mt-6 inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
+				>
+					Back to jobs
+				</Link>
+			</div>
 		</div>
 	);
 }

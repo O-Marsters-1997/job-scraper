@@ -62,7 +62,7 @@ export const TableHead = (props: TableHeadProps) => {
 	return (
 		<th
 			class={cn(
-				"h-9 px-4 text-left align-middle text-xs font-semibold whitespace-nowrap text-faint uppercase tracking-wide",
+				"h-11 px-4 text-left align-middle text-xs font-semibold whitespace-nowrap text-faint uppercase tracking-wide",
 				local.class,
 			)}
 			{...rest}
@@ -77,7 +77,7 @@ export const TableCell = (props: TableCellProps) => {
 	return (
 		<td
 			class={cn(
-				"px-4 py-2 align-middle text-[13px] text-foreground",
+				"px-4 py-4 align-middle text-[13px] text-foreground whitespace-nowrap",
 				local.class,
 			)}
 			{...rest}

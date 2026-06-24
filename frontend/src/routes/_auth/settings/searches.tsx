@@ -1,15 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
-import { ConflictError } from "../../../api/sourceTargets";
-import {
-	useCreateSourceTarget,
-	useDeleteSourceTarget,
-	useSourceTargets,
-	useUpdateSourceTarget,
-} from "../../../hooks/useSourceTargets";
-import { useSources } from "../../../hooks/useSources";
-import type { SourceTarget } from "../../../types/sourceTarget";
-import type { SourceInfo } from "../../../types/source";
+import { Badge } from "@/components/ui/badge";
 import {
 	Select,
 	SelectContent,
@@ -17,6 +8,7 @@ import {
 	SelectItemLabel,
 	SelectTrigger,
 } from "@/components/ui/select";
+import { SkeletonList } from "@/components/ui/skeleton";
 import {
 	Table,
 	TableBody,
@@ -25,8 +17,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { ConflictError } from "../../../api/sourceTargets";
+import { useSources } from "../../../hooks/useSources";
+import {
+	useCreateSourceTarget,
+	useDeleteSourceTarget,
+	useSourceTargets,
+	useUpdateSourceTarget,
+} from "../../../hooks/useSourceTargets";
+import type { SourceInfo } from "../../../types/source";
+import type { SourceTarget } from "../../../types/sourceTarget";
 
 export const Route = createFileRoute("/_auth/settings/searches")({
 	component: SearchesPage,
@@ -160,10 +160,16 @@ function SearchesPage() {
 											<TableCell>
 												<Badge variant="source">{sourceLabel(t.Source)}</Badge>
 											</TableCell>
-											<TableCell class="max-w-[200px] truncate font-mono text-xs">
+											<TableCell
+												class="max-w-[200px] truncate font-mono text-xs"
+												title={t.Value}
+											>
 												{t.Value}
 											</TableCell>
-											<TableCell class="text-faint text-xs">
+											<TableCell
+												class="max-w-[200px] truncate text-xs text-faint"
+												title={filterSummary(t)}
+											>
 												{filterSummary(t)}
 											</TableCell>
 											<TableCell>
