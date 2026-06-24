@@ -114,3 +114,11 @@ type User struct {
 	PasswordHash string
 	CreatedAt    pgtype.Timestamptz
 }
+
+type UserAiPref struct {
+	ID               pgtype.UUID
+	UserID           pgtype.UUID
+	SuitabilityModel string
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}

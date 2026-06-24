@@ -2,10 +2,14 @@ package score
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
 
 type ScoreWriter interface {
 	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error
@@ -15,15 +19,26 @@ type ConfigReader interface {
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 }
 
+type UserAIPrefsReader interface {
+	GetUserAIPrefs(ctx context.Context, userID string) (dto.UserAIPrefs, error)
+}
+
 type IngestScorer struct {
-	scorer SuitabilityScorer
-	db     ScoreWriter
-	cfgDB  ConfigReader
-	userID string
+	scorer    SuitabilityScorer
+	db        ScoreWriter
+	cfgDB     ConfigReader
+	aiPrefsDB UserAIPrefsReader
+	userID    string
 }
 
 func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, userID string) *IngestScorer {
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
+}
+
+// NewIngestScorerWithPrefs is like NewIngestScorer but threads per-user AI model preferences
+// into each Score call. aiPrefsDB may be nil, in which case the default model is used.
+func NewIngestScorerWithPrefs(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, aiPrefsDB UserAIPrefsReader, userID string) *IngestScorer {
+	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, aiPrefsDB: aiPrefsDB, userID: userID}
 }
 
 // ScoreAndSave scores the job, persists the result, and returns the score (0 on any error).
@@ -35,7 +50,17 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		return 0
 	}
 
-	result, err := s.scorer.Score(ctx, job, cfg)
+	modelID := defaultSuitabilityModel
+	if s.aiPrefsDB != nil {
+		prefs, err := s.aiPrefsDB.GetUserAIPrefs(ctx, s.userID)
+		if err != nil && !errors.Is(err, providers.ErrNotFound) {
+			slog.Warn("suitability: could not load ai prefs, using default model", slog.Any("err", err))
+		} else if err == nil {
+			modelID = prefs.SuitabilityModel
+		}
+	}
+
+	result, err := s.scorer.Score(ctx, job, cfg, modelID)
 	if err != nil {
 		slog.Error("suitability score failed", slog.String("url", job.URL), slog.Any("err", err))
 		return 0

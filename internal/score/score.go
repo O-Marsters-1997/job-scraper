@@ -17,8 +17,9 @@ type SuitabilityResult struct {
 }
 
 // SuitabilityScorer scores a job's full description against the user's rubric.
+// modelID selects which Claude model to use; if empty, the implementation uses its default.
 type SuitabilityScorer interface {
-	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (SuitabilityResult, error)
+	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig, modelID string) (SuitabilityResult, error)
 }
 
 // RelevanceScorer scores a job card against the user's search criteria.

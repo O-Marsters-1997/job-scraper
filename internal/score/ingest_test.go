@@ -5,21 +5,24 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 type stubScorer struct {
-	result score.SuitabilityResult
+	result      score.SuitabilityResult
+	lastModelID string
 }
 
-func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, modelID string) (score.SuitabilityResult, error) {
+	s.lastModelID = modelID
 	return s.result, nil
 }
 
 type errScorer struct{}
 
-func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig) (score.SuitabilityResult, error) {
+func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, _ string) (score.SuitabilityResult, error) {
 	return score.SuitabilityResult{}, errors.New("api error")
 }
 
@@ -48,6 +51,15 @@ type stubConfigReader struct {
 
 func (r *stubConfigReader) GetSearchConfig(_ context.Context, _ string) (dto.SearchConfig, error) {
 	return r.cfg, r.err
+}
+
+type stubAIPrefsReader struct {
+	prefs dto.UserAIPrefs
+	err   error
+}
+
+func (r *stubAIPrefsReader) GetUserAIPrefs(_ context.Context, _ string) (dto.UserAIPrefs, error) {
+	return r.prefs, r.err
 }
 
 func TestIngestScorer_ScoreAndSave(t *testing.T) {
@@ -142,5 +154,37 @@ func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
 	}
 	if len(writer.lastMiss) != len(missing) {
 		t.Errorf("missing len = %d; want %d", len(writer.lastMiss), len(missing))
+	}
+}
+
+func TestIngestScorer_ModelIDFromPrefs(t *testing.T) {
+	t.Parallel()
+
+	sc := &stubScorer{result: score.SuitabilityResult{Score: 70}}
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
+	aiPrefs := &stubAIPrefsReader{prefs: dto.UserAIPrefs{SuitabilityModel: "claude-sonnet-4-6"}}
+
+	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs, "user-1")
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-m", URL: "https://example.com/job3", Title: "Engineer"})
+
+	if sc.lastModelID != "claude-sonnet-4-6" {
+		t.Errorf("model passed to scorer = %q; want %q", sc.lastModelID, "claude-sonnet-4-6")
+	}
+}
+
+func TestIngestScorer_ModelIDDefaultWhenNoPrefs(t *testing.T) {
+	t.Parallel()
+
+	sc := &stubScorer{result: score.SuitabilityResult{Score: 70}}
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
+	aiPrefs := &stubAIPrefsReader{err: providers.ErrNotFound}
+
+	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs, "user-1")
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-d", URL: "https://example.com/job4", Title: "Engineer"})
+
+	if sc.lastModelID != "claude-haiku-4-5-20251001" {
+		t.Errorf("model passed to scorer = %q; want default haiku", sc.lastModelID)
 	}
 }
