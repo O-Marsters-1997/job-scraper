@@ -19,6 +19,7 @@ import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
+import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
@@ -75,6 +76,11 @@ const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   path: '/applications',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsScoringRoute = AuthSettingsScoringRouteImport.update({
   id: '/scoring',
   path: '/scoring',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
+  '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
+  '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
+  '/_auth/settings/ai': typeof AuthSettingsAiRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/_auth/settings/scoring': typeof AuthSettingsScoringRoute
   '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
     | '/overview'
     | '/settings'
     | '/jobs/$id'
+    | '/settings/ai'
     | '/settings/integrations'
     | '/settings/scoring'
     | '/settings/searches'
@@ -191,6 +201,7 @@ export interface FileRouteTypes {
     | '/overview'
     | '/settings'
     | '/jobs/$id'
+    | '/settings/ai'
     | '/settings/integrations'
     | '/settings/scoring'
     | '/settings/searches'
@@ -209,6 +220,7 @@ export interface FileRouteTypes {
     | '/_auth/overview'
     | '/_auth/settings'
     | '/_auth/jobs_/$id'
+    | '/_auth/settings/ai'
     | '/_auth/settings/integrations'
     | '/_auth/settings/scoring'
     | '/_auth/settings/searches'
@@ -295,6 +307,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthApplicationsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/settings/ai': {
+      id: '/_auth/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthSettingsAiRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/scoring': {
       id: '/_auth/settings/scoring'
       path: '/scoring'
@@ -341,6 +360,7 @@ declare module '@tanstack/solid-router' {
 }
 
 interface AuthSettingsRouteChildren {
+  AuthSettingsAiRoute: typeof AuthSettingsAiRoute
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
   AuthSettingsScoringRoute: typeof AuthSettingsScoringRoute
   AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
@@ -348,6 +368,7 @@ interface AuthSettingsRouteChildren {
 }
 
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
+  AuthSettingsAiRoute: AuthSettingsAiRoute,
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
   AuthSettingsScoringRoute: AuthSettingsScoringRoute,
   AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
