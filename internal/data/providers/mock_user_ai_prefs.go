@@ -10,7 +10,7 @@ import (
 // MockUserAIPrefsProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockUserAIPrefsProvider struct {
 	mu    sync.Mutex
-	prefs map[string]dto.UserAIPrefs // keyed by userID
+	prefs map[string]dto.UserAIPrefs
 
 	GetErr    error
 	UpsertErr error

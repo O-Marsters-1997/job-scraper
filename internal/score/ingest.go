@@ -35,8 +35,7 @@ func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReade
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
 }
 
-// NewIngestScorerWithPrefs is like NewIngestScorer but threads per-user AI model preferences
-// into each Score call. aiPrefsDB may be nil, in which case the default model is used.
+// aiPrefsDB may be nil; the default model is used when it is.
 func NewIngestScorerWithPrefs(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, aiPrefsDB UserAIPrefsReader, userID string) *IngestScorer {
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, aiPrefsDB: aiPrefsDB, userID: userID}
 }

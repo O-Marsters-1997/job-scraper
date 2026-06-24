@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 type JobScoreProvider interface {

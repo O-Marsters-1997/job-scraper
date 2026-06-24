@@ -22,7 +22,6 @@ const (
 	haiku4_5OutputPricePerMToken = 4.00
 )
 
-// ClaudeScorer calls the Anthropic Messages API to score a job's suitability.
 type ClaudeScorer struct {
 	client         anthropic.Client
 	modelID        string
@@ -51,7 +50,6 @@ func NewClaudeScorer(cfg ClaudeScorerConfig) *ClaudeScorer {
 	}
 }
 
-// claudeResponse is the JSON shape expected from the model.
 type claudeResponse struct {
 	Score     int      `json:"score"`
 	Matched   []string `json:"matched"`
@@ -83,12 +81,6 @@ func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchCon
 	var resp claudeResponse
 	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
 		return SuitabilityResult{}, fmt.Errorf("parse score response %q: %w", raw, err)
-	}
-	if resp.Score < 0 {
-		resp.Score = 0
-	}
-	if resp.Score > 100 {
-		resp.Score = 100
 	}
 	resp.Score = max(0, min(100, resp.Score))
 
@@ -134,7 +126,6 @@ func buildPrompt(job dto.Job, desc string, cfg dto.SearchConfig) string {
 	return sb.String()
 }
 
-// truncate caps s to at most maxChars characters (bytes), preserving valid UTF-8.
 func truncate(s string, maxChars int) string {
 	if len(s) <= maxChars {
 		return s
