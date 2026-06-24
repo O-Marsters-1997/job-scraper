@@ -17,10 +17,61 @@ export interface JobTableContext {
 	onEdit: (jobId: string) => void;
 }
 
+// Extend TanStack Table's meta type so cells can read expand state
+declare module "@tanstack/solid-table" {
+	// biome-ignore lint/suspicious/noExplicitAny: table meta extension
+	interface TableMeta<TData> {
+		isExpanded: (rowId: string) => boolean;
+		toggleExpanded: (rowId: string) => void;
+	}
+}
+
 export function createJobColumns(
 	ctx: JobTableContext,
 ): ColumnDef<Job, unknown>[] {
 	return [
+		{
+			id: "expand",
+			enableSorting: false,
+			enableGlobalFilter: false,
+			header: () => <span class="sr-only">Expand</span>,
+			cell: (info) => {
+				const rowId = info.row.original.ID;
+				const meta = info.table.options.meta;
+				const expanded = () => meta?.isExpanded(rowId) ?? false;
+				return (
+					<button
+						type="button"
+						aria-label={expanded() ? "Collapse row" : "Expand row"}
+						aria-expanded={expanded()}
+						onClick={(e) => {
+							e.stopPropagation();
+							meta?.toggleExpanded(rowId);
+						}}
+						class="flex size-6 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-accent-text"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+							style={{
+								transform: expanded() ? "rotate(180deg)" : "rotate(0deg)",
+								transition: "transform 150ms ease",
+							}}
+						>
+							<polyline points="6 9 12 15 18 9" />
+						</svg>
+					</button>
+				);
+			},
+		},
 		{
 			accessorKey: "Title",
 			header: "Title",
