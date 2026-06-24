@@ -95,7 +95,7 @@ type Pill = {
 	roleW: number;
 };
 
-export function RoleCloud() {
+export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 	let canvas: HTMLCanvasElement | undefined;
 
 	onMount(() => {
@@ -103,6 +103,25 @@ export function RoleCloud() {
 		if (!el) return;
 		const ctx = el.getContext("2d");
 		if (!ctx) return;
+
+		// Per-variant layout/scale. `compact` (mobile brand band) shows fewer,
+		// slightly smaller pills; `full` is the desktop split-screen, unchanged.
+		const cfg =
+			props.variant === "compact"
+				? {
+						jobs: JOBS.slice(0, 4),
+						cols: 2,
+						rows: 2,
+						scaleFar: 0.5,
+						scaleNear: 0.95,
+					}
+				: {
+						jobs: JOBS,
+						cols: 4,
+						rows: 2,
+						scaleFar: SCALE_FAR,
+						scaleNear: SCALE_NEAR,
+					};
 
 		// Resolve themed colors from the element (inherits --auth-* from .auth-brand).
 		const cs = getComputedStyle(el);
@@ -130,13 +149,11 @@ export function RoleCloud() {
 		// evenly scattered (8 purely-random points clump together too often), while
 		// depth and heading stay fully random. Each keeps its direction forever.
 		const rng = mulberry32(0x9e3779b1);
-		const COLS = 4;
-		const ROWS = 2;
-		const pills: Pill[] = JOBS.map(([role, key], idx) => {
-			const col = idx % COLS;
-			const row = Math.floor(idx / COLS);
-			const cx = (col + 0.5 + (rng() - 0.5) * 0.8) / COLS;
-			const cy = (row + 0.5 + (rng() - 0.5) * 0.8) / ROWS;
+		const pills: Pill[] = cfg.jobs.map(([role, key], idx) => {
+			const col = idx % cfg.cols;
+			const row = Math.floor(idx / cfg.cols);
+			const cx = (col + 0.5 + (rng() - 0.5) * 0.8) / cfg.cols;
+			const cy = (row + 0.5 + (rng() - 0.5) * 0.8) / cfg.rows;
 			const ang = rng() * TAU;
 			const spd = SPD_MIN + rng() * (SPD_MAX - SPD_MIN);
 			const vzMag = VZ_MIN + rng() * (VZ_MAX - VZ_MIN);
@@ -192,7 +209,7 @@ export function RoleCloud() {
 		};
 
 		const drawPill = (p: Pill, x: number, y: number, z: number) => {
-			const s = lerp(SCALE_FAR, SCALE_NEAR, z);
+			const s = lerp(cfg.scaleFar, cfg.scaleNear, z);
 			const blur = z >= FOCUS_Z ? 0 : lerp(BLUR_FAR, 0, z / FOCUS_Z);
 			const w = p.w;
 			const h = PILL_H;
@@ -255,7 +272,7 @@ export function RoleCloud() {
 				p.y += p.vy * dt;
 				p.z += p.vz * dt;
 
-				const s = lerp(SCALE_FAR, SCALE_NEAR, p.z);
+				const s = lerp(cfg.scaleFar, cfg.scaleNear, p.z);
 				const mx = Math.min(0.45, ((p.w * s) / 2 + 2) / cssW);
 				const my = Math.min(0.45, ((PILL_H * s) / 2 + 2) / cssH);
 				if (p.x < mx) {
