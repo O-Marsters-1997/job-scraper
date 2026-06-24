@@ -66,11 +66,14 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		scorer      score.SuitabilityScorer
-		cfgErr      error
-		wantWritten bool
-		wantScore   int
+		name          string
+		scorer        score.SuitabilityScorer
+		cfgErr        error
+		wantWritten   bool
+		wantScore     int
+		wantReasoning string
+		wantMatched   []string
+		wantMissing   []string
 	}{
 		{
 			name: "writes score on success",
@@ -110,15 +113,24 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 			is.ScoreAndSave(context.Background(), dto.Job{ID: "job-abc", URL: "https://example.com/job", Title: "Engineer"})
 
 			if tt.wantWritten {
-				if writer.lastJobID != "job-abc" {
-					t.Errorf("written job ID = %q; want %q", writer.lastJobID, "job-abc")
+				if writer.last.JobID != "job-abc" {
+					t.Errorf("written job ID = %q; want %q", writer.last.JobID, "job-abc")
 				}
-				if writer.lastScore != tt.wantScore {
-					t.Errorf("written score = %d; want %d", writer.lastScore, tt.wantScore)
+				if writer.last.Score != tt.wantScore {
+					t.Errorf("written score = %d; want %d", writer.last.Score, tt.wantScore)
+				}
+				if writer.last.Reasoning != tt.wantReasoning {
+					t.Errorf("reasoning = %q; want %q", writer.last.Reasoning, tt.wantReasoning)
+				}
+				if len(writer.last.Matched) != len(tt.wantMatched) {
+					t.Errorf("matched len = %d; want %d", len(writer.last.Matched), len(tt.wantMatched))
+				}
+				if len(writer.last.Missing) != len(tt.wantMissing) {
+					t.Errorf("missing len = %d; want %d", len(writer.last.Missing), len(tt.wantMissing))
 				}
 			} else {
-				if writer.lastJobID != "" {
-					t.Errorf("expected no write; got job ID %q", writer.lastJobID)
+				if writer.last.JobID != "" {
+					t.Errorf("expected no write; got job ID %q", writer.last.JobID)
 				}
 			}
 		})

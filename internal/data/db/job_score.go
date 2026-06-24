@@ -8,6 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
@@ -55,7 +56,7 @@ func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID strin
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := parseUUID(s.UserID)
 	if err != nil {
 		return err
 	}

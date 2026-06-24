@@ -90,6 +90,7 @@ func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchCon
 	if resp.Score > 100 {
 		resp.Score = 100
 	}
+	resp.Score = max(0, min(100, resp.Score))
 
 	usage := TokenUsage{
 		InputTokens:  int(msg.Usage.InputTokens),

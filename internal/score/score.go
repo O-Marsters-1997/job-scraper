@@ -27,7 +27,7 @@ type RelevanceScorer interface {
 	Score(card dto.Job, cfg dto.SearchConfig) int
 }
 
-// TokenUsage records LLM token consumption (for SuitabilityScorer in a later issue).
+// TokenUsage records LLM token consumption for a suitability scoring call.
 type TokenUsage struct {
 	InputTokens  int
 	OutputTokens int
@@ -62,8 +62,5 @@ func (h *HeuristicScorer) Score(card dto.Job, cfg dto.SearchConfig) int {
 		score += 20
 	}
 
-	if score > 100 {
-		score = 100
-	}
-	return score
+	return min(score, 100)
 }
