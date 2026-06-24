@@ -8,7 +8,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 func fromJobScore(row pgsqlc.JobScore) dto.JobScore {
@@ -51,22 +50,22 @@ func (db *DB) UpsertJobScoreRelevance(ctx context.Context, jobID, userID string,
 	return nil
 }
 
-func (db *DB) UpsertJobScoreSuitability(ctx context.Context, s score.SuitabilityScore) error {
-	jid, err := parseUUID(s.JobID)
+func (db *DB) UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error {
+	jid, err := parseUUID(jobID)
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(s.UserID)
+	uid, err := parseUUID(userID)
 	if err != nil {
 		return err
 	}
 	if err := db.queries.UpsertJobScoreSuitability(ctx, pgsqlc.UpsertJobScoreSuitabilityParams{
 		JobID:            jid,
 		UserID:           uid,
-		SuitabilityScore: pgtype.Int4{Int32: int32(s.Score), Valid: true},
-		Reasoning:        pgtype.Text{String: s.Reasoning, Valid: s.Reasoning != ""},
-		Matched:          s.Matched,
-		Missing:          s.Missing,
+		SuitabilityScore: pgtype.Int4{Int32: int32(score), Valid: true},
+		Reasoning:        pgtype.Text{String: reasoning, Valid: reasoning != ""},
+		Matched:          matched,
+		Missing:          missing,
 	}); err != nil {
 		return fmt.Errorf("db.UpsertJobScoreSuitability: %w", err)
 	}

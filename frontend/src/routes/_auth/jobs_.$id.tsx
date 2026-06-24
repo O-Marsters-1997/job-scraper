@@ -6,6 +6,7 @@ import { JobActionsMenu } from "@/components/jobs/JobActionsMenu";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
@@ -58,6 +59,96 @@ function FactRow(props: {
 				{props.children ?? props.value}
 			</span>
 		</div>
+	);
+}
+
+function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
+	const score = () => props.job.SuitabilityScore;
+	const reasoning = () => props.job.Reasoning ?? null;
+	const matched = () => props.job.Matched ?? [];
+	const missing = () => props.job.Missing ?? [];
+
+	// scored — has score + reasoning
+	const isScored = () => score() != null && reasoning() != null;
+	// legacy scored — has score but no reasoning
+	const isLegacy = () => score() != null && reasoning() == null;
+	// pending — no score (skipped state handled in ticket #104)
+	const isPending = () => score() == null;
+
+	return (
+		<Card>
+			<CardHeader class="pb-2">
+				<CardTitle>Suitability</CardTitle>
+			</CardHeader>
+			<CardContent class="gap-3">
+				<Show when={isScored()}>
+					{/* Score display */}
+					<div class="flex items-baseline gap-1">
+						<span class="font-mono text-lg font-semibold tabular-nums text-foreground">
+							{score()}
+						</span>
+						<span class="text-xs text-faint">/ 100</span>
+					</div>
+
+					{/* Rationale */}
+					<p class="rounded-md bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted">
+						{reasoning()}
+					</p>
+
+					{/* Matched chips */}
+					<Show when={matched().length > 0}>
+						<div class="flex flex-col gap-1.5">
+							<span class="text-xs font-medium text-faint">Matched</span>
+							<div class="flex flex-wrap gap-1">
+								<For each={matched()}>
+									{(item) => (
+										<span
+											class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+											style={{
+												background: "color-mix(in srgb, #059669 12%, white)",
+												color: "color-mix(in srgb, #059669 80%, black)",
+												border:
+													"1px solid color-mix(in srgb, #059669 28%, white)",
+											}}
+										>
+											{item}
+										</span>
+									)}
+								</For>
+							</div>
+						</div>
+					</Show>
+
+					{/* Missing chips */}
+					<Show when={missing().length > 0}>
+						<div class="flex flex-col gap-1.5">
+							<span class="text-xs font-medium text-faint">Missing</span>
+							<div class="flex flex-wrap gap-1">
+								<For each={missing()}>
+									{(item) => <Badge variant="secondary">{item}</Badge>}
+								</For>
+							</div>
+						</div>
+					</Show>
+				</Show>
+
+				<Show when={isLegacy()}>
+					<div class="flex items-baseline gap-1">
+						<span class="font-mono text-lg font-semibold tabular-nums text-foreground">
+							{score()}
+						</span>
+						<span class="text-xs text-faint">/ 100</span>
+					</div>
+					<p class="text-xs text-faint">
+						No reasoning captured for this score.
+					</p>
+				</Show>
+
+				<Show when={isPending()}>
+					<p class="text-xs text-faint">Not yet scored.</p>
+				</Show>
+			</CardContent>
+		</Card>
 	);
 }
 
@@ -436,6 +527,9 @@ function JobDetailPage() {
 										</CardContent>
 									</Card>
 								</Show>
+
+								{/* Suitability card */}
+								<SuitabilityPanel job={j()} />
 
 								{/* Application card */}
 								<Card>

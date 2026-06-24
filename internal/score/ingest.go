@@ -2,40 +2,42 @@ package score
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// SuitabilityScore groups the fields written to the database after a suitability
-// scoring call. It exists to keep ScoreWriter's method signature manageable as the
-// set of captured fields grows.
-type SuitabilityScore struct {
-	JobID     string
-	UserID    string
-	Score     int
-	Reasoning string
-	Matched   []string
-	Missing   []string
-}
+const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
 
 type ScoreWriter interface {
-	UpsertJobScoreSuitability(ctx context.Context, s SuitabilityScore) error
+	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error
 }
 
 type ConfigReader interface {
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 }
 
+type UserAIPrefsReader interface {
+	GetUserAIPrefs(ctx context.Context, userID string) (dto.UserAIPrefs, error)
+}
+
 type IngestScorer struct {
-	scorer SuitabilityScorer
-	db     ScoreWriter
-	cfgDB  ConfigReader
-	userID string
+	scorer    SuitabilityScorer
+	db        ScoreWriter
+	cfgDB     ConfigReader
+	aiPrefsDB UserAIPrefsReader
+	userID    string
 }
 
 func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, userID string) *IngestScorer {
 	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
+}
+
+// aiPrefsDB may be nil; the default model is used when it is.
+func NewIngestScorerWithPrefs(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, aiPrefsDB UserAIPrefsReader, userID string) *IngestScorer {
+	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, aiPrefsDB: aiPrefsDB, userID: userID}
 }
 
 // ScoreAndSave scores the job, persists the result, and returns the score (0 on any error).
@@ -47,7 +49,17 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		return 0
 	}
 
-	result, err := s.scorer.Score(ctx, job, cfg)
+	modelID := defaultSuitabilityModel
+	if s.aiPrefsDB != nil {
+		prefs, err := s.aiPrefsDB.GetUserAIPrefs(ctx, s.userID)
+		if err != nil && !errors.Is(err, providers.ErrNotFound) {
+			slog.Warn("suitability: could not load ai prefs, using default model", slog.Any("err", err))
+		} else if err == nil {
+			modelID = prefs.SuitabilityModel
+		}
+	}
+
+	result, err := s.scorer.Score(ctx, job, cfg, modelID)
 	if err != nil {
 		slog.Error("suitability score failed", slog.String("url", job.URL), slog.Any("err", err))
 		return 0
@@ -61,14 +73,7 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		slog.Float64("cost_usd", result.Usage.CostUSD),
 	)
 
-	if err := s.db.UpsertJobScoreSuitability(ctx, SuitabilityScore{
-		JobID:     job.ID,
-		UserID:    s.userID,
-		Score:     result.Score,
-		Reasoning: result.Rationale,
-		Matched:   result.Matched,
-		Missing:   result.Missing,
-	}); err != nil {
+	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, result.Score, result.Rationale, result.Matched, result.Missing); err != nil {
 		slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 	}
 	return result.Score

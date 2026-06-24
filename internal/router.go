@@ -39,6 +39,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 	stH := handlers.NewSourceTargetHandler(db, q)
+	scoringCfgH := handlers.NewScoringConfigHandler(db)
+	aiPrefsH := handlers.NewAIPrefsHandler(db)
 
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -99,6 +101,12 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 
 		r.Get("/sources", stH.Sources)
 
+		r.Get("/scoring-config", scoringCfgH.Get)
+		r.Put("/scoring-config", scoringCfgH.Put)
+
+		r.Get("/ai-prefs", aiPrefsH.Get)
+		r.Put("/ai-prefs", aiPrefsH.Put)
+
 		r.Route("/source-targets", func(r chi.Router) {
 			r.Get("/", stH.List)
 			r.Post("/", stH.Create)
@@ -132,7 +140,7 @@ func buildIngestSvc(ctx context.Context, db *jobsdb.DB, scoringUserID string) *i
 	if scoringUserID != "" {
 		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
 			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
-			scorer = score.NewIngestScorer(claudeScorer, db, db, scoringUserID)
+			scorer = score.NewIngestScorerWithPrefs(claudeScorer, db, db, db, scoringUserID)
 		}
 	}
 	var notifier ingest.Notifier

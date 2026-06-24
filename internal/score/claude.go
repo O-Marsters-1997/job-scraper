@@ -22,7 +22,6 @@ const (
 	haiku4_5OutputPricePerMToken = 4.00
 )
 
-// ClaudeScorer calls the Anthropic Messages API to score a job's suitability.
 type ClaudeScorer struct {
 	client         anthropic.Client
 	modelID        string
@@ -51,7 +50,6 @@ func NewClaudeScorer(cfg ClaudeScorerConfig) *ClaudeScorer {
 	}
 }
 
-// claudeResponse is the JSON shape expected from the model.
 type claudeResponse struct {
 	Score     int      `json:"score"`
 	Matched   []string `json:"matched"`
@@ -59,13 +57,17 @@ type claudeResponse struct {
 	Rationale string   `json:"rationale"`
 }
 
-func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig) (SuitabilityResult, error) {
+func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig, modelID string) (SuitabilityResult, error) {
 	desc := truncate(job.Description, c.maxInputTokens*4)
 
 	prompt := buildPrompt(job, desc, cfg)
 
+	if modelID == "" {
+		modelID = c.modelID
+	}
+
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(c.modelID),
+		Model:     anthropic.Model(modelID),
 		MaxTokens: 512,
 		Messages: []anthropic.MessageParam{
 			anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
@@ -124,7 +126,6 @@ func buildPrompt(job dto.Job, desc string, cfg dto.SearchConfig) string {
 	return sb.String()
 }
 
-// truncate caps s to at most maxChars characters (bytes), preserving valid UTF-8.
 func truncate(s string, maxChars int) string {
 	if len(s) <= maxChars {
 		return s
