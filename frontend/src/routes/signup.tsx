@@ -42,10 +42,10 @@ function SignupPage() {
 
 	return (
 		<AuthShell>
-			<h1 class="text-[1.85rem] font-bold tracking-[-0.025em] text-foreground">
+			<h1 class="text-auth-heading font-bold tracking-[-0.025em] text-foreground">
 				Create your account
 			</h1>
-			<p class="mt-1 text-[0.95rem] text-muted">
+			<p class="mt-1 text-auth-subtext text-muted">
 				Start gathering every fresh role in one place.
 			</p>
 
@@ -100,7 +100,7 @@ function SignupPage() {
 					type="submit"
 					disabled={loading()}
 					aria-busy={loading()}
-					class="mt-2 h-12 w-full rounded-xl text-[0.97rem]"
+					class="mt-2 h-12 w-full rounded-xl text-auth-action"
 				>
 					{loading() ? (
 						"Creating account…"

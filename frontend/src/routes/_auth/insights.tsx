@@ -237,7 +237,7 @@ function InsightsPage() {
 											type="button"
 											onClick={() => applyPreset(p)}
 											class={cn(
-												"px-2.5 py-1 text-[11px] font-medium transition-colors first:rounded-l-[5px] last:rounded-r-[5px] not-last:border-r not-last:border-border",
+												"px-2.5 py-1 text-xs font-medium transition-colors first:rounded-l-[5px] last:rounded-r-[5px] not-last:border-r not-last:border-border",
 												activePreset() === p
 													? "bg-primary/10 text-primary"
 													: "text-muted hover:bg-surface-muted hover:text-foreground",
@@ -287,7 +287,7 @@ function InsightsPage() {
 							/>
 						</Show>
 					</div>
-					<p class="px-5 pb-3 pt-1.5 text-[10px] text-faint">
+					<p class="px-5 pb-3 pt-1.5 text-2xs text-faint">
 						Drag to zoom · Scroll to zoom · Shift + drag to pan
 					</p>
 				</Card>

@@ -128,7 +128,7 @@ export function ColorPicker(props: ColorPickerProps) {
 									// Ignore partial / invalid input
 								}
 							}}
-							class="h-6 w-full rounded-md border border-border bg-background px-2 font-mono text-[11px] text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
+							class="h-6 w-full rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 							placeholder="#rrggbb"
 							spellcheck={false}
 							autocomplete="off"

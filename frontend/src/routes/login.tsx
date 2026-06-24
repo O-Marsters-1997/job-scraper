@@ -40,10 +40,10 @@ function LoginPage() {
 
 	return (
 		<AuthShell>
-			<h1 class="text-[1.85rem] font-bold tracking-[-0.025em] text-foreground">
+			<h1 class="text-auth-heading font-bold tracking-[-0.025em] text-foreground">
 				Back on track
 			</h1>
-			<p class="mt-1 text-[0.95rem] text-muted">
+			<p class="mt-1 text-auth-subtext text-muted">
 				Sign in to pick up where you left off.
 			</p>
 
@@ -98,7 +98,7 @@ function LoginPage() {
 					type="submit"
 					disabled={loading()}
 					aria-busy={loading()}
-					class="mt-2 h-12 w-full rounded-xl text-[0.97rem]"
+					class="mt-2 h-12 w-full rounded-xl text-auth-action"
 				>
 					{loading() ? (
 						"Signing in…"

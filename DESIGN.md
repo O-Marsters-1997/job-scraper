@@ -92,12 +92,20 @@ All tokens are OKLCH. Hex equivalents shown for visual reference.
 Scale:
 | Utility | Size | Use |
 |---|---|---|
-| `text-[10px]` | 10px | sidebar section labels (uppercase, tracked) |
-| `text-xs` | 12px | badges, table heads, scraped dates, field labels |
-| `text-sm` | 14px | body, buttons, nav, breadcrumb, table cells |
+| `text-2xs` | 10px | sidebar section labels (uppercase, tracked), badge labels, panel micro-text |
+| `text-xs` | 12px | badges, table heads, scraped dates, field labels, tweaks panel captions |
+| `text-data` | 13px | table cells, tweaks panel header titles |
+| `text-sm` | 14px | body, buttons, nav, breadcrumb |
 | `text-base` | 16px | card titles (semibold, snug) |
 | `text-lg` | 18px | page titles — Jobs / Applications / Statuses (bold) |
-| `text-xl` | 20px | auth screen headings (login / signup) |
+| `text-xl` | 20px | decorative display glyphs in compact selectors |
+| `text-auth-heading` | 1.85rem | login / signup form heading |
+| `text-auth-subtext` | 0.95rem | login / signup subtitle |
+| `text-auth-action` | 0.97rem | login / signup submit button |
+| `text-display` | 2.55rem | auth brand panel headline (line-height bundled) |
+| `text-display-prose` | 1.05rem | auth brand panel body prose (line-height bundled) |
+
+All tokens are defined in `frontend/src/styles.css` under `@theme`. Do not use arbitrary `text-[Npx]` values — add a named token to `@theme` instead.
 
 Weights: regular 400, medium 500, semibold 600, bold 700. Tracking: `tracking-tight`
 (−0.025em) on the brand wordmark and page titles; `tracking-wide` on uppercase table

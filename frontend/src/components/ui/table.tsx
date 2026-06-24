@@ -77,7 +77,7 @@ export const TableCell = (props: TableCellProps) => {
 	return (
 		<td
 			class={cn(
-				"px-4 py-4 align-middle text-[13px] text-foreground whitespace-nowrap",
+				"px-4 py-4 align-middle text-data text-foreground whitespace-nowrap",
 				local.class,
 			)}
 			{...rest}
