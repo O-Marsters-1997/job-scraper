@@ -27,7 +27,7 @@ function LoginPage() {
 		try {
 			const res = await login(username(), password());
 			if (res.ok) {
-				navigate({ to: "/jobs", search: { page: 1 } });
+				navigate({ to: "/jobs" });
 			} else {
 				setError("Invalid username or password.");
 			}

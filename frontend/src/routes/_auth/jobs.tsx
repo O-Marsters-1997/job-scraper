@@ -1,7 +1,9 @@
-import { createFileRoute } from "@tanstack/solid-router";
+import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SkeletonList } from "@/components/ui/skeleton";
+import type { JobFilters } from "@/lib/jobFilters";
+import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { useApplicationsForJobs } from "../../hooks/useApplications";
@@ -9,17 +11,34 @@ import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs")({
+	// Return Partial so <Link to="/jobs"> callers don't need to supply search params.
+	validateSearch: (raw: Record<string, unknown>): Partial<JobFilters> =>
+		parseSearch(raw),
 	loader: () => queryClient.ensureQueryData(jobsQueryOptions),
 	component: JobsPage,
 });
 
 function JobsPage() {
-	const query = useJobs();
+	const search = Route.useSearch();
+	const navigate = useNavigate();
 
+	const query = useJobs();
 	const jobs = () => query.data ?? [];
 	const allJobIds = () => jobs().map((j) => j.ID);
 
 	const appsForJobs = useApplicationsForJobs(allJobIds);
+
+	// Normalise partial URL params to a full JobFilters with defaults.
+	const filters = () => parseSearch(search() as Record<string, unknown>);
+	const filtered = () => applyJobFilters(jobs(), filters());
+	const srcOptions = () => sourceOptions(jobs());
+
+	const setFilters = (patch: Partial<JobFilters>) =>
+		navigate({
+			to: "/jobs",
+			search: (p) => ({ ...p, ...patch }),
+			replace: true,
+		});
 
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
@@ -75,7 +94,13 @@ function JobsPage() {
 			</Show>
 
 			<Show when={query.isSuccess}>
-				<JobsDataTable columns={columns} data={jobs()} />
+				<JobsDataTable
+					columns={columns}
+					data={filtered()}
+					filters={filters()}
+					onChange={setFilters}
+					sourceOptions={srcOptions()}
+				/>
 			</Show>
 
 			<TrackApplicationDialog
