@@ -58,7 +58,7 @@ export default function Sidebar(props: SidebarProps) {
 		cn(
 			"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
 			active
-				? "bg-sidebar-active text-sidebar-active-foreground"
+				? "bg-sidebar-active text-sidebar-active-foreground ring-1 ring-sidebar-active-foreground/20"
 				: "text-sidebar-foreground hover:bg-sidebar-hover hover:text-sidebar-foreground-strong",
 		);
 
@@ -101,7 +101,7 @@ export default function Sidebar(props: SidebarProps) {
 
 				<nav class="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
 					<Show when={showLabels()}>
-						<span class="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+						<span class="px-2.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/70">
 							Main
 						</span>
 					</Show>
@@ -250,7 +250,7 @@ export default function Sidebar(props: SidebarProps) {
 					</Link>
 
 					<Show when={showLabels()}>
-						<span class="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+						<span class="px-2.5 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/70">
 							Settings
 						</span>
 					</Show>

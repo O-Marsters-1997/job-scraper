@@ -117,10 +117,13 @@ export function RoleCloud() {
 		const monoFamily = cssVar("--font-mono", "ui-monospace, monospace");
 		const roleFont = `600 ${ROLE_PX}px "Plus Jakarta Sans", ui-sans-serif, sans-serif`;
 		const srcFont = `600 ${SRC_PX}px ${monoFamily}`;
-		const inkRole = "oklch(0.97 0.01 290)";
-		const pillBg = "oklch(1 0 0 / 0.08)";
-		const pillBorder = "oklch(1 0 0 / 0.16)";
-		const glow = "oklch(0.7 0.15 290 / 0.55)";
+		// Derive from centralised --auth-* vars so light-tone and preset overrides flow in.
+		const inkRole = cssVar("--auth-ink", "oklch(0.97 0.01 290)");
+		const pillBg = cssVar("--auth-pill-bg", "oklch(1 0 0 / 0.08)");
+		const pillBorder = cssVar("--auth-pill-border", "oklch(1 0 0 / 0.16)");
+		// Glow: color-mix with a literal is canvas-safe (no nested var()).
+		const primary = cssVar("--color-primary", "oklch(0.55 0.18 285)");
+		const glow = `color-mix(in oklch, ${primary}, transparent 45%)`;
 
 		// One shared deterministic stream so every pill's coordinates are independent.
 		// Stratified start: one pill per cell of a jittered grid, so x/y are always

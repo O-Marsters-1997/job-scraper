@@ -233,7 +233,10 @@ function OverviewPage() {
 											<TableCell class="max-w-[220px] truncate font-medium text-foreground">
 												{job.Title}
 											</TableCell>
-											<TableCell class="text-muted">
+											<TableCell
+												class="max-w-[160px] truncate text-muted"
+												title={titleCase(job.CompanySlug)}
+											>
 												{titleCase(job.CompanySlug)}
 											</TableCell>
 											<TableCell>
@@ -310,7 +313,7 @@ interface FeatureStatProps {
 // decisions (what's new, what's in flight) get this treatment.
 function FeatureStat(props: FeatureStatProps) {
 	return (
-		<Card>
+		<Card class="bg-accent-subtle/30 ring-1 ring-accent-border/40">
 			<div class="flex h-full flex-col p-5">
 				<div class="flex items-center justify-between gap-2">
 					<p class="text-xs font-medium text-muted">{props.label}</p>

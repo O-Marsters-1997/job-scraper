@@ -111,11 +111,11 @@ export default function TweaksPanel() {
 		const hex = (key: string, fallback: string) =>
 			c[key] ? oklchToHex(c[key]) : fallback;
 		return {
-			sb: hex("--color-sidebar", "#111921"),
-			cv: hex("--color-background", "#f8fafc"),
-			ac: hex("--color-primary", "#0f9d92"),
-			su: hex("--color-surface", "#ffffff"),
-			bd: hex("--color-border", "#e2e8f0"),
+			sb: hex("--color-sidebar", "oklch(0.23 0.055 285)"),
+			cv: hex("--color-background", "oklch(0.98 0.006 285)"),
+			ac: hex("--color-primary", "oklch(0.55 0.18 285)"),
+			su: hex("--color-surface", "oklch(1 0 0)"),
+			bd: hex("--color-border", "oklch(0.93 0.01 290)"),
 		};
 	};
 
