@@ -10,6 +10,7 @@ import {
 } from "@tanstack/solid-table";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
+import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,8 +24,9 @@ import {
 } from "@/components/ui/table";
 import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import { cn } from "@/lib/utils";
+import type { Job } from "@/types/job";
 
-interface JobsDataTableProps<TData> {
+interface JobsDataTableProps<TData extends Job> {
 	columns: ColumnDef<TData, unknown>[];
 	data: TData[];
 	filters: JobFilters;
@@ -53,7 +55,9 @@ function pageWindow(current: number, total: number): (number | null)[] {
 	return result;
 }
 
-export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
+export function JobsDataTable<TData extends Job>(
+	props: JobsDataTableProps<TData>,
+) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
 	const [pagination, setPagination] = createSignal<PaginationState>({
 		pageIndex: 0,
@@ -66,6 +70,21 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 		void props.data.length;
 		setPagination((p) => ({ ...p, pageIndex: 0 }));
 	});
+
+	// Per-row expand state — keyed by Job ID, isolated from sort/filter/pagination
+	const [expandedRows, setExpandedRows] = createSignal<Set<string>>(new Set());
+	const isExpanded = (rowId: string) => expandedRows().has(rowId);
+	const toggleExpanded = (rowId: string) => {
+		setExpandedRows((prev) => {
+			const next = new Set(prev);
+			if (next.has(rowId)) {
+				next.delete(rowId);
+			} else {
+				next.add(rowId);
+			}
+			return next;
+		});
+	};
 
 	const table = createSolidTable({
 		get data() {
@@ -85,6 +104,10 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 		},
 		onSortingChange: setSorting,
 		onPaginationChange: setPagination,
+		meta: {
+			isExpanded,
+			toggleExpanded,
+		},
 	});
 
 	const pageIndex = () => table.getState().pagination.pageIndex;
@@ -220,18 +243,27 @@ export function JobsDataTable<TData>(props: JobsDataTableProps<TData>) {
 						>
 							<For each={table.getRowModel().rows}>
 								{(row) => (
-									<TableRow>
-										<For each={row.getVisibleCells()}>
-											{(cell) => (
-												<TableCell>
-													{flexRender(
-														cell.column.columnDef.cell,
-														cell.getContext(),
-													)}
-												</TableCell>
-											)}
-										</For>
-									</TableRow>
+									<>
+										<TableRow>
+											<For each={row.getVisibleCells()}>
+												{(cell) => (
+													<TableCell>
+														{flexRender(
+															cell.column.columnDef.cell,
+															cell.getContext(),
+														)}
+													</TableCell>
+												)}
+											</For>
+										</TableRow>
+										<Show when={isExpanded(row.original.ID)}>
+											<tr class="border-b border-border">
+												<td colspan={row.getVisibleCells().length} class="p-0">
+													<JobRowExpander job={row.original} />
+												</td>
+											</tr>
+										</Show>
+									</>
 								)}
 							</For>
 						</Show>
