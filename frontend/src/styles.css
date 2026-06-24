@@ -6,6 +6,22 @@
 	--font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 	--font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 
+	/* Type scale extensions — fills gaps in Tailwind's built-in scale */
+	--text-2xs: 0.625rem; /* 10px — sidebar section labels, panel labels, badge labels */
+	--text-2xs--line-height: 1rem;
+	--text-data: 0.8125rem; /* 13px — table cells, tweaks panel titles */
+	--text-data--line-height: 1.25rem;
+	--text-auth-heading: 1.85rem; /* login/signup form heading */
+	--text-auth-heading--line-height: 1.25;
+	--text-auth-subtext: 0.95rem; /* login/signup subtitle */
+	--text-auth-subtext--line-height: 1.5;
+	--text-auth-action: 0.97rem; /* login/signup submit button */
+	--text-auth-action--line-height: 1.5;
+	--text-display: 2.55rem; /* auth brand panel headline */
+	--text-display--line-height: 1.12;
+	--text-display-prose: 1.05rem; /* auth brand panel body prose */
+	--text-display-prose--line-height: 1.6;
+
 	/* Canvas + surfaces */
 	--color-background: oklch(0.9842 0.0034 247.86);
 	--color-surface: oklch(1 0 0);

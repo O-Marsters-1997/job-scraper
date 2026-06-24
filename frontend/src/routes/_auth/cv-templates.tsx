@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { batch, createMemo, createSignal, For, Show } from "solid-js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -7,10 +9,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
 	Switch,
 	SwitchControl,
@@ -294,7 +294,7 @@ function CVTemplatesPage() {
 												onClick={() => handleSort("Title")}
 											>
 												Title{" "}
-												<span class="font-mono text-[10px]">
+												<span class="font-mono text-2xs">
 													{sortIcon("Title")}
 												</span>
 											</th>
@@ -306,7 +306,7 @@ function CVTemplatesPage() {
 												onClick={() => handleSort("ModifiedAt")}
 											>
 												Last modified{" "}
-												<span class="font-mono text-[10px]">
+												<span class="font-mono text-2xs">
 													{sortIcon("ModifiedAt")}
 												</span>
 											</th>

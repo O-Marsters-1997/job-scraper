@@ -1,3 +1,4 @@
+import { cva } from "class-variance-authority";
 import type { JSX } from "solid-js";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -23,6 +24,47 @@ import {
 	type Tweaks,
 } from "@/lib/tweaks";
 import { cn } from "@/lib/utils";
+
+const themeButtonVariants = cva(
+	"group relative overflow-hidden rounded-lg border bg-transparent text-left transition-[transform,box-shadow,border-color] duration-150 ease-out",
+	{
+		variants: {
+			selected: {
+				true: "border-primary shadow-[0_0_0_2px_var(--color-primary)]",
+				false:
+					"border-border hover:-translate-y-0.5 hover:border-border-strong hover:shadow-sm",
+			},
+		},
+		defaultVariants: { selected: false },
+	},
+);
+
+const themeButtonLabelVariants = cva(
+	"block border-t py-1 text-center text-xs font-semibold transition-colors",
+	{
+		variants: {
+			selected: {
+				true: "border-primary/30 bg-accent-subtle text-accent-text",
+				false:
+					"border-border bg-surface text-muted group-hover:text-foreground",
+			},
+		},
+		defaultVariants: { selected: false },
+	},
+);
+
+const selectableButtonVariants = cva(
+	"bg-transparent transition-[border-color,background]",
+	{
+		variants: {
+			selected: {
+				true: "border-primary bg-accent-subtle",
+				false: "border-border hover:border-border-strong",
+			},
+		},
+		defaultVariants: { selected: false },
+	},
+);
 
 export default function TweaksPanel() {
 	let panelRef: HTMLDivElement | undefined;
@@ -138,10 +180,10 @@ export default function TweaksPanel() {
 							when={view() === "custom"}
 							fallback={
 								<div class="flex items-center gap-2">
-									<span class="text-[13px] font-semibold tracking-tight text-foreground">
+									<span class="text-data font-semibold tracking-tight text-foreground">
 										Tweaks
 									</span>
-									<span class="rounded-full border border-accent-border bg-accent-subtle px-2 py-0.5 text-[10px] font-semibold text-accent-text">
+									<span class="rounded-full border border-accent-border bg-accent-subtle px-2 py-0.5 text-2xs font-semibold text-accent-text">
 										{THEMES[t().theme].name}
 									</span>
 								</div>
@@ -168,7 +210,7 @@ export default function TweaksPanel() {
 										<polyline points="15 18 9 12 15 6" />
 									</svg>
 								</button>
-								<span class="text-[13px] font-semibold tracking-tight text-foreground">
+								<span class="text-data font-semibold tracking-tight text-foreground">
 									Custom theme
 								</span>
 							</div>
@@ -226,12 +268,9 @@ export default function TweaksPanel() {
 																}
 															}}
 															aria-pressed={selected()}
-															class={cn(
-																"group relative overflow-hidden rounded-lg border bg-transparent text-left transition-[transform,box-shadow,border-color] duration-150 ease-out",
-																selected()
-																	? "border-primary shadow-[0_0_0_2px_var(--color-primary)]"
-																	: "border-border hover:-translate-y-0.5 hover:border-border-strong hover:shadow-sm",
-															)}
+															class={themeButtonVariants({
+																selected: selected(),
+															})}
 														>
 															{/* Mini-app preview: sidebar + content card + accent */}
 															<div class="flex h-[3.25rem]">
@@ -293,12 +332,9 @@ export default function TweaksPanel() {
 																</span>
 															</Show>
 															<span
-																class={cn(
-																	"block border-t py-1 text-center text-[11px] font-semibold transition-colors",
-																	selected()
-																		? "border-primary/30 bg-accent-subtle text-accent-text"
-																		: "border-border bg-surface text-muted group-hover:text-foreground",
-																)}
+																class={themeButtonLabelVariants({
+																	selected: selected(),
+																})}
 															>
 																{THEMES[key].name}
 															</span>
@@ -319,18 +355,18 @@ export default function TweaksPanel() {
 														onClick={() => update("font", key as FontKey)}
 														style={{ "font-family": FONTS[key].ui }}
 														class={cn(
-															"flex flex-col items-center gap-0.5 rounded-md border-[1.5px] bg-transparent px-1 py-2 transition-[border-color,background]",
-															t().font === key
-																? "border-primary bg-accent-subtle"
-																: "border-border hover:border-border-strong",
+															"flex flex-col items-center gap-0.5 rounded-md border-[1.5px] px-1 py-2",
+															selectableButtonVariants({
+																selected: t().font === key,
+															}),
 														)}
 													>
-														<span class="block text-[21px] font-semibold leading-tight text-foreground">
+														<span class="block text-xl font-semibold leading-tight text-foreground">
 															Ag
 														</span>
 														<span
 															class={cn(
-																"block text-[9.5px] font-semibold",
+																"block text-2xs font-semibold",
 																t().font === key
 																	? "text-accent-text"
 																	: "text-faint",
@@ -367,10 +403,10 @@ export default function TweaksPanel() {
 														type="button"
 														onClick={() => update("size", opt.key)}
 														class={cn(
-															"flex flex-1 flex-col items-center gap-0.5 rounded-md border-[1.5px] bg-transparent px-1 py-1.5 transition-[border-color,background]",
-															t().size === opt.key
-																? "border-primary bg-accent-subtle"
-																: "border-border hover:border-border-strong",
+															"flex flex-1 flex-col items-center gap-0.5 rounded-md border-[1.5px] px-1 py-1.5",
+															selectableButtonVariants({
+																selected: t().size === opt.key,
+															}),
 														)}
 													>
 														<span
@@ -381,7 +417,7 @@ export default function TweaksPanel() {
 														</span>
 														<span
 															class={cn(
-																"block text-[9.5px] font-semibold",
+																"block text-2xs font-semibold",
 																t().size === opt.key
 																	? "text-accent-text"
 																	: "text-faint",
@@ -446,9 +482,7 @@ export default function TweaksPanel() {
 											<For each={group.vars}>
 												{(item) => (
 													<div class="flex items-center justify-between gap-2">
-														<span class="text-[11.5px] text-muted">
-															{item.label}
-														</span>
+														<span class="text-xs text-muted">{item.label}</span>
 														<ColorPicker
 															value={oklchToHex(draft()[item.key] ?? "#000000")}
 															onChange={(v) =>
@@ -475,11 +509,11 @@ export default function TweaksPanel() {
 									<button
 										type="button"
 										onClick={reset}
-										class="text-[11.5px] text-faint transition-colors hover:text-foreground hover:underline"
+										class="text-xs text-faint transition-colors hover:text-foreground hover:underline"
 									>
 										Reset defaults
 									</button>
-									<span class="font-mono text-[10.5px] text-faint">
+									<span class="font-mono text-2xs text-faint">
 										{t().theme} · {FONTS[t().font].name} ·{" "}
 										{t().size.toUpperCase()}
 									</span>
@@ -489,14 +523,14 @@ export default function TweaksPanel() {
 							<button
 								type="button"
 								onClick={cancelCustomEditor}
-								class="text-[11.5px] text-faint transition-colors hover:text-foreground hover:underline"
+								class="text-xs text-faint transition-colors hover:text-foreground hover:underline"
 							>
 								Cancel
 							</button>
 							<button
 								type="button"
 								onClick={saveCustomTheme}
-								class="rounded-md bg-primary px-3 py-1 text-[11.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+								class="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
 							>
 								Save
 							</button>
@@ -556,10 +590,10 @@ interface SectionProps {
 function Section(props: SectionProps) {
 	return (
 		<div class="border-t border-border px-3.5 py-2.5">
-			<p class="mb-2 flex items-baseline gap-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-faint">
+			<p class="mb-2 flex items-baseline gap-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-faint">
 				{props.label}
 				<Show when={props.hint}>
-					<span class="text-[10px] font-normal normal-case tracking-normal opacity-65">
+					<span class="text-2xs font-normal normal-case tracking-normal opacity-65">
 						{props.hint}
 					</span>
 				</Show>

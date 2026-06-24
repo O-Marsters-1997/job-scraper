@@ -56,11 +56,11 @@ export function AuthShell(props: { children: JSX.Element }) {
 
 				<div class="relative z-[2] flex flex-1 flex-col justify-center gap-[clamp(2.5rem,6vh,4rem)]">
 					<div>
-						<h2 class="max-w-[16ch] text-balance text-[2.55rem] font-bold leading-[1.12] tracking-[-0.025em]">
+						<h2 class="max-w-[16ch] text-balance text-display font-bold tracking-[-0.025em]">
 							Your whole job search, on one track.
 						</h2>
 						<p
-							class="mt-[1.3rem] max-w-[38ch] text-pretty text-[1.05rem] leading-[1.6]"
+							class="mt-[1.3rem] max-w-[38ch] text-pretty text-display-prose"
 							style={{ color: "var(--auth-prose)" }}
 						>
 							New roles arrive on their own and stay current. You just decide

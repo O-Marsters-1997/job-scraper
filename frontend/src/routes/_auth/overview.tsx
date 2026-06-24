@@ -347,7 +347,7 @@ function MiniStat(props: MiniStatProps) {
 		<div class="flex items-center justify-between gap-3 px-5 py-3.5">
 			<div class="min-w-0">
 				<p class="text-xs font-medium text-muted">{props.label}</p>
-				<p class="mt-0.5 truncate text-[11px] text-faint">{props.hint}</p>
+				<p class="mt-0.5 truncate text-xs text-faint">{props.hint}</p>
 			</div>
 			<p class="shrink-0 font-mono text-lg font-medium tabular-nums text-foreground">
 				{props.value}
