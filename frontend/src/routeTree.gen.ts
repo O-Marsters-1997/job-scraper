@@ -19,6 +19,7 @@ import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
+import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
@@ -74,6 +75,11 @@ const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   path: '/applications',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthSettingsScoringRoute = AuthSettingsScoringRouteImport.update({
+  id: '/scoring',
+  path: '/scoring',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
   id: '/statuses',
   path: '/statuses',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthSettingsRouteWithChildren
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/_auth/settings/scoring': typeof AuthSettingsScoringRoute
   '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
   '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/jobs/$id'
     | '/settings/integrations'
+    | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
     | '/cv-templates/$docId/$tabId'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/jobs/$id'
     | '/settings/integrations'
+    | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
     | '/cv-templates/$docId/$tabId'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/_auth/settings'
     | '/_auth/jobs_/$id'
     | '/_auth/settings/integrations'
+    | '/_auth/settings/scoring'
     | '/_auth/settings/searches'
     | '/_auth/settings/statuses'
     | '/_auth/cv-templates_/$docId/$tabId'
@@ -283,6 +295,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthApplicationsRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/settings/scoring': {
+      id: '/_auth/settings/scoring'
+      path: '/scoring'
+      fullPath: '/settings/scoring'
+      preLoaderRoute: typeof AuthSettingsScoringRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/statuses': {
       id: '/_auth/settings/statuses'
       path: '/statuses'
@@ -323,12 +342,14 @@ declare module '@tanstack/solid-router' {
 
 interface AuthSettingsRouteChildren {
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
+  AuthSettingsScoringRoute: typeof AuthSettingsScoringRoute
   AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
 }
 
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
+  AuthSettingsScoringRoute: AuthSettingsScoringRoute,
   AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
 }
