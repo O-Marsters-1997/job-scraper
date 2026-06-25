@@ -20,6 +20,19 @@ func NewMockSearchConfigProvider() *MockSearchConfigProvider {
 	return &MockSearchConfigProvider{configs: make(map[string]dto.SearchConfig)}
 }
 
+func (m *MockSearchConfigProvider) ListSearchConfigs(_ context.Context) ([]dto.SearchConfig, error) {
+	if m.GetErr != nil {
+		return nil, m.GetErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cfgs := make([]dto.SearchConfig, 0, len(m.configs))
+	for _, cfg := range m.configs {
+		cfgs = append(cfgs, cfg)
+	}
+	return cfgs, nil
+}
+
 func (m *MockSearchConfigProvider) GetSearchConfig(_ context.Context, userID string) (dto.SearchConfig, error) {
 	if m.GetErr != nil {
 		return dto.SearchConfig{}, m.GetErr

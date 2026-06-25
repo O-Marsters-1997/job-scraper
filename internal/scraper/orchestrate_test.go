@@ -309,7 +309,7 @@ func TestRun_Paths(t *testing.T) {
 			if tt.useGate {
 				// zeroScorer always scores 0; highCutoffCfgDB sets cutoff above 0,
 				// so all jobs are dropped.
-				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{}, "user1")
+				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{})
 			}
 
 			if err := o.run(context.Background(), tt.src); err != nil {
@@ -332,6 +332,9 @@ func (z *zeroScorer) Score(_ dto.Job, _ dto.SearchConfig) int { return 0 }
 
 type highCutoffCfgDB struct{}
 
+func (h *highCutoffCfgDB) ListSearchConfigs(_ context.Context) ([]dto.SearchConfig, error) {
+	return []dto.SearchConfig{{UserID: "user1", RelevanceCutoff: 100}}, nil
+}
 func (h *highCutoffCfgDB) GetSearchConfig(_ context.Context, _ string) (dto.SearchConfig, error) {
 	return dto.SearchConfig{RelevanceCutoff: 100}, nil
 }
