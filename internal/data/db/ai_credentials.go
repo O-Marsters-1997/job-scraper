@@ -59,6 +59,18 @@ func (db *DB) DeleteUserAICredential(ctx context.Context, userID, provider strin
 	return nil
 }
 
+func (db *DB) ListUsersWithProvider(ctx context.Context, provider string) ([]string, error) {
+	uuids, err := db.queries.ListUsersWithProvider(ctx, provider)
+	if err != nil {
+		return nil, fmt.Errorf("db.ListUsersWithProvider: %w", err)
+	}
+	ids := make([]string, len(uuids))
+	for i, u := range uuids {
+		ids[i] = u.String()
+	}
+	return ids, nil
+}
+
 func (db *DB) ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {

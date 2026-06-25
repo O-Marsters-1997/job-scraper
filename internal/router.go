@@ -57,8 +57,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	cvSvc := cvtemplates.NewService(googleClient, db)
 	cvH := handlers.NewCVTemplatesHandler(cvSvc, googleClient)
 
-	scoringUserID := os.Getenv("SCORING_USER_ID")
-	ingestSvc := buildIngestSvc(ctx, db, scoringUserID)
+	ingestSvc := buildIngestSvc(ctx, db, creds)
 	ingestH := handlers.NewIngestHandler(ingestSvc)
 
 	r.Route("/auth", func(r chi.Router) {
@@ -143,22 +142,27 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	return r
 }
 
-func buildIngestSvc(ctx context.Context, db *jobsdb.DB, scoringUserID string) *ingest.Ingester {
-	var scorer ingest.Scorer
-	if scoringUserID != "" {
-		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-			claudeScorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
-			scorer = score.NewIngestScorerWithPrefs(claudeScorer, db, db, db, scoringUserID)
-		}
+func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.CredentialStore) *ingest.Ingester {
+	provider := ingest.ProviderForModel(score.DefaultSuitabilityModel)
+	scorerFor := func(apiKey string) ingest.Scorer {
+		cs := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+		return score.NewIngestScorerWithPrefs(cs, db, db, db)
 	}
 	var notifier ingest.Notifier
-	if notifSvc := setupNotifications(ctx, db, scoringUserID); notifSvc != nil {
+	if notifSvc := setupNotifications(); notifSvc != nil {
 		notifier = notifSvc
 	}
-	return ingest.New(db, scorer, notifier)
+	return ingest.New(ingest.Config{
+		DB:        db,
+		Provider:  provider,
+		Users:     db,
+		Creds:     creds,
+		ScorerFor: scorerFor,
+		Notifier:  notifier,
+	})
 }
 
-func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *notify.NotificationService {
+func setupNotifications() *notify.NotificationService {
 	apiKey := os.Getenv("RESEND_API_KEY")
 	to := os.Getenv("NOTIFY_EMAIL_TO")
 	from := os.Getenv("NOTIFY_EMAIL_FROM")
@@ -177,15 +181,6 @@ func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *noti
 		return nil
 	}
 
-	var threshold int
-	if userID != "" {
-		if cfg, err := db.GetSearchConfig(ctx, userID); err == nil {
-			threshold = cfg.NotifyThreshold
-		} else {
-			slog.Warn("notify: could not load search config for threshold", slog.Any("err", err))
-		}
-	}
-
 	return notify.NewNotificationService(
 		notify.NewResendNotifier(apiKey, from),
 		renderer,
@@ -193,7 +188,6 @@ func setupNotifications(ctx context.Context, db *jobsdb.DB, userID string) *noti
 			To:              to,
 			OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
 			DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
-			NotifyThreshold: threshold,
 		},
 	)
 }
