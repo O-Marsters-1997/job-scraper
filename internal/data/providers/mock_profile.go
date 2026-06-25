@@ -40,6 +40,15 @@ func (m *MockProfileProvider) GetProfile(_ context.Context, userID string) (dto.
 	return p, nil
 }
 
+func (m *MockProfileProvider) GetUserEmail(_ context.Context, userID string) (string, error) {
+	if m.GetErr != nil {
+		return "", m.GetErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.profiles[userID].Email, nil
+}
+
 func (m *MockProfileProvider) UpdateEmail(_ context.Context, userID, email string) (dto.Profile, error) {
 	if m.UpdateErr != nil {
 		return dto.Profile{}, m.UpdateErr

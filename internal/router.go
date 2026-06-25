@@ -158,20 +158,20 @@ func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.Credential
 		Users:     db,
 		Creds:     creds,
 		ScorerFor: scorerFor,
+		Emails:    db,
 		Notifier:  notifier,
 	})
 }
 
 func setupNotifications() *notify.NotificationService {
 	apiKey := os.Getenv("RESEND_API_KEY")
-	to := os.Getenv("NOTIFY_EMAIL_TO")
 	from := os.Getenv("NOTIFY_EMAIL_FROM")
 	if from == "" {
 		from = "onboarding@resend.dev"
 	}
 
-	if apiKey == "" || to == "" {
-		slog.Info("notifications disabled: RESEND_API_KEY or NOTIFY_EMAIL_TO not set")
+	if apiKey == "" {
+		slog.Info("notifications disabled: RESEND_API_KEY not set")
 		return nil
 	}
 
@@ -185,7 +185,6 @@ func setupNotifications() *notify.NotificationService {
 		notify.NewResendNotifier(apiKey, from),
 		renderer,
 		notify.Config{
-			To:              to,
 			OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
 			DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
 		},
