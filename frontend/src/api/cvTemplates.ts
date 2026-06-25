@@ -1,12 +1,9 @@
 import type { CV } from "../types/cv";
+import { apiFetch, apiFetchVoid } from "./client";
 import { API_BASE } from "./config";
 
 export async function fetchCVTemplates(): Promise<CV[]> {
-	const res = await fetch(`${API_BASE}/cv-templates`, {
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to fetch CV templates: ${res.status}`);
-	return res.json();
+	return apiFetch<CV[]>("/cv-templates");
 }
 
 export async function addTrackedDoc(url: string): Promise<void> {
@@ -27,25 +24,17 @@ export async function addTrackedDoc(url: string): Promise<void> {
 }
 
 export async function removeTrackedDoc(docId: string): Promise<void> {
-	const res = await fetch(`${API_BASE}/tracked-docs/${docId}`, {
-		method: "DELETE",
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to remove tracked doc: ${res.status}`);
+	return apiFetchVoid(`/tracked-docs/${docId}`, { method: "DELETE" });
 }
 
 export async function hideTab(docId: string, tabId: string): Promise<void> {
-	const res = await fetch(
-		`${API_BASE}/tracked-docs/${docId}/tabs/${tabId}/hide`,
-		{ method: "POST", credentials: "include" },
-	);
-	if (!res.ok) throw new Error(`Failed to hide tab: ${res.status}`);
+	return apiFetchVoid(`/tracked-docs/${docId}/tabs/${tabId}/hide`, {
+		method: "POST",
+	});
 }
 
 export async function showTab(docId: string, tabId: string): Promise<void> {
-	const res = await fetch(
-		`${API_BASE}/tracked-docs/${docId}/tabs/${tabId}/show`,
-		{ method: "POST", credentials: "include" },
-	);
-	if (!res.ok) throw new Error(`Failed to restore tab: ${res.status}`);
+	return apiFetchVoid(`/tracked-docs/${docId}/tabs/${tabId}/show`, {
+		method: "POST",
+	});
 }

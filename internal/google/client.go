@@ -26,6 +26,7 @@ type FileMeta struct {
 type TokenStore interface {
 	GetToken(ctx context.Context, userID string) (*oauth2.Token, error)
 	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
+	DeleteToken(ctx context.Context, userID string) error
 }
 
 type Client struct {
@@ -57,13 +58,7 @@ func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token
 }
 
 func (c *Client) DeleteToken(ctx context.Context, userID string) error {
-	type deleter interface {
-		DeleteToken(ctx context.Context, userID string) error
-	}
-	if d, ok := c.store.(deleter); ok {
-		return d.DeleteToken(ctx, userID)
-	}
-	return nil
+	return c.store.DeleteToken(ctx, userID)
 }
 
 // HTTPClientForUser returns an *http.Client that automatically refreshes the

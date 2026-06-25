@@ -24,6 +24,7 @@ import {
 	useHideTab,
 	useShowTab,
 } from "../../hooks/useCVTemplates";
+import { formatDate } from "../../lib/datetime";
 import { queryClient } from "../../lib/queryClient";
 import type { CV } from "../../types/cv";
 
@@ -34,17 +35,6 @@ export const Route = createFileRoute("/_auth/cv-templates")({
 
 type SortKey = "Title" | "ModifiedAt";
 type SortDir = "asc" | "desc";
-
-function formatDate(iso: string): string {
-	if (!iso) return "—";
-	const d = new Date(iso);
-	if (Number.isNaN(d.getTime())) return "—";
-	return d.toLocaleDateString("en-GB", {
-		day: "numeric",
-		month: "short",
-		year: "numeric",
-	});
-}
 
 function CVTemplatesPage() {
 	const query = useCVTemplates();

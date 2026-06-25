@@ -1,13 +1,6 @@
 import type { SourceTarget } from "../types/sourceTarget";
+import { apiFetch, apiFetchVoid } from "./client";
 import { API_BASE } from "./config";
-
-export async function fetchSourceTargets(): Promise<SourceTarget[]> {
-	const res = await fetch(`${API_BASE}/source-targets`, {
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to fetch source targets: ${res.status}`);
-	return res.json();
-}
 
 export interface CreateSourceTargetPayload {
 	source: string;
@@ -21,6 +14,10 @@ export class ConflictError extends Error {
 	constructor() {
 		super("source target already exists");
 	}
+}
+
+export async function fetchSourceTargets(): Promise<SourceTarget[]> {
+	return apiFetch<SourceTarget[]>("/source-targets");
 }
 
 export async function createSourceTarget(
@@ -41,20 +38,13 @@ export async function updateSourceTarget(
 	id: string,
 	enabled: boolean,
 ): Promise<SourceTarget> {
-	const res = await fetch(`${API_BASE}/source-targets/${id}`, {
+	return apiFetch<SourceTarget>(`/source-targets/${id}`, {
 		method: "PATCH",
-		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ enabled }),
 	});
-	if (!res.ok) throw new Error(`Failed to update source target: ${res.status}`);
-	return res.json();
 }
 
 export async function deleteSourceTarget(id: string): Promise<void> {
-	const res = await fetch(`${API_BASE}/source-targets/${id}`, {
-		method: "DELETE",
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to delete source target: ${res.status}`);
+	return apiFetchVoid(`/source-targets/${id}`, { method: "DELETE" });
 }

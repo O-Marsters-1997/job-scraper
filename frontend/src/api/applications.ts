@@ -3,6 +3,7 @@ import type {
 	ApplicationWithDetails,
 	JobApplicationSummary,
 } from "../types/application";
+import { apiFetch, apiFetchVoid } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
 
 export async function fetchApplications(
@@ -13,12 +14,10 @@ export async function fetchApplications(
 		await mockDelay();
 		return getApplications(statusId);
 	}
-	const url = statusId
-		? `${API_BASE}/applications?status_id=${statusId}`
-		: `${API_BASE}/applications`;
-	const res = await fetch(url, { credentials: "include" });
-	if (!res.ok) throw new Error(`Failed to fetch applications: ${res.status}`);
-	return res.json();
+	const path = statusId
+		? `/applications?status_id=${statusId}`
+		: "/applications";
+	return apiFetch<ApplicationWithDetails[]>(path);
 }
 
 export async function createApplication(data: {
@@ -58,14 +57,11 @@ export async function updateApplication(
 		await mockDelay(80);
 		return mockUpdate(id, data);
 	}
-	const res = await fetch(`${API_BASE}/applications/${id}`, {
+	return apiFetch<Application>(`/applications/${id}`, {
 		method: "PATCH",
-		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(data),
 	});
-	if (!res.ok) throw new Error(`Failed to update application: ${res.status}`);
-	return res.json();
 }
 
 export async function deleteApplication(id: string): Promise<void> {
@@ -74,11 +70,7 @@ export async function deleteApplication(id: string): Promise<void> {
 		await mockDelay(80);
 		return mockDelete(id);
 	}
-	const res = await fetch(`${API_BASE}/applications/${id}`, {
-		method: "DELETE",
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to delete application: ${res.status}`);
+	return apiFetchVoid(`/applications/${id}`, { method: "DELETE" });
 }
 
 export async function fetchApplicationsForJobs(
@@ -90,11 +82,7 @@ export async function fetchApplicationsForJobs(
 		return getApplicationsForJobs(jobIds);
 	}
 	if (jobIds.length === 0) return {};
-	const res = await fetch(
-		`${API_BASE}/applications/for-jobs?job_ids=${jobIds.join(",")}`,
-		{ credentials: "include" },
+	return apiFetch<Record<string, JobApplicationSummary>>(
+		`/applications/for-jobs?job_ids=${jobIds.join(",")}`,
 	);
-	if (!res.ok)
-		throw new Error(`Failed to fetch applications for jobs: ${res.status}`);
-	return res.json();
 }

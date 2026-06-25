@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
-import { titleCase } from "@/components/jobs/columns";
 import { JobActionsMenu } from "@/components/jobs/JobActionsMenu";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -11,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
 	JobApplicationSummary,
