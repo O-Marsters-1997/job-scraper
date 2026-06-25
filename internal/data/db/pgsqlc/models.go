@@ -56,12 +56,6 @@ type JobScore struct {
 	UpdatedAt          pgtype.Timestamptz
 }
 
-type NotificationDigest struct {
-	ID       pgtype.UUID
-	SentAt   pgtype.Timestamptz
-	JobCount int32
-}
-
 type SearchConfig struct {
 	ID                pgtype.UUID
 	UserID            pgtype.UUID

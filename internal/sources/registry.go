@@ -84,14 +84,6 @@ func Sources() []SourceInfo {
 	return infos
 }
 
-func SupportedSources() []string {
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.name
-	}
-	return names
-}
-
 func findEntry(name string) (registryEntry, bool) {
 	for _, e := range entries {
 		if e.name == name {

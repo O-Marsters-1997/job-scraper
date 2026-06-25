@@ -10,8 +10,6 @@ import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { ScoreCircle } from "./ScoreCircle";
 
-export { titleCase };
-
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;

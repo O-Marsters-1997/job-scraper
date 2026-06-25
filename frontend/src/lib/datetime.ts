@@ -1,7 +1,10 @@
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
 export function formatDate(iso: string): string {
-	return new Date(iso).toLocaleDateString("en-GB", {
+	if (!iso) return "—";
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return "—";
+	return d.toLocaleDateString("en-GB", {
 		day: "numeric",
 		month: "short",
 		year: "numeric",

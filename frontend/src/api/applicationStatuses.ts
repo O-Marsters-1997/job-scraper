@@ -1,4 +1,5 @@
 import type { ApplicationStatus } from "../types/applicationStatus";
+import { apiFetch } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
 
 export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
@@ -7,11 +8,7 @@ export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
 		await mockDelay();
 		return getStatuses();
 	}
-	const res = await fetch(`${API_BASE}/application-statuses`, {
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to fetch statuses: ${res.status}`);
-	return res.json();
+	return apiFetch<ApplicationStatus[]>("/application-statuses");
 }
 
 export async function createApplicationStatus(
@@ -23,14 +20,11 @@ export async function createApplicationStatus(
 		await mockDelay(80);
 		return createStatus(name, colour);
 	}
-	const res = await fetch(`${API_BASE}/application-statuses`, {
+	return apiFetch<ApplicationStatus>("/application-statuses", {
 		method: "POST",
-		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ name, colour }),
 	});
-	if (!res.ok) throw new Error(`Failed to create status: ${res.status}`);
-	return res.json();
 }
 
 export async function updateApplicationStatus(
@@ -43,14 +37,11 @@ export async function updateApplicationStatus(
 		await mockDelay(80);
 		return updateStatus(id, name, colour);
 	}
-	const res = await fetch(`${API_BASE}/application-statuses/${id}`, {
+	return apiFetch<ApplicationStatus>(`/application-statuses/${id}`, {
 		method: "PATCH",
-		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ name, colour }),
 	});
-	if (!res.ok) throw new Error(`Failed to update status: ${res.status}`);
-	return res.json();
 }
 
 export async function deleteApplicationStatus(

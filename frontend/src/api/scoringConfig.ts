@@ -1,4 +1,4 @@
-import { API_BASE } from "./config";
+import { apiFetch } from "./client";
 
 export interface ScoringConfig {
 	suitabilityRubric: string;
@@ -7,23 +7,15 @@ export interface ScoringConfig {
 }
 
 export async function fetchScoringConfig(): Promise<ScoringConfig> {
-	const res = await fetch(`${API_BASE}/scoring-config`, {
-		credentials: "include",
-	});
-	if (!res.ok) throw new Error(`Failed to fetch scoring config: ${res.status}`);
-	return res.json();
+	return apiFetch<ScoringConfig>("/scoring-config");
 }
 
 export async function updateScoringConfig(
 	payload: ScoringConfig,
 ): Promise<ScoringConfig> {
-	const res = await fetch(`${API_BASE}/scoring-config`, {
+	return apiFetch<ScoringConfig>("/scoring-config", {
 		method: "PUT",
-		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
 	});
-	if (!res.ok)
-		throw new Error(`Failed to update scoring config: ${res.status}`);
-	return res.json();
 }
