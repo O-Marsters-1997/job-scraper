@@ -76,7 +76,7 @@ func TestNotifyNewJob(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			svc, n := newService(t, tt.cfg)
-			svc.NotifyNewJob(context.Background(), testJob, tt.score)
+			svc.NotifyNewJob(context.Background(), testJob, tt.score, "test@example.com")
 			if n.called != tt.wantSent {
 				t.Errorf("Send called = %v; want %v", n.called, tt.wantSent)
 			}

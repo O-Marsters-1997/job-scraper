@@ -28,11 +28,15 @@ type CredentialGetter interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
 }
 
-// Notifier sends a notification for a newly ingested job.
-// score is the suitability score (0 when no scorer is configured).
-// Implementations handle their own errors internally.
+// EmailGetter retrieves the email address for a user.
+type EmailGetter interface {
+	GetUserEmail(ctx context.Context, userID string) (string, error)
+}
+
+// Notifier sends a per-user notification for a newly ingested job.
+// recipientEmail is the user's address; implementations handle errors internally.
 type Notifier interface {
-	NotifyNewJob(ctx context.Context, job dto.Job, score int)
+	NotifyNewJob(ctx context.Context, job dto.Job, score int, recipientEmail string)
 }
 
 // Config wires all Ingester dependencies. Users, Creds, and ScorerFor are all
@@ -43,6 +47,7 @@ type Config struct {
 	Users     UserLister
 	Creds     CredentialGetter
 	ScorerFor func(apiKey string) Scorer
+	Emails    EmailGetter
 	Notifier  Notifier
 }
 
@@ -53,11 +58,12 @@ type Ingester struct {
 	users     UserLister
 	creds     CredentialGetter
 	scorerFor func(apiKey string) Scorer
+	emails    EmailGetter
 	notifier  Notifier
 }
 
 // New creates an Ingester. Scoring is skipped when Config.Users, Config.Creds,
-// or Config.ScorerFor is nil. Notifier may also be nil.
+// or Config.ScorerFor is nil. Notifier and Emails may also be nil.
 func New(cfg Config) *Ingester {
 	return &Ingester{
 		db:        cfg.DB,
@@ -65,6 +71,7 @@ func New(cfg Config) *Ingester {
 		users:     cfg.Users,
 		creds:     cfg.Creds,
 		scorerFor: cfg.ScorerFor,
+		emails:    cfg.Emails,
 		notifier:  cfg.Notifier,
 	}
 }
@@ -91,15 +98,12 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	slog.Info("jobs ingested", slog.Int("count", len(valid)))
 
 	for _, j := range valid {
-		i.scoreForAllUsers(ctx, j)
-		if i.notifier != nil {
-			i.notifier.NotifyNewJob(ctx, j, 0)
-		}
+		i.scoreAndNotifyForAllUsers(ctx, j)
 	}
 	return nil
 }
 
-func (i *Ingester) scoreForAllUsers(ctx context.Context, job dto.Job) {
+func (i *Ingester) scoreAndNotifyForAllUsers(ctx context.Context, job dto.Job) {
 	if i.users == nil || i.creds == nil || i.scorerFor == nil || i.provider == "" {
 		return
 	}
@@ -119,8 +123,27 @@ func (i *Ingester) scoreForAllUsers(ctx context.Context, job dto.Job) {
 			continue
 		}
 		scorer := i.scorerFor(apiKey)
-		scorer.ScoreAndSave(ctx, job, uid)
+		score := scorer.ScoreAndSave(ctx, job, uid)
+		i.notifyUser(ctx, job, score, uid)
 	}
+}
+
+func (i *Ingester) notifyUser(ctx context.Context, job dto.Job, score int, userID string) {
+	if i.notifier == nil || i.emails == nil {
+		return
+	}
+	email, err := i.emails.GetUserEmail(ctx, userID)
+	if err != nil {
+		slog.Warn("ingest: could not get email for user",
+			slog.String("user_id", userID), slog.Any("err", err))
+		return
+	}
+	if email == "" {
+		slog.Debug("ingest: skipping notification, user has no email",
+			slog.String("user_id", userID))
+		return
+	}
+	i.notifier.NotifyNewJob(ctx, job, score, email)
 }
 
 // ProviderForModel resolves the AI provider name for a model ID.

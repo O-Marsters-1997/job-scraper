@@ -35,6 +35,14 @@ func (db *DB) GetProfile(ctx context.Context, userID string) (dto.Profile, error
 	return fromProfile(row.ID, row.Username, row.Email), nil
 }
 
+func (db *DB) GetUserEmail(ctx context.Context, userID string) (string, error) {
+	p, err := db.GetProfile(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return p.Email, nil
+}
+
 func (db *DB) UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {

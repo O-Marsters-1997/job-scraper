@@ -60,11 +60,26 @@ func (c *stubCredGetter) Get(_ context.Context, _, _ string) (string, error) {
 }
 
 type stubNotifier struct {
-	jobs []dto.Job
+	calls []struct {
+		job   dto.Job
+		email string
+	}
 }
 
-func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int) {
-	n.jobs = append(n.jobs, job)
+func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int, email string) {
+	n.calls = append(n.calls, struct {
+		job   dto.Job
+		email string
+	}{job, email})
+}
+
+type stubEmailGetter struct {
+	email string
+	err   error
+}
+
+func (e *stubEmailGetter) GetUserEmail(_ context.Context, _ string) (string, error) {
+	return e.email, e.err
 }
 
 // oneUserCfg returns a Config wired with a single user and a shared stubScorer.
@@ -77,6 +92,7 @@ func oneUserCfg(db ingest.Saver, sc *stubScorer, notifier ingest.Notifier) inges
 		ScorerFor: func(_ string) ingest.Scorer {
 			return sc
 		},
+		Emails:   &stubEmailGetter{email: "user@example.com"},
 		Notifier: notifier,
 	}
 }
@@ -169,8 +185,8 @@ func TestIngest(t *testing.T) {
 				if len(sc.calls) != 0 {
 					t.Errorf("scorer called %d times after save error; want 0", len(sc.calls))
 				}
-				if len(nc.jobs) != 0 {
-					t.Errorf("notifier called %d times after save error; want 0", len(nc.jobs))
+				if len(nc.calls) != 0 {
+					t.Errorf("notifier called %d times after save error; want 0", len(nc.calls))
 				}
 				return
 			}
@@ -189,8 +205,8 @@ func TestIngest(t *testing.T) {
 			if len(sc.calls) != tt.wantScored {
 				t.Errorf("scorer called %d times; want %d", len(sc.calls), tt.wantScored)
 			}
-			if len(nc.jobs) != tt.wantNotified {
-				t.Errorf("notifier called %d times; want %d", len(nc.jobs), tt.wantNotified)
+			if len(nc.calls) != tt.wantNotified {
+				t.Errorf("notifier called %d times; want %d", len(nc.calls), tt.wantNotified)
 			}
 		})
 	}
