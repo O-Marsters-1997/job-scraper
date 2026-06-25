@@ -208,7 +208,7 @@ export function JobsDataTable<TData extends Job>(
 						onInput={(e) => {
 							const raw = e.currentTarget.value.trim();
 							setSuitabilityMin(raw);
-							setPagination((p) => ({ ...p, pageIndex: 0 }));
+							props.onChange({ page: undefined });
 						}}
 						class="w-20"
 					/>
