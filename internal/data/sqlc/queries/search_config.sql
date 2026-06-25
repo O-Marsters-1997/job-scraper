@@ -1,3 +1,6 @@
+-- name: ListSearchConfigs :many
+SELECT * FROM search_config ORDER BY user_id;
+
 -- name: GetSearchConfig :one
 SELECT * FROM search_config WHERE user_id = $1 LIMIT 1;
 

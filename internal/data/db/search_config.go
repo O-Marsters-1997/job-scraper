@@ -21,6 +21,18 @@ func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
 	}
 }
 
+func (db *DB) ListSearchConfigs(ctx context.Context) ([]dto.SearchConfig, error) {
+	rows, err := db.queries.ListSearchConfigs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("db.ListSearchConfigs: %w", err)
+	}
+	cfgs := make([]dto.SearchConfig, len(rows))
+	for i, row := range rows {
+		cfgs[i] = fromSearchConfig(row)
+	}
+	return cfgs, nil
+}
+
 func (db *DB) GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {

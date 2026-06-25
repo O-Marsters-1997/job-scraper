@@ -25,7 +25,6 @@ type Orchestrator struct {
 	cfgDB        providers.SearchConfigProvider // nil means no gate
 	scoreDB      providers.JobScoreProvider     // nil means no score writes
 	exporter     JobExporter                    // nil means no ATS egress
-	userID       string
 	cr           *cron.Cron
 	wg           sync.WaitGroup
 	buildSources func(ctx context.Context) ([]sources.Source, error) // nil → use static srcs
@@ -55,12 +54,11 @@ func (o *Orchestrator) WithSourceReloader(
 }
 
 // WithRelevanceGate wires in a scorer and store so both ingestion paths filter
-// jobs below cfg.RelevanceCutoff. ATS job scores are persisted via store.
-func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore, userID string) {
+// jobs below any user's cfg.RelevanceCutoff. Job scores are persisted per (job, user).
+func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore) {
 	o.scorer = scorer
 	o.cfgDB = store
 	o.scoreDB = store
-	o.userID = userID
 }
 
 // WithExporter wires in the egress port used by the ATS path.
@@ -171,87 +169,108 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	}
 }
 
-type relevanceGate struct {
-	enabled   bool
+type userGate struct {
+	userID    string
 	scorer    score.RelevanceScorer
 	searchCfg dto.SearchConfig
 }
 
-func (o *Orchestrator) loadGate(ctx context.Context, name string) relevanceGate {
-	if o.scorer == nil || o.cfgDB == nil {
-		return relevanceGate{}
-	}
-	cfg, err := o.cfgDB.GetSearchConfig(ctx, o.userID)
-	if err != nil {
-		slog.Warn("could not load search config, skipping relevance gate",
-			slog.String("source", name),
-			slog.Any("err", err),
-		)
-		return relevanceGate{}
-	}
-	return relevanceGate{enabled: true, scorer: o.scorer, searchCfg: cfg}
+func (g userGate) score(job dto.Job) int {
+	return g.scorer.Score(job, g.searchCfg)
 }
 
-func (g relevanceGate) passes(job dto.Job) (int, bool) {
-	if !g.enabled {
-		return 0, true
+func (g userGate) passes(job dto.Job) bool {
+	return g.score(job) >= g.searchCfg.RelevanceCutoff
+}
+
+func (o *Orchestrator) loadGates(ctx context.Context, source string) []userGate {
+	if o.scorer == nil || o.cfgDB == nil {
+		return nil
 	}
-	s := g.scorer.Score(job, g.searchCfg)
-	return s, s >= g.searchCfg.RelevanceCutoff
+	cfgs, err := o.cfgDB.ListSearchConfigs(ctx)
+	if err != nil {
+		slog.Warn("could not load search configs, skipping relevance gate",
+			slog.String("source", source),
+			slog.Any("err", err),
+		)
+		return nil
+	}
+	gates := make([]userGate, len(cfgs))
+	for i, cfg := range cfgs {
+		gates[i] = userGate{userID: cfg.UserID, scorer: o.scorer, searchCfg: cfg}
+	}
+	return gates
 }
 
 type atsPath struct {
 	exporter JobExporter
 	scoreDB  providers.JobScoreProvider
 	name     string
-	gate     relevanceGate
-	userID   string
+	gates    []userGate
 }
 
 func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	log := slog.With(slog.String("source", p.name))
 
-	var valid []dto.Job
-	var scores []int
+	type scoreEntry struct {
+		jobID, userID string
+		score         int
+	}
+
+	passing := make([]dto.Job, 0, len(jobs))
+	var entries []scoreEntry
 	for _, j := range jobs {
 		if j.URL == "" {
 			continue
 		}
-		s, ok := p.gate.passes(j)
-		if !ok {
+		if len(p.gates) == 0 {
+			passing = append(passing, j)
 			continue
 		}
-		valid = append(valid, j)
-		scores = append(scores, s)
+		relevant := false
+		jobEntries := make([]scoreEntry, len(p.gates))
+		for i, g := range p.gates {
+			score := g.score(j)
+			if score >= g.searchCfg.RelevanceCutoff {
+				relevant = true
+			}
+			jobEntries[i] = scoreEntry{j.ID, g.userID, score}
+		}
+		if relevant {
+			passing = append(passing, j)
+			entries = append(entries, jobEntries...)
+		}
 	}
-	if len(valid) == 0 {
+
+	if len(passing) == 0 {
 		return false, nil
 	}
 
-	if err := p.exporter.BulkExport(ctx, valid); err != nil {
+	if err := p.exporter.BulkExport(ctx, passing); err != nil {
 		return false, err
 	}
 
-	if p.gate.enabled && p.scoreDB != nil {
-		for i, j := range valid {
-			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, j.ID, p.userID, scores[i]); err != nil {
+	if p.scoreDB != nil {
+		for _, e := range entries {
+			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, e.jobID, e.userID, e.score); err != nil {
 				log.Warn("could not write relevance score",
-					slog.String("job_id", j.ID),
+					slog.String("job_id", e.jobID),
+					slog.String("user_id", e.userID),
 					slog.Any("err", err),
 				)
 			}
 		}
 	}
 
-	log.Info("ats jobs published", slog.Int("count", len(valid)))
+	log.Info("ats jobs published", slog.Int("count", len(passing)))
 	return false, nil
 }
 
 type htmlPath struct {
-	db   providers.JobProvider
-	q    queue.JobQueue
-	gate relevanceGate
-	seen map[string]struct{}
+	db    providers.JobProvider
+	q     queue.JobQueue
+	gates []userGate
+	seen  map[string]struct{}
 }
 
 func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
@@ -306,15 +325,10 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 		}
 		p.seen[c.url] = struct{}{}
 
-		qj := dto.QueuedJob{URL: c.url, Card: c.job}
-		if p.gate.enabled {
-			s, ok := p.gate.passes(c.job)
-			if !ok {
-				continue
-			}
-			qj.Relevance = s
+		if !passesAnyGate(c.job, p.gates) {
+			continue
 		}
-		queued = append(queued, qj)
+		queued = append(queued, dto.QueuedJob{URL: c.url, Card: c.job})
 	}
 
 	if len(queued) == 0 {
@@ -329,13 +343,25 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	return false, nil
 }
 
+func passesAnyGate(job dto.Job, gates []userGate) bool {
+	if len(gates) == 0 {
+		return true
+	}
+	for _, g := range gates {
+		if g.passes(job) {
+			return true
+		}
+	}
+	return false
+}
+
 func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	cfg := src.Cfg()
-	gate := o.loadGate(ctx, cfg.Name)
+	gates := o.loadGates(ctx, cfg.Name)
 	if _, ok := src.(sources.DetailFetcher); ok {
-		p := &htmlPath{db: o.db, q: o.q, gate: gate, seen: map[string]struct{}{}}
+		p := &htmlPath{db: o.db, q: o.q, gates: gates, seen: map[string]struct{}{}}
 		return src.Iterate(ctx, p.onPage)
 	}
-	p := &atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: cfg.Name, gate: gate, userID: o.userID}
+	p := &atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: cfg.Name, gates: gates}
 	return src.Iterate(ctx, p.onPage)
 }
