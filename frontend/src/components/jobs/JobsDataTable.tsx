@@ -1,6 +1,5 @@
 import {
 	type ColumnDef,
-	type ColumnFiltersState,
 	createSolidTable,
 	flexRender,
 	getCoreRowModel,
@@ -60,9 +59,6 @@ export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
-	const [columnFilters, setColumnFilters] = createSignal<ColumnFiltersState>(
-		[],
-	);
 	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [showSkipped, setShowSkipped] = createSignal(true);
 	const [pagination, setPagination] = createSignal<PaginationState>({
@@ -210,19 +206,6 @@ export function JobsDataTable<TData extends Job>(
 							const raw = e.currentTarget.value.trim();
 							setSuitabilityMin(raw);
 							setPagination((p) => ({ ...p, pageIndex: 0 }));
-							if (raw === "") {
-								setColumnFilters((prev) =>
-									prev.filter((f) => f.id !== "SuitabilityScore"),
-								);
-							} else {
-								const n = Number(raw);
-								if (!Number.isNaN(n)) {
-									setColumnFilters((prev) => [
-										...prev.filter((f) => f.id !== "SuitabilityScore"),
-										{ id: "SuitabilityScore", value: n },
-									]);
-								}
-							}
 						}}
 						class="w-20"
 					/>
