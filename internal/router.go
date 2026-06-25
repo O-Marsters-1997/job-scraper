@@ -104,8 +104,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 
 		r.Get("/sources", stH.Sources)
 
-		r.Get("/profile", profileH.GetProfile)
-		r.Put("/profile", profileH.UpdateProfile)
+		r.Get("/profile", profileH.Get)
+		r.Put("/profile", profileH.Put)
 
 		r.Get("/scoring-config", scoringCfgH.Get)
 		r.Put("/scoring-config", scoringCfgH.Put)

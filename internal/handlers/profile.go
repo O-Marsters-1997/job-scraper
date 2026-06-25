@@ -17,7 +17,7 @@ func NewProfileHandler(profiles providers.ProfileProvider) *ProfileHandler {
 	return &ProfileHandler{profiles: profiles}
 }
 
-func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	p, err := h.profiles.GetProfile(r.Context(), session.UserID)
 	if err != nil {
@@ -32,7 +32,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+func (h *ProfileHandler) Put(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		Email string `json:"email"`

@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { SkeletonList } from "@/components/ui/skeleton";
-import { useAiPrefs, useUpdateAiPrefs } from "../../../hooks/useAiPrefs";
+import {
+	useAiPrefs,
+	useUpdateAiCredentials,
+	useUpdateAiPrefs,
+} from "../../../hooks/useAiPrefs";
 
 export const Route = createFileRoute("/_auth/settings/ai")({
 	component: AiPage,
@@ -20,10 +24,15 @@ function modelLabel(id: string): string {
 function AiPage() {
 	const query = useAiPrefs();
 	const saveMutation = useUpdateAiPrefs();
+	const credsMutation = useUpdateAiCredentials();
 
 	const [selectedModel, setSelectedModel] = createSignal("");
+	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
+
+	const anthropicConfigured = () =>
+		query.data?.configuredProviders.includes("anthropic") ?? false;
 
 	createEffect(() => {
 		const data = query.data;
@@ -40,6 +49,30 @@ function AiPage() {
 			setTimeout(() => setSaved(false), 3000);
 		} catch {
 			setSaveError("Failed to save. Please try again.");
+		}
+	};
+
+	const handleSaveKey = async () => {
+		setSaveError(null);
+		try {
+			await credsMutation.mutateAsync({
+				provider: "anthropic",
+				apiKey: apiKey() || null,
+			});
+			setApiKey("");
+			setSaved(true);
+			setTimeout(() => setSaved(false), 3000);
+		} catch {
+			setSaveError("Failed to save API key. Please try again.");
+		}
+	};
+
+	const handleClearKey = async () => {
+		setSaveError(null);
+		try {
+			await credsMutation.mutateAsync({ provider: "anthropic", apiKey: null });
+		} catch {
+			setSaveError("Failed to clear API key. Please try again.");
 		}
 	};
 
@@ -111,6 +144,58 @@ function AiPage() {
 								The default model (Haiku) works out of the box. Only change this
 								if you want higher-quality scoring at higher cost.
 							</p>
+						</div>
+					</div>
+
+					{/* API key */}
+					<div class="overflow-hidden rounded-xl border border-border bg-surface">
+						<div class="border-b border-border px-5 py-4">
+							<p class="text-base font-semibold text-foreground">
+								Anthropic API key
+							</p>
+							<p class="mt-0.5 text-xs text-faint">
+								Your own key is used for scoring. Leave blank to use the shared
+								key.
+							</p>
+						</div>
+						<div class="px-5 py-4">
+							<Show
+								when={anthropicConfigured()}
+								fallback={
+									<div class="flex items-center gap-3">
+										<input
+											type="password"
+											placeholder="sk-ant-…"
+											value={apiKey()}
+											onInput={(e) => setApiKey(e.currentTarget.value)}
+											class="flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+										/>
+										<button
+											type="button"
+											onClick={handleSaveKey}
+											disabled={credsMutation.isPending || !apiKey()}
+											class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
+										>
+											{credsMutation.isPending ? "Saving…" : "Save key"}
+										</button>
+									</div>
+								}
+							>
+								<div class="flex items-center gap-3">
+									<span class="text-sm text-foreground">
+										configured{" "}
+										<span class="text-primary font-medium">✓</span>
+									</span>
+									<button
+										type="button"
+										onClick={handleClearKey}
+										disabled={credsMutation.isPending}
+										class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:opacity-50"
+									>
+										{credsMutation.isPending ? "Clearing…" : "Clear"}
+									</button>
+								</div>
+							</Show>
 						</div>
 					</div>
 

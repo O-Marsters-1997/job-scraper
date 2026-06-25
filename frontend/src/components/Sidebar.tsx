@@ -72,6 +72,7 @@ export default function Sidebar(props: SidebarProps) {
 	const isAiActive = () => location().pathname === "/settings/ai";
 	const isIntegrationsActive = () =>
 		location().pathname === "/settings/integrations";
+	const isProfileActive = () => location().pathname === "/settings/profile";
 	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 	const navigate = useNavigate();
 
@@ -375,6 +376,31 @@ export default function Sidebar(props: SidebarProps) {
 						</svg>
 						<Show when={showLabels()}>
 							<span class="whitespace-nowrap">AI</span>
+						</Show>
+					</Link>
+
+					<Link
+						to="/settings/profile"
+						title="Profile"
+						class={navLinkVariants({ active: isProfileActive() })}
+					>
+						<svg
+							aria-hidden="true"
+							class="shrink-0"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+							<circle cx="12" cy="7" r="4" />
+						</svg>
+						<Show when={showLabels()}>
+							<span class="whitespace-nowrap">Profile</span>
 						</Show>
 					</Link>
 
