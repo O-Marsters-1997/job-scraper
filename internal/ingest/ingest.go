@@ -32,7 +32,7 @@ type CredentialGetter interface {
 // Notifier sends a per-user notification for a newly ingested job.
 // recipientEmail is the user's address; implementations handle errors internally.
 type Notifier interface {
-	NotifyNewJob(ctx context.Context, job dto.Job, score int, recipientEmail string)
+	NotifyNewJob(ctx context.Context, recipient string, job dto.Job, score int)
 }
 
 // Config wires all Ingester dependencies. Users, Creds, and ScorerFor are all
@@ -43,7 +43,7 @@ type Config struct {
 	Users     UserLister
 	Creds     CredentialGetter
 	ScorerFor func(apiKey string) Scorer
-	Emails    providers.UserEmailProvider
+	Emails    providers.ProfileProvider
 	Notifier  Notifier
 }
 
@@ -54,7 +54,7 @@ type Ingester struct {
 	users     UserLister
 	creds     CredentialGetter
 	scorerFor func(apiKey string) Scorer
-	emails    providers.UserEmailProvider
+	emails    providers.ProfileProvider
 	notifier  Notifier
 }
 
@@ -139,7 +139,7 @@ func (i *Ingester) notifyUser(ctx context.Context, job dto.Job, score int, userI
 			slog.String("user_id", userID))
 		return
 	}
-	i.notifier.NotifyNewJob(ctx, job, score, email)
+	i.notifier.NotifyNewJob(ctx, email, job, score)
 }
 
 // ProviderForModel resolves the AI provider name for a model ID.

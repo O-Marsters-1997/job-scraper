@@ -33,7 +33,7 @@ func NewNotificationService(
 	}
 }
 
-func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job, suitabilityScore int, recipientEmail string) {
+func (s *NotificationService) NotifyNewJob(ctx context.Context, recipient string, job dto.Job, suitabilityScore int) {
 	if !s.cfg.OnIngestEnabled {
 		return
 	}
@@ -51,7 +51,7 @@ func (s *NotificationService) NotifyNewJob(ctx context.Context, job dto.Job, sui
 		log.Error("render individual failed", slog.Any("err", err))
 		return
 	}
-	if err := s.notifier.Send(ctx, recipientEmail, "New job: "+job.Title, html); err != nil {
+	if err := s.notifier.Send(ctx, recipient, "New job: "+job.Title, html); err != nil {
 		log.Error("send individual failed", slog.Any("err", err))
 	}
 }

@@ -10,4 +10,5 @@ import (
 type ProfileProvider interface {
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
+	GetUserEmail(ctx context.Context, userID string) (string, error)
 }

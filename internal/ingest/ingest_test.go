@@ -66,7 +66,7 @@ type stubNotifier struct {
 	}
 }
 
-func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int, email string) {
+func (n *stubNotifier) NotifyNewJob(_ context.Context, email string, job dto.Job, _ int) {
 	n.calls = append(n.calls, struct {
 		job   dto.Job
 		email string
@@ -80,6 +80,14 @@ type stubEmailGetter struct {
 
 func (e *stubEmailGetter) GetUserEmail(_ context.Context, _ string) (string, error) {
 	return e.email, e.err
+}
+
+func (e *stubEmailGetter) GetProfile(_ context.Context, _ string) (dto.Profile, error) {
+	return dto.Profile{Email: e.email}, e.err
+}
+
+func (e *stubEmailGetter) UpdateEmail(_ context.Context, _, _ string) (dto.Profile, error) {
+	return dto.Profile{}, nil
 }
 
 // oneUserCfg returns a Config wired with a single user and a shared stubScorer.
