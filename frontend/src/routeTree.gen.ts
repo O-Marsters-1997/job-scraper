@@ -22,9 +22,9 @@ import { Route as AuthApplicationsRouteImport } from './routes/_auth/application
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
 import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
+import { Route as AuthSettingsProfileRouteImport } from './routes/_auth/settings/profile'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
 import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
-import { Route as AuthSettingsProfileRouteImport } from './routes/_auth/settings/profile'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
@@ -92,6 +92,11 @@ const AuthSettingsScoringRoute = AuthSettingsScoringRouteImport.update({
   path: '/scoring',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsProfileRoute = AuthSettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsIntegrationsRoute =
   AuthSettingsIntegrationsRouteImport.update({
     id: '/integrations',
@@ -101,11 +106,6 @@ const AuthSettingsIntegrationsRoute =
 const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
   id: '/ai',
   path: '/ai',
-  getParentRoute: () => AuthSettingsRoute,
-} as any)
-const AuthSettingsProfileRoute = AuthSettingsProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
 const AuthJobsIdRoute = AuthJobsIdRouteImport.update({
@@ -340,6 +340,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsScoringRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/profile': {
+      id: '/_auth/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof AuthSettingsProfileRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/integrations': {
       id: '/_auth/settings/integrations'
       path: '/integrations'
@@ -352,13 +359,6 @@ declare module '@tanstack/solid-router' {
       path: '/ai'
       fullPath: '/settings/ai'
       preLoaderRoute: typeof AuthSettingsAiRouteImport
-      parentRoute: typeof AuthSettingsRoute
-    }
-    '/_auth/settings/profile': {
-      id: '/_auth/settings/profile'
-      path: '/profile'
-      fullPath: '/settings/profile'
-      preLoaderRoute: typeof AuthSettingsProfileRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
     '/_auth/jobs_/$id': {
