@@ -12,7 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func TestProfileHandler_GetProfile(t *testing.T) {
+func TestProfileHandler_Get(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -64,7 +64,7 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 			req = withSession(req, tt.userID)
 			w := httptest.NewRecorder()
 
-			h.GetProfile(w, req)
+			h.Get(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
@@ -85,7 +85,7 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 	}
 }
 
-func TestProfileHandler_UpdateProfile(t *testing.T) {
+func TestProfileHandler_Put(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -135,7 +135,7 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 			req = withSession(req, "user-1")
 			w := httptest.NewRecorder()
 
-			h.UpdateProfile(w, req)
+			h.Put(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
