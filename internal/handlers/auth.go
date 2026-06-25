@@ -92,6 +92,7 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -111,7 +112,7 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.store.CreateUser(r.Context(), body.Username, string(hash))
+	user, err := h.store.CreateUser(r.Context(), body.Username, string(hash), body.Email)
 	if err != nil {
 		if errors.Is(err, providers.ErrUsernameTaken) {
 			w.Header().Set("Content-Type", "application/json")

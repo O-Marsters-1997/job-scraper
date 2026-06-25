@@ -6,6 +6,7 @@ type User struct {
 	ID           string
 	Username     string
 	PasswordHash string
+	Email        string
 }
 
 type Session struct {

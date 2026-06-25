@@ -63,13 +63,13 @@ func (m *MockUserProvider) GetUserByUsername(_ context.Context, username string)
 	return u, nil
 }
 
-func (m *MockUserProvider) CreateUser(_ context.Context, username, passwordHash string) (dto.User, error) {
+func (m *MockUserProvider) CreateUser(_ context.Context, username, passwordHash, email string) (dto.User, error) {
 	if m.CreateErr != nil {
 		return dto.User{}, m.CreateErr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	u := dto.User{ID: username + "-id", Username: username, PasswordHash: passwordHash}
+	u := dto.User{ID: username + "-id", Username: username, PasswordHash: passwordHash, Email: email}
 	m.users[username] = u
 	return u, nil
 }

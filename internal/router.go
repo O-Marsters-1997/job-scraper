@@ -41,6 +41,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 	stH := handlers.NewSourceTargetHandler(db, q)
 	scoringCfgH := handlers.NewScoringConfigHandler(db)
 	aiPrefsH := handlers.NewAIPrefsHandler(db)
+	profileH := handlers.NewProfileHandler(db)
 
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -100,6 +101,9 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 		})
 
 		r.Get("/sources", stH.Sources)
+
+		r.Get("/profile", profileH.Get)
+		r.Put("/profile", profileH.Put)
 
 		r.Get("/scoring-config", scoringCfgH.Get)
 		r.Put("/scoring-config", scoringCfgH.Put)
