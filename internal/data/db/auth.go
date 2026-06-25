@@ -19,6 +19,7 @@ func fromUser(u pgsqlc.User) dto.User {
 		ID:           u.ID.String(),
 		Username:     u.Username,
 		PasswordHash: u.PasswordHash,
+		Email:        u.Email.String,
 	}
 }
 
@@ -55,10 +56,11 @@ func (db *DB) GetUserByUsername(ctx context.Context, username string) (dto.User,
 	return fromUser(u), nil
 }
 
-func (db *DB) CreateUser(ctx context.Context, username, passwordHash string) (dto.User, error) {
+func (db *DB) CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error) {
 	u, err := db.queries.CreateUser(ctx, pgsqlc.CreateUserParams{
 		Username:     username,
 		PasswordHash: passwordHash,
+		Email:        pgtype.Text{String: email, Valid: email != ""},
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

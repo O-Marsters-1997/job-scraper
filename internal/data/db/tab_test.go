@@ -24,7 +24,7 @@ func truncateTrackedDocs(t *testing.T) {
 
 func seedDoc(t *testing.T, ctx context.Context, username, docID string) (userID, trackedDocID string) {
 	t.Helper()
-	user, err := testDB.CreateUser(ctx, username, "hash")
+	user, err := testDB.CreateUser(ctx, username, "hash", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestDB_HideTab(t *testing.T) {
 			run: func(t *testing.T) {
 				truncateTrackedDocs(t)
 				_, tdID := seedDoc(t, ctx, "userA", "docA")
-				userB, err := testDB.CreateUser(ctx, "userB", "hash")
+				userB, err := testDB.CreateUser(ctx, "userB", "hash", "")
 				if err != nil {
 					t.Fatalf("CreateUser userB: %v", err)
 				}
@@ -334,7 +334,7 @@ func TestDB_ShowTab(t *testing.T) {
 			run: func(t *testing.T) {
 				truncateTrackedDocs(t)
 				userA, tdID := seedDoc(t, ctx, "user12a", "docA")
-				userB, err := testDB.CreateUser(ctx, "user12b", "hash")
+				userB, err := testDB.CreateUser(ctx, "user12b", "hash", "")
 				if err != nil {
 					t.Fatalf("CreateUser userB: %v", err)
 				}

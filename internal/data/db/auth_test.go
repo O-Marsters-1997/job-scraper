@@ -17,7 +17,7 @@ func TestCreateUser(t *testing.T) {
 	truncateAuth(t)
 	ctx := context.Background()
 
-	created, err := testDB.CreateUser(ctx, "alice", "hashed-password")
+	created, err := testDB.CreateUser(ctx, "alice", "hashed-password", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestGetUserByUsername(t *testing.T) {
 		truncateAuth(t)
 		ctx := context.Background()
 
-		created, err := testDB.CreateUser(ctx, "alice", "hashed-password")
+		created, err := testDB.CreateUser(ctx, "alice", "hashed-password", "")
 		if err != nil {
 			t.Fatalf("CreateUser: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestCreateSession(t *testing.T) {
 	truncateAuth(t)
 	ctx := context.Background()
 
-	user, err := testDB.CreateUser(ctx, "bob", "hash")
+	user, err := testDB.CreateUser(ctx, "bob", "hash", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestGetSession(t *testing.T) {
 		truncateAuth(t)
 		ctx := context.Background()
 
-		user, err := testDB.CreateUser(ctx, "bob", "hash")
+		user, err := testDB.CreateUser(ctx, "bob", "hash", "")
 		if err != nil {
 			t.Fatalf("CreateUser: %v", err)
 		}
@@ -118,7 +118,7 @@ func TestGetSession(t *testing.T) {
 		truncateAuth(t)
 		ctx := context.Background()
 
-		user, err := testDB.CreateUser(ctx, "charlie", "hash")
+		user, err := testDB.CreateUser(ctx, "charlie", "hash", "")
 		if err != nil {
 			t.Fatalf("CreateUser: %v", err)
 		}
@@ -139,7 +139,7 @@ func TestDeleteSession(t *testing.T) {
 	truncateAuth(t)
 	ctx := context.Background()
 
-	user, err := testDB.CreateUser(ctx, "dana", "hash")
+	user, err := testDB.CreateUser(ctx, "dana", "hash", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestDeleteExpiredSessions(t *testing.T) {
 	truncateAuth(t)
 	ctx := context.Background()
 
-	user, err := testDB.CreateUser(ctx, "eve", "hash")
+	user, err := testDB.CreateUser(ctx, "eve", "hash", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
