@@ -8,7 +8,7 @@ import {
 	type PaginationState,
 	type SortingState,
 } from "@tanstack/solid-table";
-import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Badge } from "@/components/ui/badge";
@@ -61,20 +61,20 @@ export function JobsDataTable<TData extends Job>(
 	const [sorting, setSorting] = createSignal<SortingState>([]);
 	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [showSkipped, setShowSkipped] = createSignal(true);
-	const [pagination, setPagination] = createSignal<PaginationState>({
-		pageIndex: 0,
-		pageSize: 10,
-	});
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
 
-	// Reset to page 1 only when the active URL filters change, not on pagination clicks.
-	createEffect(
-		on(
-			() => JSON.stringify(props.filters),
-			() => setPagination((p) => ({ ...p, pageIndex: 0 })),
-			{ defer: true },
-		),
-	);
+	const PAGE_SIZE = 10;
+	const pagination = (): PaginationState => ({
+		pageIndex: Math.max(0, (props.filters.page ?? 1) - 1),
+		pageSize: PAGE_SIZE,
+	});
+	const onPaginationChange = (
+		updater: PaginationState | ((prev: PaginationState) => PaginationState),
+	) => {
+		const next =
+			typeof updater === "function" ? updater(pagination()) : updater;
+		props.onChange({ page: next.pageIndex + 1 });
+	};
 
 	// Per-row expand state — keyed by Job ID, isolated from sort/filter/pagination
 	const [expandedRows, setExpandedRows] = createSignal<Set<string>>(new Set());
@@ -104,6 +104,7 @@ export function JobsDataTable<TData extends Job>(
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
+		autoResetPageIndex: false,
 		state: {
 			get sorting() {
 				return sorting();
@@ -113,20 +114,19 @@ export function JobsDataTable<TData extends Job>(
 			},
 		},
 		onSortingChange: setSorting,
-		onPaginationChange: setPagination,
+		onPaginationChange: onPaginationChange,
 		meta: {
 			isExpanded,
 			toggleExpanded,
 		},
 	});
 
-	const pageIndex = () => table.getState().pagination.pageIndex;
+	const pageIndex = () => pagination().pageIndex;
 	const pageCount = () => table.getPageCount();
 	// Data is pre-filtered; use its length for display rather than table's row model count.
 	const filteredCount = () => props.data.length;
-	const start = () => pageIndex() * pagination().pageSize + 1;
-	const end = () =>
-		Math.min((pageIndex() + 1) * pagination().pageSize, filteredCount());
+	const start = () => pageIndex() * PAGE_SIZE + 1;
+	const end = () => Math.min((pageIndex() + 1) * PAGE_SIZE, filteredCount());
 
 	const pgBtnClass = (active: boolean, disabled: boolean) =>
 		cn(
@@ -219,7 +219,7 @@ export function JobsDataTable<TData extends Job>(
 						checked={showSkipped()}
 						onChange={(e) => {
 							setShowSkipped(e.currentTarget.checked);
-							setPagination((p) => ({ ...p, pageIndex: 0 }));
+							props.onChange({ page: undefined });
 						}}
 						class="h-3.5 w-3.5 rounded border-border accent-primary"
 					/>
