@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -28,11 +29,6 @@ type CredentialGetter interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
 }
 
-// EmailGetter retrieves the email address for a user.
-type EmailGetter interface {
-	GetUserEmail(ctx context.Context, userID string) (string, error)
-}
-
 // Notifier sends a per-user notification for a newly ingested job.
 // recipientEmail is the user's address; implementations handle errors internally.
 type Notifier interface {
@@ -47,7 +43,7 @@ type Config struct {
 	Users     UserLister
 	Creds     CredentialGetter
 	ScorerFor func(apiKey string) Scorer
-	Emails    EmailGetter
+	Emails    providers.UserEmailProvider
 	Notifier  Notifier
 }
 
@@ -58,7 +54,7 @@ type Ingester struct {
 	users     UserLister
 	creds     CredentialGetter
 	scorerFor func(apiKey string) Scorer
-	emails    EmailGetter
+	emails    providers.UserEmailProvider
 	notifier  Notifier
 }
 
