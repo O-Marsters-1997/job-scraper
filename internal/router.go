@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/credstore"
 	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
@@ -20,7 +21,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
-func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler {
+func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credstore.CredentialStore) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -40,7 +41,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 	statusH := handlers.NewApplicationStatusHandler(db)
 	stH := handlers.NewSourceTargetHandler(db, q)
 	scoringCfgH := handlers.NewScoringConfigHandler(db)
-	aiPrefsH := handlers.NewAIPrefsHandler(db)
+	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
+	aiCredsH := handlers.NewAICredentialsHandler(creds)
 
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -106,6 +108,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue) http.Handler 
 
 		r.Get("/ai-prefs", aiPrefsH.Get)
 		r.Put("/ai-prefs", aiPrefsH.Put)
+
+		r.Put("/ai-credentials", aiCredsH.Put)
 
 		r.Route("/source-targets", func(r chi.Router) {
 			r.Get("/", stH.List)

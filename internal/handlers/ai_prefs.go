@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -18,17 +19,25 @@ var availableModels = []string{
 
 const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
 
-type AIPrefsHandler struct {
-	prefs providers.UserAIPrefsProvider
+// credLister is the subset of credstore.CredentialStore used by AIPrefsHandler.
+// ponytail: minimal interface — only ListProviders needed here.
+type credLister interface {
+	ListProviders(ctx context.Context, userID string) ([]string, error)
 }
 
-func NewAIPrefsHandler(prefs providers.UserAIPrefsProvider) *AIPrefsHandler {
-	return &AIPrefsHandler{prefs: prefs}
+type AIPrefsHandler struct {
+	prefs providers.UserAIPrefsProvider
+	creds credLister // nil-safe: returns empty slice when unset
+}
+
+func NewAIPrefsHandler(prefs providers.UserAIPrefsProvider, creds credLister) *AIPrefsHandler {
+	return &AIPrefsHandler{prefs: prefs, creds: creds}
 }
 
 type aiPrefsResponse struct {
-	SuitabilityModel string   `json:"suitabilityModel"`
-	AvailableModels  []string `json:"availableModels"`
+	SuitabilityModel    string   `json:"suitabilityModel"`
+	AvailableModels     []string `json:"availableModels"`
+	ConfiguredProviders []string `json:"configuredProviders"`
 }
 
 func (h *AIPrefsHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -43,9 +52,24 @@ func (h *AIPrefsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		model = prefs.SuitabilityModel
 	}
+
+	var configured []string
+	if h.creds != nil {
+		configured, err = h.creds.ListProviders(r.Context(), session.UserID)
+		if err != nil {
+			slog.Error("list credential providers failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if configured == nil {
+		configured = []string{}
+	}
+
 	resp := aiPrefsResponse{
-		SuitabilityModel: model,
-		AvailableModels:  availableModels,
+		SuitabilityModel:    model,
+		AvailableModels:     availableModels,
+		ConfiguredProviders: configured,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
