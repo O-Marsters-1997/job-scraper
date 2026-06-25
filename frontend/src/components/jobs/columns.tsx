@@ -8,6 +8,7 @@ import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
+import { ScoreCircle } from "./ScoreCircle";
 
 export { titleCase };
 
@@ -30,48 +31,6 @@ export function createJobColumns(
 	ctx: JobTableContext,
 ): ColumnDef<Job, unknown>[] {
 	return [
-		{
-			id: "expand",
-			enableSorting: false,
-			enableGlobalFilter: false,
-			header: () => <span class="sr-only">Expand</span>,
-			cell: (info) => {
-				const rowId = info.row.original.ID;
-				const meta = info.table.options.meta;
-				const expanded = () => meta?.isExpanded(rowId) ?? false;
-				return (
-					<button
-						type="button"
-						aria-label={expanded() ? "Collapse row" : "Expand row"}
-						aria-expanded={expanded()}
-						onClick={(e) => {
-							e.stopPropagation();
-							meta?.toggleExpanded(rowId);
-						}}
-						class="flex size-6 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-accent-text"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							aria-hidden="true"
-							style={{
-								transform: expanded() ? "rotate(180deg)" : "rotate(0deg)",
-								transition: "transform 150ms ease",
-							}}
-						>
-							<polyline points="6 9 12 15 18 9" />
-						</svg>
-					</button>
-				);
-			},
-		},
 		{
 			accessorKey: "Title",
 			header: "Title",
@@ -131,32 +90,34 @@ export function createJobColumns(
 			},
 		},
 		{
-			accessorKey: "RelevanceScore",
-			header: "Relevance",
-			enableGlobalFilter: false,
-			sortUndefined: -1,
-			cell: (info) => {
-				const val = info.getValue() as number | null | undefined;
-				if (val === null || val === undefined) {
-					return <span class="text-faint">—</span>;
-				}
-				return (
-					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
-				);
-			},
-		},
-		{
 			accessorKey: "SuitabilityScore",
 			header: "Suitability",
 			enableGlobalFilter: false,
 			sortUndefined: -1,
 			cell: (info) => {
 				const val = info.getValue() as number | null | undefined;
-				if (val === null || val === undefined) {
-					return <span class="text-faint">—</span>;
-				}
+				const rowId = info.row.original.ID;
+				const meta = info.table.options.meta;
+				const expanded = () => meta?.isExpanded(rowId) ?? false;
 				return (
-					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
+					<button
+						type="button"
+						aria-label={expanded() ? "Collapse details" : "Expand details"}
+						aria-expanded={expanded()}
+						onClick={(e) => {
+							e.stopPropagation();
+							meta?.toggleExpanded(rowId);
+						}}
+						class={`rounded-full transition-all hover:opacity-80${expanded() ? " ring-2 ring-primary ring-offset-1" : ""}`}
+					>
+						{val != null ? (
+							<ScoreCircle value={val} />
+						) : (
+							<span class="inline-flex size-7 items-center justify-center text-faint">
+								—
+							</span>
+						)}
+					</button>
 				);
 			},
 		},

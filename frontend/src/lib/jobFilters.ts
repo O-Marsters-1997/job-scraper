@@ -9,6 +9,7 @@ export interface JobFilters {
 	sal: boolean;
 	salMin?: number;
 	salMax?: number;
+	page?: number;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -16,6 +17,11 @@ export const DEFAULT_FILTERS: JobFilters = {
 	src: [],
 	work: [],
 	sal: false,
+	suit: undefined,
+	rel: undefined,
+	salMin: undefined,
+	salMax: undefined,
+	page: undefined,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -38,6 +44,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		sal: raw.sal === true || raw.sal === "true",
 		salMin: coerceNum(raw.salMin),
 		salMax: coerceNum(raw.salMax),
+		page: coerceNum(raw.page),
 	};
 }
 
@@ -111,7 +118,6 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 export function activeFilterCount(f: JobFilters): number {
 	let n = 0;
 	if (f.suit !== undefined) n++;
-	if (f.rel !== undefined) n++;
 	if (f.src.length > 0) n++;
 	if (f.work.length > 0) n++;
 	if (f.sal) n++;

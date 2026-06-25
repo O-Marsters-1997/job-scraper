@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
-import { createSignal, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
@@ -30,13 +30,18 @@ function JobsPage() {
 
 	// Normalise partial URL params to a full JobFilters with defaults.
 	const filters = () => parseSearch(search() as Record<string, unknown>);
-	const filtered = () => applyJobFilters(jobs(), filters());
+	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
 	const srcOptions = () => sourceOptions(jobs());
 
 	const setFilters = (patch: Partial<JobFilters>) =>
 		navigate({
 			to: "/jobs",
-			search: (p) => ({ ...p, ...patch }),
+			// Reset to page 1 whenever anything other than page itself changes.
+			search: (p) => ({
+				...p,
+				...patch,
+				...("page" in patch ? {} : { page: undefined }),
+			}),
 			replace: true,
 		});
 
