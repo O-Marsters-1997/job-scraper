@@ -24,6 +24,7 @@ import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/setting
 import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
 import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
+import { Route as AuthSettingsProfileRouteImport } from './routes/_auth/settings/profile'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
@@ -102,6 +103,11 @@ const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
   path: '/ai',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsProfileRoute = AuthSettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthJobsIdRoute = AuthJobsIdRouteImport.update({
   id: '/jobs_/$id',
   path: '/jobs/$id',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/profile': typeof AuthSettingsProfileRoute
   '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/settings/profile': typeof AuthSettingsProfileRoute
   '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
   '/_auth/settings/ai': typeof AuthSettingsAiRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
+  '/_auth/settings/profile': typeof AuthSettingsProfileRoute
   '/_auth/settings/scoring': typeof AuthSettingsScoringRoute
   '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/jobs/$id'
     | '/settings/ai'
     | '/settings/integrations'
+    | '/settings/profile'
     | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
@@ -203,6 +213,7 @@ export interface FileRouteTypes {
     | '/jobs/$id'
     | '/settings/ai'
     | '/settings/integrations'
+    | '/settings/profile'
     | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/_auth/jobs_/$id'
     | '/_auth/settings/ai'
     | '/_auth/settings/integrations'
+    | '/_auth/settings/profile'
     | '/_auth/settings/scoring'
     | '/_auth/settings/searches'
     | '/_auth/settings/statuses'
@@ -342,6 +354,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsAiRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/profile': {
+      id: '/_auth/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof AuthSettingsProfileRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/jobs_/$id': {
       id: '/_auth/jobs_/$id'
       path: '/jobs/$id'
@@ -362,6 +381,7 @@ declare module '@tanstack/solid-router' {
 interface AuthSettingsRouteChildren {
   AuthSettingsAiRoute: typeof AuthSettingsAiRoute
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
+  AuthSettingsProfileRoute: typeof AuthSettingsProfileRoute
   AuthSettingsScoringRoute: typeof AuthSettingsScoringRoute
   AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
@@ -370,6 +390,7 @@ interface AuthSettingsRouteChildren {
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsAiRoute: AuthSettingsAiRoute,
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
+  AuthSettingsProfileRoute: AuthSettingsProfileRoute,
   AuthSettingsScoringRoute: AuthSettingsScoringRoute,
   AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
