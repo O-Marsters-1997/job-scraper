@@ -4,6 +4,7 @@ export interface AiPrefs {
 	suitabilityModel: string;
 	availableModels: string[];
 	configuredProviders: string[];
+	scoringEnabled: boolean;
 }
 
 export async function fetchAiPrefs(): Promise<AiPrefs> {

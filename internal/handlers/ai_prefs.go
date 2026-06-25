@@ -38,6 +38,7 @@ type aiPrefsResponse struct {
 	SuitabilityModel    string   `json:"suitabilityModel"`
 	AvailableModels     []string `json:"availableModels"`
 	ConfiguredProviders []string `json:"configuredProviders"`
+	ScoringEnabled      bool     `json:"scoringEnabled"`
 }
 
 func (h *AIPrefsHandler) GetAIPrefs(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +71,7 @@ func (h *AIPrefsHandler) GetAIPrefs(w http.ResponseWriter, r *http.Request) {
 		SuitabilityModel:    model,
 		AvailableModels:     availableModels,
 		ConfiguredProviders: configured,
+		ScoringEnabled:      len(configured) > 0,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
