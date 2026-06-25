@@ -113,7 +113,17 @@ type User struct {
 	ID           pgtype.UUID
 	Username     string
 	PasswordHash string
+	Email        pgtype.Text
 	CreatedAt    pgtype.Timestamptz
+}
+
+type UserAiCredential struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Provider  string
+	ApiKeyEnc string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type UserAiPref struct {

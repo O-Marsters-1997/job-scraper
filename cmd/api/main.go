@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	app "github.com/ollymarsters/job-scraper/internal"
+	"github.com/ollymarsters/job-scraper/internal/credstore"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -31,6 +32,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	if _, err := credstore.New(db); err != nil {
+		slog.Error("credstore init failed", slog.Any("err", err))
+		os.Exit(1)
+	}
 
 	valkeyAddr := os.Getenv("VALKEY_ADDR")
 	if valkeyAddr == "" {

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     username      TEXT        NOT NULL UNIQUE,
     password_hash TEXT        NOT NULL,
+    email         TEXT        UNIQUE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -107,6 +108,16 @@ CREATE TABLE IF NOT EXISTS user_ai_prefs (
     suitability_model TEXT        NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_ai_credentials (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider    TEXT        NOT NULL,
+    api_key_enc TEXT        NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, provider)
 );
 
 CREATE TABLE IF NOT EXISTS source_targets (

@@ -37,7 +37,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash)
 VALUES ($1, $2)
-RETURNING id, username, password_hash, created_at
+RETURNING id, username, password_hash, email, created_at
 `
 
 type CreateUserParams struct {
@@ -52,6 +52,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.Email,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -104,7 +105,7 @@ func (q *Queries) GetSession(ctx context.Context, id pgtype.UUID) (GetSessionRow
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at FROM users WHERE username = $1
+SELECT id, username, password_hash, email, created_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -114,6 +115,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.ID,
 		&i.Username,
 		&i.PasswordHash,
+		&i.Email,
 		&i.CreatedAt,
 	)
 	return i, err
