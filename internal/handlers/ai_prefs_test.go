@@ -68,7 +68,7 @@ func TestAIPrefsHandler_Get(t *testing.T) {
 			if tt.setupStore != nil {
 				tt.setupStore(store)
 			}
-			h := NewAIPrefsHandler(store)
+			h := NewAIPrefsHandler(store, nil)
 
 			req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
 			req = withSession(req, tt.userID)
@@ -126,7 +126,7 @@ func TestAIPrefsHandler_Put(t *testing.T) {
 			t.Parallel()
 
 			store := providers.NewMockUserAIPrefsProvider()
-			h := NewAIPrefsHandler(store)
+			h := NewAIPrefsHandler(store, nil)
 
 			req := httptest.NewRequest(http.MethodPut, "/ai-prefs", bytes.NewReader([]byte(tt.body)))
 			req.Header.Set("Content-Type", "application/json")
@@ -146,7 +146,7 @@ func TestAIPrefsHandler_PutThenGet(t *testing.T) {
 	t.Parallel()
 
 	store := providers.NewMockUserAIPrefsProvider()
-	h := NewAIPrefsHandler(store)
+	h := NewAIPrefsHandler(store, nil)
 
 	putBody, _ := json.Marshal(map[string]string{"suitabilityModel": "claude-sonnet-4-6"})
 	putReq := httptest.NewRequest(http.MethodPut, "/ai-prefs", bytes.NewReader(putBody))

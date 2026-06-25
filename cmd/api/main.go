@@ -33,7 +33,8 @@ func main() {
 	}
 	defer db.Close()
 
-	if _, err := credstore.New(db); err != nil {
+	cs, err := credstore.New(db)
+	if err != nil {
 		slog.Error("credstore init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
@@ -55,7 +56,7 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: app.NewRouter(ctx, db, q)}
+	srv := &http.Server{Addr: port, Handler: app.NewRouter(ctx, db, q, cs)}
 
 	go func() {
 		<-ctx.Done()

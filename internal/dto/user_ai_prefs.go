@@ -1,5 +1,6 @@
 package dto
 
 type UserAIPrefs struct {
-	SuitabilityModel string
+	SuitabilityModel    string
+	ConfiguredProviders []string
 }
