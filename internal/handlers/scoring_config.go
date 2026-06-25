@@ -25,7 +25,7 @@ type scoringConfigResponse struct {
 	NotifyThreshold   int    `json:"notifyThreshold"`
 }
 
-func (h *ScoringConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *ScoringConfigHandler) GetScoringConfig(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	cfg, err := h.configs.GetSearchConfig(r.Context(), session.UserID)
 	if err != nil && !errors.Is(err, providers.ErrNotFound) {
@@ -42,7 +42,7 @@ func (h *ScoringConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (h *ScoringConfigHandler) Put(w http.ResponseWriter, r *http.Request) {
+func (h *ScoringConfigHandler) UpdateScoringConfig(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		SuitabilityRubric string `json:"suitabilityRubric"`
