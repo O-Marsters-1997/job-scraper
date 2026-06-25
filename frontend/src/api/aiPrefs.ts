@@ -3,6 +3,7 @@ import { apiFetch } from "./client";
 export interface AiPrefs {
 	suitabilityModel: string;
 	availableModels: string[];
+	configuredProviders: string[];
 }
 
 export async function fetchAiPrefs(): Promise<AiPrefs> {
