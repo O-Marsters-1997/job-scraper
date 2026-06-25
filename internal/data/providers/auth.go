@@ -15,7 +15,7 @@ var ErrUsernameTaken = errors.New("username already taken")
 // Callers never import pgsqlc or pgtype directly.
 type UserProvider interface {
 	GetUserByUsername(ctx context.Context, username string) (dto.User, error)
-	CreateUser(ctx context.Context, username, passwordHash string) (dto.User, error)
+	CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error)
 }
 
 // SessionProvider is the single access point for session persistence.

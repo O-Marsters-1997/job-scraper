@@ -61,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	user, err := db.CreateUser(ctx, username, string(hash))
+	user, err := db.CreateUser(ctx, username, string(hash), "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
 		os.Exit(1)
