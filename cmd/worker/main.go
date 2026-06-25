@@ -64,8 +64,6 @@ func main() {
 	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 
-	scoringUserID := os.Getenv("SCORING_USER_ID")
-
 	targets, err := db.ListEnabledSourceTargets(ctx)
 	if err != nil {
 		slog.Error("load source targets failed", slog.Any("err", err))
@@ -89,10 +87,8 @@ func main() {
 		WithExporter(exporter).
 		WithSourceReloader(buildAll, buildOne)
 
-	if scoringUserID != "" {
-		orch.WithRelevanceGate(score.NewHeuristicScorer(), db, scoringUserID)
-		slog.Info("relevance gate enabled", slog.String("user_id", scoringUserID))
-	}
+	orch.WithRelevanceGate(score.NewHeuristicScorer(), db)
+	slog.Info("relevance gate enabled (multi-user)")
 
 	if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
