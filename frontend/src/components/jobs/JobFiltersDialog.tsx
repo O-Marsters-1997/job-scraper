@@ -101,39 +101,21 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 
 					<div class="flex-1 overflow-y-auto px-5 py-4">
 						<div class="flex flex-col gap-5">
-							<div class="grid grid-cols-2 gap-3">
-								<div class="flex flex-col gap-1.5">
-									<label class="text-xs font-medium text-muted" for="f-suit">
-										Suitability ≥
-									</label>
-									<Input
-										id="f-suit"
-										type="number"
-										min="0"
-										max="100"
-										placeholder="—"
-										value={props.filters.suit ?? ""}
-										onInput={(e) =>
-											props.onChange({ suit: numInput(e.currentTarget.value) })
-										}
-									/>
-								</div>
-								<div class="flex flex-col gap-1.5">
-									<label class="text-xs font-medium text-muted" for="f-rel">
-										Relevance ≥
-									</label>
-									<Input
-										id="f-rel"
-										type="number"
-										min="0"
-										max="100"
-										placeholder="—"
-										value={props.filters.rel ?? ""}
-										onInput={(e) =>
-											props.onChange({ rel: numInput(e.currentTarget.value) })
-										}
-									/>
-								</div>
+							<div class="flex flex-col gap-1.5">
+								<label class="text-xs font-medium text-muted" for="f-suit">
+									Suitability ≥
+								</label>
+								<Input
+									id="f-suit"
+									type="number"
+									min="0"
+									max="100"
+									placeholder="—"
+									value={props.filters.suit ?? ""}
+									onInput={(e) =>
+										props.onChange({ suit: numInput(e.currentTarget.value) })
+									}
+								/>
 							</div>
 
 							<Show when={props.sourceOptions.length > 0}>

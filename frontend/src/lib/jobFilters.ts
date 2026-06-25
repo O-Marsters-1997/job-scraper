@@ -118,7 +118,6 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 export function activeFilterCount(f: JobFilters): number {
 	let n = 0;
 	if (f.suit !== undefined) n++;
-	if (f.rel !== undefined) n++;
 	if (f.src.length > 0) n++;
 	if (f.work.length > 0) n++;
 	if (f.sal) n++;
