@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -71,162 +70,162 @@ func (m *mockCredStore) ListProviders(_ context.Context, userID string) ([]strin
 	return out, nil
 }
 
-func TestAICredentialsHandler_Put_Save(t *testing.T) {
-	t.Parallel()
-
-	store := newMockCredStore()
-	h := NewAICredentialsHandler(store)
-
-	body, _ := json.Marshal(map[string]any{"provider": "anthropic", "apiKey": "sk-ant-secret"})
-	req := httptest.NewRequest(http.MethodPut, "/ai-credentials", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = withSession(req, "user-1")
-	w := httptest.NewRecorder()
-
-	h.Put(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status = %d; want 204: %s", w.Code, w.Body.String())
-	}
-	store.mu.Lock()
-	stored := store.data["user-1/anthropic"]
-	store.mu.Unlock()
-	if stored == "" {
-		t.Error("expected credential to be stored")
-	}
-	if strings.Contains(w.Body.String(), "sk-ant-secret") {
-		t.Error("response must not echo the API key")
-	}
-}
-
-func TestAICredentialsHandler_Put_Delete(t *testing.T) {
-	t.Parallel()
-
-	store := newMockCredStore()
-	store.data["user-1/anthropic"] = "sk-ant-old"
-
-	h := NewAICredentialsHandler(store)
-
-	body, _ := json.Marshal(map[string]any{"provider": "anthropic", "apiKey": nil})
-	req := httptest.NewRequest(http.MethodPut, "/ai-credentials", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = withSession(req, "user-1")
-	w := httptest.NewRecorder()
-
-	h.Put(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status = %d; want 204: %s", w.Code, w.Body.String())
-	}
-	store.mu.Lock()
-	_, exists := store.data["user-1/anthropic"]
-	store.mu.Unlock()
-	if exists {
-		t.Error("credential should have been deleted")
-	}
-}
-
-func TestAICredentialsHandler_Put_BadRequest(t *testing.T) {
+func TestAICredentialsHandler_UpsertCredential(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		body string
+		name       string
+		setup      func(*mockCredStore)
+		body       string
+		wantStatus int
+		check      func(*testing.T, *mockCredStore, *httptest.ResponseRecorder)
 	}{
-		{"invalid json", "not-json"},
-		{"missing provider", `{"apiKey":"sk-ant-foo"}`},
+		{
+			name:       "save stores credential",
+			body:       `{"provider":"anthropic","apiKey":"sk-ant-secret"}`,
+			wantStatus: http.StatusNoContent,
+			check: func(t *testing.T, store *mockCredStore, w *httptest.ResponseRecorder) {
+				store.mu.Lock()
+				stored := store.data["user-1/anthropic"]
+				store.mu.Unlock()
+				if stored == "" {
+					t.Error("expected credential to be stored")
+				}
+				if strings.Contains(w.Body.String(), "sk-ant-secret") {
+					t.Error("response must not echo the API key")
+				}
+			},
+		},
+		{
+			name: "delete removes credential",
+			setup: func(store *mockCredStore) {
+				store.data["user-1/anthropic"] = "sk-ant-old"
+			},
+			body:       `{"provider":"anthropic","apiKey":null}`,
+			wantStatus: http.StatusNoContent,
+			check: func(t *testing.T, store *mockCredStore, _ *httptest.ResponseRecorder) {
+				store.mu.Lock()
+				_, exists := store.data["user-1/anthropic"]
+				store.mu.Unlock()
+				if exists {
+					t.Error("credential should have been deleted")
+				}
+			},
+		},
+		{
+			name:       "invalid json returns 400",
+			body:       "not-json",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "missing provider returns 400",
+			body:       `{"apiKey":"sk-ant-foo"}`,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			store := newMockCredStore()
+			if tt.setup != nil {
+				tt.setup(store)
+			}
 			h := NewAICredentialsHandler(store)
 
-			req := httptest.NewRequest(http.MethodPut, "/ai-credentials", bytes.NewReader([]byte(tt.body)))
+			req := httptest.NewRequest(http.MethodPut, "/ai-credentials", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			req = withSession(req, "user-1")
 			w := httptest.NewRecorder()
 
-			h.Put(w, req)
+			h.UpsertCredential(w, req)
 
-			if w.Code != http.StatusBadRequest {
-				t.Errorf("status = %d; want 400", w.Code)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+			if tt.check != nil {
+				tt.check(t, store, w)
 			}
 		})
 	}
 }
 
-func TestAIPrefsHandler_Get_ConfiguredProviders(t *testing.T) {
+func TestAIPrefsHandler_GetConfiguredProviders(t *testing.T) {
 	t.Parallel()
 
-	store := newMockCredStore()
-	store.data["user-1/anthropic"] = "encrypted"
-
-	prefsStore := providers.NewMockUserAIPrefsProvider()
-	h := NewAIPrefsHandler(prefsStore, store)
-
-	req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
-	req = withSession(req, "user-1")
-	w := httptest.NewRecorder()
-
-	h.Get(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d; want 200: %s", w.Code, w.Body.String())
+	tests := []struct {
+		name       string
+		setup      func(*mockCredStore)
+		wantStatus int
+		check      func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "lists configured providers",
+			setup: func(s *mockCredStore) {
+				s.data["user-1/anthropic"] = "encrypted"
+			},
+			wantStatus: http.StatusOK,
+			check: func(t *testing.T, w *httptest.ResponseRecorder) {
+				var got aiPrefsResponse
+				if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+					t.Fatalf("decode: %v", err)
+				}
+				if len(got.ConfiguredProviders) != 1 || got.ConfiguredProviders[0] != "anthropic" {
+					t.Errorf("configuredProviders = %v; want [anthropic]", got.ConfiguredProviders)
+				}
+			},
+		},
+		{
+			name: "does not leak key material",
+			setup: func(s *mockCredStore) {
+				s.data["user-1/anthropic"] = "sk-ant-topsecret"
+			},
+			wantStatus: http.StatusOK,
+			check: func(t *testing.T, w *httptest.ResponseRecorder) {
+				if strings.Contains(w.Body.String(), "sk-ant-topsecret") {
+					t.Error("response body must not contain API key material")
+				}
+			},
+		},
+		{
+			name:       "returns empty slice when no credentials",
+			wantStatus: http.StatusOK,
+			check: func(t *testing.T, w *httptest.ResponseRecorder) {
+				var got aiPrefsResponse
+				if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+					t.Fatalf("decode: %v", err)
+				}
+				if got.ConfiguredProviders == nil {
+					t.Error("configuredProviders should be an empty slice, not null")
+				}
+				if len(got.ConfiguredProviders) != 0 {
+					t.Errorf("configuredProviders = %v; want []", got.ConfiguredProviders)
+				}
+			},
+		},
 	}
-	var got aiPrefsResponse
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(got.ConfiguredProviders) != 1 || got.ConfiguredProviders[0] != "anthropic" {
-		t.Errorf("configuredProviders = %v; want [anthropic]", got.ConfiguredProviders)
-	}
-}
 
-func TestAIPrefsHandler_Get_NoKeyMaterial(t *testing.T) {
-	t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			store := newMockCredStore()
+			if tt.setup != nil {
+				tt.setup(store)
+			}
+			prefsStore := providers.NewMockUserAIPrefsProvider()
+			h := NewAIPrefsHandler(prefsStore, store)
 
-	store := newMockCredStore()
-	// Store the key so it exists; value should never appear in the HTTP response.
-	store.data["user-1/anthropic"] = "sk-ant-topsecret"
+			req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
+			req = withSession(req, "user-1")
+			w := httptest.NewRecorder()
+			h.Get(w, req)
 
-	prefsStore := providers.NewMockUserAIPrefsProvider()
-	h := NewAIPrefsHandler(prefsStore, store)
-
-	req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
-	req = withSession(req, "user-1")
-	w := httptest.NewRecorder()
-	h.Get(w, req)
-
-	if strings.Contains(w.Body.String(), "sk-ant-topsecret") {
-		t.Error("response body must not contain API key material")
-	}
-}
-
-func TestAIPrefsHandler_Get_EmptyWhenNoCredentials(t *testing.T) {
-	t.Parallel()
-
-	store := newMockCredStore() // no entries
-	prefsStore := providers.NewMockUserAIPrefsProvider()
-	h := NewAIPrefsHandler(prefsStore, store)
-
-	req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
-	req = withSession(req, "user-1")
-	w := httptest.NewRecorder()
-	h.Get(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d; want 200", w.Code)
-	}
-	var got aiPrefsResponse
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if got.ConfiguredProviders == nil {
-		t.Error("configuredProviders should be an empty slice, not null")
-	}
-	if len(got.ConfiguredProviders) != 0 {
-		t.Errorf("configuredProviders = %v; want []", got.ConfiguredProviders)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
+			}
+			if tt.check != nil {
+				tt.check(t, w)
+			}
+		})
 	}
 }

@@ -109,7 +109,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 		r.Get("/ai-prefs", aiPrefsH.Get)
 		r.Put("/ai-prefs", aiPrefsH.Put)
 
-		r.Put("/ai-credentials", aiCredsH.Put)
+		r.Put("/ai-credentials", aiCredsH.UpsertCredential)
 
 		r.Route("/source-targets", func(r chi.Router) {
 			r.Get("/", stH.List)

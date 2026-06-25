@@ -17,7 +17,7 @@ func NewAICredentialsHandler(creds credstore.CredentialStore) *AICredentialsHand
 	return &AICredentialsHandler{creds: creds}
 }
 
-func (h *AICredentialsHandler) Put(w http.ResponseWriter, r *http.Request) {
+func (h *AICredentialsHandler) UpsertCredential(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 
 	var body struct {
