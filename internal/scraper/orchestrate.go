@@ -169,7 +169,6 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	}
 }
 
-// userGate holds a scorer and config for one user.
 type userGate struct {
 	userID    string
 	scorer    score.RelevanceScorer
@@ -184,8 +183,6 @@ func (g userGate) passes(job dto.Job) bool {
 	return g.score(job) >= g.searchCfg.RelevanceCutoff
 }
 
-// loadGates loads search configs for all users and returns one gate per user.
-// Returns nil (no gate) if the scorer or cfgDB is not configured, or on error.
 func (o *Orchestrator) loadGates(ctx context.Context, source string) []userGate {
 	if o.scorer == nil || o.cfgDB == nil {
 		return nil
@@ -215,30 +212,33 @@ type atsPath struct {
 func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	log := slog.With(slog.String("source", p.name))
 
-	type scoredJob struct {
-		job    dto.Job
-		scores []int // one per gate
+	type scoreEntry struct {
+		jobID, userID string
+		score         int
 	}
 
-	passing := make([]scoredJob, 0, len(jobs))
+	passing := make([]dto.Job, 0, len(jobs))
+	var entries []scoreEntry
 	for _, j := range jobs {
 		if j.URL == "" {
 			continue
 		}
 		if len(p.gates) == 0 {
-			passing = append(passing, scoredJob{job: j})
+			passing = append(passing, j)
 			continue
 		}
-		scores := make([]int, len(p.gates))
-		ok := false
+		relevant := false
+		jobEntries := make([]scoreEntry, len(p.gates))
 		for i, g := range p.gates {
-			scores[i] = g.score(j)
-			if scores[i] >= g.searchCfg.RelevanceCutoff {
-				ok = true
+			score := g.score(j)
+			if score >= g.searchCfg.RelevanceCutoff {
+				relevant = true
 			}
+			jobEntries[i] = scoreEntry{j.ID, g.userID, score}
 		}
-		if ok {
-			passing = append(passing, scoredJob{j, scores})
+		if relevant {
+			passing = append(passing, j)
+			entries = append(entries, jobEntries...)
 		}
 	}
 
@@ -246,29 +246,23 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 		return false, nil
 	}
 
-	valid := make([]dto.Job, len(passing))
-	for i, s := range passing {
-		valid[i] = s.job
-	}
-	if err := p.exporter.BulkExport(ctx, valid); err != nil {
+	if err := p.exporter.BulkExport(ctx, passing); err != nil {
 		return false, err
 	}
 
 	if p.scoreDB != nil {
-		for _, s := range passing {
-			for i, g := range p.gates {
-				if err := p.scoreDB.UpsertJobScoreRelevance(ctx, s.job.ID, g.userID, s.scores[i]); err != nil {
-					log.Warn("could not write relevance score",
-						slog.String("job_id", s.job.ID),
-						slog.String("user_id", g.userID),
-						slog.Any("err", err),
-					)
-				}
+		for _, e := range entries {
+			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, e.jobID, e.userID, e.score); err != nil {
+				log.Warn("could not write relevance score",
+					slog.String("job_id", e.jobID),
+					slog.String("user_id", e.userID),
+					slog.Any("err", err),
+				)
 			}
 		}
 	}
 
-	log.Info("ats jobs published", slog.Int("count", len(valid)))
+	log.Info("ats jobs published", slog.Int("count", len(passing)))
 	return false, nil
 }
 
@@ -349,7 +343,6 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	return false, nil
 }
 
-// passesAnyGate returns true if job passes at least one user's gate, or if there are no gates.
 func passesAnyGate(job dto.Job, gates []userGate) bool {
 	if len(gates) == 0 {
 		return true
