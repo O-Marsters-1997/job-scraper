@@ -178,6 +178,88 @@ export function stackedBarOptions(): ChartOptions<"bar"> {
 	};
 }
 
+// Multi-category horizontal bar — skill gap, source quality.
+export function horizontalBarOptions(): ChartOptions<"bar"> {
+	const faint = cssVarHex("--color-faint");
+	const muted = cssVarHex("--color-muted");
+	const fg = cssVarHex("--color-foreground");
+	const grid = cssVarHex("--color-border");
+	return {
+		maintainAspectRatio: false,
+		indexAxis: "y",
+		plugins: {
+			legend: { display: false },
+			tooltip: {
+				backgroundColor: fg,
+				padding: 8,
+				titleFont: { family: MONO, size: 11 },
+				bodyFont: { family: MONO, size: 11 },
+			},
+		},
+		scales: {
+			x: {
+				grid: { color: grid },
+				border: { display: false },
+				ticks: {
+					color: faint,
+					font: { family: MONO, size: 10 },
+					precision: 0,
+				},
+				beginAtZero: true,
+			},
+			y: {
+				grid: { display: false },
+				border: { display: false },
+				ticks: {
+					color: muted,
+					font: { family: MONO, size: 10 },
+				},
+			},
+		},
+	};
+}
+
+// Standard vertical bar — score distribution.
+export function verticalBarOptions(): ChartOptions<"bar"> {
+	const faint = cssVarHex("--color-faint");
+	const fg = cssVarHex("--color-foreground");
+	const grid = cssVarHex("--color-border");
+	return {
+		maintainAspectRatio: false,
+		plugins: {
+			legend: { display: false },
+			tooltip: {
+				backgroundColor: fg,
+				padding: 8,
+				titleFont: { family: MONO, size: 11 },
+				bodyFont: { family: MONO, size: 11 },
+			},
+		},
+		scales: {
+			x: {
+				grid: { display: false },
+				border: { display: false },
+				ticks: {
+					color: faint,
+					font: { family: MONO, size: 10 },
+				},
+			},
+			y: {
+				grid: { color: grid },
+				border: { display: false },
+				ticks: {
+					color: faint,
+					font: { family: MONO, size: 10 },
+					precision: 0,
+				},
+				beginAtZero: true,
+			},
+		},
+	};
+}
+
+export const destructiveHex = () => cssVarHex("--color-destructive");
+
 // Append a two-hex-digit alpha to a colour string, e.g. hexAlpha("#6645d9", "1a").
 export function hexAlpha(hex: string, alpha: string): string {
 	return `${hex}${alpha}`;

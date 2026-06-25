@@ -11,13 +11,16 @@ import {
 } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
+	destructiveHex,
 	donutChartOptions,
 	hexAlpha,
+	horizontalBarOptions,
 	lineChartOptions,
 	primaryHex,
 	registerCharts,
 	sourceHex,
 	stackedBarOptions,
+	verticalBarOptions,
 } from "@/lib/charts";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +45,19 @@ export const Route = createFileRoute("/_auth/insights")({
 		]),
 	component: InsightsPage,
 });
+
+const SCORE_BANDS = ["0–19", "20–39", "40–59", "60–79", "80–100"];
+
+function topSkills(arr: string[]): [string, number][] {
+	const counts: Record<string, number> = {};
+	for (const s of arr) {
+		const key = s.trim().toLowerCase();
+		if (key) counts[key] = (counts[key] ?? 0) + 1;
+	}
+	return Object.entries(counts)
+		.sort((a, b) => b[1] - a[1])
+		.slice(0, 10);
+}
 
 type Preset = "7D" | "30D" | "90D" | "All";
 const PRESETS: Preset[] = ["7D", "30D", "90D", "All"];
@@ -205,6 +221,111 @@ function InsightsPage() {
 
 	const totalApps = () => applications().length;
 	const hasJobs = () => jobs().length > 0;
+
+	// ── A4: Score distribution + gate stats ───────────────────────────────────
+	const gateStats = createMemo(() => {
+		let scored = 0;
+		let gated = 0;
+		let unscored = 0;
+		for (const job of jobs()) {
+			if (job.SuitabilityScore != null) scored++;
+			else if (job.SuitabilitySkipped) gated++;
+			else unscored++;
+		}
+		return { scored, gated, unscored };
+	});
+
+	const hasScores = () => gateStats().scored > 0;
+
+	const scoreDistData = createMemo(() => {
+		const bands = [0, 0, 0, 0, 0];
+		for (const job of jobs()) {
+			if (job.SuitabilityScore != null) {
+				bands[Math.min(Math.floor(job.SuitabilityScore / 20), 4)]++;
+			}
+		}
+		const primary = primaryHex();
+		return {
+			labels: SCORE_BANDS,
+			datasets: [
+				{
+					data: bands,
+					backgroundColor: hexAlpha(primary, "26"),
+					borderColor: primary,
+					borderWidth: 1.5,
+					borderRadius: 3,
+				},
+			],
+		};
+	});
+
+	// ── A5: Skill gap ─────────────────────────────────────────────────────────
+	const skillGap = createMemo(() => ({
+		missing: topSkills(jobs().flatMap((j) => j.Missing ?? [])),
+		matched: topSkills(jobs().flatMap((j) => j.Matched ?? [])),
+	}));
+
+	const missingSkillsData = createMemo(() => {
+		const entries = skillGap().missing;
+		const color = destructiveHex();
+		return {
+			labels: entries.map(([k]) => k),
+			datasets: [
+				{
+					data: entries.map(([, n]) => n),
+					backgroundColor: hexAlpha(color, "26"),
+					borderColor: color,
+					borderWidth: 1.5,
+					borderRadius: 3,
+				},
+			],
+		};
+	});
+
+	const matchedSkillsData = createMemo(() => {
+		const entries = skillGap().matched;
+		const color = primaryHex();
+		return {
+			labels: entries.map(([k]) => k),
+			datasets: [
+				{
+					data: entries.map(([, n]) => n),
+					backgroundColor: hexAlpha(color, "26"),
+					borderColor: color,
+					borderWidth: 1.5,
+					borderRadius: 3,
+				},
+			],
+		};
+	});
+
+	// ── A6: Source quality ────────────────────────────────────────────────────
+	const sourceQualityData = createMemo(() => {
+		const scoreSum: Record<string, number> = {};
+		const scoreCount: Record<string, number> = {};
+		for (const job of jobs()) {
+			if (job.SuitabilityScore != null) {
+				scoreSum[job.Source] =
+					(scoreSum[job.Source] ?? 0) + job.SuitabilityScore;
+				scoreCount[job.Source] = (scoreCount[job.Source] ?? 0) + 1;
+			}
+		}
+		const sources = Object.keys(scoreCount).sort(
+			(a, b) => scoreSum[b] / scoreCount[b] - scoreSum[a] / scoreCount[a],
+		);
+		return {
+			labels: sources,
+			datasets: [
+				{
+					data: sources.map((s) => Math.round(scoreSum[s] / scoreCount[s])),
+					backgroundColor: sources.map((s) => hexAlpha(sourceHex(s), "26")),
+					borderColor: sources.map((s) => sourceHex(s)),
+					borderWidth: 1.5,
+					borderRadius: 3,
+				},
+			],
+		};
+	});
 
 	return (
 		<div class="px-7 py-6">
@@ -410,6 +531,147 @@ function InsightsPage() {
 					</Show>
 				</div>
 			</Card>
+
+			{/* A4 — Score distribution + gate stats */}
+			<Card class="mb-3 mt-3">
+				<div class="border-b border-border px-5 py-4">
+					<h3 class="text-sm font-semibold text-foreground">
+						Score &amp; gate
+					</h3>
+					<p class="mt-0.5 text-xs text-faint">
+						How the relevance gate and suitability scorer shaped your feed
+					</p>
+				</div>
+				<div class="grid grid-cols-1 lg:grid-cols-[1fr_180px]">
+					<div class="px-5 py-4 lg:border-r lg:border-border">
+						<p class="mb-2 text-xs text-faint">
+							Suitability score distribution
+						</p>
+						<Show
+							when={hasScores() && chartsReady()}
+							fallback={<p class="text-sm text-faint">No scored jobs yet.</p>}
+						>
+							<div class="relative" style={{ height: "140px" }}>
+								<Bar data={scoreDistData()} options={verticalBarOptions()} />
+							</div>
+						</Show>
+					</div>
+					<div class="divide-y divide-border">
+						<div class="flex items-center justify-between px-5 py-3.5">
+							<div>
+								<p class="text-xs font-medium text-muted">Scored</p>
+								<p class="mt-0.5 text-xs text-faint">LLM evaluated</p>
+							</div>
+							<p class="font-mono text-lg font-medium tabular-nums text-foreground">
+								{gateStats().scored}
+							</p>
+						</div>
+						<div class="flex items-center justify-between px-5 py-3.5">
+							<div>
+								<p class="text-xs font-medium text-muted">Gated</p>
+								<p class="mt-0.5 text-xs text-faint">
+									Blocked by relevance cutoff
+								</p>
+							</div>
+							<p class="font-mono text-lg font-medium tabular-nums text-foreground">
+								{gateStats().gated}
+							</p>
+						</div>
+						<div class="flex items-center justify-between px-5 py-3.5">
+							<div>
+								<p class="text-xs font-medium text-muted">Pending</p>
+								<p class="mt-0.5 text-xs text-faint">Not yet scored</p>
+							</div>
+							<p class="font-mono text-lg font-medium tabular-nums text-foreground">
+								{gateStats().unscored}
+							</p>
+						</div>
+					</div>
+				</div>
+			</Card>
+
+			{/* A5 — Source quality */}
+			<Card class="mb-3">
+				<div class="border-b border-border px-5 py-4">
+					<h3 class="text-sm font-semibold text-foreground">Source quality</h3>
+					<p class="mt-0.5 text-xs text-faint">
+						Average suitability score per job board
+					</p>
+				</div>
+				<div class="px-5 py-4">
+					<Show
+						when={
+							hasScores() &&
+							sourceQualityData().labels.length > 0 &&
+							chartsReady()
+						}
+						fallback={<p class="text-sm text-faint">No scored jobs yet.</p>}
+					>
+						<div
+							class="relative"
+							style={{
+								height: `${Math.max(80, sourceQualityData().labels.length * 40)}px`,
+							}}
+						>
+							<Bar
+								data={sourceQualityData()}
+								options={horizontalBarOptions()}
+							/>
+						</div>
+					</Show>
+				</div>
+			</Card>
+
+			{/* A6 — Skill gap (only shown when missing skill data exists) */}
+			<Show when={skillGap().missing.length > 0}>
+				<Card>
+					<div class="border-b border-border px-5 py-4">
+						<h3 class="text-sm font-semibold text-foreground">Skill gap</h3>
+						<p class="mt-0.5 text-xs text-faint">
+							Most common gaps and strengths across scored jobs
+						</p>
+					</div>
+					<div class="grid grid-cols-1 lg:grid-cols-2">
+						<div class="px-5 py-4 lg:border-r lg:border-border">
+							<p class="mb-2 text-xs text-faint">Missing skills</p>
+							<Show when={chartsReady()}>
+								<div
+									class="relative"
+									style={{
+										height: `${Math.max(120, skillGap().missing.length * 26)}px`,
+									}}
+								>
+									<Bar
+										data={missingSkillsData()}
+										options={horizontalBarOptions()}
+									/>
+								</div>
+							</Show>
+						</div>
+						<div class="px-5 py-4">
+							<p class="mb-2 text-xs text-faint">Matched skills</p>
+							<Show
+								when={skillGap().matched.length > 0 && chartsReady()}
+								fallback={
+									<p class="text-sm text-faint">No matched skill data.</p>
+								}
+							>
+								<div
+									class="relative"
+									style={{
+										height: `${Math.max(120, skillGap().matched.length * 26)}px`,
+									}}
+								>
+									<Bar
+										data={matchedSkillsData()}
+										options={horizontalBarOptions()}
+									/>
+								</div>
+							</Show>
+						</div>
+					</div>
+				</Card>
+			</Show>
 		</div>
 	);
 }

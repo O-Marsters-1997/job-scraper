@@ -19,11 +19,11 @@ import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
-import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
-import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsStatusesRouteImport } from './routes/_auth/settings/statuses'
 import { Route as AuthSettingsSearchesRouteImport } from './routes/_auth/settings/searches'
+import { Route as AuthSettingsScoringRouteImport } from './routes/_auth/settings/scoring'
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
+import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
@@ -76,16 +76,6 @@ const AuthApplicationsRoute = AuthApplicationsRouteImport.update({
   path: '/applications',
   getParentRoute: () => AuthRoute,
 } as any)
-const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
-  id: '/ai',
-  path: '/ai',
-  getParentRoute: () => AuthSettingsRoute,
-} as any)
-const AuthSettingsScoringRoute = AuthSettingsScoringRouteImport.update({
-  id: '/scoring',
-  path: '/scoring',
-  getParentRoute: () => AuthSettingsRoute,
-} as any)
 const AuthSettingsStatusesRoute = AuthSettingsStatusesRouteImport.update({
   id: '/statuses',
   path: '/statuses',
@@ -96,12 +86,22 @@ const AuthSettingsSearchesRoute = AuthSettingsSearchesRouteImport.update({
   path: '/searches',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsScoringRoute = AuthSettingsScoringRouteImport.update({
+  id: '/scoring',
+  path: '/scoring',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsIntegrationsRoute =
   AuthSettingsIntegrationsRouteImport.update({
     id: '/integrations',
     path: '/integrations',
     getParentRoute: () => AuthSettingsRoute,
   } as any)
+const AuthSettingsAiRoute = AuthSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthJobsIdRoute = AuthJobsIdRouteImport.update({
   id: '/jobs_/$id',
   path: '/jobs/$id',
@@ -307,20 +307,6 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthApplicationsRouteImport
       parentRoute: typeof AuthRoute
     }
-    '/_auth/settings/ai': {
-      id: '/_auth/settings/ai'
-      path: '/ai'
-      fullPath: '/settings/ai'
-      preLoaderRoute: typeof AuthSettingsAiRouteImport
-      parentRoute: typeof AuthSettingsRoute
-    }
-    '/_auth/settings/scoring': {
-      id: '/_auth/settings/scoring'
-      path: '/scoring'
-      fullPath: '/settings/scoring'
-      preLoaderRoute: typeof AuthSettingsScoringRouteImport
-      parentRoute: typeof AuthSettingsRoute
-    }
     '/_auth/settings/statuses': {
       id: '/_auth/settings/statuses'
       path: '/statuses'
@@ -335,11 +321,25 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthSettingsSearchesRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/scoring': {
+      id: '/_auth/settings/scoring'
+      path: '/scoring'
+      fullPath: '/settings/scoring'
+      preLoaderRoute: typeof AuthSettingsScoringRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/integrations': {
       id: '/_auth/settings/integrations'
       path: '/integrations'
       fullPath: '/settings/integrations'
       preLoaderRoute: typeof AuthSettingsIntegrationsRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
+    '/_auth/settings/ai': {
+      id: '/_auth/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AuthSettingsAiRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
     '/_auth/jobs_/$id': {
