@@ -40,7 +40,7 @@ type aiPrefsResponse struct {
 	ConfiguredProviders []string `json:"configuredProviders"`
 }
 
-func (h *AIPrefsHandler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *AIPrefsHandler) GetAIPrefs(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	prefs, err := h.prefs.GetUserAIPrefs(r.Context(), session.UserID)
 	if err != nil && !errors.Is(err, providers.ErrNotFound) {
@@ -75,7 +75,7 @@ func (h *AIPrefsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func (h *AIPrefsHandler) Put(w http.ResponseWriter, r *http.Request) {
+func (h *AIPrefsHandler) UpdateAIPrefs(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		SuitabilityModel string `json:"suitabilityModel"`

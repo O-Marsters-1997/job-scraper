@@ -3,6 +3,7 @@ package ingest_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -23,12 +24,39 @@ func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) error {
 }
 
 type stubScorer struct {
-	jobs []dto.Job
+	mu    sync.Mutex
+	calls []struct {
+		job    dto.Job
+		userID string
+	}
 }
 
-func (s *stubScorer) ScoreAndSave(_ context.Context, job dto.Job) int {
-	s.jobs = append(s.jobs, job)
+func (s *stubScorer) ScoreAndSave(_ context.Context, job dto.Job, userID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, struct {
+		job    dto.Job
+		userID string
+	}{job, userID})
 	return 0
+}
+
+type stubUserLister struct {
+	users []string
+	err   error
+}
+
+func (l *stubUserLister) ListUsersWithProvider(_ context.Context, _ string) ([]string, error) {
+	return l.users, l.err
+}
+
+type stubCredGetter struct {
+	key string
+	err error
+}
+
+func (c *stubCredGetter) Get(_ context.Context, _, _ string) (string, error) {
+	return c.key, c.err
 }
 
 type stubNotifier struct {
@@ -37,6 +65,20 @@ type stubNotifier struct {
 
 func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int) {
 	n.jobs = append(n.jobs, job)
+}
+
+// oneUserCfg returns a Config wired with a single user and a shared stubScorer.
+func oneUserCfg(db ingest.Saver, sc *stubScorer, notifier ingest.Notifier) ingest.Config {
+	return ingest.Config{
+		DB:       db,
+		Provider: "anthropic",
+		Users:    &stubUserLister{users: []string{"user-1"}},
+		Creds:    &stubCredGetter{key: "key-1"},
+		ScorerFor: func(_ string) ingest.Scorer {
+			return sc
+		},
+		Notifier: notifier,
+	}
 }
 
 func TestIngest(t *testing.T) {
@@ -48,7 +90,7 @@ func TestIngest(t *testing.T) {
 		name         string
 		jobs         []dto.Job
 		saveErr      error
-		nilScorer    bool
+		noScoring    bool
 		nilNotifier  bool
 		wantErr      bool
 		wantSaved    int
@@ -92,9 +134,9 @@ func TestIngest(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:        "nil scorer and notifier do not panic",
+			name:        "no scoring config and nil notifier do not panic",
 			jobs:        []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
-			nilScorer:   true,
+			noScoring:   true,
 			nilNotifier: true,
 			wantSaved:   1,
 		},
@@ -108,23 +150,24 @@ func TestIngest(t *testing.T) {
 			sc := &stubScorer{}
 			nc := &stubNotifier{}
 
-			var scorer ingest.Scorer
-			if !tt.nilScorer {
-				scorer = sc
-			}
-			var notifier ingest.Notifier
-			if !tt.nilNotifier {
-				notifier = nc
+			var cfg ingest.Config
+			if tt.noScoring {
+				cfg = ingest.Config{DB: db}
+			} else {
+				cfg = oneUserCfg(db, sc, nc)
+				if tt.nilNotifier {
+					cfg.Notifier = nil
+				}
 			}
 
-			err := ingest.New(db, scorer, notifier).Ingest(context.Background(), tt.jobs)
+			err := ingest.New(cfg).Ingest(context.Background(), tt.jobs)
 
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Ingest: expected error, got nil")
 				}
-				if len(sc.jobs) != 0 {
-					t.Errorf("scorer called %d times after save error; want 0", len(sc.jobs))
+				if len(sc.calls) != 0 {
+					t.Errorf("scorer called %d times after save error; want 0", len(sc.calls))
 				}
 				if len(nc.jobs) != 0 {
 					t.Errorf("notifier called %d times after save error; want 0", len(nc.jobs))
@@ -143,12 +186,122 @@ func TestIngest(t *testing.T) {
 			if saved != tt.wantSaved {
 				t.Errorf("saved %d jobs; want %d", saved, tt.wantSaved)
 			}
-			if len(sc.jobs) != tt.wantScored {
-				t.Errorf("scorer called %d times; want %d", len(sc.jobs), tt.wantScored)
+			if len(sc.calls) != tt.wantScored {
+				t.Errorf("scorer called %d times; want %d", len(sc.calls), tt.wantScored)
 			}
 			if len(nc.jobs) != tt.wantNotified {
 				t.Errorf("notifier called %d times; want %d", len(nc.jobs), tt.wantNotified)
 			}
 		})
+	}
+}
+
+func TestIngest_TwoUserFanOut(t *testing.T) {
+	t.Parallel()
+
+	db := &stubSaver{}
+	sc := &stubScorer{}
+
+	cfg := ingest.Config{
+		DB:       db,
+		Provider: "anthropic",
+		Users:    &stubUserLister{users: []string{"alice", "bob"}},
+		Creds:    &stubCredGetter{key: "key-x"},
+		ScorerFor: func(_ string) ingest.Scorer {
+			return sc
+		},
+	}
+
+	jobs := []dto.Job{
+		{Title: "Engineer", URL: "https://example.com/1"},
+		{Title: "Manager", URL: "https://example.com/2"},
+	}
+	if err := ingest.New(cfg).Ingest(context.Background(), jobs); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 2 jobs × 2 users = 4 ScoreAndSave calls
+	if len(sc.calls) != 4 {
+		t.Errorf("want 4 scorer calls (2 jobs × 2 users), got %d", len(sc.calls))
+	}
+
+	// Each user should appear exactly twice (once per job)
+	counts := map[string]int{}
+	for _, c := range sc.calls {
+		counts[c.userID]++
+	}
+	for _, uid := range []string{"alice", "bob"} {
+		if counts[uid] != 2 {
+			t.Errorf("user %q scored %d times; want 2", uid, counts[uid])
+		}
+	}
+}
+
+func TestIngest_CredentialErrorSkipsUser(t *testing.T) {
+	t.Parallel()
+
+	db := &stubSaver{}
+	sc := &stubScorer{}
+
+	credErr := errors.New("decryption failed")
+	creds := &multiCredGetter{
+		keys: map[string]string{"alice": "key-a"},
+		errs: map[string]error{"bob": credErr},
+	}
+
+	cfg := ingest.Config{
+		DB:       db,
+		Provider: "anthropic",
+		Users:    &stubUserLister{users: []string{"alice", "bob"}},
+		Creds:    creds,
+		ScorerFor: func(_ string) ingest.Scorer {
+			return sc
+		},
+	}
+
+	if err := ingest.New(cfg).Ingest(context.Background(), []dto.Job{
+		{Title: "Engineer", URL: "https://example.com/1"},
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// only alice succeeds; bob is skipped
+	if len(sc.calls) != 1 {
+		t.Errorf("want 1 scorer call (alice only), got %d", len(sc.calls))
+	}
+	if sc.calls[0].userID != "alice" {
+		t.Errorf("expected alice to be scored, got %q", sc.calls[0].userID)
+	}
+}
+
+// multiCredGetter returns per-user keys or errors.
+type multiCredGetter struct {
+	keys map[string]string
+	errs map[string]error
+}
+
+func (m *multiCredGetter) Get(_ context.Context, userID, _ string) (string, error) {
+	if err, ok := m.errs[userID]; ok {
+		return "", err
+	}
+	return m.keys[userID], nil
+}
+
+func TestProviderForModel(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		modelID string
+		want    string
+	}{
+		{"claude-haiku-4-5-20251001", "anthropic"},
+		{"claude-sonnet-4-6", "anthropic"},
+		{"claude-3-opus", "anthropic"},
+		{"gpt-4", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := ingest.ProviderForModel(tt.modelID); got != tt.want {
+			t.Errorf("ProviderForModel(%q) = %q; want %q", tt.modelID, got, tt.want)
+		}
 	}
 }

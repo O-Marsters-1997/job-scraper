@@ -64,7 +64,7 @@ func TestProfileHandler_Get(t *testing.T) {
 			req = withSession(req, tt.userID)
 			w := httptest.NewRecorder()
 
-			h.Get(w, req)
+			h.GetProfile(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
@@ -135,7 +135,7 @@ func TestProfileHandler_Put(t *testing.T) {
 			req = withSession(req, "user-1")
 			w := httptest.NewRecorder()
 
-			h.Put(w, req)
+			h.UpdateProfile(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())

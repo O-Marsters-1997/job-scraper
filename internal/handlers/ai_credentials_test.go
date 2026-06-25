@@ -218,7 +218,7 @@ func TestAIPrefsHandler_GetConfiguredProviders(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/ai-prefs", nil)
 			req = withSession(req, "user-1")
 			w := httptest.NewRecorder()
-			h.Get(w, req)
+			h.GetAIPrefs(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())

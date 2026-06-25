@@ -74,7 +74,7 @@ func TestAIPrefsHandler_Get(t *testing.T) {
 			req = withSession(req, tt.userID)
 			w := httptest.NewRecorder()
 
-			h.Get(w, req)
+			h.GetAIPrefs(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
@@ -133,7 +133,7 @@ func TestAIPrefsHandler_Put(t *testing.T) {
 			req = withSession(req, "user-1")
 			w := httptest.NewRecorder()
 
-			h.Put(w, req)
+			h.UpdateAIPrefs(w, req)
 
 			if w.Code != tt.wantStatus {
 				t.Errorf("status = %d; want %d: %s", w.Code, tt.wantStatus, w.Body.String())
@@ -154,7 +154,7 @@ func TestAIPrefsHandler_PutThenGet(t *testing.T) {
 	putReq = withSession(putReq, "user-1")
 	putW := httptest.NewRecorder()
 
-	h.Put(putW, putReq)
+	h.UpdateAIPrefs(putW, putReq)
 
 	if putW.Code != http.StatusOK {
 		t.Fatalf("PUT: want 200, got %d: %s", putW.Code, putW.Body.String())
@@ -164,7 +164,7 @@ func TestAIPrefsHandler_PutThenGet(t *testing.T) {
 	getReq = withSession(getReq, "user-1")
 	getW := httptest.NewRecorder()
 
-	h.Get(getW, getReq)
+	h.GetAIPrefs(getW, getReq)
 
 	if getW.Code != http.StatusOK {
 		t.Fatalf("GET: want 200, got %d", getW.Code)

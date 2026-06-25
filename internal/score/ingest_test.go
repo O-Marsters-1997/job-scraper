@@ -114,8 +114,8 @@ func TestIngestScorer_ScoreAndSave(t *testing.T) {
 				err: tt.cfgErr,
 			}
 
-			is := score.NewIngestScorer(tt.scorer, writer, cfgReader, "user-1")
-			is.ScoreAndSave(context.Background(), dto.Job{ID: "job-abc", URL: "https://example.com/job", Title: "Engineer"})
+			is := score.NewIngestScorer(tt.scorer, writer, cfgReader)
+			is.ScoreAndSave(context.Background(), dto.Job{ID: "job-abc", URL: "https://example.com/job", Title: "Engineer"}, "user-1")
 
 			if tt.wantWritten {
 				if writer.lastJobID != "job-abc" {
@@ -150,9 +150,9 @@ func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
 			Missing:   missing,
 			Rationale: rationale,
 		}},
-		writer, cfgReader, "user-1",
+		writer, cfgReader,
 	)
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-xyz", URL: "https://example.com/job2", Title: "Go Engineer"})
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-xyz", URL: "https://example.com/job2", Title: "Go Engineer"}, "user-1")
 
 	if writer.lastReason != rationale {
 		t.Errorf("reasoning = %q; want %q", writer.lastReason, rationale)
@@ -192,8 +192,8 @@ func TestIngestScorer_RelevanceGate(t *testing.T) {
 			}}
 			job := dto.Job{ID: "job-1", URL: "https://example.com/job", Title: "Engineer", RelevanceScore: &tc.relevanceScore}
 
-			is := score.NewIngestScorer(sc, writer, cfgReader, "user-1")
-			is.ScoreAndSave(context.Background(), job)
+			is := score.NewIngestScorer(sc, writer, cfgReader)
+			is.ScoreAndSave(context.Background(), job, "user-1")
 
 			if tc.wantSkipped && !writer.skippedCalled {
 				t.Error("UpsertJobScoreSkipped was not called")
@@ -219,8 +219,8 @@ func TestIngestScorer_ModelIDFromPrefs(t *testing.T) {
 	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
 	aiPrefs := &stubAIPrefsReader{prefs: dto.UserAIPrefs{SuitabilityModel: "claude-sonnet-4-6"}}
 
-	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs, "user-1")
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-m", URL: "https://example.com/job3", Title: "Engineer"})
+	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs)
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-m", URL: "https://example.com/job3", Title: "Engineer"}, "user-1")
 
 	if sc.lastModelID != "claude-sonnet-4-6" {
 		t.Errorf("model passed to scorer = %q; want %q", sc.lastModelID, "claude-sonnet-4-6")
@@ -235,10 +235,10 @@ func TestIngestScorer_ModelIDDefaultWhenNoPrefs(t *testing.T) {
 	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
 	aiPrefs := &stubAIPrefsReader{err: providers.ErrNotFound}
 
-	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs, "user-1")
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-d", URL: "https://example.com/job4", Title: "Engineer"})
+	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs)
+	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-d", URL: "https://example.com/job4", Title: "Engineer"}, "user-1")
 
-	if sc.lastModelID != "claude-haiku-4-5-20251001" {
+	if sc.lastModelID != score.DefaultSuitabilityModel {
 		t.Errorf("model passed to scorer = %q; want default haiku", sc.lastModelID)
 	}
 }
