@@ -8,7 +8,7 @@ import {
 	type PaginationState,
 	type SortingState,
 } from "@tanstack/solid-table";
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Badge } from "@/components/ui/badge";
@@ -67,11 +67,14 @@ export function JobsDataTable<TData extends Job>(
 	});
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
 
-	// Reset to page 1 whenever filtered data changes length.
-	createEffect(() => {
-		void props.data.length;
-		setPagination((p) => ({ ...p, pageIndex: 0 }));
-	});
+	// Reset to page 1 only when the active URL filters change, not on pagination clicks.
+	createEffect(
+		on(
+			() => JSON.stringify(props.filters),
+			() => setPagination((p) => ({ ...p, pageIndex: 0 })),
+			{ defer: true },
+		),
+	);
 
 	// Per-row expand state — keyed by Job ID, isolated from sort/filter/pagination
 	const [expandedRows, setExpandedRows] = createSignal<Set<string>>(new Set());

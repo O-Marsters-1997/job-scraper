@@ -16,6 +16,10 @@ export const DEFAULT_FILTERS: JobFilters = {
 	src: [],
 	work: [],
 	sal: false,
+	suit: undefined,
+	rel: undefined,
+	salMin: undefined,
+	salMax: undefined,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */

@@ -8,6 +8,7 @@ import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
+import { ScoreCircle } from "./ScoreCircle";
 
 export { titleCase };
 
@@ -140,9 +141,7 @@ export function createJobColumns(
 				if (val === null || val === undefined) {
 					return <span class="text-faint">—</span>;
 				}
-				return (
-					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
-				);
+				return <ScoreCircle value={val} />;
 			},
 		},
 		{
@@ -155,9 +154,7 @@ export function createJobColumns(
 				if (val === null || val === undefined) {
 					return <span class="text-faint">—</span>;
 				}
-				return (
-					<span class="font-mono text-xs tabular-nums text-muted">{val}</span>
-				);
+				return <ScoreCircle value={val} />;
 			},
 		},
 		{
