@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SkeletonList } from "@/components/ui/skeleton";
@@ -8,13 +8,18 @@ import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { useApplicationsForJobs } from "../../hooks/useApplications";
 import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs")({
 	// Return Partial so <Link to="/jobs"> callers don't need to supply search params.
 	validateSearch: (raw: Record<string, unknown>): Partial<JobFilters> =>
 		parseSearch(raw),
-	loader: () => queryClient.ensureQueryData(jobsQueryOptions),
+	loader: () =>
+		Promise.all([
+			queryClient.ensureQueryData(jobsQueryOptions),
+			queryClient.ensureQueryData(aiPrefsQueryOptions),
+		]),
 	component: JobsPage,
 });
 
@@ -23,6 +28,7 @@ function JobsPage() {
 	const navigate = useNavigate();
 
 	const query = useJobs();
+	const aiPrefs = useAiPrefs();
 	const jobs = () => query.data ?? [];
 	const allJobIds = () => jobs().map((j) => j.ID);
 
@@ -84,6 +90,15 @@ function JobsPage() {
 					Open roles scraped from your configured sources
 				</p>
 			</div>
+
+			<Show when={aiPrefs.data && !aiPrefs.data.scoringEnabled}>
+				<div class="mb-4 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3 text-sm text-accent-text">
+					AI scoring is off —{" "}
+					<Link to="/settings/ai" class="font-medium underline underline-offset-2">
+						add a key in Settings
+					</Link>
+				</div>
+			</Show>
 
 			<Show when={query.isPending}>
 				<SkeletonList rows={6} />
