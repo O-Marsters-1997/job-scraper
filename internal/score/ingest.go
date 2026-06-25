@@ -9,7 +9,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
+// DefaultSuitabilityModel is the model used for suitability scoring when the
+// user has no AI prefs or the prefs do not specify a model.
+const DefaultSuitabilityModel = "claude-haiku-4-5-20251001"
 
 type ScoreWriter interface {
 	UpsertJobScoreSuitability(ctx context.Context, jobID, userID string, score int, reasoning string, matched, missing []string) error
@@ -29,22 +31,21 @@ type IngestScorer struct {
 	db        ScoreWriter
 	cfgDB     ConfigReader
 	aiPrefsDB UserAIPrefsReader
-	userID    string
 }
 
-func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, userID string) *IngestScorer {
-	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, userID: userID}
+func NewIngestScorer(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader) *IngestScorer {
+	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB}
 }
 
 // aiPrefsDB may be nil; the default model is used when it is.
-func NewIngestScorerWithPrefs(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, aiPrefsDB UserAIPrefsReader, userID string) *IngestScorer {
-	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, aiPrefsDB: aiPrefsDB, userID: userID}
+func NewIngestScorerWithPrefs(scorer SuitabilityScorer, db ScoreWriter, cfgDB ConfigReader, aiPrefsDB UserAIPrefsReader) *IngestScorer {
+	return &IngestScorer{scorer: scorer, db: db, cfgDB: cfgDB, aiPrefsDB: aiPrefsDB}
 }
 
-// ScoreAndSave scores the job, persists the result, and returns the score (0 on any error).
+// ScoreAndSave scores the job for userID, persists the result, and returns the score (0 on any error).
 // Errors are logged internally so a scoring failure never blocks the ingest path.
-func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
-	cfg, err := s.cfgDB.GetSearchConfig(ctx, s.userID)
+func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job, userID string) int {
+	cfg, err := s.cfgDB.GetSearchConfig(ctx, userID)
 	if err != nil {
 		slog.Warn("suitability: could not load search config", slog.Any("err", err))
 		return 0
@@ -56,15 +57,15 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 			slog.Int("relevance", *job.RelevanceScore),
 			slog.Int("cutoff", cfg.RelevanceCutoff),
 		)
-		if err := s.db.UpsertJobScoreSkipped(ctx, job.ID, s.userID); err != nil {
+		if err := s.db.UpsertJobScoreSkipped(ctx, job.ID, userID); err != nil {
 			slog.Error("upsert skipped failed", slog.String("url", job.URL), slog.Any("err", err))
 		}
 		return 0
 	}
 
-	modelID := defaultSuitabilityModel
+	modelID := DefaultSuitabilityModel
 	if s.aiPrefsDB != nil {
-		prefs, err := s.aiPrefsDB.GetUserAIPrefs(ctx, s.userID)
+		prefs, err := s.aiPrefsDB.GetUserAIPrefs(ctx, userID)
 		if err != nil && !errors.Is(err, providers.ErrNotFound) {
 			slog.Warn("suitability: could not load ai prefs, using default model", slog.Any("err", err))
 		} else if err == nil {
@@ -86,7 +87,7 @@ func (s *IngestScorer) ScoreAndSave(ctx context.Context, job dto.Job) int {
 		slog.Float64("cost_usd", result.Usage.CostUSD),
 	)
 
-	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, s.userID, result.Score, result.Rationale, result.Matched, result.Missing); err != nil {
+	if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, userID, result.Score, result.Rationale, result.Matched, result.Missing); err != nil {
 		slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 	}
 	return result.Score

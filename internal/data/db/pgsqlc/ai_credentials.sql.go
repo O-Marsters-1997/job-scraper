@@ -52,6 +52,30 @@ const listUserAICredentialProviders = `-- name: ListUserAICredentialProviders :m
 SELECT provider FROM user_ai_credentials WHERE user_id = $1 ORDER BY provider
 `
 
+const listUsersWithProvider = `-- name: ListUsersWithProvider :many
+SELECT user_id FROM user_ai_credentials WHERE provider = $1 ORDER BY user_id
+`
+
+func (q *Queries) ListUsersWithProvider(ctx context.Context, provider string) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listUsersWithProvider, provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var userID pgtype.UUID
+		if err := rows.Scan(&userID); err != nil {
+			return nil, err
+		}
+		items = append(items, userID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (q *Queries) ListUserAICredentialProviders(ctx context.Context, userID pgtype.UUID) ([]string, error) {
 	rows, err := q.db.Query(ctx, listUserAICredentialProviders, userID)
 	if err != nil {

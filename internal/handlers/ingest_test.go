@@ -13,15 +13,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 )
 
-type mockScorer struct {
-	calls int
-}
-
-func (m *mockScorer) ScoreAndSave(_ context.Context, _ dto.Job) int {
-	m.calls++
-	return 42
-}
-
 type mockNotifier struct {
 	calls int
 }
@@ -30,8 +21,8 @@ func (m *mockNotifier) NotifyNewJob(_ context.Context, _ dto.Job, _ int) {
 	m.calls++
 }
 
-func buildHandler(db ingest.Saver, scorer ingest.Scorer, notifier ingest.Notifier) http.Handler {
-	ing := ingest.New(db, scorer, notifier)
+func buildHandler(db ingest.Saver, notifier ingest.Notifier) http.Handler {
+	ing := ingest.New(ingest.Config{DB: db, Notifier: notifier})
 	h := NewIngestHandler(ing)
 	return auth.ServiceTokenMiddleware(http.HandlerFunc(h.Ingest))
 }
@@ -76,7 +67,7 @@ func TestIngestHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("INGEST_SERVICE_TOKEN", goodToken)
 			db := providers.NewMockJobProvider()
-			handler := buildHandler(db, nil, nil)
+			handler := buildHandler(db, nil)
 
 			req := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewBufferString(tc.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -97,9 +88,8 @@ func TestIngestHandler(t *testing.T) {
 func TestIngestHandler_SaveCalled(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
-	scorer := &mockScorer{}
 	notifier := &mockNotifier{}
-	handler := buildHandler(db, scorer, notifier)
+	handler := buildHandler(db, notifier)
 
 	body := `{"title":"Engineer","url":"https://example.com/job1"}`
 	req := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewBufferString(body))
@@ -119,9 +109,6 @@ func TestIngestHandler_SaveCalled(t *testing.T) {
 	if len(jobs) != 1 {
 		t.Fatalf("want 1 saved job, got %d", len(jobs))
 	}
-	if scorer.calls != 1 {
-		t.Errorf("want scorer called once, got %d", scorer.calls)
-	}
 	if notifier.calls != 1 {
 		t.Errorf("want notifier called once, got %d", notifier.calls)
 	}
@@ -130,9 +117,7 @@ func TestIngestHandler_SaveCalled(t *testing.T) {
 func TestIngestHandler_DuplicateURL(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
-	scorer := &mockScorer{}
-	notifier := &mockNotifier{}
-	handler := buildHandler(db, scorer, notifier)
+	handler := buildHandler(db, nil)
 
 	body := `{"title":"Engineer","url":"https://example.com/job2"}`
 
