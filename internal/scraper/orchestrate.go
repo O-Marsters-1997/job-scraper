@@ -29,7 +29,7 @@ type Orchestrator struct {
 	wg           sync.WaitGroup
 	buildSources func(ctx context.Context) ([]sources.Source, error) // nil → use static srcs
 	buildTarget  func(target dto.SourceTarget) []sources.Source      // nil → no on-demand scrape
-	force        bool                                                 // bypass MinScrapeInterval gate when true
+	force        bool                                                // bypass MinScrapeInterval gate when true
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {

@@ -26,7 +26,6 @@ func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
 	}
 }
 
-
 func fromRow(row pgsqlc.Job) dto.Job {
 	return dto.Job{
 		ID:              row.ID.String(),

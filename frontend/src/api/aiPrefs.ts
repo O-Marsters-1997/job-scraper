@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { useMocks } from "./config";
 
 export interface AiPrefs {
 	suitabilityModel: string;
@@ -8,6 +9,14 @@ export interface AiPrefs {
 }
 
 export async function fetchAiPrefs(): Promise<AiPrefs> {
+	if (useMocks()) {
+		return {
+			suitabilityModel: "claude-sonnet-4-6",
+			availableModels: ["claude-sonnet-4-6"],
+			configuredProviders: ["anthropic"],
+			scoringEnabled: true,
+		};
+	}
 	return apiFetch<AiPrefs>("/ai-prefs");
 }
 
