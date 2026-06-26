@@ -23,22 +23,28 @@ func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error) {
 	return jobs, nil
 }
 
-type stubScorer struct {
-	mu    sync.Mutex
-	calls []struct {
-		job    dto.Job
-		userID string
-	}
+type scorerCall struct {
+	jobs   []dto.Job
+	userID string
 }
 
-func (s *stubScorer) ScoreAndSave(_ context.Context, job dto.Job, userID string) int {
+type stubScorer struct {
+	mu    sync.Mutex
+	calls []scorerCall
+}
+
+func (s *stubScorer) ScoreAndSaveBatch(_ context.Context, jobs []dto.Job, userID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.calls = append(s.calls, struct {
-		job    dto.Job
-		userID string
-	}{job, userID})
-	return 0
+	s.calls = append(s.calls, scorerCall{jobs: jobs, userID: userID})
+}
+
+func totalScored(calls []scorerCall) int {
+	n := 0
+	for _, c := range calls {
+		n += len(c.jobs)
+	}
+	return n
 }
 
 type stubUserLister struct {
@@ -94,7 +100,7 @@ func TestIngest(t *testing.T) {
 		nilNotifier  bool
 		wantErr      bool
 		wantSaved    int
-		wantScored   int
+		wantScored   int // total jobs scored across all batch calls
 		wantNotified int
 	}{
 		{
@@ -166,8 +172,8 @@ func TestIngest(t *testing.T) {
 				if err == nil {
 					t.Error("Ingest: expected error, got nil")
 				}
-				if len(sc.calls) != 0 {
-					t.Errorf("scorer called %d times after save error; want 0", len(sc.calls))
+				if totalScored(sc.calls) != 0 {
+					t.Errorf("scorer called for %d jobs after save error; want 0", totalScored(sc.calls))
 				}
 				if len(nc.jobs) != 0 {
 					t.Errorf("notifier called %d times after save error; want 0", len(nc.jobs))
@@ -186,8 +192,8 @@ func TestIngest(t *testing.T) {
 			if saved != tt.wantSaved {
 				t.Errorf("saved %d jobs; want %d", saved, tt.wantSaved)
 			}
-			if len(sc.calls) != tt.wantScored {
-				t.Errorf("scorer called %d times; want %d", len(sc.calls), tt.wantScored)
+			if got := totalScored(sc.calls); got != tt.wantScored {
+				t.Errorf("scorer called for %d jobs; want %d", got, tt.wantScored)
 			}
 			if len(nc.jobs) != tt.wantNotified {
 				t.Errorf("notifier called %d times; want %d", len(nc.jobs), tt.wantNotified)
@@ -220,19 +226,22 @@ func TestIngest_TwoUserFanOut(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// 2 jobs × 2 users = 4 ScoreAndSave calls
-	if len(sc.calls) != 4 {
-		t.Errorf("want 4 scorer calls (2 jobs × 2 users), got %d", len(sc.calls))
+	// 2 users × 1 batch call each = 2 calls; 2 jobs per call = 4 total job-scores.
+	if len(sc.calls) != 2 {
+		t.Errorf("want 2 batch calls (1 per user), got %d", len(sc.calls))
+	}
+	if got := totalScored(sc.calls); got != 4 {
+		t.Errorf("want 4 total job-scores (2 jobs × 2 users), got %d", got)
 	}
 
-	// Each user should appear exactly twice (once per job)
+	// Each user should appear exactly once (one batch call per user).
 	counts := map[string]int{}
 	for _, c := range sc.calls {
 		counts[c.userID]++
 	}
 	for _, uid := range []string{"alice", "bob"} {
-		if counts[uid] != 2 {
-			t.Errorf("user %q scored %d times; want 2", uid, counts[uid])
+		if counts[uid] != 1 {
+			t.Errorf("user %q: want 1 batch call, got %d", uid, counts[uid])
 		}
 	}
 }
@@ -265,7 +274,7 @@ func TestIngest_CredentialErrorSkipsUser(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// only alice succeeds; bob is skipped
+	// Only alice succeeds; bob is skipped.
 	if len(sc.calls) != 1 {
 		t.Errorf("want 1 scorer call (alice only), got %d", len(sc.calls))
 	}

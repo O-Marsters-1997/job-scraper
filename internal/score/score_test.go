@@ -10,7 +10,7 @@ import (
 func TestHeuristicScorer(t *testing.T) {
 	t.Parallel()
 
-	scorer := score.NewHeuristicScorer()
+	scorer := &score.HeuristicScorer{}
 
 	tests := []struct {
 		name        string

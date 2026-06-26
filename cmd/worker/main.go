@@ -97,7 +97,7 @@ func main() {
 		slog.Info("force scrape enabled: ignoring per-source recency gate")
 	}
 
-	orch.WithRelevanceGate(score.NewHeuristicScorer(), db)
+	orch.WithRelevanceGate(&score.HeuristicScorer{}, db)
 	slog.Info("relevance gate enabled (multi-user)")
 
 	if err := orch.Start(ctx); err != nil {

@@ -7,7 +7,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// SuitabilityResult holds the structured output from a suitability scoring call.
 type SuitabilityResult struct {
 	Score     int
 	Matched   []string
@@ -16,18 +15,18 @@ type SuitabilityResult struct {
 	Usage     TokenUsage
 }
 
-// SuitabilityScorer scores a job's full description against the user's rubric.
+// SuitabilityScorer scores job descriptions against the user's rubric.
 // modelID selects which Claude model to use; if empty, the implementation uses its default.
 type SuitabilityScorer interface {
 	Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig, modelID string) (SuitabilityResult, error)
+	// ScoreBatch scores multiple jobs in fewer API calls. Results are in the same order as jobs.
+	ScoreBatch(ctx context.Context, jobs []dto.Job, cfg dto.SearchConfig, modelID string) ([]SuitabilityResult, error)
 }
 
-// RelevanceScorer scores a job card against the user's search criteria.
 type RelevanceScorer interface {
 	Score(card dto.Job, cfg dto.SearchConfig) int
 }
 
-// TokenUsage records LLM token consumption for a suitability scoring call.
 type TokenUsage struct {
 	InputTokens         int
 	OutputTokens        int
@@ -39,7 +38,6 @@ type TokenUsage struct {
 // HeuristicScorer is a pure, I/O-free keyword-matching scorer.
 type HeuristicScorer struct{}
 
-func NewHeuristicScorer() *HeuristicScorer { return &HeuristicScorer{} }
 
 func (h *HeuristicScorer) Score(card dto.Job, cfg dto.SearchConfig) int {
 	score := 0

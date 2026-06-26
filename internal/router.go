@@ -146,7 +146,7 @@ func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.Credential
 	provider := ingest.ProviderForModel(score.DefaultSuitabilityModel)
 	scorerFor := func(apiKey string) ingest.Scorer {
 		cs := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
-		return score.NewIngestScorerWithPrefs(cs, db, db, db)
+		return score.NewIngestScorer(cs, db, db, db)
 	}
 	var notifier ingest.Notifier
 	if notifSvc := setupNotifications(); notifSvc != nil {

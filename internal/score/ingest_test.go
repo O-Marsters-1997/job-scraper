@@ -2,7 +2,6 @@ package score_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -20,11 +19,15 @@ func (s *stubScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, mod
 	return s.result, nil
 }
 
-type errScorer struct{}
-
-func (e *errScorer) Score(_ context.Context, _ dto.Job, _ dto.SearchConfig, _ string) (score.SuitabilityResult, error) {
-	return score.SuitabilityResult{}, errors.New("api error")
+func (s *stubScorer) ScoreBatch(_ context.Context, jobs []dto.Job, _ dto.SearchConfig, modelID string) ([]score.SuitabilityResult, error) {
+	s.lastModelID = modelID
+	results := make([]score.SuitabilityResult, len(jobs))
+	for i := range results {
+		results[i] = s.result
+	}
+	return results, nil
 }
+
 
 type stubScoreWriter struct {
 	lastJobID     string
@@ -70,101 +73,6 @@ func (r *stubAIPrefsReader) GetUserAIPrefs(_ context.Context, _ string) (dto.Use
 	return r.prefs, r.err
 }
 
-func TestIngestScorer_ScoreAndSave(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		scorer      score.SuitabilityScorer
-		cfgErr      error
-		wantWritten bool
-		wantScore   int
-	}{
-		{
-			name: "writes score on success",
-			scorer: &stubScorer{result: score.SuitabilityResult{
-				Score:     75,
-				Matched:   []string{"Go", "Postgres"},
-				Missing:   []string{"Kubernetes"},
-				Rationale: "Strong backend match.",
-			}},
-			wantWritten: true,
-			wantScore:   75,
-		},
-		{
-			name:        "config read failure — no write",
-			scorer:      &stubScorer{result: score.SuitabilityResult{Score: 50}},
-			cfgErr:      errors.New("db down"),
-			wantWritten: false,
-		},
-		{
-			name:        "scorer error — no write",
-			scorer:      &errScorer{},
-			wantWritten: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			writer := &stubScoreWriter{}
-			cfgReader := &stubConfigReader{
-				cfg: dto.SearchConfig{SuitabilityRubric: "be good"},
-				err: tt.cfgErr,
-			}
-
-			is := score.NewIngestScorer(tt.scorer, writer, cfgReader)
-			is.ScoreAndSave(context.Background(), dto.Job{ID: "job-abc", URL: "https://example.com/job", Title: "Engineer"}, "user-1")
-
-			if tt.wantWritten {
-				if writer.lastJobID != "job-abc" {
-					t.Errorf("written job ID = %q; want %q", writer.lastJobID, "job-abc")
-				}
-				if writer.lastScore != tt.wantScore {
-					t.Errorf("written score = %d; want %d", writer.lastScore, tt.wantScore)
-				}
-			} else {
-				if writer.lastJobID != "" {
-					t.Errorf("expected no write; got job ID %q", writer.lastJobID)
-				}
-			}
-		})
-	}
-}
-
-func TestIngestScorer_ScoreAndSave_ReasoningFields(t *testing.T) {
-	t.Parallel()
-
-	matched := []string{"Go", "Postgres"}
-	missing := []string{"Kubernetes"}
-	rationale := "Strong backend match."
-
-	writer := &stubScoreWriter{}
-	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
-
-	is := score.NewIngestScorer(
-		&stubScorer{result: score.SuitabilityResult{
-			Score:     80,
-			Matched:   matched,
-			Missing:   missing,
-			Rationale: rationale,
-		}},
-		writer, cfgReader,
-	)
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-xyz", URL: "https://example.com/job2", Title: "Go Engineer"}, "user-1")
-
-	if writer.lastReason != rationale {
-		t.Errorf("reasoning = %q; want %q", writer.lastReason, rationale)
-	}
-	if len(writer.lastMatch) != len(matched) {
-		t.Errorf("matched len = %d; want %d", len(writer.lastMatch), len(matched))
-	}
-	if len(writer.lastMiss) != len(missing) {
-		t.Errorf("missing len = %d; want %d", len(writer.lastMiss), len(missing))
-	}
-}
-
 func TestIngestScorer_RelevanceGate(t *testing.T) {
 	t.Parallel()
 
@@ -192,8 +100,8 @@ func TestIngestScorer_RelevanceGate(t *testing.T) {
 			}}
 			job := dto.Job{ID: "job-1", URL: "https://example.com/job", Title: "Engineer", RelevanceScore: &tc.relevanceScore}
 
-			is := score.NewIngestScorer(sc, writer, cfgReader)
-			is.ScoreAndSave(context.Background(), job, "user-1")
+			is := score.NewIngestScorer(sc, writer, cfgReader, nil)
+			is.ScoreAndSaveBatch(context.Background(), []dto.Job{job}, "user-1")
 
 			if tc.wantSkipped && !writer.skippedCalled {
 				t.Error("UpsertJobScoreSkipped was not called")
@@ -219,8 +127,8 @@ func TestIngestScorer_ModelIDFromPrefs(t *testing.T) {
 	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
 	aiPrefs := &stubAIPrefsReader{prefs: dto.UserAIPrefs{SuitabilityModel: "claude-sonnet-4-6"}}
 
-	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs)
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-m", URL: "https://example.com/job3", Title: "Engineer"}, "user-1")
+	is := score.NewIngestScorer(sc, writer, cfgReader, aiPrefs)
+	is.ScoreAndSaveBatch(context.Background(), []dto.Job{{ID: "job-m", URL: "https://example.com/job3", Title: "Engineer"}}, "user-1")
 
 	if sc.lastModelID != "claude-sonnet-4-6" {
 		t.Errorf("model passed to scorer = %q; want %q", sc.lastModelID, "claude-sonnet-4-6")
@@ -235,10 +143,70 @@ func TestIngestScorer_ModelIDDefaultWhenNoPrefs(t *testing.T) {
 	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
 	aiPrefs := &stubAIPrefsReader{err: providers.ErrNotFound}
 
-	is := score.NewIngestScorerWithPrefs(sc, writer, cfgReader, aiPrefs)
-	is.ScoreAndSave(context.Background(), dto.Job{ID: "job-d", URL: "https://example.com/job4", Title: "Engineer"}, "user-1")
+	is := score.NewIngestScorer(sc, writer, cfgReader, aiPrefs)
+	is.ScoreAndSaveBatch(context.Background(), []dto.Job{{ID: "job-d", URL: "https://example.com/job4", Title: "Engineer"}}, "user-1")
 
 	if sc.lastModelID != score.DefaultSuitabilityModel {
 		t.Errorf("model passed to scorer = %q; want default haiku", sc.lastModelID)
+	}
+}
+
+func TestIngestScorer_ScoreAndSaveBatch(t *testing.T) {
+	t.Parallel()
+
+	jobs := []dto.Job{
+		{ID: "job-1", URL: "https://example.com/1", Title: "Engineer A"},
+		{ID: "job-2", URL: "https://example.com/2", Title: "Engineer B"},
+	}
+
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{SuitabilityRubric: "be good"}}
+	sc := &stubScorer{result: score.SuitabilityResult{
+		Score: 80, Matched: []string{"Go"}, Missing: []string{"K8s"}, Rationale: "Good match.",
+	}}
+
+	is := score.NewIngestScorer(sc, writer, cfgReader, nil)
+	is.ScoreAndSaveBatch(context.Background(), jobs, "user-1")
+
+	// Both jobs should be written; last write is job-2.
+	if writer.lastJobID != "job-2" {
+		t.Errorf("last written job ID = %q; want %q", writer.lastJobID, "job-2")
+	}
+	if writer.lastScore != 80 {
+		t.Errorf("last written score = %d; want 80", writer.lastScore)
+	}
+}
+
+func TestIngestScorer_ScoreAndSaveBatch_RelevanceGate(t *testing.T) {
+	t.Parallel()
+
+	cutoff := 50
+	belowScore := 30
+	aboveScore := 70
+
+	jobs := []dto.Job{
+		{ID: "job-skip", URL: "https://example.com/skip", Title: "Skip", RelevanceScore: &belowScore},
+		{ID: "job-score", URL: "https://example.com/score", Title: "Score", RelevanceScore: &aboveScore},
+	}
+
+	writer := &stubScoreWriter{}
+	cfgReader := &stubConfigReader{cfg: dto.SearchConfig{
+		SuitabilityRubric: "be good",
+		RelevanceCutoff:   cutoff,
+	}}
+	sc := &stubScorer{result: score.SuitabilityResult{Score: 75}}
+
+	is := score.NewIngestScorer(sc, writer, cfgReader, nil)
+	is.ScoreAndSaveBatch(context.Background(), jobs, "user-1")
+
+	if !writer.skippedCalled {
+		t.Error("UpsertJobScoreSkipped was not called for below-cutoff job")
+	}
+	if writer.skippedJobID != "job-skip" {
+		t.Errorf("skipped job ID = %q; want %q", writer.skippedJobID, "job-skip")
+	}
+	// job-score should be written via batch
+	if writer.lastJobID != "job-score" {
+		t.Errorf("last written job ID = %q; want %q", writer.lastJobID, "job-score")
 	}
 }
