@@ -22,16 +22,16 @@ func NewMockJobProvider() *MockJobProvider {
 	return &MockJobProvider{jobs: make(map[string]dto.Job)}
 }
 
-func (m *MockJobProvider) Save(_ context.Context, jobs []dto.Job) error {
+func (m *MockJobProvider) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error) {
 	if m.SaveErr != nil {
-		return m.SaveErr
+		return nil, m.SaveErr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, j := range jobs {
 		m.jobs[j.URL] = j
 	}
-	return nil
+	return jobs, nil
 }
 
 func (m *MockJobProvider) NewURLs(_ context.Context, urls []string) ([]string, error) {

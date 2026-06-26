@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -27,23 +26,6 @@ func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
 	}
 }
 
-func toUpsertBatchParams(jobs []dto.Job) []pgsqlc.UpsertJobsParams {
-	params := make([]pgsqlc.UpsertJobsParams, len(jobs))
-	for i, j := range jobs {
-		params[i] = pgsqlc.UpsertJobsParams{
-			Title:           j.Title,
-			Location:        j.Location,
-			Url:             j.URL,
-			CompanySlug:     j.CompanySlug,
-			Source:          j.Source,
-			UpdatedAt:       pgtype.Timestamptz{Time: j.UpdatedAt, Valid: true},
-			Description:     j.Description,
-			SalaryRaw:       j.SalaryRaw,
-			WorkArrangement: j.WorkArrangement,
-		}
-	}
-	return params
-}
 
 func fromRow(row pgsqlc.Job) dto.Job {
 	return dto.Job{
@@ -92,41 +74,21 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	return j
 }
 
-func (db *DB) Save(ctx context.Context, jobs []dto.Job) error {
+func (db *DB) Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error) {
 	if len(jobs) == 0 {
-		return nil
+		return nil, nil
 	}
-	if len(jobs) == 1 {
-		_, err := db.queries.UpsertJob(ctx, toUpsertParams(jobs[0]))
+	out := make([]dto.Job, 0, len(jobs))
+	for _, j := range jobs {
+		row, err := db.queries.UpsertJob(ctx, toUpsertParams(j))
 		if err != nil {
-			return fmt.Errorf("db.Save: %w", err)
+			return nil, fmt.Errorf("db.Save: %w", err)
 		}
-		slog.Debug("job saved",
-			slog.String("url", jobs[0].URL),
-		)
-		return nil
+		j.ID = row.ID.String()
+		out = append(out, j)
 	}
-	results := db.queries.UpsertJobs(ctx, toUpsertBatchParams(jobs))
-	defer func() { _ = results.Close() }()
-
-	var errs []error
-	results.Exec(func(i int, err error) {
-		if err != nil {
-			slog.Error("job save failed",
-				slog.String("url", jobs[i].URL),
-				slog.Any("err", err),
-			)
-			errs = append(errs, err)
-		}
-	})
-
-	if err := errors.Join(errs...); err != nil {
-		return fmt.Errorf("db.Save: %w", err)
-	}
-	slog.Debug("jobs saved",
-		slog.Int("count", len(jobs)),
-	)
-	return nil
+	slog.Debug("jobs saved", slog.Int("count", len(out)))
+	return out, nil
 }
 
 func (db *DB) NewURLs(ctx context.Context, urls []string) ([]string, error) {

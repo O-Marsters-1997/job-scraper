@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
@@ -40,7 +41,8 @@ func (h *AICredentialsHandler) UpsertCredential(w http.ResponseWriter, r *http.R
 			return
 		}
 	} else {
-		if err := h.creds.Save(r.Context(), session.UserID, body.Provider, *body.APIKey); err != nil {
+		key := strings.Trim(*body.APIKey, `"`)
+		if err := h.creds.Save(r.Context(), session.UserID, body.Provider, key); err != nil {
 			slog.Error("save credential failed", slog.Any("err", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return

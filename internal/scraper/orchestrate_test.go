@@ -101,7 +101,7 @@ func TestRun_Enqueue(t *testing.T) {
 				for i, u := range tt.existing {
 					jobs[i] = dto.Job{URL: u}
 				}
-				if err := db.Save(context.Background(), jobs); err != nil {
+				if _, err := db.Save(context.Background(), jobs); err != nil {
 					t.Fatalf("seed existing jobs: %v", err)
 				}
 			}

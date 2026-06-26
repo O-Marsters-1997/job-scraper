@@ -29,9 +29,11 @@ type RelevanceScorer interface {
 
 // TokenUsage records LLM token consumption for a suitability scoring call.
 type TokenUsage struct {
-	InputTokens  int
-	OutputTokens int
-	CostUSD      float64
+	InputTokens        int
+	OutputTokens       int
+	CacheCreationTokens int
+	CacheReadTokens    int
+	CostUSD            float64
 }
 
 // HeuristicScorer is a pure, I/O-free keyword-matching scorer.

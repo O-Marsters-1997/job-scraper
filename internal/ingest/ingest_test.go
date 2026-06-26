@@ -15,12 +15,12 @@ type stubSaver struct {
 	err   error
 }
 
-func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) error {
+func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error) {
 	if s.err != nil {
-		return s.err
+		return nil, s.err
 	}
 	s.calls = append(s.calls, jobs)
-	return nil
+	return jobs, nil
 }
 
 type stubScorer struct {
