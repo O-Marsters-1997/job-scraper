@@ -1,48 +1,40 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 )
 
-// Tier classifies the proxy behaviour for outbound HTTP requests.
-type Tier int
+const envKey = "BRIGHTDATA_PROXY_URL"
 
-const (
-	// Direct sends requests without a proxy.
-	Direct Tier = iota
-	// Datacenter routes through a datacenter proxy; reads PROXY_DATACENTER_URL.
-	Datacenter
-	// Residential routes through a residential proxy; reads PROXY_RESIDENTIAL_URL.
-	Residential
-)
-
-// Transport returns an http.RoundTripper for tier.
-// Datacenter reads PROXY_DATACENTER_URL; Residential reads PROXY_RESIDENTIAL_URL.
-// If the env var is unset the tier falls back to http.DefaultTransport.
-func Transport(tier Tier) (http.RoundTripper, error) {
-	switch tier {
-	case Direct:
+// Transport returns an http.RoundTripper for the requested mode.
+// If useProxy is false, returns http.DefaultTransport (direct, no proxy).
+// If useProxy is true, reads BRIGHTDATA_PROXY_URL and configures a transport
+// routing through BrightData Web Unlocker. If the env var is unset the proxy
+// falls back to http.DefaultTransport — degrades gracefully rather than
+// crashing on missing creds.
+func Transport(useProxy bool) (http.RoundTripper, error) {
+	if !useProxy {
 		return http.DefaultTransport, nil
-	case Datacenter:
-		return fromEnv("PROXY_DATACENTER_URL")
-	case Residential:
-		return fromEnv("PROXY_RESIDENTIAL_URL")
-	default:
-		return nil, fmt.Errorf("proxy: unknown tier %d", tier)
 	}
-}
-
-func fromEnv(key string) (http.RoundTripper, error) {
-	raw := os.Getenv(key)
+	raw := os.Getenv(envKey)
 	if raw == "" {
 		return http.DefaultTransport, nil
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("proxy: parse %s: %w", key, err)
+		return nil, fmt.Errorf("proxy: parse %s: %w", envKey, err)
 	}
-	return &http.Transport{Proxy: http.ProxyURL(u)}, nil
+	// ponytail: InsecureSkipVerify is required because Web Unlocker performs
+	// TLS interception (MITM) to handle CAPTCHA/JS/fingerprinting. The hop to
+	// brd.superproxy.io is authenticated by the zone password and we only
+	// fetch public job listings. Upgrade path: add BrightData's CA cert to a
+	// custom x509.CertPool and set TLSClientConfig.RootCAs instead.
+	return &http.Transport{
+		Proxy:           http.ProxyURL(u),
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+	}, nil
 }

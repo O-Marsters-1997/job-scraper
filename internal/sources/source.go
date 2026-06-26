@@ -38,9 +38,8 @@ type Config struct {
 	// URLPrefix is used by PaginatedBase.CanHandle to claim URLs by prefix.
 	URLPrefix string
 
-	// ProxyTier controls the proxy used for outbound requests.
-	// Zero value is proxy.Direct (no proxy).
-	ProxyTier proxy.Tier
+	// UseProxy routes requests through BrightData Web Unlocker when true.
+	UseProxy bool
 }
 
 type Source interface {
@@ -73,7 +72,7 @@ func NewBase(cfg Config) PaginatedBase {
 	if cfg.MinScrapeInterval == 0 {
 		cfg.MinScrapeInterval = DefaultMinScrapeInterval
 	}
-	transport, err := proxy.Transport(cfg.ProxyTier)
+	transport, err := proxy.Transport(cfg.UseProxy)
 	if err != nil || transport == nil {
 		transport = http.DefaultTransport
 	}
