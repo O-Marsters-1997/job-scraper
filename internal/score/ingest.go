@@ -94,7 +94,6 @@ func (s *IngestScorer) ScoreAndSaveBatch(ctx context.Context, jobs []dto.Job, us
 	}
 }
 
-
 func (s *IngestScorer) resolveModelID(ctx context.Context, userID string) string {
 	if s.aiPrefsDB == nil {
 		return DefaultSuitabilityModel

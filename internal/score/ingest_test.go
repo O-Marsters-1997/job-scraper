@@ -28,7 +28,6 @@ func (s *stubScorer) ScoreBatch(_ context.Context, jobs []dto.Job, _ dto.SearchC
 	return results, nil
 }
 
-
 type stubScoreWriter struct {
 	lastJobID     string
 	lastScore     int

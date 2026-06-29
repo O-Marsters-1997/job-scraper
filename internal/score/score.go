@@ -38,7 +38,6 @@ type TokenUsage struct {
 // HeuristicScorer is a pure, I/O-free keyword-matching scorer.
 type HeuristicScorer struct{}
 
-
 func (h *HeuristicScorer) Score(card dto.Job, cfg dto.SearchConfig) int {
 	score := 0
 	titleLower := strings.ToLower(card.Title)
