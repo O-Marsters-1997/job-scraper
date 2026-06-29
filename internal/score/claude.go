@@ -16,6 +16,7 @@ import (
 
 const (
 	defaultModelID        = "claude-haiku-4-5-20251001"
+	DefaultReasoningModel = "claude-sonnet-4-6"
 	defaultMaxInputTokens = 4096
 
 	haiku4_5InputPricePerMToken      = 0.80

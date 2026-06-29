@@ -27,6 +27,7 @@ function AiPage() {
 	const credsMutation = useUpdateAiCredentials();
 
 	const [selectedModel, setSelectedModel] = createSignal("");
+	const [selectedReasoningModel, setSelectedReasoningModel] = createSignal("");
 	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
@@ -38,13 +39,17 @@ function AiPage() {
 		const data = query.data;
 		if (!data) return;
 		setSelectedModel(data.suitabilityModel ?? "");
+		setSelectedReasoningModel(data.reasoningModel ?? "");
 	});
 
 	const handleSave = async () => {
 		setSaved(false);
 		setSaveError(null);
 		try {
-			await saveMutation.mutateAsync({ suitabilityModel: selectedModel() });
+			await saveMutation.mutateAsync({
+				suitabilityModel: selectedModel(),
+				reasoningModel: selectedReasoningModel(),
+			});
 			setSaved(true);
 			setTimeout(() => setSaved(false), 3000);
 		} catch {
@@ -83,7 +88,8 @@ function AiPage() {
 					AI settings
 				</h1>
 				<p class="mt-0.5 text-xs text-faint">
-					Choose which Claude model is used to score job suitability.
+					Choose which Claude models are used to score and explain job
+					suitability.
 				</p>
 			</div>
 
@@ -105,19 +111,20 @@ function AiPage() {
 
 			<Show when={query.isSuccess}>
 				<div class="flex flex-col gap-5">
-					{/* Model picker */}
+					{/* Scoring model picker */}
 					<div class="overflow-hidden rounded-xl border border-border bg-surface">
 						<div class="border-b border-border px-5 py-4">
 							<p class="text-base font-semibold text-foreground">
-								Suitability model
+								Scoring model
 							</p>
 							<p class="mt-0.5 text-xs text-faint">
-								The model used when Claude scores each job against your rubric.
+								The model used at ingest time to score each job (score only, no
+								reasoning). Haiku is fast and cheap.
 							</p>
 						</div>
 						<div class="px-5 py-4">
 							<fieldset class="flex flex-col gap-3">
-								<legend class="sr-only">Select suitability model</legend>
+								<legend class="sr-only">Select scoring model</legend>
 								<For each={query.data?.availableModels ?? []}>
 									{(id) => (
 										<label class="flex cursor-pointer items-start gap-3">
@@ -139,11 +146,45 @@ function AiPage() {
 									)}
 								</For>
 							</fieldset>
+						</div>
+					</div>
 
-							<p class="mt-4 text-xs text-faint">
-								The default model (Haiku) works out of the box. Only change this
-								if you want higher-quality scoring at higher cost.
+					{/* Reasoning model picker */}
+					<div class="overflow-hidden rounded-xl border border-border bg-surface">
+						<div class="border-b border-border px-5 py-4">
+							<p class="text-base font-semibold text-foreground">
+								Reasoning model
 							</p>
+							<p class="mt-0.5 text-xs text-faint">
+								The model used when you request an explanation for a job. It
+								re-scores the job and writes matched/missing criteria and a
+								rationale. Sonnet gives better explanations than Haiku.
+							</p>
+						</div>
+						<div class="px-5 py-4">
+							<fieldset class="flex flex-col gap-3">
+								<legend class="sr-only">Select reasoning model</legend>
+								<For each={query.data?.availableModels ?? []}>
+									{(id) => (
+										<label class="flex cursor-pointer items-start gap-3">
+											<input
+												type="radio"
+												name="reasoning-model"
+												value={id}
+												checked={selectedReasoningModel() === id}
+												onChange={() => setSelectedReasoningModel(id)}
+												class="mt-0.5 accent-primary"
+											/>
+											<span class="flex flex-col">
+												<span class="text-sm font-medium text-foreground">
+													{modelLabel(id)}
+												</span>
+												<span class="font-mono text-xs text-faint">{id}</span>
+											</span>
+										</label>
+									)}
+								</For>
+							</fieldset>
 						</div>
 					</div>
 
@@ -183,8 +224,7 @@ function AiPage() {
 							>
 								<div class="flex items-center gap-3">
 									<span class="text-sm text-foreground">
-										configured{" "}
-										<span class="text-primary font-medium">✓</span>
+										configured <span class="text-primary font-medium">✓</span>
 									</span>
 									<button
 										type="button"

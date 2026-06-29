@@ -33,7 +33,7 @@ func TestAIPrefsHandler_Get(t *testing.T) {
 		{
 			name: "user sees their saved model",
 			setupStore: func(s *providers.MockUserAIPrefsProvider) {
-				_, _ = s.UpsertUserAIPrefs(context.Background(), "user-1", "claude-opus-4-8")
+				_, _ = s.UpsertUserAIPrefs(context.Background(), "user-1", "claude-opus-4-8", "claude-sonnet-4-6")
 			},
 			userID:     "user-1",
 			wantStatus: http.StatusOK,
@@ -43,7 +43,7 @@ func TestAIPrefsHandler_Get(t *testing.T) {
 		{
 			name: "user sees only their own prefs",
 			setupStore: func(s *providers.MockUserAIPrefsProvider) {
-				_, _ = s.UpsertUserAIPrefs(context.Background(), "user-a", "claude-sonnet-4-6")
+				_, _ = s.UpsertUserAIPrefs(context.Background(), "user-a", "claude-sonnet-4-6", "claude-sonnet-4-6")
 			},
 			userID:     "user-b",
 			wantStatus: http.StatusOK,

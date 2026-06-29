@@ -19,7 +19,11 @@ import {
 	applicationsQueryOptions,
 	useApplications,
 } from "../../hooks/useApplications";
-import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import {
+	jobsQueryOptions,
+	useJobs,
+	useRequestReasoning,
+} from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
@@ -63,6 +67,8 @@ function FactRow(props: {
 }
 
 function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
+	const reasoningMutation = useRequestReasoning();
+
 	const score = () => props.job.SuitabilityScore;
 	const reasoning = () => props.job.Reasoning ?? null;
 	const matched = () => props.job.Matched ?? [];
@@ -73,7 +79,7 @@ function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
 	const isSkipped = () => skipped() && score() == null;
 	// scored — has score + reasoning
 	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
-	// legacy scored — has score but no reasoning
+	// scored, no reasoning yet — show explain button
 	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
 	// pending — no score, not skipped
 	const isPending = () => !isSkipped() && score() == null;
@@ -149,9 +155,23 @@ function SuitabilityPanel(props: { job: import("@/types/job").Job }) {
 						</span>
 						<span class="text-xs text-faint">/ 100</span>
 					</div>
-					<p class="text-xs text-faint">
-						No reasoning captured for this score.
-					</p>
+					<Show
+						when={!reasoningMutation.isError}
+						fallback={
+							<p class="text-xs text-destructive-strong">
+								Failed to generate reasoning. Please try again.
+							</p>
+						}
+					>
+						<button
+							type="button"
+							onClick={() => reasoningMutation.mutate(props.job.ID)}
+							disabled={reasoningMutation.isPending}
+							class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:opacity-50"
+						>
+							{reasoningMutation.isPending ? "Generating…" : "Explain score"}
+						</button>
+					</Show>
 				</Show>
 
 				<Show when={isPending()}>

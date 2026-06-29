@@ -59,6 +59,17 @@ func (m *MockJobProvider) List(_ context.Context, _ string) ([]dto.Job, error) {
 	return out, nil
 }
 
+func (m *MockJobProvider) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, j := range m.jobs {
+		if j.ID == jobID {
+			return j, nil
+		}
+	}
+	return dto.Job{}, ErrNotFound
+}
+
 func (m *MockJobProvider) ListSince(_ context.Context, since time.Time) ([]dto.Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -21,6 +21,9 @@ type JobProvider interface {
 	// ordered by suitability score descending then scrape time descending.
 	List(ctx context.Context, userID string) ([]dto.Job, error)
 
+	// GetJob returns a single job with its score for the given user.
+	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
+
 	// ListSince returns jobs scraped after the given time, ordered by scrape time descending.
 	ListSince(ctx context.Context, since time.Time) ([]dto.Job, error)
 }

@@ -15,6 +15,7 @@ import (
 func fromUserAIPrefs(row pgsqlc.UserAiPref) dto.UserAIPrefs {
 	return dto.UserAIPrefs{
 		SuitabilityModel: row.SuitabilityModel,
+		ReasoningModel:   row.ReasoningModel,
 	}
 }
 
@@ -33,7 +34,7 @@ func (db *DB) GetUserAIPrefs(ctx context.Context, userID string) (dto.UserAIPref
 	return fromUserAIPrefs(row), nil
 }
 
-func (db *DB) UpsertUserAIPrefs(ctx context.Context, userID, suitabilityModel string) (dto.UserAIPrefs, error) {
+func (db *DB) UpsertUserAIPrefs(ctx context.Context, userID, suitabilityModel, reasoningModel string) (dto.UserAIPrefs, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.UserAIPrefs{}, err
@@ -41,6 +42,7 @@ func (db *DB) UpsertUserAIPrefs(ctx context.Context, userID, suitabilityModel st
 	row, err := db.queries.UpsertUserAIPrefs(ctx, pgsqlc.UpsertUserAIPrefsParams{
 		UserID:           uid,
 		SuitabilityModel: suitabilityModel,
+		ReasoningModel:   reasoningModel,
 	})
 	if err != nil {
 		return dto.UserAIPrefs{}, fmt.Errorf("db.UpsertUserAIPrefs: %w", err)

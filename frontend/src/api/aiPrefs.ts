@@ -3,6 +3,7 @@ import { useMocks } from "./config";
 
 export interface AiPrefs {
 	suitabilityModel: string;
+	reasoningModel: string;
 	availableModels: string[];
 	configuredProviders: string[];
 	scoringEnabled: boolean;
@@ -21,7 +22,7 @@ export async function fetchAiPrefs(): Promise<AiPrefs> {
 }
 
 export async function updateAiPrefs(
-	payload: Pick<AiPrefs, "suitabilityModel">,
+	payload: Pick<AiPrefs, "suitabilityModel" | "reasoningModel">,
 ): Promise<AiPrefs> {
 	return apiFetch<AiPrefs>("/ai-prefs", {
 		method: "PUT",

@@ -35,6 +35,64 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 	return items, nil
 }
 
+const getJob = `-- name: GetJob :one
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
+WHERE j.id = $1
+LIMIT 1
+`
+
+type GetJobParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type GetJobRow struct {
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	UpdatedAt          pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	Description        string
+	SalaryRaw          string
+	WorkArrangement    string
+	RelevanceScore     pgtype.Int4
+	SuitabilityScore   pgtype.Int4
+	Reasoning          pgtype.Text
+	Matched            []string
+	Missing            []string
+	SuitabilitySkipped bool
+}
+
+func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, error) {
+	row := q.db.QueryRow(ctx, getJob, arg.ID, arg.UserID)
+	var i GetJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Location,
+		&i.Url,
+		&i.CompanySlug,
+		&i.Source,
+		&i.UpdatedAt,
+		&i.ScrapedAt,
+		&i.Description,
+		&i.SalaryRaw,
+		&i.WorkArrangement,
+		&i.RelevanceScore,
+		&i.SuitabilityScore,
+		&i.Reasoning,
+		&i.Matched,
+		&i.Missing,
+		&i.SuitabilitySkipped,
+	)
+	return i, err
+}
+
 const getJobByURL = `-- name: GetJobByURL :one
 SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement FROM jobs WHERE url = $1 LIMIT 1
 `
