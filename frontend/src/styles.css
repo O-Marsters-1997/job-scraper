@@ -178,6 +178,40 @@ html[data-size="lg"] {
 	border-radius: 3px;
 }
 
+/* Scoped prose styles for rendered job descriptions (HTML from job boards) */
+.job-description {
+	@apply text-sm leading-relaxed text-foreground;
+}
+.job-description p {
+	@apply mb-3;
+}
+.job-description ul {
+	@apply mb-3 list-disc pl-5;
+}
+.job-description ol {
+	@apply mb-3 list-decimal pl-5;
+}
+.job-description li {
+	@apply mb-1;
+}
+.job-description h1,
+.job-description h2,
+.job-description h3,
+.job-description h4 {
+	@apply mt-4 mb-2 font-semibold text-base;
+}
+.job-description a {
+	@apply text-primary hover:underline;
+}
+.job-description strong,
+.job-description b {
+	@apply font-semibold;
+}
+.job-description em,
+.job-description i {
+	@apply italic;
+}
+
 /* ============================================================
    Auth "front door" — bold purple split-screen.
    The app and front door now share the same violet system;

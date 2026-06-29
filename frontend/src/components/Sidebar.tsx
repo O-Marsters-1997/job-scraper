@@ -68,11 +68,8 @@ export default function Sidebar(props: SidebarProps) {
 	const isInsightsActive = () => location().pathname === "/insights";
 	const isStatusesActive = () => location().pathname === "/settings/statuses";
 	const isSearchesActive = () => location().pathname === "/settings/searches";
-	const isScoringActive = () => location().pathname === "/settings/scoring";
-	const isAiActive = () => location().pathname === "/settings/ai";
 	const isIntegrationsActive = () =>
 		location().pathname === "/settings/integrations";
-	const isProfileActive = () => location().pathname === "/settings/profile";
 	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 	const navigate = useNavigate();
 
@@ -325,82 +322,6 @@ export default function Sidebar(props: SidebarProps) {
 						</svg>
 						<Show when={showLabels()}>
 							<span class="whitespace-nowrap">Searches</span>
-						</Show>
-					</Link>
-
-					<Link
-						to="/settings/scoring"
-						title="Scoring settings"
-						class={navLinkVariants({ active: isScoringActive() })}
-					>
-						<svg
-							aria-hidden="true"
-							class="shrink-0"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M12 20h9" />
-							<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-						</svg>
-						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">Scoring</span>
-						</Show>
-					</Link>
-
-					<Link
-						to="/settings/ai"
-						title="AI settings"
-						class={navLinkVariants({ active: isAiActive() })}
-					>
-						<svg
-							aria-hidden="true"
-							class="shrink-0"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2z" />
-							<circle cx="9" cy="14" r="1" />
-							<circle cx="15" cy="14" r="1" />
-						</svg>
-						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">AI</span>
-						</Show>
-					</Link>
-
-					<Link
-						to="/settings/profile"
-						title="Profile"
-						class={navLinkVariants({ active: isProfileActive() })}
-					>
-						<svg
-							aria-hidden="true"
-							class="shrink-0"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-							<circle cx="12" cy="7" r="4" />
-						</svg>
-						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">Profile</span>
 						</Show>
 					</Link>
 
