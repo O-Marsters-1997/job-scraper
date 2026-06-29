@@ -144,6 +144,45 @@ jobs:
           bun install --frozen-lockfile
           bun run typecheck
 
+  lint-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Lint & format check
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run check
+
+  build-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Build
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+  test-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Unit checks
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run test
+
   typecheck-emails:
     needs: changes
     if: needs.changes.outputs.emails == 'true'

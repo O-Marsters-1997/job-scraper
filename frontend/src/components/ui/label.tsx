@@ -1,5 +1,5 @@
-import { type ComponentProps, splitProps } from "solid-js";
 import { cva, type VariantProps } from "class-variance-authority";
+import { type ComponentProps, splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 const labelVariants = cva("mb-1 block text-xs font-medium text-muted", {

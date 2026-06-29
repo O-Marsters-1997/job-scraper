@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { API_BASE } from "../../api/config";
-import * as pdfjsLib from "pdfjs-dist";
 import type { PDFPageProxy } from "pdfjs-dist";
+import * as pdfjsLib from "pdfjs-dist";
 import { createResource, createSignal, For, Show } from "solid-js";
+import { API_BASE } from "../../api/config";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 	"pdfjs-dist/build/pdf.worker.min.mjs",

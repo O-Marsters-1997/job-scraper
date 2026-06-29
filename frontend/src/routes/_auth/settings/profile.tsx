@@ -39,9 +39,7 @@ function ProfilePage() {
 				<h1 class="text-lg font-bold tracking-tight text-foreground">
 					Profile
 				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Manage your account details.
-				</p>
+				<p class="mt-0.5 text-xs text-faint">Manage your account details.</p>
 			</div>
 
 			<Show when={saved()}>

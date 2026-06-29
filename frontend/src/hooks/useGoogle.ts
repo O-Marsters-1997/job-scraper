@@ -1,10 +1,10 @@
 import {
-	createQuery,
 	createMutation,
-	useQueryClient,
+	createQuery,
 	queryOptions,
+	useQueryClient,
 } from "@tanstack/solid-query";
-import { fetchGoogleStatus, disconnectGoogle } from "../api/google";
+import { disconnectGoogle, fetchGoogleStatus } from "../api/google";
 
 export const googleStatusQueryOptions = queryOptions({
 	queryKey: ["google-status"],

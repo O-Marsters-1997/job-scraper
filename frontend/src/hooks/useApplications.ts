@@ -1,15 +1,15 @@
 import {
-	createQuery,
 	createMutation,
-	useQueryClient,
+	createQuery,
 	queryOptions,
+	useQueryClient,
 } from "@tanstack/solid-query";
 import {
-	fetchApplications,
 	createApplication,
-	updateApplication,
 	deleteApplication,
+	fetchApplications,
 	fetchApplicationsForJobs,
+	updateApplication,
 } from "../api/applications";
 
 export const applicationsQueryOptions = (statusId?: string) =>

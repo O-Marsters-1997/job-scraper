@@ -6,9 +6,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Job } from "@/types/job";
-import type { JobApplicationSummary } from "@/types/application";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import type { JobApplicationSummary } from "@/types/application";
+import type { Job } from "@/types/job";
 
 interface JobActionsMenuProps {
 	job: Job;

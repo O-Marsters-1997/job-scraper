@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
 	useCreateApplicationStatus,
-	useUpdateApplicationStatus,
 	useDeleteApplicationStatus,
+	useUpdateApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
-import { STATUS_PALETTE } from "@/lib/status";
-import { SkeletonList } from "@/components/ui/skeleton";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
