@@ -1,16 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { batch, createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { AddDocDialog } from "@/components/cv/AddDocDialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
 	Switch,
 	SwitchControl,
@@ -19,11 +10,11 @@ import {
 } from "@/components/ui/switch";
 import {
 	cvTemplatesQueryOptions,
-	useAddTrackedDoc,
 	useCVTemplates,
 	useHideTab,
 	useShowTab,
 } from "../../hooks/useCVTemplates";
+import { useTableSort } from "../../hooks/useTableSort";
 import { formatDate } from "../../lib/datetime";
 import { queryClient } from "../../lib/queryClient";
 import type { CV } from "../../types/cv";
@@ -34,12 +25,10 @@ export const Route = createFileRoute("/_auth/cv-templates")({
 });
 
 type SortKey = "Title" | "ModifiedAt";
-type SortDir = "asc" | "desc";
 
 function CVTemplatesPage() {
 	const query = useCVTemplates();
 	const navigate = useNavigate();
-	const addMutation = useAddTrackedDoc();
 	const hideMutation = useHideTab();
 	const showMutation = useShowTab();
 
@@ -52,29 +41,14 @@ function CVTemplatesPage() {
 	};
 
 	const [searchQuery, setSearchQuery] = createSignal("");
-	const [sortKey, setSortKey] = createSignal<SortKey>("Title");
-	const [sortDir, setSortDir] = createSignal<SortDir>("asc");
 	const [showHidden, setShowHidden] = createSignal(false);
-
 	const [dialogOpen, setDialogOpen] = createSignal(false);
-	const [docUrl, setDocUrl] = createSignal("");
-	const [urlError, setUrlError] = createSignal<string | null>(null);
 
-	const handleSort = (key: SortKey) => {
-		if (sortKey() === key) {
-			setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-		} else {
-			batch(() => {
-				setSortKey(key);
-				setSortDir("asc");
-			});
-		}
-	};
+	const { sortKey, sortDir, handleSort, sortIcon } =
+		useTableSort<SortKey>("Title");
 
-	const sortIcon = (key: SortKey) => {
-		if (sortKey() !== key) return null;
-		return sortDir() === "asc" ? "↑" : "↓";
-	};
+	const thClass = (key: SortKey) =>
+		`h-9 cursor-pointer select-none px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint transition-colors hover:text-foreground ${sortKey() === key ? "text-foreground" : ""}`;
 
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
@@ -102,37 +76,8 @@ function CVTemplatesPage() {
 
 	const hasHiddenCVs = () => (query.data ?? []).some((cv) => !cv.Visible);
 
-	const openDialog = () => {
-		batch(() => {
-			setDocUrl("");
-			setUrlError(null);
-			setDialogOpen(true);
-		});
-	};
-
-	const handleAdd = async () => {
-		setUrlError(null);
-		try {
-			await addMutation.mutateAsync(docUrl().trim());
-			setDialogOpen(false);
-		} catch (err) {
-			if (err instanceof Error && err.message === "invalid-url") {
-				setUrlError("Invalid Google Docs URL or ID");
-			} else if (err instanceof Error && err.message === "access-denied") {
-				setUrlError(
-					"Cannot access this document. Make sure it's shared with your Google account.",
-				);
-			} else {
-				setUrlError("Something went wrong. Please try again.");
-			}
-		}
-	};
-
 	const isNotConnected = () =>
 		!!query.error?.message?.toLowerCase().includes("not connected");
-
-	const thClass = (key: SortKey) =>
-		`h-9 cursor-pointer select-none px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint transition-colors hover:text-foreground ${sortKey() === key ? "text-foreground" : ""}`;
 
 	return (
 		<div class="px-7 py-6">
@@ -143,7 +88,7 @@ function CVTemplatesPage() {
 				</div>
 				<button
 					type="button"
-					onClick={openDialog}
+					onClick={() => setDialogOpen(true)}
 					class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
 				>
 					<svg
@@ -209,7 +154,7 @@ function CVTemplatesPage() {
 						</p>
 						<button
 							type="button"
-							onClick={openDialog}
+							onClick={() => setDialogOpen(true)}
 							class="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
 						>
 							<svg
@@ -263,7 +208,7 @@ function CVTemplatesPage() {
 								Toggle{" "}
 								<button
 									type="button"
-									class="font-medium text-primary hover:underline underline-offset-2"
+									class="font-medium text-primary underline-offset-2 hover:underline"
 									onClick={() => setShowHidden(true)}
 								>
 									Show hidden
@@ -322,7 +267,7 @@ function CVTemplatesPage() {
 																target="_blank"
 																rel="noreferrer"
 																onClick={(e) => e.stopPropagation()}
-																class="font-medium text-foreground hover:text-primary hover:underline underline-offset-2"
+																class="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
 															>
 																{cv.Title || "—"}
 															</a>
@@ -352,7 +297,6 @@ function CVTemplatesPage() {
 																disabled={hideMutation.isPending}
 																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
 															>
-																{/* trash */}
 																<svg
 																	aria-hidden="true"
 																	width="14"
@@ -380,7 +324,6 @@ function CVTemplatesPage() {
 																disabled={showMutation.isPending}
 																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-primary disabled:opacity-50"
 															>
-																{/* rotate-ccw (restore) */}
 																<svg
 																	aria-hidden="true"
 																	width="14"
@@ -415,47 +358,7 @@ function CVTemplatesPage() {
 				</Show>
 			</Show>
 
-			<Dialog open={dialogOpen()} onOpenChange={setDialogOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Add Google Doc</DialogTitle>
-						<p class="text-sm text-faint">
-							Paste the URL of a Google Doc to track it as a CV template.
-						</p>
-					</DialogHeader>
-
-					<div class="flex flex-col gap-3">
-						<div>
-							<Label>Google Docs URL</Label>
-							<Input
-								type="url"
-								placeholder="https://docs.google.com/document/d/…"
-								value={docUrl()}
-								onInput={(e) => {
-									setDocUrl(e.currentTarget.value);
-									setUrlError(null);
-								}}
-								onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-							/>
-							<Show when={urlError()}>
-								<p class="mt-1.5 text-xs text-destructive">{urlError()}</p>
-							</Show>
-						</div>
-					</div>
-
-					<DialogFooter class="border-t border-border pt-4">
-						<Button variant="outline" onClick={() => setDialogOpen(false)}>
-							Cancel
-						</Button>
-						<Button
-							onClick={handleAdd}
-							disabled={addMutation.isPending || !docUrl().trim()}
-						>
-							Add doc
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<AddDocDialog open={dialogOpen()} onOpenChange={setDialogOpen} />
 		</div>
 	);
 }
