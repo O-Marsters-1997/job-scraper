@@ -13,6 +13,7 @@ export async function fetchAiPrefs(): Promise<AiPrefs> {
 	if (useMocks()) {
 		return {
 			suitabilityModel: "claude-sonnet-4-6",
+			reasoningModel: "claude-sonnet-4-6",
 			availableModels: ["claude-sonnet-4-6"],
 			configuredProviders: ["anthropic"],
 			scoringEnabled: true,

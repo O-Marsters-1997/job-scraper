@@ -17,11 +17,13 @@ type mockDB struct {
 	err  error
 }
 
-func (m *mockDB) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error)        { return jobs, nil }
-func (m *mockDB) NewURLs(_ context.Context, urls []string) ([]string, error)       { return urls, nil }
-func (m *mockDB) List(_ context.Context, _ string) ([]dto.Job, error)              { return m.jobs, m.err }
-func (m *mockDB) GetJob(_ context.Context, _ string, _ string) (dto.Job, error)    { return dto.Job{}, nil }
-func (m *mockDB) ListSince(_ context.Context, _ time.Time) ([]dto.Job, error)      { return m.jobs, m.err }
+func (m *mockDB) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error)  { return jobs, nil }
+func (m *mockDB) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
+func (m *mockDB) List(_ context.Context, _ string) ([]dto.Job, error)        { return m.jobs, m.err }
+func (m *mockDB) GetJob(_ context.Context, _ string, _ string) (dto.Job, error) {
+	return dto.Job{}, nil
+}
+func (m *mockDB) ListSince(_ context.Context, _ time.Time) ([]dto.Job, error) { return m.jobs, m.err }
 
 func TestListJobs(t *testing.T) {
 	fixedJob := dto.Job{
