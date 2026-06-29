@@ -28,7 +28,7 @@ interface TrackApplicationDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	job: Job | undefined;
-	existingApp?: ExistingApp;
+	existingApp?: ExistingApp | undefined;
 }
 
 export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
@@ -57,7 +57,7 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 
 function TrackApplicationForm(props: {
 	job: Job | undefined;
-	existingApp?: ExistingApp;
+	existingApp?: ExistingApp | undefined;
 	onClose: () => void;
 }) {
 	const statusesQuery = useApplicationStatuses();

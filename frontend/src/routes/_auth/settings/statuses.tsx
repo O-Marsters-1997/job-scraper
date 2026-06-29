@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { STATUS_PALETTE } from "@/lib/status";
+import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
 	useCreateApplicationStatus,
@@ -22,7 +22,9 @@ function StatusesPage() {
 
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [newName, setNewName] = createSignal("");
-	const [newColour, setNewColour] = createSignal(STATUS_PALETTE[0].hex);
+	const [newColour, setNewColour] = createSignal(
+		STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR,
+	);
 
 	const [editingId, setEditingId] = createSignal<string | null>(null);
 	const [editName, setEditName] = createSignal("");
@@ -37,7 +39,7 @@ function StatusesPage() {
 			colour: newColour(),
 		});
 		setNewName("");
-		setNewColour(STATUS_PALETTE[0].hex);
+		setNewColour(STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR);
 		setShowAdd(false);
 	};
 

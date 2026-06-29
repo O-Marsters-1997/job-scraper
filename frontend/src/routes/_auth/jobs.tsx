@@ -43,11 +43,15 @@ function JobsPage() {
 		navigate({
 			to: "/jobs",
 			// Reset to page 1 whenever anything other than page itself changes.
-			search: (p) => ({
-				...p,
-				...patch,
-				...("page" in patch ? {} : { page: undefined }),
-			}),
+			search: (p) => {
+				const next = { ...p, ...patch };
+				if (!("page" in patch)) {
+					// omit page key entirely rather than setting it to undefined
+					const { page: _page, ...withoutPage } = next;
+					return withoutPage;
+				}
+				return next;
+			},
 			replace: true,
 		});
 

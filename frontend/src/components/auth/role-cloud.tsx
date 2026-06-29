@@ -307,9 +307,10 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 			ctx.clearRect(0, 0, cssW, cssH);
 			measure();
 			// painter's algorithm: far (small z) first, near last
-			order.sort((a, b) => pills[a].z - pills[b].z);
+			order.sort((a, b) => (pills[a]?.z ?? 0) - (pills[b]?.z ?? 0));
 			for (const i of order) {
 				const p = pills[i];
+				if (!p) continue;
 				drawPill(p, p.x * cssW, p.y * cssH, p.z);
 			}
 		};

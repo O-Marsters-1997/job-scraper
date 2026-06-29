@@ -241,7 +241,8 @@ function InsightsPage() {
 		const bands = [0, 0, 0, 0, 0];
 		for (const job of jobs()) {
 			if (job.SuitabilityScore != null) {
-				bands[Math.min(Math.floor(job.SuitabilityScore / 20), 4)]++;
+				const idx = Math.min(Math.floor(job.SuitabilityScore / 20), 4);
+				bands[idx] = (bands[idx] ?? 0) + 1;
 			}
 		}
 		const primary = primaryHex();
@@ -311,13 +312,17 @@ function InsightsPage() {
 			}
 		}
 		const sources = Object.keys(scoreCount).sort(
-			(a, b) => scoreSum[b] / scoreCount[b] - scoreSum[a] / scoreCount[a],
+			(a, b) =>
+				(scoreSum[b] ?? 0) / (scoreCount[b] ?? 1) -
+				(scoreSum[a] ?? 0) / (scoreCount[a] ?? 1),
 		);
 		return {
 			labels: sources,
 			datasets: [
 				{
-					data: sources.map((s) => Math.round(scoreSum[s] / scoreCount[s])),
+					data: sources.map((s) =>
+						Math.round((scoreSum[s] ?? 0) / (scoreCount[s] ?? 1)),
+					),
 					backgroundColor: sources.map((s) => hexAlpha(sourceHex(s), "26")),
 					borderColor: sources.map((s) => sourceHex(s)),
 					borderWidth: 1.5,
