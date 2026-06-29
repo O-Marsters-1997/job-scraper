@@ -142,6 +142,7 @@ function StatusesPage() {
 												</div>
 												<input
 													class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+													aria-label="Status name"
 													value={editName()}
 													onInput={(e) => setEditName(e.currentTarget.value)}
 												/>
@@ -189,6 +190,7 @@ function StatusesPage() {
 									</div>
 									<input
 										class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+										aria-label="Status name"
 										placeholder="Status name"
 										value={newName()}
 										onInput={(e) => setNewName(e.currentTarget.value)}

@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import type { ScoringConfig } from "../../../api/scoringConfig";
 import {
 	useScoringConfig,
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
-import type { ScoringConfig } from "../../../api/scoringConfig";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
@@ -84,9 +84,9 @@ function ScoringForm(props: { data: ScoringConfig }) {
 				{/* Rubric */}
 				<div class="overflow-hidden rounded-xl border border-border bg-surface">
 					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">
+						<label for="rubric" class="text-base font-semibold text-foreground">
 							Scoring rubric
-						</p>
+						</label>
 						<p class="mt-0.5 text-xs text-faint">
 							Describe your ideal candidate profile. Claude uses this when
 							scoring each job.
@@ -97,8 +97,8 @@ function ScoringForm(props: { data: ScoringConfig }) {
 							<div class="mb-4 rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
 								<p class="font-medium text-foreground">No rubric set yet</p>
 								<p class="mt-1 text-xs text-faint">
-									Without a rubric, Claude has no profile to score against.
-									Add one so jobs are ranked against your actual goals and
+									Without a rubric, Claude has no profile to score against. Add
+									one so jobs are ranked against your actual goals and
 									experience.
 								</p>
 							</div>
@@ -162,8 +162,8 @@ function ScoringForm(props: { data: ScoringConfig }) {
 								Notify threshold
 							</label>
 							<p class="mt-0.5 text-xs text-faint">
-								You only receive notifications for jobs scoring at or above
-								this suitability score.
+								You only receive notifications for jobs scoring at or above this
+								suitability score.
 							</p>
 							<div class="mt-2 flex items-center gap-2">
 								<input
@@ -172,9 +172,7 @@ function ScoringForm(props: { data: ScoringConfig }) {
 									min="0"
 									max="100"
 									value={threshold()}
-									onInput={(e) =>
-										setThreshold(Number(e.currentTarget.value))
-									}
+									onInput={(e) => setThreshold(Number(e.currentTarget.value))}
 									class="w-20 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
 								/>
 								<span class="text-xs text-faint">out of 100</span>

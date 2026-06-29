@@ -105,8 +105,9 @@ function TrackApplicationForm(props: {
 		<>
 			<div class="flex flex-col gap-4">
 				<div>
-					<Label>Status</Label>
+					<Label for="track-status">Status</Label>
 					<select
+						id="track-status"
 						class="field"
 						value={statusId()}
 						onChange={(e) => setStatusId(e.currentTarget.value)}
@@ -120,16 +121,18 @@ function TrackApplicationForm(props: {
 
 				<div class="grid grid-cols-2 gap-3">
 					<div>
-						<Label>Applied date</Label>
+						<Label for="track-applied-at">Applied date</Label>
 						<Input
+							id="track-applied-at"
 							type="date"
 							value={appliedAt()}
 							onInput={(e) => setAppliedAt(e.currentTarget.value)}
 						/>
 					</div>
 					<div>
-						<Label>Salary / comp</Label>
+						<Label for="track-salary">Salary / comp</Label>
 						<Input
+							id="track-salary"
 							type="text"
 							placeholder="e.g. £80,000"
 							value={salary()}
@@ -139,8 +142,9 @@ function TrackApplicationForm(props: {
 				</div>
 
 				<div>
-					<Label>Notes</Label>
+					<Label for="track-notes">Notes</Label>
 					<textarea
+						id="track-notes"
 						class="field resize-y"
 						rows={3}
 						placeholder="Any notes…"

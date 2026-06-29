@@ -208,6 +208,7 @@ function AiForm(props: { data: AiPrefs }) {
 								<div class="flex items-center gap-3">
 									<input
 										type="password"
+										aria-label="Anthropic API key"
 										placeholder="sk-ant-…"
 										value={apiKey()}
 										onInput={(e) => setApiKey(e.currentTarget.value)}

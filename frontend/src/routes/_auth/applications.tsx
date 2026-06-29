@@ -204,8 +204,9 @@ function ApplicationsPage() {
 
 					<div class="flex flex-col gap-4">
 						<div>
-							<Label>Status</Label>
+							<Label for="edit-app-status">Status</Label>
 							<select
+								id="edit-app-status"
 								class="field"
 								value={editStatusId()}
 								onChange={(e) => setEditStatusId(e.currentTarget.value)}
@@ -219,8 +220,9 @@ function ApplicationsPage() {
 
 						<div class="grid grid-cols-2 gap-3">
 							<div>
-								<Label>Applied date</Label>
+								<Label for="edit-app-applied-at">Applied date</Label>
 								<Input
+									id="edit-app-applied-at"
 									type="date"
 									value={editAppliedAt()}
 									onInput={(e) => setEditAppliedAt(e.currentTarget.value)}
@@ -228,8 +230,9 @@ function ApplicationsPage() {
 							</div>
 
 							<div>
-								<Label>Salary / comp</Label>
+								<Label for="edit-app-salary">Salary / comp</Label>
 								<Input
+									id="edit-app-salary"
 									type="text"
 									placeholder="e.g. £80,000"
 									value={editSalary()}
@@ -239,8 +242,9 @@ function ApplicationsPage() {
 						</div>
 
 						<div>
-							<Label>Notes</Label>
+							<Label for="edit-app-notes">Notes</Label>
 							<textarea
+								id="edit-app-notes"
 								class="field resize-y"
 								rows={3}
 								placeholder="Any notes about this application…"
