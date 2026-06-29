@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -10,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SkeletonList } from "@/components/ui/skeleton";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -136,65 +136,63 @@ function ApplicationsPage() {
 				</For>
 			</div>
 
-			<Show when={query.isPending}>
-				<SkeletonList rows={5} />
-			</Show>
-
-			<Show when={query.isSuccess}>
-				<Show
-					when={(query.data?.length ?? 0) > 0}
-					fallback={
-						<div class="rounded-xl border border-border bg-surface p-10 text-center">
-							<p class="text-sm text-muted">
-								No applications yet. Track a job from the Jobs page.
-							</p>
-						</div>
-					}
-				>
-					<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-						<For each={query.data}>
-							{(app) => (
-								<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
-									<div class="min-w-0 flex-1">
-										<p class="truncate text-sm font-medium text-foreground">
-											{app.JobTitle}
-										</p>
-										<p class="text-xs text-faint">
-											{app.JobCompanySlug}
-											{app.JobLocation ? ` · ${app.JobLocation}` : ""}
-										</p>
+			<QueryBoundary query={query} fallbackRows={5}>
+				{(data) => (
+					<Show
+						when={data.length > 0}
+						fallback={
+							<div class="rounded-xl border border-border bg-surface p-10 text-center">
+								<p class="text-sm text-muted">
+									No applications yet. Track a job from the Jobs page.
+								</p>
+							</div>
+						}
+					>
+						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+							<For each={data}>
+								{(app) => (
+									<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium text-foreground">
+												{app.JobTitle}
+											</p>
+											<p class="text-xs text-faint">
+												{app.JobCompanySlug}
+												{app.JobLocation ? ` · ${app.JobLocation}` : ""}
+											</p>
+										</div>
+										<Show when={app.StatusName}>
+											<StatusBadge
+												name={app.StatusName}
+												colour={statusColour(app)}
+											/>
+										</Show>
+										<Show when={app.AppliedAt}>
+											<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
+												{app.AppliedAt}
+											</span>
+										</Show>
+										<button
+											type="button"
+											onClick={() => openEdit(app)}
+											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
+										>
+											Edit
+										</button>
+										<button
+											type="button"
+											onClick={() => setDeletingApp(app)}
+											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
+										>
+											Delete
+										</button>
 									</div>
-									<Show when={app.StatusName}>
-										<StatusBadge
-											name={app.StatusName}
-											colour={statusColour(app)}
-										/>
-									</Show>
-									<Show when={app.AppliedAt}>
-										<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
-											{app.AppliedAt}
-										</span>
-									</Show>
-									<button
-										type="button"
-										onClick={() => openEdit(app)}
-										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
-									>
-										Edit
-									</button>
-									<button
-										type="button"
-										onClick={() => setDeletingApp(app)}
-										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
-									>
-										Delete
-									</button>
-								</div>
-							)}
-						</For>
-					</div>
-				</Show>
-			</Show>
+								)}
+							</For>
+						</div>
+					</Show>
+				)}
+			</QueryBoundary>
 
 			{/* Edit modal */}
 			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>

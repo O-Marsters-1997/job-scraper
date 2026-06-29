@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
+import { ErrorState } from "@/components/ErrorState";
 import { API_BASE } from "../../../api/config";
 import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
@@ -94,6 +95,14 @@ function IntegrationsPage() {
 			<p class="mt-3 text-xs text-faint">
 				Google Drive access lets FastTrack read your CV documents.
 			</p>
+
+			<Show when={status.isError}>
+				<ErrorState
+					error={status.error}
+					onRetry={() => status.refetch()}
+					message="Could not load Google integration status."
+				/>
+			</Show>
 		</div>
 	);
 }

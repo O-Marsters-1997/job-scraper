@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
-import { SkeletonList } from "@/components/ui/skeleton";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
@@ -85,166 +85,166 @@ function StatusesPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isPending}>
-				<SkeletonList rows={5} />
-			</Show>
-
-			<Show when={query.isSuccess}>
-				<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-					<For each={query.data}>
-						{(status) => (
-							<div class="flex items-center gap-3 px-4 py-3">
-								<Show
-									when={editingId() === status.ID}
-									fallback={
-										<>
-											<span
-												class="h-3 w-3 shrink-0 rounded-full"
-												style={{ background: status.Colour }}
-											/>
-											<span class="flex-1 text-sm font-medium text-foreground">
-												{status.Name}
-											</span>
-											<button
-												type="button"
-												onClick={() => startEdit(status)}
-												class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
-											>
-												Edit
-											</button>
-											<button
-												type="button"
-												onClick={() => handleDelete(status.ID)}
-												class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
-											>
-												Delete
-											</button>
-										</>
-									}
-								>
-									<div class="flex flex-1 items-center gap-2">
-										<div class="flex gap-1">
-											<For each={STATUS_PALETTE}>
-												{(p) => (
+			<QueryBoundary query={query} fallbackRows={5}>
+				{(data) => (
+					<>
+						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+							<For each={data}>
+								{(status) => (
+									<div class="flex items-center gap-3 px-4 py-3">
+										<Show
+											when={editingId() === status.ID}
+											fallback={
+												<>
+													<span
+														class="h-3 w-3 shrink-0 rounded-full"
+														style={{ background: status.Colour }}
+													/>
+													<span class="flex-1 text-sm font-medium text-foreground">
+														{status.Name}
+													</span>
 													<button
 														type="button"
-														title={p.label}
-														onClick={() => setEditColour(p.hex)}
-														class="h-5 w-5 rounded-full border-2 transition"
-														style={{
-															background: p.hex,
-															"border-color":
-																editColour() === p.hex
-																	? "var(--color-foreground)"
-																	: "transparent",
-														}}
-													/>
-												)}
-											</For>
-										</div>
-										<input
-											class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
-											value={editName()}
-											onInput={(e) => setEditName(e.currentTarget.value)}
-										/>
+														onClick={() => startEdit(status)}
+														class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
+													>
+														Edit
+													</button>
+													<button
+														type="button"
+														onClick={() => handleDelete(status.ID)}
+														class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
+													>
+														Delete
+													</button>
+												</>
+											}
+										>
+											<div class="flex flex-1 items-center gap-2">
+												<div class="flex gap-1">
+													<For each={STATUS_PALETTE}>
+														{(p) => (
+															<button
+																type="button"
+																title={p.label}
+																onClick={() => setEditColour(p.hex)}
+																class="h-5 w-5 rounded-full border-2 transition"
+																style={{
+																	background: p.hex,
+																	"border-color":
+																		editColour() === p.hex
+																			? "var(--color-foreground)"
+																			: "transparent",
+																}}
+															/>
+														)}
+													</For>
+												</div>
+												<input
+													class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+													value={editName()}
+													onInput={(e) => setEditName(e.currentTarget.value)}
+												/>
+											</div>
+											<button
+												type="button"
+												onClick={handleUpdate}
+												disabled={updateMutation.isPending}
+												class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+											>
+												Save
+											</button>
+											<button
+												type="button"
+												onClick={() => setEditingId(null)}
+												class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
+											>
+												Cancel
+											</button>
+										</Show>
 									</div>
+								)}
+							</For>
+
+							<Show when={showAdd()}>
+								<div class="flex items-center gap-2 px-4 py-3">
+									<div class="flex gap-1">
+										<For each={STATUS_PALETTE}>
+											{(p) => (
+												<button
+													type="button"
+													title={p.label}
+													onClick={() => setNewColour(p.hex)}
+													class="h-5 w-5 rounded-full border-2 transition"
+													style={{
+														background: p.hex,
+														"border-color":
+															newColour() === p.hex
+																? "var(--color-foreground)"
+																: "transparent",
+													}}
+												/>
+											)}
+										</For>
+									</div>
+									<input
+										class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+										placeholder="Status name"
+										value={newName()}
+										onInput={(e) => setNewName(e.currentTarget.value)}
+										onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+									/>
 									<button
 										type="button"
-										onClick={handleUpdate}
-										disabled={updateMutation.isPending}
+										onClick={handleAdd}
+										disabled={createMutation.isPending || !newName().trim()}
 										class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
 									>
-										Save
+										Add
 									</button>
 									<button
 										type="button"
-										onClick={() => setEditingId(null)}
+										onClick={() => {
+											setShowAdd(false);
+											setNewName("");
+										}}
 										class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
 									>
 										Cancel
 									</button>
-								</Show>
-							</div>
-						)}
-					</For>
-
-					<Show when={showAdd()}>
-						<div class="flex items-center gap-2 px-4 py-3">
-							<div class="flex gap-1">
-								<For each={STATUS_PALETTE}>
-									{(p) => (
-										<button
-											type="button"
-											title={p.label}
-											onClick={() => setNewColour(p.hex)}
-											class="h-5 w-5 rounded-full border-2 transition"
-											style={{
-												background: p.hex,
-												"border-color":
-													newColour() === p.hex
-														? "var(--color-foreground)"
-														: "transparent",
-											}}
-										/>
-									)}
-								</For>
-							</div>
-							<input
-								class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
-								placeholder="Status name"
-								value={newName()}
-								onInput={(e) => setNewName(e.currentTarget.value)}
-								onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-							/>
-							<button
-								type="button"
-								onClick={handleAdd}
-								disabled={createMutation.isPending || !newName().trim()}
-								class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
-							>
-								Add
-							</button>
-							<button
-								type="button"
-								onClick={() => {
-									setShowAdd(false);
-									setNewName("");
-								}}
-								class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
-							>
-								Cancel
-							</button>
+								</div>
+							</Show>
 						</div>
-					</Show>
-				</div>
 
-				<Show when={!showAdd()}>
-					<button
-						type="button"
-						onClick={() => setShowAdd(true)}
-						class="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
-					>
-						<svg
-							aria-hidden="true"
-							width="12"
-							height="12"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-						>
-							<line x1="12" y1="5" x2="12" y2="19" />
-							<line x1="5" y1="12" x2="19" y2="12" />
-						</svg>
-						Add status
-					</button>
-				</Show>
-				<p class="mt-3 text-xs text-faint">
-					Changes take effect immediately. Deleting a status does not remove it
-					from existing applications.
-				</p>
-			</Show>
+						<Show when={!showAdd()}>
+							<button
+								type="button"
+								onClick={() => setShowAdd(true)}
+								class="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
+							>
+								<svg
+									aria-hidden="true"
+									width="12"
+									height="12"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2.5"
+									stroke-linecap="round"
+								>
+									<line x1="12" y1="5" x2="12" y2="19" />
+									<line x1="5" y1="12" x2="19" y2="12" />
+								</svg>
+								Add status
+							</button>
+						</Show>
+						<p class="mt-3 text-xs text-faint">
+							Changes take effect immediately. Deleting a status does not remove
+							it from existing applications.
+						</p>
+					</>
+				)}
+			</QueryBoundary>
 		</div>
 	);
 }
