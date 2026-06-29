@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS user_ai_prefs (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id           UUID        UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     suitability_model TEXT        NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
+    reasoning_model   TEXT        NOT NULL DEFAULT 'claude-sonnet-4-6',
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );

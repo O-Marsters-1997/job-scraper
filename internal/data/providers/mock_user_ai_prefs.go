@@ -33,13 +33,13 @@ func (m *MockUserAIPrefsProvider) GetUserAIPrefs(_ context.Context, userID strin
 	return p, nil
 }
 
-func (m *MockUserAIPrefsProvider) UpsertUserAIPrefs(_ context.Context, userID, suitabilityModel string) (dto.UserAIPrefs, error) {
+func (m *MockUserAIPrefsProvider) UpsertUserAIPrefs(_ context.Context, userID, suitabilityModel, reasoningModel string) (dto.UserAIPrefs, error) {
 	if m.UpsertErr != nil {
 		return dto.UserAIPrefs{}, m.UpsertErr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	p := dto.UserAIPrefs{SuitabilityModel: suitabilityModel}
+	p := dto.UserAIPrefs{SuitabilityModel: suitabilityModel, ReasoningModel: reasoningModel}
 	m.prefs[userID] = p
 	return p, nil
 }

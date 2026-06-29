@@ -16,6 +16,7 @@ import (
 
 const (
 	defaultModelID        = "claude-haiku-4-5-20251001"
+	DefaultReasoningModel = "claude-sonnet-4-6"
 	defaultMaxInputTokens = 4096
 
 	haiku4_5InputPricePerMToken      = 0.80
@@ -269,7 +270,7 @@ func buildBatchSystemPrompt(cfg dto.SearchConfig) string {
 		sb.WriteString("\n\n")
 	}
 	sb.WriteString("Respond ONLY with a valid JSON array, one object per job in input order (no markdown, no extra text):\n")
-	sb.WriteString(`[{"id":"<job id>","score":<int 0-100>,"matched":[<skills present>],"missing":[<skills absent>],"rationale":"<one sentence>"},...]`)
+	sb.WriteString(`[{"id":"<job id>","score":<int 0-100>,"matched":[<skills present>],"missing":[<skills absent>]},...]`)
 	return sb.String()
 }
 

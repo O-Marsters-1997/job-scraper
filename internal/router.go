@@ -36,6 +36,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	}))
 
 	jobH := handlers.NewJobHandler(db)
+	jobReasoningH := handlers.NewJobReasoningHandler(db, creds)
 	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
@@ -85,6 +86,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 		r.Use(auth.Middleware(db))
 
 		r.Get("/jobs", jobH.ListJobs)
+		r.Post("/jobs/{id}/reasoning", jobReasoningH.PostJobReasoning)
 
 		r.Route("/application-statuses", func(r chi.Router) {
 			r.Get("/", statusH.ListApplicationStatuses)

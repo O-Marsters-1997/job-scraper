@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { Badge } from "@/components/ui/badge";
+import { useRequestReasoning } from "@/hooks/useJobs";
 import type { Job } from "@/types/job";
 
 interface Props {
@@ -7,17 +8,18 @@ interface Props {
 }
 
 export function JobRowExpander(props: Props) {
+	const reasoningMutation = useRequestReasoning();
+
 	const score = () => props.job.SuitabilityScore;
 	const reasoning = () => props.job.Reasoning ?? null;
 	const matched = () => props.job.Matched ?? [];
 	const missing = () => props.job.Missing ?? [];
 	const skipped = () => props.job.SuitabilitySkipped ?? false;
 
-	// State 4 guard (field not in API until #104 — shows pending until then)
 	const isSkipped = () => skipped();
 	// State 1: scored with reasoning
 	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
-	// State 2: scored legacy (no reasoning)
+	// State 2: scored, no reasoning yet — show explain button
 	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
 	// State 3: pending
 	const isPending = () => !isSkipped() && score() == null;
@@ -76,7 +78,25 @@ export function JobRowExpander(props: Props) {
 			</Show>
 
 			<Show when={isLegacy()}>
-				<p class="text-xs text-faint">No reasoning captured for this score.</p>
+				<div class="flex items-center gap-3">
+					<Show
+						when={!reasoningMutation.isError}
+						fallback={
+							<p class="text-xs text-destructive-strong">
+								Failed to generate reasoning. Please try again.
+							</p>
+						}
+					>
+						<button
+							type="button"
+							onClick={() => reasoningMutation.mutate(props.job.ID)}
+							disabled={reasoningMutation.isPending}
+							class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:opacity-50"
+						>
+							{reasoningMutation.isPending ? "Generating…" : "Explain score"}
+						</button>
+					</Show>
+				</div>
 			</Show>
 
 			<Show when={isPending()}>

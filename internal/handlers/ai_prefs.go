@@ -17,7 +17,10 @@ var availableModels = []string{
 	"claude-opus-4-8",
 }
 
-const defaultSuitabilityModel = "claude-haiku-4-5-20251001"
+const (
+	defaultSuitabilityModel = "claude-haiku-4-5-20251001"
+	defaultReasoningModel   = "claude-sonnet-4-6"
+)
 
 // credLister is the subset of credstore.CredentialStore used by AIPrefsHandler.
 // ponytail: minimal interface — only ListProviders needed here.
@@ -36,6 +39,7 @@ func NewAIPrefsHandler(prefs providers.UserAIPrefsProvider, creds credLister) *A
 
 type aiPrefsResponse struct {
 	SuitabilityModel    string   `json:"suitabilityModel"`
+	ReasoningModel      string   `json:"reasoningModel"`
 	AvailableModels     []string `json:"availableModels"`
 	ConfiguredProviders []string `json:"configuredProviders"`
 	ScoringEnabled      bool     `json:"scoringEnabled"`
@@ -49,9 +53,11 @@ func (h *AIPrefsHandler) GetAIPrefs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	model := defaultSuitabilityModel
+	suitabilityModel := defaultSuitabilityModel
+	reasoningModel := defaultReasoningModel
 	if err == nil {
-		model = prefs.SuitabilityModel
+		suitabilityModel = prefs.SuitabilityModel
+		reasoningModel = prefs.ReasoningModel
 	}
 
 	var configured []string
@@ -68,7 +74,8 @@ func (h *AIPrefsHandler) GetAIPrefs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := aiPrefsResponse{
-		SuitabilityModel:    model,
+		SuitabilityModel:    suitabilityModel,
+		ReasoningModel:      reasoningModel,
 		AvailableModels:     availableModels,
 		ConfiguredProviders: configured,
 		ScoringEnabled:      len(configured) > 0,
@@ -81,6 +88,7 @@ func (h *AIPrefsHandler) UpdateAIPrefs(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
 		SuitabilityModel string `json:"suitabilityModel"`
+		ReasoningModel   string `json:"reasoningModel"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -90,7 +98,14 @@ func (h *AIPrefsHandler) UpdateAIPrefs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid model", http.StatusBadRequest)
 		return
 	}
-	if _, err := h.prefs.UpsertUserAIPrefs(r.Context(), session.UserID, body.SuitabilityModel); err != nil {
+	reasoningModel := body.ReasoningModel
+	if reasoningModel == "" {
+		reasoningModel = defaultReasoningModel
+	} else if !isValidModel(reasoningModel) {
+		http.Error(w, "invalid reasoning model", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.prefs.UpsertUserAIPrefs(r.Context(), session.UserID, body.SuitabilityModel, reasoningModel); err != nil {
 		slog.Error("upsert ai prefs failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return

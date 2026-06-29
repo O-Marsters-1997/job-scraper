@@ -8,5 +8,5 @@ import (
 
 type UserAIPrefsProvider interface {
 	GetUserAIPrefs(ctx context.Context, userID string) (dto.UserAIPrefs, error)
-	UpsertUserAIPrefs(ctx context.Context, userID, suitabilityModel string) (dto.UserAIPrefs, error)
+	UpsertUserAIPrefs(ctx context.Context, userID, suitabilityModel, reasoningModel string) (dto.UserAIPrefs, error)
 }

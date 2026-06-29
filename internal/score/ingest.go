@@ -88,7 +88,7 @@ func (s *IngestScorer) ScoreAndSaveBatch(ctx context.Context, jobs []dto.Job, us
 			slog.Int("output_tokens", result.Usage.OutputTokens),
 			slog.Float64("cost_usd", result.Usage.CostUSD),
 		)
-		if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, userID, result.Score, result.Rationale, result.Matched, result.Missing); err != nil {
+		if err := s.db.UpsertJobScoreSuitability(ctx, job.ID, userID, result.Score, "", result.Matched, result.Missing); err != nil {
 			slog.Error("upsert suitability failed", slog.String("url", job.URL), slog.Any("err", err))
 		}
 	}

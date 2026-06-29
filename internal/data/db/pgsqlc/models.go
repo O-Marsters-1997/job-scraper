@@ -130,6 +130,7 @@ type UserAiPref struct {
 	ID               pgtype.UUID
 	UserID           pgtype.UUID
 	SuitabilityModel string
+	ReasoningModel   string
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
 }

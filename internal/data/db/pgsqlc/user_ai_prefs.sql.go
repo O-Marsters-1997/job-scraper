@@ -12,7 +12,7 @@ import (
 )
 
 const getUserAIPrefs = `-- name: GetUserAIPrefs :one
-SELECT id, user_id, suitability_model, created_at, updated_at FROM user_ai_prefs WHERE user_id = $1 LIMIT 1
+SELECT id, user_id, suitability_model, reasoning_model, created_at, updated_at FROM user_ai_prefs WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserAIPrefs(ctx context.Context, userID pgtype.UUID) (UserAiPref, error) {
@@ -22,6 +22,7 @@ func (q *Queries) GetUserAIPrefs(ctx context.Context, userID pgtype.UUID) (UserA
 		&i.ID,
 		&i.UserID,
 		&i.SuitabilityModel,
+		&i.ReasoningModel,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -29,26 +30,29 @@ func (q *Queries) GetUserAIPrefs(ctx context.Context, userID pgtype.UUID) (UserA
 }
 
 const upsertUserAIPrefs = `-- name: UpsertUserAIPrefs :one
-INSERT INTO user_ai_prefs (user_id, suitability_model)
-VALUES ($1, $2)
+INSERT INTO user_ai_prefs (user_id, suitability_model, reasoning_model)
+VALUES ($1, $2, $3)
 ON CONFLICT (user_id) DO UPDATE SET
     suitability_model = EXCLUDED.suitability_model,
+    reasoning_model   = EXCLUDED.reasoning_model,
     updated_at        = now()
-RETURNING id, user_id, suitability_model, created_at, updated_at
+RETURNING id, user_id, suitability_model, reasoning_model, created_at, updated_at
 `
 
 type UpsertUserAIPrefsParams struct {
 	UserID           pgtype.UUID
 	SuitabilityModel string
+	ReasoningModel   string
 }
 
 func (q *Queries) UpsertUserAIPrefs(ctx context.Context, arg UpsertUserAIPrefsParams) (UserAiPref, error) {
-	row := q.db.QueryRow(ctx, upsertUserAIPrefs, arg.UserID, arg.SuitabilityModel)
+	row := q.db.QueryRow(ctx, upsertUserAIPrefs, arg.UserID, arg.SuitabilityModel, arg.ReasoningModel)
 	var i UserAiPref
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.SuitabilityModel,
+		&i.ReasoningModel,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

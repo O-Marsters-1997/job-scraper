@@ -2,11 +2,14 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -104,6 +107,9 @@ func (db *DB) GetJobScore(ctx context.Context, jobID, userID string) (dto.JobSco
 		JobID:  jid,
 		UserID: uid,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.JobScore{}, providers.ErrNotFound
+	}
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("db.GetJobScore: %w", err)
 	}
