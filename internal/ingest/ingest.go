@@ -12,18 +12,16 @@ type Saver interface {
 	Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error)
 }
 
-// Scorer runs suitability scoring for a specific user after a job is saved and returns the score (0 on error).
+// Scorer runs suitability scoring for a batch of jobs for a specific user after they are saved.
 // Implementations handle their own errors internally and never block ingest.
 type Scorer interface {
-	ScoreAndSave(ctx context.Context, job dto.Job, userID string) int
+	ScoreAndSaveBatch(ctx context.Context, jobs []dto.Job, userID string)
 }
 
-// UserLister lists user IDs that have a stored credential for a given provider.
 type UserLister interface {
 	ListUsersWithProvider(ctx context.Context, provider string) ([]string, error)
 }
 
-// CredentialGetter retrieves a plaintext API key for a user+provider pair.
 type CredentialGetter interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
 }
@@ -91,8 +89,9 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	}
 	slog.Info("jobs ingested", slog.Int("count", len(saved)))
 
+	i.scoreForAllUsers(ctx, saved)
+
 	for _, j := range saved {
-		i.scoreForAllUsers(ctx, j)
 		if i.notifier != nil {
 			i.notifier.NotifyNewJob(ctx, j, 0)
 		}
@@ -100,7 +99,7 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	return nil
 }
 
-func (i *Ingester) scoreForAllUsers(ctx context.Context, job dto.Job) {
+func (i *Ingester) scoreForAllUsers(ctx context.Context, jobs []dto.Job) {
 	if i.users == nil || i.creds == nil || i.scorerFor == nil || i.provider == "" {
 		return
 	}
@@ -120,7 +119,7 @@ func (i *Ingester) scoreForAllUsers(ctx context.Context, job dto.Job) {
 			continue
 		}
 		scorer := i.scorerFor(apiKey)
-		scorer.ScoreAndSave(ctx, job, uid)
+		scorer.ScoreAndSaveBatch(ctx, jobs, uid)
 	}
 }
 
