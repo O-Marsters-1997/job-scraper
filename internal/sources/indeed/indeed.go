@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/proxy"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
@@ -23,7 +22,7 @@ func New() *Scraper {
 		URLPrefix:         "https://www.indeed.com",
 		Schedule:          "0 */6 * * *",
 		MinScrapeInterval: 5 * time.Hour,
-		ProxyTier:         proxy.Residential,
+		UseProxy:          true,
 	})}
 }
 

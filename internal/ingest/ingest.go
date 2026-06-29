@@ -9,7 +9,7 @@ import (
 )
 
 type Saver interface {
-	Save(ctx context.Context, jobs []dto.Job) error
+	Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error)
 }
 
 // Scorer runs suitability scoring for a specific user after a job is saved and returns the score (0 on error).
@@ -85,12 +85,13 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 		return nil
 	}
 
-	if err := i.db.Save(ctx, valid); err != nil {
+	saved, err := i.db.Save(ctx, valid)
+	if err != nil {
 		return err
 	}
-	slog.Info("jobs ingested", slog.Int("count", len(valid)))
+	slog.Info("jobs ingested", slog.Int("count", len(saved)))
 
-	for _, j := range valid {
+	for _, j := range saved {
 		i.scoreForAllUsers(ctx, j)
 		if i.notifier != nil {
 			i.notifier.NotifyNewJob(ctx, j, 0)

@@ -29,6 +29,7 @@ type Orchestrator struct {
 	wg           sync.WaitGroup
 	buildSources func(ctx context.Context) ([]sources.Source, error) // nil → use static srcs
 	buildTarget  func(target dto.SourceTarget) []sources.Source      // nil → no on-demand scrape
+	force        bool                                                // bypass MinScrapeInterval gate when true
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -61,6 +62,13 @@ func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store Rel
 	o.scoreDB = store
 }
 
+// WithForceScrape bypasses the per-source MinScrapeInterval gate on every tick.
+// Use locally to test the full scrape→enqueue→ingest flow without wiping Valkey state.
+func (o *Orchestrator) WithForceScrape(force bool) *Orchestrator {
+	o.force = force
+	return o
+}
+
 // WithExporter wires in the egress port used by the ATS path.
 func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
 	o.exporter = exp
@@ -68,12 +76,17 @@ func (o *Orchestrator) WithExporter(exp JobExporter) *Orchestrator {
 }
 
 func (o *Orchestrator) Start(ctx context.Context) error {
-	// Run an initial scrape immediately in the background.
-	o.wg.Add(1)
-	go func() {
-		defer o.wg.Done()
+	// When force is set, run the initial tick synchronously so the queue is
+	// pre-populated before the caller starts the queue consumer.
+	if o.force {
 		o.tick(ctx)
-	}()
+	} else {
+		o.wg.Add(1)
+		go func() {
+			defer o.wg.Done()
+			o.tick(ctx)
+		}()
+	}
 
 	o.cr = cron.New()
 
@@ -156,7 +169,7 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 			slog.Any("err", err),
 		)
 	}
-	if ok && time.Since(last) < cfg.MinScrapeInterval {
+	if !o.force && ok && time.Since(last) < cfg.MinScrapeInterval {
 		log.Info("skipping scrape: ran recently", slog.Duration("ago", time.Since(last)))
 		return
 	}
@@ -316,6 +329,7 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	}
 
 	queued := make([]dto.QueuedJob, 0, len(candidates))
+	freshCount, gateFiltered := 0, 0
 	for _, c := range candidates {
 		if _, isNew := newSet[c.url]; !isNew {
 			continue
@@ -324,15 +338,26 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 			continue
 		}
 		p.seen[c.url] = struct{}{}
+		freshCount++
 
 		if !passesAnyGate(c.job, p.gates) {
+			gateFiltered++
 			continue
 		}
 		queued = append(queued, dto.QueuedJob{URL: c.url, Card: c.job})
 	}
 
+	if gateFiltered > 0 {
+		slog.Info("relevance gate filtered jobs on page",
+			slog.Int("filtered", gateFiltered),
+			slog.Int("gates", len(p.gates)),
+		)
+	}
+
 	if len(queued) == 0 {
-		return true, nil
+		// Only stop if we've hit the known-URL frontier (all already in DB).
+		// If URLs are fresh but gate-filtered, keep paginating.
+		return freshCount == 0, nil
 	}
 
 	if err := p.q.EnqueueJobs(ctx, queued); err != nil {

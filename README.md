@@ -101,7 +101,7 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 
 **Aggregator URL rewriting** — When an HTML source (LinkedIn/Indeed) yields a URL that wraps an underlying ATS URL, `detect.RewriteToATS` extracts the real URL before enqueueing. This means the worker sees a clean ATS URL and routes it to the correct source. See ADR 0004.
 
-**Per-source proxy tiering** — Direct for ATS APIs, datacenter for friendly HTML boards (wis), residential for hostile aggregators (LinkedIn, Indeed). Configured via `ProxyTier` in `sources.Config`. See ADR 0009.
+**Per-source proxy opt-in** — ATS APIs and cooperative HTML boards (wis) go direct; hostile aggregators (LinkedIn, Indeed) route through BrightData Web Unlocker (residential unblocking, CAPTCHA/JS handling). Configured via `UseProxy bool` in `sources.Config`. See ADR 0009.
 
 **sqlc for queries** — All SQL is hand-written in `internal/data/sqlc/queries/` and compiled to type-safe Go. No ORM.
 
@@ -173,8 +173,7 @@ Scoring and notifications (configured on `cmd/api`):
 | Email notifications (API) | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
 | Per-ingest email | `NOTIFY_ON_INGEST=true` |
 | Daily digest | `NOTIFY_DIGEST_ENABLED=true` (default) + `NOTIFY_DIGEST_CRON` |
-| Proxy (datacenter) | `PROXY_DATACENTER_URL` |
-| Proxy (residential) | `PROXY_RESIDENTIAL_URL` |
+| BrightData Web Unlocker | `BRIGHTDATA_PROXY_URL` |
 
 ## VPS Deployment
 

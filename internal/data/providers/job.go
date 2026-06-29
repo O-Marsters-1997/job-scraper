@@ -10,10 +10,10 @@ import (
 // JobProvider is the single access point for job persistence.
 // Callers never import pgsqlc or pgtype directly.
 type JobProvider interface {
-	// Save writes one or more jobs, inserting or updating on URL conflict.
-	// The implementation selects the most efficient DB path based on input size.
+	// Save writes one or more jobs, inserting or updating on URL conflict,
+	// and returns the saved jobs with their DB-assigned IDs populated.
 	// Passing an empty slice is a no-op.
-	Save(ctx context.Context, jobs []dto.Job) error
+	Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error)
 
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 

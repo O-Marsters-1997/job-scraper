@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -22,6 +23,10 @@ import (
 )
 
 func main() {
+	forceScrape := flag.Bool("scrape-now", false,
+		"bypass per-source recency gate so every tick (startup + cron) scrapes immediately")
+	flag.Parse()
+
 	slog.SetDefault(logger.New())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -85,7 +90,12 @@ func main() {
 
 	orch := scraper.New(srcs, db, q).
 		WithExporter(exporter).
-		WithSourceReloader(buildAll, buildOne)
+		WithSourceReloader(buildAll, buildOne).
+		WithForceScrape(*forceScrape)
+
+	if *forceScrape {
+		slog.Info("force scrape enabled: ignoring per-source recency gate")
+	}
 
 	orch.WithRelevanceGate(score.NewHeuristicScorer(), db)
 	slog.Info("relevance gate enabled (multi-user)")

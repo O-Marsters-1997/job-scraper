@@ -42,7 +42,7 @@ func TestSave_Single(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
 			t.Fatalf("Save: %v", err)
 		}
 
@@ -63,7 +63,7 @@ func TestSave_Single(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
 			t.Fatalf("first Save: %v", err)
 		}
 
@@ -72,7 +72,7 @@ func TestSave_Single(t *testing.T) {
 		updated.Location = "Remote"
 		updated.UpdatedAt = time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 
-		if err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
 			t.Fatalf("second Save: %v", err)
 		}
 
@@ -115,7 +115,7 @@ func TestSave_Batch(t *testing.T) {
 			},
 		}
 
-		if err := testDB.Save(ctx, jobs); err != nil {
+		if _, err := testDB.Save(ctx, jobs); err != nil {
 			t.Fatalf("Save: %v", err)
 		}
 
@@ -132,7 +132,7 @@ func TestSave_Batch(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
 			t.Fatalf("first Save: %v", err)
 		}
 
@@ -141,7 +141,7 @@ func TestSave_Batch(t *testing.T) {
 		updated.Location = "Remote"
 		updated.UpdatedAt = time.Date(2024, 9, 1, 0, 0, 0, 0, time.UTC)
 
-		if err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{updated}); err != nil {
 			t.Fatalf("second Save: %v", err)
 		}
 
@@ -166,10 +166,10 @@ func TestSave_Empty(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
-	if err := testDB.Save(ctx, nil); err != nil {
+	if _, err := testDB.Save(ctx, nil); err != nil {
 		t.Errorf("Save(nil): %v", err)
 	}
-	if err := testDB.Save(ctx, []dto.Job{}); err != nil {
+	if _, err := testDB.Save(ctx, []dto.Job{}); err != nil {
 		t.Errorf("Save([]): %v", err)
 	}
 }
@@ -179,7 +179,7 @@ func TestNewURLs(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		if err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		if _, err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
 			t.Fatalf("Save: %v", err)
 		}
 
@@ -223,7 +223,7 @@ func TestList(t *testing.T) {
 		},
 	}
 
-	if err := testDB.Save(ctx, jobs); err != nil {
+	if _, err := testDB.Save(ctx, jobs); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 

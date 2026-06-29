@@ -13,7 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func fromProfile(id pgtype.UUID, username string, email pgtype.Text) dto.Profile {
+func fromProfile(_ pgtype.UUID, username string, email pgtype.Text) dto.Profile {
 	return dto.Profile{
 		Username: username,
 		Email:    email.String,

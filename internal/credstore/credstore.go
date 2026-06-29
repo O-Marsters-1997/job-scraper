@@ -38,8 +38,8 @@ type RawStore interface {
 //
 // ponytail: key loaded once at New(); no per-op env reads.
 type EnvCredentialStore struct {
-	key  []byte
-	raw  RawStore
+	key []byte
+	raw RawStore
 }
 
 // New constructs an EnvCredentialStore. Returns an error if

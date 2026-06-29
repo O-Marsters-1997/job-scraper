@@ -29,7 +29,7 @@ type DetailFetcher interface {
 }
 ```
 
-- `Cfg()` — returns name, schedule, `MinScrapeInterval`, `URLPrefix`, and `ProxyTier`. Embed `PaginatedBase` and this is provided for free.
+- `Cfg()` — returns name, schedule, `MinScrapeInterval`, `URLPrefix`, and `UseProxy`. Embed `PaginatedBase` and this is provided for free.
 - `Iterate` — pages through all jobs. **ATS sources** yield fully-populated `dto.Job`s. **HTML sources** yield `dto.Job{URL: u, Title: ..., Location: ...}` partials with whatever card metadata is available.
 - `CanHandle(url)` — (`DetailFetcher` only) returns true if this source owns `url`. `PaginatedBase` implements this as `strings.HasPrefix(url, cfg.URLPrefix)`.
 - `GetDetails` — (`DetailFetcher` only) fetch and parse a single job detail page. HTML sources use it as the second-phase fetch.
@@ -130,15 +130,11 @@ func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error)      { return ParseU
 func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) { return ParseJobDetail(r, url) }
 ```
 
-### Proxy tier
+### Proxy
 
-Set `ProxyTier` in `sources.Config`:
+Set `UseProxy: true` in `sources.Config` for sources that hit anti-bot protection (LinkedIn, Indeed). Leave it unset (zero value = false) for ATS APIs and cooperative HTML boards.
 
-- `proxy.Direct` (zero value) — ATS APIs, friendly HTML boards.
-- `proxy.Datacenter` — semi-hostile HTML boards (wis uses this).
-- `proxy.Residential` — LinkedIn, Indeed. See ADR 0009.
-
-The correct env vars are `PROXY_DATACENTER_URL` and `PROXY_RESIDENTIAL_URL`.
+When `UseProxy` is true, requests route through BrightData Web Unlocker via `BRIGHTDATA_PROXY_URL`. If the env var is unset the source degrades to direct (no crash). See ADR 0009.
 
 ## Snapshot tests
 
@@ -209,7 +205,7 @@ Add the new env var to `.env.example` with an empty default and a comment explai
 - [ ] HTML source: implements both `Source` and `DetailFetcher` (`CanHandle` + `GetDetails`)
 - [ ] `URLPrefix` uniquely matches all URLs this source will produce (HTML sources; used by `CanHandle`)
 - [ ] `Iterate` yields partial jobs with at least URL set; title/location set if extractable from listing page
-- [ ] Correct `ProxyTier` set in `sources.Config`
+- [ ] `UseProxy` set appropriately in `sources.Config` (true for anti-bot targets)
 - [ ] Snapshot tests added and passing (HTML sources only)
 - [ ] Registered in `cmd/worker/main.go` behind an env var
 - [ ] Env var added to `.env.example`
