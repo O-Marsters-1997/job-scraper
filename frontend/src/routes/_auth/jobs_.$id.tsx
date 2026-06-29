@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
 import { JobActionsMenu } from "@/components/jobs/JobActionsMenu";
+import JobDescription from "@/components/jobs/JobDescription";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -465,13 +466,7 @@ function JobDetailPage() {
 											</p>
 										}
 									>
-										{(desc) => (
-											<div class="flex flex-col gap-3 text-sm leading-relaxed text-foreground">
-												<For each={desc().split("\n\n")}>
-													{(para) => <p>{para}</p>}
-												</For>
-											</div>
-										)}
+										{(desc) => <JobDescription html={desc()} />}
 									</Show>
 								</CardContent>
 							</Card>
