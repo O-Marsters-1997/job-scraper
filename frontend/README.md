@@ -1,137 +1,81 @@
-Welcome to your new TanStack Start app! 
+# frontend
 
-# Getting Started
+SolidJS SPA for the job-scraper pipeline. Displays scraped jobs, AI suitability scores, application tracking, CV templates, and insights charts.
 
-To run this application:
+## Stack
+
+- **SolidJS** — fine-grained reactive UI (components run once, no VDOM)
+- **TanStack Router** — file-based routing with loaders
+- **TanStack Query** — server state, caching, background refetch
+- **TanStack Table** — jobs data table
+- **Vite** — build and dev server
+- **Tailwind CSS v4** — utility-first styling via CSS `@theme`
+- **Biome** — lint + format (tabs, double quotes)
+- **Kobalte** — accessible headless primitives (Dialog, Switch, Popover…)
+
+## Development
 
 ```bash
 bun install
-bun --bun run dev
+
+# dev against real API (backend must be running on :8080)
+bun run dev          # → http://localhost:3000
+
+# dev with mock backend — no Go process needed
+bun run dev:test     # → http://localhost:4444
 ```
 
-# Building For Production
+Set `VITE_MOCK=true` to force mock mode in any env (already set for `dev:test`).
 
-To build this application for production:
+## Scripts
+
+| Command | What it does |
+|---------|-------------|
+| `bun run dev` | Dev server on :3000, proxies API to :8080 |
+| `bun run dev:test` | Dev server on :4444 with in-browser mock backend |
+| `bun run build` | Vite production build → `dist/` |
+| `bun run typecheck` | TypeScript check (tsgo, no emit) |
+| `bun run check` | Biome lint + format check |
+| `bun run test` | Run all `*.check.ts` self-tests |
+| `bun run e2e` | Playwright end-to-end tests |
+
+## Directory layout
+
+```
+src/
+  api/          API fetch functions + Zod schemas (trust boundary)
+  components/   Shared UI components
+    cv/         CV-specific components (AddDocDialog)
+    insights/   Per-chart components for the Insights page
+    jobs/       Job-detail components (SuitabilityPanel, TrackApplicationDialog…)
+    ui/         Design-system primitives (Button, Card, Dialog, Input…)
+  hooks/        TanStack Query hooks (useJobs, useApplications…)
+  lib/          Pure utilities (charts, color, datetime, tweaks data/apply)
+  mocks/        In-browser mock backend (MSW + mock DB)
+  routes/       File-based routes
+    _auth/      Authenticated routes (jobs, applications, insights, settings…)
+  types/        Hand-mirrored Go struct types
+```
+
+## Architecture notes
+
+- **Mock backend**: `src/mocks/` uses MSW to intercept fetch calls. Enabled via `VITE_MOCK`. Mirrors the real API surface so the SPA is fully functional offline.
+- **Trust boundary**: `api/client.ts` (`apiFetch`) accepts an optional Zod schema and `.parse()`s the response. Schemas adopted for high-value endpoints (`/scoring-config`).
+- **Async pattern**: `QueryBoundary` wraps loading/error/empty/success states; all authenticated routes go through it.
+- **Edit-safe forms**: Form state lives in child components that mount once when data is available (`<QueryBoundary>{(data) => <Form data={data} />}</QueryBoundary>`). Background refetches update the cache but don't remount the form.
+- **Tweaks**: `lib/tweaks.ts` exports data/types; `lib/tweaks.apply.ts` exports DOM-mutating `apply*` functions. Applied at app startup from `localStorage`.
+
+## Testing
+
+`*.check.ts` files are zero-dependency self-tests runnable via `bun`:
 
 ```bash
-bun --bun run build
+bun run test              # all checks via scripts/run-checks.ts
+bun src/api/client.check.ts   # single check file
 ```
 
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `bun install @tailwindcss/vite tailwindcss -D`
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/solid-router`.
-
-```tsx
-import { Link } from "@tanstack/solid-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/solid/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes.
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/solid/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/solid-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/solid-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      <For each={data().results}>
-        {(person) => <li>{person.name}</li>}
-      </For>
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/solid/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
+E2E tests cover login, logout, and job browsing:
 
 ```bash
-bun --bun run lint
-bun --bun run format
-bun --bun run check
+bun run e2e
 ```
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
