@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { useProfile, useUpdateProfile } from "../../../hooks/useProfile";
 import type { Profile } from "../../../api/profile";
+import { useProfile, useUpdateProfile } from "../../../hooks/useProfile";
 
 export const Route = createFileRoute("/_auth/settings/profile")({
 	component: ProfilePage,
@@ -68,10 +68,7 @@ function ProfileForm(props: { data: Profile }) {
 					</div>
 					<div class="divide-y divide-border">
 						<div class="px-5 py-4">
-							<label
-								for="username"
-								class="text-xs font-medium text-foreground"
-							>
+							<label for="username" class="text-xs font-medium text-foreground">
 								Username
 							</label>
 							<p class="mt-2 text-sm text-muted">{props.data.username}</p>

@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "frontend-best-practices": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/frontend-best-practices/SKILL.md",
+      "computedHash": "fa42cb6f2df0590322a8f60d5615c20ee205e1f2f885d7d97f7a29fcd10af3b5"
+    },
     "tailwind-shadcn": {
       "source": "O-Marsters-1997/my-claude-code",
       "sourceType": "github",
