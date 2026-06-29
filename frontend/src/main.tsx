@@ -3,7 +3,8 @@ import { createRouter, RouterProvider } from "@tanstack/solid-router";
 import { render } from "solid-js/web";
 import { ErrorState, NotFoundState } from "./components/ErrorState";
 import { queryClient } from "./lib/queryClient";
-import { applyAll, loadTweaks } from "./lib/tweaks";
+import { loadTweaks } from "./lib/tweaks";
+import { applyAll } from "./lib/tweaks.apply";
 import { routeTree } from "./routeTree.gen";
 
 // Apply persisted tweaks immediately so auth pages (login/signup) reflect the

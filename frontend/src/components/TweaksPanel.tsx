@@ -4,8 +4,6 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { oklchToHex, toOklch } from "@/lib/color";
 import {
-	applyAll,
-	applyTheme,
 	CUSTOM_DEFAULTS,
 	DEFAULTS,
 	type DensityKey,
@@ -23,6 +21,7 @@ import {
 	type ThemeKey,
 	type Tweaks,
 } from "@/lib/tweaks";
+import { applyAll, applyTheme } from "@/lib/tweaks.apply";
 import { cn } from "@/lib/utils";
 
 const themeButtonVariants = cva(
