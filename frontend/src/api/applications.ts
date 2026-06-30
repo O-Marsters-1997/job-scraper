@@ -22,10 +22,10 @@ export async function fetchApplications(
 
 export async function createApplication(data: {
 	job_id: string;
-	status_id?: string;
-	notes?: string;
-	applied_at?: string | null;
-	salary_info?: string;
+	status_id?: string | undefined;
+	notes?: string | undefined;
+	applied_at?: string | null | undefined;
+	salary_info?: string | undefined;
 }): Promise<Application> {
 	if (useMocks()) {
 		const { createApplication: mockCreate } = await import("../mocks/db");
@@ -46,10 +46,10 @@ export async function createApplication(data: {
 export async function updateApplication(
 	id: string,
 	data: {
-		status_id?: string;
-		notes?: string;
-		applied_at?: string | null;
-		salary_info?: string;
+		status_id?: string | undefined;
+		notes?: string | undefined;
+		applied_at?: string | null | undefined;
+		salary_info?: string | undefined;
 	},
 ): Promise<Application> {
 	if (useMocks()) {

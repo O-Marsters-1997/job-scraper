@@ -6,9 +6,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { Job } from "@/types/job";
-import type { JobApplicationSummary } from "@/types/application";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import type { JobApplicationSummary } from "@/types/application";
+import type { Job } from "@/types/job";
 
 interface JobActionsMenuProps {
 	job: Job;
@@ -90,7 +90,7 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 					{(summary) => (
 						<DropdownMenuItem onSelect={props.onEdit}>
 							<span
-								class="h-2 w-2 shrink-0 rounded-full"
+								class="size-2 shrink-0 rounded-full"
 								style={{
 									background: summary().StatusColour || STATUS_FALLBACK_COLOUR,
 								}}

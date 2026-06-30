@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -28,34 +28,56 @@ interface TrackApplicationDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	job: Job | undefined;
-	existingApp?: ExistingApp;
+	existingApp?: ExistingApp | undefined;
 }
 
 export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
+	return (
+		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>
+						{props.existingApp ? "Edit application" : "Track application"}
+					</DialogTitle>
+					<p class="text-sm text-muted">{props.job?.Title}</p>
+				</DialogHeader>
+				{/* Mount fresh on each open so signals initialize from props.existingApp
+				    once — no createEffect needed to re-seed on open. */}
+				<Show when={props.open}>
+					<TrackApplicationForm
+						job={props.job}
+						existingApp={props.existingApp}
+						onClose={() => props.onOpenChange(false)}
+					/>
+				</Show>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+function TrackApplicationForm(props: {
+	job: Job | undefined;
+	existingApp?: ExistingApp | undefined;
+	onClose: () => void;
+}) {
 	const statusesQuery = useApplicationStatuses();
 	const createMutation = useCreateApplication();
 	const updateMutation = useUpdateApplication();
 
-	const [statusId, setStatusId] = createSignal("");
-	const [notes, setNotes] = createSignal("");
-	const [appliedAt, setAppliedAt] = createSignal("");
-	const [salary, setSalary] = createSignal("");
-
-	const isEdit = () => !!props.existingApp;
-
-	createEffect(() => {
-		if (props.open) {
-			setStatusId(props.existingApp?.statusId ?? "");
-			setNotes(props.existingApp?.notes ?? "");
-			setAppliedAt(props.existingApp?.appliedAt ?? "");
-			setSalary(props.existingApp?.salaryInfo ?? "");
-		}
-	});
+	const isEdit = !!props.existingApp;
+	const [statusId, setStatusId] = createSignal(
+		props.existingApp?.statusId ?? "",
+	);
+	const [notes, setNotes] = createSignal(props.existingApp?.notes ?? "");
+	const [appliedAt, setAppliedAt] = createSignal(
+		props.existingApp?.appliedAt ?? "",
+	);
+	const [salary, setSalary] = createSignal(props.existingApp?.salaryInfo ?? "");
 
 	const handleSubmit = async () => {
 		const jobId = props.job?.ID;
 		if (!jobId) return;
-		if (!isEdit()) {
+		if (!isEdit) {
 			await createMutation.mutateAsync({
 				job_id: jobId,
 				status_id: statusId() || undefined,
@@ -76,84 +98,79 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 				},
 			});
 		}
-		props.onOpenChange(false);
+		props.onClose();
 	};
 
 	return (
-		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
-			<DialogContent>
-				<DialogHeader>
-					<DialogTitle>
-						{isEdit() ? "Edit application" : "Track application"}
-					</DialogTitle>
-					<p class="text-sm text-muted">{props.job?.Title}</p>
-				</DialogHeader>
+		<>
+			<div class="flex flex-col gap-4">
+				<div>
+					<Label for="track-status">Status</Label>
+					<select
+						id="track-status"
+						class="field"
+						value={statusId()}
+						onChange={(e) => setStatusId(e.currentTarget.value)}
+					>
+						<option value="">— No status —</option>
+						<For each={statusesQuery.data}>
+							{(s) => <option value={s.ID}>{s.Name}</option>}
+						</For>
+					</select>
+				</div>
 
-				<div class="flex flex-col gap-4">
+				<div class="grid grid-cols-2 gap-3">
 					<div>
-						<Label>Status</Label>
-						<select
-							class="field"
-							value={statusId()}
-							onChange={(e) => setStatusId(e.currentTarget.value)}
-						>
-							<option value="">— No status —</option>
-							<For each={statusesQuery.data}>
-								{(s) => <option value={s.ID}>{s.Name}</option>}
-							</For>
-						</select>
+						<Label for="track-applied-at">Applied date</Label>
+						<Input
+							id="track-applied-at"
+							type="date"
+							value={appliedAt()}
+							onInput={(e) => setAppliedAt(e.currentTarget.value)}
+						/>
 					</div>
-
-					<div class="grid grid-cols-2 gap-3">
-						<div>
-							<Label>Applied date</Label>
-							<Input
-								type="date"
-								value={appliedAt()}
-								onInput={(e) => setAppliedAt(e.currentTarget.value)}
-							/>
-						</div>
-						<div>
-							<Label>Salary / comp</Label>
-							<Input
-								type="text"
-								placeholder="e.g. £80,000"
-								value={salary()}
-								onInput={(e) => setSalary(e.currentTarget.value)}
-							/>
-						</div>
-					</div>
-
 					<div>
-						<Label>Notes</Label>
-						<textarea
-							class="field resize-y"
-							rows={3}
-							placeholder="Any notes…"
-							value={notes()}
-							onInput={(e) => setNotes(e.currentTarget.value)}
+						<Label for="track-salary">Salary / comp</Label>
+						<Input
+							id="track-salary"
+							type="text"
+							placeholder="e.g. £80,000"
+							value={salary()}
+							onInput={(e) => setSalary(e.currentTarget.value)}
 						/>
 					</div>
 				</div>
 
-				<DialogFooter class="border-t border-border pt-4">
-					<Button variant="outline" onClick={() => props.onOpenChange(false)}>
-						Cancel
-					</Button>
-					<Button
-						onClick={handleSubmit}
-						disabled={createMutation.isPending || updateMutation.isPending}
-					>
-						{createMutation.isPending || updateMutation.isPending
-							? isEdit()
-								? "Updating…"
-								: "Saving…"
-							: isEdit()
-								? "Update"
-								: "Save"}
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+				<div>
+					<Label for="track-notes">Notes</Label>
+					<textarea
+						id="track-notes"
+						class="field resize-y"
+						rows={3}
+						placeholder="Any notes…"
+						value={notes()}
+						onInput={(e) => setNotes(e.currentTarget.value)}
+					/>
+				</div>
+			</div>
+
+			<DialogFooter class="border-t border-border pt-4">
+				<Button variant="outline" onClick={props.onClose}>
+					Cancel
+				</Button>
+				<Button
+					onClick={handleSubmit}
+					disabled={createMutation.isPending || updateMutation.isPending}
+				>
+					{createMutation.isPending || updateMutation.isPending
+						? isEdit
+							? "Updating…"
+							: "Saving…"
+						: isEdit
+							? "Update"
+							: "Save"}
+				</Button>
+			</DialogFooter>
+		</>
 	);
 }

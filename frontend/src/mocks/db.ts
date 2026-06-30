@@ -226,13 +226,13 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		SuitabilityScore:
 			i % 5 === 0 ? null : faker.number.int({ min: 30, max: 100 }),
 		// Optional rich fields — index-modular, no faker (seed preserved)
-		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length],
-		Skills: SKILL_SETS[i % SKILL_SETS.length],
-		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length],
+		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
+		Skills: SKILL_SETS[i % SKILL_SETS.length]!,
+		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length]!,
 		ExperienceLevel: deriveExperienceLevel(title),
-		TeamName: TEAM_NAMES[i % TEAM_NAMES.length],
-		CompanySize: COMPANY_SIZES[i % COMPANY_SIZES.length],
-		SalaryRange: SALARY_RANGES[i % SALARY_RANGES.length],
+		TeamName: TEAM_NAMES[i % TEAM_NAMES.length]!,
+		CompanySize: COMPANY_SIZES[i % COMPANY_SIZES.length]!,
+		SalaryRange: SALARY_RANGES[i % SALARY_RANGES.length]!,
 	};
 });
 
@@ -259,13 +259,13 @@ let applications: Application[] = [];
 let appJobCursor = 0;
 
 for (const { statusIndex, count } of APP_DISTRIBUTION) {
-	const status = statuses[statusIndex];
+	const status = statuses[statusIndex]!;
 	for (let c = 0; c < count; c++) {
-		const job = jobs[appJobCursor++];
+		const job = jobs[appJobCursor++]!;
 		const isSaved = statusIndex === 0;
 		const appliedAt = isSaved
 			? null
-			: faker.date.recent({ days: 20 }).toISOString().split("T")[0];
+			: (faker.date.recent({ days: 20 }).toISOString().split("T")[0] ?? null);
 		applications.push({
 			ID: faker.string.uuid(),
 			UserID: "user-1",
@@ -341,14 +341,14 @@ export function getApplicationsForJobs(
 
 export function createApplication(data: {
 	job_id: string;
-	status_id?: string;
-	notes?: string;
-	applied_at?: string | null;
-	salary_info?: string;
+	status_id?: string | undefined;
+	notes?: string | undefined;
+	applied_at?: string | null | undefined;
+	salary_info?: string | undefined;
 }): Application {
 	const status = data.status_id
-		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0])
-		: statuses[0];
+		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0]!)
+		: statuses[0]!;
 	const app: Application = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
@@ -367,15 +367,15 @@ export function createApplication(data: {
 export function updateApplication(
 	id: string,
 	data: {
-		status_id?: string;
-		notes?: string;
-		applied_at?: string | null;
-		salary_info?: string;
+		status_id?: string | undefined;
+		notes?: string | undefined;
+		applied_at?: string | null | undefined;
+		salary_info?: string | undefined;
 	},
 ): Application {
 	const idx = applications.findIndex((a) => a.ID === id);
 	if (idx === -1) throw new Error("Application not found");
-	const prev = applications[idx];
+	const prev = applications[idx]!;
 	const updated: Application = {
 		...prev,
 		StatusID: data.status_id ?? prev.StatusID,
@@ -415,7 +415,7 @@ export function updateStatus(
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
-	const updated = { ...statuses[idx], Name: name, Colour: colour };
+	const updated = { ...statuses[idx]!, Name: name, Colour: colour };
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;
 }

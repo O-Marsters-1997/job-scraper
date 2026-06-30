@@ -2,14 +2,14 @@ import type { Job } from "@/types/job";
 
 export interface JobFilters {
 	q: string;
-	suit?: number;
-	rel?: number;
+	suit?: number | undefined;
+	rel?: number | undefined;
 	src: string[];
 	work: string[];
 	sal: boolean;
-	salMin?: number;
-	salMax?: number;
-	page?: number;
+	salMin?: number | undefined;
+	salMax?: number | undefined;
+	page?: number | undefined;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -60,9 +60,9 @@ export function parseSalary(
 	const nums = [...normalised.matchAll(/\d+(?:\.\d+)?/g)].map((m) =>
 		Number(m[0]),
 	);
-	if (nums.length === 0) return null;
-	const min = nums[0] as number;
-	const max = nums.length > 1 ? (nums[1] as number) : min;
+	const [min, second] = nums;
+	if (min === undefined) return null;
+	const max = second ?? min;
 	return { min, max };
 }
 

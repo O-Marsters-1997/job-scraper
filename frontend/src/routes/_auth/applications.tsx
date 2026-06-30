@@ -1,6 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { PageHeading } from "@/components/PageHeading";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -10,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SkeletonList } from "@/components/ui/skeleton";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -97,14 +99,10 @@ function ApplicationsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Applications
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Track where each application stands
-				</p>
-			</div>
+			<PageHeading
+				title="Applications"
+				subtitle="Track where each application stands"
+			/>
 
 			{/* Filter bar */}
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
@@ -127,7 +125,7 @@ function ApplicationsPage() {
 							class={chipClass(search().status === s.ID)}
 						>
 							<span
-								class="inline-block h-2 w-2 rounded-full"
+								class="inline-block size-2 rounded-full"
 								style={{ background: s.Colour }}
 							/>
 							{s.Name}
@@ -136,65 +134,63 @@ function ApplicationsPage() {
 				</For>
 			</div>
 
-			<Show when={query.isPending}>
-				<SkeletonList rows={5} />
-			</Show>
-
-			<Show when={query.isSuccess}>
-				<Show
-					when={(query.data?.length ?? 0) > 0}
-					fallback={
-						<div class="rounded-xl border border-border bg-surface p-10 text-center">
-							<p class="text-sm text-muted">
-								No applications yet. Track a job from the Jobs page.
-							</p>
-						</div>
-					}
-				>
-					<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-						<For each={query.data}>
-							{(app) => (
-								<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
-									<div class="min-w-0 flex-1">
-										<p class="truncate text-sm font-medium text-foreground">
-											{app.JobTitle}
-										</p>
-										<p class="text-xs text-faint">
-											{app.JobCompanySlug}
-											{app.JobLocation ? ` · ${app.JobLocation}` : ""}
-										</p>
+			<QueryBoundary query={query} fallbackRows={5}>
+				{(data) => (
+					<Show
+						when={data.length > 0}
+						fallback={
+							<Card class="p-10 text-center">
+								<p class="text-sm text-muted">
+									No applications yet. Track a job from the Jobs page.
+								</p>
+							</Card>
+						}
+					>
+						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+							<For each={data}>
+								{(app) => (
+									<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium text-foreground">
+												{app.JobTitle}
+											</p>
+											<p class="text-xs text-faint">
+												{app.JobCompanySlug}
+												{app.JobLocation ? ` · ${app.JobLocation}` : ""}
+											</p>
+										</div>
+										<Show when={app.StatusName}>
+											<StatusBadge
+												name={app.StatusName}
+												colour={statusColour(app)}
+											/>
+										</Show>
+										<Show when={app.AppliedAt}>
+											<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
+												{app.AppliedAt}
+											</span>
+										</Show>
+										<button
+											type="button"
+											onClick={() => openEdit(app)}
+											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
+										>
+											Edit
+										</button>
+										<button
+											type="button"
+											onClick={() => setDeletingApp(app)}
+											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
+										>
+											Delete
+										</button>
 									</div>
-									<Show when={app.StatusName}>
-										<StatusBadge
-											name={app.StatusName}
-											colour={statusColour(app)}
-										/>
-									</Show>
-									<Show when={app.AppliedAt}>
-										<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
-											{app.AppliedAt}
-										</span>
-									</Show>
-									<button
-										type="button"
-										onClick={() => openEdit(app)}
-										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle"
-									>
-										Edit
-									</button>
-									<button
-										type="button"
-										onClick={() => setDeletingApp(app)}
-										class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
-									>
-										Delete
-									</button>
-								</div>
-							)}
-						</For>
-					</div>
-				</Show>
-			</Show>
+								)}
+							</For>
+						</div>
+					</Show>
+				)}
+			</QueryBoundary>
 
 			{/* Edit modal */}
 			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>
@@ -206,8 +202,9 @@ function ApplicationsPage() {
 
 					<div class="flex flex-col gap-4">
 						<div>
-							<Label>Status</Label>
+							<Label for="edit-app-status">Status</Label>
 							<select
+								id="edit-app-status"
 								class="field"
 								value={editStatusId()}
 								onChange={(e) => setEditStatusId(e.currentTarget.value)}
@@ -221,8 +218,9 @@ function ApplicationsPage() {
 
 						<div class="grid grid-cols-2 gap-3">
 							<div>
-								<Label>Applied date</Label>
+								<Label for="edit-app-applied-at">Applied date</Label>
 								<Input
+									id="edit-app-applied-at"
 									type="date"
 									value={editAppliedAt()}
 									onInput={(e) => setEditAppliedAt(e.currentTarget.value)}
@@ -230,8 +228,9 @@ function ApplicationsPage() {
 							</div>
 
 							<div>
-								<Label>Salary / comp</Label>
+								<Label for="edit-app-salary">Salary / comp</Label>
 								<Input
+									id="edit-app-salary"
 									type="text"
 									placeholder="e.g. £80,000"
 									value={editSalary()}
@@ -241,8 +240,9 @@ function ApplicationsPage() {
 						</div>
 
 						<div>
-							<Label>Notes</Label>
+							<Label for="edit-app-notes">Notes</Label>
 							<textarea
+								id="edit-app-notes"
 								class="field resize-y"
 								rows={3}
 								placeholder="Any notes about this application…"

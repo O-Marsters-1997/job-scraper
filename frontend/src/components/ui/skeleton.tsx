@@ -13,7 +13,10 @@ export function Skeleton(props: { class?: string }) {
 // Placeholder list matching the bordered, row-divided cards used across the
 // app (applications, statuses, searches) while their data loads. Mirrors the
 // loaded shape so the layout doesn't jump when content arrives.
-export function SkeletonList(props: { rows?: number; class?: string }) {
+export function SkeletonList(props: {
+	rows?: number | undefined;
+	class?: string;
+}) {
 	const count = () => props.rows ?? 4;
 	return (
 		<div

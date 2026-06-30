@@ -6,9 +6,9 @@ import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
+import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useApplicationsForJobs } from "../../hooks/useApplications";
 import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
-import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs")({
@@ -43,11 +43,15 @@ function JobsPage() {
 		navigate({
 			to: "/jobs",
 			// Reset to page 1 whenever anything other than page itself changes.
-			search: (p) => ({
-				...p,
-				...patch,
-				...("page" in patch ? {} : { page: undefined }),
-			}),
+			search: (p) => {
+				const next = { ...p, ...patch };
+				if (!("page" in patch)) {
+					// omit page key entirely rather than setting it to undefined
+					const { page: _page, ...withoutPage } = next;
+					return withoutPage;
+				}
+				return next;
+			},
 			replace: true,
 		});
 
@@ -94,7 +98,10 @@ function JobsPage() {
 			<Show when={aiPrefs.data && !aiPrefs.data.scoringEnabled}>
 				<div class="mb-4 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3 text-sm text-accent-text">
 					AI scoring is off —{" "}
-					<Link to="/settings/ai" class="font-medium underline underline-offset-2">
+					<Link
+						to="/settings/ai"
+						class="font-medium underline underline-offset-2"
+					>
 						add a key in Settings
 					</Link>
 				</div>

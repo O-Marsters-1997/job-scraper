@@ -1,14 +1,14 @@
 import {
-	createQuery,
 	createMutation,
-	useQueryClient,
+	createQuery,
 	queryOptions,
+	useQueryClient,
 } from "@tanstack/solid-query";
 import {
-	fetchApplicationStatuses,
 	createApplicationStatus,
-	updateApplicationStatus,
 	deleteApplicationStatus,
+	fetchApplicationStatuses,
+	updateApplicationStatus,
 } from "../api/applicationStatuses";
 
 export const applicationStatusesQueryOptions = queryOptions({

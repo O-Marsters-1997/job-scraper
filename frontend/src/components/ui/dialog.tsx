@@ -1,14 +1,14 @@
-import type { ComponentProps, ValidComponent } from "solid-js";
-import { splitProps } from "solid-js";
 import {
-	Root as DialogRoot,
-	Trigger as DialogTrigger,
+	CloseButton as DialogCloseButton,
 	Content as DialogContentPrimitive,
 	Overlay as DialogOverlayPrimitive,
 	Portal as DialogPortal,
+	Root as DialogRoot,
 	Title as DialogTitlePrimitive,
-	CloseButton as DialogCloseButton,
+	Trigger as DialogTrigger,
 } from "@kobalte/core/dialog";
+import type { ComponentProps, ValidComponent } from "solid-js";
+import { splitProps } from "solid-js";
 import { cn } from "@/lib/utils";
 
 export {

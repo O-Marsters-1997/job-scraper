@@ -18,7 +18,6 @@ export interface JobTableContext {
 
 // Extend TanStack Table's meta type so cells can read expand state
 declare module "@tanstack/solid-table" {
-	// biome-ignore lint/suspicious/noExplicitAny: table meta extension
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
