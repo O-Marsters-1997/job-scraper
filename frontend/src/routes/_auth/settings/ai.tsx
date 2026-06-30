@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
+import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { AiPrefs } from "../../../api/aiPrefs";
 import {
 	useAiPrefs,
@@ -26,15 +31,10 @@ function AiPage() {
 	const query = useAiPrefs();
 	return (
 		<div class="max-w-2xl px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					AI settings
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Choose which Claude models are used to score and explain job
-					suitability.
-				</p>
-			</div>
+			<PageHeading
+				title="AI settings"
+				subtitle="Choose which Claude models are used to score and explain job suitability."
+			/>
 			<QueryBoundary query={query} fallbackRows={4}>
 				{(data) => <AiForm data={data} />}
 			</QueryBoundary>
@@ -102,21 +102,11 @@ function AiForm(props: { data: AiPrefs }) {
 
 	return (
 		<>
-			<Show when={saved()}>
-				<div class="mb-4 rounded-lg border border-primary/30 bg-accent-subtle px-4 py-3 text-sm text-primary">
-					Saved.
-				</div>
-			</Show>
-
-			<Show when={saveError()}>
-				<div class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong">
-					{saveError()}
-				</div>
-			</Show>
+			<FormFeedback success={saved()} error={saveError()} />
 
 			<div class="flex flex-col gap-5">
 				{/* Scoring model picker */}
-				<div class="overflow-hidden rounded-xl border border-border bg-surface">
+				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">Scoring model</p>
 						<p class="mt-0.5 text-xs text-faint">
@@ -149,10 +139,10 @@ function AiForm(props: { data: AiPrefs }) {
 							</For>
 						</fieldset>
 					</div>
-				</div>
+				</Card>
 
 				{/* Reasoning model picker */}
-				<div class="overflow-hidden rounded-xl border border-border bg-surface">
+				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">
 							Reasoning model
@@ -188,10 +178,10 @@ function AiForm(props: { data: AiPrefs }) {
 							</For>
 						</fieldset>
 					</div>
-				</div>
+				</Card>
 
 				{/* API key */}
-				<div class="overflow-hidden rounded-xl border border-border bg-surface">
+				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">
 							Anthropic API key
@@ -206,22 +196,20 @@ function AiForm(props: { data: AiPrefs }) {
 							when={anthropicConfigured()}
 							fallback={
 								<div class="flex items-center gap-3">
-									<input
+									<Input
 										type="password"
 										aria-label="Anthropic API key"
 										placeholder="sk-ant-…"
 										value={apiKey()}
 										onInput={(e) => setApiKey(e.currentTarget.value)}
-										class="flex-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+										class="flex-1"
 									/>
-									<button
-										type="button"
+									<Button
 										onClick={handleSaveKey}
 										disabled={credsMutation.isPending || !apiKey()}
-										class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
 									>
 										{credsMutation.isPending ? "Saving…" : "Save key"}
-									</button>
+									</Button>
 								</div>
 							}
 						>
@@ -229,28 +217,24 @@ function AiForm(props: { data: AiPrefs }) {
 								<span class="text-sm text-foreground">
 									configured <span class="text-primary font-medium">✓</span>
 								</span>
-								<button
-									type="button"
+								<Button
+									variant="outline"
+									size="sm"
 									onClick={handleClearKey}
 									disabled={credsMutation.isPending}
-									class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:opacity-50"
+									class="text-xs"
 								>
 									{credsMutation.isPending ? "Clearing…" : "Clear"}
-								</button>
+								</Button>
 							</div>
 						</Show>
 					</div>
-				</div>
+				</Card>
 
 				<div class="flex items-center gap-3">
-					<button
-						type="button"
-						onClick={handleSave}
-						disabled={saveMutation.isPending}
-						class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
-					>
+					<Button onClick={handleSave} disabled={saveMutation.isPending}>
 						{saveMutation.isPending ? "Saving…" : "Save"}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</>

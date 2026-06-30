@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
+import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
@@ -72,25 +77,16 @@ function StatusesPage() {
 
 	return (
 		<div class="max-w-2xl px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Application statuses
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Custom stages for your pipeline, each with its own colour
-				</p>
-			</div>
-
-			<Show when={deleteError()}>
-				<div class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong">
-					{deleteError()}
-				</div>
-			</Show>
+			<PageHeading
+				title="Application statuses"
+				subtitle="Custom stages for your pipeline, each with its own colour"
+			/>
+			<FormFeedback error={deleteError()} />
 
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
 					<>
-						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+						<Card class="overflow-hidden divide-y divide-border">
 							<For each={data}>
 								{(status) => (
 									<div class="flex items-center gap-3 px-4 py-3">
@@ -99,7 +95,7 @@ function StatusesPage() {
 											fallback={
 												<>
 													<span
-														class="h-3 w-3 shrink-0 rounded-full"
+														class="size-3 shrink-0 rounded-full"
 														style={{ background: status.Colour }}
 													/>
 													<span class="flex-1 text-sm font-medium text-foreground">
@@ -142,8 +138,8 @@ function StatusesPage() {
 														)}
 													</For>
 												</div>
-												<input
-													class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+												<Input
+													class="flex-1"
 													aria-label="Status name"
 													value={editName()}
 													onInput={(e) => setEditName(e.currentTarget.value)}
@@ -190,8 +186,8 @@ function StatusesPage() {
 											)}
 										</For>
 									</div>
-									<input
-										class="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+									<Input
+										class="flex-1"
 										aria-label="Status name"
 										placeholder="Status name"
 										value={newName()}
@@ -218,14 +214,10 @@ function StatusesPage() {
 									</button>
 								</div>
 							</Show>
-						</div>
+						</Card>
 
 						<Show when={!showAdd()}>
-							<button
-								type="button"
-								onClick={() => setShowAdd(true)}
-								class="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
-							>
+							<Button class="mt-4" onClick={() => setShowAdd(true)}>
 								<svg
 									aria-hidden="true"
 									width="12"
@@ -240,7 +232,7 @@ function StatusesPage() {
 									<line x1="5" y1="12" x2="19" y2="12" />
 								</svg>
 								Add status
-							</button>
+							</Button>
 						</Show>
 						<p class="mt-3 text-xs text-faint">
 							Changes take effect immediately. Deleting a status does not remove

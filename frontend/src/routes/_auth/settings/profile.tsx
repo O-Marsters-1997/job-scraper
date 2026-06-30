@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createSignal, Show } from "solid-js";
+import { createSignal } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
+import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import type { Profile } from "../../../api/profile";
 import { useProfile, useUpdateProfile } from "../../../hooks/useProfile";
 
@@ -12,12 +17,7 @@ function ProfilePage() {
 	const query = useProfile();
 	return (
 		<div class="max-w-2xl px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Profile
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">Manage your account details.</p>
-			</div>
+			<PageHeading title="Profile" subtitle="Manage your account details." />
 			<QueryBoundary query={query} fallbackRows={3}>
 				{(data) => <ProfileForm data={data} />}
 			</QueryBoundary>
@@ -47,20 +47,10 @@ function ProfileForm(props: { data: Profile }) {
 
 	return (
 		<>
-			<Show when={saved()}>
-				<div class="mb-4 rounded-lg border border-primary/30 bg-accent-subtle px-4 py-3 text-sm text-primary">
-					Saved.
-				</div>
-			</Show>
-
-			<Show when={saveError()}>
-				<div class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong">
-					{saveError()}
-				</div>
-			</Show>
+			<FormFeedback success={saved()} error={saveError()} />
 
 			<div class="flex flex-col gap-5">
-				<div class="overflow-hidden rounded-xl border border-border bg-surface">
+				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">
 							Account details
@@ -77,26 +67,21 @@ function ProfileForm(props: { data: Profile }) {
 							<label for="email" class="text-xs font-medium text-foreground">
 								Email
 							</label>
-							<input
+							<Input
 								id="email"
 								type="email"
 								value={email()}
 								onInput={(e) => setEmail(e.currentTarget.value)}
-								class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+								class="mt-2"
 							/>
 						</div>
 					</div>
-				</div>
+				</Card>
 
 				<div class="flex items-center gap-3">
-					<button
-						type="button"
-						onClick={handleSave}
-						disabled={mutation.isPending}
-						class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover disabled:opacity-50"
-					>
+					<Button onClick={handleSave} disabled={mutation.isPending}>
 						{mutation.isPending ? "Saving…" : "Save"}
-					</button>
+					</Button>
 				</div>
 			</div>
 		</>

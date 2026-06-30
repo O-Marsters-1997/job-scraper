@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
 	Dialog,
 	DialogContent,
@@ -97,14 +99,10 @@ function ApplicationsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Applications
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Track where each application stands
-				</p>
-			</div>
+			<PageHeading
+				title="Applications"
+				subtitle="Track where each application stands"
+			/>
 
 			{/* Filter bar */}
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
@@ -127,7 +125,7 @@ function ApplicationsPage() {
 							class={chipClass(search().status === s.ID)}
 						>
 							<span
-								class="inline-block h-2 w-2 rounded-full"
+								class="inline-block size-2 rounded-full"
 								style={{ background: s.Colour }}
 							/>
 							{s.Name}
@@ -141,11 +139,11 @@ function ApplicationsPage() {
 					<Show
 						when={data.length > 0}
 						fallback={
-							<div class="rounded-xl border border-border bg-surface p-10 text-center">
+							<Card class="p-10 text-center">
 								<p class="text-sm text-muted">
 									No applications yet. Track a job from the Jobs page.
 								</p>
-							</div>
+							</Card>
 						}
 					>
 						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">

@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
+import { PageHeading } from "@/components/PageHeading";
+import { Card } from "@/components/ui/card";
 import { API_BASE } from "../../../api/config";
 import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
@@ -14,16 +16,12 @@ function IntegrationsPage() {
 
 	return (
 		<div class="max-w-2xl px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Integrations
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Connect external accounts to enable additional features
-				</p>
-			</div>
+			<PageHeading
+				title="Integrations"
+				subtitle="Connect external accounts to enable additional features"
+			/>
 
-			<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+			<Card class="overflow-hidden divide-y divide-border">
 				<div class="flex items-center gap-4 px-4 py-4">
 					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-muted">
 						<svg
@@ -90,7 +88,7 @@ function IntegrationsPage() {
 						</Show>
 					</Show>
 				</div>
-			</div>
+			</Card>
 
 			<p class="mt-3 text-xs text-faint">
 				Google Drive access lets FastTrack read your CV documents.

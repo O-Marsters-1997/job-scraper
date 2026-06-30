@@ -1,13 +1,25 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { AddDocDialog } from "@/components/cv/AddDocDialog";
+import { PageHeading } from "@/components/PageHeading";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
 	Switch,
 	SwitchControl,
 	SwitchLabel,
 	SwitchThumb,
 } from "@/components/ui/switch";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
 import {
 	cvTemplatesQueryOptions,
 	useCVTemplates,
@@ -48,7 +60,7 @@ function CVTemplatesPage() {
 		useTableSort<SortKey>("Title");
 
 	const thClass = (key: SortKey) =>
-		`h-9 cursor-pointer select-none px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint transition-colors hover:text-foreground ${sortKey() === key ? "text-foreground" : ""}`;
+		`cursor-pointer select-none transition-colors hover:text-foreground${sortKey() === key ? " text-foreground" : ""}`;
 
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
@@ -81,16 +93,8 @@ function CVTemplatesPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5 flex items-start justify-between gap-4">
-				<div>
-					<h1 class="text-lg font-bold tracking-tight text-foreground">CVs</h1>
-					<p class="mt-0.5 text-xs text-faint">Google Docs tracked as CVs</p>
-				</div>
-				<button
-					type="button"
-					onClick={() => setDialogOpen(true)}
-					class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
-				>
+			<PageHeading title="CVs" subtitle="Google Docs tracked as CVs">
+				<Button class="shrink-0" onClick={() => setDialogOpen(true)}>
 					<svg
 						aria-hidden="true"
 						width="12"
@@ -105,11 +109,11 @@ function CVTemplatesPage() {
 						<line x1="5" y1="12" x2="19" y2="12" />
 					</svg>
 					Add doc
-				</button>
-			</div>
+				</Button>
+			</PageHeading>
 
 			<Show when={query.isPending}>
-				<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+				<Card class="overflow-hidden divide-y divide-border">
 					<For each={[1, 2, 3]}>
 						{() => (
 							<div class="flex items-center gap-4 px-4 py-3">
@@ -119,7 +123,7 @@ function CVTemplatesPage() {
 							</div>
 						)}
 					</For>
-				</div>
+				</Card>
 			</Show>
 
 			<Show when={query.isError && isNotConnected()}>
@@ -152,11 +156,7 @@ function CVTemplatesPage() {
 						<p class="mb-3 text-sm text-muted">
 							Add a Google Doc to see your CVs here.
 						</p>
-						<button
-							type="button"
-							onClick={() => setDialogOpen(true)}
-							class="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover"
-						>
+						<Button onClick={() => setDialogOpen(true)}>
 							<svg
 								aria-hidden="true"
 								width="12"
@@ -171,18 +171,18 @@ function CVTemplatesPage() {
 								<line x1="5" y1="12" x2="19" y2="12" />
 							</svg>
 							Add doc
-						</button>
+						</Button>
 					</div>
 				</Show>
 
 				<Show when={(query.data?.length ?? 0) > 0}>
 					<div class="mb-3 flex items-center gap-3">
-						<input
+						<Input
 							type="search"
 							placeholder="Search by title or source…"
 							value={searchQuery()}
 							onInput={(e) => setSearchQuery(e.currentTarget.value)}
-							class="h-9 w-full max-w-xs rounded-md border border-border bg-surface px-3 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+							class="max-w-xs"
 						/>
 						<Switch checked={showHidden()} onChange={setShowHidden}>
 							<SwitchLabel class="inline-flex items-center gap-2">
@@ -219,141 +219,137 @@ function CVTemplatesPage() {
 					</Show>
 
 					<Show when={filteredSorted().length > 0 || searchQuery()}>
-						<div class="overflow-hidden rounded-xl border border-border bg-surface">
-							<div class="overflow-x-auto">
-								<table class="w-full text-sm">
-									<thead class="border-b border-border bg-surface-muted">
-										<tr>
-											<th
-												class={thClass("Title")}
-												onClick={() => handleSort("Title")}
+						<Card class="overflow-hidden">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead
+											class={thClass("Title")}
+											onClick={() => handleSort("Title")}
+										>
+											Title{" "}
+											<span class="font-mono text-2xs">
+												{sortIcon("Title")}
+											</span>
+										</TableHead>
+										<TableHead>Source doc</TableHead>
+										<TableHead
+											class={thClass("ModifiedAt")}
+											onClick={() => handleSort("ModifiedAt")}
+										>
+											Last modified{" "}
+											<span class="font-mono text-2xs">
+												{sortIcon("ModifiedAt")}
+											</span>
+										</TableHead>
+										<TableHead class="w-10" />
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									<For each={filteredSorted()}>
+										{(cv) => (
+											<TableRow
+												class={`cursor-pointer${!cv.Visible ? " opacity-60" : ""}`}
+												onClick={() => {
+													navigate({
+														to: "/cv-templates/$docId/$tabId",
+														params: { docId: cv.DocID, tabId: cv.TabID },
+													});
+												}}
 											>
-												Title{" "}
-												<span class="font-mono text-2xs">
-													{sortIcon("Title")}
-												</span>
-											</th>
-											<th class="h-9 px-4 text-left text-xs font-semibold uppercase tracking-wide text-faint">
-												Source doc
-											</th>
-											<th
-												class={thClass("ModifiedAt")}
-												onClick={() => handleSort("ModifiedAt")}
-											>
-												Last modified{" "}
-												<span class="font-mono text-2xs">
-													{sortIcon("ModifiedAt")}
-												</span>
-											</th>
-											<th class="h-9 w-10 px-4" />
-										</tr>
-									</thead>
-									<tbody class="divide-y divide-border">
-										<For each={filteredSorted()}>
-											{(cv) => (
-												<tr
-													class={`cursor-pointer transition-colors hover:bg-surface-muted ${!cv.Visible ? "opacity-60" : ""}`}
-													onClick={() => {
-														navigate({
-															to: "/cv-templates/$docId/$tabId",
-															params: { docId: cv.DocID, tabId: cv.TabID },
-														});
-													}}
-												>
-													<td class="px-4 py-2.5">
-														<div class="flex items-center gap-2">
-															<a
-																href={cv.DocURL}
-																target="_blank"
-																rel="noreferrer"
-																onClick={(e) => e.stopPropagation()}
-																class="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
-															>
-																{cv.Title || "—"}
-															</a>
-															<Show when={!cv.Visible}>
-																<Badge variant="secondary">Hidden</Badge>
-															</Show>
-														</div>
-													</td>
-													<td class="px-4 py-2.5 text-muted">
-														{cv.SourceDoc || "—"}
-													</td>
-													<td class="px-4 py-2.5">
-														<span class="font-mono text-xs tabular-nums text-faint">
-															{formatDate(cv.ModifiedAt)}
-														</span>
-													</td>
-													<td
-														class="px-4 py-2.5 text-right"
-														onClick={(e) => e.stopPropagation()}
-														onKeyDown={(e) => e.stopPropagation()}
-													>
-														<Show when={cv.Visible}>
-															<button
-																type="button"
-																title="Hide tab"
-																onClick={() => handleHide(cv)}
-																disabled={hideMutation.isPending}
-																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
-															>
-																<svg
-																	aria-hidden="true"
-																	width="14"
-																	height="14"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																>
-																	<polyline points="3 6 5 6 21 6" />
-																	<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-																	<path d="M10 11v6" />
-																	<path d="M14 11v6" />
-																	<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-																</svg>
-															</button>
-														</Show>
+												<TableCell class="py-2.5">
+													<div class="flex items-center gap-2">
+														<a
+															href={cv.DocURL}
+															target="_blank"
+															rel="noreferrer"
+															onClick={(e) => e.stopPropagation()}
+															class="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+														>
+															{cv.Title || "—"}
+														</a>
 														<Show when={!cv.Visible}>
-															<button
-																type="button"
-																title="Restore tab"
-																onClick={() => handleRestore(cv)}
-																disabled={showMutation.isPending}
-																class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-primary disabled:opacity-50"
-															>
-																<svg
-																	aria-hidden="true"
-																	width="14"
-																	height="14"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																>
-																	<path d="M1 4v6h6" />
-																	<path d="M3.51 15a9 9 0 1 0 .49-3.5" />
-																</svg>
-															</button>
+															<Badge variant="secondary">Hidden</Badge>
 														</Show>
-													</td>
-												</tr>
-											)}
-										</For>
-									</tbody>
-								</table>
-							</div>
+													</div>
+												</TableCell>
+												<TableCell class="py-2.5 text-muted">
+													{cv.SourceDoc || "—"}
+												</TableCell>
+												<TableCell class="py-2.5">
+													<span class="font-mono text-xs tabular-nums text-faint">
+														{formatDate(cv.ModifiedAt)}
+													</span>
+												</TableCell>
+												<TableCell
+													class="py-2.5 text-right"
+													onClick={(e) => e.stopPropagation()}
+													onKeyDown={(e) => e.stopPropagation()}
+												>
+													<Show when={cv.Visible}>
+														<button
+															type="button"
+															title="Hide tab"
+															onClick={() => handleHide(cv)}
+															disabled={hideMutation.isPending}
+															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
+														>
+															<svg
+																aria-hidden="true"
+																width="14"
+																height="14"
+																viewBox="0 0 24 24"
+																fill="none"
+																stroke="currentColor"
+																stroke-width="2"
+																stroke-linecap="round"
+																stroke-linejoin="round"
+															>
+																<polyline points="3 6 5 6 21 6" />
+																<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+																<path d="M10 11v6" />
+																<path d="M14 11v6" />
+																<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+															</svg>
+														</button>
+													</Show>
+													<Show when={!cv.Visible}>
+														<button
+															type="button"
+															title="Restore tab"
+															onClick={() => handleRestore(cv)}
+															disabled={showMutation.isPending}
+															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-primary disabled:opacity-50"
+														>
+															<svg
+																aria-hidden="true"
+																width="14"
+																height="14"
+																viewBox="0 0 24 24"
+																fill="none"
+																stroke="currentColor"
+																stroke-width="2"
+																stroke-linecap="round"
+																stroke-linejoin="round"
+															>
+																<path d="M1 4v6h6" />
+																<path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+															</svg>
+														</button>
+													</Show>
+												</TableCell>
+											</TableRow>
+										)}
+									</For>
+								</TableBody>
+							</Table>
 
 							<Show when={filteredSorted().length === 0 && searchQuery()}>
 								<div class="px-4 py-8 text-center text-sm text-muted">
 									No CVs match "{searchQuery()}"
 								</div>
 							</Show>
-						</div>
+						</Card>
 					</Show>
 				</Show>
 			</Show>

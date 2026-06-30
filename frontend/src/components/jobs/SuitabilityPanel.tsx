@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRequestReasoning } from "@/hooks/useJobs";
 import type { Job } from "@/types/job";
@@ -101,14 +102,14 @@ export function SuitabilityPanel(props: { job: Job }) {
 							</p>
 						}
 					>
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="sm"
 							onClick={() => reasoningMutation.mutate(props.job.ID)}
 							disabled={reasoningMutation.isPending}
-							class="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground disabled:opacity-50"
 						>
 							{reasoningMutation.isPending ? "Generating…" : "Explain score"}
-						</button>
+						</Button>
 					</Show>
 				</Show>
 

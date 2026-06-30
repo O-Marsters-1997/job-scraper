@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
+import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
@@ -114,33 +119,24 @@ function SearchesPage() {
 
 	return (
 		<div class="max-w-2xl px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Tracked searches
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Keywords, board tokens and URLs to track across supported job sources.
-					Each runs on its own 6-hour cycle.
-				</p>
-			</div>
-
-			<Show when={scrapeQueued()}>
-				<div class="mb-4 rounded-lg border border-primary/30 bg-accent-subtle px-4 py-3 text-sm text-primary">
-					Scrape queued. Matching jobs will appear shortly.
-				</div>
-			</Show>
-
-			<Show when={conflictError()}>
-				<div class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong">
-					{conflictError()}
-				</div>
-			</Show>
+			<PageHeading
+				title="Tracked searches"
+				subtitle="Keywords, board tokens and URLs to track across supported job sources. Each runs on its own 6-hour cycle."
+			/>
+			<FormFeedback
+				success={
+					scrapeQueued()
+						? "Scrape queued. Matching jobs will appear shortly."
+						: false
+				}
+				error={conflictError()}
+			/>
 
 			<QueryBoundary query={query} fallbackRows={3}>
 				{(data) => (
 					<>
 						<Show when={data.length > 0}>
-							<div class="mb-4 overflow-hidden rounded-xl border border-border bg-surface">
+							<Card class="mb-4 overflow-hidden">
 								<Table>
 									<TableHeader>
 										<TableRow>
@@ -212,7 +208,7 @@ function SearchesPage() {
 										</For>
 									</TableBody>
 								</Table>
-							</div>
+							</Card>
 						</Show>
 
 						<Show when={showAdd()}>
@@ -265,9 +261,8 @@ function SearchesPage() {
 												>
 													Keywords
 												</label>
-												<input
+												<Input
 													id="new-keywords"
-													class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 													placeholder="e.g. product engineer"
 													value={newValue()}
 													onInput={(e) => setNewValue(e.currentTarget.value)}
@@ -288,9 +283,8 @@ function SearchesPage() {
 																</span>
 															</Show>
 														</label>
-														<input
+														<Input
 															id={`filter-${field.name}`}
-															class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 															placeholder={
 																field.name === "region"
 																	? "e.g. uk, us, remote"
@@ -321,9 +315,8 @@ function SearchesPage() {
 												>
 													Board token
 												</label>
-												<input
+												<Input
 													id="new-board-token"
-													class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 													placeholder="e.g. acmecorp"
 													value={newValue()}
 													onInput={(e) => setNewValue(e.currentTarget.value)}
@@ -341,9 +334,8 @@ function SearchesPage() {
 												>
 													Search URL
 												</label>
-												<input
+												<Input
 													id="new-search-url"
-													class="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none"
 													placeholder={currentSourceInfo()?.url_prefix}
 													value={newValue()}
 													onInput={(e) => setNewValue(e.currentTarget.value)}
@@ -399,14 +391,12 @@ function SearchesPage() {
 						</Show>
 
 						<Show when={!showAdd()}>
-							<button
-								type="button"
+							<Button
 								onClick={() => {
 									setScrapeQueued(false);
 									setConflictError(null);
 									setShowAdd(true);
 								}}
-								class="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary-hover"
 							>
 								<svg
 									aria-hidden="true"
@@ -422,7 +412,7 @@ function SearchesPage() {
 									<line x1="5" y1="12" x2="19" y2="12" />
 								</svg>
 								Add search
-							</button>
+							</Button>
 						</Show>
 
 						<p class="mt-3 text-xs text-faint">
