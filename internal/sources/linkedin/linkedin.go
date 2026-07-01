@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -50,18 +49,7 @@ const (
 	selApplyURLCode       = `code#applyUrl`
 )
 
-var (
-	applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
-
-	// salaryRe is the fallback when the structured compensation__salary element
-	// (selSalary) is absent — LinkedIn only renders that when the employer or local
-	// law requires a posted range. Matches e.g. "£90,000.00 to £140,000.00".
-	salaryRe = regexp.MustCompile(`[£$€]\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*(?:-|–|to)\s*[£$€]?\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?)?`)
-
-	remoteRe = regexp.MustCompile(`(?i)\bremote\b|\bwork from home\b|\bwfh\b`)
-	hybridRe = regexp.MustCompile(`(?i)\bhybrid\b`)
-	onsiteRe = regexp.MustCompile(`(?i)\bon[\s-]?site\b|\bin[\s-]?office\b|\boffice[\s-]?based\b`)
-)
+var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
 type Search struct {
 	Keywords string // maps to the keywords URL param
@@ -94,11 +82,9 @@ var _ sources.SnapshotSource = (*Scraper)(nil)
 func New(cfg Config) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:              "linkedin",
-			URLPrefix:         "https://www.linkedin.com/jobs",
-			Schedule:          "0 */6 * * *",
-			MinScrapeInterval: 5 * time.Hour,
-			UseProxy:          true,
+			Name:      "linkedin",
+			URLPrefix: "https://www.linkedin.com/jobs",
+			UseProxy:  true,
 		}),
 		searches: cfg.Searches,
 	}
@@ -159,11 +145,7 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	// ParseJobDetail), so UpdatedAt is stamped here rather than in the pure parser —
 	// keeps the parser deterministic for snapshot testing.
 	if job.UpdatedAt.IsZero() {
-		slog.Warn("defaulted field",
-			slog.String("source", "linkedin"),
-			slog.String("field", "UpdatedAt"),
-			slog.String("url", url),
-		)
+		sources.WarnDefaulted("linkedin", "UpdatedAt", url)
 		job.UpdatedAt = time.Now().UTC()
 	}
 	return job, nil
@@ -178,9 +160,9 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
-	doc, err := goquery.NewDocumentFromReader(r)
+	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return nil, fmt.Errorf("parse html: %w", err)
+		return nil, err
 	}
 
 	var jobs []dto.Job
@@ -202,7 +184,7 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 			Title:       title,
 			Location:    location,
 			URL:         baseURL + "/jobs/view/" + id,
-			CompanySlug: slugify(company),
+			CompanySlug: sources.Slugify(company),
 		})
 	})
 	return jobs, nil
@@ -229,9 +211,9 @@ func cardJobID(card *goquery.Selection) string {
 }
 
 func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
-	doc, err := goquery.NewDocumentFromReader(r)
+	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return dto.Job{}, fmt.Errorf("parse html: %w", err)
+		return dto.Job{}, err
 	}
 
 	title := strings.TrimSpace(doc.Find(selDetailTitle).First().Text())
@@ -249,11 +231,7 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 	descHTML, _ := descNode.Html()
 	descText := descNode.Text()
 	if strings.TrimSpace(descHTML) == "" {
-		slog.Warn("defaulted field",
-			slog.String("source", "linkedin"),
-			slog.String("field", "Description"),
-			slog.String("url", jobURL),
-		)
+		sources.WarnDefaulted("linkedin", "Description", jobURL)
 	}
 	description := strings.TrimSpace(withCriteria(descHTML, [][2]string{
 		{"Seniority level", criteriaText(doc, "Seniority level")},
@@ -264,10 +242,10 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 
 	salaryRaw := strings.TrimSpace(doc.Find(selSalary).First().Text())
 	if salaryRaw == "" {
-		salaryRaw = strings.TrimSpace(salaryRe.FindString(descText))
+		salaryRaw = sources.ParseSalaryRaw(descText)
 	}
 
-	workArrangement := detectWorkArrangement(title + " " + location + " " + descText)
+	workArrangement := sources.DetectWorkArrangement(title + " " + location + " " + descText)
 
 	// ponytail: applyURL is best-effort — LinkedIn only sometimes renders the ATS
 	// destination for guest requests. When it doesn't, url falls back to the
@@ -282,7 +260,7 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 		Title:           title,
 		Location:        location,
 		URL:             resolvedURL,
-		CompanySlug:     slugify(company),
+		CompanySlug:     sources.Slugify(company),
 		Source:          "linkedin",
 		Description:     description,
 		SalaryRaw:       salaryRaw,
@@ -340,31 +318,4 @@ func applyURL(doc *goquery.Document) string {
 		return ""
 	}
 	return decoded
-}
-
-func detectWorkArrangement(text string) string {
-	switch {
-	case remoteRe.MatchString(text):
-		return "remote"
-	case hybridRe.MatchString(text):
-		return "hybrid"
-	case onsiteRe.MatchString(text):
-		return "onsite"
-	default:
-		return ""
-	}
-}
-
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case unicode.IsSpace(r) || r == '-':
-			b.WriteByte('-')
-		}
-	}
-	return strings.Trim(b.String(), "-")
 }

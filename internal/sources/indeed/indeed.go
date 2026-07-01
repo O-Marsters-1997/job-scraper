@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -18,11 +17,9 @@ var _ sources.DetailFetcher = (*Scraper)(nil)
 
 func New() *Scraper {
 	return &Scraper{sources.NewBase(sources.Config{
-		Name:              "indeed",
-		URLPrefix:         "https://www.indeed.com",
-		Schedule:          "0 */6 * * *",
-		MinScrapeInterval: 5 * time.Hour,
-		UseProxy:          true,
+		Name:      "indeed",
+		URLPrefix: "https://www.indeed.com",
+		UseProxy:  true,
 	})}
 }
 

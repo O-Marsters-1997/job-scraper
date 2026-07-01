@@ -5,13 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -34,32 +31,15 @@ const (
 	selBadge       = `.inline-flex.flex-wrap span`
 )
 
-var (
-	// salaryRe matches a currency amount or range in plain text, e.g.
-	// "£80,000 to £95,000", "$120,000", "€70,000 – €90,000".
-	// Intentionally not matching "£80k"-style; refine if real snapshots show it.
-	salaryRe = regexp.MustCompile(`[£$€]\s?\d{1,3}(?:,\d{3})+(?:\s*(?:-|–|to)\s*[£$€]?\s?\d{1,3}(?:,\d{3})+)?`)
-
-	// hybridRe and onsiteRe match explicit mentions in description text only.
-	// Remote is derived from the REMOTE badge, which is the authoritative signal.
-	hybridRe = regexp.MustCompile(`(?i)\bhybrid\b`)
-	onsiteRe = regexp.MustCompile(`(?i)\bon[\s-]?site\b|\bin[\s-]?office\b|\boffice[\s-]?based\b`)
-)
-
+// DetectWorkArrangement checks the REMOTE badge first — it's the authoritative signal —
+// then falls back to detecting hybrid/onsite from the description text.
 func DetectWorkArrangement(badges []string, descText string) string {
 	for _, b := range badges {
 		if strings.EqualFold(strings.TrimSpace(b), "remote") {
 			return "remote"
 		}
 	}
-	switch {
-	case hybridRe.MatchString(descText):
-		return "hybrid"
-	case onsiteRe.MatchString(descText):
-		return "onsite"
-	default:
-		return ""
-	}
+	return sources.DetectWorkArrangement(descText)
 }
 
 type Search struct {
@@ -99,10 +79,8 @@ var _ sources.DetailFetcher = (*Scraper)(nil)
 func New(cfg Config) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:              "wis",
-			URLPrefix:         "https://workinstartups.com",
-			Schedule:          "0 */6 * * *",
-			MinScrapeInterval: 5 * time.Hour,
+			Name:      "wis",
+			URLPrefix: "https://workinstartups.com",
 		}),
 		searches: cfg.Searches,
 	}
@@ -169,9 +147,9 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {
-	doc, err := goquery.NewDocumentFromReader(r)
+	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return 0, fmt.Errorf("parse html: %w", err)
+		return 0, err
 	}
 	val := doc.Find(selTotalCount).First().AttrOr("data-cy-count", "")
 	if val == "" {
@@ -189,9 +167,9 @@ func TotalPages(totalCount int) int {
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
-	doc, err := goquery.NewDocumentFromReader(r)
+	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return nil, fmt.Errorf("parse html: %w", err)
+		return nil, err
 	}
 	var jobs []dto.Job
 	doc.Find(selJobCard).Each(func(_ int, card *goquery.Selection) {
@@ -215,16 +193,16 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 			Title:       title,
 			Location:    location,
 			URL:         href,
-			CompanySlug: slugify(company),
+			CompanySlug: sources.Slugify(company),
 		})
 	})
 	return jobs, nil
 }
 
 func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
-	doc, err := goquery.NewDocumentFromReader(r)
+	doc, err := sources.ParseHTML(r)
 	if err != nil {
-		return dto.Job{}, fmt.Errorf("parse html: %w", err)
+		return dto.Job{}, err
 	}
 
 	title := strings.TrimSpace(doc.Find(selTitle).First().Text())
@@ -248,26 +226,18 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 			updatedAt = t.UTC()
 		}
 	} else {
-		slog.Warn("defaulted field",
-			slog.String("source", "wis"),
-			slog.String("field", "UpdatedAt"),
-			slog.String("url", url),
-		)
+		sources.WarnDefaulted("wis", "UpdatedAt", url)
 	}
 
 	descNode := doc.Find(selDescription).First()
 	desc, _ := descNode.Html()
 	description := strings.TrimSpace(desc)
 	if description == "" {
-		slog.Warn("defaulted field",
-			slog.String("source", "wis"),
-			slog.String("field", "Description"),
-			slog.String("url", url),
-		)
+		sources.WarnDefaulted("wis", "Description", url)
 	}
 
 	descText := descNode.Text()
-	salaryRaw := strings.TrimSpace(salaryRe.FindString(descText))
+	salaryRaw := sources.ParseSalaryRaw(descText)
 
 	var badges []string
 	doc.Find(selBadge).Each(func(_ int, s *goquery.Selection) {
@@ -279,7 +249,7 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		Title:           title,
 		Location:        location,
 		URL:             url,
-		CompanySlug:     slugify(company),
+		CompanySlug:     sources.Slugify(company),
 		Source:          "wis",
 		UpdatedAt:       updatedAt,
 		Description:     description,
@@ -291,19 +261,5 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 // ParseSalaryRaw extracts a raw salary string from text using a currency regex.
 // Returns an empty string when no salary is found.
 func ParseSalaryRaw(text string) string {
-	return strings.TrimSpace(salaryRe.FindString(text))
-}
-
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case unicode.IsSpace(r) || r == '-':
-			b.WriteByte('-')
-		}
-	}
-	return strings.Trim(b.String(), "-")
+	return sources.ParseSalaryRaw(text)
 }
