@@ -78,7 +78,33 @@ func TestBuildSources_DisabledTargetsExcluded(t *testing.T) {
 
 func TestBuildSources_URLSourcesIncludedWhenTargetPresent(t *testing.T) {
 	targets := []dto.SourceTarget{
-		{Source: "linkedin", Value: "https://www.linkedin.com/jobs/search/?keywords=engineer", Enabled: true},
+		{Source: "indeed", Value: "https://www.indeed.com/jobs?q=engineer", Enabled: true},
+	}
+	srcs := builder.BuildSources(targets)
+
+	found := false
+	for _, s := range srcs {
+		if s.Cfg().Name == "indeed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected indeed source when URL target is present")
+	}
+}
+
+func TestBuildSources_URLSourcesExcludedWhenNoTarget(t *testing.T) {
+	srcs := builder.BuildSources(nil)
+	for _, s := range srcs {
+		if s.Cfg().Name == "linkedin" || s.Cfg().Name == "indeed" {
+			t.Errorf("expected %s to be absent when no URL target configured", s.Cfg().Name)
+		}
+	}
+}
+
+func TestBuildSources_LinkedInIncludedWhenTargetPresent(t *testing.T) {
+	targets := []dto.SourceTarget{
+		{Source: "linkedin", Value: "product engineer", Filters: map[string]string{"location": "London"}, Enabled: true},
 	}
 	srcs := builder.BuildSources(targets)
 
@@ -89,16 +115,7 @@ func TestBuildSources_URLSourcesIncludedWhenTargetPresent(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected linkedin source when URL target is present")
-	}
-}
-
-func TestBuildSources_URLSourcesExcludedWhenNoTarget(t *testing.T) {
-	srcs := builder.BuildSources(nil)
-	for _, s := range srcs {
-		if s.Cfg().Name == "linkedin" || s.Cfg().Name == "indeed" {
-			t.Errorf("expected %s to be absent when no URL target configured", s.Cfg().Name)
-		}
+		t.Error("expected linkedin source when linkedin target is present")
 	}
 }
 

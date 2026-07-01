@@ -25,6 +25,8 @@ import (
 func main() {
 	forceScrape := flag.Bool("scrape-now", false,
 		"bypass per-source recency gate so every tick (startup + cron) scrapes immediately")
+	noScrape := flag.Bool("no-scrape", false,
+		"skip source enqueueing entirely; only drain URLs already in the queue")
 	flag.Parse()
 
 	slog.SetDefault(logger.New())
@@ -100,7 +102,9 @@ func main() {
 	orch.WithRelevanceGate(&score.HeuristicScorer{}, db)
 	slog.Info("relevance gate enabled (multi-user)")
 
-	if err := orch.Start(ctx); err != nil {
+	if *noScrape {
+		slog.Info("no-scrape enabled: skipping source enqueueing, draining queue only")
+	} else if err := orch.Start(ctx); err != nil {
 		slog.Error("orchestrator start failed",
 			slog.Any("err", err),
 		)

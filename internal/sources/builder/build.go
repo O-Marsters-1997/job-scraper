@@ -21,6 +21,7 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 	boards := make(map[string][]string) // source name → board tokens
 	urlSources := make(map[string]bool)
 	var wisSearches []wis.Search
+	var linkedinSearches []linkedin.Search
 
 	for _, t := range targets {
 		if !t.Enabled {
@@ -32,6 +33,11 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 				wisSearches = append(wisSearches, wis.Search{
 					Keywords: t.Value,
 					Region:   t.Filters["region"],
+				})
+			case "linkedin":
+				linkedinSearches = append(linkedinSearches, linkedin.Search{
+					Keywords: t.Value,
+					Location: t.Filters["location"],
 				})
 			}
 			continue
@@ -52,6 +58,9 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 	if len(wisSearches) > 0 {
 		srcs = append(srcs, wis.New(wis.Config{Searches: wisSearches}))
 	}
+	if len(linkedinSearches) > 0 {
+		srcs = append(srcs, linkedin.New(linkedin.Config{Searches: linkedinSearches}))
+	}
 
 	if tokens := boards["greenhouse"]; len(tokens) > 0 {
 		srcs = append(srcs, greenhouse.New(greenhouse.Config{Boards: tokens}))
@@ -70,9 +79,6 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 	}
 	if tokens := boards["personio"]; len(tokens) > 0 {
 		srcs = append(srcs, personio.New(personio.Config{Boards: tokens}))
-	}
-	if urlSources["linkedin"] {
-		srcs = append(srcs, linkedin.New())
 	}
 	if urlSources["indeed"] {
 		srcs = append(srcs, indeed.New())

@@ -1,41 +1,370 @@
 package linkedin
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"fmt"
+	"io"
 	"log/slog"
+	"math/rand/v2"
+	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+
+	"github.com/PuerkitoBio/goquery"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-type Scraper struct{ sources.PaginatedBase }
+const (
+	baseURL   = "https://www.linkedin.com"
+	searchURL = baseURL + "/jobs-guest/jobs/api/seeMoreJobPostings/search"
+
+	// maxStart bounds pagination — seeMoreJobPostings never returns a total result
+	// count, so an empty page is the only end-of-results signal LinkedIn gives us.
+	maxStart = 1000
+
+	minWait = 2 * time.Second
+	maxWait = 7 * time.Second
+
+	selCard         = `div.base-search-card`
+	selCardLink     = `a.base-card__full-link`
+	selCardTitle    = `h3.base-search-card__title`
+	selCardTitleAlt = `span.sr-only`
+	selCardCompany  = `h4.base-search-card__subtitle a`
+	selCardLocation = `span.job-search-card__location`
+
+	selDetailTitle        = `h1.top-card-layout__title.topcard__title`
+	selDetailCompany      = `a.topcard__org-name-link`
+	selDetailFlavorRow    = `.topcard__flavor-row`
+	selDetailFlavorBullet = `.topcard__flavor--bullet`
+	selDescription        = `div.show-more-less-html__markup`
+	selCriteriaItem       = `li.description__job-criteria-item`
+	selCriteriaHeader     = `h3.description__job-criteria-subheader`
+	selCriteriaText       = `span.description__job-criteria-text`
+	selSalary             = `div.compensation__salary-range div.salary.compensation__salary`
+	selApplyURLCode       = `code#applyUrl`
+)
+
+var (
+	applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
+
+	// salaryRe is the fallback when the structured compensation__salary element
+	// (selSalary) is absent — LinkedIn only renders that when the employer or local
+	// law requires a posted range. Matches e.g. "£90,000.00 to £140,000.00".
+	salaryRe = regexp.MustCompile(`[£$€]\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*(?:-|–|to)\s*[£$€]?\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?)?`)
+
+	remoteRe = regexp.MustCompile(`(?i)\bremote\b|\bwork from home\b|\bwfh\b`)
+	hybridRe = regexp.MustCompile(`(?i)\bhybrid\b`)
+	onsiteRe = regexp.MustCompile(`(?i)\bon[\s-]?site\b|\bin[\s-]?office\b|\boffice[\s-]?based\b`)
+)
+
+type Search struct {
+	Keywords string // maps to the keywords URL param
+	Location string // maps to the location URL param; empty means no filter
+}
+
+func (s Search) pageURL(start int) string {
+	v := url.Values{}
+	v.Set("keywords", s.Keywords)
+	if s.Location != "" {
+		v.Set("location", s.Location)
+	}
+	v.Set("start", strconv.Itoa(start))
+	return searchURL + "?" + v.Encode()
+}
+
+type Config struct {
+	Searches []Search
+}
+
+type Scraper struct {
+	sources.PaginatedBase
+	searches []Search
+}
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
+var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New() *Scraper {
-	return &Scraper{sources.NewBase(sources.Config{
-		Name:              "linkedin",
-		URLPrefix:         "https://www.linkedin.com/jobs",
-		Schedule:          "0 */6 * * *",
-		MinScrapeInterval: 5 * time.Hour,
-		UseProxy:          true,
-	})}
+func New(cfg Config) *Scraper {
+	return &Scraper{
+		PaginatedBase: sources.NewBase(sources.Config{
+			Name:              "linkedin",
+			URLPrefix:         "https://www.linkedin.com/jobs",
+			Schedule:          "0 */6 * * *",
+			MinScrapeInterval: 5 * time.Hour,
+			UseProxy:          true,
+		}),
+		searches: cfg.Searches,
+	}
 }
 
 func (s *Scraper) CanHandle(url string) bool {
 	return strings.Contains(url, "linkedin.com")
 }
 
-// Iterate logs a warning and returns immediately — LinkedIn blocks scraping.
-func (s *Scraper) Iterate(_ context.Context, _ func(context.Context, []dto.Job) (bool, error)) error {
-	slog.Warn("linkedin: scraping not yet implemented; skipping")
+// ponytail: not using PaginatedBase.IteratePages here — it needs a total result
+// count up front to compute page count, but seeMoreJobPostings never returns one.
+func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
+	log := slog.With(slog.String("source", "linkedin"))
+
+	for _, search := range s.searches {
+		for start := 0; start < maxStart; {
+			body, err := s.Get(ctx, search.pageURL(start))
+			if err != nil {
+				log.Error("page fetch failed", slog.Int("start", start), slog.Any("err", err))
+				break
+			}
+
+			jobs, err := ParseURLs(bytes.NewReader(body))
+			if err != nil {
+				return fmt.Errorf("linkedin: parse page (start=%d): %w", start, err)
+			}
+			if len(jobs) == 0 {
+				break
+			}
+
+			stop, err := fn(ctx, jobs)
+			if err != nil || stop {
+				return err
+			}
+			start += len(jobs)
+
+			wait := minWait + time.Duration(rand.Int64N(int64(maxWait-minWait)))
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(wait):
+			}
+		}
+	}
 	return nil
 }
 
-func (s *Scraper) GetDetails(_ context.Context, _ string) (dto.Job, error) {
-	return dto.Job{}, errors.New("linkedin: GetDetails not implemented")
+func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+	body, err := s.Get(ctx, url)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	job, err := ParseJobDetail(bytes.NewReader(body), url)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	// LinkedIn's detail page exposes no machine-readable post date (see
+	// ParseJobDetail), so UpdatedAt is stamped here rather than in the pure parser —
+	// keeps the parser deterministic for snapshot testing.
+	if job.UpdatedAt.IsZero() {
+		slog.Warn("defaulted field",
+			slog.String("source", "linkedin"),
+			slog.String("field", "UpdatedAt"),
+			slog.String("url", url),
+		)
+		job.UpdatedAt = time.Now().UTC()
+	}
+	return job, nil
+}
+
+func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
+	return ParseURLs(r)
+}
+
+func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
+	return ParseJobDetail(r, url)
+}
+
+func ParseURLs(r io.Reader) ([]dto.Job, error) {
+	doc, err := goquery.NewDocumentFromReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("parse html: %w", err)
+	}
+
+	var jobs []dto.Job
+	doc.Find(selCard).Each(func(_ int, card *goquery.Selection) {
+		id := cardJobID(card)
+		if id == "" {
+			return
+		}
+
+		title := strings.TrimSpace(card.Find(selCardTitle).First().Text())
+		if title == "" {
+			title = strings.TrimSpace(card.Find(selCardTitleAlt).First().Text())
+		}
+
+		company := strings.TrimSpace(card.Find(selCardCompany).First().Text())
+		location := strings.TrimSpace(card.Find(selCardLocation).First().Text())
+
+		jobs = append(jobs, dto.Job{
+			Title:       title,
+			Location:    location,
+			URL:         baseURL + "/jobs/view/" + id,
+			CompanySlug: slugify(company),
+		})
+	})
+	return jobs, nil
+}
+
+// cardJobID prefers the structured data-entity-urn attribute (urn:li:jobPosting:{id})
+// over parsing the trailing digits off the full-link href — the urn doesn't depend
+// on the title-derived slug staying stable.
+func cardJobID(card *goquery.Selection) string {
+	if urn, ok := card.Attr("data-entity-urn"); ok {
+		if i := strings.LastIndex(urn, ":"); i != -1 {
+			return urn[i+1:]
+		}
+	}
+	href, ok := card.Find(selCardLink).First().Attr("href")
+	if !ok {
+		return ""
+	}
+	href = strings.SplitN(href, "?", 2)[0]
+	if i := strings.LastIndex(href, "-"); i != -1 {
+		return href[i+1:]
+	}
+	return ""
+}
+
+func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
+	doc, err := goquery.NewDocumentFromReader(r)
+	if err != nil {
+		return dto.Job{}, fmt.Errorf("parse html: %w", err)
+	}
+
+	title := strings.TrimSpace(doc.Find(selDetailTitle).First().Text())
+	if title == "" {
+		return dto.Job{}, fmt.Errorf("title not found (selector: %q)", selDetailTitle)
+	}
+
+	company := strings.TrimSpace(doc.Find(selDetailCompany).First().Text())
+
+	// The applicant-count span further down the page reuses topcard__flavor--bullet,
+	// so location must come from the first flavor row specifically, not a global match.
+	location := strings.TrimSpace(doc.Find(selDetailFlavorRow).First().Find(selDetailFlavorBullet).First().Text())
+
+	descNode := doc.Find(selDescription).First()
+	descHTML, _ := descNode.Html()
+	descText := descNode.Text()
+	if strings.TrimSpace(descHTML) == "" {
+		slog.Warn("defaulted field",
+			slog.String("source", "linkedin"),
+			slog.String("field", "Description"),
+			slog.String("url", jobURL),
+		)
+	}
+	description := strings.TrimSpace(withCriteria(descHTML, [][2]string{
+		{"Seniority level", criteriaText(doc, "Seniority level")},
+		{"Employment type", criteriaText(doc, "Employment type")},
+		{"Job function", criteriaText(doc, "Job function")},
+		{"Industries", criteriaText(doc, "Industries")},
+	}))
+
+	salaryRaw := strings.TrimSpace(doc.Find(selSalary).First().Text())
+	if salaryRaw == "" {
+		salaryRaw = strings.TrimSpace(salaryRe.FindString(descText))
+	}
+
+	workArrangement := detectWorkArrangement(title + " " + location + " " + descText)
+
+	// ponytail: applyURL is best-effort — LinkedIn only sometimes renders the ATS
+	// destination for guest requests. When it doesn't, url falls back to the
+	// LinkedIn job page itself, which is always deterministic since it's built from
+	// data already captured during discovery.
+	resolvedURL := jobURL
+	if direct := applyURL(doc); direct != "" {
+		resolvedURL = direct
+	}
+
+	return dto.Job{
+		Title:           title,
+		Location:        location,
+		URL:             resolvedURL,
+		CompanySlug:     slugify(company),
+		Source:          "linkedin",
+		Description:     description,
+		SalaryRaw:       salaryRaw,
+		WorkArrangement: workArrangement,
+	}, nil
+}
+
+// criteriaText returns "" when header isn't present — not every listing renders
+// every criterion.
+func criteriaText(doc *goquery.Document, header string) string {
+	var text string
+	doc.Find(selCriteriaItem).EachWithBreak(func(_ int, item *goquery.Selection) bool {
+		if !strings.Contains(item.Find(selCriteriaHeader).First().Text(), header) {
+			return true
+		}
+		text = strings.TrimSpace(item.Find(selCriteriaText).First().Text())
+		return false
+	})
+	return text
+}
+
+// withCriteria folds seniority/employment-type/job-function/industries into the
+// description text since dto.Job has no dedicated columns for them and
+// score/claude.go reads Description directly for LLM scoring.
+func withCriteria(descriptionHTML string, criteria [][2]string) string {
+	var lines []string
+	for _, c := range criteria {
+		if c[1] != "" {
+			lines = append(lines, c[0]+": "+c[1])
+		}
+	}
+	if len(lines) == 0 {
+		return descriptionHTML
+	}
+	return strings.Join(lines, "\n") + "\n\n" + descriptionHTML
+}
+
+// applyURL is empty in the common case — LinkedIn only renders code#applyUrl for a
+// subset of listings on guest (unauthenticated) requests.
+func applyURL(doc *goquery.Document) string {
+	code := doc.Find(selApplyURLCode).First()
+	if code.Length() == 0 {
+		return ""
+	}
+	html, err := code.Html()
+	if err != nil {
+		return ""
+	}
+	m := applyURLRe.FindStringSubmatch(html)
+	if m == nil {
+		return ""
+	}
+	decoded, err := url.QueryUnescape(m[1])
+	if err != nil {
+		return ""
+	}
+	return decoded
+}
+
+func detectWorkArrangement(text string) string {
+	switch {
+	case remoteRe.MatchString(text):
+		return "remote"
+	case hybridRe.MatchString(text):
+		return "hybrid"
+	case onsiteRe.MatchString(text):
+		return "onsite"
+	default:
+		return ""
+	}
+}
+
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+		case unicode.IsSpace(r) || r == '-':
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
