@@ -4,8 +4,39 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
 )
+
+// TestBuildSources_EveryRegisteredSourceInstantiates guards against the silent-drop
+// trap: a source added to the registry but never wired into BuildSources compiles fine
+// yet is dropped at runtime with no error. For each registered source we feed one
+// enabled target of the right kind and assert BuildSources produces it.
+func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
+	for _, info := range sources.Sources() {
+		target := dto.SourceTarget{Source: info.Name, Enabled: true}
+		switch info.Kind {
+		case "board":
+			target.Value = "acme"
+		case "filter":
+			target.Value = "engineer"
+		case "url":
+			target.Value = "https://example.com/jobs?q=engineer"
+		default:
+			t.Fatalf("source %q has unknown kind %q", info.Name, info.Kind)
+		}
+
+		found := false
+		for _, s := range builder.BuildSources([]dto.SourceTarget{target}) {
+			if s.Cfg().Name == info.Name {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("source %q (kind %q) is registered but not wired into BuildSources", info.Name, info.Kind)
+		}
+	}
+}
 
 func TestBuildSources_WisIncludedWhenTargetPresent(t *testing.T) {
 	targets := []dto.SourceTarget{
