@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-24
+last_updated: 2026-07-01
 ---
 
 # Ideation Context — Job Scraper
@@ -51,6 +51,11 @@ The **jobs × CVs × LLM, per user** triangle is where exclusive value lives.
 | Huntr | Semantic resume scoring + CRM; claims 2× interview rate | Score **overstates alignment** (false readiness); one resume, no variant library |
 | Simplify | AI autofill copilot + pipeline tracking | Autofill, not fit reasoning; no corpus-level intelligence |
 | JobSync / ApplyKit / ApplyPilot (OSS) | Self-hosted, data-private, BYO-LLM/Ollama | Single-applicant, single-resume; no "across my whole market" aggregate view |
+| **career-ops** (OSS, ~56.7k★, added 2026-07-01) | Rubric-guided LLM scoring 1.0–5.0 **with citations to CV lines + JD reqs**; tailored PDF per role; drafts Greenhouse/Ashby/Lever answers; Go TUI | **Local, single-user, one-shot-per-JD, inside a coding CLI** — no standing corpus, no outcome memory, no CV **variant library**. Near-identical thesis; beatable only on hosted/multi-user/corpus-level ground |
+
+**2026 market backdrop:** volume exploded to 300+/role → AI auto-apply backlash; employer ghosting
+at 3-year high (53%); platforms suppress automation (~23% restricted in 90 days); per-role
+**tailoring** is the one tactic proven to lift interview rate (~2% → 3–4%).
 
 ## First-principles insights
 
@@ -59,6 +64,14 @@ The **jobs × CVs × LLM, per user** triangle is where exclusive value lives.
   roadmaps name ("show why it scored that way") is one schema change away. Reuse, not new spend.
 - **Eureka 2 — variant selection beats variant generation.** Incumbents generate/edit one resume.
   This repo stores N CV variants per user → pick the best per job + show the gap, no generation needed for v1.
+- **Eureka 3 (2026-07-01) — the market chased the wrong answer.** Everyone raced to *volume*
+  (auto-apply, mass autofill); it produced workslop, ghosting and platform bans. First principles:
+  the winning move is the opposite — **fewer, better, calibrated applications** — which is already
+  this repo's thesis. Incumbents can't pivot here without becoming a different product.
+- **Eureka 4 (2026-07-01) — nobody validates their own score.** Every competitor shows a match
+  score; none feed *real outcomes* back to check it predicts responses. This repo holds `job_scores`
+  **and** `applications` outcomes per user → can ship the only **calibrated, honest** score in the
+  category, as read-only analytics over data already stored.
 
 ## Implemented ideas
 
@@ -70,17 +83,27 @@ The **jobs × CVs × LLM, per user** triangle is where exclusive value lives.
 - Per-user source targets, DB-driven source registration; source selector in tracked searches
 - Authenticated UI hardening + violet design system consolidation
 - Detail enrichment: Description, SalaryRaw, WorkArrangement (scraper side)
+- **Glass-box scoring** (shipped 2026-06→07): `job_scores.reasoning`, `SuitabilityPanel`
+  (score + rationale + matched/missing chips), on-demand "Explain score", editable rubric/cutoff/
+  threshold in `scoring.tsx`. *Unshipped tail:* jobs-list row expander + below-cutoff toggle.
+- **AI settings / model picker** (shipped): `settings/ai.tsx` — per-user scoring + reasoning model
+  pickers (default Haiku 4.5), BYOK Anthropic key. *Note:* multi-tenant **ingest** still single-user
+  (`SCORING_USER_ID`); `multi-tenant-byok.md` Phases 2–4 pending.
+- LinkedIn source; BrightData Web Unlocker proxy; batch suitability scoring (Claude cache amortise).
 
 ## Proposed ideas (pending)
 
-- [2026-06-24] Glass-box scoring — capture suitability reasoning/matched/missing + surface the
-  editable rubric & thresholds (frontend already lacks the existing /search-config controls). **(Recommended next.)**
-- [2026-06-24] AI settings — per-user model picker, default-cheap (enabler).
-- [2026-06-24] Score-validated funnel analytics — does the score predict responses?
-- [2026-06-24] Best-CV-for-this-job — rank existing CV variants + gap analysis.
-- [2026-06-24] Tailored application draft — cover letter / bullets from JD × chosen CV.
-- [2026-06-24] Market skills-gap radar — portfolio-level skills missing from all your CVs (`[enrich]`).
-- [2026-06-24] Salary intelligence — normalise salary_raw, benchmark offers.
-- [2026-06-24] Application Copilot (moonshot) — scored job → matched CV → drafted letter → tracked daily loop.
+- [2026-07-01] **Best-CV-for-this-job + real gap analysis** — fetch CV tab text (new
+  `google.Client` method; `drive.readonly` already granted) → rank N variants vs JD → matched/missing
+  vs the *chosen* CV. **(Recommended next — exercises the moat end-to-end; substrate for drafts + copilot.)**
+- [2026-07-01] Calibrated "Honest Score" — plot response/interview rate per score bucket; the one
+  claim no competitor can make (`job_scores` × `applications` outcomes). *(Differentiation flagship.)*
+- [2026-07-01] Tailored draft — cover letter + Greenhouse/Ashby/Lever answers from JD × chosen CV.
+- [2026-07-01] Company responsiveness & ghost-risk intelligence — cross-application company outcome memory.
+- [2026-07-01] Paste-a-JD / bookmarklet capture (MVP, no extension) — manual door into ingest+score.
+- [2026-07-01] Follow-up nudges for stalled applications — reuse notify/digest + status timestamps.
+- [2026-07-01] Glass-box finish — jobs-list reasoning row expander + below-cutoff toggle.
+- [2026-07-01] Selective Apply Copilot (moonshot) — hard-gated daily shortlist, best CV + draft + ghost-risk pre-assembled.
+- [2026-06-24] Salary intelligence — normalise salary_raw, benchmark offers. *(still open)*
 
-See `ideas/reports/2026-06-24-ideate.md` for full detail.
+See `ideas/reports/2026-07-01-ideate.md` (latest) and `ideas/reports/2026-06-24-ideate.md`.
