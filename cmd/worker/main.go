@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -145,6 +146,25 @@ func main() {
 	go worker.RunScrapeRequests(ctx, q, func(ctx context.Context, req dto.ScrapeRequest) error {
 		return orch.ScrapeTarget(ctx, req.Target)
 	})
+
+	// Dead-letter monitor: surfaces standing accumulation so orphaned URLs don't
+	// pile up silently. Only logs when the set is non-empty.
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n, err := q.DeadLetterCount(ctx); err != nil {
+					slog.Error("dead-letter count failed", slog.Any("err", err))
+				} else if n > 0 {
+					slog.Warn("dead-letter queue non-empty", slog.Int64("count", n))
+				}
+			}
+		}
+	}()
 
 	slog.Info("queue processing worker starting")
 	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {

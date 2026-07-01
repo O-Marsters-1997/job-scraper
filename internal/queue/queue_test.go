@@ -271,6 +271,41 @@ func TestNack(t *testing.T) {
 	})
 }
 
+func TestDeadLetterCount(t *testing.T) {
+	t.Run("zero when empty", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+
+		n, err := q.DeadLetterCount(ctx)
+		if err != nil {
+			t.Fatalf("DeadLetterCount: %v", err)
+		}
+		if n != 0 {
+			t.Errorf("want 0 on empty dead-letter set, got %d", n)
+		}
+	})
+
+	t.Run("counts URLs dead-lettered after maxAttempts", func(t *testing.T) {
+		ctx := context.Background()
+		q := newTestQueue(t)
+		url := "https://example.com/job/dlcount"
+
+		for range maxAttempts {
+			if err := q.Nack(ctx, url); err != nil {
+				t.Fatalf("Nack: %v", err)
+			}
+		}
+
+		n, err := q.DeadLetterCount(ctx)
+		if err != nil {
+			t.Fatalf("DeadLetterCount: %v", err)
+		}
+		if n != 1 {
+			t.Errorf("want 1 after dead-lettering one URL, got %d", n)
+		}
+	})
+}
+
 func TestClearAttempts(t *testing.T) {
 	t.Run("removes attempt counter for url", func(t *testing.T) {
 		ctx := context.Background()

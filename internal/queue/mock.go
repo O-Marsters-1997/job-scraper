@@ -124,6 +124,12 @@ func (m *MockQueue) DeadLetter() []string {
 	return out
 }
 
+func (m *MockQueue) DeadLetterCount(_ context.Context) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return int64(len(m.deadLetter)), nil
+}
+
 func (m *MockQueue) Attempts(url string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()

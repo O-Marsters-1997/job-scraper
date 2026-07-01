@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -43,6 +44,9 @@ type JobQueue interface {
 
 	// ClearAttempts removes the retry counter for url. Call on successful processing.
 	ClearAttempts(ctx context.Context, url string) error
+
+	// DeadLetterCount returns how many URLs are currently in the dead-letter set.
+	DeadLetterCount(ctx context.Context) (int64, error)
 
 	// EnqueueScrapeRequest pushes a scrape request onto the scrape:requests list.
 	// The worker consumer pops it and runs a one-off scrape for the target.
@@ -150,6 +154,7 @@ func (q *Queue) Nack(ctx context.Context, url string) error {
 		if err := q.client.Do(ctx, q.client.B().Zadd().Key(deadLetterKey).ScoreMember().ScoreMember(score, url).Build()).Error(); err != nil {
 			return fmt.Errorf("nack dead letter: %w", err)
 		}
+		slog.Warn("job dead-lettered", slog.String("url", url), slog.Int("attempts", int(count)))
 		return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
 	}
 	backoff := time.Duration(count) * backoffBase
@@ -159,6 +164,10 @@ func (q *Queue) Nack(ctx context.Context, url string) error {
 
 func (q *Queue) ClearAttempts(ctx context.Context, url string) error {
 	return q.client.Do(ctx, q.client.B().Hdel().Key(attemptsKey).Field(url).Build()).Error()
+}
+
+func (q *Queue) DeadLetterCount(ctx context.Context) (int64, error) {
+	return q.client.Do(ctx, q.client.B().Zcard().Key(deadLetterKey).Build()).AsInt64()
 }
 
 func (q *Queue) EnqueueScrapeRequest(ctx context.Context, req dto.ScrapeRequest) error {
