@@ -44,6 +44,56 @@ func Detect(rawURL string) ATSType {
 	}
 }
 
+// atsSourceName maps an ATSType to the registry source name. Aggregator and
+// UnknownHTML have no board source and return "".
+var atsSourceName = map[ATSType]string{
+	Greenhouse: "greenhouse",
+	Lever:      "lever",
+	Ashby:      "ashby",
+	Workable:   "workable",
+	Recruitee:  "recruitee",
+	Personio:   "personio",
+}
+
+// ResolveBoard extracts the source name and board token from a direct ATS board
+// URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
+// Path-based ATSes (greenhouse/lever/ashby/workable) take the token from the first
+// path segment; subdomain-based ATSes (recruitee/personio) take it from the leading
+// host label. Returns ok=false for aggregators, unknown hosts, or bare provider URLs.
+//
+// ponytail: direct ATS URLs only. Company careers pages that redirect to or embed an
+// ATS need a fetch-and-sniff step (follow redirect / parse window objects) — add that
+// only if manual entry proves too clumsy.
+func ResolveBoard(rawURL string) (source, token string, ok bool) {
+	t := Detect(rawURL)
+	source, known := atsSourceName[t]
+	if !known {
+		return "", "", false
+	}
+	u, err := neturl.Parse(rawURL)
+	if err != nil {
+		return "", "", false
+	}
+
+	switch t {
+	case Recruitee, Personio:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de
+		labels := strings.Split(strings.ToLower(u.Host), ".")
+		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" {
+			return "", "", false
+		}
+		return source, labels[0], true
+	default:
+		// Token is the first non-empty path segment.
+		for seg := range strings.SplitSeq(u.Path, "/") {
+			if seg != "" && seg != "embed" {
+				return source, seg, true
+			}
+		}
+		return "", "", false
+	}
+}
+
 // RewriteToATS attempts to extract the underlying ATS URL from an aggregator URL.
 // Returns the ATS URL, its type, and true on success; ("", UnknownHTML, false) otherwise.
 func RewriteToATS(rawURL string) (string, ATSType, bool) {

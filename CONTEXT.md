@@ -52,8 +52,12 @@ A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, com
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
-A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets.
+A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets. Each source carries a **Role** (below) that classifies the target as a tracked company or a discovery search — orthogonal to its kind.
 _Avoid_: Board config, source config, integration
+
+**Role**:
+A source's purpose, distinct from its `kind` (value shape). `ats` sources (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio) are **tracked companies** — known-company boards the engine re-checks periodically via a public API (no Enrich phase). `discovery` sources (LinkedIn, Indeed, Work in Startups) are **discovery searches** — surfaces you search, paginated and enriched. The finer Aggregator-vs-HTML-board split is not encoded in `role`; it lives in `detect.ATSType` and the `DetailFetcher` capability (ADR 0011). See ADR 0015.
+_Avoid_: kind (kind is value shape: board/url/filter), type
 
 **Filter Source**:
 A `kindFilter` source whose scraping targets are constructed from user-supplied keyword `value` and structured `filters` fields (e.g. `region`), rather than a fixed board token or URL. `wis` is currently the only filter source; its declared `FilterField` list is returned by `LookupFilterFields`. Contrast with `kindBoard` (ATS) and `kindURL` (aggregator) sources.
