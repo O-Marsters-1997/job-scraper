@@ -1,6 +1,6 @@
 # Adding a New Source
 
-_Last updated: 2026-06-21_
+_Last updated: 2026-07-01_
 
 ## Step 0: choose source type
 
@@ -176,28 +176,54 @@ func TestSnapshots(t *testing.T) {
 
 To update fixtures after a parser change: `just cli rebase <source>`.
 
-## Registration and env-var wiring
+## Registration
 
-Open `cmd/worker/main.go`. Add your source using the same conditional pattern as existing sources:
+Sources are **database-driven**, not env-var gated. At boot the worker loads enabled
+`source_targets` rows (`db.ListEnabledSourceTargets`), the registry classifies each by
+`kind`, and `builder.BuildSources` instantiates one source per group. Wiring a new source
+is two edits plus the source package:
+
+**1. Add a registry entry** — `internal/sources/registry.go`, the `entries` slice:
 
 ```go
-// ATS source (board-token-based)
-if boards := os.Getenv("MYATS_BOARDS"); boards != "" {
-    tokens := splitBoards(boards)
+{name: "myats", label: "MyATS", kind: kindBoard, urlPrefix: "https://boards.myats.io"},
+// kindFilter sources also declare their structured filter fields:
+{name: "mysite", label: "MySite", kind: kindFilter, urlPrefix: "https://mysite.io", filters: []FilterField{
+    {Name: "region", Label: "Region", Required: false},
+}},
+```
+
+`name` **must** match the `Name` baked into the source's `sources.Config`. Pick the kind:
+`kindBoard` (value is a board token), `kindFilter` (value is a keyword + structured
+filters), or `kindURL` (value is a full URL).
+
+**2. Wire instantiation** — `internal/sources/builder/build.go`, in `BuildSources`:
+
+```go
+// kindBoard: tokens are grouped by source name, then instantiated
+if tokens := boards["myats"]; len(tokens) > 0 {
     srcs = append(srcs, myats.New(myats.Config{Boards: tokens}))
-    slog.Info("myats source registered", slog.Int("boards", len(tokens)))
 }
 
-// HTML source (boolean toggle)
-if os.Getenv("MYSITE_ENABLED") == "true" {
-    srcs = append(srcs, mysite.New())
-    slog.Info("mysite source registered")
+// kindFilter: add a case to the classify switch, then instantiate the collected searches
+case "mysite":
+    mysiteSearches = append(mysiteSearches, mysite.Search{Keywords: t.Value, Region: t.Filters["region"]})
+// ...later:
+if len(mysiteSearches) > 0 {
+    srcs = append(srcs, mysite.New(mysite.Config{Searches: mysiteSearches}))
 }
 ```
 
-`wis` is the only always-on source (no env gate).
+> **This is the one step with no compile-time safety net.** Skip it and the code still
+> builds — the source classifies fine but never instantiates, and is silently dropped at
+> runtime. `TestBuildSources_EveryRegisteredSourceInstantiates` in `build_test.go` guards
+> against exactly this: it fails CI if a registered source isn't wired here. Run
+> `go test ./internal/sources/builder/` after wiring.
 
-Add the new env var to `.env.example` with an empty default and a comment explaining the expected format.
+**DetailFetchers register automatically.** The worker collects every source implementing
+`DetailFetcher` via type assertion (`cmd/worker/main.go`) — no manual worker edit needed.
+The one exception is the hardcoded always-on `wis` detailer, added so on-demand scrape
+URLs resolve even when no wis target is configured at boot.
 
 ## Checklist
 
@@ -207,5 +233,6 @@ Add the new env var to `.env.example` with an empty default and a comment explai
 - [ ] `Iterate` yields partial jobs with at least URL set; title/location set if extractable from listing page
 - [ ] `UseProxy` set appropriately in `sources.Config` (true for anti-bot targets)
 - [ ] Snapshot tests added and passing (HTML sources only)
-- [ ] Registered in `cmd/worker/main.go` behind an env var
-- [ ] Env var added to `.env.example`
+- [ ] Registry entry added in `internal/sources/registry.go` (name matches `Config.Name`)
+- [ ] Instantiation wired in `internal/sources/builder/build.go`; `go test ./internal/sources/builder/` passes
+- [ ] Source target seeded/enabled in the DB (`source_targets`) to actually run it
