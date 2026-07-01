@@ -61,7 +61,9 @@ var entries = []registryEntry{
 	{name: "wis", label: "Work in Startups", kind: kindFilter, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "region", Label: "Region", Required: false},
 	}},
-	{name: "linkedin", label: "LinkedIn", kind: kindURL, urlPrefix: "https://www.linkedin.com/jobs"},
+	{name: "linkedin", label: "LinkedIn", kind: kindFilter, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
+		{Name: "location", Label: "Location", Required: false},
+	}},
 	{name: "indeed", label: "Indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
 }
 

@@ -94,7 +94,7 @@ func TestSourceTargetHandler_Create(t *testing.T) {
 		},
 		{
 			name:       "rejects bad URL for URL source",
-			body:       map[string]string{"source": "linkedin", "value": "notaurl"},
+			body:       map[string]string{"source": "indeed", "value": "notaurl"},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
