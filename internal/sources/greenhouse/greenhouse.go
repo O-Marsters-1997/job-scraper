@@ -15,6 +15,8 @@ type Config struct {
 	Boards []string
 }
 
+// ponytail: the Iterate/fetchBoard skeleton here is duplicated across all 6 ATS
+// sources; extract a generic BoardSource[T] when the next ATS source lands.
 type Scraper struct {
 	sources.PaginatedBase
 	cfg Config
