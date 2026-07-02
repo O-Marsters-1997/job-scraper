@@ -75,6 +75,7 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 		return "", "", false
 	}
 
+	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
 	case Recruitee, Personio:
 		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de
