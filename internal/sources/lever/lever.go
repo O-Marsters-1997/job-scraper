@@ -1,7 +1,6 @@
 package lever
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -16,40 +15,15 @@ type Config struct {
 	Boards []string
 }
 
-type Scraper struct {
-	sources.PaginatedBase
-	cfg Config
-}
-
-var _ sources.Source = (*Scraper)(nil)
-
-func New(cfg Config) *Scraper {
-	return &Scraper{
-		PaginatedBase: sources.NewBase(sources.Config{
-			Name:              "lever",
-			URLPrefix:         "https://jobs.lever.co",
-			Schedule:          "0 */6 * * *",
-			MinScrapeInterval: 5 * time.Hour,
-		}),
-		cfg: cfg,
-	}
-}
-
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	for _, token := range s.cfg.Boards {
-		jobs, err := s.fetchBoard(ctx, token)
-		if err != nil {
-			return fmt.Errorf("lever: board %s: %w", token, err)
-		}
-		stop, err := fn(ctx, jobs)
-		if err != nil {
-			return err
-		}
-		if stop {
-			return nil
-		}
-	}
-	return nil
+func New(cfg Config) *sources.BoardSource {
+	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
+		Name:      "lever",
+		URLPrefix: "https://jobs.lever.co",
+		URL: func(token string) string {
+			return fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token)
+		},
+		Parse: parse,
+	})
 }
 
 type posting struct {
@@ -65,13 +39,7 @@ type postingCategories struct {
 	Location string `json:"location"`
 }
 
-func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
-	url := fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token)
-	body, err := s.Get(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
+func parse(body []byte, token string) ([]dto.Job, error) {
 	var postings []posting
 	if err := json.Unmarshal(body, &postings); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
@@ -91,7 +59,6 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 			CompanySlug: token,
 			Source:      "lever",
 			Description: p.DescriptionPlain,
-			SalaryRaw:   "",
 			UpdatedAt:   updatedAt,
 		})
 	}

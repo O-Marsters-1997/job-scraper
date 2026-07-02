@@ -1,10 +1,8 @@
 package greenhouse
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -15,42 +13,15 @@ type Config struct {
 	Boards []string
 }
 
-// ponytail: the Iterate/fetchBoard skeleton here is duplicated across all 6 ATS
-// sources; extract a generic BoardSource[T] when the next ATS source lands.
-type Scraper struct {
-	sources.PaginatedBase
-	cfg Config
-}
-
-var _ sources.Source = (*Scraper)(nil)
-
-func New(cfg Config) *Scraper {
-	return &Scraper{
-		PaginatedBase: sources.NewBase(sources.Config{
-			Name:              "greenhouse",
-			URLPrefix:         "https://boards.greenhouse.io",
-			Schedule:          "0 */6 * * *",
-			MinScrapeInterval: 5 * time.Hour,
-		}),
-		cfg: cfg,
-	}
-}
-
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	for _, token := range s.cfg.Boards {
-		jobs, err := s.fetchBoard(ctx, token)
-		if err != nil {
-			return fmt.Errorf("greenhouse: board %s: %w", token, err)
-		}
-		stop, err := fn(ctx, jobs)
-		if err != nil {
-			return err
-		}
-		if stop {
-			return nil
-		}
-	}
-	return nil
+func New(cfg Config) *sources.BoardSource {
+	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
+		Name:      "greenhouse",
+		URLPrefix: "https://boards.greenhouse.io",
+		URL: func(token string) string {
+			return fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token)
+		},
+		Parse: parse,
+	})
 }
 
 // boardResponse mirrors the Greenhouse boards API v1 response.
@@ -71,13 +42,7 @@ type jobLocation struct {
 	Name string `json:"name"`
 }
 
-func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
-	url := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token)
-	body, err := s.Get(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
+func parse(body []byte, token string) ([]dto.Job, error) {
 	var resp boardResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
@@ -85,13 +50,6 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 
 	jobs := make([]dto.Job, 0, len(resp.Jobs))
 	for _, bj := range resp.Jobs {
-		updatedAt := time.Now().UTC()
-		if bj.UpdatedAt != "" {
-			if t, err := time.Parse(time.RFC3339, bj.UpdatedAt); err == nil {
-				updatedAt = t
-			}
-		}
-
 		jobs = append(jobs, dto.Job{
 			Title:       bj.Title,
 			Location:    bj.Location.Name,
@@ -99,8 +57,7 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 			CompanySlug: token,
 			Source:      "greenhouse",
 			Description: bj.Content,
-			SalaryRaw:   "",
-			UpdatedAt:   updatedAt,
+			UpdatedAt:   sources.RFC3339OrNow(bj.UpdatedAt),
 		})
 	}
 	return jobs, nil

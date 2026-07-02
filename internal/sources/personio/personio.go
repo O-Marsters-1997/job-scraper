@@ -1,7 +1,6 @@
 package personio
 
 import (
-	"context"
 	"encoding/xml"
 	"fmt"
 	"time"
@@ -16,40 +15,15 @@ type Config struct {
 	Boards []string
 }
 
-type Scraper struct {
-	sources.PaginatedBase
-	cfg Config
-}
-
-var _ sources.Source = (*Scraper)(nil)
-
-func New(cfg Config) *Scraper {
-	return &Scraper{
-		PaginatedBase: sources.NewBase(sources.Config{
-			Name:              "personio",
-			URLPrefix:         "https://personio.de",
-			Schedule:          "0 */6 * * *",
-			MinScrapeInterval: 5 * time.Hour,
-		}),
-		cfg: cfg,
-	}
-}
-
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	for _, token := range s.cfg.Boards {
-		jobs, err := s.fetchBoard(ctx, token)
-		if err != nil {
-			return fmt.Errorf("personio: board %s: %w", token, err)
-		}
-		stop, err := fn(ctx, jobs)
-		if err != nil {
-			return err
-		}
-		if stop {
-			return nil
-		}
-	}
-	return nil
+func New(cfg Config) *sources.BoardSource {
+	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
+		Name:      "personio",
+		URLPrefix: "https://personio.de",
+		URL: func(token string) string {
+			return fmt.Sprintf("https://%s.personio.de/xml", token)
+		},
+		Parse: parse,
+	})
 }
 
 type workzagJobs struct {
@@ -64,13 +38,7 @@ type personioJob struct {
 	JobDescription string `xml:"jobDescription"`
 }
 
-func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
-	url := fmt.Sprintf("https://%s.personio.de/xml", token)
-	body, err := s.Get(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
+func parse(body []byte, token string) ([]dto.Job, error) {
 	var root workzagJobs
 	if err := xml.Unmarshal(body, &root); err != nil {
 		return nil, fmt.Errorf("parse xml: %w", err)
@@ -85,7 +53,6 @@ func (s *Scraper) fetchBoard(ctx context.Context, token string) ([]dto.Job, erro
 			CompanySlug: token,
 			Source:      "personio",
 			Description: pj.JobDescription,
-			SalaryRaw:   "",
 			UpdatedAt:   time.Now().UTC(),
 		})
 	}
