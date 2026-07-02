@@ -31,6 +31,38 @@ func TestDetect(t *testing.T) {
 	}
 }
 
+func TestResolveBoard(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		wantSource string
+		wantToken  string
+		wantOK     bool
+	}{
+		{"greenhouse board", "https://boards.greenhouse.io/acmecorp", "greenhouse", "acmecorp", true},
+		{"greenhouse job url", "https://boards.greenhouse.io/acme/jobs/123", "greenhouse", "acme", true},
+		{"lever board", "https://jobs.lever.co/acme", "lever", "acme", true},
+		{"ashby board", "https://jobs.ashbyhq.com/acme/role-slug", "ashby", "acme", true},
+		{"workable board", "https://apply.workable.com/acme/", "workable", "acme", true},
+		{"recruitee subdomain", "https://acme.recruitee.com/o/software-engineer", "recruitee", "acme", true},
+		{"personio subdomain", "https://acme.jobs.personio.de/", "personio", "acme", true},
+		{"aggregator rejected", "https://www.linkedin.com/jobs/view/123", "", "", false},
+		{"unknown html rejected", "https://workinstartups.com/job-board", "", "", false},
+		{"bare recruitee host rejected", "https://recruitee.com", "", "", false},
+		{"bare greenhouse host rejected", "https://boards.greenhouse.io", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSource, gotToken, gotOK := ResolveBoard(tt.url)
+			if gotSource != tt.wantSource || gotToken != tt.wantToken || gotOK != tt.wantOK {
+				t.Errorf("ResolveBoard(%q) = (%q, %q, %v), want (%q, %q, %v)",
+					tt.url, gotSource, gotToken, gotOK, tt.wantSource, tt.wantToken, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestRewriteToATS(t *testing.T) {
 	tests := []struct {
 		name     string

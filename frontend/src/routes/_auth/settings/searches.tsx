@@ -22,6 +22,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { resolveBoard } from "../../../api/sources";
 import { ConflictError } from "../../../api/sourceTargets";
 import { useSources } from "../../../hooks/useSources";
 import {
@@ -51,12 +52,18 @@ function SearchesPage() {
 	const [newScrapeNow, setNewScrapeNow] = createSignal(false);
 	const [conflictError, setConflictError] = createSignal<string | null>(null);
 	const [scrapeQueued, setScrapeQueued] = createSignal(false);
+	const [pasteUrl, setPasteUrl] = createSignal("");
+	const [resolveHint, setResolveHint] = createSignal<string | null>(null);
+	const [resolving, setResolving] = createSignal(false);
 
 	const currentSourceInfo = () =>
 		(sourcesQuery.data ?? []).find((s) => s.name === selectedSource());
 
 	const sourceLabel = (name: string) =>
 		(sourcesQuery.data ?? []).find((s) => s.name === name)?.label ?? name;
+
+	const sourceRole = (name: string) =>
+		(sourcesQuery.data ?? []).find((s) => s.name === name)?.role ?? "discovery";
 
 	const filterSummary = (t: SourceTarget) => {
 		const entries = Object.entries(t.Filters);
@@ -75,6 +82,34 @@ function SearchesPage() {
 		setNewFilters({});
 		setNewScrapeNow(false);
 		setConflictError(null);
+		setPasteUrl("");
+		setResolveHint(null);
+	};
+
+	const handleResolve = async () => {
+		const url = pasteUrl().trim();
+		if (!url) return;
+		setResolveHint(null);
+		setResolving(true);
+		try {
+			const r = await resolveBoard(url);
+			if (!r) {
+				setResolveHint(
+					"Couldn't detect an ATS board from that URL — pick a source below instead.",
+				);
+				return;
+			}
+			setSelectedSource(r.source);
+			setNewValue(r.value);
+			setNewFilters({});
+			setResolveHint(`Detected ${sourceLabel(r.source)} board "${r.value}".`);
+		} catch {
+			setResolveHint(
+				"Couldn't resolve that URL — pick a source below instead.",
+			);
+		} finally {
+			setResolving(false);
+		}
 	};
 
 	const handleAdd = async () => {
@@ -117,6 +152,80 @@ function SearchesPage() {
 		deleteMutation.mutate(id);
 	};
 
+	const TargetsCard = (props: { list: SourceTarget[] }) => (
+		<Card class="mb-4 overflow-hidden">
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead>Source</TableHead>
+						<TableHead>Search</TableHead>
+						<TableHead>Filters</TableHead>
+						<TableHead class="w-16" />
+						<TableHead class="w-20" />
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					<For each={props.list}>
+						{(t) => (
+							<TableRow>
+								<TableCell>
+									<Badge variant="source">{sourceLabel(t.Source)}</Badge>
+								</TableCell>
+								<TableCell
+									class="max-w-[200px] truncate font-mono text-xs"
+									title={t.Value}
+								>
+									{t.Value}
+								</TableCell>
+								<TableCell
+									class="max-w-[200px] truncate text-xs text-faint"
+									title={filterSummary(t)}
+								>
+									{filterSummary(t)}
+								</TableCell>
+								<TableCell>
+									<button
+										type="button"
+										role="switch"
+										aria-checked={t.Enabled}
+										onClick={() => handleToggle(t)}
+										disabled={updateMutation.isPending}
+										title={t.Enabled ? "Disable" : "Enable"}
+										class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-50"
+										style={{
+											"background-color": t.Enabled
+												? "var(--color-primary)"
+												: "var(--color-border)",
+										}}
+									>
+										<span
+											class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+											style={{
+												transform: t.Enabled
+													? "translateX(18px)"
+													: "translateX(2px)",
+											}}
+										/>
+									</button>
+								</TableCell>
+								<TableCell>
+									<button
+										type="button"
+										onClick={() => handleDelete(t.ID)}
+										disabled={deleteMutation.isPending}
+										class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-50"
+									>
+										Delete
+									</button>
+								</TableCell>
+							</TableRow>
+						)}
+					</For>
+				</TableBody>
+			</Table>
+		</Card>
+	);
+
 	return (
 		<div class="max-w-2xl px-7 py-6">
 			<PageHeading
@@ -135,80 +244,32 @@ function SearchesPage() {
 			<QueryBoundary query={query} fallbackRows={3}>
 				{(data) => (
 					<>
-						<Show when={data.length > 0}>
-							<Card class="mb-4 overflow-hidden">
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead>Source</TableHead>
-											<TableHead>Search</TableHead>
-											<TableHead>Filters</TableHead>
-											<TableHead class="w-16" />
-											<TableHead class="w-20" />
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										<For each={data}>
-											{(t) => (
-												<TableRow>
-													<TableCell>
-														<Badge variant="source">
-															{sourceLabel(t.Source)}
-														</Badge>
-													</TableCell>
-													<TableCell
-														class="max-w-[200px] truncate font-mono text-xs"
-														title={t.Value}
-													>
-														{t.Value}
-													</TableCell>
-													<TableCell
-														class="max-w-[200px] truncate text-xs text-faint"
-														title={filterSummary(t)}
-													>
-														{filterSummary(t)}
-													</TableCell>
-													<TableCell>
-														<button
-															type="button"
-															role="switch"
-															aria-checked={t.Enabled}
-															onClick={() => handleToggle(t)}
-															disabled={updateMutation.isPending}
-															title={t.Enabled ? "Disable" : "Enable"}
-															class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none disabled:opacity-50"
-															style={{
-																"background-color": t.Enabled
-																	? "var(--color-primary)"
-																	: "var(--color-border)",
-															}}
-														>
-															<span
-																class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
-																style={{
-																	transform: t.Enabled
-																		? "translateX(18px)"
-																		: "translateX(2px)",
-																}}
-															/>
-														</button>
-													</TableCell>
-													<TableCell>
-														<button
-															type="button"
-															onClick={() => handleDelete(t.ID)}
-															disabled={deleteMutation.isPending}
-															class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-50"
-														>
-															Delete
-														</button>
-													</TableCell>
-												</TableRow>
-											)}
-										</For>
-									</TableBody>
-								</Table>
-							</Card>
+						<Show when={data.some((t) => sourceRole(t.Source) === "ats")}>
+							<div class="mb-2 mt-1">
+								<h2 class="text-sm font-semibold text-foreground">
+									Tracked companies
+								</h2>
+								<p class="text-xs text-faint">
+									ATS boards re-checked every few hours for new roles.
+								</p>
+							</div>
+							<TargetsCard
+								list={data.filter((t) => sourceRole(t.Source) === "ats")}
+							/>
+						</Show>
+
+						<Show when={data.some((t) => sourceRole(t.Source) !== "ats")}>
+							<div class="mb-2 mt-1">
+								<h2 class="text-sm font-semibold text-foreground">
+									Discovery searches
+								</h2>
+								<p class="text-xs text-faint">
+									Keyword and URL searches across aggregators and job boards.
+								</p>
+							</div>
+							<TargetsCard
+								list={data.filter((t) => sourceRole(t.Source) !== "ats")}
+							/>
 						</Show>
 
 						<Show when={showAdd()}>
@@ -218,6 +279,41 @@ function SearchesPage() {
 									fallback={<p class="text-sm text-muted">Loading sources…</p>}
 								>
 									<div class="flex flex-col gap-3">
+										<div class="flex flex-col gap-2 rounded-lg bg-surface-muted px-3 py-3">
+											<label
+												for="paste-url"
+												class="text-xs font-medium text-foreground"
+											>
+												Paste a job-board URL
+											</label>
+											<div class="flex items-center gap-2">
+												<Input
+													id="paste-url"
+													placeholder="e.g. https://boards.greenhouse.io/acmecorp"
+													value={pasteUrl()}
+													onInput={(e) => setPasteUrl(e.currentTarget.value)}
+													onKeyDown={(e) =>
+														e.key === "Enter" && handleResolve()
+													}
+												/>
+												<button
+													type="button"
+													onClick={handleResolve}
+													disabled={resolving() || !pasteUrl().trim()}
+													class="shrink-0 rounded px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+												>
+													{resolving() ? "Detecting…" : "Detect"}
+												</button>
+											</div>
+											<Show when={resolveHint()}>
+												<p class="text-xs text-faint">{resolveHint()}</p>
+											</Show>
+											<p class="text-xs text-faint">
+												We'll detect the ATS and fill in the board below. Or
+												pick a source manually.
+											</p>
+										</div>
+
 										<div class="flex flex-col gap-2">
 											<p class="text-xs font-medium text-foreground">Source</p>
 											<Select<SourceInfo>

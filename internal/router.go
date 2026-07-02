@@ -104,6 +104,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 		})
 
 		r.Get("/sources", stH.Sources)
+		r.Get("/sources/resolve", stH.ResolveBoard)
 
 		r.Get("/profile", profileH.GetProfile)
 		r.Put("/profile", profileH.UpdateProfile)

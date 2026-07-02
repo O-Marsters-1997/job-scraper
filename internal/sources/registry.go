@@ -26,6 +26,14 @@ func (k sourceKind) string() string {
 	return ""
 }
 
+// Source roles classify a source by purpose, orthogonal to sourceKind (which
+// describes value shape). RoleATS sources are known-company boards re-checked
+// periodically; RoleDiscovery sources are search surfaces (aggregators, HTML boards).
+const (
+	RoleATS       = "ats"
+	RoleDiscovery = "discovery"
+)
+
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
 type FilterField struct {
 	Name     string `json:"name"`
@@ -38,6 +46,7 @@ type SourceInfo struct {
 	Name      string        `json:"name"`
 	Label     string        `json:"label"`
 	Kind      string        `json:"kind"` // "board" | "url" | "filter"
+	Role      string        `json:"role"` // "ats" | "discovery"
 	URLPrefix string        `json:"url_prefix"`
 	Filters   []FilterField `json:"filters"` // non-empty only for kindFilter sources
 }
@@ -46,25 +55,26 @@ type registryEntry struct {
 	name      string
 	label     string
 	kind      sourceKind
+	role      string
 	urlPrefix string
 	filters   []FilterField // non-nil only for kindFilter sources
 }
 
 // The names here must match the Name field baked into each source's Config.
 var entries = []registryEntry{
-	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, urlPrefix: "https://boards.greenhouse.io"},
-	{name: "lever", label: "Lever", kind: kindBoard, urlPrefix: "https://jobs.lever.co"},
-	{name: "ashby", label: "Ashby", kind: kindBoard, urlPrefix: "https://jobs.ashbyhq.com"},
-	{name: "workable", label: "Workable", kind: kindBoard, urlPrefix: "https://apply.workable.com"},
-	{name: "recruitee", label: "Recruitee", kind: kindBoard, urlPrefix: "https://recruitee.com"},
-	{name: "personio", label: "Personio", kind: kindBoard, urlPrefix: "https://personio.de"},
-	{name: "wis", label: "Work in Startups", kind: kindFilter, urlPrefix: "https://workinstartups.com", filters: []FilterField{
+	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, role: RoleATS, urlPrefix: "https://boards.greenhouse.io"},
+	{name: "lever", label: "Lever", kind: kindBoard, role: RoleATS, urlPrefix: "https://jobs.lever.co"},
+	{name: "ashby", label: "Ashby", kind: kindBoard, role: RoleATS, urlPrefix: "https://jobs.ashbyhq.com"},
+	{name: "workable", label: "Workable", kind: kindBoard, role: RoleATS, urlPrefix: "https://apply.workable.com"},
+	{name: "recruitee", label: "Recruitee", kind: kindBoard, role: RoleATS, urlPrefix: "https://recruitee.com"},
+	{name: "personio", label: "Personio", kind: kindBoard, role: RoleATS, urlPrefix: "https://personio.de"},
+	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "region", Label: "Region", Required: false},
 	}},
-	{name: "linkedin", label: "LinkedIn", kind: kindFilter, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
+	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Label: "Location", Required: false},
 	}},
-	{name: "indeed", label: "Indeed", kind: kindURL, urlPrefix: "https://www.indeed.com"},
+	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
 }
 
 // Sources returns the full registry as a slice of serialisable SourceInfo values.
@@ -79,6 +89,7 @@ func Sources() []SourceInfo {
 			Name:      e.name,
 			Label:     e.label,
 			Kind:      e.kind.string(),
+			Role:      e.role,
 			URLPrefix: e.urlPrefix,
 			Filters:   filters,
 		}
@@ -113,6 +124,16 @@ func LookupFilterFields(name string) ([]FilterField, bool) {
 		return nil, false
 	}
 	return e.filters, true
+}
+
+// SourceRole returns the role (RoleATS | RoleDiscovery) for a source, plus whether
+// the source name is known.
+func SourceRole(name string) (string, bool) {
+	e, ok := findEntry(name)
+	if !ok {
+		return "", false
+	}
+	return e.role, true
 }
 
 func IsFilterSource(name string) bool {

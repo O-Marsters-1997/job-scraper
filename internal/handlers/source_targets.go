@@ -12,6 +12,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -29,6 +30,26 @@ func NewSourceTargetHandler(targets providers.SourceTargetProvider, q queue.JobQ
 func (h *SourceTargetHandler) Sources(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sources.Sources())
+}
+
+// ResolveBoard turns a direct ATS board URL into a {source, value} pair the client
+// can use to pre-fill the add-target form. Returns 422 if no ATS board is recognised.
+func (h *SourceTargetHandler) ResolveBoard(w http.ResponseWriter, r *http.Request) {
+	rawURL := r.URL.Query().Get("url")
+	if rawURL == "" {
+		http.Error(w, "missing url", http.StatusBadRequest)
+		return
+	}
+	source, token, ok := detect.ResolveBoard(rawURL)
+	if !ok {
+		http.Error(w, "could not resolve an ATS board from that URL", http.StatusUnprocessableEntity)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(struct {
+		Source string `json:"source"`
+		Value  string `json:"value"`
+	}{Source: source, Value: token})
 }
 
 func (h *SourceTargetHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +78,15 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cross-role guard: an ATS board URL pasted into a discovery source belongs under
+	// Tracked companies, not here. (Discovery values are keywords or aggregator URLs.)
+	if role, _ := sources.SourceRole(body.Source); role == sources.RoleDiscovery {
+		if t := detect.Detect(body.Value); t != detect.UnknownHTML && t != detect.Aggregator {
+			http.Error(w, "that looks like an ATS board — add it under Tracked companies", http.StatusBadRequest)
+			return
+		}
+	}
+
 	// Validate against the registry. Filter sources get their own path; board/url
 	// sources keep the existing URL-prefix check.
 	if fields, isFilter := sources.LookupFilterFields(body.Source); isFilter {
@@ -80,6 +110,11 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if isURL && !strings.HasPrefix(body.Value, urlPrefix) {
 			http.Error(w, "value must be a URL starting with "+urlPrefix, http.StatusBadRequest)
+			return
+		}
+		// ATS board slot: value must be a bare token, not a URL.
+		if !isURL && (strings.Contains(body.Value, "://") || strings.Contains(body.Value, "/")) {
+			http.Error(w, "enter just the board token, e.g. acmecorp, not the full URL", http.StatusBadRequest)
 			return
 		}
 	}
