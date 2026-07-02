@@ -14,7 +14,7 @@ import (
 const createSourceTarget = `-- name: CreateSourceTarget :one
 INSERT INTO source_targets (user_id, source, value, enabled, filters)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, source, value, enabled, filters, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at
 `
 
 type CreateSourceTargetParams struct {
@@ -41,6 +41,9 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 		&i.Value,
 		&i.Enabled,
 		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -61,8 +64,48 @@ func (q *Queries) DeleteSourceTarget(ctx context.Context, arg DeleteSourceTarget
 	return err
 }
 
+const listDueSourceTargets = `-- name: ListDueSourceTargets :many
+SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at FROM source_targets
+WHERE enabled = TRUE
+  AND (last_checked_at IS NULL
+       OR last_checked_at <= NOW() - make_interval(mins => check_interval_minutes))
+ORDER BY source, value
+`
+
+func (q *Queries) ListDueSourceTargets(ctx context.Context) ([]SourceTarget, error) {
+	rows, err := q.db.Query(ctx, listDueSourceTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SourceTarget
+	for rows.Next() {
+		var i SourceTarget
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Source,
+			&i.Value,
+			&i.Enabled,
+			&i.Filters,
+			&i.CompanyID,
+			&i.CheckIntervalMinutes,
+			&i.LastCheckedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnabledSourceTargets = `-- name: ListEnabledSourceTargets :many
-SELECT id, user_id, source, value, enabled, filters, created_at, updated_at FROM source_targets WHERE enabled = TRUE ORDER BY source, value
+SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at FROM source_targets WHERE enabled = TRUE ORDER BY source, value
 `
 
 func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget, error) {
@@ -81,6 +124,9 @@ func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget,
 			&i.Value,
 			&i.Enabled,
 			&i.Filters,
+			&i.CompanyID,
+			&i.CheckIntervalMinutes,
+			&i.LastCheckedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -95,7 +141,7 @@ func (q *Queries) ListEnabledSourceTargets(ctx context.Context) ([]SourceTarget,
 }
 
 const listSourceTargetsByUser = `-- name: ListSourceTargetsByUser :many
-SELECT id, user_id, source, value, enabled, filters, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
+SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
 `
 
 func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUID) ([]SourceTarget, error) {
@@ -114,6 +160,9 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 			&i.Value,
 			&i.Enabled,
 			&i.Filters,
+			&i.CompanyID,
+			&i.CheckIntervalMinutes,
+			&i.LastCheckedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -127,20 +176,76 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 	return items, nil
 }
 
+const listUserIDsForTarget = `-- name: ListUserIDsForTarget :many
+SELECT DISTINCT user_id FROM source_targets
+WHERE enabled = TRUE
+  AND source = $1
+  AND ($2::text = '' OR value = $2)
+`
+
+type ListUserIDsForTargetParams struct {
+	Source string
+	Value  string
+}
+
+func (q *Queries) ListUserIDsForTarget(ctx context.Context, arg ListUserIDsForTargetParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listUserIDsForTarget, arg.Source, arg.Value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var user_id pgtype.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchSourceTargetsChecked = `-- name: TouchSourceTargetsChecked :exec
+UPDATE source_targets SET last_checked_at = NOW()
+WHERE source = $1 AND value = $2 AND enabled = TRUE
+`
+
+type TouchSourceTargetsCheckedParams struct {
+	Source string
+	Value  string
+}
+
+func (q *Queries) TouchSourceTargetsChecked(ctx context.Context, arg TouchSourceTargetsCheckedParams) error {
+	_, err := q.db.Exec(ctx, touchSourceTargetsChecked, arg.Source, arg.Value)
+	return err
+}
+
 const updateSourceTarget = `-- name: UpdateSourceTarget :one
-UPDATE source_targets SET enabled = $3, updated_at = NOW()
+UPDATE source_targets SET
+    enabled                = COALESCE($3, enabled),
+    check_interval_minutes = COALESCE($4, check_interval_minutes),
+    updated_at             = NOW()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, source, value, enabled, filters, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at
 `
 
 type UpdateSourceTargetParams struct {
-	ID      pgtype.UUID
-	UserID  pgtype.UUID
-	Enabled bool
+	ID                   pgtype.UUID
+	UserID               pgtype.UUID
+	Enabled              pgtype.Bool
+	CheckIntervalMinutes pgtype.Int4
 }
 
 func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTargetParams) (SourceTarget, error) {
-	row := q.db.QueryRow(ctx, updateSourceTarget, arg.ID, arg.UserID, arg.Enabled)
+	row := q.db.QueryRow(ctx, updateSourceTarget,
+		arg.ID,
+		arg.UserID,
+		arg.Enabled,
+		arg.CheckIntervalMinutes,
+	)
 	var i SourceTarget
 	err := row.Scan(
 		&i.ID,
@@ -149,6 +254,52 @@ func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTarget
 		&i.Value,
 		&i.Enabled,
 		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertSourceTargetForCompany = `-- name: UpsertSourceTargetForCompany :one
+INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id)
+VALUES ($1, $2, $3, $4, '{}', $5)
+ON CONFLICT (user_id, source, value, filters) DO UPDATE SET
+    enabled    = EXCLUDED.enabled,
+    company_id = EXCLUDED.company_id,
+    updated_at = NOW()
+RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at
+`
+
+type UpsertSourceTargetForCompanyParams struct {
+	UserID    pgtype.UUID
+	Source    string
+	Value     string
+	Enabled   bool
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) UpsertSourceTargetForCompany(ctx context.Context, arg UpsertSourceTargetForCompanyParams) (SourceTarget, error) {
+	row := q.db.QueryRow(ctx, upsertSourceTargetForCompany,
+		arg.UserID,
+		arg.Source,
+		arg.Value,
+		arg.Enabled,
+		arg.CompanyID,
+	)
+	var i SourceTarget
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Value,
+		&i.Enabled,
+		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

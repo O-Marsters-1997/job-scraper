@@ -4,6 +4,8 @@
 package builder
 
 import (
+	"context"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/ashby"
@@ -17,8 +19,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/workable"
 )
 
-func BuildSources(targets []dto.SourceTarget) []sources.Source {
-	boards := make(map[string][]string) // source name → board tokens
+// BuildSources constructs the live Source set from enabled targets. boardDone,
+// if non-nil, is called with (source name, board token) whenever a board is
+// successfully scraped, so the caller can record per-target freshness. Pass
+// nil for one-off scrapes (e.g. scrape-now) that must not affect scheduling.
+func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string)) []sources.Source {
+	boards := make(map[string][]string) // source name → deduped board tokens
+	seen := make(map[string]bool)       // "source\x00token" → already added
 	urlSources := make(map[string]bool)
 	var wisSearches []wis.Search
 	var linkedinSearches []linkedin.Search
@@ -48,9 +55,14 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 		}
 		if isURL {
 			urlSources[t.Source] = true
-		} else {
-			boards[t.Source] = append(boards[t.Source], t.Value)
+			continue
 		}
+		key := t.Source + "\x00" + t.Value
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		boards[t.Source] = append(boards[t.Source], t.Value)
 	}
 
 	var srcs []sources.Source
@@ -62,23 +74,32 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 		srcs = append(srcs, linkedin.New(linkedin.Config{Searches: linkedinSearches}))
 	}
 
+	withDone := func(name string, src *sources.BoardSource) *sources.BoardSource {
+		if boardDone == nil {
+			return src
+		}
+		return src.WithDone(func(ctx context.Context, token string) {
+			boardDone(ctx, name, token)
+		})
+	}
+
 	if tokens := boards["greenhouse"]; len(tokens) > 0 {
-		srcs = append(srcs, greenhouse.New(greenhouse.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("greenhouse", greenhouse.New(greenhouse.Config{Boards: tokens})))
 	}
 	if tokens := boards["lever"]; len(tokens) > 0 {
-		srcs = append(srcs, lever.New(lever.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("lever", lever.New(lever.Config{Boards: tokens})))
 	}
 	if tokens := boards["ashby"]; len(tokens) > 0 {
-		srcs = append(srcs, ashby.New(ashby.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("ashby", ashby.New(ashby.Config{Boards: tokens})))
 	}
 	if tokens := boards["workable"]; len(tokens) > 0 {
-		srcs = append(srcs, workable.New(workable.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("workable", workable.New(workable.Config{Boards: tokens})))
 	}
 	if tokens := boards["recruitee"]; len(tokens) > 0 {
-		srcs = append(srcs, recruitee.New(recruitee.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("recruitee", recruitee.New(recruitee.Config{Boards: tokens})))
 	}
 	if tokens := boards["personio"]; len(tokens) > 0 {
-		srcs = append(srcs, personio.New(personio.Config{Boards: tokens}))
+		srcs = append(srcs, withDone("personio", personio.New(personio.Config{Boards: tokens})))
 	}
 	if urlSources["indeed"] {
 		srcs = append(srcs, indeed.New())

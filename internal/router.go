@@ -41,6 +41,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 	stH := handlers.NewSourceTargetHandler(db, q)
+	compH := handlers.NewCompaniesHandler(db, db, q)
 	scoringCfgH := handlers.NewScoringConfigHandler(db)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)
@@ -124,6 +125,12 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 			r.Delete("/{id}", stH.Delete)
 		})
 
+		r.Route("/companies", func(r chi.Router) {
+			r.Get("/", compH.List)
+			r.Post("/", compH.Create)
+			r.Put("/{id}/tracking", compH.SetTracking)
+		})
+
 		r.Route("/cv-templates", func(r chi.Router) {
 			r.Get("/", cvH.ListCVTemplates)
 			r.Get("/{docId}/{tabId}/pdf", cvH.ExportCV)
@@ -151,6 +158,8 @@ func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.Credential
 		cs := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
 		return score.NewIngestScorer(cs, db, db, db)
 	}
+	// Guard the assignment: a nil *NotificationService stored directly in the
+	// interface would be a non-nil typed nil, defeating ingest's notifier != nil check.
 	var notifier ingest.Notifier
 	if notifSvc := setupNotifications(); notifSvc != nil {
 		notifier = notifSvc
@@ -162,6 +171,7 @@ func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.Credential
 		Creds:     creds,
 		ScorerFor: scorerFor,
 		Notifier:  notifier,
+		Companies: db,
 	})
 }
 

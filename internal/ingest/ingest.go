@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 type Saver interface {
@@ -18,8 +19,16 @@ type Scorer interface {
 	ScoreAndSaveBatch(ctx context.Context, jobs []dto.Job, userID string)
 }
 
-type UserLister interface {
-	ListUsersWithProvider(ctx context.Context, provider string) ([]string, error)
+// TargetUserLister lists users with an enabled source_target matching (source,
+// value). Pass value="" to match any enabled target for that source (used for
+// discovery-sourced jobs, where the job doesn't carry the specific target).
+type TargetUserLister interface {
+	ListUserIDsForTarget(ctx context.Context, source, value string) ([]string, error)
+}
+
+// CompanyUpserter records a company seen during ingest into the shared catalog.
+type CompanyUpserter interface {
+	UpsertCompany(ctx context.Context, slug, name, atsSource, atsToken string) (dto.Company, error)
 }
 
 type CredentialGetter interface {
@@ -35,27 +44,31 @@ type Notifier interface {
 
 // Config wires all Ingester dependencies. Users, Creds, and ScorerFor are all
 // required together; omitting any one disables per-user suitability scoring.
+// Companies is optional; omitting it disables the company catalog upsert.
 type Config struct {
 	DB        Saver
 	Provider  string // AI provider to fan out to, e.g. "anthropic"
-	Users     UserLister
+	Users     TargetUserLister
 	Creds     CredentialGetter
 	ScorerFor func(apiKey string) Scorer
 	Notifier  Notifier
+	Companies CompanyUpserter
 }
 
-// Ingester is the ingest seam: validate → Save → score (per user) → notify.
+// Ingester is the ingest seam: validate → Save → upsert companies → score (per
+// tracking user) → notify.
 type Ingester struct {
 	db        Saver
 	provider  string
-	users     UserLister
+	users     TargetUserLister
 	creds     CredentialGetter
 	scorerFor func(apiKey string) Scorer
 	notifier  Notifier
+	companies CompanyUpserter
 }
 
 // New creates an Ingester. Scoring is skipped when Config.Users, Config.Creds,
-// or Config.ScorerFor is nil. Notifier may also be nil.
+// or Config.ScorerFor is nil. Notifier and Companies may also be nil.
 func New(cfg Config) *Ingester {
 	return &Ingester{
 		db:        cfg.DB,
@@ -64,12 +77,14 @@ func New(cfg Config) *Ingester {
 		creds:     cfg.Creds,
 		scorerFor: cfg.ScorerFor,
 		notifier:  cfg.Notifier,
+		companies: cfg.Companies,
 	}
 }
 
-// Ingest saves valid jobs then fans out suitability scoring to every user that
-// has a credential for the configured provider. Save errors are returned;
-// scoring and notification failures are fire-and-forget.
+// Ingest saves valid jobs, upserts their companies into the shared catalog,
+// then fans out suitability scoring to users tracking each job's company or
+// search surface. Save errors are returned; everything after Save is
+// fire-and-forget.
 func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	valid := make([]dto.Job, 0, len(jobs))
 	for _, j := range jobs {
@@ -89,37 +104,91 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	}
 	slog.Info("jobs ingested", slog.Int("count", len(saved)))
 
-	i.scoreForAllUsers(ctx, saved)
+	i.upsertCompanies(ctx, saved)
+	i.scoreForTrackingUsers(ctx, saved)
 
-	for _, j := range saved {
-		if i.notifier != nil {
+	if i.notifier != nil {
+		for _, j := range saved {
 			i.notifier.NotifyNewJob(ctx, j, 0)
 		}
 	}
 	return nil
 }
 
-func (i *Ingester) scoreForAllUsers(ctx context.Context, jobs []dto.Job) {
+// upsertCompanies records each distinct (source, company_slug) pair among
+// saved jobs into the shared company catalog. Never blocks ingest.
+func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
+	if i.companies == nil {
+		return
+	}
+	seen := make(map[string]bool)
+	for _, j := range jobs {
+		if j.CompanySlug == "" || seen[j.CompanySlug] {
+			continue
+		}
+		seen[j.CompanySlug] = true
+
+		atsSource, atsToken := "", ""
+		if role, _ := sources.SourceRole(j.Source); role == sources.RoleATS {
+			atsSource, atsToken = j.Source, j.CompanySlug
+		}
+		if _, err := i.companies.UpsertCompany(ctx, j.CompanySlug, humanizeSlug(j.CompanySlug), atsSource, atsToken); err != nil {
+			slog.Warn("ingest: could not upsert company",
+				slog.String("slug", j.CompanySlug), slog.Any("err", err))
+		}
+	}
+}
+
+// humanizeSlug turns a slug like "acme-corp" into a display name "Acme Corp".
+// ponytail: name derived from slug; good enough until a source carries a real company name.
+func humanizeSlug(slug string) string {
+	words := strings.Split(slug, "-")
+	for idx, w := range words {
+		if w == "" {
+			continue
+		}
+		words[idx] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	return strings.Join(words, " ")
+}
+
+// scoreForTrackingUsers fans out suitability scoring to users with an enabled
+// source_target for each job's company or search surface — not every
+// credentialed user. ATS jobs score only for users tracking that exact board;
+// discovery jobs score for users with any enabled target on that source.
+func (i *Ingester) scoreForTrackingUsers(ctx context.Context, jobs []dto.Job) {
 	if i.users == nil || i.creds == nil || i.scorerFor == nil || i.provider == "" {
 		return
 	}
 
-	userIDs, err := i.users.ListUsersWithProvider(ctx, i.provider)
-	if err != nil {
-		slog.Error("ingest: could not list users with provider",
-			slog.String("provider", i.provider), slog.Any("err", err))
-		return
+	type groupKey struct{ source, value string }
+	groups := make(map[groupKey][]dto.Job)
+	for _, j := range jobs {
+		value := ""
+		if role, _ := sources.SourceRole(j.Source); role == sources.RoleATS {
+			value = j.CompanySlug
+		}
+		key := groupKey{j.Source, value}
+		groups[key] = append(groups[key], j)
 	}
 
-	for _, uid := range userIDs {
-		apiKey, err := i.creds.Get(ctx, uid, i.provider)
+	for key, groupJobs := range groups {
+		userIDs, err := i.users.ListUserIDsForTarget(ctx, key.source, key.value)
 		if err != nil {
-			slog.Warn("ingest: could not get credential for user",
-				slog.String("user_id", uid), slog.String("provider", i.provider), slog.Any("err", err))
+			slog.Error("ingest: could not list users for target",
+				slog.String("source", key.source), slog.String("value", key.value), slog.Any("err", err))
 			continue
 		}
-		scorer := i.scorerFor(apiKey)
-		scorer.ScoreAndSaveBatch(ctx, jobs, uid)
+		for _, uid := range userIDs {
+			apiKey, err := i.creds.Get(ctx, uid, i.provider)
+			if err != nil {
+				slog.Warn("ingest: could not get credential for user",
+					slog.String("user_id", uid), slog.String("provider", i.provider), slog.Any("err", err))
+				continue
+			}
+			scorer := i.scorerFor(apiKey)
+			scorer.ScoreAndSaveBatch(ctx, groupJobs, uid)
+		}
 	}
 }
 

@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -27,6 +29,7 @@ type BoardSource struct {
 	PaginatedBase
 	boards []string
 	spec   BoardSpec
+	done   func(ctx context.Context, token string)
 }
 
 var _ Source = (*BoardSource)(nil)
@@ -39,21 +42,48 @@ func NewBoardSource(boards []string, spec BoardSpec) *BoardSource {
 	}
 }
 
+// WithDone registers a hook called after each board token is successfully
+// fetched and parsed, letting the caller record per-token freshness (e.g.
+// last_checked_at) independent of one-off manual scrapes.
+func (b *BoardSource) WithDone(fn func(ctx context.Context, token string)) *BoardSource {
+	b.done = fn
+	return b
+}
+
+// Iterate fetches every configured board token, logging and continuing past
+// per-token failures so one dead board doesn't starve the rest of the ATS's
+// boards. Errors are joined and returned once all tokens have been attempted.
 func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
+	var errs []error
 	for _, token := range b.boards {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		body, err := b.Get(ctx, b.spec.URL(token))
 		if err != nil {
-			return fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err)
+			slog.Warn("board fetch failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
+			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
+			continue
 		}
 		jobs, err := b.spec.Parse(body, token)
 		if err != nil {
-			return fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err)
+			slog.Warn("board parse failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
+			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
+			continue
 		}
-		if stop, err := fn(ctx, jobs); err != nil || stop {
-			return err
+		stop, err := fn(ctx, jobs)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
+			continue
+		}
+		if b.done != nil {
+			b.done(ctx, token)
+		}
+		if stop {
+			break
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // RFC3339OrNow parses an RFC3339 timestamp, falling back to the current UTC time when

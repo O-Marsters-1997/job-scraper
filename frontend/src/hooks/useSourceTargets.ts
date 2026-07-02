@@ -9,6 +9,7 @@ import {
 	createSourceTarget,
 	deleteSourceTarget,
 	fetchSourceTargets,
+	type UpdateSourceTargetPayload,
 	updateSourceTarget,
 } from "../api/sourceTargets";
 
@@ -34,10 +35,15 @@ export function useCreateSourceTarget() {
 export function useUpdateSourceTarget() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
-		mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-			updateSourceTarget(id, enabled),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["source-targets"] }),
+		mutationFn: ({
+			id,
+			...patch
+		}: { id: string } & UpdateSourceTargetPayload) =>
+			updateSourceTarget(id, patch),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["source-targets"] });
+			queryClient.invalidateQueries({ queryKey: ["companies"] });
+		},
 	}));
 }
 

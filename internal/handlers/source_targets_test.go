@@ -137,6 +137,7 @@ func TestSourceTargetHandler_Update(t *testing.T) {
 	tests := []struct {
 		name       string
 		targetID   func(*providers.MockSourceTargetProvider) string
+		body       any
 		wantStatus int
 	}{
 		{
@@ -145,11 +146,40 @@ func TestSourceTargetHandler_Update(t *testing.T) {
 				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
 				return created.ID
 			},
+			body:       map[string]bool{"enabled": false},
 			wantStatus: http.StatusOK,
+		},
+		{
+			name: "updates check interval",
+			targetID: func(s *providers.MockSourceTargetProvider) string {
+				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
+				return created.ID
+			},
+			body:       map[string]int{"check_interval_minutes": 60},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "rejects interval below 60",
+			targetID: func(s *providers.MockSourceTargetProvider) string {
+				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
+				return created.ID
+			},
+			body:       map[string]int{"check_interval_minutes": 30},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects empty body",
+			targetID: func(s *providers.MockSourceTargetProvider) string {
+				created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
+				return created.ID
+			},
+			body:       map[string]any{},
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "returns 404 for non-existent target",
 			targetID:   func(*providers.MockSourceTargetProvider) string { return "non-existent-id" },
+			body:       map[string]bool{"enabled": false},
 			wantStatus: http.StatusNotFound,
 		},
 	}
@@ -160,7 +190,7 @@ func TestSourceTargetHandler_Update(t *testing.T) {
 			id := tt.targetID(store)
 			h := NewSourceTargetHandler(store, nil)
 
-			body, _ := json.Marshal(map[string]bool{"enabled": false})
+			body, _ := json.Marshal(tt.body)
 			req := httptest.NewRequest(http.MethodPatch, "/source-targets/"+id, bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			req = withSession(req, "user-1")

@@ -90,7 +90,6 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 	o.cr = cron.New()
 
-	// Schedule one reload-driven tick using the default scrape schedule.
 	// If no reloader is set, tick falls back to the static srcs slice.
 	if _, err := o.cr.AddFunc(sources.DefaultSchedule, func() {
 		slog.Info("cron: starting scrape tick")
@@ -162,6 +161,16 @@ func (o *Orchestrator) Stop() {
 func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	cfg := src.Cfg()
 	log := slog.With(slog.String("source", cfg.Name))
+
+	// ATS sources are gated per-target in SQL (ListDueSourceTargets) via
+	// check_interval_minutes; the platform-wide scrape:last gate below only
+	// applies to discovery sources, which have no per-target freshness column.
+	if role, _ := sources.SourceRole(cfg.Name); role == sources.RoleATS {
+		if err := o.run(ctx, src); err != nil {
+			log.Error("scrape failed", slog.Any("err", err))
+		}
+		return
+	}
 
 	last, ok, err := o.q.GetLastScraped(ctx, cfg.Name)
 	if err != nil {

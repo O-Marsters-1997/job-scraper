@@ -8,7 +8,11 @@ The worker picks up new sources on its next startup — restart the worker after
 
 ## Triggering a scrape
 
-The worker scrapes automatically every 6 hours. To see jobs flow immediately after adding a source, restart the worker — it runs the orchestrator once on boot before settling into the cron.
+The worker scrapes automatically every hour, but only rebuilds sources for targets that are actually due (per-target `check_interval_minutes`, default 360). To see jobs flow immediately after adding a source, restart the worker — it runs the orchestrator once on boot before settling into the cron.
+
+## Tracking a company
+
+Under **Companies**, search the shared catalog or paste an ATS board URL to add a new one, then toggle **Track** — this enables that company's source target for you. Open a company's detail page to change its check frequency or view its jobs.
 
 ## Adding a search / filter
 

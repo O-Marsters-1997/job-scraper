@@ -5,7 +5,9 @@ import type {
 	JobApplicationSummary,
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
+import type { Company } from "@/types/company";
 import type { Job } from "@/types/job";
+import type { SourceTarget } from "@/types/sourceTarget";
 
 faker.seed(1234);
 
@@ -241,6 +243,56 @@ jobs.sort(
 	(a, b) => new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
 );
 
+// ─── Companies ────────────────────────────────────────────────────────────────
+
+const ATS_SOURCES = [
+	"greenhouse",
+	"lever",
+	"ashby",
+	"workable",
+	"recruitee",
+	"personio",
+];
+
+// ponytail: even index → has a known ATS board, every fourth of those is tracked
+let companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
+	const slug = slugify(name);
+	const hasBoard = i % 2 === 0;
+	const tracked = hasBoard && i % 4 === 0;
+	return {
+		ID: `company-${i + 1}`,
+		Slug: slug,
+		Name: name,
+		ATSSource: hasBoard ? ATS_SOURCES[i % ATS_SOURCES.length]! : "",
+		ATSToken: hasBoard ? slug : "",
+		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
+		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
+		Tracked: tracked,
+		TargetID: tracked ? `target-${i + 1}` : "",
+		CheckIntervalMinutes: 360,
+		LastCheckedAt: tracked
+			? faker.date.recent({ days: 2 }).toISOString()
+			: null,
+	};
+});
+
+const ATS_HOSTS: Record<string, string> = {
+	"greenhouse.io": "greenhouse",
+	"lever.co": "lever",
+	"ashbyhq.com": "ashby",
+	"workable.com": "workable",
+	"recruitee.com": "recruitee",
+	"personio.de": "personio",
+};
+
+function humanizeSlug(slug: string): string {
+	return slug
+		.split(/[-_]/)
+		.filter(Boolean)
+		.map((w) => w[0]!.toUpperCase() + w.slice(1))
+		.join(" ");
+}
+
 // ─── Applications ─────────────────────────────────────────────────────────────
 //
 // Distribution across 12 jobs gives 42 % response rate (5 of 12 heard back)
@@ -309,6 +361,10 @@ export function getJobs(): Job[] {
 
 export function getStatuses(): ApplicationStatus[] {
 	return statuses;
+}
+
+export function getCompanies(): Company[] {
+	return companies;
 }
 
 export function getApplications(statusId?: string): ApplicationWithDetails[] {
@@ -425,6 +481,88 @@ export function deleteStatus(id: string): { count?: number } {
 	if (count > 0) return { count };
 	statuses = statuses.filter((s) => s.ID !== id);
 	return {};
+}
+
+export function addCompany(url: string, track: boolean): Company | null {
+	let hostname: string;
+	try {
+		hostname = new URL(url).hostname;
+	} catch {
+		return null;
+	}
+	const atsSource = Object.entries(ATS_HOSTS).find(([host]) =>
+		hostname.endsWith(host),
+	)?.[1];
+	if (!atsSource) return null;
+
+	const token = url.replace(/\/$/, "").split("/").pop() ?? hostname;
+	const slug = slugify(token);
+	const company: Company = {
+		ID: faker.string.uuid(),
+		Slug: slug,
+		Name: humanizeSlug(token),
+		ATSSource: atsSource,
+		ATSToken: token,
+		FirstSeenAt: new Date().toISOString(),
+		JobCount: 0,
+		Tracked: track,
+		TargetID: track ? faker.string.uuid() : "",
+		CheckIntervalMinutes: 360,
+		LastCheckedAt: null,
+	};
+	companies = [company, ...companies];
+	return company;
+}
+
+// ponytail: only understands source targets that back a tracked company —
+// standalone discovery targets (settings/searches) aren't modelled here.
+export function setCompanyTracking(id: string, enabled: boolean): SourceTarget {
+	const idx = companies.findIndex((c) => c.ID === id);
+	if (idx === -1) throw new Error("Company not found");
+	const company = companies[idx]!;
+	const targetId = company.TargetID || faker.string.uuid();
+	const updated: Company = { ...company, Tracked: enabled, TargetID: targetId };
+	companies = [
+		...companies.slice(0, idx),
+		updated,
+		...companies.slice(idx + 1),
+	];
+	return {
+		ID: targetId,
+		UserID: mockUser.id,
+		Source: company.ATSSource,
+		Value: company.ATSToken,
+		Enabled: enabled,
+		Filters: {},
+	};
+}
+
+export function updateSourceTarget(
+	id: string,
+	patch: { enabled?: boolean; check_interval_minutes?: number },
+): SourceTarget {
+	const idx = companies.findIndex((c) => c.TargetID === id);
+	if (idx === -1) throw new Error("Source target not found");
+	const company = companies[idx]!;
+	const updated: Company = {
+		...company,
+		Tracked: patch.enabled ?? company.Tracked,
+		CheckIntervalMinutes:
+			patch.check_interval_minutes ?? company.CheckIntervalMinutes,
+	};
+	companies = [
+		...companies.slice(0, idx),
+		updated,
+		...companies.slice(idx + 1),
+	];
+	return {
+		ID: id,
+		UserID: mockUser.id,
+		Source: company.ATSSource,
+		Value: company.ATSToken,
+		Enabled: updated.Tracked,
+		Filters: {},
+	};
 }
 
 export const mockUser = { id: "user-1", username: "demo" };

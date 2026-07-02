@@ -64,6 +64,7 @@ export default function Sidebar(props: SidebarProps) {
 	});
 	const isOverviewActive = () => location().pathname === "/overview";
 	const isJobsActive = () => location().pathname === "/jobs";
+	const isCompaniesActive = () => location().pathname.startsWith("/companies");
 	const isApplicationsActive = () => location()?.pathname === "/applications";
 	const isInsightsActive = () => location().pathname === "/insights";
 	const isStatusesActive = () => location().pathname === "/settings/statuses";
@@ -213,7 +214,36 @@ export default function Sidebar(props: SidebarProps) {
 						</Show>
 					</Link>
 
-					{/* CVs — only shown when Google is connected */}
+					<Link
+						to="/companies"
+						title="Companies"
+						class={navLinkVariants({ active: isCompaniesActive() })}
+					>
+						<svg
+							aria-hidden="true"
+							class="shrink-0"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M3 21h18" />
+							<path d="M5 21V7l7-4 7 4v14" />
+							<path d="M9 9h1" />
+							<path d="M14 9h1" />
+							<path d="M9 13h1" />
+							<path d="M14 13h1" />
+							<path d="M9 21v-4h6v4" />
+						</svg>
+						<Show when={showLabels()}>
+							<span class="whitespace-nowrap">Companies</span>
+						</Show>
+					</Link>
+
 					<Show when={googleStatus.data?.connected}>
 						<Link
 							to="/cv-templates"
@@ -242,7 +272,6 @@ export default function Sidebar(props: SidebarProps) {
 							</Show>
 						</Link>
 					</Show>
-					{/* Insights */}
 					<Link
 						to="/insights"
 						title="Insights"

@@ -72,23 +72,31 @@ func main() {
 	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 
-	targets, err := db.ListEnabledSourceTargets(ctx)
+	boardDone := func(ctx context.Context, source, value string) {
+		if err := db.TouchSourceTargetsChecked(ctx, source, value); err != nil {
+			slog.Warn("could not record board check", slog.String("source", source), slog.String("value", value), slog.Any("err", err))
+		}
+	}
+
+	targets, err := db.ListDueSourceTargets(ctx)
 	if err != nil {
 		slog.Error("load source targets failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, boardDone)
 	slog.Info("sources built from db", slog.Int("count", len(srcs)))
 
 	buildAll := func(ctx context.Context) ([]sources.Source, error) {
-		ts, err := db.ListEnabledSourceTargets(ctx)
+		ts, err := db.ListDueSourceTargets(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return builder.BuildSources(ts), nil
+		return builder.BuildSources(ts, boardDone), nil
 	}
 	buildOne := func(target dto.SourceTarget) []sources.Source {
-		return builder.BuildSources([]dto.SourceTarget{target})
+		// nil boardDone: on-demand scrapes (scrape-now, ScrapeTarget) must not
+		// touch last_checked_at, so the regular schedule is unaffected.
+		return builder.BuildSources([]dto.SourceTarget{target}, nil)
 	}
 
 	orch := scraper.New(srcs, db, q).
