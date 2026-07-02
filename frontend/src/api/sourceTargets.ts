@@ -1,6 +1,6 @@
 import type { SourceTarget } from "../types/sourceTarget";
 import { apiFetch, apiFetchVoid } from "./client";
-import { API_BASE } from "./config";
+import { API_BASE, mockDelay, useMocks } from "./config";
 
 export interface CreateSourceTargetPayload {
 	source: string;
@@ -34,14 +34,24 @@ export async function createSourceTarget(
 	return res.json();
 }
 
+export interface UpdateSourceTargetPayload {
+	enabled?: boolean;
+	check_interval_minutes?: number;
+}
+
 export async function updateSourceTarget(
 	id: string,
-	enabled: boolean,
+	patch: UpdateSourceTargetPayload,
 ): Promise<SourceTarget> {
+	if (useMocks()) {
+		const { updateSourceTarget: mockUpdate } = await import("../mocks/db");
+		await mockDelay(80);
+		return mockUpdate(id, patch);
+	}
 	return apiFetch<SourceTarget>(`/source-targets/${id}`, {
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ enabled }),
+		body: JSON.stringify(patch),
 	});
 }
 

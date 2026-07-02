@@ -15,7 +15,11 @@ import (
 )
 
 const (
-	DefaultSchedule          = "0 */6 * * *"
+	// DefaultSchedule is hourly: ATS sources gate freshness per-target via
+	// ListDueSourceTargets, so the tick just needs to be frequent enough to
+	// notice due targets close to their check_interval_minutes. Discovery
+	// sources still rely on MinScrapeInterval below.
+	DefaultSchedule          = "0 * * * *"
 	DefaultMinScrapeInterval = 5 * time.Hour
 	DefaultTimeout           = 15 * time.Second
 	defaultMinWait           = 2 * time.Second

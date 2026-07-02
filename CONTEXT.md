@@ -18,6 +18,18 @@ _Avoid_: Provider, site
 A single company's listings on an ATS platform, identified by a board token (e.g. a Greenhouse `{board_token}`). One Source iterates many configured Boards.
 _Avoid_: Company page, account
 
+**Company**:
+A shared catalog record — one row per company slug, visible to all Users — auto-populated whenever any scraped Job carries an unseen `company_slug`. Carries an optional ATS Board reference (`ats_source`, `ats_token`) when the company is known to run on a supported ATS; NULL for companies seen only via discovery. Joins to Jobs via `jobs.company_slug = companies.slug`. See ADR 0016.
+_Avoid_: Employer, org, account
+
+**Tracked Company**:
+A Company for which a User has an enabled ATS **Source Target**. Tracking *is* the Source Target — toggling a Company's tracking switch upserts/enables (or disables) the User's `source_targets` row for that Company's board; there is no separate tracking table. A Company can exist untracked (merely encountered) or tracked by any subset of Users. See ADR 0016.
+_Avoid_: Followed company, watched company, subscription
+
+**Check Frequency**:
+A per–Source Target setting (`check_interval_minutes`, minimum 60) controlling how often an ATS Board is re-scraped, configured from a Company's details page. Replaces the old platform-wide 6-hour/5-hour gate for ATS sources: the worker tick runs hourly and a SQL due-filter (`last_checked_at` vs `check_interval_minutes`) decides which Boards are actually re-fetched that tick. Discovery sources are unaffected — they keep the platform-wide `MinScrapeInterval` gate. See ADR 0016.
+_Avoid_: Schedule, cron, polling interval (those describe the mechanism; this is the per-target user setting)
+
 **ATS**:
 An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio) exposing a public, unauthenticated jobs API — the Tier-1 source of truth, extracted via API not HTML.
 _Avoid_: Platform (when ambiguous), provider
@@ -52,7 +64,7 @@ A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, com
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
-A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets. Each source carries a **Role** (below) that classifies the target as a tracked company or a discovery search — orthogonal to its kind.
+A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets. Each source carries a **Role** (below) that classifies the target as a tracked company or a discovery search — orthogonal to its kind. ATS-role targets optionally carry a **Company** reference (`company_id`) and a **Check Frequency** (`check_interval_minutes`, `last_checked_at`); a Target *is* what makes a Company "tracked" — see ADR 0016.
 _Avoid_: Board config, source config, integration
 
 **Role**:
@@ -104,6 +116,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
 - A **User** defines zero or more **Source Targets**; each Target maps to a supported **Source**
+- A **Company** is a shared catalog record, optionally referencing one ATS **Board**; a **User** tracks a **Company** by having an enabled ATS **Source Target** for that Board (a **Tracked Company**), each with its own **Check Frequency**
 - A **Filter Source** Target carries a keyword `value` plus optional **FilterField** values in `filters`; a **ScrapeRequest** may be enqueued at creation time when `scrape_now: true`
 - A **Job** carries a **Relevance** and **Suitability** score per **User** — a per-user assessment, sibling to **Application**, not a property of the shared **Job**
 - A **User** has exactly one **Search Config**

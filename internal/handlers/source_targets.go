@@ -157,13 +157,22 @@ func (h *SourceTargetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Enabled bool `json:"enabled"`
+		Enabled              *bool `json:"enabled"`
+		CheckIntervalMinutes *int  `json:"check_interval_minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	t, err := h.targets.UpdateSourceTarget(r.Context(), id, session.UserID, body.Enabled)
+	if body.Enabled == nil && body.CheckIntervalMinutes == nil {
+		http.Error(w, "nothing to update", http.StatusBadRequest)
+		return
+	}
+	if body.CheckIntervalMinutes != nil && *body.CheckIntervalMinutes < 60 {
+		http.Error(w, "check_interval_minutes must be at least 60", http.StatusBadRequest)
+		return
+	}
+	t, err := h.targets.UpdateSourceTarget(r.Context(), id, session.UserID, body.Enabled, body.CheckIntervalMinutes)
 	if err != nil {
 		if errors.Is(err, providers.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)

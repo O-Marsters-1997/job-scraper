@@ -4,15 +4,44 @@ SELECT * FROM source_targets WHERE user_id = $1 ORDER BY source, value;
 -- name: ListEnabledSourceTargets :many
 SELECT * FROM source_targets WHERE enabled = TRUE ORDER BY source, value;
 
+-- name: ListDueSourceTargets :many
+SELECT * FROM source_targets
+WHERE enabled = TRUE
+  AND (last_checked_at IS NULL
+       OR last_checked_at <= NOW() - make_interval(mins => check_interval_minutes))
+ORDER BY source, value;
+
+-- name: TouchSourceTargetsChecked :exec
+UPDATE source_targets SET last_checked_at = NOW()
+WHERE source = $1 AND value = $2 AND enabled = TRUE;
+
 -- name: CreateSourceTarget :one
 INSERT INTO source_targets (user_id, source, value, enabled, filters)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: UpsertSourceTargetForCompany :one
+INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id)
+VALUES ($1, $2, $3, $4, '{}', $5)
+ON CONFLICT (user_id, source, value, filters) DO UPDATE SET
+    enabled    = EXCLUDED.enabled,
+    company_id = EXCLUDED.company_id,
+    updated_at = NOW()
+RETURNING *;
+
 -- name: UpdateSourceTarget :one
-UPDATE source_targets SET enabled = $3, updated_at = NOW()
+UPDATE source_targets SET
+    enabled                = COALESCE(sqlc.narg('enabled'), enabled),
+    check_interval_minutes = COALESCE(sqlc.narg('check_interval_minutes'), check_interval_minutes),
+    updated_at             = NOW()
 WHERE id = $1 AND user_id = $2
 RETURNING *;
+
+-- name: ListUserIDsForTarget :many
+SELECT DISTINCT user_id FROM source_targets
+WHERE enabled = TRUE
+  AND source = $1
+  AND (sqlc.arg(value)::text = '' OR value = sqlc.arg(value));
 
 -- name: DeleteSourceTarget :exec
 DELETE FROM source_targets WHERE id = $1 AND user_id = $2;

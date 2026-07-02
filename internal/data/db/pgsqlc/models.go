@@ -28,6 +28,17 @@ type ApplicationStatus struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Company struct {
+	ID          pgtype.UUID
+	Slug        string
+	Name        string
+	AtsSource   pgtype.Text
+	AtsToken    pgtype.Text
+	FirstSeenAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type Job struct {
 	ID              pgtype.UUID
 	Title           string
@@ -83,14 +94,17 @@ type Session struct {
 }
 
 type SourceTarget struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
-	Source    string
-	Value     string
-	Enabled   bool
-	Filters   []byte
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID                   pgtype.UUID
+	UserID               pgtype.UUID
+	Source               string
+	Value                string
+	Enabled              bool
+	Filters              []byte
+	CompanyID            pgtype.UUID
+	CheckIntervalMinutes int32
+	LastCheckedAt        pgtype.Timestamptz
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 type TrackedDoc struct {

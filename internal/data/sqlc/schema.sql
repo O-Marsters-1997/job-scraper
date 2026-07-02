@@ -121,14 +121,28 @@ CREATE TABLE IF NOT EXISTS user_ai_credentials (
     UNIQUE (user_id, provider)
 );
 
+CREATE TABLE IF NOT EXISTS companies (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug          TEXT        NOT NULL UNIQUE,
+    name          TEXT        NOT NULL,
+    ats_source    TEXT,
+    ats_token     TEXT,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS source_targets (
-    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    source     TEXT        NOT NULL,
-    value      TEXT        NOT NULL,
-    enabled    BOOLEAN     NOT NULL DEFAULT TRUE,
-    filters    JSONB       NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id                     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source                 TEXT        NOT NULL,
+    value                  TEXT        NOT NULL,
+    enabled                BOOLEAN     NOT NULL DEFAULT TRUE,
+    filters                JSONB       NOT NULL DEFAULT '{}',
+    company_id             UUID        REFERENCES companies(id) ON DELETE SET NULL,
+    check_interval_minutes INT         NOT NULL DEFAULT 360,
+    last_checked_at        TIMESTAMPTZ,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, source, value, filters)
 );

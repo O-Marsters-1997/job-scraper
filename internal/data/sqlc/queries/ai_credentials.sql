@@ -14,6 +14,3 @@ DELETE FROM user_ai_credentials WHERE user_id = $1 AND provider = $2;
 
 -- name: ListUserAICredentialProviders :many
 SELECT provider FROM user_ai_credentials WHERE user_id = $1 ORDER BY provider;
-
--- name: ListUsersWithProvider :many
-SELECT user_id FROM user_ai_credentials WHERE provider = $1 ORDER BY user_id;

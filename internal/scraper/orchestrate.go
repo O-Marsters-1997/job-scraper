@@ -163,6 +163,16 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	cfg := src.Cfg()
 	log := slog.With(slog.String("source", cfg.Name))
 
+	// ATS sources are gated per-target in SQL (ListDueSourceTargets) via
+	// check_interval_minutes; the platform-wide scrape:last gate below only
+	// applies to discovery sources, which have no per-target freshness column.
+	if role, _ := sources.SourceRole(cfg.Name); role == sources.RoleATS {
+		if err := o.run(ctx, src); err != nil {
+			log.Error("scrape failed", slog.Any("err", err))
+		}
+		return
+	}
+
 	last, ok, err := o.q.GetLastScraped(ctx, cfg.Name)
 	if err != nil {
 		log.Warn("could not read last scraped, proceeding",

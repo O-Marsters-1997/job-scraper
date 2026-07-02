@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -18,14 +19,31 @@ func fromSourceTarget(row pgsqlc.SourceTarget) dto.SourceTarget {
 	if len(row.Filters) > 0 {
 		_ = json.Unmarshal(row.Filters, &filters)
 	}
-	return dto.SourceTarget{
-		ID:      row.ID.String(),
-		UserID:  row.UserID.String(),
-		Source:  row.Source,
-		Value:   row.Value,
-		Enabled: row.Enabled,
-		Filters: filters,
+	t := dto.SourceTarget{
+		ID:                   row.ID.String(),
+		UserID:               row.UserID.String(),
+		Source:               row.Source,
+		Value:                row.Value,
+		Enabled:              row.Enabled,
+		Filters:              filters,
+		CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 	}
+	if row.CompanyID.Valid {
+		t.CompanyID = row.CompanyID.String()
+	}
+	if row.LastCheckedAt.Valid {
+		lc := row.LastCheckedAt.Time
+		t.LastCheckedAt = &lc
+	}
+	return t
+}
+
+func fromSourceTargets(rows []pgsqlc.SourceTarget) []dto.SourceTarget {
+	out := make([]dto.SourceTarget, len(rows))
+	for i, r := range rows {
+		out[i] = fromSourceTarget(r)
+	}
+	return out
 }
 
 func (db *DB) ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error) {
@@ -37,11 +55,7 @@ func (db *DB) ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto
 	if err != nil {
 		return nil, fmt.Errorf("db.ListSourceTargetsByUser: %w", err)
 	}
-	out := make([]dto.SourceTarget, len(rows))
-	for i, r := range rows {
-		out[i] = fromSourceTarget(r)
-	}
-	return out, nil
+	return fromSourceTargets(rows), nil
 }
 
 func (db *DB) ListEnabledSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {
@@ -49,11 +63,7 @@ func (db *DB) ListEnabledSourceTargets(ctx context.Context) ([]dto.SourceTarget,
 	if err != nil {
 		return nil, fmt.Errorf("db.ListEnabledSourceTargets: %w", err)
 	}
-	out := make([]dto.SourceTarget, len(rows))
-	for i, r := range rows {
-		out[i] = fromSourceTarget(r)
-	}
-	return out, nil
+	return fromSourceTargets(rows), nil
 }
 
 func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
@@ -78,7 +88,7 @@ func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value stri
 	return fromSourceTarget(row), nil
 }
 
-func (db *DB) UpdateSourceTarget(ctx context.Context, id, userID string, enabled bool) (dto.SourceTarget, error) {
+func (db *DB) UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
 	tid, err := parseUUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -87,11 +97,14 @@ func (db *DB) UpdateSourceTarget(ctx context.Context, id, userID string, enabled
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	row, err := db.queries.UpdateSourceTarget(ctx, pgsqlc.UpdateSourceTargetParams{
-		ID:      tid,
-		UserID:  uid,
-		Enabled: enabled,
-	})
+	params := pgsqlc.UpdateSourceTargetParams{ID: tid, UserID: uid}
+	if enabled != nil {
+		params.Enabled = pgtype.Bool{Bool: *enabled, Valid: true}
+	}
+	if checkIntervalMinutes != nil {
+		params.CheckIntervalMinutes = pgtype.Int4{Int32: int32(*checkIntervalMinutes), Valid: true}
+	}
+	row, err := db.queries.UpdateSourceTarget(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return dto.SourceTarget{}, providers.ErrNotFound
@@ -99,6 +112,61 @@ func (db *DB) UpdateSourceTarget(ctx context.Context, id, userID string, enabled
 		return dto.SourceTarget{}, fmt.Errorf("db.UpdateSourceTarget: %w", err)
 	}
 	return fromSourceTarget(row), nil
+}
+
+func (db *DB) ListDueSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {
+	rows, err := db.queries.ListDueSourceTargets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("db.ListDueSourceTargets: %w", err)
+	}
+	return fromSourceTargets(rows), nil
+}
+
+func (db *DB) TouchSourceTargetsChecked(ctx context.Context, source, value string) error {
+	if err := db.queries.TouchSourceTargetsChecked(ctx, pgsqlc.TouchSourceTargetsCheckedParams{
+		Source: source,
+		Value:  value,
+	}); err != nil {
+		return fmt.Errorf("db.TouchSourceTargetsChecked: %w", err)
+	}
+	return nil
+}
+
+func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	cid, err := parseUUID(companyID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.UpsertSourceTargetForCompany(ctx, pgsqlc.UpsertSourceTargetForCompanyParams{
+		UserID:    uid,
+		Source:    source,
+		Value:     value,
+		Enabled:   enabled,
+		CompanyID: cid,
+	})
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("db.UpsertSourceTargetForCompany: %w", err)
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) ListUserIDsForTarget(ctx context.Context, source, value string) ([]string, error) {
+	uuids, err := db.queries.ListUserIDsForTarget(ctx, pgsqlc.ListUserIDsForTargetParams{
+		Source: source,
+		Value:  value,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("db.ListUserIDsForTarget: %w", err)
+	}
+	ids := make([]string, len(uuids))
+	for i, u := range uuids {
+		ids[i] = u.String()
+	}
+	return ids, nil
 }
 
 func (db *DB) DeleteSourceTarget(ctx context.Context, id, userID string) error {

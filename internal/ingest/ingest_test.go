@@ -52,7 +52,7 @@ type stubUserLister struct {
 	err   error
 }
 
-func (l *stubUserLister) ListUsersWithProvider(_ context.Context, _ string) ([]string, error) {
+func (l *stubUserLister) ListUserIDsForTarget(_ context.Context, _, _ string) ([]string, error) {
 	return l.users, l.err
 }
 

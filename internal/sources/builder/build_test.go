@@ -27,7 +27,7 @@ func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
 		}
 
 		found := false
-		for _, s := range builder.BuildSources([]dto.SourceTarget{target}) {
+		for _, s := range builder.BuildSources([]dto.SourceTarget{target}, nil) {
 			if s.Cfg().Name == info.Name {
 				found = true
 			}
@@ -42,7 +42,7 @@ func TestBuildSources_WisIncludedWhenTargetPresent(t *testing.T) {
 	targets := []dto.SourceTarget{
 		{Source: "wis", Value: "product engineer", Filters: map[string]string{"region": "uk"}, Enabled: true},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 	found := false
 	for _, s := range srcs {
 		if s.Cfg().Name == "wis" {
@@ -55,7 +55,7 @@ func TestBuildSources_WisIncludedWhenTargetPresent(t *testing.T) {
 }
 
 func TestBuildSources_WisExcludedWhenNoTarget(t *testing.T) {
-	srcs := builder.BuildSources(nil)
+	srcs := builder.BuildSources(nil, nil)
 	for _, s := range srcs {
 		if s.Cfg().Name == "wis" {
 			t.Error("expected wis to be absent when no wis targets configured")
@@ -69,7 +69,7 @@ func TestBuildSources_BoardSourcesGrouped(t *testing.T) {
 		{Source: "greenhouse", Value: "widgetco", Enabled: true},
 		{Source: "lever", Value: "startup", Enabled: true},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 
 	sourceNames := make(map[string]bool)
 	for _, s := range srcs {
@@ -98,7 +98,7 @@ func TestBuildSources_DisabledTargetsExcluded(t *testing.T) {
 	targets := []dto.SourceTarget{
 		{Source: "greenhouse", Value: "acme", Enabled: false},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 
 	for _, s := range srcs {
 		if s.Cfg().Name == "greenhouse" {
@@ -111,7 +111,7 @@ func TestBuildSources_URLSourcesIncludedWhenTargetPresent(t *testing.T) {
 	targets := []dto.SourceTarget{
 		{Source: "indeed", Value: "https://www.indeed.com/jobs?q=engineer", Enabled: true},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 
 	found := false
 	for _, s := range srcs {
@@ -125,7 +125,7 @@ func TestBuildSources_URLSourcesIncludedWhenTargetPresent(t *testing.T) {
 }
 
 func TestBuildSources_URLSourcesExcludedWhenNoTarget(t *testing.T) {
-	srcs := builder.BuildSources(nil)
+	srcs := builder.BuildSources(nil, nil)
 	for _, s := range srcs {
 		if s.Cfg().Name == "linkedin" || s.Cfg().Name == "indeed" {
 			t.Errorf("expected %s to be absent when no URL target configured", s.Cfg().Name)
@@ -137,7 +137,7 @@ func TestBuildSources_LinkedInIncludedWhenTargetPresent(t *testing.T) {
 	targets := []dto.SourceTarget{
 		{Source: "linkedin", Value: "product engineer", Filters: map[string]string{"location": "London"}, Enabled: true},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 
 	found := false
 	for _, s := range srcs {
@@ -154,7 +154,7 @@ func TestBuildSources_UnknownSourceIgnored(t *testing.T) {
 	targets := []dto.SourceTarget{
 		{Source: "unknown-ats", Value: "sometoken", Enabled: true},
 	}
-	srcs := builder.BuildSources(targets)
+	srcs := builder.BuildSources(targets, nil)
 	// Unknown source produces no output; result is an empty slice, not a panic.
 	for _, s := range srcs {
 		if s.Cfg().Name == "unknown-ats" {
