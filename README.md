@@ -11,7 +11,7 @@ There are two long-running binaries:
 
 `cmd/worker` runs three things concurrently:
 
-1. **Orchestrator** — a cron-driven loop that iterates each configured source on a schedule (default `0 */6 * * *`) and either exports jobs directly (ATS sources) or enqueues URLs for detail fetching (HTML sources).
+1. **Orchestrator** — a cron-driven loop that iterates each configured source on a schedule (default `0 * * * *`, hourly) and either exports jobs directly (ATS sources) or enqueues URLs for detail fetching (HTML sources).
 2. **Worker loop** — dequeues URLs one at a time, fetches the detail page via the owning source's `GetDetails`, then exports the result to the API.
 3. **Session-cleanup cron** — a daily cron to purge expired sessions from the DB.
 
@@ -107,6 +107,8 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 
 **Snapshot testing for parsers** — HTML snapshots are committed alongside each HTML source. Tests parse the snapshot and compare against a committed JSON fixture. See [Adding a new source](docs/sources/adding-a-source.md).
 
+**Companies are a shared catalog; scoring is target-gated** — `companies` holds one row per company slug, auto-populated at ingest for any unseen `company_slug`, with an optional known ATS board (`ats_source`/`ats_token`; NULL means discovery-only). Tracking a company just enables its ATS `source_target` — no separate tracking table. Suitability scoring now only runs for users with a matching enabled target (exact company match for ATS jobs, any target on the source for discovery jobs), not for every credentialed user. See ADR 0016.
+
 ## Getting Started
 
 **Prerequisites**: Docker, [just](https://github.com/casey/just), Go 1.26+
@@ -151,11 +153,21 @@ Manage source targets via the authenticated API:
 ```sh
 GET    /source-targets          # list your configured sources
 POST   /source-targets          # add a source: {"source":"greenhouse","value":"acmecorp"}
-PATCH  /source-targets/{id}     # toggle on/off: {"enabled":false}
+PATCH  /source-targets/{id}     # update: {"enabled"?: bool, "check_interval_minutes"?: int}
 DELETE /source-targets/{id}     # remove a source
 ```
 
-The worker loads all enabled source targets at startup and passes them to `sources/builder.BuildSources` to assemble the active source set.
+`check_interval_minutes` (default 360) has a 60-minute floor and controls how often the worker re-checks that specific target — see `ListDueSourceTargets` and ADR 0016. The worker loads due source targets each hourly tick and passes them to `sources/builder.BuildSources` to assemble the active source set.
+
+Companies are a shared catalog auto-populated from ingested jobs; the API also lets you browse and track known ATS boards directly:
+
+```sh
+GET  /companies               # list companies, with your per-caller tracked/interval/job-count status
+POST /companies                # resolve+add a company from a board URL: {"url":"...","track":true,"scrape_now":false}
+PUT  /companies/{id}/tracking  # toggle tracking (enables/disables that company's source target): {"enabled":true}
+```
+
+`POST /companies` returns `422` if the URL doesn't resolve to a known ATS board.
 
 Worker → API connection (required):
 

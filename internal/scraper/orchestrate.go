@@ -90,7 +90,6 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 
 	o.cr = cron.New()
 
-	// Schedule one reload-driven tick using the default scrape schedule.
 	// If no reloader is set, tick falls back to the static srcs slice.
 	if _, err := o.cr.AddFunc(sources.DefaultSchedule, func() {
 		slog.Info("cron: starting scrape tick")
