@@ -75,6 +75,8 @@ var entries = []registryEntry{
 		{Name: "location", Label: "Location", Required: false},
 	}},
 	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
+	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com"},
+	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com"},
 }
 
 // Sources returns the full registry as a slice of serialisable SourceInfo values.
