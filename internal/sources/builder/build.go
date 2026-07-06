@@ -43,8 +43,16 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 				})
 			case "linkedin":
 				linkedinSearches = append(linkedinSearches, linkedin.Search{
-					Keywords: t.Value,
-					Location: t.Filters["location"],
+					Keywords:    t.Value,
+					Location:    t.Filters["location"],
+					CompanyID:   t.Filters["company_id"],
+					Recency:     t.Filters["recency"],
+					Arrangement: t.Filters["arrangement"],
+					Experience:  t.Filters["experience"],
+					JobType:     t.Filters["job_type"],
+					GeoID:       t.Filters["geo_id"],
+					Distance:    t.Filters["distance"],
+					SalaryBand:  t.Filters["salary_band"],
 				})
 			}
 			continue

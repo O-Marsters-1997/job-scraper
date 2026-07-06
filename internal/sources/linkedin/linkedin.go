@@ -25,6 +25,8 @@ const (
 
 	// maxStart bounds pagination — seeMoreJobPostings never returns a total result
 	// count, so an empty page is the only end-of-results signal LinkedIn gives us.
+	// LinkedIn also tends to start 429ing a given IP after ~page 10; the proxy
+	// (UseProxy below) mitigates that, and this cap bounds the damage if it doesn't.
 	maxStart = 1000
 
 	minWait = 2 * time.Second
@@ -54,6 +56,45 @@ var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 type Search struct {
 	Keywords string // maps to the keywords URL param
 	Location string // maps to the location URL param; empty means no filter
+
+	CompanyID   string // maps to f_C; numeric LinkedIn company ID
+	Recency     string // maps to f_TPR; one of r86400, r604800, r2592000
+	Arrangement string // maps to f_WT; 1=on-site, 2=remote, 3=hybrid
+	Experience  string // maps to f_E; 1-6
+	JobType     string // maps to f_JT; one of F, P, C, T, I
+	GeoID       string // maps to geoId; numeric
+	Distance    string // maps to f_D; numeric, miles
+	SalaryBand  string // maps to f_SB2; 1-9
+}
+
+var (
+	validRecency     = map[string]bool{"r86400": true, "r604800": true, "r2592000": true}
+	validArrangement = map[string]bool{"1": true, "2": true, "3": true}
+	validExperience  = map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "6": true}
+	validJobType     = map[string]bool{"F": true, "P": true, "C": true, "T": true, "I": true}
+	validSalaryBand  = map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true}
+)
+
+func isNumeric(s string) bool {
+	_, err := strconv.Atoi(s)
+	return err == nil
+}
+
+func inSet(set map[string]bool) func(string) bool {
+	return func(s string) bool { return set[s] }
+}
+
+// setFilter sets param to value if value is non-empty and valid. An invalid value is
+// dropped with a warning rather than an error — a bad filter shouldn't kill the search.
+func setFilter(v url.Values, param, value string, valid func(string) bool) {
+	if value == "" {
+		return
+	}
+	if !valid(value) {
+		slog.Warn("linkedin: dropping invalid filter value", slog.String("param", param), slog.String("value", value))
+		return
+	}
+	v.Set(param, value)
 }
 
 func (s Search) pageURL(start int) string {
@@ -62,6 +103,14 @@ func (s Search) pageURL(start int) string {
 	if s.Location != "" {
 		v.Set("location", s.Location)
 	}
+	setFilter(v, "f_C", s.CompanyID, isNumeric)
+	setFilter(v, "f_TPR", s.Recency, inSet(validRecency))
+	setFilter(v, "f_WT", s.Arrangement, inSet(validArrangement))
+	setFilter(v, "f_E", s.Experience, inSet(validExperience))
+	setFilter(v, "f_JT", s.JobType, inSet(validJobType))
+	setFilter(v, "geoId", s.GeoID, isNumeric)
+	setFilter(v, "f_D", s.Distance, isNumeric)
+	setFilter(v, "f_SB2", s.SalaryBand, inSet(validSalaryBand))
 	v.Set("start", strconv.Itoa(start))
 	return searchURL + "?" + v.Encode()
 }
