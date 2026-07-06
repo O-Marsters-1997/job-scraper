@@ -24,9 +24,9 @@ import (
 // successfully scraped, so the caller can record per-target freshness. Pass
 // nil for one-off scrapes (e.g. scrape-now) that must not affect scheduling.
 func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string)) []sources.Source {
-	boards := make(map[string][]string) // source name → deduped board tokens
-	seen := make(map[string]bool)       // "source\x00token" → already added
-	urlSources := make(map[string]bool)
+	boards := make(map[string][]string)     // source name → deduped board tokens
+	seen := make(map[string]bool)           // "source\x00token" → already added
+	urlSources := make(map[string][]string) // source name → configured search URLs
 	var wisSearches []wis.Search
 	var linkedinSearches []linkedin.Search
 
@@ -54,7 +54,7 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 			continue
 		}
 		if isURL {
-			urlSources[t.Source] = true
+			urlSources[t.Source] = append(urlSources[t.Source], t.Value)
 			continue
 		}
 		key := t.Source + "\x00" + t.Value
@@ -101,8 +101,8 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 	if tokens := boards["personio"]; len(tokens) > 0 {
 		srcs = append(srcs, withDone("personio", personio.New(personio.Config{Boards: tokens})))
 	}
-	if urlSources["indeed"] {
-		srcs = append(srcs, indeed.New())
+	if urls := urlSources["indeed"]; len(urls) > 0 {
+		srcs = append(srcs, indeed.New(indeed.Config{URLs: urls}))
 	}
 
 	return srcs

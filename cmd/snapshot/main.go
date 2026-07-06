@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 )
@@ -20,6 +21,7 @@ import (
 var parsers = map[string]sources.SnapshotSource{
 	"wis":      wis.New(wis.Config{}),
 	"linkedin": linkedin.New(linkedin.Config{}),
+	"indeed":   indeed.New(indeed.Config{}),
 }
 
 func main() {
