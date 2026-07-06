@@ -12,7 +12,7 @@ import (
 )
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, slug, name, ats_source, ats_token, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
 `
 
 func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, error) {
@@ -24,6 +24,9 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 		&i.Name,
 		&i.AtsSource,
 		&i.AtsToken,
+		&i.Domain,
+		&i.LinkedinCompanyID,
+		&i.LastCrawledAt,
 		&i.FirstSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -32,7 +35,8 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 }
 
 const listCompaniesForUser = `-- name: ListCompaniesForUser :many
-SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.first_seen_at,
+SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+    c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
     st.id AS target_id,
     COALESCE(st.enabled, FALSE) AS tracked,
@@ -50,6 +54,9 @@ type ListCompaniesForUserRow struct {
 	Name                 string
 	AtsSource            pgtype.Text
 	AtsToken             pgtype.Text
+	Domain               pgtype.Text
+	LinkedinCompanyID    pgtype.Text
+	LastCrawledAt        pgtype.Timestamptz
 	FirstSeenAt          pgtype.Timestamptz
 	JobCount             int64
 	TargetID             pgtype.UUID
@@ -73,6 +80,9 @@ func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) 
 			&i.Name,
 			&i.AtsSource,
 			&i.AtsToken,
+			&i.Domain,
+			&i.LinkedinCompanyID,
+			&i.LastCrawledAt,
 			&i.FirstSeenAt,
 			&i.JobCount,
 			&i.TargetID,
@@ -90,21 +100,73 @@ func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
+const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies
+WHERE domain IS NOT NULL AND ats_source IS NULL
+  AND (last_crawled_at IS NULL OR last_crawled_at < NOW() - make_interval(days => 30))
+ORDER BY last_crawled_at NULLS FIRST LIMIT $1
+`
+
+func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Company, error) {
+	rows, err := q.db.Query(ctx, listCompaniesToCrawl, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Company
+	for rows.Next() {
+		var i Company
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.AtsSource,
+			&i.AtsToken,
+			&i.Domain,
+			&i.LinkedinCompanyID,
+			&i.LastCrawledAt,
+			&i.FirstSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchCompanyCrawled = `-- name: TouchCompanyCrawled :exec
+UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) TouchCompanyCrawled(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, touchCompanyCrawled, id)
+	return err
+}
+
 const upsertCompany = `-- name: UpsertCompany :one
-INSERT INTO companies (slug, name, ats_source, ats_token)
-VALUES ($1, $2, $3, $4)
+INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (slug) DO UPDATE SET
-    ats_source = COALESCE(companies.ats_source, EXCLUDED.ats_source),
-    ats_token  = COALESCE(companies.ats_token,  EXCLUDED.ats_token),
+    ats_source          = COALESCE(companies.ats_source, EXCLUDED.ats_source),
+    ats_token           = COALESCE(companies.ats_token,  EXCLUDED.ats_token),
+    domain              = COALESCE(companies.domain, EXCLUDED.domain),
+    linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
     updated_at = NOW()
-RETURNING id, slug, name, ats_source, ats_token, first_seen_at, created_at, updated_at
+RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at
 `
 
 type UpsertCompanyParams struct {
-	Slug      string
-	Name      string
-	AtsSource pgtype.Text
-	AtsToken  pgtype.Text
+	Slug              string
+	Name              string
+	AtsSource         pgtype.Text
+	AtsToken          pgtype.Text
+	Domain            pgtype.Text
+	LinkedinCompanyID pgtype.Text
 }
 
 func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (Company, error) {
@@ -113,6 +175,8 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		arg.Name,
 		arg.AtsSource,
 		arg.AtsToken,
+		arg.Domain,
+		arg.LinkedinCompanyID,
 	)
 	var i Company
 	err := row.Scan(
@@ -121,6 +185,9 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		&i.Name,
 		&i.AtsSource,
 		&i.AtsToken,
+		&i.Domain,
+		&i.LinkedinCompanyID,
+		&i.LastCrawledAt,
 		&i.FirstSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,

@@ -29,14 +29,17 @@ type ApplicationStatus struct {
 }
 
 type Company struct {
-	ID          pgtype.UUID
-	Slug        string
-	Name        string
-	AtsSource   pgtype.Text
-	AtsToken    pgtype.Text
-	FirstSeenAt pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID                pgtype.UUID
+	Slug              string
+	Name              string
+	AtsSource         pgtype.Text
+	AtsToken          pgtype.Text
+	Domain            pgtype.Text
+	LinkedinCompanyID pgtype.Text
+	LastCrawledAt     pgtype.Timestamptz
+	FirstSeenAt       pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type Job struct {

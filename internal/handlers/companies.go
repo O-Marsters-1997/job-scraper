@@ -59,7 +59,12 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := h.companies.UpsertCompany(r.Context(), token, humanizeToken(token), source, token)
+	company, err := h.companies.UpsertCompany(r.Context(), dto.CompanyUpsert{
+		Slug:      token,
+		Name:      humanizeToken(token),
+		ATSSource: source,
+		ATSToken:  token,
+	})
 	if err != nil {
 		slog.Error("upsert company failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)

@@ -122,14 +122,17 @@ CREATE TABLE IF NOT EXISTS user_ai_credentials (
 );
 
 CREATE TABLE IF NOT EXISTS companies (
-    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    slug          TEXT        NOT NULL UNIQUE,
-    name          TEXT        NOT NULL,
-    ats_source    TEXT,
-    ats_token     TEXT,
-    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug                TEXT        NOT NULL UNIQUE,
+    name                TEXT        NOT NULL,
+    ats_source          TEXT,
+    ats_token           TEXT,
+    domain              TEXT,
+    linkedin_company_id TEXT,
+    last_crawled_at     TIMESTAMPTZ,
+    first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS source_targets (

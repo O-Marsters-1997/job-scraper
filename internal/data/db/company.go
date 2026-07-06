@@ -14,22 +14,31 @@ import (
 )
 
 func fromCompany(row pgsqlc.Company) dto.Company {
-	return dto.Company{
-		ID:          row.ID.String(),
-		Slug:        row.Slug,
-		Name:        row.Name,
-		ATSSource:   row.AtsSource.String,
-		ATSToken:    row.AtsToken.String,
-		FirstSeenAt: row.FirstSeenAt.Time,
+	c := dto.Company{
+		ID:                row.ID.String(),
+		Slug:              row.Slug,
+		Name:              row.Name,
+		ATSSource:         row.AtsSource.String,
+		ATSToken:          row.AtsToken.String,
+		Domain:            row.Domain.String,
+		LinkedInCompanyID: row.LinkedinCompanyID.String,
+		FirstSeenAt:       row.FirstSeenAt.Time,
 	}
+	if row.LastCrawledAt.Valid {
+		t := row.LastCrawledAt.Time
+		c.LastCrawledAt = &t
+	}
+	return c
 }
 
-func (db *DB) UpsertCompany(ctx context.Context, slug, name, atsSource, atsToken string) (dto.Company, error) {
+func (db *DB) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
 	row, err := db.queries.UpsertCompany(ctx, pgsqlc.UpsertCompanyParams{
-		Slug:      slug,
-		Name:      name,
-		AtsSource: pgtype.Text{String: atsSource, Valid: atsSource != ""},
-		AtsToken:  pgtype.Text{String: atsToken, Valid: atsToken != ""},
+		Slug:              c.Slug,
+		Name:              c.Name,
+		AtsSource:         pgtype.Text{String: c.ATSSource, Valid: c.ATSSource != ""},
+		AtsToken:          pgtype.Text{String: c.ATSToken, Valid: c.ATSToken != ""},
+		Domain:            pgtype.Text{String: c.Domain, Valid: c.Domain != ""},
+		LinkedinCompanyID: pgtype.Text{String: c.LinkedInCompanyID, Valid: c.LinkedInCompanyID != ""},
 	})
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("db.UpsertCompany: %w", err)
@@ -64,14 +73,16 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 	out := make([]dto.Company, len(rows))
 	for i, r := range rows {
 		c := dto.Company{
-			ID:          r.ID.String(),
-			Slug:        r.Slug,
-			Name:        r.Name,
-			ATSSource:   r.AtsSource.String,
-			ATSToken:    r.AtsToken.String,
-			FirstSeenAt: r.FirstSeenAt.Time,
-			JobCount:    int(r.JobCount),
-			Tracked:     r.Tracked,
+			ID:                r.ID.String(),
+			Slug:              r.Slug,
+			Name:              r.Name,
+			ATSSource:         r.AtsSource.String,
+			ATSToken:          r.AtsToken.String,
+			Domain:            r.Domain.String,
+			LinkedInCompanyID: r.LinkedinCompanyID.String,
+			FirstSeenAt:       r.FirstSeenAt.Time,
+			JobCount:          int(r.JobCount),
+			Tracked:           r.Tracked,
 		}
 		if r.TargetID.Valid {
 			c.TargetID = r.TargetID.String()
@@ -81,7 +92,38 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 			t := r.LastCheckedAt.Time
 			c.LastCheckedAt = &t
 		}
+		if r.LastCrawledAt.Valid {
+			t := r.LastCrawledAt.Time
+			c.LastCrawledAt = &t
+		}
 		out[i] = c
 	}
 	return out, nil
+}
+
+// ListCompaniesToCrawl returns up to limit companies with a known domain but
+// no resolved ATS board, least-recently-crawled first, for the careers-page
+// crawler to work through.
+func (db *DB) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error) {
+	rows, err := db.queries.ListCompaniesToCrawl(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("db.ListCompaniesToCrawl: %w", err)
+	}
+	out := make([]dto.Company, len(rows))
+	for i, r := range rows {
+		out[i] = fromCompany(r)
+	}
+	return out, nil
+}
+
+// TouchCompanyCrawled records that a company's careers page was just crawled.
+func (db *DB) TouchCompanyCrawled(ctx context.Context, id string) error {
+	cid, err := parseUUID(id)
+	if err != nil {
+		return err
+	}
+	if err := db.queries.TouchCompanyCrawled(ctx, cid); err != nil {
+		return fmt.Errorf("db.TouchCompanyCrawled: %w", err)
+	}
+	return nil
 }

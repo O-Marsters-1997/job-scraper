@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 func truncateCompanies(t *testing.T) {
@@ -19,7 +21,7 @@ func TestUpsertCompany(t *testing.T) {
 	t.Run("insert", func(t *testing.T) {
 		truncateCompanies(t)
 
-		c, err := testDB.UpsertCompany(ctx, "acme", "Acme", "greenhouse", "acme")
+		c, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 		if err != nil {
 			t.Fatalf("UpsertCompany: %v", err)
 		}
@@ -31,7 +33,7 @@ func TestUpsertCompany(t *testing.T) {
 	t.Run("conflict fills in missing ats fields", func(t *testing.T) {
 		truncateCompanies(t)
 
-		first, err := testDB.UpsertCompany(ctx, "acme", "Acme", "", "")
+		first, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "", ATSToken: ""})
 		if err != nil {
 			t.Fatalf("first UpsertCompany: %v", err)
 		}
@@ -39,7 +41,7 @@ func TestUpsertCompany(t *testing.T) {
 			t.Fatalf("expected empty ats source on discovery-first insert, got %q", first.ATSSource)
 		}
 
-		second, err := testDB.UpsertCompany(ctx, "acme", "Acme Corp", "greenhouse", "acme")
+		second, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp", ATSSource: "greenhouse", ATSToken: "acme"})
 		if err != nil {
 			t.Fatalf("second UpsertCompany: %v", err)
 		}
@@ -54,11 +56,11 @@ func TestUpsertCompany(t *testing.T) {
 	t.Run("conflict never overwrites an existing ats board", func(t *testing.T) {
 		truncateCompanies(t)
 
-		if _, err := testDB.UpsertCompany(ctx, "acme", "Acme", "greenhouse", "acme"); err != nil {
+		if _, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"}); err != nil {
 			t.Fatalf("first UpsertCompany: %v", err)
 		}
 
-		got, err := testDB.UpsertCompany(ctx, "acme", "Acme", "lever", "acme-other")
+		got, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "lever", ATSToken: "acme-other"})
 		if err != nil {
 			t.Fatalf("second UpsertCompany: %v", err)
 		}
@@ -66,6 +68,105 @@ func TestUpsertCompany(t *testing.T) {
 			t.Errorf("expected original ats board preserved, got source=%q token=%q", got.ATSSource, got.ATSToken)
 		}
 	})
+
+	t.Run("conflict fills in missing domain and linkedin id", func(t *testing.T) {
+		truncateCompanies(t)
+
+		first, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatalf("first UpsertCompany: %v", err)
+		}
+		if first.Domain != "" || first.LinkedInCompanyID != "" {
+			t.Fatalf("expected empty domain/linkedin id on discovery-first insert, got %+v", first)
+		}
+
+		second, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"})
+		if err != nil {
+			t.Fatalf("second UpsertCompany: %v", err)
+		}
+		if second.ID != first.ID {
+			t.Errorf("expected same row, got different IDs")
+		}
+		if second.Domain != "acme.com" || second.LinkedInCompanyID != "12345" {
+			t.Errorf("expected domain/linkedin id filled in, got domain=%q linkedin=%q", second.Domain, second.LinkedInCompanyID)
+		}
+	})
+
+	t.Run("conflict never overwrites an existing domain or linkedin id", func(t *testing.T) {
+		truncateCompanies(t)
+
+		if _, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"}); err != nil {
+			t.Fatalf("first UpsertCompany: %v", err)
+		}
+
+		got, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "other.com", LinkedInCompanyID: "99999"})
+		if err != nil {
+			t.Fatalf("second UpsertCompany: %v", err)
+		}
+		if got.Domain != "acme.com" || got.LinkedInCompanyID != "12345" {
+			t.Errorf("expected original domain/linkedin id preserved, got domain=%q linkedin=%q", got.Domain, got.LinkedInCompanyID)
+		}
+	})
+}
+
+func TestListCompaniesToCrawl(t *testing.T) {
+	ctx := context.Background()
+	truncateCompanies(t)
+
+	noDomain, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "no-domain", Name: "No Domain"})
+	if err != nil {
+		t.Fatalf("UpsertCompany no-domain: %v", err)
+	}
+	hasATS, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "has-ats", Name: "Has ATS", ATSSource: "greenhouse", ATSToken: "has-ats", Domain: "hasats.com"})
+	if err != nil {
+		t.Fatalf("UpsertCompany has-ats: %v", err)
+	}
+	neverCrawled, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "never-crawled", Name: "Never Crawled", Domain: "never.com"})
+	if err != nil {
+		t.Fatalf("UpsertCompany never-crawled: %v", err)
+	}
+	staleCrawl, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "stale-crawl", Name: "Stale Crawl", Domain: "stale.com"})
+	if err != nil {
+		t.Fatalf("UpsertCompany stale-crawl: %v", err)
+	}
+	freshCrawl, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "fresh-crawl", Name: "Fresh Crawl", Domain: "fresh.com"})
+	if err != nil {
+		t.Fatalf("UpsertCompany fresh-crawl: %v", err)
+	}
+
+	if _, err := testDB.Pool().Exec(ctx,
+		"UPDATE companies SET last_crawled_at = NOW() - interval '31 days' WHERE id = $1", staleCrawl.ID); err != nil {
+		t.Fatalf("set stale-crawl last_crawled_at: %v", err)
+	}
+	if _, err := testDB.Pool().Exec(ctx,
+		"UPDATE companies SET last_crawled_at = NOW() - interval '1 day' WHERE id = $1", freshCrawl.ID); err != nil {
+		t.Fatalf("set fresh-crawl last_crawled_at: %v", err)
+	}
+
+	due, err := testDB.ListCompaniesToCrawl(ctx, 10)
+	if err != nil {
+		t.Fatalf("ListCompaniesToCrawl: %v", err)
+	}
+
+	dueIDs := make(map[string]bool, len(due))
+	for _, c := range due {
+		dueIDs[c.ID] = true
+	}
+	if dueIDs[noDomain.ID] {
+		t.Errorf("company with no domain should not be due")
+	}
+	if dueIDs[hasATS.ID] {
+		t.Errorf("company with a resolved ats board should not be due")
+	}
+	if !dueIDs[neverCrawled.ID] {
+		t.Errorf("never-crawled company with a domain should be due")
+	}
+	if !dueIDs[staleCrawl.ID] {
+		t.Errorf("company crawled >30 days ago should be due")
+	}
+	if dueIDs[freshCrawl.ID] {
+		t.Errorf("company crawled recently should not be due")
+	}
 }
 
 func TestListCompaniesForUser(t *testing.T) {
@@ -77,11 +178,11 @@ func TestListCompaniesForUser(t *testing.T) {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
-	tracked, err := testDB.UpsertCompany(ctx, "acme", "Acme", "greenhouse", "acme")
+	tracked, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	if err != nil {
 		t.Fatalf("UpsertCompany tracked: %v", err)
 	}
-	if _, err := testDB.UpsertCompany(ctx, "widgetco", "Widgetco", "ashby", "widgetco"); err != nil {
+	if _, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "widgetco", Name: "Widgetco", ATSSource: "ashby", ATSToken: "widgetco"}); err != nil {
 		t.Fatalf("UpsertCompany untracked: %v", err)
 	}
 
@@ -261,7 +362,7 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	company, err := testDB.UpsertCompany(ctx, "acme", "Acme", "greenhouse", "acme")
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	if err != nil {
 		t.Fatalf("UpsertCompany: %v", err)
 	}
