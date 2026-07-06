@@ -73,6 +73,14 @@ var entries = []registryEntry{
 	}},
 	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Label: "Location", Required: false},
+		{Name: "company_id", Label: "Company ID", Required: false},
+		{Name: "recency", Label: "Recency", Required: false},
+		{Name: "arrangement", Label: "Work Arrangement", Required: false},
+		{Name: "experience", Label: "Experience Level", Required: false},
+		{Name: "job_type", Label: "Job Type", Required: false},
+		{Name: "geo_id", Label: "Geo ID", Required: false},
+		{Name: "distance", Label: "Distance", Required: false},
+		{Name: "salary_band", Label: "Salary Band", Required: false},
 	}},
 	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
 }
