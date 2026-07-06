@@ -76,9 +76,28 @@ func main() {
 	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 
-	boardDone := func(ctx context.Context, source, value string) {
+	boardDone := func(ctx context.Context, source, value string, urls []string) {
 		if err := db.TouchSourceTargetsChecked(ctx, source, value); err != nil {
 			slog.Warn("could not record board check", slog.String("source", source), slog.String("value", value), slog.Any("err", err))
+		}
+
+		if len(urls) == 0 {
+			// ponytail: refuses mass-closure on empty parse; revisit if a real all-closed board shows up.
+			slog.Warn("board returned zero jobs; skipping closure detection", slog.String("source", source), slog.String("value", value))
+			return
+		}
+
+		openURLs, err := db.OpenJobURLsForBoard(ctx, source, value)
+		if err != nil {
+			slog.Warn("could not load open job urls for board", slog.String("source", source), slog.String("value", value), slog.Any("err", err))
+			return
+		}
+		closed := closedBoardURLs(openURLs, urls)
+		if len(closed) == 0 {
+			return
+		}
+		if err := db.MarkJobsClosed(ctx, closed); err != nil {
+			slog.Warn("could not mark jobs closed", slog.String("source", source), slog.String("value", value), slog.Any("err", err))
 		}
 	}
 
@@ -205,4 +224,31 @@ func main() {
 			slog.Any("err", err),
 		)
 	}
+}
+
+// setDifference returns the elements of a not present in b.
+func setDifference(a, b []string) []string {
+	inB := make(map[string]bool, len(b))
+	for _, v := range b {
+		inB[v] = true
+	}
+	var diff []string
+	for _, v := range a {
+		if !inB[v] {
+			diff = append(diff, v)
+		}
+	}
+	return diff
+}
+
+// closedBoardURLs returns which of openURLs should be marked closed given the
+// URLs a board scrape just returned. An empty urls slice is treated as a
+// likely parser regression, not every role closing at once, so it returns
+// nil rather than closing everything.
+// ponytail: refuses mass-closure on empty parse; revisit if a real all-closed board shows up.
+func closedBoardURLs(openURLs, urls []string) []string {
+	if len(urls) == 0 {
+		return nil
+	}
+	return setDifference(openURLs, urls)
 }
