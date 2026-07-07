@@ -12,7 +12,7 @@ import (
 )
 
 const getSearchConfig = `-- name: GetSearchConfig :one
-SELECT id, user_id, role, location, keywords, suitability_rubric, relevance_cutoff, notify_threshold, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
+SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_seniority, excluded_locations, suitability_rubric, notify_threshold, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (SearchConfig, error) {
@@ -21,11 +21,11 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Role,
-		&i.Location,
-		&i.Keywords,
+		&i.ExcludedTitleKeywords,
+		&i.ExcludedCompanies,
+		&i.ExcludedSeniority,
+		&i.ExcludedLocations,
 		&i.SuitabilityRubric,
-		&i.RelevanceCutoff,
 		&i.NotifyThreshold,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -34,7 +34,7 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 }
 
 const listSearchConfigs = `-- name: ListSearchConfigs :many
-SELECT id, user_id, role, location, keywords, suitability_rubric, relevance_cutoff, notify_threshold, created_at, updated_at FROM search_config ORDER BY user_id
+SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_seniority, excluded_locations, suitability_rubric, notify_threshold, created_at, updated_at FROM search_config ORDER BY user_id
 `
 
 func (q *Queries) ListSearchConfigs(ctx context.Context) ([]SearchConfig, error) {
@@ -49,11 +49,11 @@ func (q *Queries) ListSearchConfigs(ctx context.Context) ([]SearchConfig, error)
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
-			&i.Role,
-			&i.Location,
-			&i.Keywords,
+			&i.ExcludedTitleKeywords,
+			&i.ExcludedCompanies,
+			&i.ExcludedSeniority,
+			&i.ExcludedLocations,
 			&i.SuitabilityRubric,
-			&i.RelevanceCutoff,
 			&i.NotifyThreshold,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -69,48 +69,48 @@ func (q *Queries) ListSearchConfigs(ctx context.Context) ([]SearchConfig, error)
 }
 
 const upsertSearchConfig = `-- name: UpsertSearchConfig :one
-INSERT INTO search_config (user_id, role, location, keywords, suitability_rubric, relevance_cutoff, notify_threshold)
+INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_seniority, excluded_locations, suitability_rubric, notify_threshold)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (user_id) DO UPDATE SET
-    role               = EXCLUDED.role,
-    location           = EXCLUDED.location,
-    keywords           = EXCLUDED.keywords,
-    suitability_rubric = EXCLUDED.suitability_rubric,
-    relevance_cutoff   = EXCLUDED.relevance_cutoff,
-    notify_threshold   = EXCLUDED.notify_threshold,
-    updated_at         = NOW()
-RETURNING id, user_id, role, location, keywords, suitability_rubric, relevance_cutoff, notify_threshold, created_at, updated_at
+    excluded_title_keywords = EXCLUDED.excluded_title_keywords,
+    excluded_companies      = EXCLUDED.excluded_companies,
+    excluded_seniority      = EXCLUDED.excluded_seniority,
+    excluded_locations      = EXCLUDED.excluded_locations,
+    suitability_rubric      = EXCLUDED.suitability_rubric,
+    notify_threshold        = EXCLUDED.notify_threshold,
+    updated_at              = NOW()
+RETURNING id, user_id, excluded_title_keywords, excluded_companies, excluded_seniority, excluded_locations, suitability_rubric, notify_threshold, created_at, updated_at
 `
 
 type UpsertSearchConfigParams struct {
-	UserID            pgtype.UUID
-	Role              string
-	Location          string
-	Keywords          []string
-	SuitabilityRubric string
-	RelevanceCutoff   int32
-	NotifyThreshold   int32
+	UserID                pgtype.UUID
+	ExcludedTitleKeywords []string
+	ExcludedCompanies     []string
+	ExcludedSeniority     []string
+	ExcludedLocations     []string
+	SuitabilityRubric     string
+	NotifyThreshold       int32
 }
 
 func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfigParams) (SearchConfig, error) {
 	row := q.db.QueryRow(ctx, upsertSearchConfig,
 		arg.UserID,
-		arg.Role,
-		arg.Location,
-		arg.Keywords,
+		arg.ExcludedTitleKeywords,
+		arg.ExcludedCompanies,
+		arg.ExcludedSeniority,
+		arg.ExcludedLocations,
 		arg.SuitabilityRubric,
-		arg.RelevanceCutoff,
 		arg.NotifyThreshold,
 	)
 	var i SearchConfig
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Role,
-		&i.Location,
-		&i.Keywords,
+		&i.ExcludedTitleKeywords,
+		&i.ExcludedCompanies,
+		&i.ExcludedSeniority,
+		&i.ExcludedLocations,
 		&i.SuitabilityRubric,
-		&i.RelevanceCutoff,
 		&i.NotifyThreshold,
 		&i.CreatedAt,
 		&i.UpdatedAt,

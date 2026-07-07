@@ -78,16 +78,16 @@ type NotificationDigest struct {
 }
 
 type SearchConfig struct {
-	ID                pgtype.UUID
-	UserID            pgtype.UUID
-	Role              string
-	Location          string
-	Keywords          []string
-	SuitabilityRubric string
-	RelevanceCutoff   int32
-	NotifyThreshold   int32
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	ID                    pgtype.UUID
+	UserID                pgtype.UUID
+	ExcludedTitleKeywords []string
+	ExcludedCompanies     []string
+	ExcludedSeniority     []string
+	ExcludedLocations     []string
+	SuitabilityRubric     string
+	NotifyThreshold       int32
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
 }
 
 type Session struct {

@@ -39,47 +39,6 @@ func (q *Queries) GetJobScore(ctx context.Context, arg GetJobScoreParams) (JobSc
 	return i, err
 }
 
-const upsertJobScoreRelevance = `-- name: UpsertJobScoreRelevance :exec
-INSERT INTO job_scores (job_id, user_id, relevance_score)
-VALUES ($1, $2, $3)
-ON CONFLICT (job_id, user_id) DO UPDATE SET
-    relevance_score = EXCLUDED.relevance_score,
-    updated_at = NOW()
-`
-
-type UpsertJobScoreRelevanceParams struct {
-	JobID          pgtype.UUID
-	UserID         pgtype.UUID
-	RelevanceScore pgtype.Int4
-}
-
-func (q *Queries) UpsertJobScoreRelevance(ctx context.Context, arg UpsertJobScoreRelevanceParams) error {
-	_, err := q.db.Exec(ctx, upsertJobScoreRelevance, arg.JobID, arg.UserID, arg.RelevanceScore)
-	return err
-}
-
-const upsertJobScoreSkipped = `-- name: UpsertJobScoreSkipped :exec
-INSERT INTO job_scores (job_id, user_id, suitability_skipped)
-VALUES ($1, $2, true)
-ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_skipped = true,
-    suitability_score   = NULL,
-    reasoning           = NULL,
-    matched             = NULL,
-    missing             = NULL,
-    updated_at          = NOW()
-`
-
-type UpsertJobScoreSkippedParams struct {
-	JobID  pgtype.UUID
-	UserID pgtype.UUID
-}
-
-func (q *Queries) UpsertJobScoreSkipped(ctx context.Context, arg UpsertJobScoreSkippedParams) error {
-	_, err := q.db.Exec(ctx, upsertJobScoreSkipped, arg.JobID, arg.UserID)
-	return err
-}
-
 const upsertJobScoreSuitability = `-- name: UpsertJobScoreSuitability :exec
 INSERT INTO job_scores (job_id, user_id, suitability_score, reasoning, matched, missing, suitability_skipped)
 VALUES ($1, $2, $3, $4, $5, $6, false)

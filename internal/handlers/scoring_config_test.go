@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -27,7 +28,7 @@ func TestScoringConfigHandler_Get(t *testing.T) {
 			name:       "no config returns zero-value defaults",
 			userID:     "user-1",
 			wantStatus: http.StatusOK,
-			wantResp:   &scoringConfigResponse{},
+			wantResp:   emptyScoringConfigResponse(),
 		},
 		{
 			name: "provider error returns 500",
@@ -43,13 +44,12 @@ func TestScoringConfigHandler_Get(t *testing.T) {
 				_, _ = s.UpsertSearchConfig(context.Background(), dto.SearchConfig{
 					UserID:            "user-a",
 					SuitabilityRubric: "user-a rubric",
-					RelevanceCutoff:   50,
 					NotifyThreshold:   80,
 				})
 			},
 			userID:     "user-b",
 			wantStatus: http.StatusOK,
-			wantResp:   &scoringConfigResponse{},
+			wantResp:   emptyScoringConfigResponse(),
 		},
 	}
 
@@ -77,11 +77,22 @@ func TestScoringConfigHandler_Get(t *testing.T) {
 				if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
 					t.Fatalf("decode response: %v", err)
 				}
-				if got != *tt.wantResp {
+				if !reflect.DeepEqual(got, *tt.wantResp) {
 					t.Errorf("got %+v; want %+v", got, *tt.wantResp)
 				}
 			}
 		})
+	}
+}
+
+// emptyScoringConfigResponse is what a zero-value dto.SearchConfig encodes
+// as: exclusion lists are empty arrays, never null.
+func emptyScoringConfigResponse() *scoringConfigResponse {
+	return &scoringConfigResponse{
+		ExcludedTitleKeywords: []string{},
+		ExcludedCompanies:     []string{},
+		ExcludedSeniority:     []string{},
+		ExcludedLocations:     []string{},
 	}
 }
 
@@ -100,8 +111,13 @@ func TestScoringConfigHandler_Put(t *testing.T) {
 		},
 		{
 			name:       "valid body returns 200",
-			body:       `{"suitabilityRubric":"Looking for senior Go engineers","relevanceCutoff":30,"notifyThreshold":75}`,
+			body:       `{"suitabilityRubric":"Looking for senior Go engineers","notifyThreshold":75}`,
 			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "unknown seniority level returns 400",
+			body:       `{"excludedSeniority":["ceo"]}`,
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -133,9 +149,12 @@ func TestScoringConfigHandler_PutThenGet(t *testing.T) {
 	h := NewScoringConfigHandler(store)
 
 	putBody, _ := json.Marshal(map[string]any{
-		"suitabilityRubric": "Looking for senior Go engineers",
-		"relevanceCutoff":   30,
-		"notifyThreshold":   75,
+		"suitabilityRubric":     "Looking for senior Go engineers",
+		"notifyThreshold":       75,
+		"excludedTitleKeywords": []string{"Java", "Sales"},
+		"excludedCompanies":     []string{"Acme Corp"},
+		"excludedSeniority":     []string{"intern", "junior"},
+		"excludedLocations":     []string{"United States"},
 	})
 	putReq := httptest.NewRequest(http.MethodPut, "/scoring-config", bytes.NewReader(putBody))
 	putReq.Header.Set("Content-Type", "application/json")
@@ -162,11 +181,14 @@ func TestScoringConfigHandler_PutThenGet(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	want := scoringConfigResponse{
-		SuitabilityRubric: "Looking for senior Go engineers",
-		RelevanceCutoff:   30,
-		NotifyThreshold:   75,
+		SuitabilityRubric:     "Looking for senior Go engineers",
+		NotifyThreshold:       75,
+		ExcludedTitleKeywords: []string{"java", "sales"},
+		ExcludedCompanies:     []string{"acme corp"},
+		ExcludedSeniority:     []string{"intern", "junior"},
+		ExcludedLocations:     []string{"united states"},
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v; want %+v", got, want)
 	}
 }

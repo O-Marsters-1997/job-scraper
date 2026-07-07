@@ -19,7 +19,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
@@ -131,8 +130,8 @@ func main() {
 		slog.Info("force scrape enabled: ignoring per-source recency gate")
 	}
 
-	orch.WithRelevanceGate(&score.HeuristicScorer{}, db)
-	slog.Info("relevance gate enabled (multi-user)")
+	orch.WithRejectFilter(db)
+	slog.Info("reject filter enabled (multi-user)")
 
 	if *noScrape {
 		slog.Info("no-scrape enabled: skipping source enqueueing, draining queue only")
@@ -173,7 +172,6 @@ func main() {
 	// job URLs can be fetched even when no wis targets exist at boot.
 	detailers = append(detailers, wis.New(wis.Config{}))
 
-	// Scrape-request consumer: handles scrape_now requests from the API.
 	go worker.RunScrapeRequests(ctx, q, func(ctx context.Context, req dto.ScrapeRequest) error {
 		return orch.ScrapeTarget(ctx, req.Target)
 	})
@@ -226,7 +224,6 @@ func main() {
 	}
 }
 
-// setDifference returns the elements of a not present in b.
 func setDifference(a, b []string) []string {
 	inB := make(map[string]bool, len(b))
 	for _, v := range b {

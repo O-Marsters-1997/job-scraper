@@ -91,16 +91,16 @@ CREATE TABLE IF NOT EXISTS job_scores (
 );
 
 CREATE TABLE IF NOT EXISTS search_config (
-    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id            UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    role               TEXT        NOT NULL DEFAULT '',
-    location           TEXT        NOT NULL DEFAULT '',
-    keywords           TEXT[]      NOT NULL DEFAULT '{}',
-    suitability_rubric TEXT        NOT NULL DEFAULT '',
-    relevance_cutoff   INT         NOT NULL DEFAULT 0,
-    notify_threshold   INT         NOT NULL DEFAULT 70,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                 UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    excluded_title_keywords TEXT[]      NOT NULL DEFAULT '{}',
+    excluded_companies      TEXT[]      NOT NULL DEFAULT '{}',
+    excluded_seniority      TEXT[]      NOT NULL DEFAULT '{}',
+    excluded_locations      TEXT[]      NOT NULL DEFAULT '{}',
+    suitability_rubric      TEXT        NOT NULL DEFAULT '',
+    notify_threshold        INT         NOT NULL DEFAULT 70,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS user_ai_prefs (

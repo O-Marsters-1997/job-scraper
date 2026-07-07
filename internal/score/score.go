@@ -2,7 +2,6 @@ package score
 
 import (
 	"context"
-	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -24,43 +23,10 @@ type SuitabilityScorer interface {
 	ScoreBatch(ctx context.Context, jobs []dto.Job, cfg dto.SearchConfig, modelID string) ([]SuitabilityResult, error)
 }
 
-type RelevanceScorer interface {
-	Score(card dto.Job, cfg dto.SearchConfig) int
-}
-
 type TokenUsage struct {
 	InputTokens         int
 	OutputTokens        int
 	CacheCreationTokens int
 	CacheReadTokens     int
 	CostUSD             float64
-}
-
-// HeuristicScorer is a pure, I/O-free keyword-matching scorer.
-type HeuristicScorer struct{}
-
-func (h *HeuristicScorer) Score(card dto.Job, cfg dto.SearchConfig) int {
-	score := 0
-	titleLower := strings.ToLower(card.Title)
-	locationLower := strings.ToLower(card.Location)
-
-	if cfg.Role != "" && strings.Contains(titleLower, strings.ToLower(cfg.Role)) {
-		score += 50
-	}
-
-	if len(cfg.Keywords) > 0 {
-		matched := 0
-		for _, kw := range cfg.Keywords {
-			if strings.Contains(titleLower, strings.ToLower(kw)) {
-				matched++
-			}
-		}
-		score += 30 * matched / len(cfg.Keywords)
-	}
-
-	if cfg.Location != "" && strings.Contains(locationLower, strings.ToLower(cfg.Location)) {
-		score += 20
-	}
-
-	return min(score, 100)
 }
