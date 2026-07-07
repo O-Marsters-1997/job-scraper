@@ -1,0 +1,754 @@
+{
+  "companies": [
+    {
+      "id": 33838,
+      "name": "Simantic",
+      "slug": "simantic",
+      "website": "https://simantic.dev",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/12eef74104b6e57636a6f0d2305e3a2d18d5c2e5.png",
+      "oneLiner": "Firmware simulation for AI agents",
+      "longDescription": "Simantic is modernizing the embedded firmware industry with hardware simulation developed for the adoption of AI in hardware engineering. Simantic gives both humans and AI the visibility into hardware previously limited by the physical world.",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/simantic",
+      "batch": "F26",
+      "tags": [
+        "Artificial Intelligence",
+        "Developer Tools",
+        "Hardware",
+        "Semiconductors",
+        "Electronics"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Engineering, Product and Design"
+      ],
+      "regions": [
+        "Canada",
+        "America / Canada"
+      ],
+      "locations": [
+        "Waterloo, ON, Canada"
+      ],
+      "badges": [
+        "isHiring"
+      ]
+    },
+    {
+      "id": 33806,
+      "name": "Experiential Labs",
+      "slug": "experiential-labs",
+      "website": "https://experientiallabs.ai",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/716e828c9efd6efe6da64574ff67dd5bfa0c2a25.png",
+      "oneLiner": "World models for agents",
+      "longDescription": "An applied AI research lab building world models for agents. We simulate reality faster and more accurately based on the technology self-driving uses to get 99.7% reconstruction fidelity.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/experiential-labs",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "Infrastructure"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Infrastructure"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33805,
+      "name": "Edviro",
+      "slug": "edviro",
+      "website": "https://edviroenergy.com",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/c179a28044a3d4a8c3ceaf2a5b8cecbf90f66aa7.png",
+      "oneLiner": "Energy world models that fix energy waste before it becomes expensive.",
+      "longDescription": "Edviro helps facilities managers at large buildings save on their energy bills. Facilities managers are overwhelmed with dashboards, alarms, and analytics for hundreds of boilers, HVAC units, and heat pumps across their buildings. Edviro continuously monitors and optimizes buildings using energy world models to detect anomalies, simulate interventions, and suggest the best options to the facilities manager.  Once the changes occur, we create a comprehensive M&V report to ensure savings show up on the bill. \r\n\r\nOur tools also allow institutions to maintain detailed service history & equipment logs, and perform maintenance with AR.  ",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/edviro",
+      "batch": "S26",
+      "tags": [
+        "Deep Learning",
+        "B2B",
+        "Energy"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Infrastructure"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33738,
+      "name": "Coasty",
+      "slug": "coasty",
+      "website": "http://coasty.ai/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/49c533e34b6c887207ac5683dd8dfab22709a458.png",
+      "oneLiner": "Building the future of knowledge work, RPA and SOPs using computer use",
+      "longDescription": "Coasty is a computer use agent that does real work inside softwares, companies already run. New web apps, old desktop tools, the legacy systems nobody wants to touch. You hand it a workflow and it owns the outcome.\r\nMost agents demo well and break the moment they hit real software. They get 18 steps out of 20 right, misclick once, and everything after is garbage. Coasty catches when it goes off track and fixes itself mid-task instead of starting over. It handles the messy parts, benchmarks never show. Permission dialogs, surprise pop-ups, a modal that steals focus, a page that loads slow. When a vendor pushes an overnight update and moves half the menus, brittle scripts break by morning. Coasty reads the screen instead of recording clicks, so it adapts and keeps going.\r\nIt also checks its own output and leaves a time-stamped trail you can replay. We won't pretend it gets every task right. Nothing automating this work does. What matters is what happens when something breaks. It catches the mistake, fixes what it can, and flags what it can't so a person can step in. Nothing fails quietly. That's what lets a team trust it on the work where a silent error gets someone fired.\r\nWe scored 82% on OSWorld, which puts us among the most reliable agents out there. Reliability is the whole product, not a feature.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/coasty",
+      "batch": "S26",
+      "tags": [
+        "AIOps",
+        "Developer Tools",
+        "Workflow Automation"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33408,
+      "name": "Salem Robotics Inc",
+      "slug": "salem-robotics-inc",
+      "website": "https://salemroboticsinc.com",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/5e1ebb1f65dc65dbec9a58c2d2d505adc9e79d36.png",
+      "oneLiner": "We deploy robots for inspections in hazardous spaces, like nuclear.",
+      "longDescription": "Our software turns any robot we deploy into an everyday independent worker at your facility. They are able to walk sites, handle instruments, overcome obstacles, collect measurements, and generate auditable compliance records, replacing hours of manual surveys and inspections. Built by Los Alamos robotics veterans and deterministic-manipulation researchers, we're starting in nuclear and expanding to other hazardous industries.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/salem-robotics-inc",
+      "batch": "S26",
+      "tags": [
+        "Hard Tech",
+        "Robotics",
+        "Industrial"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials",
+        "Manufacturing and Robotics"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "Austin, TX, USA"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33310,
+      "name": "Petrarch",
+      "slug": "petrarch",
+      "website": "https://petrarch.co/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/7b5debb8ea62766300bda39dac40230ec792801c.png",
+      "oneLiner": "Market maker for specialized data assets",
+      "longDescription": "",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/petrarch",
+      "batch": "S26",
+      "tags": [
+        "Marketplace",
+        "B2B",
+        "Data Engineering"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": [
+        "isHiring"
+      ]
+    },
+    {
+      "id": 33283,
+      "name": "Justinian",
+      "slug": "justinian",
+      "website": "https://justinianai.com",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/05d00b332191d31f20aa45f1bbec7b3fd866e683.png",
+      "oneLiner": "Builders of the first AI-native government affairs firm.",
+      "longDescription": "Justinian is an applied AI company changing the way companies and governments work together. \r\n\r\nOur first focus is building Justinian Government Affairs, an AI-native government affairs firm helping early-stage companies monitor regulations, lobby policymakers, and win government contracts.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/justinian",
+      "batch": "S26",
+      "tags": [
+        "GovTech",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": [
+        "isHiring"
+      ]
+    },
+    {
+      "id": 33282,
+      "name": "Florin",
+      "slug": "florin",
+      "website": "https://florin.inc",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/48074691217afbc59a4443c6ffa2379a823efda9.png",
+      "oneLiner": "The financial operating system for the companies building the future.",
+      "longDescription": "Florin brings banking, payments, cards, and treasury into one account built for startups - so founders can hold, move, and grow their capital without stitching together half a dozen tools. Unlike platforms that resell another bank's rails, we're building the infrastructure ourselves, end to end, so money moves in real time on a single ledger we own. We start with an invite-only membership for venture-backed companies and expand from there. Named after the florin, the coin that anchored global trade for three centuries, with infrastructure built for how money moves now.",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/florin",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "Banking as a Service",
+        "Fintech",
+        "Finance",
+        "Neobank"
+      ],
+      "status": "Active",
+      "industries": [
+        "Fintech"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33277,
+      "name": "Hop Aero",
+      "slug": "hop-aero",
+      "website": "https://hop-aero.com",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/a5cab9ede70e23b0ea3f8e3b64b7a19735939c17.png",
+      "oneLiner": "Rocket cargo delivery to contested environments",
+      "longDescription": "Hop Aero is building rocket cargo vehicles that deliver to contested environments hundreds of miles away in minutes. Our rockets fly point-to-point into the most austere locations at hypersonic speeds. Hop Aero's goal is to provide the U.S. and allies the asymmetric advantage that deters a future major conflict.",
+      "teamSize": 6,
+      "url": "https://www.ycombinator.com/companies/hop-aero",
+      "batch": "S26",
+      "tags": [],
+      "status": "Active",
+      "industries": [
+        "Industrials",
+        "Defense"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "Los Angeles"
+      ],
+      "badges": [
+        "isHiring"
+      ]
+    },
+    {
+      "id": 33056,
+      "name": "83 Sciences",
+      "slug": "83-sciences",
+      "website": "https://83sciences.ai",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/08c94ab9737bf76c36b1cbac477c55b5067788ed.png",
+      "oneLiner": "Intelligence engine powering the future of science and materials…",
+      "longDescription": "",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/83-sciences",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "Hard Tech",
+        "Advanced Materials"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials"
+      ],
+      "regions": [],
+      "locations": [],
+      "badges": []
+    },
+    {
+      "id": 33052,
+      "name": "Mireye",
+      "slug": "mireye",
+      "website": "https://www.mireye.com/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/c96db3bdd6828a4a145c678555e120d2ab43c855.png",
+      "oneLiner": "Infrastructure for Physical World AI Agents",
+      "longDescription": "AI agents are starting to act in the real world, but they can't reliably understand it. \r\n\r\nGeospatial data is complex, fragmented, and unstructured. Ask a model a specific question about a specific place and it guesses. Our API and MCP give agents cited answers about any location.\r\n\r\nOur mission is to index every inch of the earth, and make it as queryable as the web.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/mireye",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "Geographic Information System",
+        "Location-based"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Infrastructure"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33023,
+      "name": "Levocred AI",
+      "slug": "levocred-ai",
+      "website": "https://levocred.com/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/0bbbf3d7f7c1c77264bdea3c5e95a8c6d460cd1f.png",
+      "oneLiner": "AI for every workflow inside a credit team",
+      "longDescription": "Levocred AI is the Company Brain for credit teams — an AI employee that plugs into the fund's loan tape, credit agreements, servicer reports, and bank feeds, and runs the workflows analysts would otherwise grind on.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/levocred-ai",
+      "batch": "S26",
+      "tags": [
+        "Lending",
+        "Investments"
+      ],
+      "status": "Active",
+      "industries": [
+        "Fintech"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33022,
+      "name": "Praxis AI",
+      "slug": "praxis-ai-2",
+      "website": "https://www.praxisrobotics.io",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/9bc18b804ad9a5d92ef1db88e90491f98e0204a7.png",
+      "oneLiner": "Turns every company into a data vendor ",
+      "longDescription": "Praxis captures the data physical AI is bottlenecked on: egocentric video, 3D scans, and multimodal capture from inside real industrial and residential environments. Embedded within publicly listed and unicorn-scale conglomerates, we reach 60k workers across 5 continents and 150+ environment types, supplying the real-world training data frontier labs and humanoid companies can't source anywhere else.",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/praxis-ai-2",
+      "batch": "S26",
+      "tags": [
+        "Hard Tech",
+        "Reinforcement Learning",
+        "Robotic Process Automation"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33021,
+      "name": "Care GP",
+      "slug": "care-gp",
+      "website": "https://caregp.com.au/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/3f871fa8c32b501e71ef06d881893d564e003fbd.png",
+      "oneLiner": "AI agents to run primary healthcare operations",
+      "longDescription": "Care GP is building AI agents to run operations for primary healthcare clinics",
+      "teamSize": 10,
+      "url": "https://www.ycombinator.com/companies/care-gp",
+      "batch": "S26",
+      "tags": [
+        "SaaS",
+        "Healthcare",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "Healthcare"
+      ],
+      "regions": [
+        "Australia",
+        "Oceania"
+      ],
+      "locations": [
+        "Sydney NSW, Australia"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33018,
+      "name": "Agentcard",
+      "slug": "agentcard",
+      "website": "https://agentcard.sh",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/aba1ff38c8593a6ce1ecdd01f1125330e298ac04.png",
+      "oneLiner": "debit cards for AI agents.",
+      "longDescription": "Agentcard.sh is a debit card for AI agents. Agents can use Agentcard’s API to issue cards and pay for things online autonomously.",
+      "teamSize": 0,
+      "url": "https://www.ycombinator.com/companies/agentcard",
+      "batch": "S26",
+      "tags": [
+        "Fintech"
+      ],
+      "status": "Active",
+      "industries": [
+        "Fintech"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33014,
+      "name": "Inkbox",
+      "slug": "inkbox",
+      "website": "https://inkbox.ai",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/f2e10120a7184c6f7b716b22ea7167e079fcbd86.png",
+      "oneLiner": "Give your AI agents email, phone, iMessage and an internet address",
+      "longDescription": "We are building the identity and communication layer for AI agents: giving agents their own email, phone, iMessage, and internet address. Every interaction flows through Inkbox, so agents are enhanced with multi-channel context.",
+      "teamSize": 3,
+      "url": "https://www.ycombinator.com/companies/inkbox",
+      "batch": "S26",
+      "tags": [
+        "Developer Tools",
+        "Infrastructure",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Infrastructure"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 33013,
+      "name": "Operon",
+      "slug": "operon",
+      "website": "https://operonsolutions.com/en",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/aaeb7f2ff7aa5b0b7e64888230be2a7e46342f66.png",
+      "oneLiner": "Agentic data layer for manufacturing & process industries. ",
+      "longDescription": "Operon is the data intelligence layer for heavy industry. We ingest the messy documents a plant runs on (P&IDs, schematics, datasheets, scans) and turn them into one structured, queryable model of the facility.\r\n\r\nOn top of it, engineers query their plant in natural language and build agentic workflows for safety, compliance, and design. \r\n\r\n",
+      "teamSize": 0,
+      "url": "https://www.ycombinator.com/companies/operon",
+      "batch": "S26",
+      "tags": [
+        "Computer Vision",
+        "Manufacturing",
+        "Infrastructure"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": [
+        "isHiring"
+      ]
+    },
+    {
+      "id": 33012,
+      "name": "Cosmic Robotics",
+      "slug": "cosmic-robotics",
+      "website": "https://www.cosmicrobotics.com/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/610b3f44c95c65ea346121a48c57b8c81a3788ce.png",
+      "oneLiner": "Autonomous construction on Earth and beyond",
+      "longDescription": "Our mission is to build a city on Mars. \r\n\r\nCosmic-1, the first equipment in our fleet, is an autonomous robot capable of heavy-lift manipulation. Its been deployed on some of the largest solar farms in the US, more than doubling labor productivity across tens of thousands of panel installs. \r\n\r\nWe're scaling in solar, expanding in data centers, and building lunar construction robotics under contract with NASA.",
+      "teamSize": 8,
+      "url": "https://www.ycombinator.com/companies/cosmic-robotics",
+      "batch": "S26",
+      "tags": [
+        "Hard Tech",
+        "Robotics",
+        "Construction",
+        "Aerospace"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32988,
+      "name": "Markov",
+      "slug": "markov",
+      "website": "https://www.markovstudios.com/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/455a1b80a115b180bc211a79ff00bc48bf9cb451.png",
+      "oneLiner": "Data for computer-use ai",
+      "longDescription": "We source high quality tasks and data to train the next generation of computer use AI models.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/markov",
+      "batch": "S26",
+      "tags": [
+        "Reinforcement Learning",
+        "Data Labeling",
+        "Data Engineering"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Infrastructure"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32782,
+      "name": "Denta",
+      "slug": "denta",
+      "website": "https://trydenta.com",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/8126dcec05004e9a335df14d0116cf4774a61b06.png",
+      "oneLiner": "The dental practice that runs itself",
+      "longDescription": "Denta is the practice management platform that puts dental practices on autopilot. When a dentist starts a new practice, instead of finding an accounting firm, hiring two front desk workers, and then spending their nights posting insurance payments, they use Denta.\r\n\r\nI started Denta to help operate my Dad's 10 practices in Iowa. In supporting those, I realized the most painful part was both people and agents having messy access to fragmented data. So I solved for that and now spend my time automating work for dentists!",
+      "teamSize": 1,
+      "url": "https://www.ycombinator.com/companies/denta",
+      "batch": "S26",
+      "tags": [
+        "Dental",
+        "Healthcare IT",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "Healthcare",
+        "Healthcare IT"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32781,
+      "name": "Isengard Industries Inc",
+      "slug": "isengard-industries-inc",
+      "website": "http://isengardindustries.com/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/61edd7196dfa0843151f208bc6c91a2bd788bc94.png",
+      "oneLiner": "Mass-produced AI strike systems and Counter-UAS",
+      "longDescription": "Isengard Industries is not another drone company.\r\n\r\nWe build sovereign production: the means for allied nations to make precision-strike and counter-drone systems by the thousand, on their own soil, at a fraction of what the primes charge.\r\n\r\nWe call it Weapons of Mass Production. The Arsenal of Democracy, rebuilt for the drone age.\r\n\r\nMore to come, and only where it helps. You know how to reach us.",
+      "teamSize": 20,
+      "url": "https://www.ycombinator.com/companies/isengard-industries-inc",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "Swarm Robotics",
+        "Unmanned Vehicle"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials",
+        "Defense"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada",
+        "Remote",
+        "Partly Remote"
+      ],
+      "locations": [
+        "Florida City, FL, USA"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32682,
+      "name": "LATO",
+      "slug": "lato",
+      "website": "https://www.latolabs.io/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/78429e3a8867e93ea2df52fc422fdbd447685774.png",
+      "oneLiner": "Agent-native research and simulation platform for investors",
+      "longDescription": "The best investments come from conviction, and conviction comes from understanding a market deeply: its customers, its competitors, and where it's heading.\r\n\r\nToday that understanding is slow and expensive to build. Reaching the right people takes weeks, a commercial study costs $300k+, and each one starts from scratch.\r\n\r\nLATO does this research end-to-end, combining public data and the fund's own knowledge with first-hand interviews of a market's customers, experts, and operators. This research grounds a simulation of the market to predict how market participants behave.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/lato",
+      "batch": "S26",
+      "tags": [
+        "B2B",
+        "Investing",
+        "Market Research",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32650,
+      "name": "Risklytics",
+      "slug": "risklytics",
+      "website": "https://www.risklytics.ai/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/b0ad1653f775fb272b3481e8715c274f46c2c464.png",
+      "oneLiner": "AI-powered catastrophe risk modeling",
+      "longDescription": "We build AI-powered catastrophe risk models that help insurers, reinsurers, and financial institutions better understand and quantify natural disaster risk. Our platform combines continuously updated data, property-level analysis, and synthetic catastrophe simulations to deliver more accurate, transparent, and flexible risk assessments than traditional catastrophe models.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/risklytics",
+      "batch": "S26",
+      "tags": [
+        "Machine Learning",
+        "B2B",
+        "Climate",
+        "Insurance",
+        "AI"
+      ],
+      "status": "Active",
+      "industries": [
+        "Fintech",
+        "Insurance"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32617,
+      "name": "Whitespace",
+      "slug": "whitespace",
+      "website": "https://whitespacehq.ai/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/d7ab9b902afa3fe0a37b3622022557a9cd82d082.png",
+      "oneLiner": "AI Operating System for Wholesale Distributors",
+      "longDescription": "Whitespace is the AI operating system for wholesale distributors. It connects to their systems and inboxes to build a living model of their business, then deploys self-improving AI agents to automate work like inventory planning, customer support, and order entry.",
+      "teamSize": 2,
+      "url": "https://www.ycombinator.com/companies/whitespace",
+      "batch": "S26",
+      "tags": [
+        "Artificial Intelligence",
+        "SaaS",
+        "B2B",
+        "Supply Chain"
+      ],
+      "status": "Active",
+      "industries": [
+        "B2B",
+        "Supply Chain and Logistics"
+      ],
+      "regions": [
+        "United Kingdom",
+        "Europe"
+      ],
+      "locations": [
+        "London"
+      ],
+      "badges": []
+    },
+    {
+      "id": 32586,
+      "name": "Greypoint Industries",
+      "slug": "greypoint-industries",
+      "website": "https://greypointindustries.ca/",
+      "smallLogoUrl": "https://bookface-images.s3.amazonaws.com/small_logos/0639d67fe49e5a542121b3abc6ee745141eeff4b.png",
+      "oneLiner": "Manufacturing the future of autonomous swarm warfare.",
+      "longDescription": "Greypoint Industries builds mass-produced autonomous interceptors that defeat drone saturation for a fraction of the cost of the targets. We are developing a soldier-deployable, fire-and-forget interceptor built to give Western and allied forces the ammunition to counter mass drone swarm attacks.",
+      "teamSize": 4,
+      "url": "https://www.ycombinator.com/companies/greypoint-industries",
+      "batch": "S26",
+      "tags": [
+        "Hardware",
+        "Robotics",
+        "Drones",
+        "Manufacturing",
+        "Defense"
+      ],
+      "status": "Active",
+      "industries": [
+        "Industrials",
+        "Defense"
+      ],
+      "regions": [
+        "United States of America",
+        "America / Canada"
+      ],
+      "locations": [
+        "San Francisco"
+      ],
+      "badges": []
+    }
+  ],
+  "nextPage": "https://api.ycombinator.com/v0.1/companies?page=2",
+  "page": 1,
+  "totalPages": 241
+}

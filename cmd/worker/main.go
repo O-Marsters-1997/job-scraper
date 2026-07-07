@@ -12,6 +12,9 @@ import (
 	"github.com/robfig/cron/v3"
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/discover"
+	"github.com/ollymarsters/job-scraper/internal/discover/getro"
+	"github.com/ollymarsters/job-scraper/internal/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -154,6 +157,12 @@ func main() {
 	go worker.RunScrapeRequests(ctx, q, func(ctx context.Context, req dto.ScrapeRequest) error {
 		return orch.ScrapeTarget(ctx, req.Target)
 	})
+
+	// Company harvester runner: drains code-registered harvesters into the
+	// companies catalog on a 24h-per-harvester gate. Catalog-only — no source
+	// targets, nothing scrapable results from this.
+	harvestRunner := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, db, q)
+	go harvestRunner.Run(ctx)
 
 	// Dead-letter monitor: surfaces standing accumulation so orphaned URLs don't
 	// pile up silently. Only logs when the set is non-empty.
