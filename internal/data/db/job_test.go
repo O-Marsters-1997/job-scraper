@@ -208,6 +208,73 @@ func TestNewURLs(t *testing.T) {
 	})
 }
 
+func TestOpenJobURLsForBoard_MarkJobsClosed(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	source := "greenhouse"
+	companySlug := "acme"
+	jobs := []dto.Job{
+		{Title: "A", URL: "https://boards.example.com/acme/1", CompanySlug: companySlug, Source: source, UpdatedAt: time.Now()},
+		{Title: "B", URL: "https://boards.example.com/acme/2", CompanySlug: companySlug, Source: source, UpdatedAt: time.Now()},
+		{Title: "C", URL: "https://boards.example.com/acme/3", CompanySlug: companySlug, Source: source, UpdatedAt: time.Now()},
+	}
+	if _, err := testDB.Save(ctx, jobs); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	open, err := testDB.OpenJobURLsForBoard(ctx, source, companySlug)
+	if err != nil {
+		t.Fatalf("OpenJobURLsForBoard: %v", err)
+	}
+	if len(open) != 3 {
+		t.Fatalf("want 3 open urls, got %d", len(open))
+	}
+
+	// Only jobs 1 and 2 present in this run; job 3 disappeared.
+	currentRun := map[string]bool{jobs[0].URL: true, jobs[1].URL: true}
+	var toClose []string
+	for _, url := range open {
+		if !currentRun[url] {
+			toClose = append(toClose, url)
+		}
+	}
+	if len(toClose) != 1 || toClose[0] != jobs[2].URL {
+		t.Fatalf("want to close [%q], got %v", jobs[2].URL, toClose)
+	}
+
+	if err := testDB.MarkJobsClosed(ctx, toClose); err != nil {
+		t.Fatalf("MarkJobsClosed: %v", err)
+	}
+
+	open, err = testDB.OpenJobURLsForBoard(ctx, source, companySlug)
+	if err != nil {
+		t.Fatalf("OpenJobURLsForBoard (after close): %v", err)
+	}
+	if len(open) != 2 {
+		t.Fatalf("want 2 open urls after closing job 3, got %v", open)
+	}
+	for _, url := range open {
+		if url == jobs[2].URL {
+			t.Fatalf("closed job %q still reported open", jobs[2].URL)
+		}
+	}
+
+	// Re-scraping the closed job (fresh Save) reopens it for free.
+	reopened := jobs[2]
+	reopened.UpdatedAt = time.Now()
+	if _, err := testDB.Save(ctx, []dto.Job{reopened}); err != nil {
+		t.Fatalf("Save (reopen): %v", err)
+	}
+	open, err = testDB.OpenJobURLsForBoard(ctx, source, companySlug)
+	if err != nil {
+		t.Fatalf("OpenJobURLsForBoard (after reopen): %v", err)
+	}
+	if len(open) != 3 {
+		t.Fatalf("want 3 open urls after re-saving job 3, got %v", open)
+	}
+}
+
 func TestList(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

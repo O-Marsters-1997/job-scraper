@@ -22,10 +22,11 @@ import (
 )
 
 // BuildSources constructs the live Source set from enabled targets. boardDone,
-// if non-nil, is called with (source name, board token) whenever a board is
-// successfully scraped, so the caller can record per-target freshness. Pass
-// nil for one-off scrapes (e.g. scrape-now) that must not affect scheduling.
-func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string)) []sources.Source {
+// if non-nil, is called with (source name, board token, job URLs) whenever a
+// board is successfully scraped, so the caller can record per-target
+// freshness and detect closures. Pass nil for one-off scrapes (e.g.
+// scrape-now) that must not affect scheduling.
+func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string, urls []string)) []sources.Source {
 	boards := make(map[string][]string)     // source name → deduped board tokens
 	seen := make(map[string]bool)           // "source\x00token" → already added
 	urlSources := make(map[string][]string) // source name → configured search URLs
@@ -100,8 +101,8 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 		if boardDone == nil {
 			return src
 		}
-		return src.WithDone(func(ctx context.Context, token string) {
-			boardDone(ctx, name, token)
+		return src.WithDone(func(ctx context.Context, token string, urls []string) {
+			boardDone(ctx, name, token, urls)
 		})
 	}
 

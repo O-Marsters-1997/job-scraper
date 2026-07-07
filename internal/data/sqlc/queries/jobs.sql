@@ -8,7 +8,8 @@ ON CONFLICT (url) DO UPDATE SET
     scraped_at       = NOW(),
     description      = EXCLUDED.description,
     salary_raw       = EXCLUDED.salary_raw,
-    work_arrangement = EXCLUDED.work_arrangement
+    work_arrangement = EXCLUDED.work_arrangement,
+    closed_at        = NULL
 RETURNING *;
 
 -- name: UpsertJobs :batchexec
@@ -21,7 +22,8 @@ ON CONFLICT (url) DO UPDATE SET
     scraped_at       = NOW(),
     description      = EXCLUDED.description,
     salary_raw       = EXCLUDED.salary_raw,
-    work_arrangement = EXCLUDED.work_arrangement;
+    work_arrangement = EXCLUDED.work_arrangement,
+    closed_at        = NULL;
 
 -- name: GetJobByURL :one
 SELECT * FROM jobs WHERE url = $1 LIMIT 1;
@@ -44,3 +46,9 @@ SELECT url FROM jobs WHERE url = ANY($1::text[]);
 
 -- name: ListJobsSince :many
 SELECT * FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC;
+
+-- name: OpenJobURLsForBoard :many
+SELECT url FROM jobs WHERE source = $1 AND company_slug = $2 AND closed_at IS NULL;
+
+-- name: MarkJobsClosed :exec
+UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL;

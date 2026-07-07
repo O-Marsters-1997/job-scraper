@@ -29,7 +29,7 @@ type BoardSource struct {
 	PaginatedBase
 	boards []string
 	spec   BoardSpec
-	done   func(ctx context.Context, token string)
+	done   func(ctx context.Context, token string, urls []string)
 }
 
 var _ Source = (*BoardSource)(nil)
@@ -44,8 +44,10 @@ func NewBoardSource(boards []string, spec BoardSpec) *BoardSource {
 
 // WithDone registers a hook called after each board token is successfully
 // fetched and parsed, letting the caller record per-token freshness (e.g.
-// last_checked_at) independent of one-off manual scrapes.
-func (b *BoardSource) WithDone(fn func(ctx context.Context, token string)) *BoardSource {
+// last_checked_at) independent of one-off manual scrapes. urls is every job
+// URL the board API returned for that token this run, pre-relevance-gate —
+// callers can diff it against previously-known URLs to detect closures.
+func (b *BoardSource) WithDone(fn func(ctx context.Context, token string, urls []string)) *BoardSource {
 	b.done = fn
 	return b
 }
@@ -77,7 +79,11 @@ func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dt
 			continue
 		}
 		if b.done != nil {
-			b.done(ctx, token)
+			urls := make([]string, len(jobs))
+			for i, job := range jobs {
+				urls[i] = job.URL
+			}
+			b.done(ctx, token, urls)
 		}
 		if stop {
 			break

@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
-    work_arrangement TEXT         NOT NULL DEFAULT ''
+    work_arrangement TEXT         NOT NULL DEFAULT '',
+    closed_at        TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS users (

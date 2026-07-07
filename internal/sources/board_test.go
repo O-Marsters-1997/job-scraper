@@ -33,7 +33,11 @@ func TestBoardSource_Iterate_ContinuesPastFailingToken(t *testing.T) {
 	})
 
 	var done []string
-	src.WithDone(func(_ context.Context, token string) { done = append(done, token) })
+	var doneURLs [][]string
+	src.WithDone(func(_ context.Context, token string, urls []string) {
+		done = append(done, token)
+		doneURLs = append(doneURLs, urls)
+	})
 
 	err := src.Iterate(context.Background(), func(_ context.Context, jobs []dto.Job) (bool, error) {
 		for _, j := range jobs {
@@ -50,6 +54,9 @@ func TestBoardSource_Iterate_ContinuesPastFailingToken(t *testing.T) {
 	}
 	if want := []string{"good1", "good2"}; !equalSlices(done, want) {
 		t.Errorf("done called with %v, want %v (bad token should not call done)", done, want)
+	}
+	if len(doneURLs) != 2 || doneURLs[0][0] != "https://example.com/good1" || doneURLs[1][0] != "https://example.com/good2" {
+		t.Errorf("done urls = %v, want per-token job URLs", doneURLs)
 	}
 }
 

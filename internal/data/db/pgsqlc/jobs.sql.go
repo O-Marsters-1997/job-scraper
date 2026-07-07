@@ -94,7 +94,7 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 }
 
 const getJobByURL = `-- name: GetJobByURL :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement FROM jobs WHERE url = $1 LIMIT 1
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at FROM jobs WHERE url = $1 LIMIT 1
 `
 
 func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
@@ -112,6 +112,7 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 		&i.Description,
 		&i.SalaryRaw,
 		&i.WorkArrangement,
+		&i.ClosedAt,
 	)
 	return i, err
 }
@@ -182,7 +183,7 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 }
 
 const listJobsSince = `-- name: ListJobsSince :many
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
 `
 
 func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestamptz) ([]Job, error) {
@@ -206,10 +207,49 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 			&i.Description,
 			&i.SalaryRaw,
 			&i.WorkArrangement,
+			&i.ClosedAt,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markJobsClosed = `-- name: MarkJobsClosed :exec
+UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
+`
+
+func (q *Queries) MarkJobsClosed(ctx context.Context, dollar_1 []string) error {
+	_, err := q.db.Exec(ctx, markJobsClosed, dollar_1)
+	return err
+}
+
+const openJobURLsForBoard = `-- name: OpenJobURLsForBoard :many
+SELECT url FROM jobs WHERE source = $1 AND company_slug = $2 AND closed_at IS NULL
+`
+
+type OpenJobURLsForBoardParams struct {
+	Source      string
+	CompanySlug string
+}
+
+func (q *Queries) OpenJobURLsForBoard(ctx context.Context, arg OpenJobURLsForBoardParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, openJobURLsForBoard, arg.Source, arg.CompanySlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, err
+		}
+		items = append(items, url)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -227,8 +267,9 @@ ON CONFLICT (url) DO UPDATE SET
     scraped_at       = NOW(),
     description      = EXCLUDED.description,
     salary_raw       = EXCLUDED.salary_raw,
-    work_arrangement = EXCLUDED.work_arrangement
-RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement
+    work_arrangement = EXCLUDED.work_arrangement,
+    closed_at        = NULL
+RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at
 `
 
 type UpsertJobParams struct {
@@ -268,6 +309,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, erro
 		&i.Description,
 		&i.SalaryRaw,
 		&i.WorkArrangement,
+		&i.ClosedAt,
 	)
 	return i, err
 }

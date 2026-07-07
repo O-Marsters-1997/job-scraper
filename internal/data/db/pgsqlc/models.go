@@ -54,6 +54,7 @@ type Job struct {
 	Description     string
 	SalaryRaw       string
 	WorkArrangement string
+	ClosedAt        pgtype.Timestamptz
 }
 
 type JobScore struct {

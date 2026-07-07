@@ -181,6 +181,27 @@ func (db *DB) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	return fromGetJobRow(row), nil
 }
 
+func (db *DB) OpenJobURLsForBoard(ctx context.Context, source, companySlug string) ([]string, error) {
+	urls, err := db.queries.OpenJobURLsForBoard(ctx, pgsqlc.OpenJobURLsForBoardParams{
+		Source:      source,
+		CompanySlug: companySlug,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("db.OpenJobURLsForBoard: %w", err)
+	}
+	return urls, nil
+}
+
+func (db *DB) MarkJobsClosed(ctx context.Context, urls []string) error {
+	if len(urls) == 0 {
+		return nil
+	}
+	if err := db.queries.MarkJobsClosed(ctx, urls); err != nil {
+		return fmt.Errorf("db.MarkJobsClosed: %w", err)
+	}
+	return nil
+}
+
 func (db *DB) ListSince(ctx context.Context, since time.Time) ([]dto.Job, error) {
 	rows, err := db.queries.ListJobsSince(ctx, pgtype.Timestamptz{Time: since, Valid: true})
 	if err != nil {

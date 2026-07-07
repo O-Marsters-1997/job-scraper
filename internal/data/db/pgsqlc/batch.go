@@ -27,7 +27,8 @@ ON CONFLICT (url) DO UPDATE SET
     scraped_at       = NOW(),
     description      = EXCLUDED.description,
     salary_raw       = EXCLUDED.salary_raw,
-    work_arrangement = EXCLUDED.work_arrangement
+    work_arrangement = EXCLUDED.work_arrangement,
+    closed_at        = NULL
 `
 
 type UpsertJobsBatchResults struct {
