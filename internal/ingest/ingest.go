@@ -28,7 +28,7 @@ type TargetUserLister interface {
 
 // CompanyUpserter records a company seen during ingest into the shared catalog.
 type CompanyUpserter interface {
-	UpsertCompany(ctx context.Context, slug, name, atsSource, atsToken string) (dto.Company, error)
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 }
 
 type CredentialGetter interface {
@@ -132,7 +132,13 @@ func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
 		if role, _ := sources.SourceRole(j.Source); role == sources.RoleATS {
 			atsSource, atsToken = j.Source, j.CompanySlug
 		}
-		if _, err := i.companies.UpsertCompany(ctx, j.CompanySlug, humanizeSlug(j.CompanySlug), atsSource, atsToken); err != nil {
+		upsert := dto.CompanyUpsert{
+			Slug:      j.CompanySlug,
+			Name:      humanizeSlug(j.CompanySlug),
+			ATSSource: atsSource,
+			ATSToken:  atsToken,
+		}
+		if _, err := i.companies.UpsertCompany(ctx, upsert); err != nil {
 			slog.Warn("ingest: could not upsert company",
 				slog.String("slug", j.CompanySlug), slog.Any("err", err))
 		}

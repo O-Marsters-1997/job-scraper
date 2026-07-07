@@ -7,7 +7,7 @@ import (
 )
 
 type CompanyProvider interface {
-	UpsertCompany(ctx context.Context, slug, name, atsSource, atsToken string) (dto.Company, error)
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	GetCompany(ctx context.Context, id string) (dto.Company, error)
 	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
 }

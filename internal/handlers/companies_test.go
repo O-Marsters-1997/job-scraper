@@ -13,7 +13,7 @@ import (
 
 func TestCompaniesHandler_List(t *testing.T) {
 	companies := providers.NewMockCompanyProvider()
-	_, _ = companies.UpsertCompany(t.Context(), "acme", "Acme", "greenhouse", "acme")
+	_, _ = companies.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	targets := providers.NewMockSourceTargetProvider()
 	h := NewCompaniesHandler(companies, targets, nil)
 
@@ -82,7 +82,7 @@ func TestCompaniesHandler_Create(t *testing.T) {
 func TestCompaniesHandler_SetTracking(t *testing.T) {
 	t.Run("enables tracking for an ATS company", func(t *testing.T) {
 		companies := providers.NewMockCompanyProvider()
-		company, _ := companies.UpsertCompany(t.Context(), "acme", "Acme", "greenhouse", "acme")
+		company, _ := companies.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 		targets := providers.NewMockSourceTargetProvider()
 		h := NewCompaniesHandler(companies, targets, nil)
 
@@ -101,7 +101,7 @@ func TestCompaniesHandler_SetTracking(t *testing.T) {
 
 	t.Run("rejects tracking a discovery-only company", func(t *testing.T) {
 		companies := providers.NewMockCompanyProvider()
-		company, _ := companies.UpsertCompany(t.Context(), "acme", "Acme", "", "")
+		company, _ := companies.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "", ATSToken: ""})
 		targets := providers.NewMockSourceTargetProvider()
 		h := NewCompaniesHandler(companies, targets, nil)
 
