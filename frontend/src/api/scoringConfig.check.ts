@@ -4,50 +4,48 @@ function ok(cond: boolean, msg: string) {
 	if (!cond) throw new Error(`FAIL: ${msg}`);
 }
 
-// valid config passes
-const valid = scoringConfigSchema.parse({
+const base = {
 	suitabilityRubric:
 		"I am a Go engineer looking for distributed systems roles.",
-	relevanceCutoff: 40,
 	notifyThreshold: 70,
-});
-ok(valid.relevanceCutoff === 40, "valid config parses");
+	excludedTitleKeywords: ["java", "sales"],
+	excludedCompanies: ["acme corp"],
+	excludedSeniority: ["intern", "junior"],
+	excludedLocations: ["united states"],
+};
 
-// cutoff above 100 is rejected
+const valid = scoringConfigSchema.parse(base);
+ok(valid.notifyThreshold === 70, "valid config parses");
+ok(valid.excludedTitleKeywords.length === 2, "exclusion lists parse");
+
 let threw = false;
 try {
-	scoringConfigSchema.parse({
-		suitabilityRubric: "",
-		relevanceCutoff: 101,
-		notifyThreshold: 70,
-	});
+	scoringConfigSchema.parse({ ...base, notifyThreshold: 101 });
 } catch {
 	threw = true;
 }
-ok(threw, "cutoff > 100 rejected");
+ok(threw, "threshold > 100 rejected");
 
-// threshold below 0 is rejected
 threw = false;
 try {
-	scoringConfigSchema.parse({
-		suitabilityRubric: "",
-		relevanceCutoff: 50,
-		notifyThreshold: -1,
-	});
+	scoringConfigSchema.parse({ ...base, notifyThreshold: -1 });
 } catch {
 	threw = true;
 }
 ok(threw, "threshold < 0 rejected");
 
-// non-integer is rejected
 threw = false;
 try {
-	scoringConfigSchema.parse({
-		suitabilityRubric: "",
-		relevanceCutoff: 50.5,
-		notifyThreshold: 70,
-	});
+	scoringConfigSchema.parse({ ...base, notifyThreshold: 70.5 });
 } catch {
 	threw = true;
 }
-ok(threw, "float cutoff rejected");
+ok(threw, "float threshold rejected");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({ ...base, excludedTitleKeywords: [1] });
+} catch {
+	threw = true;
+}
+ok(threw, "non-string exclusion entry rejected");

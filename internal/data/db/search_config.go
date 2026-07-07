@@ -14,14 +14,14 @@ import (
 
 func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
 	return dto.SearchConfig{
-		ID:                row.ID.String(),
-		UserID:            row.UserID.String(),
-		Role:              row.Role,
-		Location:          row.Location,
-		Keywords:          row.Keywords,
-		SuitabilityRubric: row.SuitabilityRubric,
-		RelevanceCutoff:   int(row.RelevanceCutoff),
-		NotifyThreshold:   int(row.NotifyThreshold),
+		ID:                    row.ID.String(),
+		UserID:                row.UserID.String(),
+		ExcludedTitleKeywords: row.ExcludedTitleKeywords,
+		ExcludedCompanies:     row.ExcludedCompanies,
+		ExcludedSeniority:     row.ExcludedSeniority,
+		ExcludedLocations:     row.ExcludedLocations,
+		SuitabilityRubric:     row.SuitabilityRubric,
+		NotifyThreshold:       int(row.NotifyThreshold),
 	}
 }
 
@@ -57,21 +57,26 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 	if err != nil {
 		return dto.SearchConfig{}, err
 	}
-	keywords := cfg.Keywords
-	if keywords == nil {
-		keywords = []string{}
-	}
 	row, err := db.queries.UpsertSearchConfig(ctx, pgsqlc.UpsertSearchConfigParams{
-		UserID:            uid,
-		Role:              cfg.Role,
-		Location:          cfg.Location,
-		Keywords:          keywords,
-		SuitabilityRubric: cfg.SuitabilityRubric,
-		RelevanceCutoff:   int32(cfg.RelevanceCutoff),
-		NotifyThreshold:   int32(cfg.NotifyThreshold),
+		UserID:                uid,
+		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
+		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
+		ExcludedSeniority:     nonNilStrings(cfg.ExcludedSeniority),
+		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
+		SuitabilityRubric:     cfg.SuitabilityRubric,
+		NotifyThreshold:       int32(cfg.NotifyThreshold),
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)
 	}
 	return fromSearchConfig(row), nil
+}
+
+// nonNilStrings replaces a nil slice with empty so pgx encodes it as an
+// empty array instead of NULL for a NOT NULL column.
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

@@ -11,15 +11,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 // stubSource is an HTML-like source: implements Source and DetailFetcher so
 // run() routes it through htmlPath (enqueue, not publish).
 type stubSource struct {
-	cfg  sources.Config
-	urls []string
+	cfg   sources.Config
+	urls  []string
+	title string // optional; applied to every job's Title
 }
 
 var _ sources.Source = (*stubSource)(nil)
@@ -33,7 +33,7 @@ func (s *stubSource) GetDetails(_ context.Context, _ string) (dto.Job, error) {
 func (s *stubSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
 	jobs := make([]dto.Job, len(s.urls))
 	for i, u := range s.urls {
-		jobs[i] = dto.Job{URL: u}
+		jobs[i] = dto.Job{URL: u, Title: s.title}
 	}
 	_, err := fn(ctx, jobs)
 	return err
@@ -68,7 +68,7 @@ func TestRun_Enqueue(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		urls     []string // URLs the source returns
+		urls     []string
 		existing []string // URLs already saved in the DB
 		want     []string // URLs expected in the queue
 	}{
@@ -125,7 +125,7 @@ func TestRunIfReady_IntervalGate(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		lastScrapedAgo time.Duration // how long ago the source was last scraped
+		lastScrapedAgo time.Duration
 		minInterval    time.Duration
 		wantEnqueued   bool
 	}{
@@ -262,11 +262,12 @@ func TestRun_Paths(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		src          sources.Source
-		useGate      bool
-		wantExported int
-		wantQueued   int
+		name           string
+		src            sources.Source
+		wireFilter     bool
+		excludeKeyword string // "" means the wired config has no exclusions
+		wantExported   int
+		wantQueued     int
 	}{
 		{
 			name:         "ats publishes jobs",
@@ -275,10 +276,18 @@ func TestRun_Paths(t *testing.T) {
 			wantQueued:   0,
 		},
 		{
-			name:         "ats gate drops below cutoff",
+			name:           "ats filter drops excluded title keyword",
+			src:            atsSrc(2),
+			wireFilter:     true,
+			excludeKeyword: "engineer",
+			wantExported:   0,
+			wantQueued:     0,
+		},
+		{
+			name:         "ats filter with no exclusions passes everything",
 			src:          atsSrc(2),
-			useGate:      true,
-			wantExported: 0,
+			wireFilter:   true,
+			wantExported: 2,
 			wantQueued:   0,
 		},
 		{
@@ -288,11 +297,12 @@ func TestRun_Paths(t *testing.T) {
 			wantQueued:   2,
 		},
 		{
-			name:         "html gate drops below cutoff",
-			src:          htmlSrc(1),
-			useGate:      true,
-			wantExported: 0,
-			wantQueued:   0,
+			name:           "html filter drops excluded title keyword",
+			src:            &stubSource{cfg: sources.Config{Name: "html-test"}, urls: []string{"https://example.com/job/1"}, title: "Senior Engineer"},
+			wireFilter:     true,
+			excludeKeyword: "engineer",
+			wantExported:   0,
+			wantQueued:     0,
 		},
 	}
 
@@ -306,10 +316,12 @@ func TestRun_Paths(t *testing.T) {
 
 			o := New([]sources.Source{tt.src}, db, q)
 			o.WithExporter(exp)
-			if tt.useGate {
-				// zeroScorer always scores 0; highCutoffCfgDB sets cutoff above 0,
-				// so all jobs are dropped.
-				o.WithRelevanceGate(&zeroScorer{}, &highCutoffCfgDB{})
+			if tt.wireFilter {
+				cfg := dto.SearchConfig{UserID: "user1"}
+				if tt.excludeKeyword != "" {
+					cfg.ExcludedTitleKeywords = []string{tt.excludeKeyword}
+				}
+				o.WithRejectFilter(&stubCfgDB{cfgs: []dto.SearchConfig{cfg}})
 			}
 
 			if err := o.run(context.Background(), tt.src); err != nil {
@@ -326,33 +338,23 @@ func TestRun_Paths(t *testing.T) {
 	}
 }
 
-type zeroScorer struct{}
-
-func (z *zeroScorer) Score(_ dto.Job, _ dto.SearchConfig) int { return 0 }
-
-type highCutoffCfgDB struct{}
-
-func (h *highCutoffCfgDB) ListSearchConfigs(_ context.Context) ([]dto.SearchConfig, error) {
-	return []dto.SearchConfig{{UserID: "user1", RelevanceCutoff: 100}}, nil
+type stubCfgDB struct {
+	cfgs []dto.SearchConfig
 }
-func (h *highCutoffCfgDB) GetSearchConfig(_ context.Context, _ string) (dto.SearchConfig, error) {
-	return dto.SearchConfig{RelevanceCutoff: 100}, nil
+
+func (s *stubCfgDB) ListSearchConfigs(_ context.Context) ([]dto.SearchConfig, error) {
+	return s.cfgs, nil
 }
-func (h *highCutoffCfgDB) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
+func (s *stubCfgDB) GetSearchConfig(_ context.Context, userID string) (dto.SearchConfig, error) {
+	for _, cfg := range s.cfgs {
+		if cfg.UserID == userID {
+			return cfg, nil
+		}
+	}
+	return dto.SearchConfig{}, nil
+}
+func (s *stubCfgDB) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	return cfg, nil
 }
-func (h *highCutoffCfgDB) UpsertJobScoreRelevance(_ context.Context, _, _ string, _ int) error {
-	return nil
-}
-func (h *highCutoffCfgDB) UpsertJobScoreSuitability(_ context.Context, _, _ string, _ int, _ string, _, _ []string) error {
-	return nil
-}
-func (h *highCutoffCfgDB) UpsertJobScoreSkipped(_ context.Context, _, _ string) error {
-	return nil
-}
-func (h *highCutoffCfgDB) GetJobScore(_ context.Context, _, _ string) (dto.JobScore, error) {
-	return dto.JobScore{}, nil
-}
 
-var _ score.RelevanceScorer = (*zeroScorer)(nil)
-var _ RelevanceStore = (*highCutoffCfgDB)(nil)
+var _ providers.SearchConfigProvider = (*stubCfgDB)(nil)

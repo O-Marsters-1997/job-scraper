@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createSignal, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -19,13 +19,26 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 const STARTER_RUBRIC =
 	"I am a software engineer with 3+ years of experience in backend development. I am looking for roles that involve: Go or Python, distributed systems or APIs, remote or hybrid work. I prefer companies with fewer than 500 employees. I am not interested in roles focused primarily on JavaScript frontend or mobile development.";
 
+// Mirrors score.SeniorityLevels in internal/score/filter.go — kept in sync manually.
+const SENIORITY_LEVELS = [
+	"intern",
+	"junior",
+	"mid",
+	"senior",
+	"staff",
+	"principal",
+	"lead",
+	"manager",
+	"director",
+];
+
 function ScoringPage() {
 	const query = useScoringConfig();
 	return (
 		<div class="max-w-2xl px-7 py-6">
 			<PageHeading
 				title="Scoring settings"
-				subtitle="Control how Claude scores job listings for suitability and when you receive notifications."
+				subtitle="Filter out obvious non-fits, then let Claude score what's left for suitability."
 			/>
 			<QueryBoundary query={query} fallbackRows={4}>
 				{(data) => <ScoringForm data={data} />}
@@ -39,12 +52,37 @@ function ScoringPage() {
 function ScoringForm(props: { data: ScoringConfig }) {
 	const mutation = useUpdateScoringConfig();
 	const [rubric, setRubric] = createSignal(props.data.suitabilityRubric ?? "");
-	const [cutoff, setCutoff] = createSignal(props.data.relevanceCutoff ?? 0);
 	const [threshold, setThreshold] = createSignal(
 		props.data.notifyThreshold ?? 70,
 	);
+	const [titleKeywords, setTitleKeywords] = createSignal(
+		props.data.excludedTitleKeywords.join(", "),
+	);
+	const [companies, setCompanies] = createSignal(
+		props.data.excludedCompanies.join(", "),
+	);
+	const [locations, setLocations] = createSignal(
+		props.data.excludedLocations.join(", "),
+	);
+	const [seniority, setSeniority] = createSignal<string[]>(
+		props.data.excludedSeniority,
+	);
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
+
+	const toggleSeniority = (level: string) => {
+		setSeniority((current) =>
+			current.includes(level)
+				? current.filter((l) => l !== level)
+				: [...current, level],
+		);
+	};
+
+	const splitList = (value: string) =>
+		value
+			.split(",")
+			.map((v) => v.trim())
+			.filter((v) => v.length > 0);
 
 	const handleSave = async () => {
 		setSaved(false);
@@ -52,8 +90,11 @@ function ScoringForm(props: { data: ScoringConfig }) {
 		try {
 			await mutation.mutateAsync({
 				suitabilityRubric: rubric(),
-				relevanceCutoff: cutoff(),
 				notifyThreshold: threshold(),
+				excludedTitleKeywords: splitList(titleKeywords()),
+				excludedCompanies: splitList(companies()),
+				excludedSeniority: seniority(),
+				excludedLocations: splitList(locations()),
 			});
 			setSaved(true);
 			setTimeout(() => setSaved(false), 3000);
@@ -71,7 +112,6 @@ function ScoringForm(props: { data: ScoringConfig }) {
 			<FormFeedback success={saved()} error={saveError()} />
 
 			<div class="flex flex-col gap-5">
-				{/* Rubric */}
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<label for="rubric" class="text-base font-semibold text-foreground">
@@ -113,60 +153,125 @@ function ScoringForm(props: { data: ScoringConfig }) {
 					</div>
 				</Card>
 
-				{/* Cutoff + threshold */}
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">Thresholds</p>
+						<p class="text-base font-semibold text-foreground">
+							Exclusion filters
+						</p>
 						<p class="mt-0.5 text-xs text-faint">
-							Tune when AI scoring runs and when notifications are sent.
+							Jobs matching any of these are dropped before AI scoring runs.
+							Leave a field blank to exclude nothing on that axis.
 						</p>
 					</div>
 					<div class="divide-y divide-border">
 						<div class="px-5 py-4">
-							<label for="cutoff" class="text-xs font-medium text-foreground">
-								Relevance cutoff
+							<label
+								for="excluded-titles"
+								class="text-xs font-medium text-foreground"
+							>
+								Excluded title keywords
 							</label>
 							<p class="mt-0.5 text-xs text-faint">
-								Jobs scoring below this on keyword/location matching skip AI
-								scoring entirely.
+								Comma-separated. Matches whole words in the title only (e.g.
+								"java" won't reject "JavaScript").
 							</p>
-							<div class="mt-2 flex items-center gap-2">
-								<Input
-									id="cutoff"
-									type="number"
-									min="0"
-									max="100"
-									value={cutoff()}
-									onInput={(e) => setCutoff(Number(e.currentTarget.value))}
-									class="w-20"
-								/>
-								<span class="text-xs text-faint">out of 100</span>
-							</div>
+							<Input
+								id="excluded-titles"
+								value={titleKeywords()}
+								onInput={(e) => setTitleKeywords(e.currentTarget.value)}
+								placeholder="recruiter, sales, .net"
+								class="mt-2"
+							/>
 						</div>
 
 						<div class="px-5 py-4">
 							<label
-								for="threshold"
+								for="excluded-companies"
 								class="text-xs font-medium text-foreground"
 							>
-								Notify threshold
+								Excluded companies
 							</label>
-							<p class="mt-0.5 text-xs text-faint">
-								You only receive notifications for jobs scoring at or above this
-								suitability score.
+							<p class="mt-0.5 text-xs text-faint">Comma-separated.</p>
+							<Input
+								id="excluded-companies"
+								value={companies()}
+								onInput={(e) => setCompanies(e.currentTarget.value)}
+								placeholder="Acme Corp"
+								class="mt-2"
+							/>
+						</div>
+
+						<div class="px-5 py-4">
+							<label
+								for="excluded-locations"
+								class="text-xs font-medium text-foreground"
+							>
+								Excluded locations
+							</label>
+							<p class="mt-0.5 text-xs text-faint">Comma-separated.</p>
+							<Input
+								id="excluded-locations"
+								value={locations()}
+								onInput={(e) => setLocations(e.currentTarget.value)}
+								placeholder="United States"
+								class="mt-2"
+							/>
+						</div>
+
+						<div class="px-5 py-4">
+							<p class="text-xs font-medium text-foreground">
+								Excluded seniority levels
 							</p>
-							<div class="mt-2 flex items-center gap-2">
-								<Input
-									id="threshold"
-									type="number"
-									min="0"
-									max="100"
-									value={threshold()}
-									onInput={(e) => setThreshold(Number(e.currentTarget.value))}
-									class="w-20"
-								/>
-								<span class="text-xs text-faint">out of 100</span>
+							<p class="mt-0.5 text-xs text-faint">
+								Only rejects titles that clearly signal one of these levels —
+								ambiguous titles pass.
+							</p>
+							<div class="mt-2 flex flex-wrap gap-2">
+								<For each={SENIORITY_LEVELS}>
+									{(level) => (
+										<Button
+											type="button"
+											variant={
+												seniority().includes(level) ? "secondary" : "outline"
+											}
+											size="sm"
+											onClick={() => toggleSeniority(level)}
+										>
+											{level}
+										</Button>
+									)}
+								</For>
 							</div>
+						</div>
+					</div>
+				</Card>
+
+				<Card class="overflow-hidden">
+					<div class="border-b border-border px-5 py-4">
+						<p class="text-base font-semibold text-foreground">Notifications</p>
+						<p class="mt-0.5 text-xs text-faint">
+							Tune when you're notified after AI scoring.
+						</p>
+					</div>
+					<div class="px-5 py-4">
+						<label for="threshold" class="text-xs font-medium text-foreground">
+							Notify threshold
+						</label>
+						<p class="mt-0.5 text-xs text-faint">
+							You only receive notifications for jobs scoring at or above this
+							suitability score.
+						</p>
+						<div class="mt-2 flex items-center gap-2">
+							<Input
+								id="threshold"
+								type="number"
+								min="0"
+								max="100"
+								value={threshold()}
+								onInput={(e) => setThreshold(Number(e.currentTarget.value))}
+								class="w-20"
+							/>
+							<span class="text-xs text-faint">out of 100</span>
 						</div>
 					</div>
 				</Card>

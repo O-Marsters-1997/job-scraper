@@ -3,8 +3,11 @@ import { apiFetch } from "./client";
 
 export const scoringConfigSchema = z.object({
 	suitabilityRubric: z.string(),
-	relevanceCutoff: z.number().int().min(0).max(100),
 	notifyThreshold: z.number().int().min(0).max(100),
+	excludedTitleKeywords: z.array(z.string()),
+	excludedCompanies: z.array(z.string()),
+	excludedSeniority: z.array(z.string()),
+	excludedLocations: z.array(z.string()),
 });
 
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;

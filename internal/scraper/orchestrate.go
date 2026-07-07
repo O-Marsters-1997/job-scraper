@@ -21,9 +21,7 @@ type Orchestrator struct {
 	srcs         []sources.Source
 	db           providers.JobProvider
 	q            queue.JobQueue
-	scorer       score.RelevanceScorer          // nil means no gate
-	cfgDB        providers.SearchConfigProvider // nil means no gate
-	scoreDB      providers.JobScoreProvider     // nil means no score writes
+	cfgDB        providers.SearchConfigProvider // nil means no reject filter
 	exporter     JobExporter                    // nil means no ATS egress
 	cr           *cron.Cron
 	wg           sync.WaitGroup
@@ -34,12 +32,6 @@ type Orchestrator struct {
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
 	return &Orchestrator{srcs: srcs, db: db, q: q}
-}
-
-// RelevanceStore combines SearchConfigProvider and JobScoreProvider so callers pass db once.
-type RelevanceStore interface {
-	providers.SearchConfigProvider
-	providers.JobScoreProvider
 }
 
 // WithSourceReloader wires in functions to reload sources from DB at each tick
@@ -54,12 +46,10 @@ func (o *Orchestrator) WithSourceReloader(
 	return o
 }
 
-// WithRelevanceGate wires in a scorer and store so both ingestion paths filter
-// jobs below any user's cfg.RelevanceCutoff. Job scores are persisted per (job, user).
-func (o *Orchestrator) WithRelevanceGate(scorer score.RelevanceScorer, store RelevanceStore) {
-	o.scorer = scorer
-	o.cfgDB = store
-	o.scoreDB = store
+// WithRejectFilter wires in the search-config store so both ingestion paths
+// drop jobs that every user's exclusion filters reject.
+func (o *Orchestrator) WithRejectFilter(cfgDB providers.SearchConfigProvider) {
+	o.cfgDB = cfgDB
 }
 
 // WithForceScrape bypasses the per-source MinScrapeInterval gate on every tick.
@@ -192,26 +182,21 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 }
 
 type userGate struct {
-	userID    string
-	scorer    score.RelevanceScorer
-	searchCfg dto.SearchConfig
+	userID string
+	cfg    dto.SearchConfig
 }
 
-func (g userGate) score(job dto.Job) int {
-	return g.scorer.Score(job, g.searchCfg)
-}
-
-func (g userGate) passes(job dto.Job) bool {
-	return g.score(job) >= g.searchCfg.RelevanceCutoff
+func (g userGate) rejects(job dto.Job) (string, bool) {
+	return score.Reject(job, g.cfg)
 }
 
 func (o *Orchestrator) loadGates(ctx context.Context, source string) []userGate {
-	if o.scorer == nil || o.cfgDB == nil {
+	if o.cfgDB == nil {
 		return nil
 	}
 	cfgs, err := o.cfgDB.ListSearchConfigs(ctx)
 	if err != nil {
-		slog.Warn("could not load search configs, skipping relevance gate",
+		slog.Warn("could not load search configs, skipping reject filter",
 			slog.String("source", source),
 			slog.Any("err", err),
 		)
@@ -219,14 +204,36 @@ func (o *Orchestrator) loadGates(ctx context.Context, source string) []userGate 
 	}
 	gates := make([]userGate, len(cfgs))
 	for i, cfg := range cfgs {
-		gates[i] = userGate{userID: cfg.UserID, scorer: o.scorer, searchCfg: cfg}
+		gates[i] = userGate{userID: cfg.UserID, cfg: cfg}
 	}
 	return gates
 }
 
+// keepJob reports whether job survives every user's reject filter, i.e. at
+// least one user's filter does not reject it. When every user rejects it,
+// each user's reason is logged so filters can be tuned.
+func keepJob(job dto.Job, gates []userGate) bool {
+	if len(gates) == 0 {
+		return true
+	}
+	reasons := make([]string, 0, len(gates))
+	for _, g := range gates {
+		reason, rejected := g.rejects(job)
+		if !rejected {
+			return true
+		}
+		reasons = append(reasons, g.userID+": "+reason)
+	}
+	slog.Info("job rejected by all user filters",
+		slog.String("title", job.Title),
+		slog.String("url", job.URL),
+		slog.Any("reasons", reasons),
+	)
+	return false
+}
+
 type atsPath struct {
 	exporter JobExporter
-	scoreDB  providers.JobScoreProvider
 	name     string
 	gates    []userGate
 }
@@ -234,33 +241,13 @@ type atsPath struct {
 func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	log := slog.With(slog.String("source", p.name))
 
-	type scoreEntry struct {
-		jobID, userID string
-		score         int
-	}
-
 	passing := make([]dto.Job, 0, len(jobs))
-	var entries []scoreEntry
 	for _, j := range jobs {
 		if j.URL == "" {
 			continue
 		}
-		if len(p.gates) == 0 {
+		if keepJob(j, p.gates) {
 			passing = append(passing, j)
-			continue
-		}
-		relevant := false
-		jobEntries := make([]scoreEntry, len(p.gates))
-		for i, g := range p.gates {
-			score := g.score(j)
-			if score >= g.searchCfg.RelevanceCutoff {
-				relevant = true
-			}
-			jobEntries[i] = scoreEntry{j.ID, g.userID, score}
-		}
-		if relevant {
-			passing = append(passing, j)
-			entries = append(entries, jobEntries...)
 		}
 	}
 
@@ -271,18 +258,6 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 
 	if err := p.exporter.BulkExport(ctx, passing); err != nil {
 		return false, err
-	}
-
-	if p.scoreDB != nil {
-		for _, e := range entries {
-			if err := p.scoreDB.UpsertJobScoreRelevance(ctx, e.jobID, e.userID, e.score); err != nil {
-				log.Warn("could not write relevance score",
-					slog.String("job_id", e.jobID),
-					slog.String("user_id", e.userID),
-					slog.Any("err", err),
-				)
-			}
-		}
 	}
 
 	log.Info("ats jobs published", slog.Int("count", len(passing)))
@@ -350,7 +325,7 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 		p.seen[c.url] = struct{}{}
 		freshCount++
 
-		if !passesAnyGate(c.job, p.gates) {
+		if !keepJob(c.job, p.gates) {
 			gateFiltered++
 			continue
 		}
@@ -358,7 +333,7 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	}
 
 	if gateFiltered > 0 {
-		slog.Info("relevance gate filtered jobs on page",
+		slog.Info("reject filter dropped jobs on page",
 			slog.Int("filtered", gateFiltered),
 			slog.Int("gates", len(p.gates)),
 		)
@@ -378,18 +353,6 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	return false, nil
 }
 
-func passesAnyGate(job dto.Job, gates []userGate) bool {
-	if len(gates) == 0 {
-		return true
-	}
-	for _, g := range gates {
-		if g.passes(job) {
-			return true
-		}
-	}
-	return false
-}
-
 func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	cfg := src.Cfg()
 	gates := o.loadGates(ctx, cfg.Name)
@@ -397,6 +360,6 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 		p := &htmlPath{db: o.db, q: o.q, gates: gates, seen: map[string]struct{}{}}
 		return src.Iterate(ctx, p.onPage)
 	}
-	p := &atsPath{exporter: o.exporter, scoreDB: o.scoreDB, name: cfg.Name, gates: gates}
+	p := &atsPath{exporter: o.exporter, name: cfg.Name, gates: gates}
 	return src.Iterate(ctx, p.onPage)
 }
