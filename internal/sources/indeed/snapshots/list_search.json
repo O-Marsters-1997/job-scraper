@@ -1,0 +1,40 @@
+[
+  {
+    "ID": "",
+    "Title": "Senior Software Engineer",
+    "Location": "London, UK",
+    "URL": "https://www.indeed.com/viewjob?jk=abc123def456",
+    "CompanySlug": "acme-corp",
+    "Source": "",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null,
+    "Reasoning": null,
+    "Matched": null,
+    "Missing": null,
+    "SuitabilitySkipped": false
+  },
+  {
+    "ID": "",
+    "Title": "Backend Engineer (Remote)",
+    "Location": "Remote",
+    "URL": "https://www.indeed.com/viewjob?jk=ghi789jkl012",
+    "CompanySlug": "widget-co",
+    "Source": "",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "RelevanceScore": null,
+    "SuitabilityScore": null,
+    "Reasoning": null,
+    "Matched": null,
+    "Missing": null,
+    "SuitabilitySkipped": false
+  }
+]
