@@ -13,6 +13,7 @@ import (
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/discover"
+	"github.com/ollymarsters/job-scraper/internal/discover/crawl"
 	"github.com/ollymarsters/job-scraper/internal/discover/getro"
 	"github.com/ollymarsters/job-scraper/internal/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -163,6 +164,14 @@ func main() {
 	// targets, nothing scrapable results from this.
 	harvestRunner := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, db, q)
 	go harvestRunner.Run(ctx)
+
+	// Careers-page crawler: the self-expanding step. Resolves companies.domain
+	// rows with no known ats_source into a board by fetching their careers
+	// page directly (never proxied). Still catalog-only — a resolved board
+	// isn't scraped until the Companies-page tracking toggle turns it into a
+	// source_targets row.
+	careersCrawler := crawl.New(db)
+	go careersCrawler.Run(ctx)
 
 	// Dead-letter monitor: surfaces standing accumulation so orphaned URLs don't
 	// pile up silently. Only logs when the set is non-empty.
