@@ -15,6 +15,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/personio"
 	"github.com/ollymarsters/job-scraper/internal/sources/recruitee"
+	"github.com/ollymarsters/job-scraper/internal/sources/remoteok"
+	"github.com/ollymarsters/job-scraper/internal/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/sources/workable"
 )
@@ -29,6 +31,8 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 	urlSources := make(map[string][]string) // source name → configured search URLs
 	var wisSearches []wis.Search
 	var linkedinSearches []linkedin.Search
+	var remoteokKeywords []string
+	var remotiveKeywords []string
 
 	for _, t := range targets {
 		if !t.Enabled {
@@ -54,6 +58,10 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 					Distance:    t.Filters["distance"],
 					SalaryBand:  t.Filters["salary_band"],
 				})
+			case "remoteok":
+				remoteokKeywords = append(remoteokKeywords, t.Value)
+			case "remotive":
+				remotiveKeywords = append(remotiveKeywords, t.Value)
 			}
 			continue
 		}
@@ -80,6 +88,12 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 	}
 	if len(linkedinSearches) > 0 {
 		srcs = append(srcs, linkedin.New(linkedin.Config{Searches: linkedinSearches}))
+	}
+	if len(remoteokKeywords) > 0 {
+		srcs = append(srcs, remoteok.New(remoteok.Config{Keywords: remoteokKeywords}))
+	}
+	if len(remotiveKeywords) > 0 {
+		srcs = append(srcs, remotive.New(remotive.Config{Keywords: remotiveKeywords}))
 	}
 
 	withDone := func(name string, src *sources.BoardSource) *sources.BoardSource {
