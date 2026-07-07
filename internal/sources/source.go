@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -95,13 +96,29 @@ func (b *PaginatedBase) CanHandle(url string) bool {
 func (b *PaginatedBase) Client() *http.Client { return b.client }
 
 func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	return b.do(ctx, http.MethodGet, url, nil)
+}
+
+// PostEmptyJSON exists because some ATS list APIs (e.g. Workable) only respond to POST.
+func (b *PaginatedBase) PostEmptyJSON(ctx context.Context, url string) ([]byte, error) {
+	return b.do(ctx, http.MethodPost, url, []byte("{}"))
+}
+
+func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+	var rdr io.Reader
+	if body != nil {
+		rdr = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, rdr)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-GB,en;q=0.9")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := b.client.Do(req)
 	if err != nil {
@@ -113,11 +130,11 @@ func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
-	return body, nil
+	return respBody, nil
 }
 
 func (b *PaginatedBase) IteratePages(

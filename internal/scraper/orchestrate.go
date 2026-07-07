@@ -265,6 +265,7 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 	}
 
 	if len(passing) == 0 {
+		log.Info("ats jobs fetched, none passed relevance gate", slog.Int("fetched", len(jobs)))
 		return false, nil
 	}
 

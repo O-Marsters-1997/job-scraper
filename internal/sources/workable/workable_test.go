@@ -1,35 +1,25 @@
 package workable
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
-
-	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func TestFetchBoard_ParsesFixture(t *testing.T) {
-	data, err := os.ReadFile("snapshots/jobs_acme.json")
+// jobs_pearltalent.json is a real capture from Workable's job-list API
+// (POST apply.workable.com/api/v3/accounts/pearltalent/jobs), trimmed to two
+// results. The list carries no URL or description; the parser builds the URL
+// from token+shortcode and leaves the description empty. The second result has
+// a blank city, a real edge case worth pinning.
+func TestParse_ParsesFixture(t *testing.T) {
+	data, err := os.ReadFile("snapshots/jobs_pearltalent.json")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	var resp boardResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		t.Fatalf("unmarshal fixture: %v", err)
-	}
-
-	const token = "acme"
-	jobs := make([]dto.Job, 0, len(resp.Results))
-	for _, r := range resp.Results {
-		jobs = append(jobs, dto.Job{
-			Title:       r.Title,
-			Location:    r.Location.City,
-			URL:         r.URL,
-			CompanySlug: token,
-			Source:      "workable",
-			Description: r.FullDescription,
-		})
+	const token = "pearltalent"
+	jobs, err := parse(data, token)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
 	}
 
 	if len(jobs) != 2 {
@@ -37,31 +27,22 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 	}
 
 	tests := []struct {
-		idx         int
-		title       string
-		location    string
-		url         string
-		companySlug string
-		source      string
-		description string
+		idx      int
+		title    string
+		location string
+		url      string
 	}{
 		{
-			idx:         0,
-			title:       "Frontend Engineer",
-			location:    "London",
-			url:         "https://apply.workable.com/acme/j/ABC123/",
-			companySlug: "acme",
-			source:      "workable",
-			description: "<p>We are looking for a Frontend Engineer.</p>",
+			idx:      0,
+			title:    "Pearl Talent- Finance Operations Associate - I021",
+			location: "Cape Town",
+			url:      "https://apply.workable.com/pearltalent/j/2D4246C5C3/",
 		},
 		{
-			idx:         1,
-			title:       "DevOps Engineer",
-			location:    "Remote",
-			url:         "https://apply.workable.com/acme/j/DEF456/",
-			companySlug: "acme",
-			source:      "workable",
-			description: "<p>Join our infrastructure team as a DevOps Engineer.</p>",
+			idx:      1,
+			title:    "Remote Credentialing Specialist for Healthcare Company",
+			location: "",
+			url:      "https://apply.workable.com/pearltalent/j/986DE1BC83/",
 		},
 	}
 
@@ -76,17 +57,11 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 		if j.URL != tc.url {
 			t.Errorf("[%d] URL = %q, want %q", tc.idx, j.URL, tc.url)
 		}
-		if j.CompanySlug != tc.companySlug {
-			t.Errorf("[%d] CompanySlug = %q, want %q", tc.idx, j.CompanySlug, tc.companySlug)
+		if j.CompanySlug != token {
+			t.Errorf("[%d] CompanySlug = %q, want %q", tc.idx, j.CompanySlug, token)
 		}
-		if j.Source != tc.source {
-			t.Errorf("[%d] Source = %q, want %q", tc.idx, j.Source, tc.source)
-		}
-		if j.Description != tc.description {
-			t.Errorf("[%d] Description = %q, want %q", tc.idx, j.Description, tc.description)
-		}
-		if j.SalaryRaw != "" {
-			t.Errorf("[%d] SalaryRaw = %q, want empty", tc.idx, j.SalaryRaw)
+		if j.Source != "workable" {
+			t.Errorf("[%d] Source = %q, want %q", tc.idx, j.Source, "workable")
 		}
 	}
 }

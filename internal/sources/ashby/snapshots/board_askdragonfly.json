@@ -1,0 +1,21 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+      "title": "Founding Sales Development Representative",
+      "location": "London",
+      "jobUrl": "https://jobs.ashbyhq.com/askdragonfly/2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+      "descriptionHtml": "<h2>This isn't a traditional SDR role</h2>",
+      "publishedAt": "2026-07-06T10:44:50.212+00:00"
+    },
+    {
+      "id": "43376c66-9659-41bf-afba-f527caa2e4f1",
+      "title": "Senior Product Engineer",
+      "location": "Tallinn",
+      "jobUrl": "https://jobs.ashbyhq.com/askdragonfly/43376c66-9659-41bf-afba-f527caa2e4f1",
+      "descriptionHtml": "<p><strong>About Us</strong></p>",
+      "publishedAt": "2026-06-24T14:36:34.183+00:00"
+    }
+  ]
+}

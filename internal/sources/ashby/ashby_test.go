@@ -1,43 +1,25 @@
 package ashby
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
-
-	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func TestFetchBoard_ParsesFixture(t *testing.T) {
-	data, err := os.ReadFile("snapshots/board_acme.json")
+// board_askdragonfly.json is a real capture from the Ashby posting-api
+// (api.ashbyhq.com/posting-api/job-board/askdragonfly), trimmed to two jobs
+// with shortened descriptions. Keep it real-shaped: it exists to catch API
+// field drift, which a hand-written fixture cannot.
+func TestParse_ParsesFixture(t *testing.T) {
+	data, err := os.ReadFile("snapshots/board_askdragonfly.json")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	var resp boardResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		t.Fatalf("unmarshal fixture: %v", err)
-	}
-
-	const token = "acme"
-	jobs := make([]dto.Job, 0, len(resp.JobPostings))
-	for _, jp := range resp.JobPostings {
-		updatedAt := time.Now().UTC()
-		if jp.PublishedDate != "" {
-			if t2, err := time.Parse(time.RFC3339, jp.PublishedDate); err == nil {
-				updatedAt = t2
-			}
-		}
-		jobs = append(jobs, dto.Job{
-			Title:       jp.Title,
-			Location:    jp.Location.Name,
-			URL:         jp.JobURL,
-			CompanySlug: token,
-			Source:      "ashby",
-			Description: jp.DescriptionHTML,
-			UpdatedAt:   updatedAt,
-		})
+	const token = "askdragonfly"
+	jobs, err := parse(data, token)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
 	}
 
 	if len(jobs) != 2 {
@@ -49,30 +31,24 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 		title       string
 		location    string
 		url         string
-		companySlug string
-		source      string
 		description string
 		updatedAt   time.Time
 	}{
 		{
 			idx:         0,
-			title:       "Engineering Manager",
-			location:    "London, UK",
-			url:         "https://jobs.ashbyhq.com/acme/uuid-1001",
-			companySlug: "acme",
-			source:      "ashby",
-			description: "<p>We are hiring an Engineering Manager.</p>",
-			updatedAt:   time.Date(2024, 6, 1, 9, 0, 0, 0, time.UTC),
+			title:       "Founding Sales Development Representative",
+			location:    "London",
+			url:         "https://jobs.ashbyhq.com/askdragonfly/2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+			description: "<h2>This isn't a traditional SDR role</h2>",
+			updatedAt:   time.Date(2026, 7, 6, 10, 44, 50, 212000000, time.UTC),
 		},
 		{
 			idx:         1,
-			title:       "Senior Data Scientist",
-			location:    "Remote",
-			url:         "https://jobs.ashbyhq.com/acme/uuid-1002",
-			companySlug: "acme",
-			source:      "ashby",
-			description: "<p>Join our data science team.</p>",
-			updatedAt:   time.Date(2024, 6, 2, 10, 30, 0, 0, time.UTC),
+			title:       "Senior Product Engineer",
+			location:    "Tallinn",
+			url:         "https://jobs.ashbyhq.com/askdragonfly/43376c66-9659-41bf-afba-f527caa2e4f1",
+			description: "<p><strong>About Us</strong></p>",
+			updatedAt:   time.Date(2026, 6, 24, 14, 36, 34, 183000000, time.UTC),
 		},
 	}
 
@@ -87,20 +63,17 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 		if j.URL != tc.url {
 			t.Errorf("[%d] URL = %q, want %q", tc.idx, j.URL, tc.url)
 		}
-		if j.CompanySlug != tc.companySlug {
-			t.Errorf("[%d] CompanySlug = %q, want %q", tc.idx, j.CompanySlug, tc.companySlug)
+		if j.CompanySlug != token {
+			t.Errorf("[%d] CompanySlug = %q, want %q", tc.idx, j.CompanySlug, token)
 		}
-		if j.Source != tc.source {
-			t.Errorf("[%d] Source = %q, want %q", tc.idx, j.Source, tc.source)
+		if j.Source != "ashby" {
+			t.Errorf("[%d] Source = %q, want %q", tc.idx, j.Source, "ashby")
 		}
 		if j.Description != tc.description {
 			t.Errorf("[%d] Description = %q, want %q", tc.idx, j.Description, tc.description)
 		}
 		if !j.UpdatedAt.Equal(tc.updatedAt) {
 			t.Errorf("[%d] UpdatedAt = %v, want %v", tc.idx, j.UpdatedAt, tc.updatedAt)
-		}
-		if j.SalaryRaw != "" {
-			t.Errorf("[%d] SalaryRaw = %q, want empty", tc.idx, j.SalaryRaw)
 		}
 	}
 }

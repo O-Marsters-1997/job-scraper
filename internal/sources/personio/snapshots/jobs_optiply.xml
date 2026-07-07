@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs>
+  <position>
+    <id>1953132</id>
+    <office>Amsterdam</office>
+    <department>Sales</department>
+    <name>Account Executive</name>
+    <jobDescriptions>
+      <jobDescription>
+        <name><![CDATA[About us]]></name>
+        <value><![CDATA[<p>Optiply is the AI-native platform.</p>]]></value>
+      </jobDescription>
+      <jobDescription>
+        <name><![CDATA[Job Description]]></name>
+        <value><![CDATA[<p>We are hiring an Account Executive.</p>]]></value>
+      </jobDescription>
+    </jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <createdAt>2026-06-01T09:00:00+02:00</createdAt>
+  </position>
+  <position>
+    <id>2623060</id>
+    <office>Amsterdam</office>
+    <department>Sales</department>
+    <name>Commercial Lead -BeNeLux</name>
+    <jobDescriptions>
+      <jobDescription>
+        <name><![CDATA[About us]]></name>
+        <value><![CDATA[<div>Join the commercial team.</div>]]></value>
+      </jobDescription>
+    </jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <createdAt>2026-06-02T10:30:00+02:00</createdAt>
+  </position>
+</workzag-jobs>

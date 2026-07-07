@@ -1,0 +1,34 @@
+{
+  "total": 2,
+  "results": [
+    {
+      "id": "b1f2c3d4",
+      "shortcode": "2D4246C5C3",
+      "title": "Pearl Talent- Finance Operations Associate - I021",
+      "remote": true,
+      "location": {
+        "country": "South Africa",
+        "countryCode": "ZA",
+        "city": "Cape Town",
+        "region": "Western Cape"
+      },
+      "state": "published",
+      "department": ["Finance"]
+    },
+    {
+      "id": "e5f6a7b8",
+      "shortcode": "986DE1BC83",
+      "title": "Remote Credentialing Specialist for Healthcare Company",
+      "remote": true,
+      "location": {
+        "country": "Philippines",
+        "countryCode": "PH",
+        "city": "",
+        "region": ""
+      },
+      "state": "published",
+      "department": ["Operations"]
+    }
+  ],
+  "nextPage": null
+}

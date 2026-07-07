@@ -18,8 +18,11 @@ type BoardSpec struct {
 	Name      string
 	URLPrefix string
 	UseProxy  bool
-	URL       func(token string) string
-	Parse     func(body []byte, token string) ([]dto.Job, error)
+	// Post, when true, fetches the board via POST with an empty JSON body
+	// instead of GET. Workable's job-list API only responds to POST.
+	Post  bool
+	URL   func(token string) string
+	Parse func(body []byte, token string) ([]dto.Job, error)
 }
 
 // BoardSource is the shared implementation for ATS "board" sources whose only
@@ -61,7 +64,11 @@ func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dt
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		body, err := b.Get(ctx, b.spec.URL(token))
+		fetch := b.Get
+		if b.spec.Post {
+			fetch = b.PostEmptyJSON
+		}
+		body, err := fetch(ctx, b.spec.URL(token))
 		if err != nil {
 			slog.Warn("board fetch failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
 			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
