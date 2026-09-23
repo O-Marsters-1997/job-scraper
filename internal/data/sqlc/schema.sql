@@ -99,9 +99,29 @@ CREATE TABLE IF NOT EXISTS job_scores (
     matched              TEXT[],
     missing              TEXT[],
     suitability_skipped  BOOLEAN     NOT NULL DEFAULT false,
+    score_fingerprint    TEXT,
+    score_config_version TIMESTAMPTZ,
+    score_model          TEXT,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (job_id, user_id)
+);
+
+CREATE TABLE effect_outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    config_version TIMESTAMPTZ NOT NULL,
+    model TEXT NOT NULL,
+    first_discovery BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INT NOT NULL DEFAULT 0,
+    due_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    lease_until TIMESTAMPTZ,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (job_id, user_id, fingerprint, config_version, model)
 );
 
 CREATE TABLE IF NOT EXISTS search_config (
