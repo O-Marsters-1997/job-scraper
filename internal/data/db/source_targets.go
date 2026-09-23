@@ -155,7 +155,7 @@ func (db *DB) TouchSourceTargetsChecked(ctx context.Context, source, value strin
 	return nil
 }
 
-func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error) {
+func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -165,11 +165,12 @@ func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, 
 		return dto.SourceTarget{}, err
 	}
 	row, err := db.queries.UpsertSourceTargetForCompany(ctx, pgsqlc.UpsertSourceTargetForCompanyParams{
-		UserID:    uid,
-		Source:    source,
-		Value:     value,
-		Enabled:   enabled,
-		CompanyID: cid,
+		UserID:               uid,
+		Source:               source,
+		Value:                value,
+		Enabled:              enabled,
+		CompanyID:            cid,
+		CheckIntervalMinutes: int32(interval),
 	})
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("db.UpsertSourceTargetForCompany: %w", err)

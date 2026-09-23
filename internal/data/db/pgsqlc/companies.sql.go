@@ -38,13 +38,16 @@ const listCompaniesForUser = `-- name: ListCompaniesForUser :many
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
-    st.id AS target_id,
-    COALESCE(st.enabled, FALSE) AS tracked,
-    st.check_interval_minutes,
+    COALESCE(tc.enabled, FALSE) AS tracked,
+    tc.check_interval_minutes,
     st.last_checked_at
 FROM companies c
-LEFT JOIN source_targets st
-    ON st.user_id = $1 AND st.source = c.ats_source AND st.value = c.ats_token
+LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
+LEFT JOIN LATERAL (
+    SELECT last_checked_at FROM source_targets
+    WHERE user_id = $1 AND source = c.ats_source AND value = c.ats_token
+    ORDER BY last_checked_at DESC NULLS LAST LIMIT 1
+) st ON TRUE
 ORDER BY c.name
 `
 
@@ -59,7 +62,6 @@ type ListCompaniesForUserRow struct {
 	LastCrawledAt        pgtype.Timestamptz
 	FirstSeenAt          pgtype.Timestamptz
 	JobCount             int64
-	TargetID             pgtype.UUID
 	Tracked              bool
 	CheckIntervalMinutes pgtype.Int4
 	LastCheckedAt        pgtype.Timestamptz
@@ -85,7 +87,6 @@ func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) 
 			&i.LastCrawledAt,
 			&i.FirstSeenAt,
 			&i.JobCount,
-			&i.TargetID,
 			&i.Tracked,
 			&i.CheckIntervalMinutes,
 			&i.LastCheckedAt,
@@ -137,6 +138,47 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 		return nil, err
 	}
 	return items, nil
+}
+
+const setCompanyTracking = `-- name: SetCompanyTracking :one
+INSERT INTO tracked_companies (user_id, company_id, enabled, check_interval_minutes)
+VALUES ($1, $2, $3, COALESCE(NULLIF($4::int, 0), 360))
+ON CONFLICT (user_id, company_id) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    check_interval_minutes = COALESCE(NULLIF($4::int, 0), tracked_companies.check_interval_minutes),
+    updated_at = NOW()
+RETURNING user_id, company_id, enabled, check_interval_minutes
+`
+
+type SetCompanyTrackingParams struct {
+	UserID               pgtype.UUID
+	CompanyID            pgtype.UUID
+	Enabled              bool
+	CheckIntervalMinutes int32
+}
+
+type SetCompanyTrackingRow struct {
+	UserID               pgtype.UUID
+	CompanyID            pgtype.UUID
+	Enabled              bool
+	CheckIntervalMinutes int32
+}
+
+func (q *Queries) SetCompanyTracking(ctx context.Context, arg SetCompanyTrackingParams) (SetCompanyTrackingRow, error) {
+	row := q.db.QueryRow(ctx, setCompanyTracking,
+		arg.UserID,
+		arg.CompanyID,
+		arg.Enabled,
+		arg.CheckIntervalMinutes,
+	)
+	var i SetCompanyTrackingRow
+	err := row.Scan(
+		&i.UserID,
+		&i.CompanyID,
+		&i.Enabled,
+		&i.CheckIntervalMinutes,
+	)
+	return i, err
 }
 
 const touchCompanyCrawled = `-- name: TouchCompanyCrawled :exec

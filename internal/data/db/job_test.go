@@ -174,6 +174,105 @@ func TestSave_Empty(t *testing.T) {
 	}
 }
 
+func TestSaveCanonical_AliasesAndReplay(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	first := baseJob
+	first.BoardID = "11111111-1111-1111-1111-111111111111"
+	first.ProviderPostingID = "posting-1"
+	first.URL = "https://example.com/jobs/1?ref=board"
+
+	saved, status, err := testDB.SaveCanonical(ctx, first)
+	if err != nil || status != "new" || saved.ID == "" {
+		t.Fatalf("first save: status=%q job=%+v err=%v", status, saved, err)
+	}
+	alias := first
+	alias.URL = "https://example.com/jobs/1?ref=partner"
+	savedAgain, status, err := testDB.SaveCanonical(ctx, alias)
+	if err != nil || status != "unchanged" || savedAgain.ID != saved.ID {
+		t.Fatalf("alias: status=%q job=%+v err=%v", status, savedAgain, err)
+	}
+	replayed, status, err := testDB.SaveCanonical(ctx, alias)
+	if err != nil || status != "unchanged" || replayed.ID != saved.ID {
+		t.Fatalf("replay: status=%q job=%+v err=%v", status, replayed, err)
+	}
+	jobs, err := testDB.List(ctx, "")
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("list: count=%d err=%v", len(jobs), err)
+	}
+	if jobs[0].BoardID != first.BoardID || jobs[0].ProviderPostingID != first.ProviderPostingID || jobs[0].ContentFingerprint == "" {
+		t.Fatalf("canonical identity missing from read: %+v", jobs[0])
+	}
+}
+
+func TestSaveCanonical_ContentChangeAndDistinctBoard(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	first := baseJob
+	first.BoardID = "11111111-1111-1111-1111-111111111111"
+	first.ProviderPostingID = "posting-1"
+	first.URL = "https://example.com/jobs/1"
+	saved, _, err := testDB.SaveCanonical(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := first
+	changed.Title = "Senior Engineer"
+	updated, status, err := testDB.SaveCanonical(ctx, changed)
+	if err != nil || status != "changed" || updated.ID != saved.ID {
+		t.Fatalf("changed: status=%q job=%+v err=%v", status, updated, err)
+	}
+	unchanged, status, err := testDB.SaveCanonical(ctx, changed)
+	if err != nil || status != "unchanged" || unchanged.ID != saved.ID || unchanged.ContentFingerprint != updated.ContentFingerprint {
+		t.Fatalf("changed replay: status=%q job=%+v err=%v", status, unchanged, err)
+	}
+	other := first
+	other.BoardID = "22222222-2222-2222-2222-222222222222"
+	other.URL = "https://other.example.com/jobs/1"
+	distinct, status, err := testDB.SaveCanonical(ctx, other)
+	if err != nil || status != "new" || distinct.ID == saved.ID {
+		t.Fatalf("distinct board: status=%q job=%+v err=%v", status, distinct, err)
+	}
+}
+
+func TestSaveCanonical_ConflictingBoardCannotClaimURL(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	first := baseJob
+	first.BoardID = "11111111-1111-1111-1111-111111111111"
+	first.ProviderPostingID = "posting-1"
+	first.URL = "https://example.com/jobs/1"
+	saved, _, err := testDB.SaveCanonical(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := first
+	other.BoardID = "22222222-2222-2222-2222-222222222222"
+	if _, _, err := testDB.SaveCanonical(ctx, other); err == nil {
+		t.Fatal("expected conflicting board URL to be rejected")
+	}
+	jobs, err := testDB.List(ctx, "")
+	if err != nil || len(jobs) != 1 || jobs[0].ID != saved.ID {
+		t.Fatalf("canonical jobs changed after conflict: %+v, %v", jobs, err)
+	}
+}
+
+func TestSaveCanonical_BackfillsLegacyJobFingerprint(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	if _, err := testDB.Save(ctx, []dto.Job{baseJob}); err != nil {
+		t.Fatal(err)
+	}
+	_, status, err := testDB.SaveCanonical(ctx, baseJob)
+	if err != nil || status != "unchanged" {
+		t.Fatalf("legacy replay: status=%q err=%v", status, err)
+	}
+	jobs, err := testDB.List(ctx, "")
+	if err != nil || len(jobs) != 1 || jobs[0].ContentFingerprint == "" {
+		t.Fatalf("legacy fingerprint missing: jobs=%+v err=%v", jobs, err)
+	}
+}
+
 func TestNewURLs(t *testing.T) {
 	t.Run("filters existing URLs", func(t *testing.T) {
 		truncate(t)

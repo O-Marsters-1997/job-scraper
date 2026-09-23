@@ -86,7 +86,7 @@ func TestCompaniesHandler_SetTracking(t *testing.T) {
 		targets := providers.NewMockSourceTargetProvider()
 		h := NewCompaniesHandler(companies, targets, nil)
 
-		body, _ := json.Marshal(map[string]bool{"enabled": true})
+		body, _ := json.Marshal(map[string]any{"enabled": true, "check_interval_minutes": 180})
 		req := httptest.NewRequest(http.MethodPut, "/companies/"+company.ID+"/tracking", bytes.NewReader(body))
 		req = withSession(req, "user-1")
 		req = withRouteID(req, company.ID)
@@ -97,15 +97,29 @@ func TestCompaniesHandler_SetTracking(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
 		}
+		tracked, err := companies.ListCompaniesForUser(t.Context(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !tracked[0].Tracked || tracked[0].CheckIntervalMinutes != 180 {
+			t.Errorf("tracking state = %+v", tracked[0])
+		}
+		legacy, err := targets.ListSourceTargetsByUser(t.Context(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(legacy) != 1 || legacy[0].CheckIntervalMinutes != 180 {
+			t.Errorf("legacy target interval = %+v", legacy)
+		}
 	})
 
-	t.Run("rejects tracking a discovery-only company", func(t *testing.T) {
+	t.Run("tracks a company without a board and preserves its frequency", func(t *testing.T) {
 		companies := providers.NewMockCompanyProvider()
 		company, _ := companies.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "", ATSToken: ""})
 		targets := providers.NewMockSourceTargetProvider()
 		h := NewCompaniesHandler(companies, targets, nil)
 
-		body, _ := json.Marshal(map[string]bool{"enabled": true})
+		body, _ := json.Marshal(map[string]any{"enabled": true, "check_interval_minutes": 180})
 		req := httptest.NewRequest(http.MethodPut, "/companies/"+company.ID+"/tracking", bytes.NewReader(body))
 		req = withSession(req, "user-1")
 		req = withRouteID(req, company.ID)
@@ -113,8 +127,49 @@ func TestCompaniesHandler_SetTracking(t *testing.T) {
 
 		h.SetTracking(w, req)
 
-		if w.Code != http.StatusUnprocessableEntity {
-			t.Errorf("want 422, got %d: %s", w.Code, w.Body.String())
+		if w.Code != http.StatusOK {
+			t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+		}
+		listed, err := companies.ListCompaniesForUser(t.Context(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !listed[0].Tracked || listed[0].CheckIntervalMinutes != 180 {
+			t.Errorf("tracking after reload = %+v", listed[0])
+		}
+		disable := httptest.NewRequest(http.MethodPut, "/companies/"+company.ID+"/tracking", bytes.NewReader([]byte(`{"enabled":false}`)))
+		disable = withRouteID(withSession(disable, "user-1"), company.ID)
+		disabledResponse := httptest.NewRecorder()
+		h.SetTracking(disabledResponse, disable)
+		if disabledResponse.Code != http.StatusOK {
+			t.Fatalf("disable: want 200, got %d: %s", disabledResponse.Code, disabledResponse.Body.String())
+		}
+		listed, err = companies.ListCompaniesForUser(t.Context(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if listed[0].Tracked || listed[0].CheckIntervalMinutes != 180 {
+			t.Errorf("tracking after disable = %+v", listed[0])
+		}
+		otherUser, err := companies.ListCompaniesForUser(t.Context(), "user-2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if otherUser[0].Tracked || otherUser[0].CheckIntervalMinutes != 0 {
+			t.Errorf("other user tracking = %+v", otherUser[0])
+		}
+	})
+
+	t.Run("rejects an invalid interval", func(t *testing.T) {
+		companies := providers.NewMockCompanyProvider()
+		company, _ := companies.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		h := NewCompaniesHandler(companies, providers.NewMockSourceTargetProvider(), nil)
+		body := bytes.NewReader([]byte(`{"enabled":true,"check_interval_minutes":0}`))
+		req := withRouteID(withSession(httptest.NewRequest(http.MethodPut, "/companies/"+company.ID+"/tracking", body), "user-1"), company.ID)
+		w := httptest.NewRecorder()
+		h.SetTracking(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("want 400, got %d: %s", w.Code, w.Body.String())
 		}
 	})
 

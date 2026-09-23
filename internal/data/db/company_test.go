@@ -2,6 +2,8 @@ package db_test
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -186,10 +188,8 @@ func TestListCompaniesForUser(t *testing.T) {
 		t.Fatalf("UpsertCompany untracked: %v", err)
 	}
 
-	// Pre-existing target created before this feature (no company_id) must still
-	// join to the company via (source, value) and show as tracked.
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "acme", true, nil); err != nil {
-		t.Fatalf("CreateSourceTarget: %v", err)
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, tracked.ID, true, 180); err != nil {
+		t.Fatalf("SetCompanyTracking: %v", err)
 	}
 
 	companies, err := testDB.ListCompaniesForUser(ctx, user.ID)
@@ -202,13 +202,164 @@ func TestListCompaniesForUser(t *testing.T) {
 
 	for _, c := range companies {
 		if c.ID == tracked.ID {
-			if !c.Tracked {
-				t.Errorf("expected acme to show as tracked via (source, value) join")
+			if !c.Tracked || c.CheckIntervalMinutes != 180 {
+				t.Errorf("expected acme tracking with 180-minute interval, got %+v", c)
 			}
 			continue
 		}
 		if c.Tracked {
 			t.Errorf("expected widgetco to show as untracked")
+		}
+	}
+}
+
+func TestCompanyTrackingWithoutBoard(t *testing.T) {
+	ctx := context.Background()
+	truncateCompanies(t)
+	alice, err := testDB.CreateUser(ctx, "tracking-alice", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bob, err := testDB.CreateUser(ctx, "tracking-bob", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "boardless", Name: "Boardless"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, alice.ID, company.ID, true, 180); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, alice.ID, company.ID, false, 0); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		userID       string
+		wantTracked  bool
+		wantInterval int
+	}{
+		{alice.ID, false, 180},
+		{bob.ID, false, 0},
+	} {
+		companies, err := testDB.ListCompaniesForUser(ctx, test.userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(companies) != 1 || companies[0].Tracked != test.wantTracked || companies[0].CheckIntervalMinutes != test.wantInterval {
+			t.Errorf("user %s: got %+v", test.userID, companies)
+		}
+	}
+}
+
+func TestTrackedCompaniesBackfill(t *testing.T) {
+	ctx := context.Background()
+	tx, err := testDB.Pool().Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(ctx) })
+
+	if _, err := tx.Exec(ctx, "DROP TABLE tracking_backfill_issues, tracked_companies"); err != nil {
+		t.Fatal(err)
+	}
+	var userID, acmeID, duplicateID, recruiteeID, personioID string
+	if err := tx.QueryRow(ctx, "INSERT INTO users (username, password_hash) VALUES ('backfill-user', 'hash') RETURNING id").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range []struct {
+		slug, source, token string
+		id                  *string
+	}{
+		{"acme-backfill", "greenhouse", "ambiguous", &acmeID},
+		{"duplicate-backfill", "greenhouse", "ambiguous", &duplicateID},
+		{"recruitee-backfill", "recruitee", "recruitee-board", &recruiteeID},
+		{"personio-backfill", "personio", "personio-board", &personioID},
+	} {
+		if err := tx.QueryRow(ctx,
+			"INSERT INTO companies (slug, name, ats_source, ats_token) VALUES ($1, $1, $2, $3) RETURNING id",
+			entry.slug, entry.source, entry.token).Scan(entry.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var targetA, targetB, ambiguous, disabled, unmatched, recruiteeTarget, personioTarget string
+	for _, entry := range []struct {
+		source, value, filters string
+		enabled                bool
+		interval               int
+		companyID              any
+		id                     *string
+	}{
+		{"greenhouse", "acme", "{}", true, 360, acmeID, &targetA},
+		{"lever", "acme", `{"location":"remote"}`, false, 180, acmeID, &targetB},
+		{"greenhouse", "ambiguous", "{}", true, 60, nil, &ambiguous},
+		{"ashby", "disabled", "{}", false, 720, duplicateID, &disabled},
+		{"workable", "unknown", "{}", true, 360, nil, &unmatched},
+		{"recruitee", "recruitee-board", "{}", true, 180, nil, &recruiteeTarget},
+		{"personio", "personio-board", "{}", false, 720, nil, &personioTarget},
+	} {
+		if err := tx.QueryRow(ctx,
+			"INSERT INTO source_targets (user_id, source, value, filters, enabled, check_interval_minutes, company_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+			userID, entry.source, entry.value, entry.filters, entry.enabled, entry.interval, entry.companyID).Scan(entry.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	migration, err := os.ReadFile("scripts/migrations/20260923000000_create_tracked_companies.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	up, _, _ := strings.Cut(string(migration), "-- +goose Down")
+	if _, err := tx.Exec(ctx, up); err != nil {
+		t.Fatalf("backfill migration: %v", err)
+	}
+	var enabled bool
+	var interval int
+	if err := tx.QueryRow(ctx, "SELECT enabled, check_interval_minutes FROM tracked_companies WHERE user_id = $1 AND company_id = $2", userID, acmeID).Scan(&enabled, &interval); err != nil {
+		t.Fatal(err)
+	}
+	if !enabled || interval != 180 {
+		t.Errorf("backfilled tracking = enabled %v, interval %d; want true, 180", enabled, interval)
+	}
+	var reason string
+	if err := tx.QueryRow(ctx, "SELECT reason FROM tracking_backfill_issues WHERE source_target_id = $1", ambiguous).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "ambiguous_company_match" {
+		t.Errorf("ambiguity report reason = %q", reason)
+	}
+	if err := tx.QueryRow(ctx, "SELECT reason FROM tracking_backfill_issues WHERE source_target_id = $1", targetB).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "frequency_collision" {
+		t.Errorf("frequency report reason = %q", reason)
+	}
+	if err := tx.QueryRow(ctx, "SELECT enabled, check_interval_minutes FROM tracked_companies WHERE user_id = $1 AND company_id = $2", userID, duplicateID).Scan(&enabled, &interval); err != nil {
+		t.Fatal(err)
+	}
+	if enabled || interval != 720 {
+		t.Errorf("disabled backfill = enabled %v, interval %d; want false, 720", enabled, interval)
+	}
+	if err := tx.QueryRow(ctx, "SELECT reason FROM tracking_backfill_issues WHERE source_target_id = $1", unmatched).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if reason != "unmatched" {
+		t.Errorf("unmatched report reason = %q", reason)
+	}
+	for _, entry := range []struct {
+		name, companyID, targetID string
+		wantEnabled               bool
+		wantInterval              int
+	}{
+		{"recruitee", recruiteeID, recruiteeTarget, true, 180},
+		{"personio", personioID, personioTarget, false, 720},
+	} {
+		if err := tx.QueryRow(ctx, "SELECT enabled, check_interval_minutes FROM tracked_companies WHERE user_id = $1 AND company_id = $2", userID, entry.companyID).Scan(&enabled, &interval); err != nil {
+			t.Errorf("%s backfill: %v", entry.name, err)
+			continue
+		}
+		if enabled != entry.wantEnabled || interval != entry.wantInterval {
+			t.Errorf("%s backfill = enabled %v, interval %d", entry.name, enabled, interval)
 		}
 	}
 }
@@ -395,15 +546,15 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 		t.Fatalf("UpsertCompany: %v", err)
 	}
 
-	created, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, true)
+	created, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, true, 180)
 	if err != nil {
 		t.Fatalf("UpsertSourceTargetForCompany create: %v", err)
 	}
-	if !created.Enabled || created.CompanyID != company.ID {
+	if !created.Enabled || created.CompanyID != company.ID || created.CheckIntervalMinutes != 180 {
 		t.Fatalf("unexpected created target: %+v", created)
 	}
 
-	disabled, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, false)
+	disabled, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, false, 0)
 	if err != nil {
 		t.Fatalf("UpsertSourceTargetForCompany disable: %v", err)
 	}
@@ -412,5 +563,8 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 	}
 	if disabled.Enabled {
 		t.Errorf("expected target to be disabled")
+	}
+	if disabled.CheckIntervalMinutes != 180 {
+		t.Errorf("expected interval preserved, got %d", disabled.CheckIntervalMinutes)
 	}
 }

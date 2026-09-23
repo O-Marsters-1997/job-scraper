@@ -8,6 +8,10 @@ type Job struct {
 	Location           string
 	URL                string
 	CompanySlug        string
+	CompanyID          string
+	BoardID            string
+	ProviderPostingID  string
+	ContentFingerprint string
 	Source             string
 	UpdatedAt          time.Time
 	ScrapedAt          time.Time

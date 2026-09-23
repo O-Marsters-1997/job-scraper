@@ -30,7 +30,7 @@ func toUpsertParams(j dto.Job) pgsqlc.UpsertJobParams {
 }
 
 func fromRow(row pgsqlc.Job) dto.Job {
-	return dto.Job{
+	j := dto.Job{
 		ID:              row.ID.String(),
 		Title:           row.Title,
 		Location:        row.Location,
@@ -43,6 +43,15 @@ func fromRow(row pgsqlc.Job) dto.Job {
 		SalaryRaw:       row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement,
 	}
+	if row.CompanyID.Valid {
+		j.CompanyID = row.CompanyID.String()
+	}
+	if row.PrimaryBoardID.Valid {
+		j.BoardID = row.PrimaryBoardID.String()
+	}
+	j.ProviderPostingID = row.ProviderPostingID.String
+	j.ContentFingerprint = row.ContentFingerprint.String
+	return j
 }
 
 func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
@@ -73,6 +82,14 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	if row.Reasoning.Valid {
 		j.Reasoning = &row.Reasoning.String
 	}
+	if row.CompanyID.Valid {
+		j.CompanyID = row.CompanyID.String()
+	}
+	if row.PrimaryBoardID.Valid {
+		j.BoardID = row.PrimaryBoardID.String()
+	}
+	j.ProviderPostingID = row.ProviderPostingID.String
+	j.ContentFingerprint = row.ContentFingerprint.String
 	return j
 }
 
@@ -159,6 +176,14 @@ func fromGetJobRow(row pgsqlc.GetJobRow) dto.Job {
 	if row.Reasoning.Valid {
 		j.Reasoning = &row.Reasoning.String
 	}
+	if row.CompanyID.Valid {
+		j.CompanyID = row.CompanyID.String()
+	}
+	if row.PrimaryBoardID.Valid {
+		j.BoardID = row.PrimaryBoardID.String()
+	}
+	j.ProviderPostingID = row.ProviderPostingID.String
+	j.ContentFingerprint = row.ContentFingerprint.String
 	return j
 }
 
