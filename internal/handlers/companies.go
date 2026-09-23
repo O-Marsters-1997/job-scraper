@@ -38,9 +38,7 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(cs)
 }
 
-// Create resolves a pasted ATS board URL into a company, upserting it into the
-// shared catalog. When Track is true (the default) it also enables the
-// caller's source_target for that board, optionally enqueuing an immediate scrape.
+// Create resolves an ATS URL into a company and optionally tracks it for the caller.
 func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
@@ -73,6 +71,11 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	track := body.Track == nil || *body.Track
 	if track {
+		if _, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, true, 360); err != nil {
+			slog.Error("track company failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, source, token, company.ID, true)
 		if err != nil {
 			slog.Error("upsert source target for company failed", slog.Any("err", err))
@@ -91,16 +94,24 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(company)
 }
 
-// SetTracking toggles the caller's tracking of a company by upserting/enabling
-// or disabling their ATS source_target for its board.
+// SetTracking stores the caller's company interest and requested check frequency.
 func (h *CompaniesHandler) SetTracking(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Enabled bool `json:"enabled"`
+		Enabled              *bool `json:"enabled"`
+		CheckIntervalMinutes *int  `json:"check_interval_minutes"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Enabled == nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	interval := 0
+	if body.CheckIntervalMinutes != nil {
+		interval = *body.CheckIntervalMinutes
+	}
+	if body.CheckIntervalMinutes != nil && interval < 60 {
+		http.Error(w, "check_interval_minutes must be at least 60", http.StatusBadRequest)
 		return
 	}
 
@@ -114,20 +125,28 @@ func (h *CompaniesHandler) SetTracking(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	if company.ATSSource == "" {
-		http.Error(w, "this company has no known ATS board", http.StatusUnprocessableEntity)
-		return
-	}
-
-	target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, body.Enabled)
+	tracking, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, *body.Enabled, interval)
 	if err != nil {
-		slog.Error("upsert source target for company failed", slog.Any("err", err))
+		slog.Error("set company tracking failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	if company.ATSSource != "" {
+		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, *body.Enabled)
+		if err != nil {
+			slog.Error("sync legacy source target failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if _, err := h.targets.UpdateSourceTarget(r.Context(), target.ID, session.UserID, nil, &tracking.CheckIntervalMinutes); err != nil {
+			slog.Error("sync legacy source target interval failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(target)
+	_ = json.NewEncoder(w).Encode(tracking)
 }
 
 // humanizeToken turns a board token like "acme-corp" into "Acme Corp".

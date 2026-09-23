@@ -150,3 +150,13 @@ CREATE TABLE IF NOT EXISTS source_targets (
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, source, value, filters)
 );
+
+CREATE TABLE IF NOT EXISTS tracked_companies (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    check_interval_minutes INT NOT NULL DEFAULT 360 CHECK (check_interval_minutes >= 60),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, company_id)
+);

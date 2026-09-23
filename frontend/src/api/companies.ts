@@ -1,5 +1,4 @@
-import type { Company } from "../types/company";
-import type { SourceTarget } from "../types/sourceTarget";
+import type { Company, CompanyTracking } from "../types/company";
 import { apiFetch } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
 
@@ -46,15 +45,19 @@ export async function addCompany(payload: AddCompanyPayload): Promise<Company> {
 export async function setCompanyTracking(
 	id: string,
 	enabled: boolean,
-): Promise<SourceTarget> {
+	checkIntervalMinutes?: number,
+): Promise<CompanyTracking> {
 	if (useMocks()) {
 		const { setCompanyTracking: mockSetTracking } = await import("../mocks/db");
 		await mockDelay(80);
-		return mockSetTracking(id, enabled);
+		return mockSetTracking(id, enabled, checkIntervalMinutes);
 	}
-	return apiFetch<SourceTarget>(`/companies/${id}/tracking`, {
+	return apiFetch<CompanyTracking>(`/companies/${id}/tracking`, {
 		method: "PUT",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ enabled }),
+		body: JSON.stringify({
+			enabled,
+			check_interval_minutes: checkIntervalMinutes,
+		}),
 	});
 }

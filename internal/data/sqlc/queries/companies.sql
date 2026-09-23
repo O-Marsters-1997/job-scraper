@@ -25,11 +25,23 @@ UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1;
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
-    st.id AS target_id,
-    COALESCE(st.enabled, FALSE) AS tracked,
-    st.check_interval_minutes,
+    COALESCE(tc.enabled, FALSE) AS tracked,
+    tc.check_interval_minutes,
     st.last_checked_at
 FROM companies c
-LEFT JOIN source_targets st
-    ON st.user_id = $1 AND st.source = c.ats_source AND st.value = c.ats_token
+LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
+LEFT JOIN LATERAL (
+    SELECT last_checked_at FROM source_targets
+    WHERE user_id = $1 AND source = c.ats_source AND value = c.ats_token
+    ORDER BY last_checked_at DESC NULLS LAST LIMIT 1
+) st ON TRUE
 ORDER BY c.name;
+
+-- name: SetCompanyTracking :one
+INSERT INTO tracked_companies (user_id, company_id, enabled, check_interval_minutes)
+VALUES ($1, $2, $3, COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), 360))
+ON CONFLICT (user_id, company_id) DO UPDATE SET
+    enabled = EXCLUDED.enabled,
+    check_interval_minutes = COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), tracked_companies.check_interval_minutes),
+    updated_at = NOW()
+RETURNING user_id, company_id, enabled, check_interval_minutes;

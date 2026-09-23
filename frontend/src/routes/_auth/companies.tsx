@@ -97,7 +97,7 @@ function CompaniesPage() {
 		<div class="px-7 py-6">
 			<PageHeading
 				title="Companies"
-				subtitle="Every company we've encountered. Track one to re-check its board for new roles."
+				subtitle="Every company we've encountered. Track a company to follow its current and future boards."
 			>
 				<Button
 					onClick={() => {
@@ -174,7 +174,7 @@ function CompaniesPage() {
 												<Switch
 													checked={c.Tracked}
 													onChange={() => handleToggle(c)}
-													disabled={!c.ATSSource || trackMutation.isPending}
+													disabled={trackMutation.isPending}
 												>
 													<SwitchControl>
 														<SwitchThumb />

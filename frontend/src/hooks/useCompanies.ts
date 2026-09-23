@@ -34,8 +34,15 @@ export function useAddCompany() {
 export function useSetCompanyTracking() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
-		mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-			setCompanyTracking(id, enabled),
+		mutationFn: ({
+			id,
+			enabled,
+			checkIntervalMinutes,
+		}: {
+			id: string;
+			enabled: boolean;
+			checkIntervalMinutes?: number;
+		}) => setCompanyTracking(id, enabled, checkIntervalMinutes),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["companies"] });
 			queryClient.invalidateQueries({ queryKey: ["source-targets"] });

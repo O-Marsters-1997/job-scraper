@@ -22,7 +22,6 @@ import {
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
-import { useUpdateSourceTarget } from "../../hooks/useSourceTargets";
 import { queryClient } from "../../lib/queryClient";
 
 const CHECK_INTERVAL_OPTIONS = [
@@ -59,7 +58,6 @@ function CompanyDetailPage() {
 	const companiesQuery = useCompanies();
 	const jobsQuery = useJobs();
 	const trackMutation = useSetCompanyTracking();
-	const intervalMutation = useUpdateSourceTarget();
 
 	const company = () => companiesQuery.data?.find((c) => c.ID === params().id);
 
@@ -137,7 +135,7 @@ function CompanyDetailPage() {
 													enabled: !c().Tracked,
 												})
 											}
-											disabled={!c().ATSSource || trackMutation.isPending}
+											disabled={trackMutation.isPending}
 										>
 											<SwitchControl>
 												<SwitchThumb />
@@ -221,10 +219,11 @@ function CompanyDetailPage() {
 													) ?? null
 												}
 												onChange={(opt) => {
-													if (!opt || !c().TargetID) return;
-													intervalMutation.mutate({
-														id: c().TargetID,
-														check_interval_minutes: opt.minutes,
+													if (!opt) return;
+													trackMutation.mutate({
+														id: c().ID,
+														enabled: c().Tracked,
+														checkIntervalMinutes: opt.minutes,
 													});
 												}}
 												itemComponent={(props) => (

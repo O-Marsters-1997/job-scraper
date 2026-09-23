@@ -514,26 +514,30 @@ export function addCompany(url: string, track: boolean): Company | null {
 	return company;
 }
 
-// ponytail: only understands source targets that back a tracked company —
-// standalone discovery targets (settings/searches) aren't modelled here.
-export function setCompanyTracking(id: string, enabled: boolean): SourceTarget {
+export function setCompanyTracking(
+	id: string,
+	enabled: boolean,
+	checkIntervalMinutes?: number,
+): import("../types/company").CompanyTracking {
 	const idx = companies.findIndex((c) => c.ID === id);
 	if (idx === -1) throw new Error("Company not found");
 	const company = companies[idx]!;
-	const targetId = company.TargetID || faker.string.uuid();
-	const updated: Company = { ...company, Tracked: enabled, TargetID: targetId };
+	const updated: Company = {
+		...company,
+		Tracked: enabled,
+		CheckIntervalMinutes:
+			checkIntervalMinutes ?? (company.CheckIntervalMinutes || 360),
+	};
 	companies = [
 		...companies.slice(0, idx),
 		updated,
 		...companies.slice(idx + 1),
 	];
 	return {
-		ID: targetId,
+		CompanyID: id,
 		UserID: mockUser.id,
-		Source: company.ATSSource,
-		Value: company.ATSToken,
 		Enabled: enabled,
-		Filters: {},
+		CheckIntervalMinutes: updated.CheckIntervalMinutes,
 	};
 }
 

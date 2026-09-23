@@ -11,3 +11,10 @@ export interface Company {
 	CheckIntervalMinutes: number;
 	LastCheckedAt: string | null;
 }
+
+export interface CompanyTracking {
+	CompanyID: string;
+	UserID: string;
+	Enabled: boolean;
+	CheckIntervalMinutes: number;
+}
