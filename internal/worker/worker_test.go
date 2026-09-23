@@ -143,7 +143,7 @@ func TestRun_ClearAttemptsOnSuccess(t *testing.T) {
 	enqueueURLs(t, q, []string{url})
 
 	// Seed an existing attempt count so ClearAttempts has something to clear.
-	if err := q.Nack(context.Background(), url); err != nil {
+	if err := q.Nack(context.Background(), queue.Item{ID: url}, "failure"); err != nil {
 		t.Fatalf("Nack: %v", err)
 	}
 
@@ -174,5 +174,21 @@ func TestRun_DequeueError(t *testing.T) {
 	err := w.run(ctx, q, func(ctx context.Context, job dto.QueuedJob) error { return nil })
 	if err != nil {
 		t.Errorf("run returned %v, want nil", err)
+	}
+}
+
+func TestRunScrapeRequests_NacksFailure(t *testing.T) {
+	q := queue.NewMockQueue()
+	req := dto.ScrapeRequest{Target: dto.SourceTarget{ID: "request-1", Source: "test"}}
+	if err := q.EnqueueScrapeRequest(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	RunScrapeRequests(ctx, q, func(context.Context, dto.ScrapeRequest) error {
+		cancel()
+		return errors.New("scrape failed")
+	})
+	if q.Attempts("request-1") != 1 {
+		t.Fatalf("attempts = %d, want 1", q.Attempts("request-1"))
 	}
 }
