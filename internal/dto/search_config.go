@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 type SearchConfig struct {
 	ID                    string
 	UserID                string
@@ -9,4 +11,5 @@ type SearchConfig struct {
 	ExcludedLocations     []string
 	SuitabilityRubric     string
 	NotifyThreshold       int
+	UpdatedAt             time.Time
 }

@@ -9,13 +9,20 @@ import (
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 type ScoringConfigHandler struct {
-	configs providers.SearchConfigProvider
+	configs    providers.SearchConfigProvider
+	candidates *candidates.Service
+}
+
+func (h *ScoringConfigHandler) WithCandidates(service *candidates.Service) *ScoringConfigHandler {
+	h.candidates = service
+	return h
 }
 
 func NewScoringConfigHandler(configs providers.SearchConfigProvider) *ScoringConfigHandler {
@@ -91,6 +98,13 @@ func (h *ScoringConfigHandler) UpdateScoringConfig(w http.ResponseWriter, r *htt
 		slog.Error("upsert scoring config failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
+	}
+	if h.candidates != nil {
+		if err := h.candidates.Reconsider(r.Context(), updated); err != nil {
+			slog.Error("reconsider candidates failed", slog.Any("err", err))
+			http.Error(w, "search config saved but candidate reconsideration failed", http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(toScoringConfigResponse(updated))

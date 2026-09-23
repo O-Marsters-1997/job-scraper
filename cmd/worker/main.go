@@ -133,6 +133,7 @@ func main() {
 	}
 
 	orch.WithRejectFilter(db)
+	orch.WithCandidates(db)
 	slog.Info("reject filter enabled (multi-user)")
 
 	if *noScrape {
@@ -152,6 +153,9 @@ func main() {
 			slog.Error("session cleanup failed",
 				slog.Any("err", err),
 			)
+		}
+		if err := db.DeleteExpiredCandidates(ctx); err != nil {
+			slog.Error("candidate cleanup failed", slog.Any("err", err))
 		}
 	}); err != nil {
 		slog.Error("session cleanup cron schedule failed",
