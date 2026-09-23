@@ -47,6 +47,7 @@ services:
 
   valkey:
     image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     restart: unless-stopped
     ports:
       - "6379:6379"
