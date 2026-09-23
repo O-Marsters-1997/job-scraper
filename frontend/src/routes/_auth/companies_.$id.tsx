@@ -24,7 +24,7 @@ import {
 	useCompanyBoards,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
-import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import { useJobPage } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 import type { CompanyBoard } from "../../types/company";
 
@@ -68,18 +68,20 @@ function FactRow(props: {
 }
 
 export const Route = createFileRoute("/_auth/companies_/$id")({
-	loader: () =>
-		Promise.all([
-			queryClient.ensureQueryData(companiesQueryOptions),
-			queryClient.ensureQueryData(jobsQueryOptions),
-		]),
+	loader: () => queryClient.ensureQueryData(companiesQueryOptions),
 	component: CompanyDetailPage,
 });
 
 function CompanyDetailPage() {
 	const params = Route.useParams();
 	const companiesQuery = useCompanies();
-	const jobsQuery = useJobs();
+	const [cursor, setCursor] = createSignal("");
+	const [history, setHistory] = createSignal<string[]>([]);
+	const jobsQuery = useJobPage(() => ({
+		companyId: params().id,
+		cursor: cursor() || undefined,
+		limit: 10,
+	}));
 	const trackMutation = useSetCompanyTracking();
 	const boardsQuery = useCompanyBoards(() => params().id);
 	const addBoardMutation = useAddCompanyBoard();
@@ -112,11 +114,7 @@ function CompanyDetailPage() {
 	const setFilterPatch = (patch: Partial<typeof DEFAULT_FILTERS>) =>
 		setFilters((f) => ({ ...f, ...patch }));
 
-	const jobsForCompany = createMemo(() => {
-		const c = company();
-		if (!c) return [];
-		return (jobsQuery.data ?? []).filter((j) => j.CompanySlug === c.Slug);
-	});
+	const jobsForCompany = createMemo(() => jobsQuery.data?.items ?? []);
 	const companyJobs = createMemo(() =>
 		applyJobFilters(jobsForCompany(), filters()),
 	);
@@ -215,6 +213,29 @@ function CompanyDetailPage() {
 											sourceOptions={[]}
 										/>
 									</Show>
+									<div class="mt-3 flex justify-end gap-2">
+										<Button
+											variant="outline"
+											disabled={history().length === 0}
+											onClick={() => {
+												const previous = history().at(-1) ?? "";
+												setHistory((items) => items.slice(0, -1));
+												setCursor(previous);
+											}}
+										>
+											Previous
+										</Button>
+										<Button
+											variant="outline"
+											disabled={!jobsQuery.data?.next_cursor}
+											onClick={() => {
+												setHistory((items) => [...items, cursor()]);
+												setCursor(jobsQuery.data?.next_cursor ?? "");
+											}}
+										>
+											Next
+										</Button>
+									</div>
 								</CardContent>
 							</Card>
 

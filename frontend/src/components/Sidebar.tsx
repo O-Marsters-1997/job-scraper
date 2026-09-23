@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useGoogleStatus } from "../hooks/useGoogle";
-import { useJobs } from "../hooks/useJobs";
 
 const navLinkVariants = cva(
 	"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
@@ -74,7 +73,6 @@ export default function Sidebar(props: SidebarProps) {
 	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 	const navigate = useNavigate();
 
-	const jobsQuery = useJobs();
 	const appsQuery = useApplications();
 	const googleStatus = useGoogleStatus();
 
@@ -168,11 +166,6 @@ export default function Sidebar(props: SidebarProps) {
 						</svg>
 						<Show when={showLabels()}>
 							<span class="whitespace-nowrap">Jobs</span>
-							<Show when={(jobsQuery.data?.length ?? 0) > 0}>
-								<span class={sidebarBadgeVariants({ active: isJobsActive() })}>
-									{jobsQuery.data?.length}
-								</span>
-							</Show>
 						</Show>
 					</Link>
 

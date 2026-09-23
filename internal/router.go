@@ -90,6 +90,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 		r.Use(auth.Middleware(db))
 
 		r.Get("/jobs", jobH.ListJobs)
+		r.Get("/jobs/{id}", jobH.GetJob)
 		r.Post("/jobs/{id}/reasoning", jobReasoningH.PostJobReasoning)
 
 		r.Route("/application-statuses", func(r chi.Router) {

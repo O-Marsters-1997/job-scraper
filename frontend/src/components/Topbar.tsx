@@ -1,6 +1,5 @@
 import { Link, useLocation } from "@tanstack/solid-router";
 import { Show } from "solid-js";
-import { jobsQueryOptions } from "../hooks/useJobs";
 import { queryClient } from "../lib/queryClient";
 import type { Job } from "../types/job";
 import SettingsPanel from "./SettingsPanel";
@@ -42,8 +41,7 @@ export default function Topbar(props: TopbarProps) {
 	const jobDetailTitle = () => {
 		const id = jobDetailId();
 		if (!id) return null;
-		const jobs = queryClient.getQueryData<Job[]>(jobsQueryOptions.queryKey);
-		return jobs?.find((j) => j.ID === id)?.Title ?? null;
+		return queryClient.getQueryData<Job>(["job", id])?.Title ?? null;
 	};
 
 	const pageLabel = () =>
