@@ -102,7 +102,7 @@ function OverviewPage() {
 			{/* Key metrics — lead with the two you act on daily, group the rest */}
 			<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1.2fr]">
 				<FeatureStat
-					label="New today"
+					label="New today (recent 100)"
 					value={newToday().toString()}
 					delta={
 						todaySources() > 0
@@ -140,7 +140,7 @@ function OverviewPage() {
 				<Card class="sm:col-span-2 lg:col-span-1">
 					<div class="grid h-full grid-rows-2 divide-y divide-border">
 						<MiniStat
-							label="Jobs in database"
+							label="Recent jobs"
 							value={totalJobs().toString()}
 							hint={`from ${sourceCount()} ${sourceCount() === 1 ? "source" : "sources"}`}
 						/>

@@ -285,6 +285,97 @@ func (q *Queries) OpenJobURLsForBoard(ctx context.Context, arg OpenJobURLsForBoa
 	return items, nil
 }
 
+const pageJobs = `-- name: PageJobs :many
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
+  AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
+  AND ($5::text = 'all' OR ($5::text = 'open' AND j.closed_at IS NULL) OR ($5::text = 'closed' AND j.closed_at IS NOT NULL))
+ORDER BY j.scraped_at DESC, j.id DESC
+LIMIT $6::int
+`
+
+type PageJobsParams struct {
+	UserID       pgtype.UUID
+	CursorTime   pgtype.Timestamptz
+	CursorID     pgtype.UUID
+	CompanyID    pgtype.UUID
+	Availability string
+	PageLimit    int32
+}
+
+type PageJobsRow struct {
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	UpdatedAt          pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	SalaryRaw          string
+	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
+	RelevanceScore     pgtype.Int4
+	SuitabilityScore   pgtype.Int4
+	Reasoning          pgtype.Text
+	Matched            []string
+	Missing            []string
+	SuitabilitySkipped bool
+}
+
+func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
+	rows, err := q.db.Query(ctx, pageJobs,
+		arg.UserID,
+		arg.CursorTime,
+		arg.CursorID,
+		arg.CompanyID,
+		arg.Availability,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PageJobsRow
+	for rows.Next() {
+		var i PageJobsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Location,
+			&i.Url,
+			&i.CompanySlug,
+			&i.Source,
+			&i.UpdatedAt,
+			&i.ScrapedAt,
+			&i.SalaryRaw,
+			&i.WorkArrangement,
+			&i.CompanyID,
+			&i.PrimaryBoardID,
+			&i.ProviderPostingID,
+			&i.ContentFingerprint,
+			&i.RelevanceScore,
+			&i.SuitabilityScore,
+			&i.Reasoning,
+			&i.Matched,
+			&i.Missing,
+			&i.SuitabilitySkipped,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertJob = `-- name: UpsertJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement)
 VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8, $9)
