@@ -134,7 +134,7 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) { ret
 
 Set `UseProxy: true` in `sources.Config` for sources that hit anti-bot protection (LinkedIn, Indeed). Leave it unset (zero value = false) for ATS APIs and cooperative HTML boards.
 
-When `UseProxy` is true, requests route through BrightData Web Unlocker via `BRIGHTDATA_PROXY_URL`. If the env var is unset the source degrades to direct (no crash). See ADR 0009.
+The worker requires a credentialed `BRIGHTDATA_PROXY_URL` at startup. Protected sources fail visibly if Web Unlocker fails; they never retry directly. Install Bright Data's CA and set `BRIGHTDATA_CA_CERT` when the certificate is not in the system trust store. Requests use verified TLS and reject private destinations, unsafe redirects, and responses over 8 MiB. See ADR 0018.
 
 ## Snapshot tests
 

@@ -185,7 +185,7 @@ Scoring and notifications (configured on `cmd/api`):
 | Email notifications (API) | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
 | Per-ingest email | `NOTIFY_ON_INGEST=true` |
 | Daily digest | `NOTIFY_DIGEST_ENABLED=true` (default) + `NOTIFY_DIGEST_CRON` |
-| BrightData Web Unlocker | `BRIGHTDATA_PROXY_URL` |
+| BrightData Web Unlocker (required by worker) | `BRIGHTDATA_PROXY_URL`; `BRIGHTDATA_CA_CERT` when needed for TLS trust |
 
 ## VPS Deployment
 
