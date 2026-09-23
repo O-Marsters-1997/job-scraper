@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -66,12 +67,13 @@ func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID,
 		}
 	}
 	t := dto.SourceTarget{
-		ID:      fmt.Sprintf("target-%d", m.nextID),
-		UserID:  userID,
-		Source:  source,
-		Value:   value,
-		Enabled: enabled,
-		Filters: filters,
+		ID:        fmt.Sprintf("target-%d", m.nextID),
+		UserID:    userID,
+		Source:    source,
+		Value:     value,
+		Enabled:   enabled,
+		Filters:   filters,
+		RunStatus: "idle",
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)
@@ -100,10 +102,29 @@ func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Contex
 		Filters:              map[string]string{},
 		CompanyID:            companyID,
 		CheckIntervalMinutes: 360,
+		RunStatus:            "idle",
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)
 	return t, nil
+}
+
+func (m *MockSourceTargetProvider) SetSourceTargetRunState(_ context.Context, id, status, runError string) (dto.SourceTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.targets {
+		if m.targets[i].ID != id {
+			continue
+		}
+		m.targets[i].RunStatus = status
+		m.targets[i].LastRunError = runError
+		if status == "succeeded" || status == "failed" {
+			now := time.Now()
+			m.targets[i].LastRunAt = &now
+		}
+		return m.targets[i], nil
+	}
+	return dto.SourceTarget{}, ErrNotFound
 }
 
 func (m *MockSourceTargetProvider) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {

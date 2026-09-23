@@ -12,4 +12,7 @@ type SourceTarget struct {
 	CompanyID            string
 	CheckIntervalMinutes int
 	LastCheckedAt        *time.Time
+	RunStatus            string
+	LastRunAt            *time.Time
+	LastRunError         string
 }

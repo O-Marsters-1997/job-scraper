@@ -142,7 +142,17 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.ScrapeNow && enabled && h.q != nil {
+	role, _ := sources.SourceRole(t.Source)
+	if enabled && role == sources.RoleDiscovery {
+		t, err = h.enqueueRun(r, t)
+		if err != nil {
+			slog.Error("enqueue scrape request failed", slog.Any("err", err))
+			if t.ID == "" {
+				http.Error(w, "search saved but could not start; retry from Searches", http.StatusServiceUnavailable)
+				return
+			}
+		}
+	} else if enabled && body.ScrapeNow && h.q != nil {
 		if err := h.q.EnqueueScrapeRequest(r.Context(), dto.ScrapeRequest{Target: t}); err != nil {
 			slog.Error("enqueue scrape request failed", slog.Any("err", err))
 		}
@@ -151,6 +161,58 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(t)
+}
+
+func (h *SourceTargetHandler) Scrape(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	id := chi.URLParam(r, "id")
+	targets, err := h.targets.ListSourceTargetsByUser(r.Context(), session.UserID)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	for _, target := range targets {
+		if target.ID != id {
+			continue
+		}
+		role, _ := sources.SourceRole(target.Source)
+		if role != sources.RoleDiscovery {
+			http.Error(w, "only discovery searches can be rerun", http.StatusBadRequest)
+			return
+		}
+		if target.RunStatus == "queued" || target.RunStatus == "running" {
+			http.Error(w, "search already in progress", http.StatusConflict)
+			return
+		}
+		target.Enabled = true
+		queued, err := h.enqueueRun(r, target)
+		if err != nil {
+			http.Error(w, "could not start search", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(queued)
+		return
+	}
+	http.Error(w, "not found", http.StatusNotFound)
+}
+
+func (h *SourceTargetHandler) enqueueRun(r *http.Request, target dto.SourceTarget) (dto.SourceTarget, error) {
+	queued, err := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "queued", "")
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	if h.q == nil {
+		failed, _ := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "failed", "queue unavailable")
+		return failed, errors.New("queue unavailable")
+	}
+	queued.Enabled = true
+	if err := h.q.EnqueueScrapeRequest(r.Context(), dto.ScrapeRequest{Target: queued}); err != nil {
+		failed, _ := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "failed", "queue unavailable")
+		return failed, err
+	}
+	return queued, nil
 }
 
 func (h *SourceTargetHandler) Update(w http.ResponseWriter, r *http.Request) {

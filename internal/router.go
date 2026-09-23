@@ -122,6 +122,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 			r.Get("/", stH.List)
 			r.Post("/", stH.Create)
 			r.Patch("/{id}", stH.Update)
+			r.Post("/{id}/scrape", stH.Scrape)
 			r.Delete("/{id}", stH.Delete)
 		})
 

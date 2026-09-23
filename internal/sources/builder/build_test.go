@@ -162,3 +162,14 @@ func TestBuildSources_UnknownSourceIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildScheduledSources_ExcludesDiscovery(t *testing.T) {
+	targets := []dto.SourceTarget{
+		{Source: "greenhouse", Value: "acme", Enabled: true},
+		{Source: "wis", Value: "engineer", Enabled: true},
+	}
+	srcs := builder.BuildScheduledSources(targets, nil)
+	if len(srcs) != 1 || srcs[0].Cfg().Name != "greenhouse" {
+		t.Fatalf("scheduled sources = %v, want only greenhouse", srcs)
+	}
+}

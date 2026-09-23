@@ -58,3 +58,9 @@ export async function updateSourceTarget(
 export async function deleteSourceTarget(id: string): Promise<void> {
 	return apiFetchVoid(`/source-targets/${id}`, { method: "DELETE" });
 }
+
+export async function rerunSourceTarget(id: string): Promise<SourceTarget> {
+	return apiFetch<SourceTarget>(`/source-targets/${id}/scrape`, {
+		method: "POST",
+	});
+}

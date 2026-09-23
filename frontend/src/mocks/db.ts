@@ -534,6 +534,9 @@ export function setCompanyTracking(id: string, enabled: boolean): SourceTarget {
 		Value: company.ATSToken,
 		Enabled: enabled,
 		Filters: {},
+		RunStatus: "idle",
+		LastRunAt: null,
+		LastRunError: "",
 	};
 }
 
@@ -562,6 +565,9 @@ export function updateSourceTarget(
 		Value: company.ATSToken,
 		Enabled: updated.Tracked,
 		Filters: {},
+		RunStatus: "idle",
+		LastRunAt: null,
+		LastRunError: "",
 	};
 }
 

@@ -13,4 +13,5 @@ type SourceTargetProvider interface {
 	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error)
 	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
+	SetSourceTargetRunState(ctx context.Context, id, status, runError string) (dto.SourceTarget, error)
 }
