@@ -13,9 +13,54 @@ type MockCompanyProvider struct {
 	companies []dto.Company
 	nextID    int
 	tracking  map[string]dto.CompanyTracking
+	boards    []dto.CompanyBoard
 
 	UpsertErr error
 	ListErr   error
+}
+
+func (m *MockCompanyProvider) ListCompanyBoards(_ context.Context, companyID string) ([]dto.CompanyBoard, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []dto.CompanyBoard{}
+	for _, board := range m.boards {
+		if board.CompanyID == companyID {
+			out = append(out, board)
+		}
+	}
+	return out, nil
+}
+
+func (m *MockCompanyProvider) UpsertCandidateBoard(_ context.Context, companyID, source, token string) (dto.CompanyBoard, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, board := range m.boards {
+		if board.Source == source && board.BoardToken == token {
+			if board.CompanyID != companyID {
+				return dto.CompanyBoard{}, ErrBoardConflict
+			}
+			return board, nil
+		}
+	}
+	board := dto.CompanyBoard{ID: fmt.Sprintf("board-%d", len(m.boards)+1), CompanyID: companyID, Source: source, BoardToken: token, Status: dto.BoardCandidate}
+	m.boards = append(m.boards, board)
+	return board, nil
+}
+
+func (m *MockCompanyProvider) VerifyCompanyBoard(_ context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, board := range m.boards {
+		if board.CompanyID == companyID && board.Source == source && board.BoardToken == token {
+			if board.Status == dto.BoardCandidate {
+				board.Status = dto.BoardVerified
+				board.VerificationMethod = method
+				m.boards[i] = board
+			}
+			return board, nil
+		}
+	}
+	return dto.CompanyBoard{}, ErrNotFound
 }
 
 func NewMockCompanyProvider() *MockCompanyProvider {

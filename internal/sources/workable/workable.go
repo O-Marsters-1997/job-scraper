@@ -53,12 +53,13 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 	jobs := make([]dto.Job, 0, len(resp.Results))
 	for _, r := range resp.Results {
 		jobs = append(jobs, dto.Job{
-			Title:       r.Title,
-			Location:    r.Location.City,
-			URL:         fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
-			CompanySlug: token,
-			Source:      "workable",
-			UpdatedAt:   time.Now().UTC(),
+			Title:             r.Title,
+			Location:          r.Location.City,
+			URL:               fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
+			CompanySlug:       token,
+			ProviderPostingID: r.Shortcode,
+			Source:            "workable",
+			UpdatedAt:         time.Now().UTC(),
 		})
 	}
 	return jobs, nil

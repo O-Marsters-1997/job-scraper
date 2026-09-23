@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,10 +29,38 @@ func (m *MockJobProvider) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, er
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, j := range jobs {
+	out := make([]dto.Job, len(jobs))
+	for idx, j := range jobs {
+		if j.ID == "" {
+			if previous, ok := m.jobs[j.URL]; ok {
+				j.ID = previous.ID
+			} else {
+				j.ID = "mock-" + strconv.Itoa(len(m.jobs)+1)
+			}
+		}
 		m.jobs[j.URL] = j
+		out[idx] = j
 	}
-	return jobs, nil
+	return out, nil
+}
+
+func (m *MockJobProvider) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
+	if m.SaveErr != nil {
+		return dto.Job{}, "", m.SaveErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if previous, ok := m.jobs[job.URL]; ok {
+		job.ID = previous.ID
+		if job.Title == previous.Title && job.Description == previous.Description && job.Location == previous.Location && job.SalaryRaw == previous.SalaryRaw && job.WorkArrangement == previous.WorkArrangement {
+			return previous, "unchanged", nil
+		}
+		m.jobs[job.URL] = job
+		return job, "changed", nil
+	}
+	job.ID = "mock-" + strconv.Itoa(len(m.jobs)+1)
+	m.jobs[job.URL] = job
+	return job, "new", nil
 }
 
 func (m *MockJobProvider) NewURLs(_ context.Context, urls []string) ([]string, error) {

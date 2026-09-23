@@ -10,7 +10,21 @@ CREATE TABLE IF NOT EXISTS jobs (
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
     work_arrangement TEXT         NOT NULL DEFAULT '',
-    closed_at        TIMESTAMPTZ
+    closed_at           TIMESTAMPTZ,
+    company_id          UUID,
+    primary_board_id    UUID,
+    provider_posting_id TEXT,
+    content_fingerprint TEXT,
+    content_changed_at  TIMESTAMPTZ,
+    first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE job_urls (
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    normalized_url TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -162,6 +176,20 @@ CREATE TABLE IF NOT EXISTS tracked_companies (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, company_id)
+);
+
+CREATE TABLE IF NOT EXISTS company_boards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    board_token TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'verified', 'retired')),
+    verification_method TEXT,
+    verified_at TIMESTAMPTZ,
+    last_linked_at TIMESTAMPTZ,
+    retired_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (source, board_token)
 );
 
 CREATE TABLE IF NOT EXISTS job_candidates (

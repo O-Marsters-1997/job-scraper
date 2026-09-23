@@ -55,13 +55,14 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			sb.WriteString(d.Value)
 		}
 		jobs = append(jobs, dto.Job{
-			Title:       p.Name,
-			Location:    p.Office,
-			URL:         fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
-			CompanySlug: token,
-			Source:      "personio",
-			Description: sb.String(),
-			UpdatedAt:   time.Now().UTC(),
+			Title:             p.Name,
+			Location:          p.Office,
+			URL:               fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
+			CompanySlug:       token,
+			ProviderPostingID: p.ID,
+			Source:            "personio",
+			Description:       sb.String(),
+			UpdatedAt:         time.Now().UTC(),
 		})
 	}
 	return jobs, nil

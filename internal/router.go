@@ -43,7 +43,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	statusH := handlers.NewApplicationStatusHandler(db)
 	candidateService := candidates.New(db, q)
 	stH := handlers.NewSourceTargetHandler(db, q).WithCandidates(candidateService, db)
-	compH := handlers.NewCompaniesHandler(db, db, q)
+	compH := handlers.NewCompaniesHandler(db, db, handlers.ATSBoardVerifier{})
 	scoringCfgH := handlers.NewScoringConfigHandler(db).WithCandidates(candidateService)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)
@@ -132,6 +132,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 			r.Get("/", compH.List)
 			r.Post("/", compH.Create)
 			r.Put("/{id}/tracking", compH.SetTracking)
+			r.Get("/{id}/boards", compH.ListBoards)
+			r.Post("/{id}/boards", compH.AddBoard)
 		})
 
 		r.Route("/cv-templates", func(r chi.Router) {
@@ -150,6 +152,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
 		r.Post("/ingest", ingestH.Ingest)
+		r.Post("/ingest/batch", ingestH.IngestBatch)
 	})
 
 	return r

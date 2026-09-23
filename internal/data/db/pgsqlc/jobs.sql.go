@@ -36,7 +36,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 WHERE j.id = $1
@@ -60,6 +60,10 @@ type GetJobRow struct {
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
 	RelevanceScore     pgtype.Int4
 	SuitabilityScore   pgtype.Int4
 	Reasoning          pgtype.Text
@@ -83,6 +87,10 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.Description,
 		&i.SalaryRaw,
 		&i.WorkArrangement,
+		&i.CompanyID,
+		&i.PrimaryBoardID,
+		&i.ProviderPostingID,
+		&i.ContentFingerprint,
 		&i.RelevanceScore,
 		&i.SuitabilityScore,
 		&i.Reasoning,
@@ -94,7 +102,7 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 }
 
 const getJobByURL = `-- name: GetJobByURL :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at FROM jobs WHERE url = $1 LIMIT 1
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at, company_id, primary_board_id, provider_posting_id, content_fingerprint, content_changed_at, first_discovered_at FROM jobs WHERE url = $1 LIMIT 1
 `
 
 func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
@@ -113,12 +121,18 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 		&i.SalaryRaw,
 		&i.WorkArrangement,
 		&i.ClosedAt,
+		&i.CompanyID,
+		&i.PrimaryBoardID,
+		&i.ProviderPostingID,
+		&i.ContentFingerprint,
+		&i.ContentChangedAt,
+		&i.FirstDiscoveredAt,
 	)
 	return i, err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.relevance_score, js.suitability_score, js.reasoning, js.matched, js.missing, COALESCE(js.suitability_skipped, false) AS suitability_skipped
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC
@@ -136,6 +150,10 @@ type ListJobsRow struct {
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
 	RelevanceScore     pgtype.Int4
 	SuitabilityScore   pgtype.Int4
 	Reasoning          pgtype.Text
@@ -165,6 +183,10 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 			&i.Description,
 			&i.SalaryRaw,
 			&i.WorkArrangement,
+			&i.CompanyID,
+			&i.PrimaryBoardID,
+			&i.ProviderPostingID,
+			&i.ContentFingerprint,
 			&i.RelevanceScore,
 			&i.SuitabilityScore,
 			&i.Reasoning,
@@ -183,7 +205,7 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 }
 
 const listJobsSince = `-- name: ListJobsSince :many
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
+SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at, company_id, primary_board_id, provider_posting_id, content_fingerprint, content_changed_at, first_discovered_at FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC
 `
 
 func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestamptz) ([]Job, error) {
@@ -208,6 +230,12 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 			&i.SalaryRaw,
 			&i.WorkArrangement,
 			&i.ClosedAt,
+			&i.CompanyID,
+			&i.PrimaryBoardID,
+			&i.ProviderPostingID,
+			&i.ContentFingerprint,
+			&i.ContentChangedAt,
+			&i.FirstDiscoveredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -269,7 +297,7 @@ ON CONFLICT (url) DO UPDATE SET
     salary_raw       = EXCLUDED.salary_raw,
     work_arrangement = EXCLUDED.work_arrangement,
     closed_at        = NULL
-RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at
+RETURNING id, title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, work_arrangement, closed_at, company_id, primary_board_id, provider_posting_id, content_fingerprint, content_changed_at, first_discovered_at
 `
 
 type UpsertJobParams struct {
@@ -310,6 +338,12 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (Job, erro
 		&i.SalaryRaw,
 		&i.WorkArrangement,
 		&i.ClosedAt,
+		&i.CompanyID,
+		&i.PrimaryBoardID,
+		&i.ProviderPostingID,
+		&i.ContentFingerprint,
+		&i.ContentChangedAt,
+		&i.FirstDiscoveredAt,
 	)
 	return i, err
 }
