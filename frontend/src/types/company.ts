@@ -18,3 +18,16 @@ export interface CompanyTracking {
 	Enabled: boolean;
 	CheckIntervalMinutes: number;
 }
+
+export interface CompanyBoard {
+	ID: string;
+	CompanyID: string;
+	Source: string;
+	BoardToken: string;
+	Status: "candidate" | "verified" | "retired";
+	VerificationMethod: string;
+	VerifiedAt: string | null;
+	LastLinkedAt: string | null;
+	RetiredAt: string | null;
+	CreatedAt: string;
+}

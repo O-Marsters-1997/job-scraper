@@ -160,3 +160,17 @@ CREATE TABLE IF NOT EXISTS tracked_companies (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, company_id)
 );
+
+CREATE TABLE IF NOT EXISTS company_boards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    board_token TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'candidate' CHECK (status IN ('candidate', 'verified', 'retired')),
+    verification_method TEXT,
+    verified_at TIMESTAMPTZ,
+    last_linked_at TIMESTAMPTZ,
+    retired_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (source, board_token)
+);

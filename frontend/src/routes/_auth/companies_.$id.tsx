@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { createJobColumns } from "@/components/jobs/columns";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
 	Select,
 	SelectContent,
@@ -18,11 +19,33 @@ import { formatDate } from "@/lib/datetime";
 import { applyJobFilters, DEFAULT_FILTERS } from "@/lib/jobFilters";
 import {
 	companiesQueryOptions,
+	useAddCompanyBoard,
 	useCompanies,
+	useCompanyBoards,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
+import type { CompanyBoard } from "../../types/company";
+
+function boardURLFor(board: CompanyBoard): string {
+	switch (board.Source) {
+		case "greenhouse":
+			return `https://boards.greenhouse.io/${board.BoardToken}`;
+		case "lever":
+			return `https://jobs.lever.co/${board.BoardToken}`;
+		case "ashby":
+			return `https://jobs.ashbyhq.com/${board.BoardToken}`;
+		case "workable":
+			return `https://apply.workable.com/${board.BoardToken}`;
+		case "recruitee":
+			return `https://${board.BoardToken}.recruitee.com`;
+		case "personio":
+			return `https://${board.BoardToken}.jobs.personio.de`;
+		default:
+			return "";
+	}
+}
 
 const CHECK_INTERVAL_OPTIONS = [
 	{ minutes: 60, label: "Hourly" },
@@ -58,6 +81,50 @@ function CompanyDetailPage() {
 	const companiesQuery = useCompanies();
 	const jobsQuery = useJobs();
 	const trackMutation = useSetCompanyTracking();
+	const boardsQuery = useCompanyBoards(() => params().id);
+	const addBoardMutation = useAddCompanyBoard();
+	const [boardURL, setBoardURL] = createSignal("");
+	const [boardMessage, setBoardMessage] = createSignal("");
+	const submitBoard = async (event: SubmitEvent) => {
+		event.preventDefault();
+		setBoardMessage("");
+		try {
+			const board = await addBoardMutation.mutateAsync({
+				id: params().id,
+				url: boardURL().trim(),
+				confirm: true,
+			});
+			setBoardMessage(
+				board.Status === "verified"
+					? "Board verified."
+					: "Board saved as a candidate. Verification failed; retry when it is available.",
+			);
+			setBoardURL("");
+		} catch (error) {
+			setBoardMessage(
+				error instanceof Error ? error.message : "Could not add board.",
+			);
+		}
+	};
+	const retryBoard = async (board: CompanyBoard) => {
+		setBoardMessage("");
+		try {
+			const result = await addBoardMutation.mutateAsync({
+				id: params().id,
+				url: boardURLFor(board),
+				confirm: true,
+			});
+			setBoardMessage(
+				result.Status === "verified"
+					? "Board verified."
+					: "Verification failed; retry when the board is available.",
+			);
+		} catch (error) {
+			setBoardMessage(
+				error instanceof Error ? error.message : "Could not verify board.",
+			);
+		}
+	};
 
 	const company = () => companiesQuery.data?.find((c) => c.ID === params().id);
 
@@ -172,6 +239,98 @@ function CompanyDetailPage() {
 							</Card>
 
 							<div class="sticky top-0 flex flex-col gap-3">
+								<Card>
+									<CardHeader class="pb-2">
+										<CardTitle>Boards</CardTitle>
+									</CardHeader>
+									<CardContent class="gap-3">
+										<Show when={boardsQuery.isError}>
+											<p class="text-sm text-destructive-strong">
+												Could not load boards.
+											</p>
+										</Show>
+										<Show
+											when={!boardsQuery.isPending && !boardsQuery.isError}
+											fallback={
+												<p class="text-sm text-muted">Loading boards…</p>
+											}
+										>
+											<Show
+												when={(boardsQuery.data ?? []).length > 0}
+												fallback={
+													<p class="text-sm text-faint">
+														No boards linked yet.
+													</p>
+												}
+											>
+												<For each={boardsQuery.data ?? []}>
+													{(board) => (
+														<div class="flex items-start justify-between gap-2 border-b border-border pb-2 text-xs">
+															<div class="min-w-0">
+																<p class="font-medium text-foreground">
+																	{board.Source}
+																</p>
+																<p class="break-all font-mono text-faint">
+																	{board.BoardToken}
+																</p>
+															</div>
+															<span class="capitalize text-muted">
+																{board.Status}
+															</span>
+														</div>
+													)}
+												</For>
+											</Show>
+										</Show>
+										<form onSubmit={submitBoard} class="flex flex-col gap-2">
+											<label
+												for="company-board-url"
+												class="text-xs font-medium text-foreground"
+											>
+												ATS board URL
+											</label>
+											<Input
+												id="company-board-url"
+												type="url"
+												required
+												value={boardURL()}
+												onInput={(event) =>
+													setBoardURL(event.currentTarget.value)
+												}
+												placeholder="https://boards.greenhouse.io/acme"
+											/>
+											<Button
+												type="submit"
+												size="sm"
+												disabled={addBoardMutation.isPending}
+											>
+												Add and verify board
+											</Button>
+											<Show when={boardMessage()}>
+												<output class="text-xs text-muted">
+													{boardMessage()}
+												</output>
+											</Show>
+										</form>
+										<For
+											each={(boardsQuery.data ?? []).filter(
+												(board) => board.Status === "candidate",
+											)}
+										>
+											{(board) => (
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													disabled={addBoardMutation.isPending}
+													onClick={() => retryBoard(board)}
+												>
+													Retry {board.BoardToken}
+												</Button>
+											)}
+										</For>
+									</CardContent>
+								</Card>
 								<Card>
 									<CardHeader class="pb-2">
 										<CardTitle>Details</CardTitle>

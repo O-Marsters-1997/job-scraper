@@ -41,7 +41,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 	stH := handlers.NewSourceTargetHandler(db, q)
-	compH := handlers.NewCompaniesHandler(db, db, q)
+	compH := handlers.NewCompaniesHandler(db, db, q, handlers.ATSBoardVerifier{})
 	scoringCfgH := handlers.NewScoringConfigHandler(db)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)
@@ -129,6 +129,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 			r.Get("/", compH.List)
 			r.Post("/", compH.Create)
 			r.Put("/{id}/tracking", compH.SetTracking)
+			r.Get("/{id}/boards", compH.ListBoards)
+			r.Post("/{id}/boards", compH.AddBoard)
 		})
 
 		r.Route("/cv-templates", func(r chi.Router) {
