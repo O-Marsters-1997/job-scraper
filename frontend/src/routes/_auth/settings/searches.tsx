@@ -28,6 +28,7 @@ import { useSources } from "../../../hooks/useSources";
 import {
 	useCreateSourceTarget,
 	useDeleteSourceTarget,
+	useRerunSourceTarget,
 	useSourceTargets,
 	useUpdateSourceTarget,
 } from "../../../hooks/useSourceTargets";
@@ -44,12 +45,12 @@ function SearchesPage() {
 	const createMutation = useCreateSourceTarget();
 	const updateMutation = useUpdateSourceTarget();
 	const deleteMutation = useDeleteSourceTarget();
+	const rerunMutation = useRerunSourceTarget();
 
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [selectedSource, setSelectedSource] = createSignal("wis");
 	const [newValue, setNewValue] = createSignal("");
 	const [newFilters, setNewFilters] = createSignal<Record<string, string>>({});
-	const [newScrapeNow, setNewScrapeNow] = createSignal(false);
 	const [conflictError, setConflictError] = createSignal<string | null>(null);
 	const [scrapeQueued, setScrapeQueued] = createSignal(false);
 	const [pasteUrl, setPasteUrl] = createSignal("");
@@ -80,7 +81,6 @@ function SearchesPage() {
 	const resetForm = () => {
 		setNewValue("");
 		setNewFilters({});
-		setNewScrapeNow(false);
 		setConflictError(null);
 		setPasteUrl("");
 		setResolveHint(null);
@@ -126,15 +126,20 @@ function SearchesPage() {
 		setScrapeQueued(false);
 		try {
 			const filters = info?.kind === "filter" ? newFilters() : {};
-			await createMutation.mutateAsync({
+			const created = await createMutation.mutateAsync({
 				source: selectedSource(),
 				value: val,
 				filters,
-				scrape_now: newScrapeNow(),
 			});
-			if (newScrapeNow()) setScrapeQueued(true);
 			resetForm();
 			setShowAdd(false);
+			if (created.RunStatus === "failed") {
+				setConflictError(
+					"Search saved, but it could not start. Use Run again to retry.",
+				);
+			} else if (sourceRole(created.Source) === "discovery") {
+				setScrapeQueued(true);
+			}
 		} catch (err) {
 			if (err instanceof ConflictError) {
 				setConflictError("A search with these settings already exists.");
@@ -152,14 +157,28 @@ function SearchesPage() {
 		deleteMutation.mutate(id);
 	};
 
+	const handleRerun = async (id: string) => {
+		setConflictError(null);
+		setScrapeQueued(false);
+		try {
+			await rerunMutation.mutateAsync(id);
+			setScrapeQueued(true);
+		} catch {
+			setConflictError("Could not start the search. Please try again.");
+		}
+	};
+
 	const TargetsCard = (props: { list: SourceTarget[] }) => (
-		<Card class="mb-4 overflow-hidden">
+		<Card class="mb-4 overflow-x-auto">
 			<Table>
 				<TableHeader>
 					<TableRow>
 						<TableHead>Source</TableHead>
 						<TableHead>Search</TableHead>
 						<TableHead>Filters</TableHead>
+						<TableHead>Last run</TableHead>
+						<TableHead>Status</TableHead>
+						<TableHead class="w-24" />
 						<TableHead class="w-16" />
 						<TableHead class="w-20" />
 					</TableRow>
@@ -182,6 +201,34 @@ function SearchesPage() {
 									title={filterSummary(t)}
 								>
 									{filterSummary(t)}
+								</TableCell>
+								<TableCell>
+									{t.LastRunAt
+										? new Date(t.LastRunAt).toLocaleString()
+										: "Never"}
+								</TableCell>
+								<TableCell>
+									<Show when={sourceRole(t.Source) === "discovery"}>
+										<span title={t.LastRunError || undefined}>
+											{t.RunStatus}
+										</span>
+									</Show>
+								</TableCell>
+								<TableCell>
+									<Show when={sourceRole(t.Source) === "discovery"}>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => handleRerun(t.ID)}
+											disabled={
+												rerunMutation.isPending ||
+												t.RunStatus === "queued" ||
+												t.RunStatus === "running"
+											}
+										>
+											Run again
+										</Button>
+									</Show>
 								</TableCell>
 								<TableCell>
 									<button
@@ -227,10 +274,10 @@ function SearchesPage() {
 	);
 
 	return (
-		<div class="max-w-2xl px-7 py-6">
+		<div class="max-w-5xl px-7 py-6">
 			<PageHeading
 				title="Tracked searches"
-				subtitle="Keywords, board tokens and URLs to track across supported job sources. Each runs on its own 6-hour cycle."
+				subtitle="Discovery searches run when added or when you choose Run again."
 			/>
 			<FormFeedback
 				success={
@@ -446,19 +493,6 @@ function SearchesPage() {
 											</div>
 										</Show>
 
-										<label class="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground">
-											<input
-												type="checkbox"
-												checked={newScrapeNow()}
-												onChange={(e) =>
-													setNewScrapeNow(e.currentTarget.checked)
-												}
-												class="h-4 w-4 rounded border-border accent-primary"
-											/>
-											Scrape now: get results immediately instead of waiting up
-											to 6 hours
-										</label>
-
 										<div class="flex items-center gap-2 pt-1">
 											<button
 												type="button"
@@ -512,8 +546,7 @@ function SearchesPage() {
 						</Show>
 
 						<p class="mt-3 text-xs text-faint">
-							Each search runs independently on the 6-hour cron. Toggle to pause
-							without deleting.
+							Discovery searches run when added or explicitly rerun.
 						</p>
 					</>
 				)}

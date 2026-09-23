@@ -22,3 +22,10 @@ type Company struct {
 	CheckIntervalMinutes int
 	LastCheckedAt        *time.Time
 }
+
+type CompanyTracking struct {
+	CompanyID            string
+	UserID               string
+	Enabled              bool
+	CheckIntervalMinutes int
+}

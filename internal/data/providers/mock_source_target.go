@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -66,19 +67,20 @@ func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID,
 		}
 	}
 	t := dto.SourceTarget{
-		ID:      fmt.Sprintf("target-%d", m.nextID),
-		UserID:  userID,
-		Source:  source,
-		Value:   value,
-		Enabled: enabled,
-		Filters: filters,
+		ID:        fmt.Sprintf("target-%d", m.nextID),
+		UserID:    userID,
+		Source:    source,
+		Value:     value,
+		Enabled:   enabled,
+		Filters:   filters,
+		RunStatus: "idle",
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)
 	return t, nil
 }
 
-func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error) {
+func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
 	if m.CreateErr != nil {
 		return dto.SourceTarget{}, m.CreateErr
 	}
@@ -88,6 +90,9 @@ func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Contex
 		if t.UserID == userID && t.Source == source && t.Value == value && len(t.Filters) == 0 {
 			m.targets[i].Enabled = enabled
 			m.targets[i].CompanyID = companyID
+			if interval != 0 {
+				m.targets[i].CheckIntervalMinutes = interval
+			}
 			return m.targets[i], nil
 		}
 	}
@@ -99,11 +104,33 @@ func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Contex
 		Enabled:              enabled,
 		Filters:              map[string]string{},
 		CompanyID:            companyID,
-		CheckIntervalMinutes: 360,
+		CheckIntervalMinutes: interval,
+		RunStatus:            "idle",
+	}
+	if interval == 0 {
+		t.CheckIntervalMinutes = 360
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)
 	return t, nil
+}
+
+func (m *MockSourceTargetProvider) SetSourceTargetRunState(_ context.Context, id, status, runError string) (dto.SourceTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.targets {
+		if m.targets[i].ID != id {
+			continue
+		}
+		m.targets[i].RunStatus = status
+		m.targets[i].LastRunError = runError
+		if status == "succeeded" || status == "failed" {
+			now := time.Now()
+			m.targets[i].LastRunAt = &now
+		}
+		return m.targets[i], nil
+	}
+	return dto.SourceTarget{}, ErrNotFound
 }
 
 func (m *MockSourceTargetProvider) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {

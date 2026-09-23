@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -13,17 +14,84 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 type CompaniesHandler struct {
 	companies providers.CompanyProvider
 	targets   providers.SourceTargetProvider
-	q         queue.JobQueue
+	verifier  BoardVerifier
 }
 
-func NewCompaniesHandler(companies providers.CompanyProvider, targets providers.SourceTargetProvider, q queue.JobQueue) *CompaniesHandler {
-	return &CompaniesHandler{companies: companies, targets: targets, q: q}
+type BoardVerifier interface {
+	Verify(ctx context.Context, source, token string) error
+}
+
+func NewCompaniesHandler(companies providers.CompanyProvider, targets providers.SourceTargetProvider, verifier BoardVerifier) *CompaniesHandler {
+	return &CompaniesHandler{companies: companies, targets: targets, verifier: verifier}
+}
+
+func (h *CompaniesHandler) ListBoards(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := h.companies.GetCompany(r.Context(), id); err != nil {
+		if errors.Is(err, providers.ErrNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	boards, err := h.companies.ListCompanyBoards(r.Context(), id)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(boards)
+}
+
+func (h *CompaniesHandler) AddBoard(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := h.companies.GetCompany(r.Context(), id); err != nil {
+		if errors.Is(err, providers.ErrNotFound) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	var body struct {
+		URL     string `json:"url"`
+		Confirm bool   `json:"confirm"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	source, token, ok := detect.ResolveBoard(body.URL)
+	if !ok {
+		http.Error(w, "could not resolve an ATS board from that URL", http.StatusUnprocessableEntity)
+		return
+	}
+	board, err := h.companies.UpsertCandidateBoard(r.Context(), id, source, token)
+	if errors.Is(err, providers.ErrBoardConflict) {
+		http.Error(w, "board belongs to another company", http.StatusConflict)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if body.Confirm && board.Status == dto.BoardCandidate && h.verifier != nil {
+		if err := h.verifier.Verify(r.Context(), source, token); err == nil {
+			board, err = h.companies.VerifyCompanyBoard(r.Context(), id, source, token, "user_confirmed")
+			if err != nil {
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(board)
 }
 
 func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -38,15 +106,12 @@ func (h *CompaniesHandler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(cs)
 }
 
-// Create resolves a pasted ATS board URL into a company, upserting it into the
-// shared catalog. When Track is true (the default) it also enables the
-// caller's source_target for that board, optionally enqueuing an immediate scrape.
+// Create resolves an ATS URL into a company and optionally tracks it for the caller.
 func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	var body struct {
-		URL       string `json:"url"`
-		Track     *bool  `json:"track"`
-		ScrapeNow bool   `json:"scrape_now"`
+		URL   string `json:"url"`
+		Track *bool  `json:"track"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -60,29 +125,29 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	company, err := h.companies.UpsertCompany(r.Context(), dto.CompanyUpsert{
-		Slug:      token,
-		Name:      humanizeToken(token),
-		ATSSource: source,
-		ATSToken:  token,
+		Slug: token,
+		Name: humanizeToken(token),
 	})
 	if err != nil {
 		slog.Error("upsert company failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	if _, err := h.companies.UpsertCandidateBoard(r.Context(), company.ID, source, token); err != nil {
+		if errors.Is(err, providers.ErrBoardConflict) {
+			http.Error(w, "board belongs to another company", http.StatusConflict)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 
 	track := body.Track == nil || *body.Track
 	if track {
-		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, source, token, company.ID, true)
-		if err != nil {
-			slog.Error("upsert source target for company failed", slog.Any("err", err))
+		if _, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, true, 360); err != nil {
+			slog.Error("track company failed", slog.Any("err", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
-		}
-		if body.ScrapeNow && h.q != nil {
-			if err := h.q.EnqueueScrapeRequest(r.Context(), dto.ScrapeRequest{Target: target}); err != nil {
-				slog.Error("enqueue scrape request failed", slog.Any("err", err))
-			}
 		}
 	}
 
@@ -91,16 +156,24 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(company)
 }
 
-// SetTracking toggles the caller's tracking of a company by upserting/enabling
-// or disabling their ATS source_target for its board.
+// SetTracking stores the caller's company interest and requested check frequency.
 func (h *CompaniesHandler) SetTracking(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Enabled bool `json:"enabled"`
+		Enabled              *bool `json:"enabled"`
+		CheckIntervalMinutes *int  `json:"check_interval_minutes"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Enabled == nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	interval := 0
+	if body.CheckIntervalMinutes != nil {
+		interval = *body.CheckIntervalMinutes
+	}
+	if body.CheckIntervalMinutes != nil && interval < 60 {
+		http.Error(w, "check_interval_minutes must be at least 60", http.StatusBadRequest)
 		return
 	}
 
@@ -114,20 +187,23 @@ func (h *CompaniesHandler) SetTracking(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	if company.ATSSource == "" {
-		http.Error(w, "this company has no known ATS board", http.StatusUnprocessableEntity)
-		return
-	}
-
-	target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, body.Enabled)
+	tracking, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, *body.Enabled, interval)
 	if err != nil {
-		slog.Error("upsert source target for company failed", slog.Any("err", err))
+		slog.Error("set company tracking failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
+	if company.ATSSource != "" {
+		_, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, *body.Enabled, tracking.CheckIntervalMinutes)
+		if err != nil {
+			slog.Error("sync legacy source target failed", slog.Any("err", err))
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(target)
+	_ = json.NewEncoder(w).Encode(tracking)
 }
 
 // humanizeToken turns a board token like "acme-corp" into "Acme Corp".

@@ -47,9 +47,8 @@ function CompaniesPage() {
 	const [search, setSearch] = createSignal("");
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [newUrl, setNewUrl] = createSignal("");
-	const [newScrapeNow, setNewScrapeNow] = createSignal(false);
 	const [addError, setAddError] = createSignal<string | null>(null);
-	const [scrapeQueued, setScrapeQueued] = createSignal(false);
+	const [addedCompany, setAddedCompany] = createSignal(false);
 
 	const filtered = createMemo(() => {
 		const q = search().trim().toLowerCase();
@@ -64,7 +63,6 @@ function CompaniesPage() {
 
 	const resetForm = () => {
 		setNewUrl("");
-		setNewScrapeNow(false);
 		setAddError(null);
 	};
 
@@ -72,15 +70,14 @@ function CompaniesPage() {
 		const url = newUrl().trim();
 		if (!url) return;
 		setAddError(null);
-		setScrapeQueued(false);
+		setAddedCompany(false);
 		try {
 			await addMutation.mutateAsync({
 				url,
 				track: true,
-				scrape_now: newScrapeNow(),
 			});
-			if (newScrapeNow()) setScrapeQueued(true);
 			resetForm();
+			setAddedCompany(true);
 			setShowAdd(false);
 		} catch (err) {
 			if (err instanceof UnresolvableBoardError) {
@@ -97,11 +94,11 @@ function CompaniesPage() {
 		<div class="px-7 py-6">
 			<PageHeading
 				title="Companies"
-				subtitle="Every company we've encountered. Track one to re-check its board for new roles."
+				subtitle="Every company we've encountered. Track a company to follow its current and future boards."
 			>
 				<Button
 					onClick={() => {
-						setScrapeQueued(false);
+						setAddedCompany(false);
 						setAddError(null);
 						setShowAdd(true);
 					}}
@@ -112,8 +109,8 @@ function CompaniesPage() {
 
 			<FormFeedback
 				success={
-					scrapeQueued()
-						? "Scrape queued. Matching jobs will appear shortly."
+					addedCompany()
+						? "Company added. Open its detail page to verify the candidate board."
 						: false
 				}
 			/>
@@ -174,7 +171,7 @@ function CompaniesPage() {
 												<Switch
 													checked={c.Tracked}
 													onChange={() => handleToggle(c)}
-													disabled={!c.ATSSource || trackMutation.isPending}
+													disabled={trackMutation.isPending}
 												>
 													<SwitchControl>
 														<SwitchThumb />
@@ -211,15 +208,6 @@ function CompaniesPage() {
 								onKeyDown={(e) => e.key === "Enter" && handleAdd()}
 							/>
 						</div>
-						<label class="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground">
-							<input
-								type="checkbox"
-								checked={newScrapeNow()}
-								onChange={(e) => setNewScrapeNow(e.currentTarget.checked)}
-								class="h-4 w-4 rounded border-border accent-primary"
-							/>
-							Scrape now: get results immediately
-						</label>
 						<Show when={addError()}>
 							<p class="text-xs text-destructive-strong">{addError()}</p>
 						</Show>

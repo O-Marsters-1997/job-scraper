@@ -9,6 +9,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -28,6 +29,7 @@ type Orchestrator struct {
 	buildSources func(ctx context.Context) ([]sources.Source, error) // nil → use static srcs
 	buildTarget  func(target dto.SourceTarget) []sources.Source      // nil → no on-demand scrape
 	force        bool                                                // bypass MinScrapeInterval gate when true
+	candidates   *candidates.Service
 }
 
 func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
@@ -50,6 +52,11 @@ func (o *Orchestrator) WithSourceReloader(
 // drop jobs that every user's exclusion filters reject.
 func (o *Orchestrator) WithRejectFilter(cfgDB providers.SearchConfigProvider) {
 	o.cfgDB = cfgDB
+}
+
+func (o *Orchestrator) WithCandidates(store candidates.Store) *Orchestrator {
+	o.candidates = candidates.New(store, o.q)
+	return o
 }
 
 // WithForceScrape bypasses the per-source MinScrapeInterval gate on every tick.
@@ -134,11 +141,41 @@ func (o *Orchestrator) ScrapeTarget(ctx context.Context, target dto.SourceTarget
 	}
 	srcs := o.buildTarget(target)
 	for _, src := range srcs {
+		role, _ := sources.SourceRole(target.Source)
+		if role == sources.RoleDiscovery && o.candidates != nil {
+			if err := o.runDiscovery(ctx, src, target); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := o.run(ctx, src); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (o *Orchestrator) runDiscovery(ctx context.Context, src sources.Source, target dto.SourceTarget) error {
+	config := dto.SearchConfig{UserID: target.UserID}
+	if o.cfgDB != nil {
+		stored, err := o.cfgDB.GetSearchConfig(ctx, target.UserID)
+		if err != nil && err != providers.ErrNotFound {
+			return err
+		}
+		if err == nil {
+			config = stored
+		}
+	}
+	return src.Iterate(ctx, func(ctx context.Context, cards []dto.Job) (bool, error) {
+		for i := range cards {
+			if detect.Detect(cards[i].URL) == detect.Aggregator {
+				if rewritten, _, ok := detect.RewriteToATS(cards[i].URL); ok {
+					cards[i].URL = rewritten
+				}
+			}
+		}
+		return false, o.candidates.CapturePage(ctx, target, cards, config)
+	})
 }
 
 func (o *Orchestrator) Stop() {

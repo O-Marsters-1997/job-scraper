@@ -21,11 +21,12 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpsertSourceTargetForCompany :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id)
-VALUES ($1, $2, $3, $4, '{}', $5)
+INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id, check_interval_minutes)
+VALUES ($1, $2, $3, $4, '{}', $5, COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), 360))
 ON CONFLICT (user_id, source, value, filters) DO UPDATE SET
     enabled    = EXCLUDED.enabled,
     company_id = EXCLUDED.company_id,
+    check_interval_minutes = COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), source_targets.check_interval_minutes),
     updated_at = NOW()
 RETURNING *;
 
@@ -45,3 +46,12 @@ WHERE enabled = TRUE
 
 -- name: DeleteSourceTarget :exec
 DELETE FROM source_targets WHERE id = $1 AND user_id = $2;
+
+-- name: SetSourceTargetRunState :one
+UPDATE source_targets SET
+    run_status = $2,
+    last_run_error = $3,
+    last_run_at = CASE WHEN $2 IN ('succeeded', 'failed') THEN NOW() ELSE last_run_at END,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

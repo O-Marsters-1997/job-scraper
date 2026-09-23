@@ -73,20 +73,17 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 	out := make([]dto.Company, len(rows))
 	for i, r := range rows {
 		c := dto.Company{
-			ID:                r.ID.String(),
-			Slug:              r.Slug,
-			Name:              r.Name,
-			ATSSource:         r.AtsSource.String,
-			ATSToken:          r.AtsToken.String,
-			Domain:            r.Domain.String,
-			LinkedInCompanyID: r.LinkedinCompanyID.String,
-			FirstSeenAt:       r.FirstSeenAt.Time,
-			JobCount:          int(r.JobCount),
-			Tracked:           r.Tracked,
-		}
-		if r.TargetID.Valid {
-			c.TargetID = r.TargetID.String()
-			c.CheckIntervalMinutes = int(r.CheckIntervalMinutes.Int32)
+			ID:                   r.ID.String(),
+			Slug:                 r.Slug,
+			Name:                 r.Name,
+			ATSSource:            r.AtsSource.String,
+			ATSToken:             r.AtsToken.String,
+			Domain:               r.Domain.String,
+			LinkedInCompanyID:    r.LinkedinCompanyID.String,
+			FirstSeenAt:          r.FirstSeenAt.Time,
+			JobCount:             int(r.JobCount),
+			Tracked:              r.Tracked,
+			CheckIntervalMinutes: int(r.CheckIntervalMinutes.Int32),
 		}
 		if r.LastCheckedAt.Valid {
 			t := r.LastCheckedAt.Time
@@ -99,6 +96,27 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 		out[i] = c
 	}
 	return out, nil
+}
+
+func (db *DB) SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, interval int) (dto.CompanyTracking, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	cid, err := parseUUID(companyID)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	row, err := db.queries.SetCompanyTracking(ctx, pgsqlc.SetCompanyTrackingParams{
+		UserID: uid, CompanyID: cid, Enabled: enabled, CheckIntervalMinutes: int32(interval),
+	})
+	if err != nil {
+		return dto.CompanyTracking{}, fmt.Errorf("db.SetCompanyTracking: %w", err)
+	}
+	return dto.CompanyTracking{
+		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
+		Enabled: row.Enabled, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
+	}, nil
 }
 
 // ListCompaniesToCrawl returns up to limit companies with a known domain but

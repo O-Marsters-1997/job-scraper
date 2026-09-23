@@ -5,7 +5,7 @@ import type {
 	JobApplicationSummary,
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
-import type { Company } from "@/types/company";
+import type { Company, CompanyBoard } from "@/types/company";
 import type { Job } from "@/types/job";
 import type { SourceTarget } from "@/types/sourceTarget";
 
@@ -276,6 +276,21 @@ let companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 	};
 });
 
+let companyBoards: CompanyBoard[] = companies
+	.filter((company) => company.ATSSource)
+	.map((company) => ({
+		ID: faker.string.uuid(),
+		CompanyID: company.ID,
+		Source: company.ATSSource,
+		BoardToken: company.ATSToken,
+		Status: "verified" as const,
+		VerificationMethod: "legacy_import",
+		VerifiedAt: company.FirstSeenAt,
+		LastLinkedAt: null,
+		RetiredAt: null,
+		CreatedAt: company.FirstSeenAt,
+	}));
+
 const ATS_HOSTS: Record<string, string> = {
 	"greenhouse.io": "greenhouse",
 	"lever.co": "lever",
@@ -501,8 +516,8 @@ export function addCompany(url: string, track: boolean): Company | null {
 		ID: faker.string.uuid(),
 		Slug: slug,
 		Name: humanizeSlug(token),
-		ATSSource: atsSource,
-		ATSToken: token,
+		ATSSource: "",
+		ATSToken: "",
 		FirstSeenAt: new Date().toISOString(),
 		JobCount: 0,
 		Tracked: track,
@@ -511,29 +526,80 @@ export function addCompany(url: string, track: boolean): Company | null {
 		LastCheckedAt: null,
 	};
 	companies = [company, ...companies];
+	addCompanyBoard(company.ID, url, false);
 	return company;
 }
 
-// ponytail: only understands source targets that back a tracked company —
-// standalone discovery targets (settings/searches) aren't modelled here.
-export function setCompanyTracking(id: string, enabled: boolean): SourceTarget {
+export function getCompanyBoards(companyID: string): CompanyBoard[] {
+	return companyBoards.filter((board) => board.CompanyID === companyID);
+}
+
+export function addCompanyBoard(
+	companyID: string,
+	url: string,
+	confirm: boolean,
+): CompanyBoard | null {
+	let hostname: string;
+	try {
+		hostname = new URL(url).hostname;
+	} catch {
+		return null;
+	}
+	const source = Object.entries(ATS_HOSTS).find(([host]) =>
+		hostname.endsWith(host),
+	)?.[1];
+	if (!source) return null;
+	const token = url.replace(/\/$/, "").split("/").pop() ?? hostname;
+	const existing = companyBoards.find(
+		(board) => board.Source === source && board.BoardToken === token,
+	);
+	if (existing && existing.CompanyID !== companyID)
+		throw new Error("This board belongs to another company.");
+	const board: CompanyBoard = existing ?? {
+		ID: faker.string.uuid(),
+		CompanyID: companyID,
+		Source: source,
+		BoardToken: token,
+		Status: "candidate",
+		VerificationMethod: "",
+		VerifiedAt: null,
+		LastLinkedAt: null,
+		RetiredAt: null,
+		CreatedAt: new Date().toISOString(),
+	};
+	if (confirm && board.Status === "candidate") {
+		board.Status = "verified";
+		board.VerificationMethod = "user_confirmed";
+		board.VerifiedAt = new Date().toISOString();
+	}
+	if (!existing) companyBoards = [...companyBoards, board];
+	return board;
+}
+
+export function setCompanyTracking(
+	id: string,
+	enabled: boolean,
+	checkIntervalMinutes?: number,
+): import("../types/company").CompanyTracking {
 	const idx = companies.findIndex((c) => c.ID === id);
 	if (idx === -1) throw new Error("Company not found");
 	const company = companies[idx]!;
-	const targetId = company.TargetID || faker.string.uuid();
-	const updated: Company = { ...company, Tracked: enabled, TargetID: targetId };
+	const updated: Company = {
+		...company,
+		Tracked: enabled,
+		CheckIntervalMinutes:
+			checkIntervalMinutes ?? (company.CheckIntervalMinutes || 360),
+	};
 	companies = [
 		...companies.slice(0, idx),
 		updated,
 		...companies.slice(idx + 1),
 	];
 	return {
-		ID: targetId,
+		CompanyID: id,
 		UserID: mockUser.id,
-		Source: company.ATSSource,
-		Value: company.ATSToken,
 		Enabled: enabled,
-		Filters: {},
+		CheckIntervalMinutes: updated.CheckIntervalMinutes,
 	};
 }
 
@@ -562,6 +628,9 @@ export function updateSourceTarget(
 		Value: company.ATSToken,
 		Enabled: updated.Tracked,
 		Filters: {},
+		RunStatus: "idle",
+		LastRunAt: null,
+		LastRunError: "",
 	};
 }
 

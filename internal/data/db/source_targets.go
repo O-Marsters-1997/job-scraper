@@ -27,6 +27,8 @@ func fromSourceTarget(row pgsqlc.SourceTarget) dto.SourceTarget {
 		Enabled:              row.Enabled,
 		Filters:              filters,
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes),
+		RunStatus:            row.RunStatus,
+		LastRunError:         row.LastRunError,
 	}
 	if row.CompanyID.Valid {
 		t.CompanyID = row.CompanyID.String()
@@ -35,7 +37,28 @@ func fromSourceTarget(row pgsqlc.SourceTarget) dto.SourceTarget {
 		lc := row.LastCheckedAt.Time
 		t.LastCheckedAt = &lc
 	}
+	if row.LastRunAt.Valid {
+		lastRun := row.LastRunAt.Time
+		t.LastRunAt = &lastRun
+	}
 	return t
+}
+
+func (db *DB) SetSourceTargetRunState(ctx context.Context, id, status, runError string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.SetSourceTargetRunState(ctx, pgsqlc.SetSourceTargetRunStateParams{
+		ID: tid, RunStatus: status, LastRunError: runError,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return dto.SourceTarget{}, providers.ErrNotFound
+		}
+		return dto.SourceTarget{}, fmt.Errorf("db.SetSourceTargetRunState: %w", err)
+	}
+	return fromSourceTarget(row), nil
 }
 
 func fromSourceTargets(rows []pgsqlc.SourceTarget) []dto.SourceTarget {
@@ -132,7 +155,7 @@ func (db *DB) TouchSourceTargetsChecked(ctx context.Context, source, value strin
 	return nil
 }
 
-func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error) {
+func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -142,11 +165,12 @@ func (db *DB) UpsertSourceTargetForCompany(ctx context.Context, userID, source, 
 		return dto.SourceTarget{}, err
 	}
 	row, err := db.queries.UpsertSourceTargetForCompany(ctx, pgsqlc.UpsertSourceTargetForCompanyParams{
-		UserID:    uid,
-		Source:    source,
-		Value:     value,
-		Enabled:   enabled,
-		CompanyID: cid,
+		UserID:               uid,
+		Source:               source,
+		Value:                value,
+		Enabled:              enabled,
+		CompanyID:            cid,
+		CheckIntervalMinutes: int32(interval),
 	})
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("db.UpsertSourceTargetForCompany: %w", err)
