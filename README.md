@@ -97,7 +97,7 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 
 **Two scoring stages** — Relevance (`HeuristicScorer`) is keyword-only, runs cheap at scrape time as a gate before enqueueing or saving. Suitability (`ClaudeScorer`) is an LLM call on the full job description, runs once at ingest, and gates notifications. See ADRs 0005 and 0006.
 
-**Recoverable Valkey queues** — detail and explicit scrape-request work is published atomically with its payload. Workers claim only due items under a lease, acknowledge after successful ingest or scrape, and retry failures with bounded exponential backoff. Expired leases are reclaimable; three failed attempts move work to a replayable dead-letter set. See ADR 0008.
+**Recoverable Valkey queues** — detail and explicit scrape-request work is published atomically with its payload. Workers claim only due items under a lease, acknowledge after successful ingest or scrape, and retry failures with bounded exponential backoff. Expired leases are reclaimable; three failed attempts move work to a replayable dead-letter set.
 
 **Aggregator URL rewriting** — When an HTML source (LinkedIn/Indeed) yields a URL that wraps an underlying ATS URL, `detect.RewriteToATS` extracts the real URL before enqueueing. This means the worker sees a clean ATS URL and routes it to the correct source. See ADR 0004.
 
