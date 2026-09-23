@@ -2,6 +2,9 @@ package db_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -330,6 +333,12 @@ func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
 	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
 		t.Fatal(err)
 	}
+	legacy := job
+	legacy.URL = "https://example.com/jobs/legacy-cached"
+	legacy.Description = "<p>Cached role</p>"
+	if _, err := testDB.Save(ctx, []dto.Job{legacy}); err != nil {
+		t.Fatal(err)
+	}
 	user, err := testDB.CreateUser(ctx, "cached-user", "hash", "")
 	if err != nil {
 		t.Fatal(err)
@@ -342,8 +351,16 @@ func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
 	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*), COALESCE(bool_or(first_discovery), false) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count, &eligible); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || eligible {
+	if count != 2 || eligible {
 		t.Fatalf("cached scores = %d, first discovery = %v", count, eligible)
+	}
+	content, _ := json.Marshal([5]string{legacy.Title, legacy.Description, legacy.Location, legacy.SalaryRaw, legacy.WorkArrangement})
+	var fingerprint string
+	if err := testDB.Pool().QueryRow(ctx, "SELECT content_fingerprint FROM jobs WHERE url = $1", legacy.URL).Scan(&fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("%x", sha256.Sum256(content)); fingerprint != want {
+		t.Fatalf("legacy fingerprint = %q, want %q", fingerprint, want)
 	}
 }
 
