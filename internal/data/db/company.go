@@ -107,11 +107,28 @@ func (db *DB) SetCompanyTracking(ctx context.Context, userID, companyID string, 
 	if err != nil {
 		return dto.CompanyTracking{}, err
 	}
-	row, err := db.queries.SetCompanyTracking(ctx, pgsqlc.SetCompanyTrackingParams{
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return dto.CompanyTracking{}, fmt.Errorf("begin company tracking: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := db.queries.WithTx(tx)
+	row, err := queries.SetCompanyTracking(ctx, pgsqlc.SetCompanyTrackingParams{
 		UserID: uid, CompanyID: cid, Enabled: enabled, CheckIntervalMinutes: int32(interval),
 	})
 	if err != nil {
 		return dto.CompanyTracking{}, fmt.Errorf("db.SetCompanyTracking: %w", err)
+	}
+	if enabled {
+		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
+		}
+		if err := queries.QueueTrackingScores(ctx, pgsqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid}); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("queue tracked company scores: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return dto.CompanyTracking{}, fmt.Errorf("commit company tracking: %w", err)
 	}
 	return dto.CompanyTracking{
 		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),

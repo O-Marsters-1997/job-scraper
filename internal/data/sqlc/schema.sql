@@ -104,10 +104,32 @@ CREATE TABLE IF NOT EXISTS job_scores (
     matched              TEXT[],
     missing              TEXT[],
     suitability_skipped  BOOLEAN     NOT NULL DEFAULT false,
+    score_fingerprint    TEXT,
+    score_config_version TIMESTAMPTZ,
+    score_model          TEXT,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (job_id, user_id)
 );
+
+CREATE TABLE effect_outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    fingerprint TEXT NOT NULL,
+    config_version TIMESTAMPTZ NOT NULL,
+    model TEXT NOT NULL,
+    first_discovery BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INT NOT NULL DEFAULT 0,
+    due_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    lease_until TIMESTAMPTZ,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (job_id, user_id, fingerprint, config_version, model)
+);
+CREATE INDEX effect_outbox_user_job_idx ON effect_outbox (user_id, job_id);
+CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
 CREATE TABLE IF NOT EXISTS search_config (
     id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -193,9 +215,34 @@ CREATE TABLE IF NOT EXISTS company_boards (
     verified_at TIMESTAMPTZ,
     last_linked_at TIMESTAMPTZ,
     retired_at TIMESTAMPTZ,
+    superseded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
+
+CREATE TABLE board_poll_state (
+    board_id UUID PRIMARY KEY REFERENCES company_boards(id) ON DELETE CASCADE,
+    last_completed_at TIMESTAMPTZ,
+    last_scheduled_at TIMESTAMPTZ,
+    last_started_at TIMESTAMPTZ,
+    last_snapshot_version BIGINT NOT NULL DEFAULT 0,
+    consecutive_complete_empty INT NOT NULL DEFAULT 0,
+    consecutive_failures INT NOT NULL DEFAULT 0,
+    lease_owner TEXT,
+    lease_until TIMESTAMPTZ,
+    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE board_job_observations (
+    board_id UUID NOT NULL REFERENCES company_boards(id) ON DELETE CASCADE,
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_snapshot_version BIGINT NOT NULL,
+    PRIMARY KEY (board_id, job_id)
+);
+
+CREATE INDEX board_poll_state_due_idx ON board_poll_state(next_due_at) WHERE lease_until IS NULL;
+CREATE INDEX board_job_observations_version_idx ON board_job_observations(board_id, last_snapshot_version);
 
 CREATE TABLE IF NOT EXISTS job_candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

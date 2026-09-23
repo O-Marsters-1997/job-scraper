@@ -28,6 +28,26 @@ type ApplicationStatus struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type BoardJobObservation struct {
+	BoardID             pgtype.UUID
+	JobID               pgtype.UUID
+	LastSeenAt          pgtype.Timestamptz
+	LastSnapshotVersion int64
+}
+
+type BoardPollState struct {
+	BoardID                  pgtype.UUID
+	LastCompletedAt          pgtype.Timestamptz
+	LastScheduledAt          pgtype.Timestamptz
+	LastStartedAt            pgtype.Timestamptz
+	LastSnapshotVersion      int64
+	ConsecutiveCompleteEmpty int32
+	ConsecutiveFailures      int32
+	LeaseOwner               pgtype.Text
+	LeaseUntil               pgtype.Timestamptz
+	NextDueAt                pgtype.Timestamptz
+}
+
 type CandidateAssessment struct {
 	CandidateID         pgtype.UUID
 	UserID              pgtype.UUID
@@ -66,7 +86,24 @@ type CompanyBoard struct {
 	VerifiedAt         pgtype.Timestamptz
 	LastLinkedAt       pgtype.Timestamptz
 	RetiredAt          pgtype.Timestamptz
+	SupersededAt       pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
+}
+
+type EffectOutbox struct {
+	ID             pgtype.UUID
+	JobID          pgtype.UUID
+	UserID         pgtype.UUID
+	Fingerprint    string
+	ConfigVersion  pgtype.Timestamptz
+	Model          string
+	FirstDiscovery bool
+	Status         string
+	Attempts       int32
+	DueAt          pgtype.Timestamptz
+	LeaseUntil     pgtype.Timestamptz
+	LastError      string
+	CreatedAt      pgtype.Timestamptz
 }
 
 type Job struct {
@@ -113,6 +150,9 @@ type JobScore struct {
 	Matched            []string
 	Missing            []string
 	SuitabilitySkipped bool
+	ScoreFingerprint   pgtype.Text
+	ScoreConfigVersion pgtype.Timestamptz
+	ScoreModel         pgtype.Text
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
 }

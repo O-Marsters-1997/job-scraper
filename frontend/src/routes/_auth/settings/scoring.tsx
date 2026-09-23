@@ -4,9 +4,10 @@ import { FormFeedback } from "@/components/FormFeedback";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { ScoringConfig } from "../../../api/scoringConfig";
+import { useQueueRescore, useScoringStatus } from "../../../hooks/useScores";
 import {
 	useScoringConfig,
 	useUpdateScoringConfig,
@@ -51,6 +52,8 @@ function ScoringPage() {
 // refetches don't clobber values the user is actively editing.
 function ScoringForm(props: { data: ScoringConfig }) {
 	const mutation = useUpdateScoringConfig();
+	const scoringStatus = useScoringStatus();
+	const rescore = useQueueRescore();
 	const [rubric, setRubric] = createSignal(props.data.suitabilityRubric ?? "");
 	const [threshold, setThreshold] = createSignal(
 		props.data.notifyThreshold ?? 70,
@@ -282,10 +285,46 @@ function ScoringForm(props: { data: ScoringConfig }) {
 					</Button>
 				</div>
 
-				<p class="text-xs text-faint">
-					Changes apply to future scoring only. Already-scored jobs are not
-					re-scored.
-				</p>
+				<Card>
+					<CardHeader>
+						<CardTitle>Existing assessments</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<Show
+							when={scoringStatus.data}
+							fallback={
+								<p>
+									{scoringStatus.isError
+										? "Could not load assessment status."
+										: "Loading assessment status…"}
+								</p>
+							}
+						>
+							{(status) => (
+								<p>
+									{status().stale} stale · {status().pending} pending ·{" "}
+									{status().failed} failed
+								</p>
+							)}
+						</Show>
+						<Button
+							variant="outline"
+							disabled={rescore.isPending}
+							onClick={() => rescore.mutate()}
+						>
+							{rescore.isPending ? "Queueing…" : "Rescore existing jobs"}
+						</Button>
+						<Show when={rescore.data}>
+							<p>
+								{rescore.data?.queued} jobs queued. Run again to queue the next
+								batch.
+							</p>
+						</Show>
+						<Show when={rescore.isError}>
+							<p>Could not queue a rescore. Try again.</p>
+						</Show>
+					</CardContent>
+				</Card>
 			</div>
 		</>
 	);
