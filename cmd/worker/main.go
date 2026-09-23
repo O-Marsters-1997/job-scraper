@@ -22,6 +22,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
+	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 )
@@ -105,7 +107,7 @@ func main() {
 		slog.Error("load source targets failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	srcs := builder.BuildSources(targets, boardDone)
+	srcs := builder.BuildScheduledSources(targets, boardDone)
 	slog.Info("sources built from db", slog.Int("count", len(srcs)))
 
 	buildAll := func(ctx context.Context) ([]sources.Source, error) {
@@ -113,7 +115,7 @@ func main() {
 		if err != nil {
 			return nil, err
 		}
-		return builder.BuildSources(ts, boardDone), nil
+		return builder.BuildScheduledSources(ts, boardDone), nil
 	}
 	buildOne := func(target dto.SourceTarget) []sources.Source {
 		// nil boardDone: on-demand scrapes (scrape-now, ScrapeTarget) must not
@@ -131,6 +133,7 @@ func main() {
 	}
 
 	orch.WithRejectFilter(db)
+	orch.WithCandidates(db)
 	slog.Info("reject filter enabled (multi-user)")
 
 	if *noScrape {
@@ -151,6 +154,9 @@ func main() {
 				slog.Any("err", err),
 			)
 		}
+		if err := db.DeleteExpiredCandidates(ctx); err != nil {
+			slog.Error("candidate cleanup failed", slog.Any("err", err))
+		}
 	}); err != nil {
 		slog.Error("session cleanup cron schedule failed",
 			slog.Any("err", err),
@@ -162,7 +168,7 @@ func main() {
 	cr.Start()
 	defer cr.Stop()
 
-	detailers := make([]sources.DetailFetcher, 0, len(srcs)+1)
+	detailers := make([]sources.DetailFetcher, 0, len(srcs)+3)
 	for _, s := range srcs {
 		if df, ok := s.(sources.DetailFetcher); ok {
 			detailers = append(detailers, df)
@@ -171,9 +177,24 @@ func main() {
 	// Always include a bare wis scraper for GetDetails so that on-demand scrape
 	// job URLs can be fetched even when no wis targets exist at boot.
 	detailers = append(detailers, wis.New(wis.Config{}))
+	detailers = append(detailers, linkedin.New(linkedin.Config{}), indeed.New(indeed.Config{}))
 
 	go worker.RunScrapeRequests(ctx, q, func(ctx context.Context, req dto.ScrapeRequest) error {
-		return orch.ScrapeTarget(ctx, req.Target)
+		role, _ := sources.SourceRole(req.Target.Source)
+		if role != sources.RoleDiscovery {
+			return orch.ScrapeTarget(ctx, req.Target)
+		}
+		if _, err := db.SetSourceTargetRunState(ctx, req.Target.ID, "running", ""); err != nil {
+			return err
+		}
+		if err := orch.ScrapeTarget(ctx, req.Target); err != nil {
+			if _, stateErr := db.SetSourceTargetRunState(ctx, req.Target.ID, "failed", "Search failed. Try running it again."); stateErr != nil {
+				slog.Error("record search failure failed", slog.Any("err", stateErr))
+			}
+			return err
+		}
+		_, err := db.SetSourceTargetRunState(ctx, req.Target.ID, "succeeded", "")
+		return err
 	})
 
 	// Company harvester runner: drains code-registered harvesters into the

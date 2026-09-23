@@ -22,6 +22,7 @@ func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
 		ExcludedLocations:     row.ExcludedLocations,
 		SuitabilityRubric:     row.SuitabilityRubric,
 		NotifyThreshold:       int(row.NotifyThreshold),
+		UpdatedAt:             row.UpdatedAt.Time,
 	}
 }
 
