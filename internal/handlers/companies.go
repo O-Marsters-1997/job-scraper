@@ -14,13 +14,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 type CompaniesHandler struct {
 	companies providers.CompanyProvider
 	targets   providers.SourceTargetProvider
-	q         queue.JobQueue
 	verifier  BoardVerifier
 }
 
@@ -28,12 +26,8 @@ type BoardVerifier interface {
 	Verify(ctx context.Context, source, token string) error
 }
 
-func NewCompaniesHandler(companies providers.CompanyProvider, targets providers.SourceTargetProvider, q queue.JobQueue, verifier ...BoardVerifier) *CompaniesHandler {
-	h := &CompaniesHandler{companies: companies, targets: targets, q: q}
-	if len(verifier) > 0 {
-		h.verifier = verifier[0]
-	}
-	return h
+func NewCompaniesHandler(companies providers.CompanyProvider, targets providers.SourceTargetProvider, verifier BoardVerifier) *CompaniesHandler {
+	return &CompaniesHandler{companies: companies, targets: targets, verifier: verifier}
 }
 
 func (h *CompaniesHandler) ListBoards(w http.ResponseWriter, r *http.Request) {

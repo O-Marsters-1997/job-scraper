@@ -41,7 +41,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 	stH := handlers.NewSourceTargetHandler(db, q)
-	compH := handlers.NewCompaniesHandler(db, db, q, handlers.ATSBoardVerifier{})
+	compH := handlers.NewCompaniesHandler(db, db, handlers.ATSBoardVerifier{})
 	scoringCfgH := handlers.NewScoringConfigHandler(db)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)

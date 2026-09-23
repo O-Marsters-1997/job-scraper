@@ -526,21 +526,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		LastCheckedAt: null,
 	};
 	companies = [company, ...companies];
-	companyBoards = [
-		{
-			ID: faker.string.uuid(),
-			CompanyID: company.ID,
-			Source: atsSource,
-			BoardToken: token,
-			Status: "candidate",
-			VerificationMethod: "",
-			VerifiedAt: null,
-			LastLinkedAt: null,
-			RetiredAt: null,
-			CreatedAt: new Date().toISOString(),
-		},
-		...companyBoards,
-	];
+	addCompanyBoard(company.ID, url, false);
 	return company;
 }
 

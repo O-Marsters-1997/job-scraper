@@ -85,43 +85,23 @@ function CompanyDetailPage() {
 	const addBoardMutation = useAddCompanyBoard();
 	const [boardURL, setBoardURL] = createSignal("");
 	const [boardMessage, setBoardMessage] = createSignal("");
-	const submitBoard = async (event: SubmitEvent) => {
-		event.preventDefault();
+	const saveBoard = async (url: string) => {
 		setBoardMessage("");
 		try {
 			const board = await addBoardMutation.mutateAsync({
 				id: params().id,
-				url: boardURL().trim(),
+				url,
 				confirm: true,
 			});
 			setBoardMessage(
 				board.Status === "verified"
 					? "Board verified."
-					: "Board saved as a candidate. Verification failed; retry when it is available.",
+					: "Verification failed; retry when the board is available.",
 			);
 			setBoardURL("");
 		} catch (error) {
 			setBoardMessage(
 				error instanceof Error ? error.message : "Could not add board.",
-			);
-		}
-	};
-	const retryBoard = async (board: CompanyBoard) => {
-		setBoardMessage("");
-		try {
-			const result = await addBoardMutation.mutateAsync({
-				id: params().id,
-				url: boardURLFor(board),
-				confirm: true,
-			});
-			setBoardMessage(
-				result.Status === "verified"
-					? "Board verified."
-					: "Verification failed; retry when the board is available.",
-			);
-		} catch (error) {
-			setBoardMessage(
-				error instanceof Error ? error.message : "Could not verify board.",
 			);
 		}
 	};
@@ -249,12 +229,10 @@ function CompanyDetailPage() {
 												Could not load boards.
 											</p>
 										</Show>
-										<Show
-											when={!boardsQuery.isPending && !boardsQuery.isError}
-											fallback={
-												<p class="text-sm text-muted">Loading boards…</p>
-											}
-										>
+										<Show when={boardsQuery.isPending}>
+											<p class="text-sm text-muted">Loading boards…</p>
+										</Show>
+										<Show when={!boardsQuery.isPending && !boardsQuery.isError}>
 											<Show
 												when={(boardsQuery.data ?? []).length > 0}
 												fallback={
@@ -282,7 +260,13 @@ function CompanyDetailPage() {
 												</For>
 											</Show>
 										</Show>
-										<form onSubmit={submitBoard} class="flex flex-col gap-2">
+										<form
+											onSubmit={(event) => {
+												event.preventDefault();
+												void saveBoard(boardURL().trim());
+											}}
+											class="flex flex-col gap-2"
+										>
 											<label
 												for="company-board-url"
 												class="text-xs font-medium text-foreground"
@@ -323,7 +307,7 @@ function CompanyDetailPage() {
 													size="sm"
 													variant="outline"
 													disabled={addBoardMutation.isPending}
-													onClick={() => retryBoard(board)}
+													onClick={() => saveBoard(boardURLFor(board))}
 												>
 													Retry {board.BoardToken}
 												</Button>

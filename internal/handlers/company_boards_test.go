@@ -26,7 +26,7 @@ func TestCompanyBoardConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyErr := errors.New("board unavailable")
-	h := NewCompaniesHandler(companies, providers.NewMockSourceTargetProvider(), nil, boardVerifierFunc(func(source, token string) error {
+	h := NewCompaniesHandler(companies, providers.NewMockSourceTargetProvider(), boardVerifierFunc(func(source, token string) error {
 		return verifyErr
 	}))
 	post := func(body string) dto.CompanyBoard {
