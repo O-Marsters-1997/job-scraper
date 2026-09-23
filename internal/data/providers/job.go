@@ -2,10 +2,13 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+var ErrCanonicalConflict = errors.New("canonical job identity conflict")
 
 // JobProvider is the single access point for job persistence.
 // Callers never import pgsqlc or pgtype directly.

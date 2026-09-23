@@ -46,13 +46,14 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 	jobs := make([]dto.Job, 0, len(resp.Jobs))
 	for _, jp := range resp.Jobs {
 		jobs = append(jobs, dto.Job{
-			Title:       jp.Title,
-			Location:    jp.Location,
-			URL:         jp.JobURL,
-			CompanySlug: token,
-			Source:      "ashby",
-			Description: jp.DescriptionHTML,
-			UpdatedAt:   sources.RFC3339OrNow(jp.PublishedAt),
+			Title:             jp.Title,
+			Location:          jp.Location,
+			URL:               jp.JobURL,
+			CompanySlug:       token,
+			ProviderPostingID: jp.ID,
+			Source:            "ashby",
+			Description:       jp.DescriptionHTML,
+			UpdatedAt:         sources.RFC3339OrNow(jp.PublishedAt),
 		})
 	}
 	return jobs, nil

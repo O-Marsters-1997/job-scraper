@@ -53,13 +53,14 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 		}
 
 		jobs = append(jobs, dto.Job{
-			Title:       p.Text,
-			Location:    p.Categories.Location,
-			URL:         p.HostedURL,
-			CompanySlug: token,
-			Source:      "lever",
-			Description: p.DescriptionPlain,
-			UpdatedAt:   updatedAt,
+			Title:             p.Text,
+			Location:          p.Categories.Location,
+			URL:               p.HostedURL,
+			CompanySlug:       token,
+			ProviderPostingID: p.ID,
+			Source:            "lever",
+			Description:       p.DescriptionPlain,
+			UpdatedAt:         updatedAt,
 		})
 	}
 	return jobs, nil

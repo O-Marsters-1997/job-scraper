@@ -2,15 +2,30 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/url"
 	"strings"
 
+	"github.com/google/uuid"
+
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 type Saver interface {
 	Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error)
+}
+
+type CanonicalSaver interface {
+	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
+}
+
+type Result struct {
+	Status string `json:"status"`
+	JobID  string `json:"job_id,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // Scorer runs suitability scoring for a batch of jobs for a specific user after they are saved.
@@ -113,6 +128,48 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 		}
 	}
 	return nil
+}
+
+func (i *Ingester) IngestJobs(ctx context.Context, jobs []dto.Job) ([]Result, error) {
+	canonical, ok := i.db.(CanonicalSaver)
+	if !ok {
+		return nil, errors.New("canonical job persistence unavailable")
+	}
+	results := make([]Result, len(jobs))
+	for idx, job := range jobs {
+		if strings.TrimSpace(job.Title) == "" || strings.TrimSpace(job.URL) == "" {
+			results[idx] = Result{Status: "rejected", Reason: "title and url are required"}
+			continue
+		}
+		parsedURL, parseErr := url.Parse(job.URL)
+		if parseErr != nil || parsedURL.Hostname() == "" || (parsedURL.Scheme != "https" && parsedURL.Scheme != "http") || parsedURL.User != nil {
+			results[idx] = Result{Status: "rejected", Reason: "invalid job url"}
+			continue
+		}
+		if (job.BoardID != "" && uuid.Validate(job.BoardID) != nil) ||
+			(job.CompanyID != "" && uuid.Validate(job.CompanyID) != nil) {
+			results[idx] = Result{Status: "rejected", Reason: "invalid job identity"}
+			continue
+		}
+		saved, status, err := canonical.SaveCanonical(ctx, job)
+		if err != nil {
+			if errors.Is(err, providers.ErrCanonicalConflict) {
+				results[idx] = Result{Status: "rejected", Reason: err.Error()}
+				continue
+			}
+			return nil, err
+		}
+		results[idx] = Result{Status: status, JobID: saved.ID}
+		if status == "unchanged" {
+			continue
+		}
+		i.upsertCompanies(ctx, []dto.Job{saved})
+		i.scoreForTrackingUsers(ctx, []dto.Job{saved})
+		if status == "new" && i.notifier != nil {
+			i.notifier.NotifyNewJob(ctx, saved, 0)
+		}
+	}
+	return results, nil
 }
 
 // upsertCompanies records each distinct (source, company_slug) pair among

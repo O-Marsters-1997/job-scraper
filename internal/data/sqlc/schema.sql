@@ -10,7 +10,21 @@ CREATE TABLE IF NOT EXISTS jobs (
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
     work_arrangement TEXT         NOT NULL DEFAULT '',
-    closed_at        TIMESTAMPTZ
+    closed_at           TIMESTAMPTZ,
+    company_id          UUID,
+    primary_board_id    UUID,
+    provider_posting_id TEXT,
+    content_fingerprint TEXT,
+    content_changed_at  TIMESTAMPTZ,
+    first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE job_urls (
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    normalized_url TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS users (

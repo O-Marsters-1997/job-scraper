@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 )
@@ -13,6 +14,37 @@ import (
 type stubSaver struct {
 	calls [][]dto.Job
 	err   error
+}
+
+type rejectingCanonicalSaver struct{ stubSaver }
+
+func (s *rejectingCanonicalSaver) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
+	if job.URL == "https://example.com/conflict" {
+		return dto.Job{}, "", providers.ErrCanonicalConflict
+	}
+	job.ID = "job-1"
+	return job, "new", nil
+}
+
+func TestIngestJobs_RejectsConflictAndKeepsValidItem(t *testing.T) {
+	ing := ingest.New(ingest.Config{DB: &rejectingCanonicalSaver{}})
+	results, err := ing.IngestJobs(context.Background(), []dto.Job{
+		{Title: "Conflict", URL: "https://example.com/conflict"},
+		{Title: "Valid", URL: "https://example.com/valid"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 || results[0].Status != "rejected" || results[1].Status != "new" {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
+func TestIngestJobs_RequiresCanonicalPersistence(t *testing.T) {
+	ing := ingest.New(ingest.Config{DB: &stubSaver{}})
+	if _, err := ing.IngestJobs(context.Background(), []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}); err == nil {
+		t.Fatal("expected error without canonical persistence")
+	}
 }
 
 func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error) {
