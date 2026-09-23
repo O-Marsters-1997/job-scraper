@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -40,20 +41,6 @@ func (m *MockQueue) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
 	return nil
 }
 
-func (m *MockQueue) Dequeue(_ context.Context) (dto.QueuedJob, bool, error) {
-	if m.DequeueErr != nil {
-		return dto.QueuedJob{}, false, m.DequeueErr
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.items) == 0 {
-		return dto.QueuedJob{}, false, nil
-	}
-	job := m.items[0]
-	m.items = m.items[1:]
-	return job, true, nil
-}
-
 func (m *MockQueue) SetLastScraped(_ context.Context, source string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -68,24 +55,45 @@ func (m *MockQueue) GetLastScraped(_ context.Context, source string) (time.Time,
 	return t, ok, nil
 }
 
-func (m *MockQueue) Nack(_ context.Context, url string) error {
+func (m *MockQueue) Nack(_ context.Context, item Item, _ string) error {
 	if m.NackErr != nil {
 		return m.NackErr
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.attempts[url]++
-	if m.attempts[url] >= maxAttempts {
-		m.deadLetter = append(m.deadLetter, url)
-		delete(m.attempts, url)
+	m.attempts[item.ID]++
+	if m.attempts[item.ID] >= maxAttempts {
+		m.deadLetter = append(m.deadLetter, item.ID)
+		delete(m.attempts, item.ID)
 	}
 	return nil
 }
 
-func (m *MockQueue) ClearAttempts(_ context.Context, url string) error {
+func (m *MockQueue) ClaimReady(_ context.Context, kind Kind, _ time.Duration) (Item, bool, error) {
+	if m.DequeueErr != nil {
+		return Item{}, false, m.DequeueErr
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.attempts, url)
+	if kind == Detail && len(m.items) > 0 {
+		job := m.items[0]
+		m.items = m.items[1:]
+		payload, _ := json.Marshal(job)
+		return Item{ID: job.URL, Kind: kind, Payload: payload, Token: job.URL}, true, nil
+	}
+	if kind == ScrapeRequest && len(m.scrapeReqs) > 0 {
+		req := m.scrapeReqs[0]
+		m.scrapeReqs = m.scrapeReqs[1:]
+		payload, _ := json.Marshal(req)
+		return Item{ID: req.Target.ID, Kind: kind, Payload: payload, Token: req.Target.ID}, true, nil
+	}
+	return Item{}, false, nil
+}
+
+func (m *MockQueue) Ack(_ context.Context, item Item) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.attempts, item.ID)
 	return nil
 }
 
@@ -97,17 +105,6 @@ func (m *MockQueue) EnqueueScrapeRequest(_ context.Context, req dto.ScrapeReques
 	defer m.mu.Unlock()
 	m.scrapeReqs = append(m.scrapeReqs, req)
 	return nil
-}
-
-func (m *MockQueue) DequeueScrapeRequest(_ context.Context) (dto.ScrapeRequest, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(m.scrapeReqs) == 0 {
-		return dto.ScrapeRequest{}, false, nil
-	}
-	req := m.scrapeReqs[0]
-	m.scrapeReqs = m.scrapeReqs[1:]
-	return req, true, nil
 }
 
 func (m *MockQueue) ScrapeRequests() []dto.ScrapeRequest {
@@ -126,12 +123,6 @@ func (m *MockQueue) DeadLetter() []string {
 	out := make([]string, len(m.deadLetter))
 	copy(out, m.deadLetter)
 	return out
-}
-
-func (m *MockQueue) DeadLetterCount(_ context.Context) (int64, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return int64(len(m.deadLetter)), nil
 }
 
 func (m *MockQueue) Attempts(url string) int {
