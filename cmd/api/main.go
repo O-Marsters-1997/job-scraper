@@ -15,7 +15,9 @@ import (
 	app "github.com/ollymarsters/job-scraper/internal"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
@@ -43,11 +45,25 @@ func main() {
 		slog.Error("credstore init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
+	var sendAlert func(context.Context, dto.Job, string) error
+	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
+		renderer, err := notify.NewRenderer()
+		if err != nil {
+			slog.Error("notify templates unavailable", slog.Any("err", err))
+		} else {
+			from := os.Getenv("NOTIFY_EMAIL_FROM")
+			if from == "" {
+				from = "onboarding@resend.dev"
+			}
+			sendAlert = notify.NewNotificationService(notify.NewResendNotifier(apiKey, from), renderer).NotifyNewJob
+		}
+	}
 	outbox := score.NewOutboxWorker(db,
 		func(ctx context.Context, userID string) (string, error) { return cs.Get(ctx, userID, "anthropic") },
 		func(apiKey string) score.SuitabilityScorer {
 			return score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
 		},
+		sendAlert,
 	)
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)

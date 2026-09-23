@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
 
@@ -17,7 +16,6 @@ import (
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/ingest"
-	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
@@ -167,49 +165,12 @@ func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.Credential
 		cs := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
 		return score.NewIngestScorer(cs, db, db, db)
 	}
-	// Guard the assignment: a nil *NotificationService stored directly in the
-	// interface would be a non-nil typed nil, defeating ingest's notifier != nil check.
-	var notifier ingest.Notifier
-	if notifSvc := setupNotifications(); notifSvc != nil {
-		notifier = notifSvc
-	}
 	return ingest.New(ingest.Config{
 		DB:        db,
 		Provider:  provider,
 		Users:     db,
 		Creds:     creds,
 		ScorerFor: scorerFor,
-		Notifier:  notifier,
 		Companies: db,
 	})
-}
-
-func setupNotifications() *notify.NotificationService {
-	apiKey := os.Getenv("RESEND_API_KEY")
-	to := os.Getenv("NOTIFY_EMAIL_TO")
-	from := os.Getenv("NOTIFY_EMAIL_FROM")
-	if from == "" {
-		from = "onboarding@resend.dev"
-	}
-
-	if apiKey == "" || to == "" {
-		slog.Info("notifications disabled: RESEND_API_KEY or NOTIFY_EMAIL_TO not set")
-		return nil
-	}
-
-	renderer, err := notify.NewRenderer()
-	if err != nil {
-		slog.Error("notify: failed to load templates", slog.Any("err", err))
-		return nil
-	}
-
-	return notify.NewNotificationService(
-		notify.NewResendNotifier(apiKey, from),
-		renderer,
-		notify.Config{
-			To:              to,
-			OnIngestEnabled: os.Getenv("NOTIFY_ON_INGEST") == "true",
-			DigestEnabled:   os.Getenv("NOTIFY_DIGEST_ENABLED") != "false",
-		},
-	)
 }

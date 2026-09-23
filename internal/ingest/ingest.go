@@ -50,13 +50,6 @@ type CredentialGetter interface {
 	Get(ctx context.Context, userID, provider string) (string, error)
 }
 
-// Notifier sends a notification for a newly ingested job.
-// score is the suitability score (0 when no scorer is configured).
-// Implementations handle their own errors internally.
-type Notifier interface {
-	NotifyNewJob(ctx context.Context, job dto.Job, score int)
-}
-
 // Config wires all Ingester dependencies. Users, Creds, and ScorerFor are all
 // required together; omitting any one disables per-user suitability scoring.
 // Companies is optional; omitting it disables the company catalog upsert.
@@ -66,24 +59,21 @@ type Config struct {
 	Users     TargetUserLister
 	Creds     CredentialGetter
 	ScorerFor func(apiKey string) Scorer
-	Notifier  Notifier
 	Companies CompanyUpserter
 }
 
-// Ingester is the ingest seam: validate → Save → upsert companies → score (per
-// tracking user) → notify.
+// Ingester saves valid jobs and fans out scoring to interested users.
 type Ingester struct {
 	db        Saver
 	provider  string
 	users     TargetUserLister
 	creds     CredentialGetter
 	scorerFor func(apiKey string) Scorer
-	notifier  Notifier
 	companies CompanyUpserter
 }
 
 // New creates an Ingester. Scoring is skipped when Config.Users, Config.Creds,
-// or Config.ScorerFor is nil. Notifier and Companies may also be nil.
+// or Config.ScorerFor is nil. Companies may also be nil.
 func New(cfg Config) *Ingester {
 	return &Ingester{
 		db:        cfg.DB,
@@ -91,7 +81,6 @@ func New(cfg Config) *Ingester {
 		users:     cfg.Users,
 		creds:     cfg.Creds,
 		scorerFor: cfg.ScorerFor,
-		notifier:  cfg.Notifier,
 		companies: cfg.Companies,
 	}
 }
@@ -122,11 +111,6 @@ func (i *Ingester) Ingest(ctx context.Context, jobs []dto.Job) error {
 	i.upsertCompanies(ctx, saved)
 	i.scoreForTrackingUsers(ctx, saved)
 
-	if i.notifier != nil {
-		for _, j := range saved {
-			i.notifier.NotifyNewJob(ctx, j, 0)
-		}
-	}
 	return nil
 }
 
