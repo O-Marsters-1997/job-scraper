@@ -264,21 +264,23 @@ func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTarget
 }
 
 const upsertSourceTargetForCompany = `-- name: UpsertSourceTargetForCompany :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id)
-VALUES ($1, $2, $3, $4, '{}', $5)
+INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id, check_interval_minutes)
+VALUES ($1, $2, $3, $4, '{}', $5, COALESCE(NULLIF($6::int, 0), 360))
 ON CONFLICT (user_id, source, value, filters) DO UPDATE SET
     enabled    = EXCLUDED.enabled,
     company_id = EXCLUDED.company_id,
+    check_interval_minutes = COALESCE(NULLIF($6::int, 0), source_targets.check_interval_minutes),
     updated_at = NOW()
 RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, created_at, updated_at
 `
 
 type UpsertSourceTargetForCompanyParams struct {
-	UserID    pgtype.UUID
-	Source    string
-	Value     string
-	Enabled   bool
-	CompanyID pgtype.UUID
+	UserID               pgtype.UUID
+	Source               string
+	Value                string
+	Enabled              bool
+	CompanyID            pgtype.UUID
+	CheckIntervalMinutes int32
 }
 
 func (q *Queries) UpsertSourceTargetForCompany(ctx context.Context, arg UpsertSourceTargetForCompanyParams) (SourceTarget, error) {
@@ -288,6 +290,7 @@ func (q *Queries) UpsertSourceTargetForCompany(ctx context.Context, arg UpsertSo
 		arg.Value,
 		arg.Enabled,
 		arg.CompanyID,
+		arg.CheckIntervalMinutes,
 	)
 	var i SourceTarget
 	err := row.Scan(

@@ -10,7 +10,7 @@ type SourceTargetProvider interface {
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
 	ListEnabledSourceTargets(ctx context.Context) ([]dto.SourceTarget, error)
 	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
-	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error)
+	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error)
 	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
 }

@@ -78,7 +78,7 @@ func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID,
 	return t, nil
 }
 
-func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool) (dto.SourceTarget, error) {
+func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
 	if m.CreateErr != nil {
 		return dto.SourceTarget{}, m.CreateErr
 	}
@@ -88,6 +88,9 @@ func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Contex
 		if t.UserID == userID && t.Source == source && t.Value == value && len(t.Filters) == 0 {
 			m.targets[i].Enabled = enabled
 			m.targets[i].CompanyID = companyID
+			if interval != 0 {
+				m.targets[i].CheckIntervalMinutes = interval
+			}
 			return m.targets[i], nil
 		}
 	}
@@ -99,7 +102,10 @@ func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Contex
 		Enabled:              enabled,
 		Filters:              map[string]string{},
 		CompanyID:            companyID,
-		CheckIntervalMinutes: 360,
+		CheckIntervalMinutes: interval,
+	}
+	if interval == 0 {
+		t.CheckIntervalMinutes = 360
 	}
 	m.nextID++
 	m.targets = append(m.targets, t)

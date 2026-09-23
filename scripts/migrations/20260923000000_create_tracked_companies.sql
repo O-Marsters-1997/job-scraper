@@ -9,8 +9,6 @@ CREATE TABLE tracked_companies (
     PRIMARY KEY (user_id, company_id)
 );
 
-CREATE INDEX tracked_companies_company_enabled_idx ON tracked_companies (company_id, check_interval_minutes) WHERE enabled;
-
 CREATE TABLE tracking_backfill_issues (
     source_target_id UUID PRIMARY KEY,
     reason TEXT NOT NULL,

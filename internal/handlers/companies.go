@@ -71,12 +71,13 @@ func (h *CompaniesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	track := body.Track == nil || *body.Track
 	if track {
-		if _, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, true, 360); err != nil {
+		tracking, err := h.companies.SetCompanyTracking(r.Context(), session.UserID, company.ID, true, 360)
+		if err != nil {
 			slog.Error("track company failed", slog.Any("err", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, source, token, company.ID, true)
+		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, source, token, company.ID, true, tracking.CheckIntervalMinutes)
 		if err != nil {
 			slog.Error("upsert source target for company failed", slog.Any("err", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -132,14 +133,9 @@ func (h *CompaniesHandler) SetTracking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if company.ATSSource != "" {
-		target, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, *body.Enabled)
+		_, err := h.targets.UpsertSourceTargetForCompany(r.Context(), session.UserID, company.ATSSource, company.ATSToken, company.ID, *body.Enabled, tracking.CheckIntervalMinutes)
 		if err != nil {
 			slog.Error("sync legacy source target failed", slog.Any("err", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
-			return
-		}
-		if _, err := h.targets.UpdateSourceTarget(r.Context(), target.ID, session.UserID, nil, &tracking.CheckIntervalMinutes); err != nil {
-			slog.Error("sync legacy source target interval failed", slog.Any("err", err))
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}

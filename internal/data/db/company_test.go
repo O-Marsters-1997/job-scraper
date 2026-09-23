@@ -518,15 +518,15 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 		t.Fatalf("UpsertCompany: %v", err)
 	}
 
-	created, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, true)
+	created, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, true, 180)
 	if err != nil {
 		t.Fatalf("UpsertSourceTargetForCompany create: %v", err)
 	}
-	if !created.Enabled || created.CompanyID != company.ID {
+	if !created.Enabled || created.CompanyID != company.ID || created.CheckIntervalMinutes != 180 {
 		t.Fatalf("unexpected created target: %+v", created)
 	}
 
-	disabled, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, false)
+	disabled, err := testDB.UpsertSourceTargetForCompany(ctx, user.ID, "greenhouse", "acme", company.ID, false, 0)
 	if err != nil {
 		t.Fatalf("UpsertSourceTargetForCompany disable: %v", err)
 	}
@@ -535,5 +535,8 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 	}
 	if disabled.Enabled {
 		t.Errorf("expected target to be disabled")
+	}
+	if disabled.CheckIntervalMinutes != 180 {
+		t.Errorf("expected interval preserved, got %d", disabled.CheckIntervalMinutes)
 	}
 }
