@@ -43,17 +43,22 @@ WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
     AND j.closed_at IS NULL AND j.content_fingerprint IS NULL;
 
 -- name: QueueRescore :execrows
+WITH interested AS (
+    SELECT job_id FROM job_scores WHERE user_id = sqlc.arg(user_id)::uuid
+    UNION
+    SELECT job_id FROM effect_outbox WHERE user_id = sqlc.arg(user_id)::uuid
+)
 INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model)
 SELECT j.id, sqlc.arg(user_id)::uuid, j.content_fingerprint,
     COALESCE(sc.updated_at, 'epoch'::timestamptz),
     COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001')
-FROM job_scores s JOIN jobs j ON j.id = s.job_id
-LEFT JOIN search_config sc ON sc.user_id = s.user_id
-LEFT JOIN user_ai_prefs p ON p.user_id = s.user_id
-WHERE s.user_id = sqlc.arg(user_id)::uuid AND j.closed_at IS NULL
+FROM interested i JOIN jobs j ON j.id = i.job_id
+LEFT JOIN search_config sc ON sc.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN user_ai_prefs p ON p.user_id = sqlc.arg(user_id)::uuid
+WHERE j.closed_at IS NULL
     AND j.content_fingerprint IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM effect_outbox e
-        WHERE e.job_id = j.id AND e.user_id = s.user_id
+        WHERE e.job_id = j.id AND e.user_id = sqlc.arg(user_id)::uuid
         AND e.fingerprint = j.content_fingerprint
         AND e.config_version = COALESCE(sc.updated_at, 'epoch'::timestamptz)
         AND e.model = COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001'))
@@ -92,7 +97,7 @@ UPDATE effect_outbox SET
     last_error = sqlc.arg(last_error)::text
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'running';
 
--- name: CompleteScoringEffect :exec
+-- name: CompleteScoringEffect :execrows
 WITH completed AS (
     UPDATE effect_outbox SET status = 'done', lease_until = NULL, last_error = ''
     WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'running'

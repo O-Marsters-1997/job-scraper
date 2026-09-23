@@ -17,6 +17,7 @@ type effectStore struct {
 	failed      string
 	completed   bool
 	completeErr error
+	unsaved     bool
 }
 
 func (s *effectStore) ClaimScoringEffect(context.Context) (dto.ScoringEffect, error) {
@@ -31,12 +32,12 @@ func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, reas
 	s.failed = reason
 	return nil
 }
-func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) error {
+func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error) {
 	if s.completeErr != nil {
-		return s.completeErr
+		return false, s.completeErr
 	}
 	s.completed = true
-	return nil
+	return !s.unsaved, nil
 }
 
 type failingScorer struct{}
@@ -114,5 +115,14 @@ func TestOutboxWorkerDoesNotSendUntilScoreIsStored(t *testing.T) {
 	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{95} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
 	if err := worker.RunOnce(t.Context()); err == nil || sent {
 		t.Fatalf("complete failure: err=%v sent=%v", err, sent)
+	}
+}
+
+func TestOutboxWorkerDoesNotSendWhenCompletionIsStale(t *testing.T) {
+	store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "alice", Fingerprint: "same", Model: score.DefaultSuitabilityModel, FirstDiscovery: true}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, profile: dto.Profile{Email: "alice@example.com"}, unsaved: true}
+	sent := false
+	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{95} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
+	if err := worker.RunOnce(t.Context()); err != nil || sent {
+		t.Fatalf("stale completion: err=%v sent=%v", err, sent)
 	}
 }

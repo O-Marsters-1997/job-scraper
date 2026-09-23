@@ -31,18 +31,19 @@ func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, re
 	return nil
 }
 
-func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffect, score int, reasoning string, matched, missing []string) error {
+func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffect, score int, reasoning string, matched, missing []string) (bool, error) {
 	effectID, err := parseUUID(effect.ID)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if err := db.queries.CompleteScoringEffect(ctx, pgsqlc.CompleteScoringEffectParams{
+	rows, err := db.queries.CompleteScoringEffect(ctx, pgsqlc.CompleteScoringEffectParams{
 		ID: effectID, Attempts: int32(effect.Attempts), Score: int32(score), Reasoning: reasoning,
 		Matched: matched, Missing: missing,
-	}); err != nil {
-		return fmt.Errorf("complete scoring effect: %w", err)
+	})
+	if err != nil {
+		return false, fmt.Errorf("complete scoring effect: %w", err)
 	}
-	return nil
+	return rows == 1, nil
 }
 
 type ScoringStatus struct {
