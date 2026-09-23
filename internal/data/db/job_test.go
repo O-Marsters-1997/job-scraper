@@ -245,11 +245,12 @@ func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "example", true, nil); err != nil {
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
 		t.Fatal(err)
 	}
 	job := baseJob
 	job.URL = "https://example.com/jobs/lease"
+	job.CompanySlug = "lease-company"
 	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
 		t.Fatal(err)
 	}
@@ -282,11 +283,12 @@ func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "example", true, nil); err != nil {
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "rescore-company", true, nil); err != nil {
 		t.Fatal(err)
 	}
 	job := baseJob
 	job.URL = "https://example.com/jobs/rescore"
+	job.CompanySlug = "rescore-company"
 	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
 		t.Fatal(err)
 	}
