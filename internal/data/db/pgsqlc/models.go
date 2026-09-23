@@ -42,6 +42,19 @@ type Company struct {
 	UpdatedAt         pgtype.Timestamptz
 }
 
+type CompanyBoard struct {
+	ID                 pgtype.UUID
+	CompanyID          pgtype.UUID
+	Source             string
+	BoardToken         string
+	Status             string
+	VerificationMethod pgtype.Text
+	VerifiedAt         pgtype.Timestamptz
+	LastLinkedAt       pgtype.Timestamptz
+	RetiredAt          pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+}
+
 type Job struct {
 	ID              pgtype.UUID
 	Title           string
