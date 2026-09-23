@@ -120,6 +120,9 @@ func (db *DB) SetCompanyTracking(ctx context.Context, userID, companyID string, 
 		return dto.CompanyTracking{}, fmt.Errorf("db.SetCompanyTracking: %w", err)
 	}
 	if enabled {
+		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
+		}
 		if err := queries.QueueTrackingScores(ctx, pgsqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid}); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("queue tracked company scores: %w", err)
 		}
