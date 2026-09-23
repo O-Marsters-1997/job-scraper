@@ -8,6 +8,7 @@ import (
 )
 
 var ErrBoardConflict = errors.New("board belongs to another company")
+var ErrBoardClaimUnavailable = errors.New("board claim unavailable")
 
 type CompanyProvider interface {
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)

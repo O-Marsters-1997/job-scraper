@@ -28,6 +28,26 @@ type ApplicationStatus struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type BoardJobObservation struct {
+	BoardID             pgtype.UUID
+	JobID               pgtype.UUID
+	LastSeenAt          pgtype.Timestamptz
+	LastSnapshotVersion int64
+}
+
+type BoardPollState struct {
+	BoardID                  pgtype.UUID
+	LastCompletedAt          pgtype.Timestamptz
+	LastScheduledAt          pgtype.Timestamptz
+	LastStartedAt            pgtype.Timestamptz
+	LastSnapshotVersion      int64
+	ConsecutiveCompleteEmpty int32
+	ConsecutiveFailures      int32
+	LeaseOwner               pgtype.Text
+	LeaseUntil               pgtype.Timestamptz
+	NextDueAt                pgtype.Timestamptz
+}
+
 type CandidateAssessment struct {
 	CandidateID         pgtype.UUID
 	UserID              pgtype.UUID
@@ -66,6 +86,7 @@ type CompanyBoard struct {
 	VerifiedAt         pgtype.Timestamptz
 	LastLinkedAt       pgtype.Timestamptz
 	RetiredAt          pgtype.Timestamptz
+	SupersededAt       pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
 }
 

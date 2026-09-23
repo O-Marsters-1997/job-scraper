@@ -288,6 +288,7 @@ let companyBoards: CompanyBoard[] = companies
 		VerifiedAt: company.FirstSeenAt,
 		LastLinkedAt: null,
 		RetiredAt: null,
+		LastCompletedAt: company.LastCheckedAt,
 		CreatedAt: company.FirstSeenAt,
 	}));
 
@@ -565,6 +566,7 @@ export function addCompanyBoard(
 		VerifiedAt: null,
 		LastLinkedAt: null,
 		RetiredAt: null,
+		LastCompletedAt: null,
 		CreatedAt: new Date().toISOString(),
 	};
 	if (confirm && board.Status === "candidate") {

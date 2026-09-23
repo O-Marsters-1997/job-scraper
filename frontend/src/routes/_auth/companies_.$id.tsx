@@ -251,6 +251,14 @@ function CompanyDetailPage() {
 																<p class="break-all font-mono text-faint">
 																	{board.BoardToken}
 																</p>
+																<Show when={board.LastCompletedAt}>
+																	{(checked) => (
+																		<p class="text-faint">
+																			Last checked{" "}
+																			{new Date(checked()).toLocaleString()}
+																		</p>
+																	)}
+																</Show>
 															</div>
 															<span class="capitalize text-muted">
 																{board.Status}

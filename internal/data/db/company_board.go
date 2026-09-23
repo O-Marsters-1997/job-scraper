@@ -45,8 +45,19 @@ func (db *DB) ListCompanyBoards(ctx context.Context, companyID string) ([]dto.Co
 		return nil, fmt.Errorf("db.ListCompanyBoards: %w", err)
 	}
 	boards := make([]dto.CompanyBoard, len(rows))
+	checks, err := db.queries.ListBoardChecks(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("db.ListCompanyBoards checks: %w", err)
+	}
+	completed := make(map[string]pgtype.Timestamptz, len(checks))
+	for _, check := range checks {
+		completed[check.ID.String()] = check.LastCompletedAt
+	}
 	for i, row := range rows {
 		boards[i] = fromCompanyBoard(row)
+		if last := completed[boards[i].ID]; last.Valid {
+			boards[i].LastCompletedAt = &last.Time
+		}
 	}
 	return boards, nil
 }

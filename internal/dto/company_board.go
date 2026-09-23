@@ -20,5 +20,6 @@ type CompanyBoard struct {
 	VerifiedAt         *time.Time
 	LastLinkedAt       *time.Time
 	RetiredAt          *time.Time
+	LastCompletedAt    *time.Time
 	CreatedAt          time.Time
 }
