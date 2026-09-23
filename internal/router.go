@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
 	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
@@ -40,9 +41,10 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
-	stH := handlers.NewSourceTargetHandler(db, q)
+	candidateService := candidates.New(db, q)
+	stH := handlers.NewSourceTargetHandler(db, q).WithCandidates(candidateService, db)
 	compH := handlers.NewCompaniesHandler(db, db, q)
-	scoringCfgH := handlers.NewScoringConfigHandler(db)
+	scoringCfgH := handlers.NewScoringConfigHandler(db).WithCandidates(candidateService)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)
 	profileH := handlers.NewProfileHandler(db)
@@ -122,6 +124,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 			r.Get("/", stH.List)
 			r.Post("/", stH.Create)
 			r.Patch("/{id}", stH.Update)
+			r.Post("/{id}/scrape", stH.Scrape)
 			r.Delete("/{id}", stH.Delete)
 		})
 

@@ -566,6 +566,9 @@ export function updateSourceTarget(
 		Value: company.ATSToken,
 		Enabled: updated.Tracked,
 		Filters: {},
+		RunStatus: "idle",
+		LastRunAt: null,
+		LastRunError: "",
 	};
 }
 

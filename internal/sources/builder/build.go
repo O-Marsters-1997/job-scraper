@@ -130,3 +130,13 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 
 	return srcs
 }
+
+func BuildScheduledSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string, urls []string)) []sources.Source {
+	atsTargets := make([]dto.SourceTarget, 0, len(targets))
+	for _, target := range targets {
+		if role, ok := sources.SourceRole(target.Source); ok && role == sources.RoleATS {
+			atsTargets = append(atsTargets, target)
+		}
+	}
+	return BuildSources(atsTargets, boardDone)
+}

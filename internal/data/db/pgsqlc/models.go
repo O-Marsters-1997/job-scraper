@@ -28,6 +28,20 @@ type ApplicationStatus struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type CandidateAssessment struct {
+	CandidateID         pgtype.UUID
+	UserID              pgtype.UUID
+	SearchConfigVersion pgtype.Timestamptz
+	Relevance           bool
+	EvaluatedAt         pgtype.Timestamptz
+}
+
+type CandidateDiscovery struct {
+	CandidateID    pgtype.UUID
+	SourceTargetID pgtype.UUID
+	LastSeenAt     pgtype.Timestamptz
+}
+
 type Company struct {
 	ID                pgtype.UUID
 	Slug              string
@@ -55,6 +69,19 @@ type Job struct {
 	SalaryRaw       string
 	WorkArrangement string
 	ClosedAt        pgtype.Timestamptz
+}
+
+type JobCandidate struct {
+	ID            pgtype.UUID
+	NormalizedUrl string
+	Source        string
+	CardTitle     string
+	CardCompany   string
+	CardLocation  string
+	FirstSeenAt   pgtype.Timestamptz
+	LastSeenAt    pgtype.Timestamptz
+	ExpiresAt     pgtype.Timestamptz
+	DetailState   string
 }
 
 type JobScore struct {
@@ -107,6 +134,9 @@ type SourceTarget struct {
 	CompanyID            pgtype.UUID
 	CheckIntervalMinutes int32
 	LastCheckedAt        pgtype.Timestamptz
+	RunStatus            string
+	LastRunAt            pgtype.Timestamptz
+	LastRunError         string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 }
