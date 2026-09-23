@@ -66,8 +66,9 @@ type DetailFetcher interface {
 }
 
 type PaginatedBase struct {
-	cfg    Config
-	client *http.Client
+	cfg     Config
+	client  *http.Client
+	initErr error
 }
 
 func NewBase(cfg Config) PaginatedBase {
@@ -77,13 +78,16 @@ func NewBase(cfg Config) PaginatedBase {
 	if cfg.MinScrapeInterval == 0 {
 		cfg.MinScrapeInterval = DefaultMinScrapeInterval
 	}
-	transport, err := proxy.Transport(cfg.UseProxy)
-	if err != nil || transport == nil {
-		transport = http.DefaultTransport
-	}
+	transport, err := proxy.Fetcher(cfg.UseProxy)
 	return PaginatedBase{
-		cfg:    cfg,
-		client: &http.Client{Timeout: DefaultTimeout, Transport: transport},
+		cfg:     cfg,
+		initErr: err,
+		client: &http.Client{Timeout: DefaultTimeout, Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			return proxy.ValidateURL(req.Context(), req.URL)
+		}},
 	}
 }
 
@@ -105,6 +109,9 @@ func (b *PaginatedBase) PostEmptyJSON(ctx context.Context, url string) ([]byte, 
 }
 
 func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+	if b.initErr != nil {
+		return nil, b.initErr
+	}
 	var rdr io.Reader
 	if body != nil {
 		rdr = bytes.NewReader(body)
