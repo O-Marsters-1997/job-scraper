@@ -107,6 +107,9 @@ type SourceTarget struct {
 	CompanyID            pgtype.UUID
 	CheckIntervalMinutes int32
 	LastCheckedAt        pgtype.Timestamptz
+	RunStatus            string
+	LastRunAt            pgtype.Timestamptz
+	LastRunError         string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 }

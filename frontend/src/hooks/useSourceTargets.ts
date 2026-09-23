@@ -9,6 +9,7 @@ import {
 	createSourceTarget,
 	deleteSourceTarget,
 	fetchSourceTargets,
+	rerunSourceTarget,
 	type UpdateSourceTargetPayload,
 	updateSourceTarget,
 } from "../api/sourceTargets";
@@ -16,10 +17,20 @@ import {
 export const sourceTargetsQueryOptions = queryOptions({
 	queryKey: ["source-targets"],
 	queryFn: fetchSourceTargets,
+	refetchInterval: 5000,
 });
 
 export function useSourceTargets() {
 	return createQuery(() => sourceTargetsQueryOptions);
+}
+
+export function useRerunSourceTarget() {
+	const queryClient = useQueryClient();
+	return createMutation(() => ({
+		mutationFn: rerunSourceTarget,
+		onSettled: () =>
+			queryClient.invalidateQueries({ queryKey: ["source-targets"] }),
+	}));
 }
 
 export function useCreateSourceTarget() {

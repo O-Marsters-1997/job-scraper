@@ -146,6 +146,9 @@ CREATE TABLE IF NOT EXISTS source_targets (
     company_id             UUID        REFERENCES companies(id) ON DELETE SET NULL,
     check_interval_minutes INT         NOT NULL DEFAULT 360,
     last_checked_at        TIMESTAMPTZ,
+    run_status             TEXT        NOT NULL DEFAULT 'idle' CHECK (run_status IN ('idle', 'queued', 'running', 'succeeded', 'failed')),
+    last_run_at            TIMESTAMPTZ,
+    last_run_error         TEXT        NOT NULL DEFAULT '',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, source, value, filters)

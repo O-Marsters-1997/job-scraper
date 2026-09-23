@@ -274,6 +274,34 @@ func TestListDueSourceTargets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryRunStatePersists(t *testing.T) {
+	ctx := context.Background()
+	truncateCompanies(t)
+	user, err := testDB.CreateUser(ctx, "discovery-run", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := testDB.CreateSourceTarget(ctx, user.ID, "wis", "engineer", true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []struct {
+		status string
+		runErr string
+	}{{"queued", ""}, {"running", ""}, {"failed", "upstream unavailable"}} {
+		if _, err := testDB.SetSourceTargetRunState(ctx, target.ID, state.status, state.runErr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	targets, err := testDB.ListSourceTargetsByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 1 || targets[0].RunStatus != "failed" || targets[0].LastRunAt == nil || targets[0].LastRunError != "upstream unavailable" {
+		t.Fatalf("persisted run state = %+v", targets)
+	}
+}
+
 func TestTouchSourceTargetsChecked(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)

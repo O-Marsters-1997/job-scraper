@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,11 +14,96 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 func withSession(r *http.Request, userID string) *http.Request {
 	ctx := auth.WithSession(r.Context(), dto.Session{UserID: userID})
 	return r.WithContext(ctx)
+}
+
+func TestDiscoveryTargetCreationQueuesOneRun(t *testing.T) {
+	store := providers.NewMockSourceTargetProvider()
+	q := queue.NewMockQueue()
+	h := NewSourceTargetHandler(store, q)
+	req := withSession(httptest.NewRequest(http.MethodPost, "/source-targets", bytes.NewBufferString(`{"source":"wis","value":"engineer"}`)), "user-1")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", w.Code, w.Body.String())
+	}
+	if got := q.ScrapeRequests(); len(got) != 1 || got[0].Target.Source != "wis" {
+		t.Fatalf("queued requests = %+v, want one WIS search", got)
+	}
+	var target dto.SourceTarget
+	if err := json.NewDecoder(w.Body).Decode(&target); err != nil {
+		t.Fatal(err)
+	}
+	if target.RunStatus != "queued" {
+		t.Fatalf("run status = %q, want queued", target.RunStatus)
+	}
+}
+
+func TestDiscoveryTargetCreationShowsQueueFailure(t *testing.T) {
+	store := providers.NewMockSourceTargetProvider()
+	q := queue.NewMockQueue()
+	q.EnqueueScrapeErr = errors.New("queue unavailable")
+	h := NewSourceTargetHandler(store, q)
+	req := withSession(httptest.NewRequest(http.MethodPost, "/source-targets", bytes.NewBufferString(`{"source":"wis","value":"engineer"}`)), "user-1")
+	w := httptest.NewRecorder()
+	h.Create(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", w.Code, w.Body.String())
+	}
+	var target dto.SourceTarget
+	if err := json.NewDecoder(w.Body).Decode(&target); err != nil {
+		t.Fatal(err)
+	}
+	if target.RunStatus != "failed" || len(q.ScrapeRequests()) != 0 {
+		t.Fatalf("created target = %+v, queued = %+v", target, q.ScrapeRequests())
+	}
+}
+
+func TestDiscoveryTargetRerunRequiresOwnershipAndQueues(t *testing.T) {
+	store := providers.NewMockSourceTargetProvider()
+	target, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
+	q := queue.NewMockQueue()
+	h := NewSourceTargetHandler(store, q)
+	for _, tc := range []struct {
+		user string
+		want int
+	}{{"user-2", http.StatusNotFound}, {"user-1", http.StatusAccepted}} {
+		req := withRouteID(withSession(httptest.NewRequest(http.MethodPost, "/source-targets/"+target.ID+"/scrape", nil), tc.user), target.ID)
+		w := httptest.NewRecorder()
+		h.Scrape(w, req)
+		if w.Code != tc.want {
+			t.Fatalf("user %s: status = %d, want %d", tc.user, w.Code, tc.want)
+		}
+	}
+	if len(q.ScrapeRequests()) != 1 {
+		t.Fatalf("queued requests = %d, want 1", len(q.ScrapeRequests()))
+	}
+}
+
+func TestFailedDiscoveryTargetCanBeRerun(t *testing.T) {
+	store := providers.NewMockSourceTargetProvider()
+	target, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
+	_, _ = store.SetSourceTargetRunState(context.Background(), target.ID, "failed", "previous run failed")
+	q := queue.NewMockQueue()
+	h := NewSourceTargetHandler(store, q)
+	req := withRouteID(withSession(httptest.NewRequest(http.MethodPost, "/source-targets/"+target.ID+"/scrape", nil), "user-1"), target.ID)
+	w := httptest.NewRecorder()
+	h.Scrape(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("retry status = %d: %s", w.Code, w.Body.String())
+	}
+	if len(q.ScrapeRequests()) != 1 {
+		t.Fatalf("queued requests = %d, want 1", len(q.ScrapeRequests()))
+	}
+	targets, _ := store.ListSourceTargetsByUser(context.Background(), "user-1")
+	if targets[0].RunStatus != "queued" || targets[0].LastRunError != "" {
+		t.Fatalf("run state after retry = %+v", targets[0])
+	}
 }
 
 func withRouteID(r *http.Request, id string) *http.Request {

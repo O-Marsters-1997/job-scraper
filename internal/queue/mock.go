@@ -17,9 +17,10 @@ type MockQueue struct {
 	attempts    map[string]int
 	deadLetter  []string
 
-	EnqueueErr error
-	DequeueErr error
-	NackErr    error
+	EnqueueErr       error
+	EnqueueScrapeErr error
+	DequeueErr       error
+	NackErr          error
 }
 
 func NewMockQueue() *MockQueue {
@@ -89,6 +90,9 @@ func (m *MockQueue) ClearAttempts(_ context.Context, url string) error {
 }
 
 func (m *MockQueue) EnqueueScrapeRequest(_ context.Context, req dto.ScrapeRequest) error {
+	if m.EnqueueScrapeErr != nil {
+		return m.EnqueueScrapeErr
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.scrapeReqs = append(m.scrapeReqs, req)

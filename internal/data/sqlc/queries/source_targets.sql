@@ -45,3 +45,12 @@ WHERE enabled = TRUE
 
 -- name: DeleteSourceTarget :exec
 DELETE FROM source_targets WHERE id = $1 AND user_id = $2;
+
+-- name: SetSourceTargetRunState :one
+UPDATE source_targets SET
+    run_status = $2,
+    last_run_error = $3,
+    last_run_at = CASE WHEN $2 IN ('succeeded', 'failed') THEN NOW() ELSE last_run_at END,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

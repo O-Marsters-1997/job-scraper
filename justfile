@@ -23,6 +23,9 @@ build:
 run *args:
     go run ./cmd/worker {{args}}
 
+run-api:
+    go run ./cmd/api
+
 # ── Code generation ───────────────────────────────────────────────────────────
 
 # generate typed Go code from SQL files (requires sqlc: brew install sqlc)
