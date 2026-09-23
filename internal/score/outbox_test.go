@@ -27,9 +27,9 @@ func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, reas
 	s.failed = reason
 	return nil
 }
-func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) error {
+func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error) {
 	s.completed = true
-	return nil
+	return true, nil
 }
 
 type failingScorer struct{}

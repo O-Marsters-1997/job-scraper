@@ -15,7 +15,7 @@ type EffectStore interface {
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	FailScoringEffect(context.Context, string, int, string) error
-	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) error
+	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
 
 type OutboxWorker struct {
@@ -44,7 +44,8 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 		return fail(fmt.Errorf("load scoring job: %w", err))
 	}
 	if job.ContentFingerprint != effect.Fingerprint {
-		return w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		_, err := w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		return err
 	}
 	cfg, err := w.store.GetSearchConfig(ctx, effect.UserID)
 	if errors.Is(err, providers.ErrNotFound) {
@@ -53,7 +54,8 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 		return fail(fmt.Errorf("load scoring config: %w", err))
 	}
 	if !cfg.UpdatedAt.Equal(effect.ConfigVersion) && !cfg.UpdatedAt.IsZero() {
-		return w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		_, err := w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		return err
 	}
 	if !strings.HasPrefix(effect.Model, "claude-") {
 		return fail(fmt.Errorf("unsupported scoring model %q", effect.Model))
@@ -66,5 +68,6 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return fail(fmt.Errorf("score job: %w", err))
 	}
-	return w.store.CompleteScoringEffect(ctx, effect, result.Score, result.Rationale, result.Matched, result.Missing)
+	_, err = w.store.CompleteScoringEffect(ctx, effect, result.Score, result.Rationale, result.Matched, result.Missing)
+	return err
 }

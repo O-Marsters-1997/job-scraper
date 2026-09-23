@@ -123,6 +123,8 @@ CREATE TABLE effect_outbox (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (job_id, user_id, fingerprint, config_version, model)
 );
+CREATE INDEX effect_outbox_user_job_idx ON effect_outbox (user_id, job_id);
+CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
 CREATE TABLE IF NOT EXISTS search_config (
     id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
