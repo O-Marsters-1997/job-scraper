@@ -110,8 +110,8 @@ func TestIngestHandler_SaveCalled(t *testing.T) {
 	if len(jobs) != 1 {
 		t.Fatalf("want 1 saved job, got %d", len(jobs))
 	}
-	if notifier.calls != 1 {
-		t.Errorf("want notifier called once, got %d", notifier.calls)
+	if notifier.calls != 0 {
+		t.Errorf("want no notification during ingest, got %d", notifier.calls)
 	}
 }
 
@@ -138,8 +138,8 @@ func TestIngestHandler_DuplicateURL(t *testing.T) {
 	if len(jobs) != 1 {
 		t.Errorf("want 1 saved job after duplicate, got %d", len(jobs))
 	}
-	if notifier.calls != 1 {
-		t.Errorf("notifier called %d times after unchanged replay, want 1", notifier.calls)
+	if notifier.calls != 0 {
+		t.Errorf("notifier called %d times during ingest, want 0", notifier.calls)
 	}
 }
 

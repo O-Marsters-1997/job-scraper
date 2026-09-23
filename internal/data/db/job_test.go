@@ -205,6 +205,146 @@ func TestSaveCanonical_AliasesAndReplay(t *testing.T) {
 	}
 }
 
+func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "outbox-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "outbox-company", Name: "Outbox Company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/outbox"
+	job.CompanySlug = company.Slug
+	job.CompanyID = company.ID
+	for _, title := range []string{"Engineer", "Engineer", "Senior Engineer"} {
+		job.Title = title
+		if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("queued scoring effects = %d, want 2", count)
+	}
+}
+
+func TestScoringEffect_LeaseAndRetry(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "example", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/lease"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil || first.UserID != user.ID {
+		t.Fatalf("first claim = %+v, %v", first, err)
+	}
+	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
+		t.Fatal("leased effect claimed twice")
+	}
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "temporary failure"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
+		t.Fatal("future retry claimed early")
+	}
+	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil || second.ID != first.ID {
+		t.Fatalf("retry claim = %+v, %v", second, err)
+	}
+}
+
+func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "rescore-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "example", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/rescore"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	effect, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.CompleteScoringEffect(ctx, effect, 80, "", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "New rubric"}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := testDB.GetScoringStatus(ctx, user.ID)
+	if err != nil || status.Stale != 1 {
+		t.Fatalf("status after rubric edit = %+v, %v", status, err)
+	}
+	queued, err := testDB.QueueRescore(ctx, user.ID)
+	if err != nil || queued != 1 {
+		t.Fatalf("rescore queued = %d, %v", queued, err)
+	}
+	queued, err = testDB.QueueRescore(ctx, user.ID)
+	if err != nil || queued != 0 {
+		t.Fatalf("duplicate rescore queued = %d, %v", queued, err)
+	}
+}
+
+func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "cached-company", Name: "Cached Company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/cached"
+	job.CompanyID = company.ID
+	job.CompanySlug = company.Slug
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	user, err := testDB.CreateUser(ctx, "cached-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	var eligible bool
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*), COALESCE(bool_or(first_discovery), false) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count, &eligible); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || eligible {
+		t.Fatalf("cached scores = %d, first discovery = %v", count, eligible)
+	}
+}
+
 func TestSaveCanonical_ContentChangeAndDistinctBoard(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
