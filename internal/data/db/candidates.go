@@ -33,7 +33,7 @@ func (db *DB) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dt
 	if err != nil {
 		return nil, fmt.Errorf("begin candidate save: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	out := make([]candidates.Candidate, 0, len(cards))
 	for _, card := range cards {
@@ -129,7 +129,7 @@ func (db *DB) Assess(ctx context.Context, candidateID, userID string, version ti
 	if err != nil {
 		return false, fmt.Errorf("begin candidate assessment: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 INSERT INTO candidate_assessments (candidate_id, user_id, search_config_version, relevance)
 VALUES ($1, $2, $3, $4)
