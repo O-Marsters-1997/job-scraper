@@ -19,9 +19,12 @@ CREATE TABLE effect_outbox (
     UNIQUE (job_id, user_id, fingerprint, config_version, model)
 );
 CREATE INDEX effect_outbox_due_idx ON effect_outbox (due_at, id) WHERE status IN ('pending', 'running');
+CREATE INDEX effect_outbox_user_job_idx ON effect_outbox (user_id, job_id);
+CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
 -- +goose Down
 DROP TABLE effect_outbox;
+DROP INDEX job_scores_user_job_idx;
 ALTER TABLE job_scores DROP COLUMN score_model;
 ALTER TABLE job_scores DROP COLUMN score_config_version;
 ALTER TABLE job_scores DROP COLUMN score_fingerprint;

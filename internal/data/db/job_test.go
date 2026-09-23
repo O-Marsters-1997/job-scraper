@@ -299,7 +299,7 @@ func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.CompleteScoringEffect(ctx, effect, 80, "", nil, nil); err != nil {
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 80, "", nil, nil); err != nil || !saved {
 		t.Fatal(err)
 	}
 	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "New rubric"}); err != nil {
@@ -316,6 +316,37 @@ func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
 	queued, err = testDB.QueueRescore(ctx, user.ID)
 	if err != nil || queued != 0 {
 		t.Fatalf("duplicate rescore queued = %d, %v", queued, err)
+	}
+}
+
+func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "stale-effect-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "stale-effect-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/stale-effect"
+	job.CompanySlug = "stale-effect-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	effect, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "Changed during scoring"}); err != nil {
+		t.Fatal(err)
+	}
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 90, "", nil, nil); err != nil || saved {
+		t.Fatalf("stale score persisted=%v err=%v", saved, err)
+	}
+	if queued, err := testDB.QueueRescore(ctx, user.ID); err != nil || queued != 1 {
+		t.Fatalf("rescore after stale completion queued=%d err=%v", queued, err)
 	}
 }
 
