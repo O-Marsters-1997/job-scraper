@@ -44,7 +44,7 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 ┌──────────────────────────────────────────────────────────────────┐
 │ Worker (HTML sources only)                         cmd/worker    │
 │                                                                  │
-│  Queue.Dequeue() ──► sources.Dispatch() ──► APIExporter.Export() │
+│  Queue.ClaimReady() ──► sources.Dispatch() ──► APIExporter.Export() ──► Queue.Ack() │
 │                      (GetDetails by URL)         │               │
 │                                                  ▼               │
 │                                            POST /ingest          │
@@ -97,7 +97,7 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 
 **Two scoring stages** — Relevance (`HeuristicScorer`) is keyword-only, runs cheap at scrape time as a gate before enqueueing or saving. Suitability (`ClaudeScorer`) is an LLM call on the full job description, runs once at ingest, and gates notifications. See ADRs 0005 and 0006.
 
-**Valkey sorted set as queue** — `jobs:pending` sorted by Unix-ms timestamp. `ZADD NX` deduplicates at enqueue; `ZPOPMIN` gives atomic dequeue. Retry uses exponential backoff (`30s × attempt`); after 3 attempts URLs move to `jobs:deadletter`. See ADR 0008.
+**Recoverable Valkey queues** — detail and explicit scrape-request work is published atomically with its payload. Workers claim only due items under a lease, acknowledge after successful ingest or scrape, and retry failures with bounded exponential backoff. Expired leases are reclaimable; three failed attempts move work to a replayable dead-letter set.
 
 **Aggregator URL rewriting** — When an HTML source (LinkedIn/Indeed) yields a URL that wraps an underlying ATS URL, `detect.RewriteToATS` extracts the real URL before enqueueing. This means the worker sees a clean ATS URL and routes it to the correct source. See ADR 0004.
 
@@ -239,10 +239,14 @@ NOTIFY_DIGEST_CRON="0 9 * * *"
 **Valkey**:
 
 ```sh
-docker run -d --name valkey -p 6379:6379 valkey/valkey:latest
+docker run -d --name valkey -p 6379:6379 -v valkey_data:/data valkey/valkey:8 --appendonly yes --appendfsync everysec
 ```
 
 Set `VALKEY_ADDR="localhost:6379"` in `.env`.
+
+The Compose service uses the same AOF policy with a named volume. Check it with `docker compose exec valkey valkey-cli CONFIG GET appendonly appendfsync`. Back up the volume by running `docker compose exec valkey valkey-cli BGSAVE`, waiting for `rdb_bgsave_in_progress` to become `0`, then copying `/data/dump.rdb` off the container with `docker compose cp valkey:/data/dump.rdb ./valkey-backup.rdb`. Store that copy away from the host. Restore the snapshot into a clean Valkey volume while the service is stopped, before startup. The queue integration suite stops and restarts a Valkey container with AOF enabled and checks that pending work remains and acknowledged work does not return.
+
+Inspect queue state with `docker compose exec worker ./queue stats detail` or `./queue stats scrape-request`. Use `./queue dead <kind>` to inspect terminal failures and `./queue replay <kind> <id>` to replay one with its original payload. Run these commands through the worker container or with `VALKEY_ADDR` set locally.
 
 ### 4. Run migrations and start
 
@@ -276,7 +280,7 @@ just ci          # fmt + lint + generate + test + build
 |---|---|---|
 | **Parsers** (`ParseURLs`, `ParseJobDetail`) | Snapshot tests — parse committed HTML, compare against committed JSON | None |
 | **DB** (`Save`, `NewURLs`, `List`) | Integration — real PostgreSQL via testcontainers | Docker |
-| **Queue** (`Enqueue`, `Dequeue`, etc.) | Integration — real Valkey via testcontainers | Docker |
+| **Queue** (publish, claim, acknowledge, retry, replay) | Integration — real Valkey via testcontainers | Docker |
 | **Orchestrator** | Unit — `FakeQueue`, stub `Source` | None |
 | **Worker** | Unit — `FakeQueue`, stub handler | None |
 

@@ -120,9 +120,9 @@ db-shell:
 valkey-shell:
     docker compose exec valkey valkey-cli
 
-# list all URLs in the pending jobs sorted set (with scores)
+# show detail queue counts and oldest due time
 queue-list:
-    docker compose exec valkey valkey-cli ZRANGE jobs:pending 0 -1 WITHSCORES
+    docker compose exec worker ./queue stats detail
 
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 
