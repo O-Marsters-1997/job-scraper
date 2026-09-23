@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
+	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -19,8 +20,16 @@ import (
 )
 
 type SourceTargetHandler struct {
-	targets providers.SourceTargetProvider
-	q       queue.JobQueue
+	targets    providers.SourceTargetProvider
+	q          queue.JobQueue
+	candidates *candidates.Service
+	configs    providers.SearchConfigProvider
+}
+
+func (h *SourceTargetHandler) WithCandidates(service *candidates.Service, configs providers.SearchConfigProvider) *SourceTargetHandler {
+	h.candidates = service
+	h.configs = configs
+	return h
 }
 
 func NewSourceTargetHandler(targets providers.SourceTargetProvider, q queue.JobQueue) *SourceTargetHandler {
@@ -243,6 +252,23 @@ func (h *SourceTargetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Error("update source target failed", slog.Any("err", err))
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
+	}
+	if body.Enabled != nil && *body.Enabled && h.candidates != nil {
+		role, _ := sources.SourceRole(t.Source)
+		if role == sources.RoleDiscovery {
+			cfg, err := h.configs.GetSearchConfig(r.Context(), session.UserID)
+			if errors.Is(err, providers.ErrNotFound) {
+				cfg = dto.SearchConfig{UserID: session.UserID}
+			} else if err != nil {
+				http.Error(w, "search saved but candidate reconsideration failed", http.StatusInternalServerError)
+				return
+			}
+			if err := h.candidates.Reconsider(r.Context(), cfg); err != nil {
+				slog.Error("reconsider candidates failed", slog.Any("err", err))
+				http.Error(w, "search saved but candidate reconsideration failed", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(t)
