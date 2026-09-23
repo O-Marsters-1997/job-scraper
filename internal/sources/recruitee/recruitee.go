@@ -3,6 +3,7 @@ package recruitee
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -47,13 +48,14 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 	jobs := make([]dto.Job, 0, len(resp.Offers))
 	for _, o := range resp.Offers {
 		jobs = append(jobs, dto.Job{
-			Title:       o.Title,
-			Location:    o.Location,
-			URL:         o.CareersURL,
-			CompanySlug: token,
-			Source:      "recruitee",
-			Description: o.Description,
-			UpdatedAt:   time.Now().UTC(),
+			Title:             o.Title,
+			Location:          o.Location,
+			URL:               o.CareersURL,
+			CompanySlug:       token,
+			ProviderPostingID: strconv.FormatInt(o.ID, 10),
+			Source:            "recruitee",
+			Description:       o.Description,
+			UpdatedAt:         time.Now().UTC(),
 		})
 	}
 	return jobs, nil

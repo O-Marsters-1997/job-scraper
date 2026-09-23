@@ -3,6 +3,7 @@ package greenhouse
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -51,13 +52,14 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 	jobs := make([]dto.Job, 0, len(resp.Jobs))
 	for _, bj := range resp.Jobs {
 		jobs = append(jobs, dto.Job{
-			Title:       bj.Title,
-			Location:    bj.Location.Name,
-			URL:         bj.AbsoluteURL,
-			CompanySlug: token,
-			Source:      "greenhouse",
-			Description: bj.Content,
-			UpdatedAt:   sources.RFC3339OrNow(bj.UpdatedAt),
+			Title:             bj.Title,
+			Location:          bj.Location.Name,
+			URL:               bj.AbsoluteURL,
+			CompanySlug:       token,
+			ProviderPostingID: strconv.FormatInt(bj.ID, 10),
+			Source:            "greenhouse",
+			Description:       bj.Content,
+			UpdatedAt:         sources.RFC3339OrNow(bj.UpdatedAt),
 		})
 	}
 	return jobs, nil

@@ -152,6 +152,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
 		r.Post("/ingest", ingestH.Ingest)
+		r.Post("/ingest/batch", ingestH.IngestBatch)
 	})
 
 	return r

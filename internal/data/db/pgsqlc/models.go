@@ -70,18 +70,24 @@ type CompanyBoard struct {
 }
 
 type Job struct {
-	ID              pgtype.UUID
-	Title           string
-	Location        string
-	Url             string
-	CompanySlug     string
-	Source          string
-	UpdatedAt       pgtype.Timestamptz
-	ScrapedAt       pgtype.Timestamptz
-	Description     string
-	SalaryRaw       string
-	WorkArrangement string
-	ClosedAt        pgtype.Timestamptz
+	ID                 pgtype.UUID
+	Title              string
+	Location           string
+	Url                string
+	CompanySlug        string
+	Source             string
+	UpdatedAt          pgtype.Timestamptz
+	ScrapedAt          pgtype.Timestamptz
+	Description        string
+	SalaryRaw          string
+	WorkArrangement    string
+	ClosedAt           pgtype.Timestamptz
+	CompanyID          pgtype.UUID
+	PrimaryBoardID     pgtype.UUID
+	ProviderPostingID  pgtype.Text
+	ContentFingerprint pgtype.Text
+	ContentChangedAt   pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 }
 
 type JobCandidate struct {
@@ -109,6 +115,14 @@ type JobScore struct {
 	SuitabilitySkipped bool
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+}
+
+type JobUrl struct {
+	JobID         pgtype.UUID
+	NormalizedUrl string
+	Source        string
+	FirstSeenAt   pgtype.Timestamptz
+	LastSeenAt    pgtype.Timestamptz
 }
 
 type NotificationDigest struct {

@@ -105,3 +105,17 @@ func TestFetchBoard_ParsesFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestParse_PreservesPostingID(t *testing.T) {
+	data, err := os.ReadFile("snapshots/board_acme.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := parse(data, "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 || jobs[0].ProviderPostingID != "1001" || jobs[1].ProviderPostingID != "1002" {
+		t.Fatalf("posting IDs = %+v", jobs)
+	}
+}
