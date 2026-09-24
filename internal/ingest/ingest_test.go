@@ -47,6 +47,19 @@ func TestIngestJobs_RequiresCanonicalPersistence(t *testing.T) {
 	}
 }
 
+func TestIngestJobs_DoesNotCallExternalEffects(t *testing.T) {
+	sc := &stubScorer{}
+	notifier := &stubNotifier{}
+	cfg := oneUserCfg(providers.NewMockJobProvider(), sc, notifier)
+	results, err := ingest.New(cfg).IngestJobs(context.Background(), []dto.Job{{Title: "Engineer", URL: "https://example.com/job", Source: "greenhouse", CompanySlug: "acme"}})
+	if err != nil || len(results) != 1 || results[0].Status != "new" {
+		t.Fatalf("IngestJobs results=%+v err=%v", results, err)
+	}
+	if len(sc.calls) != 0 || len(notifier.jobs) != 0 {
+		t.Fatalf("external calls during ingest: scores=%d notifications=%d", len(sc.calls), len(notifier.jobs))
+	}
+}
+
 func (s *stubSaver) Save(_ context.Context, jobs []dto.Job) ([]dto.Job, error) {
 	if s.err != nil {
 		return nil, s.err

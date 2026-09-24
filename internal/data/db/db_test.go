@@ -62,7 +62,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func truncate(t *testing.T) {
+func truncate(t testing.TB) {
 	t.Helper()
 	if _, err := testDB.Pool().Exec(context.Background(), "TRUNCATE jobs CASCADE"); err != nil {
 		t.Fatalf("truncate jobs: %v", err)

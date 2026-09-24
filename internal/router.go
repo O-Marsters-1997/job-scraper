@@ -45,6 +45,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 	stH := handlers.NewSourceTargetHandler(db, q).WithCandidates(candidateService, db)
 	compH := handlers.NewCompaniesHandler(db, db, handlers.ATSBoardVerifier{})
 	scoringCfgH := handlers.NewScoringConfigHandler(db).WithCandidates(candidateService)
+	scoresH := handlers.NewScoresHandler(db)
 	aiPrefsH := handlers.NewAIPrefsHandler(db, creds)
 	aiCredsH := handlers.NewAICredentialsHandler(creds)
 	profileH := handlers.NewProfileHandler(db)
@@ -89,6 +90,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 		r.Use(auth.Middleware(db))
 
 		r.Get("/jobs", jobH.ListJobs)
+		r.Get("/jobs/{id}", jobH.GetJob)
 		r.Post("/jobs/{id}/reasoning", jobReasoningH.PostJobReasoning)
 
 		r.Route("/application-statuses", func(r chi.Router) {
@@ -114,6 +116,8 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credsto
 
 		r.Get("/scoring-config", scoringCfgH.GetScoringConfig)
 		r.Put("/scoring-config", scoringCfgH.UpdateScoringConfig)
+		r.Get("/scores/status", scoresH.Status)
+		r.Post("/scores/rescore", scoresH.Rescore)
 
 		r.Get("/ai-prefs", aiPrefsH.GetAIPrefs)
 		r.Put("/ai-prefs", aiPrefsH.UpdateAIPrefs)

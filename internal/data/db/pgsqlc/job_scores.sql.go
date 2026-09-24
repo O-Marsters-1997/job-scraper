@@ -12,7 +12,7 @@ import (
 )
 
 const getJobScore = `-- name: GetJobScore :one
-SELECT id, job_id, user_id, relevance_score, suitability_score, reasoning, matched, missing, suitability_skipped, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
+SELECT id, job_id, user_id, relevance_score, suitability_score, reasoning, matched, missing, suitability_skipped, score_fingerprint, score_config_version, score_model, created_at, updated_at FROM job_scores WHERE job_id = $1 AND user_id = $2 LIMIT 1
 `
 
 type GetJobScoreParams struct {
@@ -33,6 +33,9 @@ func (q *Queries) GetJobScore(ctx context.Context, arg GetJobScoreParams) (JobSc
 		&i.Matched,
 		&i.Missing,
 		&i.SuitabilitySkipped,
+		&i.ScoreFingerprint,
+		&i.ScoreConfigVersion,
+		&i.ScoreModel,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

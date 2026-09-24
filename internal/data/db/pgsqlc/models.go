@@ -90,6 +90,22 @@ type CompanyBoard struct {
 	CreatedAt          pgtype.Timestamptz
 }
 
+type EffectOutbox struct {
+	ID             pgtype.UUID
+	JobID          pgtype.UUID
+	UserID         pgtype.UUID
+	Fingerprint    string
+	ConfigVersion  pgtype.Timestamptz
+	Model          string
+	FirstDiscovery bool
+	Status         string
+	Attempts       int32
+	DueAt          pgtype.Timestamptz
+	LeaseUntil     pgtype.Timestamptz
+	LastError      string
+	CreatedAt      pgtype.Timestamptz
+}
+
 type Job struct {
 	ID                 pgtype.UUID
 	Title              string
@@ -134,6 +150,9 @@ type JobScore struct {
 	Matched            []string
 	Missing            []string
 	SuitabilitySkipped bool
+	ScoreFingerprint   pgtype.Text
+	ScoreConfigVersion pgtype.Timestamptz
+	ScoreModel         pgtype.Text
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
 }

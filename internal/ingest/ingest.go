@@ -164,10 +164,6 @@ func (i *Ingester) IngestJobs(ctx context.Context, jobs []dto.Job) ([]Result, er
 			continue
 		}
 		i.upsertCompanies(ctx, []dto.Job{saved})
-		i.scoreForTrackingUsers(ctx, []dto.Job{saved})
-		if status == "new" && i.notifier != nil {
-			i.notifier.NotifyNewJob(ctx, saved, 0)
-		}
 	}
 	return results, nil
 }

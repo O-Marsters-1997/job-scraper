@@ -148,6 +148,59 @@ func (db *DB) List(ctx context.Context, userID string) ([]dto.Job, error) {
 	return jobs, nil
 }
 
+func (db *DB) Page(ctx context.Context, userID string, options providers.JobPageOptions) (providers.JobPage, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return providers.JobPage{}, providers.ErrInvalidID
+	}
+	params := pgsqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit}
+	if params.Availability == "" {
+		params.Availability = "open"
+	}
+	if options.CursorID != "" {
+		params.CursorID, err = parseUUID(options.CursorID)
+		if err != nil {
+			return providers.JobPage{}, providers.ErrInvalidID
+		}
+		params.CursorTime = pgtype.Timestamptz{Time: options.CursorTime, Valid: true}
+	}
+	if options.CompanyID != "" {
+		params.CompanyID, err = parseUUID(options.CompanyID)
+		if err != nil {
+			return providers.JobPage{}, providers.ErrInvalidID
+		}
+	}
+	rows, err := db.queries.PageJobs(ctx, params)
+	if err != nil {
+		return providers.JobPage{}, fmt.Errorf("db.Page: %w", err)
+	}
+	page := providers.JobPage{Items: make([]dto.Job, len(rows))}
+	for i, row := range rows {
+		job := dto.Job{ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url, CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time, ScrapedAt: row.ScrapedAt.Time, SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement, Matched: row.Matched, Missing: row.Missing, SuitabilitySkipped: row.SuitabilitySkipped}
+		if row.CompanyID.Valid {
+			job.CompanyID = row.CompanyID.String()
+		}
+		if row.PrimaryBoardID.Valid {
+			job.BoardID = row.PrimaryBoardID.String()
+		}
+		job.ProviderPostingID = row.ProviderPostingID.String
+		job.ContentFingerprint = row.ContentFingerprint.String
+		if row.RelevanceScore.Valid {
+			v := int(row.RelevanceScore.Int32)
+			job.RelevanceScore = &v
+		}
+		if row.SuitabilityScore.Valid {
+			v := int(row.SuitabilityScore.Int32)
+			job.SuitabilityScore = &v
+		}
+		if row.Reasoning.Valid {
+			job.Reasoning = &row.Reasoning.String
+		}
+		page.Items[i] = job
+	}
+	return page, nil
+}
+
 func fromGetJobRow(row pgsqlc.GetJobRow) dto.Job {
 	j := dto.Job{
 		ID:                 row.ID.String(),
@@ -190,11 +243,11 @@ func fromGetJobRow(row pgsqlc.GetJobRow) dto.Job {
 func (db *DB) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error) {
 	jid, err := parseUUID(jobID)
 	if err != nil {
-		return dto.Job{}, err
+		return dto.Job{}, providers.ErrInvalidID
 	}
 	uid, err := parseUUID(userID)
 	if err != nil {
-		return dto.Job{}, err
+		return dto.Job{}, providers.ErrInvalidID
 	}
 	row, err := db.queries.GetJob(ctx, pgsqlc.GetJobParams{ID: jid, UserID: uid})
 	if errors.Is(err, pgx.ErrNoRows) {

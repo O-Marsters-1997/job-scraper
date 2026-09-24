@@ -2,6 +2,9 @@ package db_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -202,6 +205,193 @@ func TestSaveCanonical_AliasesAndReplay(t *testing.T) {
 	}
 	if jobs[0].BoardID != first.BoardID || jobs[0].ProviderPostingID != first.ProviderPostingID || jobs[0].ContentFingerprint == "" {
 		t.Fatalf("canonical identity missing from read: %+v", jobs[0])
+	}
+}
+
+func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "outbox-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "outbox-company", Name: "Outbox Company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/outbox"
+	job.CompanySlug = company.Slug
+	job.CompanyID = company.ID
+	for _, title := range []string{"Engineer", "Engineer", "Senior Engineer"} {
+		job.Title = title
+		if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("queued scoring effects = %d, want 2", count)
+	}
+}
+
+func TestScoringEffect_LeaseAndRetry(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/lease"
+	job.CompanySlug = "lease-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil || first.UserID != user.ID {
+		t.Fatalf("first claim = %+v, %v", first, err)
+	}
+	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
+		t.Fatal("leased effect claimed twice")
+	}
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "temporary failure"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
+		t.Fatal("future retry claimed early")
+	}
+	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil || second.ID != first.ID {
+		t.Fatalf("retry claim = %+v, %v", second, err)
+	}
+}
+
+func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "rescore-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "rescore-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/rescore"
+	job.CompanySlug = "rescore-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	effect, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 80, "", nil, nil); err != nil || !saved {
+		t.Fatal(err)
+	}
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "New rubric"}); err != nil {
+		t.Fatal(err)
+	}
+	status, err := testDB.GetScoringStatus(ctx, user.ID)
+	if err != nil || status.Stale != 1 {
+		t.Fatalf("status after rubric edit = %+v, %v", status, err)
+	}
+	queued, err := testDB.QueueRescore(ctx, user.ID)
+	if err != nil || queued != 1 {
+		t.Fatalf("rescore queued = %d, %v", queued, err)
+	}
+	queued, err = testDB.QueueRescore(ctx, user.ID)
+	if err != nil || queued != 0 {
+		t.Fatalf("duplicate rescore queued = %d, %v", queued, err)
+	}
+}
+
+func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "stale-effect-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "stale-effect-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/stale-effect"
+	job.CompanySlug = "stale-effect-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	effect, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "Changed during scoring"}); err != nil {
+		t.Fatal(err)
+	}
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 90, "", nil, nil); err != nil || saved {
+		t.Fatalf("stale score persisted=%v err=%v", saved, err)
+	}
+	if queued, err := testDB.QueueRescore(ctx, user.ID); err != nil || queued != 1 {
+		t.Fatalf("rescore after stale completion queued=%d err=%v", queued, err)
+	}
+}
+
+func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "cached-company", Name: "Cached Company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/cached"
+	job.CompanyID = company.ID
+	job.CompanySlug = company.Slug
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	legacy := job
+	legacy.URL = "https://example.com/jobs/legacy-cached"
+	legacy.Description = "<p>Cached role</p>"
+	if _, err := testDB.Save(ctx, []dto.Job{legacy}); err != nil {
+		t.Fatal(err)
+	}
+	user, err := testDB.CreateUser(ctx, "cached-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	var eligible bool
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*), COALESCE(bool_or(first_discovery), false) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count, &eligible); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 || eligible {
+		t.Fatalf("cached scores = %d, first discovery = %v", count, eligible)
+	}
+	content, _ := json.Marshal([5]string{legacy.Title, legacy.Description, legacy.Location, legacy.SalaryRaw, legacy.WorkArrangement})
+	var fingerprint string
+	if err := testDB.Pool().QueryRow(ctx, "SELECT content_fingerprint FROM jobs WHERE url = $1", legacy.URL).Scan(&fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf("%x", sha256.Sum256(content)); fingerprint != want {
+		t.Fatalf("legacy fingerprint = %q, want %q", fingerprint, want)
 	}
 }
 

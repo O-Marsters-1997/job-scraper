@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
@@ -8,18 +9,14 @@ import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useApplicationsForJobs } from "../../hooks/useApplications";
-import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import { useJobPage } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs")({
 	// Return Partial so <Link to="/jobs"> callers don't need to supply search params.
 	validateSearch: (raw: Record<string, unknown>): Partial<JobFilters> =>
 		parseSearch(raw),
-	loader: () =>
-		Promise.all([
-			queryClient.ensureQueryData(jobsQueryOptions),
-			queryClient.ensureQueryData(aiPrefsQueryOptions),
-		]),
+	loader: () => queryClient.ensureQueryData(aiPrefsQueryOptions),
 	component: JobsPage,
 });
 
@@ -27,9 +24,14 @@ function JobsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
 
-	const query = useJobs();
+	const [cursor, setCursor] = createSignal("");
+	const [history, setHistory] = createSignal<string[]>([]);
+	const query = useJobPage(() => ({
+		cursor: cursor() || undefined,
+		limit: 10,
+	}));
 	const aiPrefs = useAiPrefs();
-	const jobs = () => query.data ?? [];
+	const jobs = () => query.data?.items ?? [];
 	const allJobIds = () => jobs().map((j) => j.ID);
 
 	const appsForJobs = useApplicationsForJobs(allJobIds);
@@ -39,7 +41,9 @@ function JobsPage() {
 	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
 	const srcOptions = () => sourceOptions(jobs());
 
-	const setFilters = (patch: Partial<JobFilters>) =>
+	const setFilters = (patch: Partial<JobFilters>) => {
+		setCursor("");
+		setHistory([]);
 		navigate({
 			to: "/jobs",
 			// Reset to page 1 whenever anything other than page itself changes.
@@ -54,6 +58,7 @@ function JobsPage() {
 			},
 			replace: true,
 		});
+	};
 
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
@@ -128,6 +133,29 @@ function JobsPage() {
 					onChange={setFilters}
 					sourceOptions={srcOptions()}
 				/>
+				<div class="mt-3 flex justify-end gap-2">
+					<Button
+						variant="outline"
+						disabled={history().length === 0}
+						onClick={() => {
+							const previous = history().at(-1) ?? "";
+							setHistory((items) => items.slice(0, -1));
+							setCursor(previous);
+						}}
+					>
+						Previous
+					</Button>
+					<Button
+						variant="outline"
+						disabled={!query.data?.next_cursor}
+						onClick={() => {
+							setHistory((items) => [...items, cursor()]);
+							setCursor(query.data?.next_cursor ?? "");
+						}}
+					>
+						Next
+					</Button>
+				</div>
 			</Show>
 
 			<TrackApplicationDialog

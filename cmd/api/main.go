@@ -2,17 +2,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	app "github.com/ollymarsters/job-scraper/internal"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 func main() {
@@ -38,6 +43,26 @@ func main() {
 		slog.Error("credstore init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
+	outbox := score.NewOutboxWorker(db,
+		func(ctx context.Context, userID string) (string, error) { return cs.Get(ctx, userID, "anthropic") },
+		func(apiKey string) score.SuitabilityScorer {
+			return score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+		},
+	)
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := outbox.RunOnce(ctx); err != nil && !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
+					slog.Error("scoring effect failed", slog.Any("err", err))
+				}
+			}
+		}
+	}()
 
 	valkeyAddr := os.Getenv("VALKEY_ADDR")
 	if valkeyAddr == "" {

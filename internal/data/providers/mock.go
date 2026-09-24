@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -86,6 +87,33 @@ func (m *MockJobProvider) List(_ context.Context, _ string) ([]dto.Job, error) {
 		out = append(out, j)
 	}
 	return out, nil
+}
+
+func (m *MockJobProvider) Page(ctx context.Context, userID string, options JobPageOptions) (JobPage, error) {
+	jobs, err := m.List(ctx, userID)
+	if err != nil {
+		return JobPage{}, err
+	}
+	sort.Slice(jobs, func(i, j int) bool {
+		if jobs[i].ScrapedAt.Equal(jobs[j].ScrapedAt) {
+			return jobs[i].ID > jobs[j].ID
+		}
+		return jobs[i].ScrapedAt.After(jobs[j].ScrapedAt)
+	})
+	page := JobPage{Items: make([]dto.Job, 0)}
+	for _, job := range jobs {
+		if options.CompanyID != "" && job.CompanyID != options.CompanyID {
+			continue
+		}
+		if !options.CursorTime.IsZero() && (job.ScrapedAt.After(options.CursorTime) || (job.ScrapedAt.Equal(options.CursorTime) && job.ID >= options.CursorID)) {
+			continue
+		}
+		page.Items = append(page.Items, job)
+		if len(page.Items) == int(options.Limit) {
+			break
+		}
+	}
+	return page, nil
 }
 
 func (m *MockJobProvider) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) {
