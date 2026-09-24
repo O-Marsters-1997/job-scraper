@@ -107,7 +107,7 @@ func (h *JobReasoningHandler) PostJobReasoning(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	scorer := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+	scorer := score.NewClaudeScorer(apiKey)
 	result, err := scorer.Score(r.Context(), job, cfg, reasoningModel)
 	if err != nil {
 		slog.Error("reasoning score failed", slog.String("job_id", jobID), slog.Any("err", err))

@@ -8,12 +8,20 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/notify"
 )
 
+type sentEmail struct{ to string }
+type mockNotifier struct{ sent []sentEmail }
+
+func (m *mockNotifier) Send(_ context.Context, to, _, _ string) error {
+	m.sent = append(m.sent, sentEmail{to: to})
+	return nil
+}
+
 func TestNotifyNewJobUsesRecipient(t *testing.T) {
 	renderer, err := notify.NewRenderer()
 	if err != nil {
 		t.Fatal(err)
 	}
-	sender := &notify.MockNotifier{}
+	sender := &mockNotifier{}
 	svc := notify.NewNotificationService(sender, renderer)
 	job := dto.Job{ID: "job-1", Title: "Engineer", URL: "https://example.com/job"}
 	for _, email := range []string{"alice@example.com", "bob@example.com", ""} {
@@ -21,7 +29,7 @@ func TestNotifyNewJobUsesRecipient(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(sender.Sent) != 2 || sender.Sent[0].To != "alice@example.com" || sender.Sent[1].To != "bob@example.com" {
-		t.Fatalf("recipients: %+v", sender.Sent)
+	if len(sender.sent) != 2 || sender.sent[0].to != "alice@example.com" || sender.sent[1].to != "bob@example.com" {
+		t.Fatalf("recipients: %+v", sender.sent)
 	}
 }

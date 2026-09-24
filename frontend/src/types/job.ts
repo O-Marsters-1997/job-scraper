@@ -4,6 +4,7 @@ export interface Job {
 	Location: string;
 	URL: string;
 	CompanySlug: string;
+	CompanyID?: string;
 	Source: string;
 	UpdatedAt: string;
 	ScrapedAt: string;

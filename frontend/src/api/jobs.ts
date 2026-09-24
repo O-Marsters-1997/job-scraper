@@ -8,6 +8,15 @@ export interface JobPage {
 	next_cursor: string;
 }
 
+export async function fetchAllJobs(): Promise<Job[]> {
+	if (useMocks()) {
+		const { getJobs } = await import("../mocks/db");
+		await mockDelay();
+		return getJobs();
+	}
+	return apiFetch<Job[]>("/jobs/all");
+}
+
 export async function fetchJobs(
 	options: {
 		cursor?: string | undefined;

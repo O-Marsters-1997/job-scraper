@@ -123,13 +123,15 @@ func (db *DB) CountApplicationsUsingStatus(ctx context.Context, statusID, userID
 	return count, nil
 }
 
-func toOptionalDate(s fp.Option[string]) pgtype.Date {
+func toOptionalDate(s fp.Option[string]) (pgtype.Date, error) {
 	if s.IsNone() {
-		return pgtype.Date{}
+		return pgtype.Date{}, nil
 	}
 	var d pgtype.Date
-	_ = d.Scan(s.Unwrap())
-	return d
+	if err := d.Scan(s.Unwrap()); err != nil {
+		return pgtype.Date{}, fmt.Errorf("invalid applied date: %w", err)
+	}
+	return d, nil
 }
 
 func fromOptionalDate(d pgtype.Date) *time.Time {

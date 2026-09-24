@@ -15,8 +15,7 @@ type Config struct {
 
 func New(cfg Config) *sources.BoardSource {
 	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
-		Name:      "ashby",
-		URLPrefix: "https://jobs.ashbyhq.com",
+		Name: "ashby",
 		URL: func(token string) string {
 			return fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", token)
 		},

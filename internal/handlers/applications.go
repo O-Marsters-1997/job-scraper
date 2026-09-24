@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -61,6 +62,10 @@ func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Re
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if !validAppliedAt(body.AppliedAt) {
+		http.Error(w, "invalid applied_at date", http.StatusBadRequest)
+		return
+	}
 
 	app, err := h.applications.CreateApplication(r.Context(), dto.CreateApplicationInput{
 		UserID:     session.UserID,
@@ -102,6 +107,10 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if !validAppliedAt(body.AppliedAt) {
+		http.Error(w, "invalid applied_at date", http.StatusBadRequest)
+		return
+	}
 	app, err := h.applications.UpdateApplication(r.Context(), dto.UpdateApplicationInput{
 		ID:         id,
 		UserID:     session.UserID,
@@ -123,6 +132,14 @@ func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Re
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(app)
+}
+
+func validAppliedAt(date fp.Option[string]) bool {
+	if date.IsNone() {
+		return true
+	}
+	_, err := time.Parse(time.DateOnly, date.Unwrap())
+	return err == nil
 }
 
 func (h *ApplicationHandler) DeleteApplication(w http.ResponseWriter, r *http.Request) {

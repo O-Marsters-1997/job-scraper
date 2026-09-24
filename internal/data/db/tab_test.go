@@ -2,6 +2,7 @@ package db_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -244,7 +245,7 @@ func TestDB_HideTab(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
-				if !isErr(err, providers.ErrTabNotFound) {
+				if !errors.Is(err, providers.ErrTabNotFound) {
 					t.Errorf("expected ErrTabNotFound, got %v", err)
 				}
 			},
@@ -266,7 +267,7 @@ func TestDB_HideTab(t *testing.T) {
 				if hideErr == nil {
 					t.Fatal("expected error when hiding another user's tab, got nil")
 				}
-				if !isErr(hideErr, providers.ErrTabNotFound) {
+				if !errors.Is(hideErr, providers.ErrTabNotFound) {
 					t.Errorf("expected ErrTabNotFound, got %v", hideErr)
 				}
 			},
@@ -324,7 +325,7 @@ func TestDB_ShowTab(t *testing.T) {
 				if err == nil {
 					t.Fatal("expected error, got nil")
 				}
-				if !isErr(err, providers.ErrTabNotFound) {
+				if !errors.Is(err, providers.ErrTabNotFound) {
 					t.Errorf("expected ErrTabNotFound, got %v", err)
 				}
 			},
@@ -349,7 +350,7 @@ func TestDB_ShowTab(t *testing.T) {
 				if showErr == nil {
 					t.Fatal("expected error when restoring another user's tab, got nil")
 				}
-				if !isErr(showErr, providers.ErrTabNotFound) {
+				if !errors.Is(showErr, providers.ErrTabNotFound) {
 					t.Errorf("expected ErrTabNotFound, got %v", showErr)
 				}
 			},
@@ -359,19 +360,4 @@ func TestDB_ShowTab(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, tc.run)
 	}
-}
-
-func isErr(err, target error) bool {
-	for err != nil {
-		if err == target {
-			return true
-		}
-		type unwrapper interface{ Unwrap() error }
-		if u, ok := err.(unwrapper); ok {
-			err = u.Unwrap()
-		} else {
-			break
-		}
-	}
-	return err == target
 }

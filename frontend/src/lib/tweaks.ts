@@ -380,24 +380,59 @@ export const FONT_KEYS: FontKey[] = ["jakarta", "dm", "sora", "outfit", "ibm"];
 
 // ── Persistence ────────────────────────────────────────────────────────────
 
+function savedChoice<T extends string>(
+	value: unknown,
+	choices: readonly T[],
+	fallback: T,
+): T {
+	return typeof value === "string" && choices.includes(value as T)
+		? (value as T)
+		: fallback;
+}
+
 export function loadTweaks(): Tweaks {
 	try {
 		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored) {
-			const parsed = JSON.parse(stored);
-			// Guard: coerce stale theme keys (e.g. "teal" from a previous session)
-			// to the current default so THEMES[key] never returns undefined.
-			if (parsed.theme && !THEME_KEYS.includes(parsed.theme as ThemeKey)) {
-				parsed.theme = DEFAULTS.theme;
-			}
+			const parsed: unknown = JSON.parse(stored);
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+				return DEFAULTS;
+			const value = parsed as Record<string, unknown>;
+			const savedColors = value.customColors;
+			const colors =
+				savedColors &&
+				typeof savedColors === "object" &&
+				!Array.isArray(savedColors)
+					? (savedColors as Record<string, unknown>)
+					: {};
 			return {
-				...DEFAULTS,
-				...parsed,
-				// Deep-merge so new vars added to CUSTOM_DEFAULTS are present for existing users
-				customColors: {
-					...DEFAULTS.customColors,
-					...(parsed.customColors ?? {}),
-				},
+				theme: savedChoice(value.theme, THEME_KEYS, DEFAULTS.theme),
+				font: savedChoice(value.font, FONT_KEYS, DEFAULTS.font),
+				size: savedChoice(value.size, ["xs", "sm", "md", "lg"], DEFAULTS.size),
+				sidebarWidth: savedChoice(
+					value.sidebarWidth,
+					["narrow", "default", "wide"],
+					DEFAULTS.sidebarWidth,
+				),
+				density: savedChoice(
+					value.density,
+					["compact", "default", "spacious"],
+					DEFAULTS.density,
+				),
+				radius: savedChoice(
+					value.radius,
+					["sharp", "default", "round"],
+					DEFAULTS.radius,
+				),
+				customColors: Object.fromEntries(
+					Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [
+						key,
+						typeof colors[key] === "string" &&
+						(typeof CSS === "undefined" || CSS.supports("color", colors[key]))
+							? colors[key]
+							: fallback,
+					]),
+				),
 			};
 		}
 	} catch {}

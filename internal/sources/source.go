@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -16,34 +15,15 @@ import (
 )
 
 const (
-	// DefaultSchedule is hourly: ATS sources gate freshness per-target via
-	// ListDueSourceTargets, so the tick just needs to be frequent enough to
-	// notice due targets close to their check_interval_minutes. Discovery
-	// sources still rely on MinScrapeInterval below.
-	DefaultSchedule          = "0 * * * *"
-	DefaultMinScrapeInterval = 5 * time.Hour
-	DefaultTimeout           = 15 * time.Second
-	defaultMinWait           = 2 * time.Second
-	defaultMaxWait           = 7 * time.Second
-	userAgent                = "Mozilla/5.0 (compatible; job-scraper/1.0)"
+	DefaultSchedule = "0 * * * *"
+	DefaultTimeout  = 15 * time.Second
+	defaultMinWait  = 2 * time.Second
+	defaultMaxWait  = 7 * time.Second
+	userAgent       = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
 type Config struct {
-	// Name is the canonical identifier, e.g. "wis", "greenhouse".
-	Name string
-
-	// Schedule is a cron expression controlling how often this source is polled.
-	// Defaults to DefaultSchedule if empty.
-	Schedule string
-
-	// MinScrapeInterval is the minimum duration between scrapes.
-	// Defaults to DefaultMinScrapeInterval if zero.
-	MinScrapeInterval time.Duration
-
-	// URLPrefix is used by PaginatedBase.CanHandle to claim URLs by prefix.
-	URLPrefix string
-
-	// UseProxy routes requests through BrightData Web Unlocker when true.
+	Name     string
 	UseProxy bool
 }
 
@@ -77,11 +57,7 @@ type PageFetcher interface {
 	FetchPage(context.Context, string) ([]dto.Job, string, error)
 }
 
-// DetailFetcher is an optional capability implemented by HTML scrape sources
-// that require a separate per-URL fetch to produce a fully-populated dto.Job.
-// ATS sources do not implement this interface.
 type DetailFetcher interface {
-	CanHandle(url string) bool
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 
@@ -92,12 +68,6 @@ type PaginatedBase struct {
 }
 
 func NewBase(cfg Config) PaginatedBase {
-	if cfg.Schedule == "" {
-		cfg.Schedule = DefaultSchedule
-	}
-	if cfg.MinScrapeInterval == 0 {
-		cfg.MinScrapeInterval = DefaultMinScrapeInterval
-	}
 	transport, err := proxy.Fetcher(cfg.UseProxy)
 	return PaginatedBase{
 		cfg:     cfg,
@@ -112,10 +82,6 @@ func NewBase(cfg Config) PaginatedBase {
 }
 
 func (b *PaginatedBase) Cfg() Config { return b.cfg }
-
-func (b *PaginatedBase) CanHandle(url string) bool {
-	return strings.HasPrefix(url, b.cfg.URLPrefix)
-}
 
 func (b *PaginatedBase) Client() *http.Client { return b.client }
 
@@ -211,15 +177,4 @@ func (b *PaginatedBase) IteratePages(
 	}
 
 	return nil
-}
-
-// Dispatch routes url to the first DetailFetcher that claims it via CanHandle
-// and calls its GetDetails. Returns an error if no fetcher claims the URL.
-func Dispatch(ctx context.Context, srcs []DetailFetcher, url string) (dto.Job, error) {
-	for _, src := range srcs {
-		if src.CanHandle(url) {
-			return src.GetDetails(ctx, url)
-		}
-	}
-	return dto.Job{}, fmt.Errorf("sources: no handler for %s", url)
 }

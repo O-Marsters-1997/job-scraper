@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -29,7 +28,7 @@ func (h *CVTemplatesHandler) ListCVTemplates(w http.ResponseWriter, r *http.Requ
 	session, _ := auth.SessionFromContext(r.Context())
 	cvs, err := h.svc.List(r.Context(), session.UserID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not connected") {
+		if errors.Is(err, providers.ErrGoogleTokenNotFound) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"error":"google account not connected"}`))
@@ -53,7 +52,6 @@ func (h *CVTemplatesHandler) AddTrackedDoc(w http.ResponseWriter, r *http.Reques
 	}
 	session, _ := auth.SessionFromContext(r.Context())
 	if err := h.svc.AddDoc(r.Context(), session.UserID, body.URL); err != nil {
-		// Parse errors and access errors are client faults.
 		if isClientError(err) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -137,7 +135,5 @@ func (h *CVTemplatesHandler) ShowTab(w http.ResponseWriter, r *http.Request) {
 }
 
 func isClientError(err error) bool {
-	msg := err.Error()
-	return strings.HasPrefix(msg, "invalid Google Docs") ||
-		strings.HasPrefix(msg, "cannot access document")
+	return errors.Is(err, cvtemplates.ErrInvalidDoc) || errors.Is(err, cvtemplates.ErrInaccessibleDoc)
 }

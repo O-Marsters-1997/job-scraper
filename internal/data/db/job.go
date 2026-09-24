@@ -64,7 +64,6 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 		Source:             row.Source,
 		UpdatedAt:          row.UpdatedAt.Time,
 		ScrapedAt:          row.ScrapedAt.Time,
-		Description:        row.Description,
 		SalaryRaw:          row.SalaryRaw,
 		WorkArrangement:    row.WorkArrangement,
 		Matched:            row.Matched,

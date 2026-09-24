@@ -9,7 +9,6 @@ export interface JobFilters {
 	sal: boolean;
 	salMin?: number | undefined;
 	salMax?: number | undefined;
-	page?: number | undefined;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -21,7 +20,6 @@ export const DEFAULT_FILTERS: JobFilters = {
 	rel: undefined,
 	salMin: undefined,
 	salMax: undefined,
-	page: undefined,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -44,7 +42,6 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		sal: raw.sal === true || raw.sal === "true",
 		salMin: coerceNum(raw.salMin),
 		salMax: coerceNum(raw.salMax),
-		page: coerceNum(raw.page),
 	};
 }
 
@@ -127,4 +124,15 @@ export function activeFilterCount(f: JobFilters): number {
 /** Unique Source values present in the dataset, sorted. */
 export function sourceOptions(jobs: Job[]): string[] {
 	return [...new Set(jobs.map((j) => j.Source))].sort();
+}
+
+export function filterCompanyJobs(
+	jobs: Job[],
+	company: { ID: string; Slug: string },
+): Job[] {
+	return jobs.filter((job) =>
+		job.CompanyID
+			? job.CompanyID === company.ID
+			: job.CompanySlug === company.Slug,
+	);
 }

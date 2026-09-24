@@ -1,8 +1,4 @@
-import type {
-	Application,
-	ApplicationWithDetails,
-	JobApplicationSummary,
-} from "../types/application";
+import type { Application, ApplicationWithDetails } from "../types/application";
 import { apiFetch, apiFetchVoid } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
 
@@ -71,18 +67,4 @@ export async function deleteApplication(id: string): Promise<void> {
 		return mockDelete(id);
 	}
 	return apiFetchVoid(`/applications/${id}`, { method: "DELETE" });
-}
-
-export async function fetchApplicationsForJobs(
-	jobIds: string[],
-): Promise<Record<string, JobApplicationSummary>> {
-	if (useMocks()) {
-		const { getApplicationsForJobs } = await import("../mocks/db");
-		await mockDelay();
-		return getApplicationsForJobs(jobIds);
-	}
-	if (jobIds.length === 0) return {};
-	return apiFetch<Record<string, JobApplicationSummary>>(
-		`/applications/for-jobs?job_ids=${jobIds.join(",")}`,
-	);
 }

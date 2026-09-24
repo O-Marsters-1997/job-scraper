@@ -86,7 +86,7 @@ type SourceBoardFetcher struct{}
 
 func (SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) ([]dto.Job, error) {
 	target := dto.SourceTarget{Source: board.Source, Value: board.Token, Enabled: true}
-	srcs := builder.BuildSources([]dto.SourceTarget{target}, nil)
+	srcs := builder.BuildSources([]dto.SourceTarget{target})
 	if len(srcs) != 1 {
 		return nil, fmt.Errorf("unsupported board source %q", board.Source)
 	}

@@ -11,13 +11,10 @@ import (
 )
 
 // BoardSpec describes one ATS board integration. URL builds the API endpoint for a
-// board token; Parse decodes the response body into jobs. Schedule and
-// MinScrapeInterval come from NewBase defaults; set UseProxy only when the board needs
-// the Web Unlocker.
+// board token; Parse decodes the response body into jobs.
 type BoardSpec struct {
-	Name      string
-	URLPrefix string
-	UseProxy  bool
+	Name     string
+	UseProxy bool
 	// Post, when true, fetches the board via POST with an empty JSON body
 	// instead of GET. Workable's job-list API only responds to POST.
 	Post  bool
@@ -32,27 +29,16 @@ type BoardSource struct {
 	PaginatedBase
 	boards []string
 	spec   BoardSpec
-	done   func(ctx context.Context, token string, urls []string)
 }
 
 var _ Source = (*BoardSource)(nil)
 
 func NewBoardSource(boards []string, spec BoardSpec) *BoardSource {
 	return &BoardSource{
-		PaginatedBase: NewBase(Config{Name: spec.Name, URLPrefix: spec.URLPrefix, UseProxy: spec.UseProxy}),
+		PaginatedBase: NewBase(Config{Name: spec.Name, UseProxy: spec.UseProxy}),
 		boards:        boards,
 		spec:          spec,
 	}
-}
-
-// WithDone registers a hook called after each board token is successfully
-// fetched and parsed, letting the caller record per-token freshness (e.g.
-// last_checked_at) independent of one-off manual scrapes. urls is every job
-// URL the board API returned for that token this run, pre-relevance-gate —
-// callers can diff it against previously-known URLs to detect closures.
-func (b *BoardSource) WithDone(fn func(ctx context.Context, token string, urls []string)) *BoardSource {
-	b.done = fn
-	return b
 }
 
 func (b *BoardSource) FetchPage(ctx context.Context, cursor string) (Page, error) {
@@ -97,13 +83,6 @@ func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dt
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
 			continue
-		}
-		if b.done != nil {
-			urls := make([]string, len(jobs))
-			for i, job := range jobs {
-				urls[i] = job.URL
-			}
-			b.done(ctx, token, urls)
 		}
 		if stop {
 			break

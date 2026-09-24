@@ -79,8 +79,7 @@ var _ sources.DetailFetcher = (*Scraper)(nil)
 func New(cfg Config) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:      "wis",
-			URLPrefix: "https://workinstartups.com",
+			Name: "wis",
 		}),
 		searches: cfg.Searches,
 	}

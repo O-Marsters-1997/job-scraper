@@ -12,8 +12,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 )
 
-func buildHandler(db ingest.Saver) http.Handler {
-	ing := ingest.New(ingest.Config{DB: db})
+func buildHandler(db ingest.CanonicalSaver) http.Handler {
+	ing := ingest.New(db, nil)
 	h := NewIngestHandler(ing)
 	return auth.ServiceTokenMiddleware(http.HandlerFunc(h.Ingest))
 }
@@ -128,7 +128,7 @@ func TestIngestHandler_DuplicateURL(t *testing.T) {
 func TestIngestBatch_ReturnsOrderedOutcomes(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
-	ing := ingest.New(ingest.Config{DB: db})
+	ing := ingest.New(db, nil)
 	h := NewIngestHandler(ing)
 	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
 
@@ -149,7 +149,7 @@ func TestIngestBatch_ReturnsOrderedOutcomes(t *testing.T) {
 func TestIngestBatch_RejectsInvalidIdentityWithoutLosingValidJob(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
-	h := NewIngestHandler(ingest.New(ingest.Config{DB: db}))
+	h := NewIngestHandler(ingest.New(db, nil))
 	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
 	body := `{"jobs":[{"title":"Bad","url":"file:///etc/passwd"},{"title":"Bad","url":"https://example.com/1","BoardID":"invalid"},{"title":"Good","url":"https://example.com/2"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(body))
@@ -175,7 +175,7 @@ func TestIngestBatch_RejectsInvalidIdentityWithoutLosingValidJob(t *testing.T) {
 
 func TestIngestBatch_ReturnsDistinctCanonicalIDs(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
-	h := NewIngestHandler(ingest.New(ingest.Config{DB: providers.NewMockJobProvider()}))
+	h := NewIngestHandler(ingest.New(providers.NewMockJobProvider(), nil))
 	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
 	request := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(`{"jobs":[{"title":"A","url":"https://example.com/a"},{"title":"B","url":"https://example.com/b"}]}`))
 	request.Header.Set("Authorization", "Bearer tok")

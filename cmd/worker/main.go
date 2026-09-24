@@ -72,9 +72,9 @@ func main() {
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
 	boardPoller := scraper.NewBoardPoller(db, scraper.SourceBoardFetcher{}, exporter)
-	orch := scraper.New(nil, db, q).WithExporter(exporter).WithSourceReloader(nil,
+	orch := scraper.New(db, q).WithSourceBuilder(
 		func(target dto.SourceTarget) []sources.Source {
-			return builder.BuildSources([]dto.SourceTarget{target}, nil)
+			return builder.BuildSources([]dto.SourceTarget{target})
 		})
 	orch.WithRejectFilter(db)
 	orch.WithCandidates(db)

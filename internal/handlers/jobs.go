@@ -109,6 +109,23 @@ func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *JobHandler) ListAllJobs(w http.ResponseWriter, r *http.Request) {
+	session, _ := auth.SessionFromContext(r.Context())
+	jobs, err := h.jobs.List(r.Context(), session.UserID)
+	if err != nil {
+		slog.Error("list all jobs failed", slog.Any("err", err))
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if jobs == nil {
+		jobs = []dto.Job{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(jobs); err != nil {
+		slog.Error("encode jobs failed", slog.Any("err", err))
+	}
+}
+
 func (h *JobHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	job, err := h.jobs.GetJob(r.Context(), chi.URLParam(r, "id"), session.UserID)

@@ -5,7 +5,6 @@ import {
 	getCoreRowModel,
 	getPaginationRowModel,
 	getSortedRowModel,
-	type PaginationState,
 	type SortingState,
 } from "@tanstack/solid-table";
 import { createSignal, For, Show } from "solid-js";
@@ -23,7 +22,6 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
-import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
 interface JobsDataTableProps<TData extends Job> {
@@ -34,47 +32,12 @@ interface JobsDataTableProps<TData extends Job> {
 	sourceOptions: string[];
 }
 
-// Returns a windowed list of page numbers with null for ellipsis gaps.
-function pageWindow(current: number, total: number): (number | null)[] {
-	if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-	const pages = new Set([
-		1,
-		Math.max(1, current - 1),
-		current,
-		Math.min(total, current + 1),
-		total,
-	]);
-	const sorted = [...pages].sort((a, b) => a - b);
-	const result: (number | null)[] = [];
-	for (let i = 0; i < sorted.length; i++) {
-		if (i > 0 && (sorted[i] as number) - (sorted[i - 1] as number) > 1) {
-			result.push(null);
-		}
-		result.push(sorted[i] as number);
-	}
-	return result;
-}
-
 export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
-	const [suitabilityMin, setSuitabilityMin] = createSignal("");
 	const [showSkipped, setShowSkipped] = createSignal(true);
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
-
-	const PAGE_SIZE = 10;
-	const pagination = (): PaginationState => ({
-		pageIndex: Math.max(0, (props.filters.page ?? 1) - 1),
-		pageSize: PAGE_SIZE,
-	});
-	const onPaginationChange = (
-		updater: PaginationState | ((prev: PaginationState) => PaginationState),
-	) => {
-		const next =
-			typeof updater === "function" ? updater(pagination()) : updater;
-		props.onChange({ page: next.pageIndex + 1 });
-	};
 
 	// Per-row expand state — keyed by Job ID, isolated from sort/filter/pagination
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
@@ -95,38 +58,18 @@ export function JobsDataTable<TData extends Job>(
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
-		autoResetPageIndex: false,
+		initialState: { pagination: { pageSize: 10 } },
 		state: {
 			get sorting() {
 				return sorting();
 			},
-			get pagination() {
-				return pagination();
-			},
 		},
 		onSortingChange: setSorting,
-		onPaginationChange: onPaginationChange,
 		meta: {
 			isExpanded,
 			toggleExpanded,
 		},
 	});
-
-	const pageIndex = () => pagination().pageIndex;
-	const pageCount = () => table.getPageCount();
-	// Data is pre-filtered; use its length for display rather than table's row model count.
-	const filteredCount = () => props.data.length;
-	const start = () => pageIndex() * PAGE_SIZE + 1;
-	const end = () => Math.min((pageIndex() + 1) * PAGE_SIZE, filteredCount());
-
-	const pgBtnClass = (active: boolean, disabled: boolean) =>
-		cn(
-			"flex size-7 items-center justify-center rounded-md border text-xs font-medium transition-colors",
-			active
-				? "border-primary bg-primary text-primary-foreground"
-				: "border-border text-muted hover:border-border-strong hover:text-foreground",
-			disabled && "opacity-40",
-		);
 
 	const filterCount = () => activeFilterCount(props.filters);
 
@@ -185,33 +128,11 @@ export function JobsDataTable<TData extends Job>(
 						</Badge>
 					</Show>
 				</Button>
-				<div class="flex items-center gap-1.5">
-					<label class="text-xs font-medium text-muted" for="suitability-min">
-						Min suitability
-					</label>
-					<Input
-						id="suitability-min"
-						type="number"
-						min="0"
-						max="100"
-						placeholder="—"
-						value={suitabilityMin()}
-						onInput={(e) => {
-							const raw = e.currentTarget.value.trim();
-							setSuitabilityMin(raw);
-							props.onChange({ page: undefined });
-						}}
-						class="w-20"
-					/>
-				</div>
 				<label class="flex cursor-pointer items-center gap-1.5">
 					<input
 						type="checkbox"
 						checked={showSkipped()}
-						onChange={(e) => {
-							setShowSkipped(e.currentTarget.checked);
-							props.onChange({ page: undefined });
-						}}
+						onChange={(e) => setShowSkipped(e.currentTarget.checked)}
 						class="h-3.5 w-3.5 rounded border-border accent-primary"
 					/>
 					<span class="text-xs font-medium text-muted">
@@ -220,7 +141,6 @@ export function JobsDataTable<TData extends Job>(
 				</label>
 			</div>
 
-			{/* Table card — pagination lives inside so it shares the rounded border */}
 			<div class="overflow-hidden rounded-xl border border-border bg-surface">
 				<Table>
 					<TableHeader>
@@ -303,53 +223,28 @@ export function JobsDataTable<TData extends Job>(
 						</Show>
 					</TableBody>
 				</Table>
-
-				<Show when={pageCount() > 1}>
-					<div class="flex items-center justify-between border-t border-border px-4 py-2.5">
-						<p class="text-xs text-faint">
-							Showing {start()}–{end()} of {filteredCount()} jobs
-						</p>
-						<div class="flex items-center gap-1">
-							<button
-								type="button"
-								onClick={() => table.previousPage()}
-								disabled={!table.getCanPreviousPage()}
-								class={pgBtnClass(false, !table.getCanPreviousPage())}
-								aria-label="Previous page"
-							>
-								←
-							</button>
-
-							<For each={pageWindow(pageIndex() + 1, pageCount())}>
-								{(p) =>
-									p === null ? (
-										<span class="flex size-7 items-center justify-center text-xs text-faint">
-											…
-										</span>
-									) : (
-										<button
-											type="button"
-											onClick={() => table.setPageIndex((p as number) - 1)}
-											class={pgBtnClass(p === pageIndex() + 1, false)}
-											aria-label={`Page ${p}`}
-											aria-current={p === pageIndex() + 1 ? "page" : undefined}
-										>
-											{p}
-										</button>
-									)
-								}
-							</For>
-
-							<button
-								type="button"
-								onClick={() => table.nextPage()}
-								disabled={!table.getCanNextPage()}
-								class={pgBtnClass(false, !table.getCanNextPage())}
-								aria-label="Next page"
-							>
-								→
-							</button>
-						</div>
+				<Show when={table.getPageCount() > 1}>
+					<div class="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
+						<span class="mr-auto text-xs text-faint">
+							Page {table.getState().pagination.pageIndex + 1} of{" "}
+							{table.getPageCount()}
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={!table.getCanPreviousPage()}
+							onClick={() => table.previousPage()}
+						>
+							Previous
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={!table.getCanNextPage()}
+							onClick={() => table.nextPage()}
+						>
+							Next
+						</Button>
 					</div>
 				</Show>
 			</div>

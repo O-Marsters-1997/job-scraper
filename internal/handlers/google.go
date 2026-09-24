@@ -22,12 +22,11 @@ import (
 const oauthStateCookie = "oauth_state"
 
 type GoogleHandler struct {
-	client   *igoogle.Client
-	sessions providers.SessionProvider
+	client *igoogle.Client
 }
 
-func NewGoogleHandler(client *igoogle.Client, sessions providers.SessionProvider) *GoogleHandler {
-	return &GoogleHandler{client: client, sessions: sessions}
+func NewGoogleHandler(client *igoogle.Client) *GoogleHandler {
+	return &GoogleHandler{client: client}
 }
 
 func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
