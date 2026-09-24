@@ -3,8 +3,8 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -o worker ./cmd/worker && go build -o api ./cmd/api
+RUN go build -o worker ./cmd/worker && go build -o api ./cmd/api && go build -o queue ./cmd/queue
 
 FROM alpine:latest
 WORKDIR /app
-COPY --from=builder /app/worker /app/api ./
+COPY --from=builder /app/worker /app/api /app/queue ./

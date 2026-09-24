@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
+CREATE INDEX jobs_open_page_idx ON jobs (scraped_at DESC, id DESC) WHERE closed_at IS NULL;
+CREATE INDEX jobs_company_page_idx ON jobs (company_id, scraped_at DESC, id DESC);
+CREATE INDEX jobs_legacy_company_page_idx ON jobs (company_slug, scraped_at DESC, id DESC) WHERE company_id IS NULL;
+
 CREATE TABLE job_urls (
     job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     normalized_url TEXT PRIMARY KEY,
@@ -210,9 +215,34 @@ CREATE TABLE IF NOT EXISTS company_boards (
     verified_at TIMESTAMPTZ,
     last_linked_at TIMESTAMPTZ,
     retired_at TIMESTAMPTZ,
+    superseded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
+
+CREATE TABLE board_poll_state (
+    board_id UUID PRIMARY KEY REFERENCES company_boards(id) ON DELETE CASCADE,
+    last_completed_at TIMESTAMPTZ,
+    last_scheduled_at TIMESTAMPTZ,
+    last_started_at TIMESTAMPTZ,
+    last_snapshot_version BIGINT NOT NULL DEFAULT 0,
+    consecutive_complete_empty INT NOT NULL DEFAULT 0,
+    consecutive_failures INT NOT NULL DEFAULT 0,
+    lease_owner TEXT,
+    lease_until TIMESTAMPTZ,
+    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE board_job_observations (
+    board_id UUID NOT NULL REFERENCES company_boards(id) ON DELETE CASCADE,
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_snapshot_version BIGINT NOT NULL,
+    PRIMARY KEY (board_id, job_id)
+);
+
+CREATE INDEX board_poll_state_due_idx ON board_poll_state(next_due_at) WHERE lease_until IS NULL;
+CREATE INDEX board_job_observations_version_idx ON board_job_observations(board_id, last_snapshot_version);
 
 CREATE TABLE IF NOT EXISTS job_candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

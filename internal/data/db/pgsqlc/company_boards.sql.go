@@ -12,7 +12,7 @@ import (
 )
 
 const listCompanyBoards = `-- name: ListCompanyBoards :many
-SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
+SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) ([]CompanyBoard, error) {
@@ -34,6 +34,7 @@ func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) 
 			&i.VerifiedAt,
 			&i.LastLinkedAt,
 			&i.RetiredAt,
+			&i.SupersededAt,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -51,7 +52,7 @@ INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)
 ON CONFLICT (source, board_token) DO UPDATE SET source = EXCLUDED.source
 WHERE company_boards.company_id = EXCLUDED.company_id
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at
 `
 
 type UpsertCandidateBoardParams struct {
@@ -73,6 +74,7 @@ func (q *Queries) UpsertCandidateBoard(ctx context.Context, arg UpsertCandidateB
 		&i.VerifiedAt,
 		&i.LastLinkedAt,
 		&i.RetiredAt,
+		&i.SupersededAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -82,7 +84,7 @@ const verifyCompanyBoard = `-- name: VerifyCompanyBoard :one
 UPDATE company_boards
 SET status = 'verified', verification_method = $4, verified_at = NOW()
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at
 `
 
 type VerifyCompanyBoardParams struct {
@@ -110,6 +112,7 @@ func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoard
 		&i.VerifiedAt,
 		&i.LastLinkedAt,
 		&i.RetiredAt,
+		&i.SupersededAt,
 		&i.CreatedAt,
 	)
 	return i, err

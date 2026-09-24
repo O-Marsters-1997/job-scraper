@@ -29,5 +29,6 @@ export interface CompanyBoard {
 	VerifiedAt: string | null;
 	LastLinkedAt: string | null;
 	RetiredAt: string | null;
+	LastCompletedAt: string | null;
 	CreatedAt: string;
 }

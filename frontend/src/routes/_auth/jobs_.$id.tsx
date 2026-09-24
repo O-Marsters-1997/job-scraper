@@ -20,13 +20,13 @@ import {
 	applicationsQueryOptions,
 	useApplications,
 } from "../../hooks/useApplications";
-import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import { jobQueryOptions, useJob } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
-	loader: () =>
+	loader: ({ params }) =>
 		Promise.all([
-			queryClient.ensureQueryData(jobsQueryOptions),
+			queryClient.ensureQueryData(jobQueryOptions(params.id)),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 		]),
 	component: JobDetailPage,
@@ -65,10 +65,10 @@ function FactRow(props: {
 
 function JobDetailPage() {
 	const params = Route.useParams();
-	const jobsQuery = useJobs();
+	const jobsQuery = useJob(() => params().id);
 	const appsQuery = useApplications();
 
-	const job = () => jobsQuery.data?.find((j) => j.ID === params().id);
+	const job = () => jobsQuery.data;
 	const app = (): ApplicationWithDetails | undefined =>
 		appsQuery.data?.find((a) => a.JobID === params().id);
 	const appSummary = (): JobApplicationSummary | undefined => {
