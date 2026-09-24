@@ -29,6 +29,10 @@ func fromSourceTarget(row pgsqlc.SourceTarget) dto.SourceTarget {
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 		RunStatus:            row.RunStatus,
 		LastRunError:         row.LastRunError,
+		UpdatedAt:            row.UpdatedAt.Time,
+	}
+	if row.RunID.Valid {
+		t.RunID = row.RunID.String()
 	}
 	if row.CompanyID.Valid {
 		t.CompanyID = row.CompanyID.String()
@@ -57,6 +61,84 @@ func (db *DB) SetSourceTargetRunState(ctx context.Context, id, status, runError 
 			return dto.SourceTarget{}, providers.ErrNotFound
 		}
 		return dto.SourceTarget{}, fmt.Errorf("db.SetSourceTargetRunState: %w", err)
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.StartSourceTargetRun(ctx, tid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, providers.ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("start source target run: %w", err)
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	rid, err := parseUUID(runID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.TransitionSourceTargetRun(ctx, pgsqlc.TransitionSourceTargetRunParams{
+		ID: tid, RunID: rid, RunStatus: status, LastRunError: runError,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, providers.ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("transition source target run: %w", err)
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.GetSourceTarget(ctx, tid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, providers.ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {
+	rows, err := db.queries.ListRecoverableSourceTargets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return fromSourceTargets(rows), nil
+}
+
+func (db *DB) ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	rid, err := parseUUID(runID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.ClaimRecoverableSourceTarget(ctx, pgsqlc.ClaimRecoverableSourceTargetParams{ID: tid, RunID: rid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, providers.ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("claim recoverable source target: %w", err)
 	}
 	return fromSourceTarget(row), nil
 }
@@ -107,6 +189,24 @@ func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value stri
 	})
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("db.CreateSourceTarget: %w", err)
+	}
+	return fromSourceTarget(row), nil
+}
+
+func (db *DB) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	filtersJSON, err := json.Marshal(filters)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := db.queries.CreateSourceTargetWithRun(ctx, pgsqlc.CreateSourceTargetWithRunParams{
+		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
+	})
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("create source target with run: %w", err)
 	}
 	return fromSourceTarget(row), nil
 }

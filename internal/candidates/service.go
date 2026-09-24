@@ -21,7 +21,7 @@ type Store interface {
 	SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]Candidate, error)
 	ListForUser(context.Context, string, string, int) ([]Candidate, error)
 	Assess(context.Context, string, string, time.Time, bool) (bool, error)
-	ReleaseDetail(context.Context, string) error
+	MarkDetailPending(context.Context, string) error
 }
 
 type JobQueue interface {
@@ -76,13 +76,10 @@ func (s *Service) assess(ctx context.Context, candidates []Candidate, config dto
 			continue
 		}
 		if err := s.queue.EnqueueJobs(ctx, []dto.QueuedJob{{URL: candidate.URL, Card: candidate.Card}}); err != nil {
-			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			releaseErr := s.store.ReleaseDetail(cleanupCtx, candidate.ID)
-			cancel()
-			if releaseErr != nil {
-				return fmt.Errorf("enqueue candidate %s: %w (release: %v)", candidate.ID, err, releaseErr)
-			}
 			return fmt.Errorf("enqueue candidate %s: %w", candidate.ID, err)
+		}
+		if err := s.store.MarkDetailPending(ctx, candidate.ID); err != nil {
+			return fmt.Errorf("mark candidate %s pending: %w", candidate.ID, err)
 		}
 	}
 	return nil

@@ -5,60 +5,71 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
+	"strconv"
 
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: queue <stats|dead|replay> <detail|scrape-request> [id]")
-		os.Exit(2)
+	if len(os.Args) < 2 {
+		fail("usage: queue count | list [limit] | inspect <task-id> | replay <task-id>")
 	}
-	kind := queue.Kind(os.Args[2])
-	addr := os.Getenv("VALKEY_ADDR")
-	if addr == "" {
-		addr = "localhost:6379"
+	brokerURL := os.Getenv("RABBITMQ_URL")
+	if brokerURL == "" {
+		brokerURL = "amqp://guest:guest@localhost:5672/"
 	}
-	q, err := queue.New(addr)
+	q, err := queue.NewBroker(brokerURL)
 	if err != nil {
-		fail(err)
+		fail(err.Error())
 	}
-	defer q.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var result any
+	defer func() { _ = q.Close() }()
+	ctx := context.Background()
 	switch os.Args[1] {
-	case "stats":
-		result, err = q.Stats(ctx, kind)
-	case "dead":
-		var items []queue.Item
-		items, err = q.DeadLetters(ctx, kind)
-		if err == nil {
-			dead := make([]map[string]string, 0, len(items))
-			for _, item := range items {
-				dead = append(dead, map[string]string{"id": item.ID, "payload": string(item.Payload), "failure": item.Failure})
+	case "count":
+		count, err := q.DeadLetterCount()
+		if err != nil {
+			fail(err.Error())
+		}
+		fmt.Println(count)
+	case "list", "inspect":
+		limit := 100
+		if os.Args[1] == "list" && len(os.Args) > 2 {
+			limit, err = strconv.Atoi(os.Args[2])
+			if err != nil {
+				fail(err.Error())
 			}
-			result = dead
+		}
+		if os.Args[1] == "inspect" && len(os.Args) != 3 {
+			fail("usage: queue inspect <task-id>")
+		}
+		letters, err := q.DeadLetters(ctx, limit)
+		if err != nil {
+			fail(err.Error())
+		}
+		for _, letter := range letters {
+			if os.Args[1] == "inspect" && letter.Task.ID != os.Args[2] {
+				continue
+			}
+			encoded, err := json.Marshal(letter)
+			if err != nil {
+				fail(err.Error())
+			}
+			fmt.Println(string(encoded))
 		}
 	case "replay":
-		if len(os.Args) != 4 {
-			fail(fmt.Errorf("replay requires an id"))
+		if len(os.Args) != 3 {
+			fail("usage: queue replay <task-id>")
 		}
-		err = q.ReplayDeadLetter(ctx, kind, os.Args[3])
-		result = map[string]string{"replayed": os.Args[3]}
+		if err := q.ReplayDead(ctx, os.Args[2]); err != nil {
+			fail(err.Error())
+		}
+		fmt.Println("replayed", os.Args[2])
 	default:
-		fail(fmt.Errorf("unknown operation %q", os.Args[1]))
-	}
-	if err != nil {
-		fail(err)
-	}
-	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
-		fail(err)
+		fail("unknown command")
 	}
 }
 
-func fail(err error) {
-	fmt.Fprintln(os.Stderr, err)
+func fail(message string) {
+	fmt.Fprintln(os.Stderr, message)
 	os.Exit(1)
 }

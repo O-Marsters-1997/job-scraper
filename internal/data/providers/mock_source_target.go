@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -80,6 +82,14 @@ func (m *MockSourceTargetProvider) CreateSourceTarget(_ context.Context, userID,
 	return t, nil
 }
 
+func (m *MockSourceTargetProvider) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
+	target, err := m.CreateSourceTarget(ctx, userID, source, value, enabled, filters)
+	if err != nil {
+		return target, err
+	}
+	return m.StartSourceTargetRun(ctx, target.ID)
+}
+
 func (m *MockSourceTargetProvider) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
 	if m.CreateErr != nil {
 		return dto.SourceTarget{}, m.CreateErr
@@ -131,6 +141,24 @@ func (m *MockSourceTargetProvider) SetSourceTargetRunState(_ context.Context, id
 		return m.targets[i], nil
 	}
 	return dto.SourceTarget{}, ErrNotFound
+}
+
+func (m *MockSourceTargetProvider) StartSourceTargetRun(_ context.Context, id string) (dto.SourceTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.targets {
+		if m.targets[i].ID == id {
+			m.targets[i].RunID = uuid.NewString()
+			m.targets[i].RunStatus = "queued"
+			m.targets[i].LastRunError = ""
+			return m.targets[i], nil
+		}
+	}
+	return dto.SourceTarget{}, ErrNotFound
+}
+
+func (m *MockSourceTargetProvider) GetVerifiedBoardID(context.Context, string, string) (string, error) {
+	return uuid.NewString(), nil
 }
 
 func (m *MockSourceTargetProvider) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {

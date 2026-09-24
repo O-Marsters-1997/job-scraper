@@ -17,6 +17,11 @@ import (
 const maxBodyBytes = 8 << 20
 
 var errZoneExhausted = errors.New("web unlocker zone exhausted (client_10100)")
+var errZonePaused = errors.New("web unlocker zone paused until daily probe")
+
+func IsZonePaused(err error) bool {
+	return errors.Is(err, errZoneExhausted) || errors.Is(err, errZonePaused)
+}
 
 var sharedZone = &zoneGate{}
 var allSlots = make(chan struct{}, 16)
@@ -57,7 +62,7 @@ func (z *zoneGate) enter() (bool, error) {
 		now = z.now()
 	}
 	if now.Year() == z.lastProbe.Year() && now.YearDay() == z.lastProbe.YearDay() {
-		return false, errors.New("web unlocker zone paused until daily probe")
+		return false, errZonePaused
 	}
 	z.lastProbe = now
 	return true, nil

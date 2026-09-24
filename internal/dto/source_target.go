@@ -13,6 +13,8 @@ type SourceTarget struct {
 	CheckIntervalMinutes int
 	LastCheckedAt        *time.Time
 	RunStatus            string
+	RunID                string
 	LastRunAt            *time.Time
 	LastRunError         string
+	UpdatedAt            time.Time
 }

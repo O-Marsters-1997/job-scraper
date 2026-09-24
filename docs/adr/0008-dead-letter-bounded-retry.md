@@ -1,6 +1,7 @@
 # ADR 0008 — Dead-letter and bounded retry for failed Enrich
 
 **Status:** Accepted
+**Partially superseded by:** ADR 0019 (RabbitMQ replaces the Valkey retry and dead-letter mechanics)
 
 ## Context
 

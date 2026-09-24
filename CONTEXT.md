@@ -69,6 +69,10 @@ _Avoid_: Provider type, kind
 **Crawl** / **Enrich**:
 The two decoupled scraper phases — Crawl discovers and enqueues job URLs; Enrich dequeues them and upserts full job details. ATS API Sources complete in Crawl alone (the list call returns full details), so they have no Enrich phase.
 
+**Scrape Run**:
+One initiated discovery Source Target search or Verified Board check, complete when its Crawl work succeeds or has a recorded terminal failure.
+_Avoid_: Source, schedule
+
 **Application**:
 A user's tracked pursuit of a Job, moving through Statuses.
 _Avoid_: Submission, app
@@ -140,8 +144,10 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - A **Job** has one or more **Job URLs**; matching trusted ATS posting IDs can establish that different URLs refer to the same **Job**
 - A **Provisional Job** becomes part of an established **Job** when a trusted ATS posting ID confirms they are the same opportunity
 - A **Job Candidate** may become a fully described **Provisional Job** or ATS-identified **Job** when a User's interest justifies fetching its details; a Candidate rejected by current filters remains available for later interest
+- Every **Job Candidate** has a known **Source**; detail work without a Source is invalid
 - A changed discovery **Source Target** or **Search Config** reconsiders retained **Job Candidates**, but only Candidates that pass the current cheap **Relevance** gate proceed to detail fetching
 - A discovery **Source Target** runs once when added or explicitly rerun; recurring source checks are for **Verified Boards** of **Tracked Companies**
+- A **Scrape Run** checks exactly one discovery **Source Target** or **Verified Board**; later Enrich failures are tracked separately and do not change its result
 - A **Job** becomes a **Closed Job** after one successful, complete, nonempty **Board** check omits it; an empty **Board** needs two successful, complete checks before its formerly advertised Jobs close
 - A non-ATS **Job** becomes a **Closed Job** only when its own page confirms unavailability; a transient fetch failure does not close it
 - A **Job** may change while retaining its identity; changes to title, description, location, salary, or work arrangement make existing **Suitability** assessments stale for affected **Users**
@@ -172,6 +178,8 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 > **Owner:** "Keep it as a Provisional Job by its normalized Job URL, then merge it if a trusted ATS ID later proves the match."
 > **Dev:** "If no current User wants a discovered listing, do we lose it?"
 > **Owner:** "No. Keep a Job Candidate with its cheap details so later interest can justify the full fetch."
+> **Dev:** "Can a Candidate's detail work proceed if its Source is missing?"
+> **Owner:** "No. Reject it with an error; our scrapers handle known Sources."
 > **Dev:** "If I change my search, do all stored Candidates get full details?"
 > **Owner:** "No. Recheck them soon, but only fetch details for Candidates that pass the new cheap gate."
 > **Dev:** "Does the same Job stay frozen if the company edits its salary?"
@@ -200,6 +208,10 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 > **Owner:** "No. Share one Board check at the shortest requested Check Frequency."
 > **Dev:** "If I paste a direct ATS Board URL, does it become a standalone Source Target?"
 > **Owner:** "No. Identify or create its Company, attach the verified Board, and track the Company."
+> **Dev:** "If a detail fetch is repeated after a failure, does that create a second Job?"
+> **Owner:** "No. Repeated fetching is acceptable; the same opportunity keeps one canonical Job identity."
+> **Dev:** "If a detail cannot be completed, does that change the Scrape Run result?"
+> **Owner:** "No. The run reports discovery; track the later detail failure separately."
 
 ## Flagged ambiguities
 
@@ -213,6 +225,8 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "Job without an ATS ID" — resolved: keep a **Provisional Job** by normalized **Job URL** and merge it only after a trusted ATS ID confirms identity.
 - "partial Job" — resolved: discovery metadata before detail fetching is a **Job Candidate**; a fully described Job without a trusted ATS ID is a **Provisional Job**.
 - "scrape once" implied a Job never changes — resolved: a **Job** keeps its identity across edits, while relevant changed details can require new **Suitability** assessments.
+- "deliver once" could mean one fetch, one ingest request, or one Job — resolved: repeat fetches and ingest requests are acceptable, while the same opportunity keeps one canonical **Job** identity.
+- "unclassified detail" suggested a general crawler — resolved: every detail task must retain its **Source**, and missing Source identity is an error.
 - "stale score" has two causes with different responses — resolved: changed Job details prompt reassessment; a changed User rubric marks existing **Suitability** as potentially stale until an on-demand rescore.
 - "closed Job" could imply the position was filled — resolved: **Closed Job** means the source no longer advertises it after sufficient confirmation; one complete nonempty check can close a missing Job, while an empty Board requires two complete successful checks.
 - "Tracked Company" previously meant one board-specific **Source Target** — resolved: it is one User choice covering current and later verified **Boards**, even when no Board is yet known.

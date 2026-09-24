@@ -20,7 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
-func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Queue, creds credstore.CredentialStore) http.Handler {
+func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"

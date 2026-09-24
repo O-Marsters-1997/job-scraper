@@ -57,6 +57,9 @@ func TestCandidateRetentionAndDuplicateCards(t *testing.T) {
 	if len(retained) != 1 {
 		t.Fatalf("rediscovered candidate missing: %+v", retained)
 	}
+	if retained[0].Card.Source != target.Source {
+		t.Fatalf("candidate source=%q, want %q", retained[0].Card.Source, target.Source)
+	}
 	version := time.Now().UTC()
 	requested, err := testDB.Assess(ctx, got[0].ID, user.ID, version, false)
 	if err != nil || requested {
@@ -65,6 +68,9 @@ func TestCandidateRetentionAndDuplicateCards(t *testing.T) {
 	requested, err = testDB.Assess(ctx, got[0].ID, user.ID, version.Add(time.Second), true)
 	if err != nil || !requested {
 		t.Fatalf("newly relevant candidate not requested: requested=%v err=%v", requested, err)
+	}
+	if err := testDB.MarkDetailPending(ctx, got[0].ID); err != nil {
+		t.Fatal(err)
 	}
 	requested, err = testDB.Assess(ctx, got[0].ID, user.ID, version.Add(2*time.Second), true)
 	if err != nil || requested {

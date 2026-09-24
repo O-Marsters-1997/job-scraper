@@ -248,7 +248,7 @@ The current scraper is a single hardcoded HTML source (Work In Startups, locked 
 - Eliminate proxy cost for any job that can be fetched from a structured ATS API
 - Score every ingested job 0–100 for suitability against a rubric derived from the user's criteria, so jobs can be ranked, filtered, and gated for notification
 - Store description and salary so filtering, scoring, and email digests have the full picture
-- Keep scrape-once semantics: a job URL is fetched exactly once, never revisited
+- Keep one canonical Job identity; a detail URL may be fetched again after a failed delivery
 
 ## Non-goals
 
@@ -330,7 +330,7 @@ Each feature is a user-facing capability. No priority tiers — use `approach-to
 ## Constraints
 
 - Go backend; existing package layout (`cmd/worker`, `internal/scraper`, `internal/sources`, `internal/queue`, `internal/data`) is the extension surface — no package restructuring
-- Valkey sorted-set queue with `ZADD NX` dedup; scrape-once guarantee must be preserved
+- RabbitMQ source queues with bounded retry and a shared DLQ; accepted tasks remain durable, and repeated deliveries preserve canonical Job identity (ADR 0019)
 - Postgres with sqlc; schema changes via numbered migrations in `scripts/migrations/`
 - Single recipient (`NOTIFY_EMAIL_TO`) and single configured intent for v1 — no multi-tenancy; criteria are not startup-specific
 - Suitability scoring uses Claude Haiku (or equivalent cheap model); must remain low-cost per job — it runs synchronously on every ingest
@@ -340,7 +340,7 @@ Each feature is a user-facing capability. No priority tiers — use `approach-to
 
 - **Domain-agnostic:** the system searches whatever the user configures; startups are the origin use case, not a baked-in assumption — no hardcoded role, sector, or job-type anywhere in the pipeline
 - **Two-stage filtering:** cheap heuristic relevance gate on listing-card signals pre-scrape → expensive scrape → cheap LLM suitability score on full text post-scrape. Each stage costs less than the next; the gate's job is to protect the expensive stages
-- **Scrape-once:** a job URL is detail-fetched exactly once; the `jobs.url UNIQUE` constraint and `NewURLs` dedup are the enforcement mechanism — don't weaken them
+- **Canonical Job identity:** repeated detail fetches and ingest requests may occur after failure; the Job identity and upsert rules keep one canonical Job
 - **API-first:** always prefer a structured ATS API over HTML scraping for the same content
 - **Proxy as last resort:** only proxy-back a source that has no API alternative and actively blocks direct requests; tier proxy grade to source hostility
 - **Design for extensibility:** v1 ships with static criteria config but every abstraction (filter gate, source router, scoring rubric, proxy transport) must accept that config as an injected dependency, not as a hardcoded value

@@ -138,6 +138,37 @@ func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Jo
 	return nil
 }
 
+func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
+	if len(s.searches) != 1 {
+		return nil, "", fmt.Errorf("wis page fetch requires one search")
+	}
+	page, totalPages := 1, 0
+	if cursor != "" {
+		if _, err := fmt.Sscanf(cursor, "%d:%d", &page, &totalPages); err != nil || page < 1 || totalPages < page {
+			return nil, "", fmt.Errorf("invalid wis cursor %q", cursor)
+		}
+	}
+	body, err := s.Get(ctx, pageURL(s.searches[0], page))
+	if err != nil {
+		return nil, "", err
+	}
+	jobs, err := ParseURLs(bytes.NewReader(body))
+	if err != nil {
+		return nil, "", err
+	}
+	if cursor == "" {
+		total, err := ParseTotalCount(bytes.NewReader(body))
+		if err != nil {
+			return nil, "", err
+		}
+		totalPages = TotalPages(total)
+	}
+	if page >= totalPages {
+		return jobs, "", nil
+	}
+	return jobs, fmt.Sprintf("%d:%d", page+1, totalPages), nil
+}
+
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	body, err := s.Get(ctx, url)
 	if err != nil {

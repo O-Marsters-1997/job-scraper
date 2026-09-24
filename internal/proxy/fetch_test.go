@@ -30,11 +30,11 @@ func TestProtectedZonePausesOnlyOnExhaustion(t *testing.T) {
 	}), zone: zone}
 	direct := &fetchTransport{base: roundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil })}
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://8.8.8.8/jobs", nil)
-	if _, err := protected.RoundTrip(req); err == nil {
-		t.Fatal("exhaustion should fail")
+	if _, err := protected.RoundTrip(req); !IsZonePaused(err) {
+		t.Fatalf("exhaustion should pause source: %v", err)
 	}
-	if _, err := protected.RoundTrip(req); err == nil {
-		t.Fatal("protected request should stay paused")
+	if _, err := protected.RoundTrip(req); !IsZonePaused(err) {
+		t.Fatalf("protected request should stay paused: %v", err)
 	}
 	if calls != 1 {
 		t.Fatalf("protected calls = %d, want 1", calls)

@@ -37,13 +37,15 @@ WITH assessment AS (
         evaluated_at = NOW()
     RETURNING candidate_id
 ), claimed AS (
-    UPDATE job_candidates c SET detail_state = 'pending'
+    SELECT c.id FROM job_candidates c
     WHERE c.id = (SELECT candidate_id FROM assessment)
       AND $4::boolean AND c.detail_state = 'unrequested' AND c.expires_at > NOW()
       AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.url = c.normalized_url)
-    RETURNING id
 )
 SELECT EXISTS (SELECT 1 FROM claimed);
+
+-- name: MarkCandidateDetailPending :exec
+UPDATE job_candidates SET detail_state = 'pending' WHERE id = $1;
 
 -- name: ReleaseCandidateDetail :exec
 UPDATE job_candidates SET detail_state = 'unrequested' WHERE id = $1;
