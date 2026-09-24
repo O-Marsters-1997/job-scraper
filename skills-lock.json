@@ -5,13 +5,19 @@
       "source": "O-Marsters-1997/skills",
       "sourceType": "github",
       "skillPath": "skills/code/frontend-best-practices/SKILL.md",
-      "computedHash": "fa42cb6f2df0590322a8f60d5615c20ee205e1f2f885d7d97f7a29fcd10af3b5"
+      "computedHash": "ebe01d05694ce40e8af82657f8bd9b57b9c3fcf30a25e07c0257e2824fc9dc09"
+    },
+    "go-idiomatic": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/code/go-idiomatic/SKILL.md",
+      "computedHash": "3475d8109802323e00682e57a8397b417fd3271213faa948b05681d8a8aa5b35"
     },
     "goquery-parsing": {
       "source": "O-Marsters-1997/skills",
       "sourceType": "github",
       "skillPath": "skills/code/goquery-parsing/SKILL.md",
-      "computedHash": "5a29431ff52d24e9a9f2e2822883bd575b71b85d357048f96d6da5fa1394cd1f"
+      "computedHash": "8501b532e55a47eed8a525585dca8952b9a0dbef9cd7f3e437d8a8502cee9d04"
     },
     "playwright-ci": {
       "source": "testdino-hq/playwright-skill",
@@ -35,7 +41,7 @@
       "source": "O-Marsters-1997/my-claude-code",
       "sourceType": "github",
       "skillPath": "skills/code/tailwind-shadcn/SKILL.md",
-      "computedHash": "32a56a758779507385b5f5dddf4afe0341ce520bb2fa55bd14980551adf6a211"
+      "computedHash": "e3d84b962fa49587f9fb0b3eba7404d6a6f96a76e208952fc6ba09a1546480fb"
     }
   }
 }

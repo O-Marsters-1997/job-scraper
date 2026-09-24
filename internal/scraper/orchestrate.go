@@ -78,25 +78,17 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	if o.force {
 		o.tick(ctx)
 	} else {
-		o.wg.Add(1)
-		go func() {
-			defer o.wg.Done()
+		o.wg.Go(func() {
 			o.tick(ctx)
-		}()
+		})
 	}
 
 	o.cr = cron.New()
-
-	// If no reloader is set, tick falls back to the static srcs slice.
 	if _, err := o.cr.AddFunc(sources.DefaultSchedule, func() {
 		slog.Info("cron: starting scrape tick")
-		// wg.Add must be called before the goroutine starts; cron calls this
-		// func synchronously so it's safe here.
-		o.wg.Add(1)
-		go func() {
-			defer o.wg.Done()
+		o.wg.Go(func() {
 			o.tick(ctx)
-		}()
+		})
 	}); err != nil {
 		o.cr.Stop()
 		return fmt.Errorf("schedule scrape tick (%s): %w", sources.DefaultSchedule, err)
@@ -123,11 +115,9 @@ func (o *Orchestrator) tick(ctx context.Context) {
 
 	var wg sync.WaitGroup
 	for _, src := range srcs {
-		wg.Add(1)
-		go func(s sources.Source) {
-			defer wg.Done()
-			o.runIfReady(ctx, s)
-		}(src)
+		wg.Go(func() {
+			o.runIfReady(ctx, src)
+		})
 	}
 	wg.Wait()
 }

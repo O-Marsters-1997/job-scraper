@@ -1,6 +1,6 @@
 # ADR 0014 — BrightData Web Unlocker replaces proxy tiers
 
-**Status:** Accepted  
+**Status:** Accepted; fallback behavior superseded by ADR 0018
 **Supersedes:** ADR 0009
 
 ## Context

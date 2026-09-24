@@ -7,28 +7,52 @@ The domain language for Job Scraper — a personal job-hunting command centre th
 ### Job search
 
 **Job**:
-A single listing scraped from a job board, shared as a DTO across crawl, enrich, and the frontend.
+A single job opportunity, identified by a trusted ATS posting ID when one is available; the same Job may appear at several URLs.
 _Avoid_: Listing, posting, vacancy
+
+**Job URL**:
+A source-specific link to a Job; several Job URLs may refer to the same Job when a trusted ATS posting ID establishes the match.
+_Avoid_: Job identity, unique Job
+
+**Job Candidate**:
+A discovered job URL with cheap listing details, retained before its full Job details are fetched.
+_Avoid_: Fully described Job, rejected Job
+
+**Provisional Job**:
+A fully described Job whose identity rests on a normalized Job URL until a trusted ATS posting ID establishes whether it matches another Job.
+_Avoid_: Confirmed Job, duplicate Job
+
+**Closed Job**:
+A Job no longer treated as available because its source no longer advertises it after sufficient confirmation.
+_Avoid_: Filled role, rejected application
 
 **Source**:
 A job-listing surface the scraper knows how to read behind a per-platform interface — an HTML job board (`wis`), an ATS platform adapter (`greenhouse`), or an Aggregator.
 _Avoid_: Provider, site
 
 **Board**:
-A single company's listings on an ATS platform, identified by a board token (e.g. a Greenhouse `{board_token}`). One Source iterates many configured Boards.
+A single company's listings on an ATS platform, identified by that platform's board token; a Company may have several Boards.
 _Avoid_: Company page, account
 
+**Verified Board**:
+A Board successfully read from its ATS and associated with a Company through its careers site or explicit User confirmation.
+_Avoid_: Detected Board, guessed Board
+
+**Retired Board**:
+A formerly verified Board no longer polled after its Company stops linking to it and two complete empty checks close its remaining Jobs.
+_Avoid_: Closed Job, failed Board
+
 **Company**:
-A shared catalog record — one row per company slug, visible to all Users — auto-populated whenever any scraped Job carries an unseen `company_slug`. Carries an optional ATS Board reference (`ats_source`, `ats_token`) when the company is known to run on a supported ATS; NULL for companies seen only via discovery. Joins to Jobs via `jobs.company_slug = companies.slug`. See ADR 0016.
+A shared employer identity visible to all Users, which may be associated with zero or more verified ATS Boards.
 _Avoid_: Employer, org, account
 
 **Tracked Company**:
-A Company for which a User has an enabled ATS **Source Target**. Tracking *is* the Source Target — toggling a Company's tracking switch upserts/enables (or disables) the User's `source_targets` row for that Company's board; there is no separate tracking table. A Company can exist untracked (merely encountered) or tracked by any subset of Users. See ADR 0016.
+A Company a User has chosen to monitor, including Boards verified after the choice was made.
 _Avoid_: Followed company, watched company, subscription
 
 **Check Frequency**:
-A per–Source Target setting (`check_interval_minutes`, minimum 60) controlling how often an ATS Board is re-scraped, configured from a Company's details page. Replaces the old platform-wide 6-hour/5-hour gate for ATS sources: the worker tick runs hourly and a SQL due-filter (`last_checked_at` vs `check_interval_minutes`) decides which Boards are actually re-fetched that tick. Discovery sources are unaffected — they keep the platform-wide `MinScrapeInterval` gate. See ADR 0016.
-_Avoid_: Schedule, cron, polling interval (those describe the mechanism; this is the per-target user setting)
+A User's requested interval for checking a Tracked Company's verified Boards, shared across that Company's Boards.
+_Avoid_: Schedule, cron, polling interval
 
 **ATS**:
 An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio) exposing a public, unauthenticated jobs API — the Tier-1 source of truth, extracted via API not HTML.
@@ -64,15 +88,15 @@ A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, com
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
-A user-defined record that the scraper watches on a user's behalf. Depending on the source kind, the `value` field is a board token (ATS), a URL (URL-based sources), or a keyword string (filter sources); optional structured parameters (e.g. region) are stored in the `filters` JSONB column. Stored per-user in `source_targets`; the worker builds its live Source set from the union of all users' enabled targets. Each source carries a **Role** (below) that classifies the target as a tracked company or a discovery search — orthogonal to its kind. ATS-role targets optionally carry a **Company** reference (`company_id`) and a **Check Frequency** (`check_interval_minutes`, `last_checked_at`); a Target *is* what makes a Company "tracked" — see ADR 0016.
-_Avoid_: Board config, source config, integration
+A User's chosen discovery search on a Source, identified by a search URL or criteria; tracking an ATS Company is a separate choice.
+_Avoid_: Board config, tracked company, integration
 
 **Role**:
-A source's purpose, distinct from its `kind` (value shape). `ats` sources (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio) are **tracked companies** — known-company boards the engine re-checks periodically via a public API (no Enrich phase). `discovery` sources (LinkedIn, Indeed, Work in Startups) are **discovery searches** — surfaces you search, paginated and enriched. The finer Aggregator-vs-HTML-board split is not encoded in `role`; it lives in `detect.ATSType` and the `DetailFetcher` capability (ADR 0011). See ADR 0015.
+A Source's purpose: `ats` Sources read verified Company Boards, while `discovery` Sources search for Job Candidates.
 _Avoid_: kind (kind is value shape: board/url/filter), type
 
 **Filter Source**:
-A `kindFilter` source whose scraping targets are constructed from user-supplied keyword `value` and structured `filters` fields (e.g. `region`), rather than a fixed board token or URL. `wis` is currently the only filter source; its declared `FilterField` list is returned by `LookupFilterFields`. Contrast with `kindBoard` (ATS) and `kindURL` (aggregator) sources.
+A discovery Source searched through User-supplied keywords and structured filters rather than a fixed Board or search URL.
 _Avoid_: keyword source, search source
 
 **FilterField**:
@@ -80,7 +104,7 @@ A structured parameter declaration on a filter source — carries `Name` (the ma
 _Avoid_: filter param, filter key
 
 **ScrapeRequest**:
-A lightweight message enqueued by the API (via `queue.EnqueueScrapeRequest`) when a user creates a Source Target with `scrape_now: true`. The worker's `RunScrapeRequests` loop pops it and calls `Orchestrator.ScrapeTarget`, bypassing the `MinScrapeInterval` gate. Stored in the `scrape:requests` Valkey list. Failures are best-effort — the regular schedule covers any missed scrape.
+A request to run a discovery Source Target now, including when it is first created or explicitly rerun. Discovery searches do not have a recurring schedule to cover a missed request.
 _Avoid_: immediate scrape, manual scrape, trigger
 
 **Search Config**:
@@ -113,12 +137,27 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - A **User** owns at most one **Google Link** and many **Tracked Docs**
 - A **Tracked Doc** contains one or more **Tabs**; each **Tab** is exactly one **CV**
 - A **Job** is pursued via at most one **Application** per user
+- A **Job** has one or more **Job URLs**; matching trusted ATS posting IDs can establish that different URLs refer to the same **Job**
+- A **Provisional Job** becomes part of an established **Job** when a trusted ATS posting ID confirms they are the same opportunity
+- A **Job Candidate** may become a fully described **Provisional Job** or ATS-identified **Job** when a User's interest justifies fetching its details; a Candidate rejected by current filters remains available for later interest
+- A changed discovery **Source Target** or **Search Config** reconsiders retained **Job Candidates**, but only Candidates that pass the current cheap **Relevance** gate proceed to detail fetching
+- A discovery **Source Target** runs once when added or explicitly rerun; recurring source checks are for **Verified Boards** of **Tracked Companies**
+- A **Job** becomes a **Closed Job** after one successful, complete, nonempty **Board** check omits it; an empty **Board** needs two successful, complete checks before its formerly advertised Jobs close
+- A non-ATS **Job** becomes a **Closed Job** only when its own page confirms unavailability; a transient fetch failure does not close it
+- A **Job** may change while retaining its identity; changes to title, description, location, salary, or work arrangement make existing **Suitability** assessments stale for affected **Users**
+- A **Job** is eligible for a new-Job alert only when first discovered and its **Suitability** reaches the User's notification threshold; later edits and reopening do not create another new-Job alert
+- Promoting an older **Job Candidate** after changed User interest does not count as first discovery and does not send a new-Job alert
+- A User who starts tracking a **Company** sees its already known open **Jobs** immediately and receives fresh **Suitability** assessments for them without new-Job alerts
+- A changed **Search Config** makes the User's existing **Suitability** assessments potentially stale; new assessments use the current rubric, while old Jobs are reassessed on the User's request
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
-- A **User** defines zero or more **Source Targets**; each Target maps to a supported **Source**
-- A **Company** is a shared catalog record, optionally referencing one ATS **Board**; a **User** tracks a **Company** by having an enabled ATS **Source Target** for that Board (a **Tracked Company**), each with its own **Check Frequency**
+- A **User** defines zero or more discovery **Source Targets**; each Target maps to a supported **Source**
+- A **Company** may have zero or more **Verified Boards**; a **User** makes one company-level choice to track all current and later Verified Boards of a **Tracked Company** at that User's **Check Frequency**
+- An untracked **Company** may remain in the catalog without ATS inspection; tracking it starts Board discovery, and later verified Boards join the same tracking choice
+- A superseded **Verified Board** remains polled until two complete empty checks confirm it has no open **Jobs**, then becomes a **Retired Board**
+- When several **Users** track the same **Company**, its **Boards** are checked at the shortest requested **Check Frequency** with one shared check per Board
 - A **Filter Source** Target carries a keyword `value` plus optional **FilterField** values in `filters`; a **ScrapeRequest** may be enqueued at creation time when `scrape_now: true`
-- A **Job** carries a **Relevance** and **Suitability** score per **User** — a per-user assessment, sibling to **Application**, not a property of the shared **Job**
+- A **Job Candidate** can receive a cheap **Relevance** assessment per **User**; a fully described **Job** can receive a **Suitability** assessment per **User**. Neither is a property of the shared **Job**
 - A **User** has exactly one **Search Config**
 
 ## Example dialogue
@@ -127,6 +166,40 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 > **Owner:** "No — we only store the Tracked Doc reference. The three CVs are read live from the doc's Tabs each time the list loads, so titles and content are never stale."
 > **Dev:** "And a CV always belongs to one doc?"
 > **Owner:** "Right. A CV is just a Tab. Remove the Tracked Doc and its CVs disappear from the list."
+> **Dev:** "LinkedIn and Greenhouse link to the same ATS posting. Are those two Jobs?"
+> **Owner:** "No. The trusted ATS posting ID makes them one Job with two Job URLs."
+> **Dev:** "What if the LinkedIn result has no ATS ID yet?"
+> **Owner:** "Keep it as a Provisional Job by its normalized Job URL, then merge it if a trusted ATS ID later proves the match."
+> **Dev:** "If no current User wants a discovered listing, do we lose it?"
+> **Owner:** "No. Keep a Job Candidate with its cheap details so later interest can justify the full fetch."
+> **Dev:** "If I change my search, do all stored Candidates get full details?"
+> **Owner:** "No. Recheck them soon, but only fetch details for Candidates that pass the new cheap gate."
+> **Dev:** "Does the same Job stay frozen if the company edits its salary?"
+> **Owner:** "No. Update the Job from the trusted source and reassess Suitability when its title, description, location, salary, or work arrangement changes."
+> **Dev:** "If I edit my rubric, do all my old Jobs get rescored immediately?"
+> **Owner:** "No. Mark their Suitability as potentially stale and let me request a rescore; newly assessed Jobs use the current rubric."
+> **Dev:** "Does reopening an old Job announce it as new again?"
+> **Owner:** "No. The new-Job alert belongs to first discovery only."
+> **Dev:** "Does every new Job produce an alert before Suitability is known?"
+> **Owner:** "No. Alert only after my Suitability score reaches my notification threshold."
+> **Dev:** "If I start tracking a Company later, do its existing open Jobs wait for another Board check?"
+> **Owner:** "No. Show them immediately, assess their Suitability for me, and do not alert me as if they were new."
+> **Dev:** "Does one empty Board check mean the company filled every role?"
+> **Owner:** "No. Two complete, successful empty checks can close those Jobs as no longer advertised; we do not know whether the roles were filled."
+> **Dev:** "What if the Board still lists other Jobs but drops this one?"
+> **Owner:** "One complete successful check is enough to close that missing Job."
+> **Dev:** "If a Company has separate regional ATS Boards, do I track each one?"
+> **Owner:** "No. I track the Company once, and that covers all of its verified Boards."
+> **Dev:** "Is an ATS-looking URL enough to attach a Board to the Company?"
+> **Owner:** "No. Read the Board successfully and confirm the Company link through its careers site or my explicit confirmation."
+> **Dev:** "Can I track a Company before we know which ATS it uses?"
+> **Owner:** "Yes. My tracking choice remains active, and a Board starts contributing Jobs when it is later verified."
+> **Dev:** "Would I set a different Check Frequency for each regional Board?"
+> **Owner:** "No. I set one Check Frequency for the Tracked Company, and it applies to all its Boards."
+> **Dev:** "Another User wants that Company checked more often. Do we fetch its Boards twice?"
+> **Owner:** "No. Share one Board check at the shortest requested Check Frequency."
+> **Dev:** "If I paste a direct ATS Board URL, does it become a standalone Source Target?"
+> **Owner:** "No. Identify or create its Company, attach the verified Board, and track the Company."
 
 ## Flagged ambiguities
 
@@ -136,3 +209,14 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "relevance" vs "suitability" — resolved: **Relevance** is the cheap pre-persistence heuristic gate signal; **Suitability** is the post-persistence LLM fit score. Both are 0–100 and per **User**, but differ in input (card vs full text), cost (free vs LLM), and timing.
 - "score on a Job" read as a property of the shared **Job** — resolved: a score is per-**User** (a **Job**↔**User** assessment, modelled like **Application**), never a column on the shared catalog.
 - "source target value" for WIS was ambiguous — resolved: for **Filter Source** targets the `value` column is the keyword string (what to search for); additional structured parameters (e.g. region) live in the `filters` JSONB column, not in `value`.
+- "Job" previously meant one scraped URL — resolved: trusted ATS posting identity defines one **Job**; URLs are **Job URLs** and can be aliases.
+- "Job without an ATS ID" — resolved: keep a **Provisional Job** by normalized **Job URL** and merge it only after a trusted ATS ID confirms identity.
+- "partial Job" — resolved: discovery metadata before detail fetching is a **Job Candidate**; a fully described Job without a trusted ATS ID is a **Provisional Job**.
+- "scrape once" implied a Job never changes — resolved: a **Job** keeps its identity across edits, while relevant changed details can require new **Suitability** assessments.
+- "stale score" has two causes with different responses — resolved: changed Job details prompt reassessment; a changed User rubric marks existing **Suitability** as potentially stale until an on-demand rescore.
+- "closed Job" could imply the position was filled — resolved: **Closed Job** means the source no longer advertises it after sufficient confirmation; one complete nonempty check can close a missing Job, while an empty Board requires two complete successful checks.
+- "Tracked Company" previously meant one board-specific **Source Target** — resolved: it is one User choice covering current and later verified **Boards**, even when no Board is yet known.
+- "Check Frequency" previously belonged to each ATS **Source Target** — resolved: it belongs to the User's **Tracked Company** and applies across its verified **Boards**.
+- "Source Target" previously included ATS Board tracking — resolved: **Source Target** is a discovery search; direct ATS Board entry resolves to a **Company** and its **Tracked Company** choice.
+- "scheduled scraping" previously included recurring discovery searches and HTML detail refresh — resolved: discovery runs once or on explicit rerun; only matched ATS Boards of Tracked Companies are checked automatically on a recurring schedule.
+- "verified Board" previously meant a detected ATS-looking URL — resolved: a **Verified Board** also requires a successful read and Company association evidence.
