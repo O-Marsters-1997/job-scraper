@@ -88,7 +88,10 @@ func (q *Queue) GetLastScraped(ctx context.Context, source string) (time.Time, b
 }
 
 func (q *Queue) DeadLetterCount(ctx context.Context) (int64, error) {
-	var total int64
+	total, err := q.client.Do(ctx, q.client.B().Zcard().Key(sourceKeys[11]).Build()).AsInt64()
+	if err != nil {
+		return 0, err
+	}
 	for _, kind := range []Kind{Detail, ScrapeRequest} {
 		keys, _ := queueKeys(kind)
 		n, err := q.client.Do(ctx, q.client.B().Zcard().Key(keys[5]).Build()).AsInt64()
