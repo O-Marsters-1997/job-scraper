@@ -13,16 +13,21 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 type Orchestrator struct {
-	srcs         []sources.Source
-	db           providers.JobProvider
-	q            queue.JobQueue
+	srcs []sources.Source
+	db   providers.JobProvider
+	q    interface {
+		EnqueueJobs(context.Context, []dto.QueuedJob) error
+	}
+	gate interface {
+		GetLastScraped(context.Context, string) (time.Time, bool, error)
+		SetLastScraped(context.Context, string) error
+	}
 	cfgDB        providers.SearchConfigProvider // nil means no reject filter
 	exporter     JobExporter                    // nil means no ATS egress
 	cr           *cron.Cron
@@ -33,8 +38,17 @@ type Orchestrator struct {
 	candidates   *candidates.Service
 }
 
-func New(srcs []sources.Source, db providers.JobProvider, q queue.JobQueue) *Orchestrator {
-	return &Orchestrator{srcs: srcs, db: db, q: q}
+func New(srcs []sources.Source, db providers.JobProvider, q interface {
+	EnqueueJobs(context.Context, []dto.QueuedJob) error
+}) *Orchestrator {
+	o := &Orchestrator{srcs: srcs, db: db, q: q}
+	if gate, ok := q.(interface {
+		GetLastScraped(context.Context, string) (time.Time, bool, error)
+		SetLastScraped(context.Context, string) error
+	}); ok {
+		o.gate = gate
+	}
+	return o
 }
 
 // WithSourceReloader wires in functions to reload sources from DB at each tick
@@ -61,7 +75,7 @@ func (o *Orchestrator) WithCandidates(store candidates.Store) *Orchestrator {
 }
 
 // WithForceScrape bypasses the per-source MinScrapeInterval gate on every tick.
-// Use locally to test the full scrape→enqueue→ingest flow without wiping Valkey state.
+// Use locally to test the full scrape→enqueue→ingest flow.
 func (o *Orchestrator) WithForceScrape(force bool) *Orchestrator {
 	o.force = force
 	return o
@@ -147,26 +161,91 @@ func (o *Orchestrator) ScrapeTarget(ctx context.Context, target dto.SourceTarget
 }
 
 func (o *Orchestrator) runDiscovery(ctx context.Context, src sources.Source, target dto.SourceTarget) error {
+	config, err := o.searchConfig(ctx, target)
+	if err != nil {
+		return err
+	}
+	return src.Iterate(ctx, func(ctx context.Context, cards []dto.Job) (bool, error) {
+		return false, o.capturePage(ctx, target, cards, config)
+	})
+}
+
+func (o *Orchestrator) searchConfig(ctx context.Context, target dto.SourceTarget) (dto.SearchConfig, error) {
 	config := dto.SearchConfig{UserID: target.UserID}
 	if o.cfgDB != nil {
 		stored, err := o.cfgDB.GetSearchConfig(ctx, target.UserID)
 		if err != nil && err != providers.ErrNotFound {
-			return err
+			return config, err
 		}
 		if err == nil {
 			config = stored
 		}
 	}
-	return src.Iterate(ctx, func(ctx context.Context, cards []dto.Job) (bool, error) {
-		for i := range cards {
-			if detect.Detect(cards[i].URL) == detect.Aggregator {
-				if rewritten, _, ok := detect.RewriteToATS(cards[i].URL); ok {
-					cards[i].URL = rewritten
-				}
+	return config, nil
+}
+
+func (o *Orchestrator) capturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error {
+	rewriteCards(cards)
+	return o.candidates.CapturePage(ctx, target, cards, config)
+}
+
+func rewriteCards(cards []dto.Job) {
+	for i := range cards {
+		if detect.Detect(cards[i].URL) == detect.Aggregator {
+			if rewritten, _, ok := detect.RewriteToATS(cards[i].URL); ok {
+				cards[i].URL = rewritten
 			}
 		}
-		return false, o.candidates.CapturePage(ctx, target, cards, config)
-	})
+	}
+}
+
+func (o *Orchestrator) ScrapePage(ctx context.Context, target dto.SourceTarget, cursor string) (string, error) {
+	if o.buildTarget == nil || o.candidates == nil {
+		return "", fmt.Errorf("discovery page processor unavailable")
+	}
+	srcs := o.buildTarget(target)
+	if len(srcs) != 1 {
+		return "", fmt.Errorf("expected one source for target %s", target.ID)
+	}
+	config, err := o.searchConfig(ctx, target)
+	if err != nil {
+		return "", err
+	}
+	var cards []dto.Job
+	var next string
+	if fetcher, ok := srcs[0].(sources.PageFetcher); ok {
+		cards, next, err = fetcher.FetchPage(ctx, cursor)
+	} else if cursor == "" {
+		err = srcs[0].Iterate(ctx, func(_ context.Context, page []dto.Job) (bool, error) {
+			cards = append(cards, page...)
+			return false, nil
+		})
+	} else {
+		return "", fmt.Errorf("source %s has no page cursor", target.Source)
+	}
+	if err != nil {
+		return "", err
+	}
+	rewriteCards(cards)
+	if len(cards) > 0 {
+		urls := make([]string, 0, len(cards))
+		for _, card := range cards {
+			if card.URL != "" {
+				urls = append(urls, card.URL)
+			}
+		}
+		newURLs, err := o.db.NewURLs(ctx, urls)
+		if err != nil {
+			return "", err
+		}
+		if len(newURLs) == 0 {
+			next = ""
+		}
+	}
+	if err := o.capturePage(ctx, target, cards, config); err != nil {
+		return "", err
+	}
+	return next, nil
 }
 
 func (o *Orchestrator) Stop() {
@@ -190,7 +269,10 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 		return
 	}
 
-	last, ok, err := o.q.GetLastScraped(ctx, cfg.Name)
+	if o.gate == nil {
+		return
+	}
+	last, ok, err := o.gate.GetLastScraped(ctx, cfg.Name)
 	if err != nil {
 		log.Warn("could not read last scraped, proceeding",
 			slog.Any("err", err),
@@ -204,7 +286,7 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 		log.Error("scrape failed", slog.Any("err", err))
 		return
 	}
-	if err := o.q.SetLastScraped(ctx, cfg.Name); err != nil {
+	if err := o.gate.SetLastScraped(ctx, cfg.Name); err != nil {
 		log.Error("could not set last scraped", slog.Any("err", err))
 	}
 }
@@ -293,10 +375,13 @@ func (p *atsPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 }
 
 type htmlPath struct {
-	db    providers.JobProvider
-	q     queue.JobQueue
-	gates []userGate
-	seen  map[string]struct{}
+	db providers.JobProvider
+	q  interface {
+		EnqueueJobs(context.Context, []dto.QueuedJob) error
+	}
+	source string
+	gates  []userGate
+	seen   map[string]struct{}
 }
 
 func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
@@ -357,6 +442,7 @@ func (p *htmlPath) onPage(ctx context.Context, jobs []dto.Job) (bool, error) {
 			gateFiltered++
 			continue
 		}
+		c.job.Source = p.source
 		queued = append(queued, dto.QueuedJob{URL: c.url, Card: c.job})
 	}
 
@@ -385,7 +471,7 @@ func (o *Orchestrator) run(ctx context.Context, src sources.Source) error {
 	cfg := src.Cfg()
 	gates := o.loadGates(ctx, cfg.Name)
 	if _, ok := src.(sources.DetailFetcher); ok {
-		p := &htmlPath{db: o.db, q: o.q, gates: gates, seen: map[string]struct{}{}}
+		p := &htmlPath{db: o.db, q: o.q, source: cfg.Name, gates: gates, seen: map[string]struct{}{}}
 		return src.Iterate(ctx, p.onPage)
 	}
 	p := &atsPath{exporter: o.exporter, name: cfg.Name, gates: gates}

@@ -6,13 +6,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      valkey:
+      rabbitmq:
         condition: service_healthy
     env_file: .env.docker-compose
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      VALKEY_ADDR: valkey:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
 
   api:
     build: .
@@ -21,12 +22,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8080:8080"
     env_file: .env.docker-compose
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
 
   db:
     image: postgres:17-alpine
@@ -45,20 +49,24 @@ services:
       timeout: 5s
       retries: 5
 
-  valkey:
-    image: valkey/valkey:8-alpine
-    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+  rabbitmq:
+    image: rabbitmq:4.3.6-management
+    hostname: rabbitmq
     restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     volumes:
-      - valkey_data:/data
+      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
   db_data:
-  valkey_data:
+  rabbitmq_data:

@@ -44,7 +44,7 @@ func TestDiscoveryTargetCreationQueuesOneRun(t *testing.T) {
 	}
 }
 
-func TestDiscoveryTargetCreationShowsQueueFailure(t *testing.T) {
+func TestDiscoveryTargetCreationKeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 	store := providers.NewMockSourceTargetProvider()
 	q := queue.NewMockQueue()
 	q.EnqueueScrapeErr = errors.New("queue unavailable")
@@ -59,7 +59,7 @@ func TestDiscoveryTargetCreationShowsQueueFailure(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&target); err != nil {
 		t.Fatal(err)
 	}
-	if target.RunStatus != "failed" || len(q.ScrapeRequests()) != 0 {
+	if target.RunStatus != "queued" || target.RunID == "" || len(q.ScrapeRequests()) != 0 {
 		t.Fatalf("created target = %+v, queued = %+v", target, q.ScrapeRequests())
 	}
 }

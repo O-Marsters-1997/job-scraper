@@ -62,6 +62,7 @@ func (db *DB) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dt
 			return nil, fmt.Errorf("record candidate discovery: %w", err)
 		}
 		card.URL = normalized
+		card.Source = target.Source
 		out = append(out, candidates.Candidate{ID: id.String(), URL: normalized, Card: card})
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -128,6 +129,14 @@ func (db *DB) ReleaseDetail(ctx context.Context, candidateID string) error {
 		return err
 	}
 	return db.queries.ReleaseCandidateDetail(ctx, cid)
+}
+
+func (db *DB) MarkDetailPending(ctx context.Context, candidateID string) error {
+	cid, err := parseUUID(candidateID)
+	if err != nil {
+		return err
+	}
+	return db.queries.MarkCandidateDetailPending(ctx, cid)
 }
 
 func (db *DB) DeleteExpiredCandidates(ctx context.Context) error {

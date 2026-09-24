@@ -10,7 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-// fakeGate is an in-memory ScrapeGate double; no real Valkey needed.
+// fakeGate is an in-memory ScrapeGate double.
 type fakeGate struct {
 	mu   sync.Mutex
 	last map[string]time.Time

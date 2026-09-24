@@ -18,6 +18,7 @@ build:
     go build -o bin/worker   ./cmd/worker
     go build -o bin/admin    ./cmd/admin
     go build -o bin/snapshot ./cmd/snapshot
+    go build -o bin/queue    ./cmd/queue
 
 # run the worker
 run *args:
@@ -63,7 +64,7 @@ ci:
 
 # ── Services ──────────────────────────────────────────────────────────────────
 
-# start all services (postgres + valkey)
+# start all services (postgres + RabbitMQ)
 up:
     docker compose up -d
     @echo "services ready"
@@ -114,15 +115,18 @@ db-logs:
 db-shell:
     docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB
 
-# ── Valkey ────────────────────────────────────────────────────────────────────
+# ── RabbitMQ ──────────────────────────────────────────────────────────────────
 
-# open a valkey-cli shell
-valkey-shell:
-    docker compose exec valkey valkey-cli
+# show broker status
+rabbitmq-status:
+    docker compose exec rabbitmq rabbitmq-diagnostics status
 
-# show detail queue counts and oldest due time
+# show dead-letter count
 queue-list:
-    docker compose exec worker ./queue stats detail
+    docker compose exec worker ./queue count
+
+queue-dead *args:
+    docker compose exec worker ./queue {{args}}
 
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 

@@ -2,34 +2,22 @@ package queue
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// MockQueue lives outside _test.go so it can be imported by tests in other packages.
 type MockQueue struct {
-	mu          sync.Mutex
-	items       []dto.QueuedJob
-	scrapeReqs  []dto.ScrapeRequest
-	lastScraped map[string]time.Time
-	attempts    map[string]int
-	deadLetter  []string
-
+	mu               sync.Mutex
+	jobs             []dto.QueuedJob
+	tasks            []Task
+	lastScraped      map[string]time.Time
 	EnqueueErr       error
 	EnqueueScrapeErr error
-	DequeueErr       error
-	NackErr          error
 }
 
-func NewMockQueue() *MockQueue {
-	return &MockQueue{
-		lastScraped: make(map[string]time.Time),
-		attempts:    make(map[string]int),
-	}
-}
+func NewMockQueue() *MockQueue { return &MockQueue{lastScraped: map[string]time.Time{}} }
 
 func (m *MockQueue) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
 	if m.EnqueueErr != nil {
@@ -37,8 +25,50 @@ func (m *MockQueue) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.items = append(m.items, jobs...)
+	m.jobs = append(m.jobs, jobs...)
 	return nil
+}
+
+func (m *MockQueue) Publish(_ context.Context, task Task) error {
+	if m.EnqueueScrapeErr != nil {
+		return m.EnqueueScrapeErr
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tasks = append(m.tasks, task)
+	return nil
+}
+
+func (m *MockQueue) Jobs() []dto.QueuedJob {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]dto.QueuedJob(nil), m.jobs...)
+}
+
+func (m *MockQueue) Items() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, len(m.jobs))
+	for i, job := range m.jobs {
+		out[i] = job.URL
+	}
+	return out
+}
+
+func (m *MockQueue) Tasks() []Task {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Task(nil), m.tasks...)
+}
+
+func (m *MockQueue) ScrapeRequests() []dto.ScrapeRequest {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]dto.ScrapeRequest, len(m.tasks))
+	for i, task := range m.tasks {
+		out[i] = dto.ScrapeRequest{Target: dto.SourceTarget{ID: task.TargetID, RunID: task.RunID, Source: task.Source}}
+	}
+	return out
 }
 
 func (m *MockQueue) SetLastScraped(_ context.Context, source string) error {
@@ -51,106 +81,12 @@ func (m *MockQueue) SetLastScraped(_ context.Context, source string) error {
 func (m *MockQueue) GetLastScraped(_ context.Context, source string) (time.Time, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	t, ok := m.lastScraped[source]
-	return t, ok, nil
+	last, ok := m.lastScraped[source]
+	return last, ok, nil
 }
 
-func (m *MockQueue) Nack(_ context.Context, item Item, _ string) error {
-	if m.NackErr != nil {
-		return m.NackErr
-	}
+func (m *MockQueue) SetLastScrapedAt(source string, when time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.attempts[item.ID]++
-	if m.attempts[item.ID] >= maxAttempts {
-		m.deadLetter = append(m.deadLetter, item.ID)
-		delete(m.attempts, item.ID)
-	}
-	return nil
-}
-
-func (m *MockQueue) ClaimReady(_ context.Context, kind Kind, _ time.Duration) (Item, bool, error) {
-	if m.DequeueErr != nil {
-		return Item{}, false, m.DequeueErr
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if kind == Detail && len(m.items) > 0 {
-		job := m.items[0]
-		m.items = m.items[1:]
-		payload, _ := json.Marshal(job)
-		return Item{ID: job.URL, Kind: kind, Payload: payload, Token: job.URL}, true, nil
-	}
-	if kind == ScrapeRequest && len(m.scrapeReqs) > 0 {
-		req := m.scrapeReqs[0]
-		m.scrapeReqs = m.scrapeReqs[1:]
-		payload, _ := json.Marshal(req)
-		return Item{ID: req.Target.ID, Kind: kind, Payload: payload, Token: req.Target.ID}, true, nil
-	}
-	return Item{}, false, nil
-}
-
-func (m *MockQueue) Ack(_ context.Context, item Item) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.attempts, item.ID)
-	return nil
-}
-
-func (m *MockQueue) EnqueueScrapeRequest(_ context.Context, req dto.ScrapeRequest) error {
-	if m.EnqueueScrapeErr != nil {
-		return m.EnqueueScrapeErr
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.scrapeReqs = append(m.scrapeReqs, req)
-	return nil
-}
-
-func (m *MockQueue) ScrapeRequests() []dto.ScrapeRequest {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]dto.ScrapeRequest, len(m.scrapeReqs))
-	copy(out, m.scrapeReqs)
-	return out
-}
-
-func (m *MockQueue) Close() {}
-
-func (m *MockQueue) DeadLetter() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]string, len(m.deadLetter))
-	copy(out, m.deadLetter)
-	return out
-}
-
-func (m *MockQueue) Attempts(url string) int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.attempts[url]
-}
-
-func (m *MockQueue) SetLastScrapedAt(source string, t time.Time) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.lastScraped[source] = t
-}
-
-func (m *MockQueue) Items() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]string, len(m.items))
-	for i, j := range m.items {
-		out[i] = j.URL
-	}
-	return out
-}
-
-func (m *MockQueue) Jobs() []dto.QueuedJob {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	out := make([]dto.QueuedJob, len(m.items))
-	copy(out, m.items)
-	return out
+	m.lastScraped[source] = when
 }

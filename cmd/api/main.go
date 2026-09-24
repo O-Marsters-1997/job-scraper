@@ -80,17 +80,17 @@ func main() {
 		}
 	}()
 
-	valkeyAddr := os.Getenv("VALKEY_ADDR")
-	if valkeyAddr == "" {
-		valkeyAddr = "localhost:6379"
+	brokerURL := os.Getenv("RABBITMQ_URL")
+	if brokerURL == "" {
+		brokerURL = "amqp://guest:guest@localhost:5672/"
 	}
-	q, err := queue.New(valkeyAddr)
+	q, err := queue.NewBroker(brokerURL)
 	if err != nil {
 		slog.Error("queue init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	slog.Info("queue client ready", slog.String("addr", valkeyAddr))
-	defer q.Close()
+	slog.Info("queue client ready")
+	defer func() { _ = q.Close() }()
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -20,8 +23,10 @@ import (
 )
 
 type SourceTargetHandler struct {
-	targets    providers.SourceTargetProvider
-	q          queue.JobQueue
+	targets providers.SourceTargetProvider
+	q       interface {
+		Publish(context.Context, queue.Task) error
+	}
 	candidates *candidates.Service
 	configs    providers.SearchConfigProvider
 }
@@ -32,7 +37,9 @@ func (h *SourceTargetHandler) WithCandidates(service *candidates.Service, config
 	return h
 }
 
-func NewSourceTargetHandler(targets providers.SourceTargetProvider, q queue.JobQueue) *SourceTargetHandler {
+func NewSourceTargetHandler(targets providers.SourceTargetProvider, q interface {
+	Publish(context.Context, queue.Task) error
+}) *SourceTargetHandler {
 	return &SourceTargetHandler{targets: targets, q: q}
 }
 
@@ -137,7 +144,19 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		enabled = *body.Enabled
 	}
 
-	t, err := h.targets.CreateSourceTarget(r.Context(), session.UserID, body.Source, body.Value, enabled, body.Filters)
+	role, _ := registry.SourceRole(body.Source)
+	startNow := enabled && (role == registry.RoleDiscovery || body.ScrapeNow)
+	if startNow && role == registry.RoleATS {
+		if _, err := h.targets.GetVerifiedBoardID(r.Context(), body.Source, body.Value); err != nil {
+			http.Error(w, "verified Board required to start search", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	create := h.targets.CreateSourceTarget
+	if startNow {
+		create = h.targets.CreateSourceTargetWithRun
+	}
+	t, err := create(r.Context(), session.UserID, body.Source, body.Value, enabled, body.Filters)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -151,19 +170,14 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, _ := registry.SourceRole(t.Source)
-	if enabled && role == registry.RoleDiscovery {
-		t, err = h.enqueueRun(r, t)
+	if startNow {
+		t, err = h.publishRun(r, t)
 		if err != nil {
 			slog.Error("enqueue scrape request failed", slog.Any("err", err))
 			if t.ID == "" {
 				http.Error(w, "search saved but could not start; retry from Searches", http.StatusServiceUnavailable)
 				return
 			}
-		}
-	} else if enabled && body.ScrapeNow && h.q != nil {
-		if err := h.q.EnqueueScrapeRequest(r.Context(), dto.ScrapeRequest{Target: t}); err != nil {
-			slog.Error("enqueue scrape request failed", slog.Any("err", err))
 		}
 	}
 
@@ -184,11 +198,6 @@ func (h *SourceTargetHandler) Scrape(w http.ResponseWriter, r *http.Request) {
 		if target.ID != id {
 			continue
 		}
-		role, _ := registry.SourceRole(target.Source)
-		if role != registry.RoleDiscovery {
-			http.Error(w, "only discovery searches can be rerun", http.StatusBadRequest)
-			return
-		}
 		if target.RunStatus == "queued" || target.RunStatus == "running" {
 			http.Error(w, "search already in progress", http.StatusConflict)
 			return
@@ -208,18 +217,35 @@ func (h *SourceTargetHandler) Scrape(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SourceTargetHandler) enqueueRun(r *http.Request, target dto.SourceTarget) (dto.SourceTarget, error) {
-	queued, err := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "queued", "")
+	if role, _ := registry.SourceRole(target.Source); role == registry.RoleATS {
+		if _, err := h.targets.GetVerifiedBoardID(r.Context(), target.Source, target.Value); err != nil {
+			return dto.SourceTarget{}, err
+		}
+	}
+	queued, err := h.targets.StartSourceTargetRun(r.Context(), target.ID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
+	return h.publishRun(r, queued)
+}
+
+func (h *SourceTargetHandler) publishRun(r *http.Request, queued dto.SourceTarget) (dto.SourceTarget, error) {
 	if h.q == nil {
-		failed, _ := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "failed", "queue unavailable")
-		return failed, errors.New("queue unavailable")
+		return queued, errors.New("queue unavailable")
 	}
 	queued.Enabled = true
-	if err := h.q.EnqueueScrapeRequest(r.Context(), dto.ScrapeRequest{Target: queued}); err != nil {
-		failed, _ := h.targets.SetSourceTargetRunState(r.Context(), target.ID, "failed", "queue unavailable")
-		return failed, err
+	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: queued.Source, TargetID: queued.ID, RunID: queued.RunID}
+	if role, _ := registry.SourceRole(queued.Source); role == registry.RoleATS {
+		boardID, err := h.targets.GetVerifiedBoardID(r.Context(), queued.Source, queued.Value)
+		if err != nil {
+			return queued, err
+		}
+		task.Kind, task.BoardID, task.Manual = queue.BoardCheckTask, boardID, true
+	} else {
+		task.Kind = queue.ListingPageTask
+	}
+	if err := h.q.Publish(r.Context(), task); err != nil {
+		return queued, err
 	}
 	return queued, nil
 }

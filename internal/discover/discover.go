@@ -2,7 +2,7 @@
 // catalog on a fixed cadence. Harvesters yield company candidates (name/domain,
 // occasionally an ATS board); the Runner deduplicates via CompanyProvider's
 // COALESCE-upsert and gates each harvester to one run per interval, reusing the
-// queue's scrape:last mechanism.
+// PostgreSQL harvest_runs state.
 package discover
 
 import (
@@ -27,8 +27,7 @@ type Harvester interface {
 	Harvest(ctx context.Context) ([]Company, error)
 }
 
-// ScrapeGate is the narrow subset of queue.JobQueue the Runner needs to gate
-// each harvester to one run per interval. *queue.Queue satisfies this.
+// ScrapeGate persists each harvester's successful run time.
 type ScrapeGate interface {
 	SetLastScraped(ctx context.Context, source string) error
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)

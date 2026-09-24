@@ -33,16 +33,33 @@ func TestSourceDetailHandlerExportsToAPI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	job := dto.QueuedJob{URL: "https://example.com/job", Card: dto.Job{Source: "wis"}}
-	payload, err := json.Marshal(job)
-	if err != nil {
+	jobURL := "https://example.com/job"
+	processor := &taskProcessor{detailers: map[string]sources.DetailFetcher{"wis": detailSourceStub{}}, exporter: scraper.NewAPIExporter(server.URL, "token")}
+	task := queue.Task{Version: 1, Source: "wis", Kind: queue.DetailTask, URL: jobURL}
+	if err := processor.process(context.Background(), task); err != nil {
 		t.Fatal(err)
 	}
-	item := queue.SourceItem{ID: job.URL, Source: "wis", Kind: queue.SourceDetail, Payload: payload}
-	if err := deliverSourceDetail(context.Background(), item, []sources.DetailFetcher{detailSourceStub{}}, scraper.NewAPIExporter(server.URL, "token")); err != nil {
+	if delivered.URL != jobURL || delivered.Title != "Job" {
+		t.Fatalf("delivered = %+v", delivered)
+	}
+}
+
+func TestFullFeedCardExportsWithoutDetailFetcher(t *testing.T) {
+	var delivered dto.Job
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&delivered); err != nil {
+			t.Error(err)
+		}
+		_, _ = w.Write([]byte(`{"status":"new"}`))
+	}))
+	defer server.Close()
+
+	processor := &taskProcessor{exporter: scraper.NewAPIExporter(server.URL, "token")}
+	card := dto.Job{Source: "remoteok", URL: "https://remoteok.com/jobs/1", Title: "Full feed job", Description: "Already complete"}
+	if err := processor.process(context.Background(), queue.Task{Source: "remoteok", Kind: queue.DetailTask, Card: card}); err != nil {
 		t.Fatal(err)
 	}
-	if delivered.URL != job.URL || delivered.Title != "Job" {
+	if delivered.Description != card.Description {
 		t.Fatalf("delivered = %+v", delivered)
 	}
 }

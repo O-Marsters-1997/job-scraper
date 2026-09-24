@@ -188,6 +188,7 @@ CREATE TABLE IF NOT EXISTS source_targets (
     check_interval_minutes INT         NOT NULL DEFAULT 360,
     last_checked_at        TIMESTAMPTZ,
     run_status             TEXT        NOT NULL DEFAULT 'idle' CHECK (run_status IN ('idle', 'queued', 'running', 'succeeded', 'failed')),
+    run_id                 UUID,
     last_run_at            TIMESTAMPTZ,
     last_run_error         TEXT        NOT NULL DEFAULT '',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -267,6 +268,11 @@ CREATE TABLE IF NOT EXISTS candidate_discoveries (
 );
 
 CREATE INDEX IF NOT EXISTS candidate_discoveries_target_idx ON candidate_discoveries(source_target_id, candidate_id);
+
+CREATE TABLE harvest_runs (
+    harvester TEXT PRIMARY KEY,
+    last_succeeded_at TIMESTAMPTZ NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS candidate_assessments (
     candidate_id UUID NOT NULL REFERENCES job_candidates(id) ON DELETE CASCADE,

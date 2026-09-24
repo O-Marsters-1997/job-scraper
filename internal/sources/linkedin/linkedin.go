@@ -181,6 +181,32 @@ func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Jo
 	return nil
 }
 
+func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
+	if len(s.searches) != 1 {
+		return nil, "", fmt.Errorf("linkedin page fetch requires one search")
+	}
+	start := 0
+	if cursor != "" {
+		var err error
+		start, err = strconv.Atoi(cursor)
+		if err != nil || start <= 0 || start >= maxStart {
+			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
+		}
+	}
+	body, err := s.Get(ctx, s.searches[0].pageURL(start))
+	if err != nil {
+		return nil, "", err
+	}
+	jobs, err := ParseURLs(bytes.NewReader(body))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(jobs) == 0 || start+len(jobs) >= maxStart {
+		return jobs, "", nil
+	}
+	return jobs, strconv.Itoa(start + len(jobs)), nil
+}
+
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	body, err := s.Get(ctx, url)
 	if err != nil {

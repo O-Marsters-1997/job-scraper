@@ -23,9 +23,10 @@ func newMemoryStore() *memoryStore {
 	return &memoryStore{cards: map[string]Candidate{}, assessments: map[string]bool{}, pending: map[string]bool{}}
 }
 
-func (m *memoryStore) SaveCards(_ context.Context, _ dto.SourceTarget, cards []dto.Job) ([]Candidate, error) {
+func (m *memoryStore) SaveCards(_ context.Context, target dto.SourceTarget, cards []dto.Job) ([]Candidate, error) {
 	out := make([]Candidate, 0, len(cards))
 	for _, card := range cards {
+		card.Source = target.Source
 		candidate, ok := m.cards[card.URL]
 		if !ok {
 			m.nextID++
@@ -57,12 +58,11 @@ func (m *memoryStore) Assess(_ context.Context, candidateID, userID string, vers
 	if !passes || m.pending[candidateID] {
 		return false, nil
 	}
-	m.pending[candidateID] = true
 	return true, nil
 }
 
-func (m *memoryStore) ReleaseDetail(_ context.Context, candidateID string) error {
-	delete(m.pending, candidateID)
+func (m *memoryStore) MarkDetailPending(_ context.Context, candidateID string) error {
+	m.pending[candidateID] = true
 	return nil
 }
 
@@ -89,6 +89,9 @@ func TestCaptureRetriesAfterQueueFailure(t *testing.T) {
 	config := dto.SearchConfig{UserID: target.UserID, UpdatedAt: time.Now().UTC()}
 	if err := service.CapturePage(ctx, target, []dto.Job{card}, config); err == nil {
 		t.Fatal("expected queue failure")
+	}
+	if store.pending[store.cards[card.URL].ID] {
+		t.Fatal("candidate pending without confirmed detail")
 	}
 	q.err = nil
 	if err := service.Reconsider(ctx, config); err != nil {

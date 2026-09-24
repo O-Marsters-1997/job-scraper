@@ -73,6 +73,10 @@ type PageDetailFetcher interface {
 	GetDetails(ctx context.Context, fetchURL string) (dto.Job, error)
 }
 
+type PageFetcher interface {
+	FetchPage(context.Context, string) ([]dto.Job, string, error)
+}
+
 // DetailFetcher is an optional capability implemented by HTML scrape sources
 // that require a separate per-URL fetch to produce a fully-populated dto.Job.
 // ATS sources do not implement this interface.

@@ -8,11 +8,50 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
+
+type pageSourceStub struct {
+	stubSource
+	next string
+}
+
+func (s *pageSourceStub) FetchPage(context.Context, string) ([]dto.Job, string, error) {
+	return []dto.Job{{URL: s.urls[0]}}, s.next, nil
+}
+
+type emptyCandidateStore struct{}
+
+func (emptyCandidateStore) SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]candidates.Candidate, error) {
+	return nil, nil
+}
+func (emptyCandidateStore) ListForUser(context.Context, string, string, int) ([]candidates.Candidate, error) {
+	return nil, nil
+}
+func (emptyCandidateStore) Assess(context.Context, string, string, time.Time, bool) (bool, error) {
+	return false, nil
+}
+func (emptyCandidateStore) MarkDetailPending(context.Context, string) error { return nil }
+
+func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
+	ctx := context.Background()
+	url := "https://workinstartups.com/job/1"
+	db := providers.NewMockJobProvider()
+	if _, err := db.Save(ctx, []dto.Job{{URL: url}}); err != nil {
+		t.Fatal(err)
+	}
+	src := &pageSourceStub{stubSource: stubSource{cfg: sources.Config{Name: "wis"}, urls: []string{url}}, next: "2:5"}
+	q := queue.NewMockQueue()
+	orch := New(nil, db, q).WithSourceReloader(nil, func(dto.SourceTarget) []sources.Source { return []sources.Source{src} }).WithCandidates(emptyCandidateStore{})
+	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")
+	if err != nil || next != "" {
+		t.Fatalf("next=%q err=%v", next, err)
+	}
+}
 
 // stubSource is an HTML-like source: implements Source and DetailFetcher so
 // run() routes it through htmlPath (enqueue, not publish).
