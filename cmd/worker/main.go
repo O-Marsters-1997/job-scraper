@@ -18,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/proxy"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/scraper"
 	"github.com/ollymarsters/job-scraper/internal/sources"
@@ -39,6 +40,10 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if err := proxy.Validate(); err != nil {
+		slog.Error("Web Unlocker config invalid", slog.Any("err", err))
+		os.Exit(1)
+	}
 
 	connStr, err := jobsdb.ConnString()
 	if err != nil {
@@ -149,6 +154,9 @@ func main() {
 	cr := cron.New()
 
 	if _, err := cr.AddFunc("@daily", func() {
+		if err := proxy.Probe(ctx); err != nil {
+			slog.Warn("Web Unlocker daily probe failed", slog.Any("err", err))
+		}
 		if err := db.DeleteExpiredSessions(ctx); err != nil {
 			slog.Error("session cleanup failed",
 				slog.Any("err", err),
