@@ -25,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 )
@@ -152,8 +153,8 @@ func main() {
 	detailers = append(detailers, linkedin.New(linkedin.Config{}), indeed.New(indeed.Config{}))
 
 	go worker.RunScrapeRequests(ctx, q, func(ctx context.Context, req dto.ScrapeRequest) error {
-		role, _ := sources.SourceRole(req.Target.Source)
-		if role == sources.RoleATS {
+		role, _ := registry.SourceRole(req.Target.Source)
+		if role == registry.RoleATS {
 			id, err := db.GetVerifiedBoardID(ctx, req.Target.Source, req.Target.Value)
 			if err != nil {
 				return err

@@ -16,7 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 type SourceTargetHandler struct {
@@ -38,7 +38,7 @@ func NewSourceTargetHandler(targets providers.SourceTargetProvider, q queue.JobQ
 
 func (h *SourceTargetHandler) Sources(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sources.Sources())
+	_ = json.NewEncoder(w).Encode(registry.Sources())
 }
 
 // ResolveBoard turns a direct ATS board URL into a {source, value} pair the client
@@ -89,7 +89,7 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Cross-role guard: an ATS board URL pasted into a discovery source belongs under
 	// Tracked companies, not here. (Discovery values are keywords or aggregator URLs.)
-	if role, _ := sources.SourceRole(body.Source); role == sources.RoleDiscovery {
+	if role, _ := registry.SourceRole(body.Source); role == registry.RoleDiscovery {
 		if t := detect.Detect(body.Value); t != detect.UnknownHTML && t != detect.Aggregator {
 			http.Error(w, "that looks like an ATS board — add it under Tracked companies", http.StatusBadRequest)
 			return
@@ -98,7 +98,7 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate against the registry. Filter sources get their own path; board/url
 	// sources keep the existing URL-prefix check.
-	if fields, isFilter := sources.LookupFilterFields(body.Source); isFilter {
+	if fields, isFilter := registry.LookupFilterFields(body.Source); isFilter {
 		for k := range body.Filters {
 			if !isKnownFilterField(k, fields) {
 				http.Error(w, "unknown filter key: "+k, http.StatusBadRequest)
@@ -112,7 +112,7 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		urlPrefix, isURL, ok := sources.LookupSource(body.Source)
+		urlPrefix, isURL, ok := registry.LookupSource(body.Source)
 		if !ok {
 			http.Error(w, "unsupported source", http.StatusBadRequest)
 			return
@@ -151,8 +151,8 @@ func (h *SourceTargetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	role, _ := sources.SourceRole(t.Source)
-	if enabled && role == sources.RoleDiscovery {
+	role, _ := registry.SourceRole(t.Source)
+	if enabled && role == registry.RoleDiscovery {
 		t, err = h.enqueueRun(r, t)
 		if err != nil {
 			slog.Error("enqueue scrape request failed", slog.Any("err", err))
@@ -184,8 +184,8 @@ func (h *SourceTargetHandler) Scrape(w http.ResponseWriter, r *http.Request) {
 		if target.ID != id {
 			continue
 		}
-		role, _ := sources.SourceRole(target.Source)
-		if role != sources.RoleDiscovery {
+		role, _ := registry.SourceRole(target.Source)
+		if role != registry.RoleDiscovery {
 			http.Error(w, "only discovery searches can be rerun", http.StatusBadRequest)
 			return
 		}
@@ -254,8 +254,8 @@ func (h *SourceTargetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Enabled != nil && *body.Enabled && h.candidates != nil {
-		role, _ := sources.SourceRole(t.Source)
-		if role == sources.RoleDiscovery {
+		role, _ := registry.SourceRole(t.Source)
+		if role == registry.RoleDiscovery {
 			cfg, err := h.configs.GetSearchConfig(r.Context(), session.UserID)
 			if errors.Is(err, providers.ErrNotFound) {
 				cfg = dto.SearchConfig{UserID: session.UserID}
@@ -285,7 +285,7 @@ func (h *SourceTargetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func isKnownFilterField(key string, fields []sources.FilterField) bool {
+func isKnownFilterField(key string, fields []registry.FilterField) bool {
 	for _, f := range fields {
 		if f.Name == key {
 			return true

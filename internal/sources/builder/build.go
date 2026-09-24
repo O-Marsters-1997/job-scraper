@@ -15,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/personio"
 	"github.com/ollymarsters/job-scraper/internal/sources/recruitee"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 	"github.com/ollymarsters/job-scraper/internal/sources/remoteok"
 	"github.com/ollymarsters/job-scraper/internal/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
@@ -39,7 +40,7 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 		if !t.Enabled {
 			continue
 		}
-		if sources.IsFilterSource(t.Source) {
+		if registry.IsFilterSource(t.Source) {
 			switch t.Source {
 			case "wis":
 				wisSearches = append(wisSearches, wis.Search{
@@ -66,7 +67,7 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 			}
 			continue
 		}
-		_, isURL, ok := sources.LookupSource(t.Source)
+		_, isURL, ok := registry.LookupSource(t.Source)
 		if !ok {
 			continue
 		}
@@ -134,7 +135,7 @@ func BuildSources(targets []dto.SourceTarget, boardDone func(ctx context.Context
 func BuildScheduledSources(targets []dto.SourceTarget, boardDone func(ctx context.Context, source, value string, urls []string)) []sources.Source {
 	atsTargets := make([]dto.SourceTarget, 0, len(targets))
 	for _, target := range targets {
-		if role, ok := sources.SourceRole(target.Source); ok && role == sources.RoleATS {
+		if role, ok := registry.SourceRole(target.Source); ok && role == registry.RoleATS {
 			atsTargets = append(atsTargets, target)
 		}
 	}

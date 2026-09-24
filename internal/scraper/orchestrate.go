@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 type Orchestrator struct {
@@ -131,8 +132,8 @@ func (o *Orchestrator) ScrapeTarget(ctx context.Context, target dto.SourceTarget
 	}
 	srcs := o.buildTarget(target)
 	for _, src := range srcs {
-		role, _ := sources.SourceRole(target.Source)
-		if role == sources.RoleDiscovery && o.candidates != nil {
+		role, _ := registry.SourceRole(target.Source)
+		if role == registry.RoleDiscovery && o.candidates != nil {
 			if err := o.runDiscovery(ctx, src, target); err != nil {
 				return err
 			}
@@ -182,7 +183,7 @@ func (o *Orchestrator) runIfReady(ctx context.Context, src sources.Source) {
 	// ATS sources are gated per-target in SQL (ListDueSourceTargets) via
 	// check_interval_minutes; the platform-wide scrape:last gate below only
 	// applies to discovery sources, which have no per-target freshness column.
-	if role, _ := sources.SourceRole(cfg.Name); role == sources.RoleATS {
+	if role, _ := registry.SourceRole(cfg.Name); role == registry.RoleATS {
 		if err := o.run(ctx, src); err != nil {
 			log.Error("scrape failed", slog.Any("err", err))
 		}

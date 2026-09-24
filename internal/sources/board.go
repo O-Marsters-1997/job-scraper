@@ -55,6 +55,29 @@ func (b *BoardSource) WithDone(fn func(ctx context.Context, token string, urls [
 	return b
 }
 
+func (b *BoardSource) FetchPage(ctx context.Context, cursor string) (Page, error) {
+	if len(b.boards) != 1 {
+		return Page{}, fmt.Errorf("%s: expected one board, got %d", b.spec.Name, len(b.boards))
+	}
+	if cursor != "" {
+		return Page{}, fmt.Errorf("%s: unexpected cursor %q", b.spec.Name, cursor)
+	}
+	jobs, err := b.fetchBoard(ctx, b.boards[0])
+	return Page{Jobs: jobs}, err
+}
+
+func (b *BoardSource) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
+	fetch := b.Get
+	if b.spec.Post {
+		fetch = b.PostEmptyJSON
+	}
+	body, err := fetch(ctx, b.spec.URL(token))
+	if err != nil {
+		return nil, err
+	}
+	return b.spec.Parse(body, token)
+}
+
 // Iterate fetches every configured board token, logging and continuing past
 // per-token failures so one dead board doesn't starve the rest of the ATS's
 // boards. Errors are joined and returned once all tokens have been attempted.
@@ -64,17 +87,7 @@ func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dt
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		fetch := b.Get
-		if b.spec.Post {
-			fetch = b.PostEmptyJSON
-		}
-		body, err := fetch(ctx, b.spec.URL(token))
-		if err != nil {
-			slog.Warn("board fetch failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
-			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
-			continue
-		}
-		jobs, err := b.spec.Parse(body, token)
+		jobs, err := b.fetchBoard(ctx, token)
 		if err != nil {
 			slog.Warn("board parse failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
 			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))

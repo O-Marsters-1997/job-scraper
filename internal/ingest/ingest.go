@@ -11,7 +11,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 type Saver interface {
@@ -166,7 +166,7 @@ func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
 		seen[j.CompanySlug] = true
 
 		atsSource, atsToken := "", ""
-		if role, _ := sources.SourceRole(j.Source); role == sources.RoleATS {
+		if role, _ := registry.SourceRole(j.Source); role == registry.RoleATS {
 			atsSource, atsToken = j.Source, j.CompanySlug
 		}
 		upsert := dto.CompanyUpsert{
@@ -208,7 +208,7 @@ func (i *Ingester) scoreForTrackingUsers(ctx context.Context, jobs []dto.Job) {
 	groups := make(map[groupKey][]dto.Job)
 	for _, j := range jobs {
 		value := ""
-		if role, _ := sources.SourceRole(j.Source); role == sources.RoleATS {
+		if role, _ := registry.SourceRole(j.Source); role == registry.RoleATS {
 			value = j.CompanySlug
 		}
 		key := groupKey{j.Source, value}

@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 // TestBuildSources_EveryRegisteredSourceInstantiates guards against the silent-drop
@@ -13,7 +13,7 @@ import (
 // yet is dropped at runtime with no error. For each registered source we feed one
 // enabled target of the right kind and assert BuildSources produces it.
 func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
-	for _, info := range sources.Sources() {
+	for _, info := range registry.Sources() {
 		target := dto.SourceTarget{Source: info.Name, Enabled: true}
 		switch info.Kind {
 		case "board":

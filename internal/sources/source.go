@@ -57,6 +57,22 @@ type Source interface {
 	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
 }
 
+// Page is one source response and the cursor for the next response.
+type Page struct {
+	Jobs       []dto.Job
+	NextCursor string
+}
+
+// PageSource fetches one page for a saved source target.
+type PageSource interface {
+	FetchPage(ctx context.Context, cursor string) (Page, error)
+}
+
+// PageDetailFetcher resolves a page card using its original fetch URL.
+type PageDetailFetcher interface {
+	GetDetails(ctx context.Context, fetchURL string) (dto.Job, error)
+}
+
 // DetailFetcher is an optional capability implemented by HTML scrape sources
 // that require a separate per-URL fetch to produce a fully-populated dto.Job.
 // ATS sources do not implement this interface.
