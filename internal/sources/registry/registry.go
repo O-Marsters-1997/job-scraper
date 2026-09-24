@@ -1,4 +1,14 @@
-package sources
+package registry
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
+)
 
 // sourceKind classifies how a source target's value is interpreted.
 type sourceKind int
@@ -52,17 +62,21 @@ type SourceInfo struct {
 }
 
 type registryEntry struct {
-	name      string
-	label     string
-	kind      sourceKind
-	role      string
-	urlPrefix string
-	filters   []FilterField // non-nil only for kindFilter sources
+	name          string
+	label         string
+	kind          sourceKind
+	role          string
+	urlPrefix     string
+	filters       []FilterField // non-nil only for kindFilter sources
+	requestGap    time.Duration
+	newPageSource func(string) sources.PageSource
 }
 
 // The names here must match the Name field baked into each source's Config.
 var entries = []registryEntry{
-	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, role: RoleATS, urlPrefix: "https://boards.greenhouse.io"},
+	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, role: RoleATS, urlPrefix: "https://boards.greenhouse.io", requestGap: 2 * time.Second, newPageSource: func(token string) sources.PageSource {
+		return greenhouse.New(greenhouse.Config{Boards: []string{token}})
+	}},
 	{name: "lever", label: "Lever", kind: kindBoard, role: RoleATS, urlPrefix: "https://jobs.lever.co"},
 	{name: "ashby", label: "Ashby", kind: kindBoard, role: RoleATS, urlPrefix: "https://jobs.ashbyhq.com"},
 	{name: "workable", label: "Workable", kind: kindBoard, role: RoleATS, urlPrefix: "https://apply.workable.com"},
@@ -149,4 +163,41 @@ func SourceRole(name string) (string, bool) {
 func IsFilterSource(name string) bool {
 	e, ok := findEntry(name)
 	return ok && e.kind == kindFilter
+}
+
+// Entry contains a constructed page source and its execution policy.
+type Entry struct {
+	Name       string
+	Role       string
+	RequestGap time.Duration
+	Source     sources.PageSource
+	Details    sources.PageDetailFetcher
+}
+
+// Open constructs a page source for one saved target.
+func Open(target dto.SourceTarget) (Entry, error) {
+	registration, ok := findEntry(target.Source)
+	if !ok || registration.newPageSource == nil {
+		return Entry{}, fmt.Errorf("unsupported page source %q", target.Source)
+	}
+	if !target.Enabled || len(target.Filters) != 0 || !ValidBoardToken(target.Value) {
+		return Entry{}, fmt.Errorf("invalid %s board configuration", target.Source)
+	}
+	src := registration.newPageSource(target.Value)
+	entry := Entry{Name: target.Source, Role: registration.role, RequestGap: registration.requestGap, Source: src}
+	entry.Details, _ = src.(sources.PageDetailFetcher)
+	return entry, nil
+}
+
+// ValidBoardToken reports whether a board token can be used as one URL path segment.
+func ValidBoardToken(token string) bool {
+	if token == "" || token == "." || token == ".." {
+		return false
+	}
+	for _, r := range token {
+		if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-", r) {
+			return false
+		}
+	}
+	return true
 }

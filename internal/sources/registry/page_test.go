@@ -1,4 +1,4 @@
-package catalog_test
+package registry_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/catalog"
+	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -16,7 +16,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestGreenhouseFetchPage(t *testing.T) {
-	entry, err := catalog.Open(dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true})
+	entry, err := registry.Open(dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestOpenRejectsInvalidConfiguration(t *testing.T) {
 		{Source: "greenhouse", Value: "acme", Enabled: false},
 		{Source: "greenhouse", Value: "acme", Enabled: true, Filters: map[string]string{"x": "y"}},
 	} {
-		if _, err := catalog.Open(target); err == nil {
+		if _, err := registry.Open(target); err == nil {
 			t.Errorf("accepted %+v", target)
 		}
 	}
