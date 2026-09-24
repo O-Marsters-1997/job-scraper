@@ -49,6 +49,12 @@ func (q *Queue) EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error {
 		if err != nil {
 			return err
 		}
+		if job.Card.Source != "" {
+			if err := q.PublishSource(ctx, job.Card.Source, SourceDetail, job.URL, payload, time.Now(), 10*time.Second); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := q.Publish(ctx, Detail, job.URL, payload, time.Now()); err != nil {
 			return err
 		}

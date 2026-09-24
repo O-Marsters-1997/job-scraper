@@ -44,7 +44,7 @@ func RunAcquisition(ctx context.Context, q SourceQueue, size int, handler Acquis
 }
 
 func runAcquisition(ctx context.Context, q SourceQueue, item queue.SourceItem, handler AcquisitionHandler) {
-	workCtx, cancel := context.WithCancel(ctx)
+	workCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	stopped := make(chan struct{})
 	lost := make(chan error, 1)
@@ -66,6 +66,9 @@ func runAcquisition(ctx context.Context, q SourceQueue, item queue.SourceItem, h
 		}
 	}()
 	err := handler(workCtx, item)
+	if err == nil {
+		err = workCtx.Err()
+	}
 	cancel()
 	<-stopped
 	select {

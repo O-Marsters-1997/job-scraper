@@ -16,9 +16,10 @@ import (
 )
 
 type sourceQueueStub struct {
-	mu    sync.Mutex
-	items []queue.SourceItem
-	acked int
+	mu     sync.Mutex
+	items  []queue.SourceItem
+	acked  int
+	nacked int
 }
 
 func (q *sourceQueueStub) ClaimSource(context.Context, time.Duration) (queue.SourceItem, bool, error) {
@@ -39,7 +40,12 @@ func (q *sourceQueueStub) AckSource(context.Context, queue.SourceItem) error {
 	return nil
 }
 
-func (q *sourceQueueStub) NackSource(context.Context, queue.SourceItem, string) error { return nil }
+func (q *sourceQueueStub) NackSource(context.Context, queue.SourceItem, string) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.nacked++
+	return nil
+}
 func (q *sourceQueueStub) RenewSource(context.Context, queue.SourceItem, time.Duration) error {
 	return nil
 }
@@ -72,6 +78,21 @@ func TestAcquisitionPoolRunsEligibleSourcesTogether(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("pool did not stop")
+	}
+}
+
+func TestCanceledAcquisitionIsRetried(t *testing.T) {
+	q := &sourceQueueStub{items: []queue.SourceItem{{ID: "task", Source: "wis"}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	RunAcquisition(ctx, q, 1, func(ctx context.Context, _ queue.SourceItem) error {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Error("handler context has no deadline")
+		}
+		cancel()
+		return nil
+	})
+	if q.acked != 0 || q.nacked != 1 {
+		t.Fatalf("canceled task: acked=%d nacked=%d", q.acked, q.nacked)
 	}
 }
 
@@ -137,11 +158,8 @@ func TestSourceDetailDeliversToAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := &sourceQueueStub{items: []queue.SourceItem{{ID: "task", Source: "wis", Kind: queue.SourceDetail, Payload: payload}}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	exporter := scraper.NewAPIExporter(server.URL, "token")
-	RunAcquisition(ctx, q, 1, func(ctx context.Context, item queue.SourceItem) error {
-		defer cancel()
+	runAcquisition(context.Background(), q, q.items[0], func(ctx context.Context, item queue.SourceItem) error {
 		var job dto.QueuedJob
 		if err := json.Unmarshal(item.Payload, &job); err != nil {
 			return err
@@ -154,5 +172,8 @@ func TestSourceDetailDeliversToAPI(t *testing.T) {
 	})
 	if delivered.URL != url || delivered.Title != "Job" {
 		t.Fatalf("delivered = %+v", delivered)
+	}
+	if q.acked != 1 {
+		t.Fatalf("source task acknowledged %d times", q.acked)
 	}
 }

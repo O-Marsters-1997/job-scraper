@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -208,16 +210,52 @@ func main() {
 	}()
 
 	slog.Info("queue processing worker starting")
-	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
-		job, err := sources.Dispatch(ctx, detailers, qj.URL)
-		if err != nil {
-			slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
+	poolDone := make(chan struct{})
+	go func() {
+		defer close(poolDone)
+		worker.RunAcquisition(ctx, q, 4, func(ctx context.Context, item queue.SourceItem) error {
+			err := deliverSourceDetail(ctx, item, detailers, exporter)
+			if proxy.IsZonePaused(err) {
+				pauseCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+				until := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+				if pauseErr := q.PauseSource(pauseCtx, item.Source, until); pauseErr != nil {
+					slog.Error("source pause failed", slog.String("source", item.Source), slog.Any("err", pauseErr))
+				}
+				stop()
+			}
 			return err
+		})
+	}()
+	if err := worker.Run(ctx, q, func(ctx context.Context, qj dto.QueuedJob) error {
+		if qj.Card.Source != "" {
+			return q.EnqueueJobs(ctx, []dto.QueuedJob{qj})
 		}
-		return exporter.Export(ctx, job)
+		return deliverDetail(ctx, qj, detailers, exporter)
 	}); err != nil {
 		slog.Error("worker failed",
 			slog.Any("err", err),
 		)
 	}
+	cancel()
+	<-poolDone
+}
+
+func deliverSourceDetail(ctx context.Context, item queue.SourceItem, detailers []sources.DetailFetcher, exporter *scraper.APIExporter) error {
+	if item.Kind != queue.SourceDetail {
+		return fmt.Errorf("unsupported source task kind %q", item.Kind)
+	}
+	var job dto.QueuedJob
+	if err := json.Unmarshal(item.Payload, &job); err != nil {
+		return err
+	}
+	return deliverDetail(ctx, job, detailers, exporter)
+}
+
+func deliverDetail(ctx context.Context, qj dto.QueuedJob, detailers []sources.DetailFetcher, exporter *scraper.APIExporter) error {
+	job, err := sources.Dispatch(ctx, detailers, qj.URL)
+	if err != nil {
+		slog.Error("dispatch failed", slog.String("url", qj.URL), slog.Any("err", err))
+		return err
+	}
+	return exporter.Export(ctx, job)
 }

@@ -2,10 +2,33 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+func TestSourceTaggedDetailUsesLane(t *testing.T) {
+	ctx := context.Background()
+	q := newTestQueue(t)
+	job := dto.QueuedJob{URL: "https://example.com/job", Card: dto.Job{Source: "wis"}}
+	if err := q.EnqueueJobs(ctx, []dto.QueuedJob{job}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := q.ClaimReady(ctx, Detail, time.Minute); err != nil || ok {
+		t.Fatalf("legacy claim = %v, %v", ok, err)
+	}
+	item, ok, err := q.ClaimSource(ctx, time.Minute)
+	if err != nil || !ok || item.Source != "wis" || item.Kind != SourceDetail {
+		t.Fatalf("source claim = %+v, %v, %v", item, ok, err)
+	}
+	var got dto.QueuedJob
+	if err := json.Unmarshal(item.Payload, &got); err != nil || got.URL != job.URL {
+		t.Fatalf("payload = %+v, %v", got, err)
+	}
+}
 
 func TestSourceClaimPriorityAndDueTime(t *testing.T) {
 	ctx := context.Background()
