@@ -49,14 +49,13 @@ func TestIngestJobs_RequiresCanonicalPersistence(t *testing.T) {
 
 func TestIngestJobs_DoesNotCallExternalEffects(t *testing.T) {
 	sc := &stubScorer{}
-	notifier := &stubNotifier{}
-	cfg := oneUserCfg(providers.NewMockJobProvider(), sc, notifier)
+	cfg := oneUserCfg(providers.NewMockJobProvider(), sc)
 	results, err := ingest.New(cfg).IngestJobs(context.Background(), []dto.Job{{Title: "Engineer", URL: "https://example.com/job", Source: "greenhouse", CompanySlug: "acme"}})
 	if err != nil || len(results) != 1 || results[0].Status != "new" {
 		t.Fatalf("IngestJobs results=%+v err=%v", results, err)
 	}
-	if len(sc.calls) != 0 || len(notifier.jobs) != 0 {
-		t.Fatalf("external calls during ingest: scores=%d notifications=%d", len(sc.calls), len(notifier.jobs))
+	if len(sc.calls) != 0 {
+		t.Fatalf("scoring called during ingest: %d", len(sc.calls))
 	}
 }
 
@@ -110,16 +109,8 @@ func (c *stubCredGetter) Get(_ context.Context, _, _ string) (string, error) {
 	return c.key, c.err
 }
 
-type stubNotifier struct {
-	jobs []dto.Job
-}
-
-func (n *stubNotifier) NotifyNewJob(_ context.Context, job dto.Job, _ int) {
-	n.jobs = append(n.jobs, job)
-}
-
 // oneUserCfg returns a Config wired with a single user and a shared stubScorer.
-func oneUserCfg(db ingest.Saver, sc *stubScorer, notifier ingest.Notifier) ingest.Config {
+func oneUserCfg(db ingest.Saver, sc *stubScorer) ingest.Config {
 	return ingest.Config{
 		DB:       db,
 		Provider: "anthropic",
@@ -128,7 +119,6 @@ func oneUserCfg(db ingest.Saver, sc *stubScorer, notifier ingest.Notifier) inges
 		ScorerFor: func(_ string) ingest.Scorer {
 			return sc
 		},
-		Notifier: notifier,
 	}
 }
 
@@ -138,25 +128,22 @@ func TestIngest(t *testing.T) {
 	errSave := errors.New("db down")
 
 	tests := []struct {
-		name         string
-		jobs         []dto.Job
-		saveErr      error
-		noScoring    bool
-		nilNotifier  bool
-		wantErr      bool
-		wantSaved    int
-		wantScored   int // total jobs scored across all batch calls
-		wantNotified int
+		name       string
+		jobs       []dto.Job
+		saveErr    error
+		noScoring  bool
+		wantErr    bool
+		wantSaved  int
+		wantScored int // total jobs scored across all batch calls
 	}{
 		{
-			name: "valid batch is saved, scored, and notified",
+			name: "valid batch is saved and scored",
 			jobs: []dto.Job{
 				{Title: "Engineer", URL: "https://example.com/1"},
 				{Title: "Manager", URL: "https://example.com/2"},
 			},
-			wantSaved:    2,
-			wantScored:   2,
-			wantNotified: 2,
+			wantSaved:  2,
+			wantScored: 2,
 		},
 		{
 			name: "jobs missing title or url are filtered out",
@@ -165,9 +152,8 @@ func TestIngest(t *testing.T) {
 				{Title: "Engineer", URL: ""},
 				{Title: "Valid", URL: "https://example.com/3"},
 			},
-			wantSaved:    1,
-			wantScored:   1,
-			wantNotified: 1,
+			wantSaved:  1,
+			wantScored: 1,
 		},
 		{
 			name:      "all invalid - nothing saved",
@@ -179,17 +165,16 @@ func TestIngest(t *testing.T) {
 			wantSaved: 0,
 		},
 		{
-			name:    "save error propagates; scorer and notifier not called",
+			name:    "save error propagates; scorer not called",
 			jobs:    []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
 			saveErr: errSave,
 			wantErr: true,
 		},
 		{
-			name:        "no scoring config and nil notifier do not panic",
-			jobs:        []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
-			noScoring:   true,
-			nilNotifier: true,
-			wantSaved:   1,
+			name:      "no scoring config does not panic",
+			jobs:      []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}},
+			noScoring: true,
+			wantSaved: 1,
 		},
 	}
 
@@ -199,16 +184,12 @@ func TestIngest(t *testing.T) {
 
 			db := &stubSaver{err: tt.saveErr}
 			sc := &stubScorer{}
-			nc := &stubNotifier{}
 
 			var cfg ingest.Config
 			if tt.noScoring {
 				cfg = ingest.Config{DB: db}
 			} else {
-				cfg = oneUserCfg(db, sc, nc)
-				if tt.nilNotifier {
-					cfg.Notifier = nil
-				}
+				cfg = oneUserCfg(db, sc)
 			}
 
 			err := ingest.New(cfg).Ingest(context.Background(), tt.jobs)
@@ -219,9 +200,6 @@ func TestIngest(t *testing.T) {
 				}
 				if totalScored(sc.calls) != 0 {
 					t.Errorf("scorer called for %d jobs after save error; want 0", totalScored(sc.calls))
-				}
-				if len(nc.jobs) != 0 {
-					t.Errorf("notifier called %d times after save error; want 0", len(nc.jobs))
 				}
 				return
 			}
@@ -239,9 +217,6 @@ func TestIngest(t *testing.T) {
 			}
 			if got := totalScored(sc.calls); got != tt.wantScored {
 				t.Errorf("scorer called for %d jobs; want %d", got, tt.wantScored)
-			}
-			if len(nc.jobs) != tt.wantNotified {
-				t.Errorf("notifier called %d times; want %d", len(nc.jobs), tt.wantNotified)
 			}
 		})
 	}

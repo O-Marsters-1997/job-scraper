@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -14,6 +15,7 @@ type EffectStore interface {
 	ClaimScoringEffect(context.Context) (dto.ScoringEffect, error)
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
+	GetProfile(context.Context, string) (dto.Profile, error)
 	FailScoringEffect(context.Context, string, int, string) error
 	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
@@ -22,10 +24,11 @@ type OutboxWorker struct {
 	store     EffectStore
 	getKey    func(context.Context, string) (string, error)
 	scorerFor func(string) SuitabilityScorer
+	sendAlert func(context.Context, dto.Job, string) error
 }
 
-func NewOutboxWorker(store EffectStore, getKey func(context.Context, string) (string, error), scorerFor func(string) SuitabilityScorer) *OutboxWorker {
-	return &OutboxWorker{store: store, getKey: getKey, scorerFor: scorerFor}
+func NewOutboxWorker(store EffectStore, getKey func(context.Context, string) (string, error), scorerFor func(string) SuitabilityScorer, sendAlert func(context.Context, dto.Job, string) error) *OutboxWorker {
+	return &OutboxWorker{store: store, getKey: getKey, scorerFor: scorerFor, sendAlert: sendAlert}
 }
 
 func (w *OutboxWorker) RunOnce(ctx context.Context) error {
@@ -68,6 +71,29 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	if err != nil {
 		return fail(fmt.Errorf("score job: %w", err))
 	}
-	_, err = w.store.CompleteScoringEffect(ctx, effect, result.Score, result.Rationale, result.Matched, result.Missing)
-	return err
+	email := ""
+	if effect.FirstDiscovery && result.Score >= cfg.NotifyThreshold && w.sendAlert != nil {
+		profile, err := w.store.GetProfile(ctx, effect.UserID)
+		if err != nil {
+			return fail(fmt.Errorf("load notification recipient: %w", err))
+		}
+		email = profile.Email
+	}
+	saved, err := w.store.CompleteScoringEffect(ctx, effect, result.Score, result.Rationale, result.Matched, result.Missing)
+	if err != nil {
+		return err
+	}
+	if !saved {
+		return nil
+	}
+	if email == "" {
+		if effect.FirstDiscovery && result.Score >= cfg.NotifyThreshold && w.sendAlert != nil {
+			slog.Debug("notification skipped: user has no email", slog.String("user_id", effect.UserID))
+		}
+		return nil
+	}
+	if err := w.sendAlert(ctx, job, email); err != nil {
+		slog.Error("notification send failed", slog.String("user_id", effect.UserID), slog.String("job_id", job.ID), slog.Any("err", err))
+	}
+	return nil
 }

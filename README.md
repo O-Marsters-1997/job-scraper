@@ -54,7 +54,8 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 ┌──────────────────────────────────────────────────────────────────┐
 │ POST /ingest  (service-token auth)                 cmd/api       │
 │                                                                  │
-│  validate → db.Save → ScoreAndSave → NotifyNewJob                │
+│  validate → save → queue scoring effect                          │
+│  scoring worker → per-user threshold → recipient email          │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +64,7 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 | Package | Role |
 |---|---|
 | `cmd/worker` | Loads source targets from DB, registers exporter and relevance gate, runs orchestrator + worker loop + session-cleanup cron |
-| `cmd/api` | HTTP API server; frontend routes, user auth, application tracking, CV templates, and `POST /ingest` (persist/score/notify) |
+| `cmd/api` | HTTP API server; frontend routes, user auth, application tracking, CV templates, ingest, and scoring outbox worker |
 | `internal/scraper` | Cron orchestrator; schedules scrapes, branches on `DetailFetcher` interface, enqueues HTML URLs or bulk-exports ATS jobs; `JobExporter` egress interface + `APIExporter` HTTP implementation |
 | `internal/sources` | `Source` and `DetailFetcher` interfaces, `PaginatedBase` helper, `Dispatch` URL router, supported-source registry |
 | `internal/sources/builder` | Builds the active source set from per-user source targets loaded from the DB |
@@ -79,11 +80,11 @@ The orchestrator branches at callback time: `if _, ok := src.(sources.DetailFetc
 | `internal/detect` | Classifies URLs by ATS type; `RewriteToATS` strips aggregator wrappers |
 | `internal/queue` | Valkey-backed sorted-set queue; `ZADD NX` dedup, exponential backoff retry, dead-letter after 3 attempts |
 | `internal/worker` | Sequential consumer loop; random 10–15s between items, 30s when empty |
-| `internal/ingest` | validate → `db.Save` → `Scorer.ScoreAndSave` → `Notifier.NotifyNewJob`; wired into `cmd/api` |
+| `internal/ingest` | Validates and saves jobs; scoring and notification delivery happen after the durable scoring effect |
 | `internal/auth` | Cookie session middleware (user routes) + `ServiceTokenMiddleware` (bearer token for `POST /ingest`) |
 | `internal/handlers` | HTTP handlers including `IngestHandler` for `POST /ingest` |
-| `internal/score` | Heuristic relevance scorer (cheap, runs at scrape time as gate) + Claude suitability scorer (LLM, runs at ingest in API) |
-| `internal/notify` | Resend-backed email; per-job alerts and daily digest, gated by suitability threshold |
+| `internal/score` | Heuristic relevance scorer and durable per-user Claude suitability worker |
+| `internal/notify` | Resend-backed per-job email to each qualifying user's profile address |
 | `internal/data/db` | pgx pool + sqlc-generated queries |
 | `internal/dto` | Shared data transfer objects (`Job`, `QueuedJob`, `SearchConfig`) |
 | `internal/proxy` | Per-source proxy tiers: direct / datacenter / residential |
@@ -182,10 +183,10 @@ Scoring and notifications (configured on `cmd/api`):
 |---|---|
 | Relevance gate (worker) | `SCORING_USER_ID` |
 | Suitability scoring (API) | `SCORING_USER_ID` + `ANTHROPIC_API_KEY` |
-| Email notifications (API) | `RESEND_API_KEY` + `NOTIFY_EMAIL_TO` |
-| Per-ingest email | `NOTIFY_ON_INGEST=true` |
-| Daily digest | `NOTIFY_DIGEST_ENABLED=true` (default) + `NOTIFY_DIGEST_CRON` |
+| Per-user email notifications (API) | `RESEND_API_KEY` + `NOTIFY_EMAIL_FROM` (optional); recipient comes from `users.email` and threshold from each user's search config |
 | BrightData Web Unlocker (required by worker) | `BRIGHTDATA_PROXY_URL`; `BRIGHTDATA_CA_CERT` when needed for TLS trust |
+
+Existing operator accounts need `users.email` set (via Profile settings) to keep receiving notifications after this change. A null email silently skips delivery.
 
 ## VPS Deployment
 
