@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
@@ -20,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/crawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/getro"
@@ -55,6 +58,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9091"
+	}
+	go func() {
+		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
+			slog.Error("metrics server failed", slog.Any("err", err))
+		}
+	}()
+
 	brokerURL := os.Getenv("RABBITMQ_URL")
 	if brokerURL == "" {
 		brokerURL = "amqp://guest:guest@localhost:5672/"

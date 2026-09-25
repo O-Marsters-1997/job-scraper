@@ -1,0 +1,81 @@
+# Phase 1 rules only (plans/grafana-observability.md). datasourceUid placeholders are filled in
+# by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki datasource UIDs
+# by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
+folder:
+  uid: pipeline-health
+  title: Pipeline health
+
+ruleGroup: pipeline-health
+
+rules:
+  - uid: target-down
+    title: Target down
+    condition: C
+    for: 5m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $labels.job }} target is down"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: up{job=~"api|worker"} == 0
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
+  - uid: error-burst
+    title: Error burst
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.service }} logged {{ $values.A }} ERROR lines in the last 10m"
+    data:
+      - refId: A
+        queryType: range
+        relativeTimeRange:
+          from: 600
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: A
+          queryType: range
+          expr: sum by (service) (count_over_time({env="prod"} |= "ERROR" [10m]))
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [20]

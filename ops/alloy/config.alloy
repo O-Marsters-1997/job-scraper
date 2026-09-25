@@ -1,0 +1,78 @@
+// Grafana Alloy config for the observability profile (ADR-0025, plans/grafana-observability.md
+// Phase 1). Ships api/worker container logs and /metrics scrapes to Grafana Cloud. Credentials
+// come from the environment (.env.docker-compose); this file holds no secrets.
+
+discovery.docker "containers" {
+	host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "default" {
+	host          = "unix:///var/run/docker.sock"
+	targets       = discovery.relabel.containers.output
+	relabel_rules = discovery.relabel.containers.rules
+	forward_to    = [loki.process.add_level.receiver]
+}
+
+loki.process "add_level" {
+	forward_to = [loki.write.grafana_cloud.receiver]
+
+	stage.docker { }
+
+	stage.json {
+		expressions = {level = "level"}
+	}
+
+	stage.labels {
+		values = {
+			level = "level",
+		}
+	}
+}
+
+loki.write "grafana_cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+			password = sys.env("GRAFANA_CLOUD_TOKEN")
+		}
+	}
+
+	external_labels = {
+		env = sys.env("ENV"),
+	}
+}
+
+prometheus.scrape "services" {
+	targets = [
+		{"__address__" = "api:9091", "job" = "api"},
+		{"__address__" = "worker:9091", "job" = "worker"},
+	]
+	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+	endpoint {
+		url = sys.env("GRAFANA_CLOUD_PROM_URL")
+
+		basic_auth {
+			username = sys.env("GRAFANA_CLOUD_PROM_USER")
+			password = sys.env("GRAFANA_CLOUD_TOKEN")
+		}
+	}
+
+	external_labels = {
+		env = sys.env("ENV"),
+	}
+}

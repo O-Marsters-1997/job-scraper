@@ -1,0 +1,29 @@
+{
+  "uid": "jobscraper-pipeline-health",
+  "title": "Pipeline health",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service up",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "up{job=~\"api|worker\"}", "legendFormat": "{{job}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Logs by service and level",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "{env=\"prod\"}" }
+      ]
+    }
+  ]
+}

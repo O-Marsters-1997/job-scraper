@@ -1,0 +1,7 @@
+contactPoints:
+  - uid: email-oncall
+    name: email-oncall
+    type: email
+    settings:
+      addresses: ollyn.marsters@gmail.com
+      singleEmail: true
