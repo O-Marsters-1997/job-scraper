@@ -12,6 +12,19 @@ const base = {
 	excludedCompanies: ["acme corp"],
 	excludedSeniority: ["intern", "junior"],
 	excludedLocations: ["united states"],
+	scoringQuestions: {
+		profile: "I am a Go engineer looking for distributed systems roles.",
+		criteria: [
+			{
+				key: "go_backend",
+				instructions: "Does the job involve Go backend work?",
+				true: "Go is a primary language",
+				false: "Go isn't used",
+				required: true,
+			},
+		],
+		scale: ["Not relevant", "Weak", "Possible", "Strong", "Apply today"],
+	},
 };
 
 const valid = scoringConfigSchema.parse(base);
@@ -49,3 +62,21 @@ try {
 	threw = true;
 }
 ok(threw, "non-string exclusion entry rejected");
+
+const valid2 = scoringConfigSchema.parse(base);
+ok(valid2.scoringQuestions.criteria.length === 1, "criteria parse");
+ok(valid2.scoringQuestions.scale.length === 5, "scale parses");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		scoringQuestions: {
+			...base.scoringQuestions,
+			criteria: [{ ...base.scoringQuestions.criteria[0], required: "yes" }],
+		},
+	});
+} catch {
+	threw = true;
+}
+ok(threw, "non-boolean criterion required rejected");

@@ -1,6 +1,20 @@
 import { z } from "zod";
 import { apiFetch } from "./client";
 
+export const scoringCriterionSchema = z.object({
+	key: z.string(),
+	instructions: z.string(),
+	true: z.string(),
+	false: z.string(),
+	required: z.boolean(),
+});
+
+export const scoringQuestionsSchema = z.object({
+	profile: z.string(),
+	criteria: z.array(scoringCriterionSchema),
+	scale: z.array(z.string()),
+});
+
 export const scoringConfigSchema = z.object({
 	suitabilityRubric: z.string(),
 	notifyThreshold: z.number().int().min(0).max(100),
@@ -8,8 +22,11 @@ export const scoringConfigSchema = z.object({
 	excludedCompanies: z.array(z.string()),
 	excludedSeniority: z.array(z.string()),
 	excludedLocations: z.array(z.string()),
+	scoringQuestions: scoringQuestionsSchema,
 });
 
+export type ScoringCriterion = z.infer<typeof scoringCriterionSchema>;
+export type ScoringQuestions = z.infer<typeof scoringQuestionsSchema>;
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
 
 export async function fetchScoringConfig(): Promise<ScoringConfig> {
