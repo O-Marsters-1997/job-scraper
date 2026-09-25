@@ -1,22 +1,15 @@
 package handlers
 
 import (
-	"encoding/json"
-	"errors"
-	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-
-	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
-	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
+// ApplicationHandler holds the two routes driven by a query parameter
+// (status_id, job_ids) rather than a path ID, so they stay misfits per ADR
+// 0020 instead of binding through the generic adapter wrappers.
 type ApplicationHandler struct {
 	applications providers.ApplicationProvider
 }
@@ -26,7 +19,10 @@ func NewApplicationHandler(applications providers.ApplicationProvider) *Applicat
 }
 
 func (h *ApplicationHandler) ListApplications(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
+	userID, ok := Caller(w, r)
+	if !ok {
+		return
+	}
 	statusID := r.URL.Query().Get("status_id")
 
 	var (
@@ -34,144 +30,32 @@ func (h *ApplicationHandler) ListApplications(w http.ResponseWriter, r *http.Req
 		err  error
 	)
 	if statusID != "" {
-		apps, err = h.applications.ListApplicationsByUserAndStatus(r.Context(), session.UserID, statusID)
+		apps, err = h.applications.ListApplicationsByUserAndStatus(r.Context(), userID, statusID)
 	} else {
-		apps, err = h.applications.ListApplicationsByUser(r.Context(), session.UserID)
+		apps, err = h.applications.ListApplicationsByUser(r.Context(), userID)
 	}
 	if err != nil {
-		slog.Error("list applications failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(apps)
-}
-
-func (h *ApplicationHandler) CreateApplication(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	var body struct {
-		JobID      string            `json:"job_id"`
-		StatusID   string            `json:"status_id"`
-		Notes      string            `json:"notes"`
-		AppliedAt  fp.Option[string] `json:"applied_at"`
-		SalaryInfo string            `json:"salary_info"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.JobID == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	if !validAppliedAt(body.AppliedAt) {
-		http.Error(w, "invalid applied_at date", http.StatusBadRequest)
-		return
-	}
-
-	app, err := h.applications.CreateApplication(r.Context(), dto.CreateApplicationInput{
-		UserID:     session.UserID,
-		JobID:      body.JobID,
-		StatusID:   body.StatusID,
-		Notes:      body.Notes,
-		SalaryInfo: body.SalaryInfo,
-		AppliedAt:  body.AppliedAt,
-	})
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_, _ = w.Write([]byte(`{"error":"application already exists for this job"}`))
-			return
-		}
-		slog.Error("create application failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(app)
-}
-
-func (h *ApplicationHandler) UpdateApplication(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	id := chi.URLParam(r, "id")
-	var body struct {
-		StatusID   string            `json:"status_id"`
-		Notes      string            `json:"notes"`
-		AppliedAt  fp.Option[string] `json:"applied_at"`
-		SalaryInfo string            `json:"salary_info"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	if !validAppliedAt(body.AppliedAt) {
-		http.Error(w, "invalid applied_at date", http.StatusBadRequest)
-		return
-	}
-	app, err := h.applications.UpdateApplication(r.Context(), dto.UpdateApplicationInput{
-		ID:         id,
-		UserID:     session.UserID,
-		StatusID:   body.StatusID,
-		Notes:      body.Notes,
-		SalaryInfo: body.SalaryInfo,
-		AppliedAt:  body.AppliedAt,
-	})
-	if err != nil {
-		if errors.Is(err, providers.ErrNotFound) {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
-		slog.Error("update application failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(app)
-}
-
-func validAppliedAt(date fp.Option[string]) bool {
-	if date.IsNone() {
-		return true
-	}
-	_, err := time.Parse(time.DateOnly, date.Unwrap())
-	return err == nil
-}
-
-func (h *ApplicationHandler) DeleteApplication(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	id := chi.URLParam(r, "id")
-	if err := h.applications.DeleteApplication(r.Context(), id, session.UserID); err != nil {
-		slog.Error("delete application failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	WriteJSON(w, http.StatusOK, apps)
 }
 
 func (h *ApplicationHandler) GetApplicationsForJobs(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
+	userID, ok := Caller(w, r)
+	if !ok {
+		return
+	}
 	raw := r.URL.Query().Get("job_ids")
 	if raw == "" {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{})
+		WriteJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
 	jobIDs := strings.Split(raw, ",")
-	m, err := h.applications.GetApplicationsForJobs(r.Context(), session.UserID, jobIDs)
+	m, err := h.applications.GetApplicationsForJobs(r.Context(), userID, jobIDs)
 	if err != nil {
-		slog.Error("get applications for jobs failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(m)
+	WriteJSON(w, http.StatusOK, m)
 }

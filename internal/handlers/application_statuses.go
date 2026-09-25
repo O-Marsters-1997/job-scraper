@@ -11,72 +11,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
+// ApplicationStatusHandler holds DeleteApplicationStatus, which stays a
+// misfit per ADR 0020: it returns 409 plus an in-use count, a shape the
+// generic adapters don't express.
 type ApplicationStatusHandler struct {
 	statuses providers.ApplicationStatusProvider
 }
 
 func NewApplicationStatusHandler(statuses providers.ApplicationStatusProvider) *ApplicationStatusHandler {
 	return &ApplicationStatusHandler{statuses: statuses}
-}
-
-func (h *ApplicationStatusHandler) ListApplicationStatuses(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	statuses, err := h.statuses.ListApplicationStatusesByUser(r.Context(), session.UserID)
-	if err != nil {
-		slog.Error("list application statuses failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(statuses)
-}
-
-func (h *ApplicationStatusHandler) CreateApplicationStatus(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	var body struct {
-		Name   string `json:"name"`
-		Colour string `json:"colour"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" || body.Colour == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	s, err := h.statuses.CreateApplicationStatus(r.Context(), session.UserID, body.Name, body.Colour)
-	if err != nil {
-		slog.Error("create application status failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(s)
-}
-
-func (h *ApplicationStatusHandler) UpdateApplicationStatus(w http.ResponseWriter, r *http.Request) {
-	session, _ := auth.SessionFromContext(r.Context())
-	id := chi.URLParam(r, "id")
-	var body struct {
-		Name   string `json:"name"`
-		Colour string `json:"colour"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" || body.Colour == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	s, err := h.statuses.UpdateApplicationStatus(r.Context(), id, session.UserID, body.Name, body.Colour)
-	if err != nil {
-		slog.Error("update application status failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s)
 }
 
 func (h *ApplicationStatusHandler) DeleteApplicationStatus(w http.ResponseWriter, r *http.Request) {

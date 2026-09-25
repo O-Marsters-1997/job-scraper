@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrBoardConflict = errors.New("board belongs to another company")
+var ErrBoardConflict = apperr.Conflict("board belongs to another company")
 var ErrBoardClaimUnavailable = errors.New("board claim unavailable")
 
 type CompanyProvider interface {

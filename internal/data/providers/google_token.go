@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrGoogleTokenNotFound = errors.New("google token not found")
+var ErrGoogleTokenNotFound = apperr.Unauthorized("google account not connected")
 
 // ErrGoogleTokenUnusable is returned when a token row exists but cannot be
 // decrypted (e.g. bad or rotated GOOGLE_TOKEN_ENC_KEY). The handler treats

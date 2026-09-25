@@ -7,21 +7,18 @@ import (
 )
 
 type CreateApplicationInput struct {
-	UserID     string
-	JobID      string
-	StatusID   string
-	Notes      string
-	SalaryInfo string
-	AppliedAt  fp.Option[string]
+	JobID      string            `json:"job_id"`
+	StatusID   string            `json:"status_id"`
+	Notes      string            `json:"notes"`
+	SalaryInfo string            `json:"salary_info"`
+	AppliedAt  fp.Option[string] `json:"applied_at"`
 }
 
 type UpdateApplicationInput struct {
-	ID         string
-	UserID     string
-	StatusID   string
-	Notes      string
-	SalaryInfo string
-	AppliedAt  fp.Option[string]
+	StatusID   string            `json:"status_id"`
+	Notes      string            `json:"notes"`
+	SalaryInfo string            `json:"salary_info"`
+	AppliedAt  fp.Option[string] `json:"applied_at"`
 }
 
 type ApplicationStatus struct {

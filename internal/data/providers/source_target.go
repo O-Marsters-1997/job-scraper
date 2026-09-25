@@ -3,8 +3,11 @@ package providers
 import (
 	"context"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+var ErrSourceTargetExists = apperr.Conflict("source target already exists")
 
 type SourceTargetProvider interface {
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)

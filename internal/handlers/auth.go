@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
@@ -32,12 +32,11 @@ func NewAuthHandler(store authStore) *AuthHandler {
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var body struct {
+	body, ok := DecodeJSON[struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	}](w, r)
+	if !ok {
 		return
 	}
 
@@ -54,16 +53,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
-		slog.Error("create session failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
 	http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"username": user.Username})
+	WriteJSON(w, http.StatusOK, map[string]string{"username": user.Username})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -81,49 +76,39 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	WriteJSON(w, http.StatusOK, map[string]string{
 		"id":       session.UserID,
 		"username": session.Username,
 	})
 }
 
 func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
-	var body struct {
+	body, ok := DecodeJSON[struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 		Email    string `json:"email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+	}](w, r)
+	if !ok {
 		return
 	}
 	if body.Username == "" || body.Password == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		WriteError(w, r, apperr.Invalid("bad request"))
 		return
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcryptCost)
 	if err != nil {
-		slog.Error("bcrypt failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
 	user, err := h.store.CreateUser(r.Context(), body.Username, string(hash), body.Email)
 	if err != nil {
 		if errors.Is(err, providers.ErrUsernameTaken) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			_, _ = w.Write([]byte(`{"error":"username already taken"}`))
+			WriteError(w, r, apperr.Conflict(err.Error()))
 			return
 		}
-		slog.Error("create user failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
@@ -135,15 +120,10 @@ func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
 	if err != nil {
-		slog.Error("create session after signup failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
 	http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]string{"username": user.Username})
+	WriteJSON(w, http.StatusCreated, map[string]string{"username": user.Username})
 }

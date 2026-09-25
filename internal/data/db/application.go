@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
@@ -67,8 +68,8 @@ func fromApplicationListStatusRow(r pgsqlc.ListApplicationsByUserAndStatusRow) d
 	}
 }
 
-func (db *DB) CreateApplication(ctx context.Context, input dto.CreateApplicationInput) (dto.Application, error) {
-	uid, err := parseUUID(input.UserID)
+func (db *DB) CreateApplication(ctx context.Context, userID string, input dto.CreateApplicationInput) (dto.Application, error) {
+	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.Application{}, err
 	}
@@ -96,6 +97,10 @@ func (db *DB) CreateApplication(ctx context.Context, input dto.CreateApplication
 		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return dto.Application{}, providers.ErrApplicationExists
+		}
 		return dto.Application{}, fmt.Errorf("db.CreateApplication: %w", err)
 	}
 	return fromApplication(a), nil
@@ -140,12 +145,12 @@ func (db *DB) ListApplicationsByUserAndStatus(ctx context.Context, userID, statu
 	return out, nil
 }
 
-func (db *DB) UpdateApplication(ctx context.Context, input dto.UpdateApplicationInput) (dto.Application, error) {
-	aid, err := parseUUID(input.ID)
+func (db *DB) UpdateApplication(ctx context.Context, userID, id string, input dto.UpdateApplicationInput) (dto.Application, error) {
+	aid, err := parseUUID(id)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	uid, err := parseUUID(input.UserID)
+	uid, err := parseUUID(userID)
 	if err != nil {
 		return dto.Application{}, err
 	}
@@ -177,7 +182,7 @@ func (db *DB) UpdateApplication(ctx context.Context, input dto.UpdateApplication
 	return fromApplication(a), nil
 }
 
-func (db *DB) DeleteApplication(ctx context.Context, id, userID string) error {
+func (db *DB) DeleteApplication(ctx context.Context, userID, id string) error {
 	aid, err := parseUUID(id)
 	if err != nil {
 		return err

@@ -2,14 +2,14 @@ package providers
 
 import (
 	"context"
-	"errors"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 var (
-	ErrApplicationExists = errors.New("application already exists for this job")
-	ErrNotFound          = errors.New("not found")
+	ErrApplicationExists = apperr.Conflict("application already exists for this job")
+	ErrNotFound          = apperr.NotFound("not found")
 )
 
 type ApplicationStatusProvider interface {
@@ -22,10 +22,10 @@ type ApplicationStatusProvider interface {
 }
 
 type ApplicationProvider interface {
-	CreateApplication(ctx context.Context, input dto.CreateApplicationInput) (dto.Application, error)
+	CreateApplication(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error)
 	ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error)
 	ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
-	UpdateApplication(ctx context.Context, input dto.UpdateApplicationInput) (dto.Application, error)
-	DeleteApplication(ctx context.Context, id, userID string) error
+	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
+	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 }

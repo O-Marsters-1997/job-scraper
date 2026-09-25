@@ -4,41 +4,38 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-type unusedApplicationProvider struct{ providers.ApplicationProvider }
-
-func (unusedApplicationProvider) CreateApplication(context.Context, dto.CreateApplicationInput) (dto.Application, error) {
-	panic("invalid date reached provider")
+func TestGetApplicationsForJobsNoIDsReturnsEmptyObject(t *testing.T) {
+	h := NewApplicationHandler(providers.NewMockApplicationProvider())
+	req := withSession(httptest.NewRequest(http.MethodGet, "/applications/for-jobs", nil), "user-1")
+	w := httptest.NewRecorder()
+	h.GetApplicationsForJobs(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if got := w.Body.String(); got != "{}\n" {
+		t.Fatalf("body = %q, want {}", got)
+	}
 }
-func (unusedApplicationProvider) UpdateApplication(context.Context, dto.UpdateApplicationInput) (dto.Application, error) {
-	panic("invalid date reached provider")
-}
 
-func TestApplicationHandlersRejectInvalidDate(t *testing.T) {
-	h := NewApplicationHandler(unusedApplicationProvider{})
-	for _, tc := range []struct {
-		name   string
-		handle http.HandlerFunc
-		body   string
-	}{
-		{"create", h.CreateApplication, `{"job_id":"job-1","applied_at":"bad"}`},
-		{"update", h.UpdateApplication, `{"applied_at":"bad"}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/applications", strings.NewReader(tc.body))
-			req = req.WithContext(auth.WithSession(req.Context(), dto.Session{UserID: "user-1"}))
-			w := httptest.NewRecorder()
-			tc.handle(w, req)
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want 400", w.Code)
-			}
-		})
+func TestListApplicationsFiltersByStatusWhenGiven(t *testing.T) {
+	store := providers.NewMockApplicationProvider()
+	if _, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1"}); err != nil {
+		t.Fatal(err)
+	}
+	h := NewApplicationHandler(store)
+	req := withSession(httptest.NewRequest(http.MethodGet, "/applications?status_id=missing", nil), "user-1")
+	w := httptest.NewRecorder()
+	h.ListApplications(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	if got := w.Body.String(); got != "[]\n" {
+		t.Fatalf("body = %q, want []", got)
 	}
 }
