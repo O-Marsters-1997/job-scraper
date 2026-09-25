@@ -147,6 +147,78 @@ func (q *Queries) FailScoringEffect(ctx context.Context, arg FailScoringEffectPa
 	return err
 }
 
+const findInterestedUsers = `-- name: FindInterestedUsers :many
+SELECT u.id AS user_id,
+    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
+    COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
+    COALESCE(sc.excluded_seniority, '{}')::text[] AS excluded_seniority,
+    COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
+    COALESCE(sc.updated_at, 'epoch'::timestamptz) AS config_version,
+    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001') AS model
+FROM users u
+LEFT JOIN search_config sc ON sc.user_id = u.id
+LEFT JOIN user_ai_prefs p ON p.user_id = u.id
+WHERE EXISTS (
+    SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+    WHERE tc.user_id = u.id AND tc.enabled AND
+        (c.id = $1::uuid OR c.slug = $2::text)
+) OR EXISTS (
+    SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled
+        AND st.source = $3::text
+        AND ($4::boolean OR st.value = $2::text)
+)
+`
+
+type FindInterestedUsersParams struct {
+	CompanyID   pgtype.UUID
+	CompanySlug string
+	Source      string
+	Discovery   bool
+}
+
+type FindInterestedUsersRow struct {
+	UserID                pgtype.UUID
+	ExcludedTitleKeywords []string
+	ExcludedCompanies     []string
+	ExcludedSeniority     []string
+	ExcludedLocations     []string
+	ConfigVersion         pgtype.Timestamptz
+	Model                 string
+}
+
+func (q *Queries) FindInterestedUsers(ctx context.Context, arg FindInterestedUsersParams) ([]FindInterestedUsersRow, error) {
+	rows, err := q.db.Query(ctx, findInterestedUsers,
+		arg.CompanyID,
+		arg.CompanySlug,
+		arg.Source,
+		arg.Discovery,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindInterestedUsersRow
+	for rows.Next() {
+		var i FindInterestedUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.ExcludedTitleKeywords,
+			&i.ExcludedCompanies,
+			&i.ExcludedSeniority,
+			&i.ExcludedLocations,
+			&i.ConfigVersion,
+			&i.Model,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getScoringStatus = `-- name: GetScoringStatus :one
 SELECT
     (SELECT count(*) FROM effect_outbox WHERE user_id = $1::uuid AND status IN ('pending', 'running')) AS pending,
@@ -171,6 +243,34 @@ func (q *Queries) GetScoringStatus(ctx context.Context, userID pgtype.UUID) (Get
 	var i GetScoringStatusRow
 	err := row.Scan(&i.Pending, &i.Failed, &i.Stale)
 	return i, err
+}
+
+const insertScoringEffect = `-- name: InsertScoringEffect :exec
+INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model, first_discovery)
+VALUES ($1::uuid, $2::uuid, $3::text,
+    $4::timestamptz, $5::text, $6::boolean)
+ON CONFLICT DO NOTHING
+`
+
+type InsertScoringEffectParams struct {
+	JobID          pgtype.UUID
+	UserID         pgtype.UUID
+	Fingerprint    string
+	ConfigVersion  pgtype.Timestamptz
+	Model          string
+	FirstDiscovery bool
+}
+
+func (q *Queries) InsertScoringEffect(ctx context.Context, arg InsertScoringEffectParams) error {
+	_, err := q.db.Exec(ctx, insertScoringEffect,
+		arg.JobID,
+		arg.UserID,
+		arg.Fingerprint,
+		arg.ConfigVersion,
+		arg.Model,
+		arg.FirstDiscovery,
+	)
+	return err
 }
 
 const queueRescore = `-- name: QueueRescore :execrows
@@ -203,50 +303,6 @@ func (q *Queries) QueueRescore(ctx context.Context, userID pgtype.UUID) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const queueScoringEffects = `-- name: QueueScoringEffects :exec
-INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model, first_discovery)
-SELECT $1::uuid, u.id, $2::text,
-    COALESCE(sc.updated_at, 'epoch'::timestamptz),
-    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001'),
-    $3::boolean
-FROM users u
-LEFT JOIN search_config sc ON sc.user_id = u.id
-LEFT JOIN user_ai_prefs p ON p.user_id = u.id
-WHERE EXISTS (
-    SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
-    WHERE tc.user_id = u.id AND tc.enabled AND
-        (c.id = $4::uuid OR c.slug = $5::text)
-) OR EXISTS (
-    SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled
-        AND st.source = $6::text
-        AND ($7::boolean OR st.value = $5::text)
-)
-ON CONFLICT DO NOTHING
-`
-
-type QueueScoringEffectsParams struct {
-	JobID          pgtype.UUID
-	Fingerprint    string
-	FirstDiscovery bool
-	CompanyID      pgtype.UUID
-	CompanySlug    string
-	Source         string
-	Discovery      bool
-}
-
-func (q *Queries) QueueScoringEffects(ctx context.Context, arg QueueScoringEffectsParams) error {
-	_, err := q.db.Exec(ctx, queueScoringEffects,
-		arg.JobID,
-		arg.Fingerprint,
-		arg.FirstDiscovery,
-		arg.CompanyID,
-		arg.CompanySlug,
-		arg.Source,
-		arg.Discovery,
-	)
-	return err
 }
 
 const queueTrackingScores = `-- name: QueueTrackingScores :exec

@@ -146,11 +146,11 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 	}
 	if status != "unchanged" {
 		role, _ := registry.SourceRole(job.Source)
-		if err := queries.QueueScoringEffects(ctx, pgsqlc.QueueScoringEffectsParams{
-			JobID: jobID, Fingerprint: job.ContentFingerprint, CompanyID: companyID,
-			CompanySlug: job.CompanySlug, Source: job.Source, Discovery: role == registry.RoleDiscovery,
-			FirstDiscovery: status == "new",
-		}); err != nil {
+		in := scoringEffectsInput{
+			Job: job, JobID: jobID, CompanyID: companyID,
+			Discovery: role == registry.RoleDiscovery, FirstDiscovery: status == "new",
+		}
+		if err := queueScoringEffects(ctx, queries, in); err != nil {
 			return dto.Job{}, "", fmt.Errorf("queue scoring effects: %w", err)
 		}
 	}

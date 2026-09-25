@@ -48,6 +48,22 @@ func (q *Queries) GetUserAICredential(ctx context.Context, arg GetUserAICredenti
 	return i, err
 }
 
+const hasUserAICredential = `-- name: HasUserAICredential :one
+SELECT EXISTS (SELECT 1 FROM user_ai_credentials WHERE user_id = $1 AND provider = $2)
+`
+
+type HasUserAICredentialParams struct {
+	UserID   pgtype.UUID
+	Provider string
+}
+
+func (q *Queries) HasUserAICredential(ctx context.Context, arg HasUserAICredentialParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasUserAICredential, arg.UserID, arg.Provider)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listUserAICredentialProviders = `-- name: ListUserAICredentialProviders :many
 SELECT provider FROM user_ai_credentials WHERE user_id = $1 ORDER BY provider
 `

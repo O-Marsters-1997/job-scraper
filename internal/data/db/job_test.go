@@ -221,6 +221,9 @@ func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
 	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
 		t.Fatal(err)
 	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+		t.Fatal(err)
+	}
 	job := baseJob
 	job.URL = "https://example.com/jobs/outbox"
 	job.CompanySlug = company.Slug
@@ -240,11 +243,161 @@ func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
 	}
 }
 
+func effectCount(t testing.TB, ctx context.Context, userID string) int {
+	t.Helper()
+	var count int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE user_id = $1", userID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	return count
+}
+
+func TestSaveCanonical_RejectFiltersSkipOnlyMatchingUser(t *testing.T) {
+	cases := []struct {
+		name     string
+		urlPath  string
+		title    string
+		location string
+		cfg      dto.SearchConfig
+	}{
+		{
+			name:    "excluded company",
+			urlPath: "reject-company",
+			title:   "Engineer",
+			cfg:     dto.SearchConfig{ExcludedCompanies: []string{"reject-co"}},
+		},
+		{
+			name:    "excluded title keyword",
+			urlPath: "reject-keyword",
+			title:   "Blockchain Engineer",
+			cfg:     dto.SearchConfig{ExcludedTitleKeywords: []string{"blockchain"}},
+		},
+		{
+			name:    "excluded seniority",
+			urlPath: "reject-seniority",
+			title:   "Senior Engineer",
+			cfg:     dto.SearchConfig{ExcludedSeniority: []string{"senior"}},
+		},
+		{
+			name:     "excluded location",
+			urlPath:  "reject-location",
+			title:    "Engineer",
+			location: "Berlin",
+			cfg:      dto.SearchConfig{ExcludedLocations: []string{"Berlin"}},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			truncate(t)
+			ctx := context.Background()
+
+			company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "reject-co", Name: "Reject Co"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			filteredUser, err := testDB.CreateUser(ctx, "filtered-user-"+tc.urlPath, "hash", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := tc.cfg
+			cfg.UserID = filteredUser.ID
+			if _, err := testDB.UpsertSearchConfig(ctx, cfg); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := testDB.SetCompanyTracking(ctx, filteredUser.ID, company.ID, true, 360); err != nil {
+				t.Fatal(err)
+			}
+			if err := testDB.UpsertUserAICredential(ctx, filteredUser.ID, "anthropic", "enc-key"); err != nil {
+				t.Fatal(err)
+			}
+
+			controlUser, err := testDB.CreateUser(ctx, "control-user-"+tc.urlPath, "hash", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := testDB.SetCompanyTracking(ctx, controlUser.ID, company.ID, true, 360); err != nil {
+				t.Fatal(err)
+			}
+			if err := testDB.UpsertUserAICredential(ctx, controlUser.ID, "anthropic", "enc-key"); err != nil {
+				t.Fatal(err)
+			}
+
+			job := baseJob
+			job.URL = "https://example.com/jobs/" + tc.urlPath
+			job.CompanySlug = company.Slug
+			job.CompanyID = company.ID
+			job.Title = tc.title
+			if tc.location != "" {
+				job.Location = tc.location
+			}
+			if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+				t.Fatal(err)
+			}
+
+			if count := effectCount(t, ctx, filteredUser.ID); count != 0 {
+				t.Errorf("filtered user queued effects = %d, want 0", count)
+			}
+			if count := effectCount(t, ctx, controlUser.ID); count != 1 {
+				t.Errorf("control user queued effects = %d, want 1", count)
+			}
+		})
+	}
+}
+
+func TestSaveCanonical_NoCredentialQueuesNoEffect(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "cred-co", Name: "Cred Co"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	noCredUser, err := testDB.CreateUser(ctx, "no-cred-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, noCredUser.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+
+	credUser, err := testDB.CreateUser(ctx, "cred-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, credUser.ID, company.ID, true, 360); err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.UpsertUserAICredential(ctx, credUser.ID, "anthropic", "enc-key"); err != nil {
+		t.Fatal(err)
+	}
+
+	job := baseJob
+	job.URL = "https://example.com/jobs/cred-check"
+	job.CompanySlug = company.Slug
+	job.CompanyID = company.ID
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+
+	if count := effectCount(t, ctx, noCredUser.ID); count != 0 {
+		t.Errorf("user with no credential queued effects = %d, want 0", count)
+	}
+	if count := effectCount(t, ctx, credUser.ID); count != 1 {
+		t.Errorf("user with credential queued effects = %d, want 1", count)
+	}
+}
+
 func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
@@ -285,6 +438,9 @@ func TestScoringEffect_TerminalFailureFailsAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -315,6 +471,9 @@ func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
@@ -352,6 +511,9 @@ func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "rescore-user", "hash", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "rescore-company", true, nil); err != nil {
@@ -392,6 +554,9 @@ func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "stale-effect-user", "hash", "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "stale-effect-company", true, nil); err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 var _ providers.ScoringEffectsProvider = (*DB)(nil)
@@ -59,7 +60,6 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	return rows == 1, nil
 }
 
-// ScoringStatus aliases dto.ScoringStatus.
 type ScoringStatus = dto.ScoringStatus
 
 func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatus, error) {
@@ -84,6 +84,51 @@ func (db *DB) QueueRescore(ctx context.Context, userID string) (int64, error) {
 		return 0, fmt.Errorf("queue rescore: %w", err)
 	}
 	return count, nil
+}
+
+type scoringEffectsInput struct {
+	Job            dto.Job
+	JobID          pgtype.UUID
+	CompanyID      pgtype.UUID
+	Discovery      bool
+	FirstDiscovery bool
+}
+
+func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, in scoringEffectsInput) error {
+	job := in.Job
+	users, err := queries.FindInterestedUsers(ctx, pgsqlc.FindInterestedUsersParams{
+		CompanyID: in.CompanyID, CompanySlug: job.CompanySlug, Source: job.Source, Discovery: in.Discovery,
+	})
+	if err != nil {
+		return fmt.Errorf("find interested users: %w", err)
+	}
+	for _, user := range users {
+		cfg := dto.SearchConfig{
+			ExcludedTitleKeywords: user.ExcludedTitleKeywords,
+			ExcludedCompanies:     user.ExcludedCompanies,
+			ExcludedSeniority:     user.ExcludedSeniority,
+			ExcludedLocations:     user.ExcludedLocations,
+		}
+		if _, rejected := score.Reject(job, cfg); rejected {
+			continue
+		}
+		hasCredential, err := queries.HasUserAICredential(ctx, pgsqlc.HasUserAICredentialParams{
+			UserID: user.UserID, Provider: score.Provider,
+		})
+		if err != nil {
+			return fmt.Errorf("check scoring credential: %w", err)
+		}
+		if !hasCredential {
+			continue
+		}
+		if err := queries.InsertScoringEffect(ctx, pgsqlc.InsertScoringEffectParams{
+			JobID: in.JobID, UserID: user.UserID, Fingerprint: job.ContentFingerprint,
+			ConfigVersion: user.ConfigVersion, Model: user.Model, FirstDiscovery: in.FirstDiscovery,
+		}); err != nil {
+			return fmt.Errorf("insert scoring effect: %w", err)
+		}
+	}
+	return nil
 }
 
 func (db *DB) QueueTrackingScores(ctx context.Context, userID, companyID string) error {
