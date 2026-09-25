@@ -23,7 +23,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	container, err := testcontainers.Run(ctx, "rabbitmq:4.3.6-management",
 		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": "jobs", "RABBITMQ_DEFAULT_PASS": "testpass"}),
 		testcontainers.WithExposedPorts("5672/tcp", "15672/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForListeningPort("5672/tcp")),
+		testcontainers.WithWaitStrategy(wait.ForLog("Server startup complete")),
 	)
 	if err != nil {
 		t.Fatal(err)
