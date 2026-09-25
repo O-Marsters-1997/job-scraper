@@ -1,7 +1,7 @@
 ---
 name: new-handler
 description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
-paths: ["internal/handlers/**", "internal/router.go", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
+paths: ["internal/handlers/**", "internal/router.go", "internal/services/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
 ---
 
 # New Handler
@@ -15,48 +15,71 @@ covers the migration and sqlc regen. Come back here once the provider method exi
 
 ## Backend
 
-**ADR 0020 status check (verified by this skill, re-check if it's been a while):**
-`internal/apperr` does not exist yet, and no handler uses `User`/`ID`/`Body`/`BodyID` or the
-`Caller`/`DecodeJSON`/`WriteJSON`/`WriteError` helpers — every handler still decodes,
-validates and writes responses inline with raw `net/http` (see `internal/handlers/profile.go`,
-`internal/handlers/companies.go`). Steps 2-4 below describe the **target** shape from
-[ADR 0020](../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
-(accepted, rollout pending). There is no canonical file to copy for these steps —
-do **not** copy an existing `internal/handlers/*.go` file as the pattern, it's pre-ADR.
+The shape below is current: [ADR 0020](../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
+and [ADR 0021](../../../docs/adr/0021-services-directory-and-crud-generics.md) are both rolled
+out. `internal/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth,
+google, ingest, cv export) — no handler struct owns your route.
 
 ### 1. dto input type
 
-Add the input type to `internal/dto/` — plain struct, no business logic. Existing dto types
-(e.g. `internal/dto/company_upsert.go`) show the shape convention; the ADR adds JSON tags to
-input types as the rollout touches each one, so add tags on your new type even though older
-ones don't have them yet.
+Add the input type to `internal/dto/` — plain struct, JSON tags, no business logic. If a path
+ID belongs on it (anything but a plain `GetByID`/`Delete`), tag that field
+`json:"-" path:"id"` (or `path:"docId"`/`path:"tabId"` for a two-segment route) — see
+`internal/dto/company_input.go`'s `SetCompanyTrackingInput` for the pattern. The generic
+wrapper fills it from the chi URL param after decoding the body, so a request body can never
+set it.
 
-### 2. Service (target shape, pending ADR 0020)
+### 2. Service
 
-Package `internal/<feature>` (e.g. `internal/companies`, `internal/sourcetargets`).
+Package `internal/services/<feature>` (e.g. `internal/services/companies`,
+`internal/services/sourcetargets`) — not bare `internal/<feature>`. The exception:
+`internal/candidates` and `internal/ingest` stay where they are, because the worker/scraper
+import them too; only a service that exists purely to back an HTTP route goes under
+`internal/services/`.
+
 Constructor args are all required — `providers.X` interfaces (already in
 `internal/data/providers/`) for persistence, small interfaces declared in the service's own
 package for anything else (queue publisher, verifier, scorer). No `With*` setters.
 
-Methods take `(ctx, userID, id…, in dto.X)` — the caller's user ID and path IDs are always
-service args, never dto fields — and return `(dto.Y, error)`, the error being an `apperr` kind:
-`Invalid` (400), `Unauthorized` (401), `NotFound` (404), `Conflict` (409), `Unprocessable`
-(422), `Upstream` (502), `Unavailable` (503). Add a service method only when there's a rule or
-orchestration to hold; see `references/pass-through-routes.md` if there isn't one.
+Match your method's signature to whichever generic wrapper it'll bind to (step 3) — see that
+table. Return `(dto.Y, error)`, the error being an `apperr` kind: `Invalid` (400),
+`Unauthorized` (401), `NotFound` (404), `Conflict` (409), `Unprocessable` (422), `Upstream`
+(502), `Unavailable` (503). Need an extra field in the error body (e.g. a count)? Wrap it:
+`apperr.WithFields(apperr.Conflict(...), map[string]any{"count": n})` — the adapter merges it
+into `{"error": ...}` automatically. If there's no rule or orchestration to add, don't write a
+service at all; see `references/pass-through-routes.md`.
 
-### 3. Route + wiring in `internal/router.go`
+### 3. Route + wiring
 
-This repo wires everything in one place: `NewRouter` in `internal/router.go` both constructs
-handlers next to their siblings (`profileH := handlers.NewProfileHandler(db)`) and adds the
-chi route in the matching `r.Route(...)` block. `cmd/api/main.go` only builds top-level infra
-(db, queue, credstore) and calls `app.NewRouter(db, q, cs)` — there is no per-handler wiring
-there, wire your service/handler in `router.go`, not `main.go`.
+`internal/services.go` builds every service once in `newServices(db, q, creds) *services`.
+Add your service's field and construction there, next to its siblings — this is the only place
+that constructs it.
 
-The chi route line itself is ordinary code today and after the ADR alike — copy the
-mechanics from a neighbouring route. What it points to is what's pending: today a handler
-struct method (pre-ADR, raw `net/http`); after rollout, an adapter wrapper call. If your
-route sets cookies, redirects, streams, or uses service-token auth, see
-`references/non-adapter-routes.md` instead.
+`internal/router.go` adds the chi route, binding it to a generic wrapper from
+`internal/handlers/generic.go`:
+
+| Wrapper | Your method's shape | Status |
+|---|---|---|
+| `handlers.GetAll` | `(ctx, userID) (Out, error)` | 200 |
+| `handlers.GetByID` | `(ctx, userID, id) (Out, error)` | 200 |
+| `handlers.Query[Q]` | `(ctx, userID, q Q) (Out, error)` | 200 |
+| `handlers.Create` | `(ctx, userID, in In) (Out, error)` | 201 |
+| `handlers.Update` | `(ctx, userID, in In) (Out, error)` | 200 |
+| `handlers.Delete` | `(ctx, userID, id) error` | 204 |
+
+Return `struct{}` as `Out` on `Create`/`Update` to get 204 instead of the verb's default (a
+bodyless action, or a write with nothing to send back). An action reuses whichever wrapper
+matches its shape regardless of HTTP method — `POST .../scrape` is still a `GetByID`. `Query`
+needs a query dto (step 1's sibling: string fields, json tags matching the query keys); the
+service parses and validates them.
+
+The line in `router.go` is exactly `r.<Method>("path", handlers.<Wrapper>(svc.Method))` — no
+`func` literal, no status argument, no inline validation. If your route sets cookies,
+redirects, streams, or uses service-token auth, see `references/non-adapter-routes.md` instead
+of the table above.
+
+`cmd/api/main.go` only builds top-level infra (db, queue, credstore) and calls
+`app.NewRouter(db, q, cs)` — never wire a service there.
 
 ## Frontend (ready now — these are real, current patterns)
 
@@ -85,7 +108,7 @@ Copy `frontend/src/hooks/useProfile.ts` — `queryOptions` + `createQuery` for r
 ## Verify
 
 ```
-go test ./internal/handlers/ ./internal/<feature>/
+go test ./internal/handlers/... ./internal/services/<feature>/...
 cd frontend && bun run typecheck && bun run test && bunx playwright test
 ```
 

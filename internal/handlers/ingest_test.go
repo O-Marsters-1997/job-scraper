@@ -14,8 +14,7 @@ import (
 
 func buildHandler(db ingest.CanonicalSaver) http.Handler {
 	ing := ingest.New(db, nil)
-	h := NewIngestHandler(ing)
-	return auth.ServiceTokenMiddleware(http.HandlerFunc(h.Ingest))
+	return auth.ServiceTokenMiddleware(Ingest(ing))
 }
 
 func TestIngestHandler(t *testing.T) {
@@ -129,8 +128,7 @@ func TestIngestBatch_ReturnsOrderedOutcomes(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
 	ing := ingest.New(db, nil)
-	h := NewIngestHandler(ing)
-	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
+	handler := auth.ServiceTokenMiddleware(IngestBatch(ing))
 
 	body := `{"jobs":[{"title":"Engineer","url":"https://example.com/1"},{"title":"","url":"https://example.com/2"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(body))
@@ -149,8 +147,7 @@ func TestIngestBatch_ReturnsOrderedOutcomes(t *testing.T) {
 func TestIngestBatch_RejectsInvalidIdentityWithoutLosingValidJob(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
 	db := providers.NewMockJobProvider()
-	h := NewIngestHandler(ingest.New(db, nil))
-	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
+	handler := auth.ServiceTokenMiddleware(IngestBatch(ingest.New(db, nil)))
 	body := `{"jobs":[{"title":"Bad","url":"file:///etc/passwd"},{"title":"Bad","url":"https://example.com/1","BoardID":"invalid"},{"title":"Good","url":"https://example.com/2"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(body))
 	req.Header.Set("Authorization", "Bearer tok")
@@ -175,8 +172,7 @@ func TestIngestBatch_RejectsInvalidIdentityWithoutLosingValidJob(t *testing.T) {
 
 func TestIngestBatch_ReturnsDistinctCanonicalIDs(t *testing.T) {
 	t.Setenv("INGEST_SERVICE_TOKEN", "tok")
-	h := NewIngestHandler(ingest.New(providers.NewMockJobProvider(), nil))
-	handler := auth.ServiceTokenMiddleware(http.HandlerFunc(h.IngestBatch))
+	handler := auth.ServiceTokenMiddleware(IngestBatch(ingest.New(providers.NewMockJobProvider(), nil)))
 	request := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(`{"jobs":[{"title":"A","url":"https://example.com/a"},{"title":"B","url":"https://example.com/b"}]}`))
 	request.Header.Set("Authorization", "Bearer tok")
 	w := httptest.NewRecorder()

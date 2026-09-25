@@ -2,128 +2,97 @@ package handlers
 
 import (
 	"context"
-	"errors"
-	"log/slog"
 	"net/http"
-	"time"
+	"os"
 
-	"golang.org/x/crypto/bcrypt"
-
-	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/auth"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// bcryptCost is the work factor for hashing passwords. Overridden to bcrypt.MinCost in tests.
-var bcryptCost = bcrypt.DefaultCost
-
-type authStore interface {
-	providers.UserProvider
-	providers.SessionProvider
-	SeedDefaultStatuses(ctx context.Context, userID string) error
+// authSvc is the interface handlers.Login/Signup/Logout need from
+// services/auth.Service; declared here, not imported, so the handler
+// package doesn't depend on the service package.
+type authSvc interface {
+	Login(ctx context.Context, username, password string) (dto.Session, dto.User, error)
+	Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error)
+	Logout(ctx context.Context, sessionID string) error
 }
 
-type AuthHandler struct {
-	store authStore
+func newSessionCookie(id string, maxAge int) *http.Cookie {
+	secure := os.Getenv("COOKIE_SECURE") == "true"
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
+	return &http.Cookie{
+		Name:     "session_id",
+		Value:    id,
+		HttpOnly: true,
+		SameSite: sameSite,
+		Secure:   secure,
+		Path:     "/",
+		MaxAge:   maxAge,
+	}
 }
 
-func NewAuthHandler(store authStore) *AuthHandler {
-	return &AuthHandler{store: store}
-}
-
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	body, ok := DecodeJSON[struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}](w, r)
-	if !ok {
-		return
-	}
-
-	user, err := h.store.GetUserByUsername(r.Context(), body.Username)
-	if err != nil {
-		auth.WriteUnauthorized(w)
-		return
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(body.Password)); err != nil {
-		auth.WriteUnauthorized(w)
-		return
-	}
-
-	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
-	WriteJSON(w, http.StatusOK, map[string]string{"username": user.Username})
-}
-
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	session, ok := auth.SessionFromContext(r.Context())
-	if ok {
-		if err := h.store.DeleteSession(r.Context(), session.ID); err != nil {
-			slog.Error("delete session failed",
-				slog.Any("err", err),
-			)
+// Login authenticates a user by username/password and starts a session.
+func Login(svc authSvc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, ok := decodeBody[struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}](w, r)
+		if !ok {
+			return
 		}
+		session, user, err := svc.Login(r.Context(), body.Username, body.Password)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
+		writeJSON(w, http.StatusOK, map[string]string{"username": user.Username})
 	}
-	http.SetCookie(w, newSessionCookie("", -1))
-	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+// Signup creates a user and starts a session.
+func Signup(svc authSvc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, ok := decodeBody[struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Email    string `json:"email"`
+		}](w, r)
+		if !ok {
+			return
+		}
+		session, user, err := svc.Signup(r.Context(), body.Username, body.Password, body.Email)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
+		writeJSON(w, http.StatusCreated, map[string]string{"username": user.Username})
+	}
+}
+
+// Logout clears the caller's session.
+func Logout(svc authSvc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, ok := auth.SessionFromContext(r.Context())
+		if ok {
+			_ = svc.Logout(r.Context(), session.ID)
+		}
+		http.SetCookie(w, newSessionCookie("", -1))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// Me returns the caller's session identity.
+func Me(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
-	WriteJSON(w, http.StatusOK, map[string]string{
+	writeJSON(w, http.StatusOK, map[string]string{
 		"id":       session.UserID,
 		"username": session.Username,
 	})
-}
-
-func (h *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
-	body, ok := DecodeJSON[struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Email    string `json:"email"`
-	}](w, r)
-	if !ok {
-		return
-	}
-	if body.Username == "" || body.Password == "" {
-		WriteError(w, r, apperr.Invalid("bad request"))
-		return
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcryptCost)
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	user, err := h.store.CreateUser(r.Context(), body.Username, string(hash), body.Email)
-	if err != nil {
-		if errors.Is(err, providers.ErrUsernameTaken) {
-			WriteError(w, r, apperr.Conflict(err.Error()))
-			return
-		}
-		WriteError(w, r, err)
-		return
-	}
-
-	if err := h.store.SeedDefaultStatuses(r.Context(), user.ID); err != nil {
-		slog.Error("seed default statuses failed",
-			slog.Any("err", err),
-		)
-	}
-
-	session, err := h.store.CreateSession(r.Context(), user.ID, time.Now().Add(30*24*time.Hour))
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	http.SetCookie(w, newSessionCookie(session.ID, 30*24*60*60))
-	WriteJSON(w, http.StatusCreated, map[string]string{"username": user.Username})
 }

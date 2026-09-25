@@ -1,28 +1,35 @@
 # Routes that don't fit the adapter
 
-Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md),
-some routes never move onto the `User`/`ID`/`Body`/`BodyID` adapter wrappers, even after the
-rollout, because they need something the wrappers don't support:
+Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
+and [ADR 0021](../../../../docs/adr/0021-services-directory-and-crud-generics.md), a few routes
+never move onto `internal/handlers/generic.go`'s wrappers, because they need something the
+wrappers don't support:
 
 - **Set cookies** — login, signup, logout (`internal/handlers/auth.go`).
-- **Redirect** — Google OAuth (`internal/handlers/google.go`, `OAuthStart`/`OAuthCallback`).
+- **Redirect** — Google OAuth start/callback (`internal/handlers/google.go`).
 - **Stream a response** — PDF export (`internal/handlers/cvtemplates.go`, `ExportCV`).
 - **Authenticate by service token instead of session** — ingest
   (`internal/handlers/ingest.go`, mounted under `auth.ServiceTokenMiddleware` in
   `internal/router.go`).
-- **Driven by query parameters** rather than a path ID or body — jobs paging, applications
-  filters, board resolve.
-- **Need extra fields in the error body** — e.g. the 409 with a `count` when deleting an
-  application status still in use (`internal/handlers/application_statuses.go`).
 
-These stay plain `http.HandlerFunc`s. The ADR says they use shared `Caller`, `DecodeJSON`,
-`WriteJSON` and `WriteError` helpers for the session, decoding and response writing, so they
-still follow the adapter's error contract (`{"error": msg}`) without going through it.
+These are written as `func X(svc) http.HandlerFunc` — a constructor that closes over the
+service and returns the actual `http.HandlerFunc` — not a handler struct with methods, and not
+a bare `http.HandlerFunc` with the service reached some other way. `internal/handlers/auth.go`
+and `internal/handlers/google.go` are the templates.
 
-**As of this writing those four helpers don't exist yet** — checked, no `func Caller`,
-`DecodeJSON`, `WriteJSON` or `WriteError` anywhere under `internal/`. Every route above is
-still written with raw `net/http` today: `json.NewDecoder(r.Body).Decode(...)`,
-`json.NewEncoder(w).Encode(...)`, `http.Error(w, msg, status)`. If you're adding a route that
-belongs in this category before the ADR rollout lands, follow that same raw style — see
-`internal/handlers/auth.go` for the shape. Once the helpers land, migrate the route to use
-them in the same PR that adds the helpers, not as a one-off.
+They still use the shared, now-private, `caller`, `decodeBody`/`decodeQuery`, `writeJSON` and
+`writeError` helpers from `adapter.go`/`generic.go` for the session, decoding and response
+writing, so they follow the same `{"error": msg}` contract as every generic-wrapped route even
+though they're not going through one.
+
+The actual domain logic behind these routes — password hashing, session creation, OAuth token
+exchange, the UserInfo lookup — lives in `internal/services/auth` and `internal/services/google`
+like any other service; only the cookie/redirect/stream/service-token mechanics stay in the
+handler. Before writing a new misfit route, check whether it's really one: `GET /google/status`
+and `DELETE /google/link` look like OAuth routes but don't set cookies or redirect, so they
+bind through `handlers.GetAll`/`handlers.Delete` like anything else — only `oauth/start` and
+`oauth/callback` are genuine misfits in that file.
+
+**Query-string-driven reads are not misfits any more.** `handlers.Query[Q]` (see the main
+skill) covers jobs paging, applications filters and board resolve — decode the query into a dto
+and bind through `Query` like any other read.
