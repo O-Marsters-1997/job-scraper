@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiFetch } from "./client";
+import { useMocks } from "./config";
 
 export const scoringCriterionSchema = z.object({
 	key: z.string(),
@@ -29,6 +30,10 @@ export type ScoringQuestions = z.infer<typeof scoringQuestionsSchema>;
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
 
 export async function fetchScoringConfig(): Promise<ScoringConfig> {
+	if (useMocks()) {
+		const { getScoringConfig } = await import("../mocks/db");
+		return getScoringConfig();
+	}
 	return apiFetch("/scoring-config", undefined, scoringConfigSchema);
 }
 
@@ -37,6 +42,10 @@ export async function updateScoringConfig(
 ): Promise<ScoringConfig> {
 	// Validates 0-100 range client-side before send (HTML min/max can be bypassed)
 	const validated = scoringConfigSchema.parse(payload);
+	if (useMocks()) {
+		const { updateScoringConfig: setMockConfig } = await import("../mocks/db");
+		return setMockConfig(validated);
+	}
 	return apiFetch(
 		"/scoring-config",
 		{

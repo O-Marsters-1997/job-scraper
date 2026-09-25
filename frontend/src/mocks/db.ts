@@ -4,6 +4,7 @@ import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
 import type { Job } from "@/types/job";
 import type { SourceTarget } from "@/types/sourceTarget";
+import type { ScoringConfig } from "../api/scoringConfig";
 
 faker.seed(1234);
 
@@ -187,6 +188,44 @@ const JOB_TITLES = [
 	"Software Development Engineer in Test",
 ];
 
+const MOCK_CRITERIA = [
+	{
+		key: "go_backend",
+		instructions: "Does the job involve significant backend work in Go?",
+		true: "Go is a primary language for the role",
+		false: "Go isn't used",
+		required: false,
+	},
+	{
+		key: "remote_friendly",
+		instructions: "Is the role remote or hybrid-friendly?",
+		true: "Remote or hybrid is supported",
+		false: "The role is on-site only",
+		required: false,
+	},
+	{
+		key: "early_stage",
+		instructions: "Is the company early-stage (seed to Series B)?",
+		true: "The company is seed to Series B",
+		false: "The company is later-stage or public",
+		required: false,
+	},
+];
+
+let scoringConfig: ScoringConfig = {
+	notifyThreshold: 70,
+	excludedTitleKeywords: [],
+	excludedCompanies: [],
+	excludedSeniority: [],
+	excludedLocations: [],
+	scoringQuestions: {
+		profile:
+			"I am a software engineer with 3+ years of experience in backend development, looking for Go or Python roles at remote-friendly, early-stage companies.",
+		criteria: MOCK_CRITERIA,
+		scale: ["Not relevant", "Weak", "Possible", "Strong", "Apply today"],
+	},
+};
+
 function slugify(name: string): string {
 	return name
 		.toLowerCase()
@@ -205,6 +244,7 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 				? faker.number.int({ min: 1, max: 5 })
 				: null;
 	const title = faker.helpers.arrayElement(JOB_TITLES);
+	const scored = i % 5 !== 0;
 	return {
 		ID: faker.string.uuid(),
 		Title: title,
@@ -215,8 +255,18 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		UpdatedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
 		DaysInOffice: daysInOffice,
-		SuitabilityScore:
-			i % 5 === 0 ? null : faker.number.int({ min: 30, max: 100 }),
+		SuitabilityScore: scored ? faker.number.int({ min: 30, max: 100 }) : null,
+		Criteria: scored
+			? Object.fromEntries(
+					MOCK_CRITERIA.map((c) => [
+						c.key,
+						faker.number.float({ min: 0, max: 1, fractionDigits: 2 }),
+					]),
+				)
+			: null,
+		Confidence: scored
+			? faker.number.float({ min: 0, max: 1, fractionDigits: 2 })
+			: null,
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
 		Skills: SKILL_SETS[i % SKILL_SETS.length]!,
 		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length]!,
@@ -371,6 +421,10 @@ export function getApplications(statusId?: string): ApplicationWithDetails[] {
 		? applications.filter((a) => a.StatusID === statusId)
 		: applications;
 	return list.map(buildWithDetails);
+}
+
+export function getScoringConfig(): ScoringConfig {
+	return structuredClone(scoringConfig);
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
@@ -598,6 +652,11 @@ export function updateSourceTarget(
 		LastRunAt: null,
 		LastRunError: "",
 	};
+}
+
+export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
+	scoringConfig = payload;
+	return scoringConfig;
 }
 
 export const mockUser = { id: "user-1", username: "demo" };
