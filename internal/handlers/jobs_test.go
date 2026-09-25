@@ -103,6 +103,24 @@ func TestListJobs(t *testing.T) {
 	}
 }
 
+func TestListAllJobs(t *testing.T) {
+	db := &mockDB{jobs: []dto.Job{{ID: "first"}, {ID: "second"}}}
+	req := httptest.NewRequest(http.MethodGet, "/jobs/all", nil)
+	req = req.WithContext(auth.WithSession(req.Context(), dto.Session{UserID: "user-1"}))
+	w := httptest.NewRecorder()
+	NewJobHandler(db).ListAllJobs(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d", w.Code)
+	}
+	var jobs []dto.Job
+	if err := json.NewDecoder(w.Body).Decode(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 || jobs[0].ID != "first" || jobs[1].ID != "second" {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+}
+
 func TestListJobsPagination(t *testing.T) {
 	first := dto.Job{ID: "00000000-0000-0000-0000-000000000002", ScrapedAt: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)}
 	second := dto.Job{ID: "00000000-0000-0000-0000-000000000001", ScrapedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
 func TestParse_ParsesFixture(t *testing.T) {
@@ -143,7 +144,7 @@ func TestFilterByKeywords(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := filterByKeywords(jobs, tc.keywords)
+			got := sources.FilterByKeywords(jobs, tc.keywords)
 			gotTitles := make([]string, 0, len(got))
 			for _, j := range got {
 				gotTitles = append(gotTitles, j.Title)

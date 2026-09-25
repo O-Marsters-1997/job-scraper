@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"net/http"
 	"os"
 
@@ -17,10 +16,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
-func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
+func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -55,13 +53,12 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Broker, creds credst
 		os.Getenv("GOOGLE_REDIRECT_URL"),
 		tokenStore,
 	)
-	googleH := handlers.NewGoogleHandler(googleClient, db)
+	googleH := handlers.NewGoogleHandler(googleClient)
 
 	cvSvc := cvtemplates.NewService(googleClient, db)
 	cvH := handlers.NewCVTemplatesHandler(cvSvc, googleClient)
 
-	ingestSvc := buildIngestSvc(ctx, db, creds)
-	ingestH := handlers.NewIngestHandler(ingestSvc)
+	ingestH := handlers.NewIngestHandler(ingest.New(db, db))
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", authH.Login)
@@ -88,6 +85,7 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Broker, creds credst
 		r.Use(auth.Middleware(db))
 
 		r.Get("/jobs", jobH.ListJobs)
+		r.Get("/jobs/all", jobH.ListAllJobs)
 		r.Get("/jobs/{id}", jobH.GetJob)
 		r.Post("/jobs/{id}/reasoning", jobReasoningH.PostJobReasoning)
 
@@ -158,20 +156,4 @@ func NewRouter(ctx context.Context, db *jobsdb.DB, q *queue.Broker, creds credst
 	})
 
 	return r
-}
-
-func buildIngestSvc(_ context.Context, db *jobsdb.DB, creds credstore.CredentialStore) *ingest.Ingester {
-	provider := ingest.ProviderForModel(score.DefaultSuitabilityModel)
-	scorerFor := func(apiKey string) ingest.Scorer {
-		cs := score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
-		return score.NewIngestScorer(cs, db, db, db)
-	}
-	return ingest.New(ingest.Config{
-		DB:        db,
-		Provider:  provider,
-		Users:     db,
-		Creds:     creds,
-		ScorerFor: scorerFor,
-		Companies: db,
-	})
 }

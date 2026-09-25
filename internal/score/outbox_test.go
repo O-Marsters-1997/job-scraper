@@ -45,9 +45,6 @@ type failingScorer struct{}
 func (failingScorer) Score(context.Context, dto.Job, dto.SearchConfig, string) (score.SuitabilityResult, error) {
 	return score.SuitabilityResult{}, errors.New("AI unavailable")
 }
-func (failingScorer) ScoreBatch(context.Context, []dto.Job, dto.SearchConfig, string) ([]score.SuitabilityResult, error) {
-	return nil, errors.New("AI unavailable")
-}
 
 func TestOutboxWorker_RetriesScoringFailure(t *testing.T) {
 	store := &effectStore{
@@ -68,9 +65,6 @@ type fixedScorer struct{ value int }
 
 func (s fixedScorer) Score(context.Context, dto.Job, dto.SearchConfig, string) (score.SuitabilityResult, error) {
 	return score.SuitabilityResult{Score: s.value}, nil
-}
-func (s fixedScorer) ScoreBatch(context.Context, []dto.Job, dto.SearchConfig, string) ([]score.SuitabilityResult, error) {
-	return nil, nil
 }
 
 func TestOutboxWorkerRoutesFirstDiscoveryPerUser(t *testing.T) {

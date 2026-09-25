@@ -590,4 +590,14 @@ func TestList(t *testing.T) {
 	if len(got) != len(jobs) {
 		t.Errorf("want %d jobs, got %d", len(jobs), len(got))
 	}
+	if err := testDB.MarkJobsClosed(ctx, []string{jobs[0].URL}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = testDB.List(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].URL != jobs[1].URL {
+		t.Fatalf("open jobs = %+v", got)
+	}
 }

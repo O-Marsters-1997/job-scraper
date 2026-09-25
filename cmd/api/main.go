@@ -61,7 +61,7 @@ func main() {
 	outbox := score.NewOutboxWorker(db,
 		func(ctx context.Context, userID string) (string, error) { return cs.Get(ctx, userID, "anthropic") },
 		func(apiKey string) score.SuitabilityScorer {
-			return score.NewClaudeScorer(score.ClaudeScorerConfig{APIKey: apiKey})
+			return score.NewClaudeScorer(apiKey)
 		},
 		sendAlert,
 	)
@@ -97,7 +97,7 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: app.NewRouter(ctx, db, q, cs)}
+	srv := &http.Server{Addr: port, Handler: app.NewRouter(db, q, cs)}
 
 	go func() {
 		<-ctx.Done()

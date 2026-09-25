@@ -83,12 +83,16 @@ func (db *DB) CreateApplication(ctx context.Context, input dto.CreateApplication
 			return dto.Application{}, err
 		}
 	}
+	appliedAt, err := toOptionalDate(input.AppliedAt)
+	if err != nil {
+		return dto.Application{}, err
+	}
 	a, err := db.queries.CreateApplication(ctx, pgsqlc.CreateApplicationParams{
 		UserID:     uid,
 		JobID:      jid,
 		StatusID:   sid,
 		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
-		AppliedAt:  toOptionalDate(input.AppliedAt),
+		AppliedAt:  appliedAt,
 		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {
@@ -152,12 +156,16 @@ func (db *DB) UpdateApplication(ctx context.Context, input dto.UpdateApplication
 			return dto.Application{}, err
 		}
 	}
+	appliedAt, err := toOptionalDate(input.AppliedAt)
+	if err != nil {
+		return dto.Application{}, err
+	}
 	a, err := db.queries.UpdateApplication(ctx, pgsqlc.UpdateApplicationParams{
 		ID:         aid,
 		UserID:     uid,
 		StatusID:   sid,
 		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
-		AppliedAt:  toOptionalDate(input.AppliedAt),
+		AppliedAt:  appliedAt,
 		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
 	})
 	if err != nil {

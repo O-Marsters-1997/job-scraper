@@ -20,9 +20,8 @@ func TestBoardSource_Iterate_ContinuesPastFailingToken(t *testing.T) {
 
 	var fetched []string
 	src := sources.NewBoardSource([]string{"good1", "bad", "good2"}, sources.BoardSpec{
-		Name:      "stub",
-		URLPrefix: baseURL,
-		URL:       func(token string) string { return baseURL + "/" + token },
+		Name: "stub",
+		URL:  func(token string) string { return baseURL + "/" + token },
 		Parse: func(body []byte, token string) ([]dto.Job, error) {
 			return []dto.Job{{Title: token, URL: "https://example.com/" + token}}, nil
 		},
@@ -33,13 +32,6 @@ func TestBoardSource_Iterate_ContinuesPastFailingToken(t *testing.T) {
 			status = http.StatusInternalServerError
 		}
 		return &http.Response{StatusCode: status, Status: http.StatusText(status), Body: io.NopCloser(strings.NewReader("ok"))}, nil
-	})
-
-	var done []string
-	var doneURLs [][]string
-	src.WithDone(func(_ context.Context, token string, urls []string) {
-		done = append(done, token)
-		doneURLs = append(doneURLs, urls)
 	})
 
 	err := src.Iterate(context.Background(), func(_ context.Context, jobs []dto.Job) (bool, error) {
@@ -55,21 +47,14 @@ func TestBoardSource_Iterate_ContinuesPastFailingToken(t *testing.T) {
 	if want := []string{"good1", "good2"}; !equalSlices(fetched, want) {
 		t.Errorf("fetched = %v, want %v", fetched, want)
 	}
-	if want := []string{"good1", "good2"}; !equalSlices(done, want) {
-		t.Errorf("done called with %v, want %v (bad token should not call done)", done, want)
-	}
-	if len(doneURLs) != 2 || doneURLs[0][0] != "https://example.com/good1" || doneURLs[1][0] != "https://example.com/good2" {
-		t.Errorf("done urls = %v, want per-token job URLs", doneURLs)
-	}
 }
 
 func TestBoardSource_Iterate_AllSucceedNoError(t *testing.T) {
 	baseURL := "https://8.8.8.8"
 
 	src := sources.NewBoardSource([]string{"a", "b"}, sources.BoardSpec{
-		Name:      "stub",
-		URLPrefix: baseURL,
-		URL:       func(token string) string { return baseURL + "/" + token },
+		Name: "stub",
+		URL:  func(token string) string { return baseURL + "/" + token },
 		Parse: func(_ []byte, token string) ([]dto.Job, error) {
 			return []dto.Job{{Title: token, URL: "https://example.com/" + token}}, nil
 		},

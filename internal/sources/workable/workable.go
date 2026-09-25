@@ -16,9 +16,8 @@ type Config struct {
 
 func New(cfg Config) *sources.BoardSource {
 	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
-		Name:      "workable",
-		URLPrefix: "https://apply.workable.com",
-		Post:      true, // Workable's list API 404s on GET; only POST responds.
+		Name: "workable",
+		Post: true, // Workable's list API 404s on GET; only POST responds.
 		URL: func(token string) string {
 			return fmt.Sprintf("https://apply.workable.com/api/v3/accounts/%s/jobs", token)
 		},

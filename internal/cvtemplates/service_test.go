@@ -3,7 +3,6 @@ package cvtemplates_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -66,7 +65,7 @@ func TestService_List(t *testing.T) {
 		name    string
 		setup   func(gc *mockGoogleClient, st *mockStore)
 		wantN   int
-		wantErr string
+		wantErr error
 		check   func(t *testing.T, cvs []cvtemplates.CV, st *mockStore)
 	}{
 		{
@@ -117,7 +116,7 @@ func TestService_List(t *testing.T) {
 			setup: func(_ *mockGoogleClient, st *mockStore) {
 				st.err = providers.ErrGoogleTokenNotFound
 			},
-			wantErr: "not connected",
+			wantErr: providers.ErrGoogleTokenNotFound,
 		},
 		{
 			name: "skips inaccessible doc",
@@ -233,9 +232,9 @@ func TestService_List(t *testing.T) {
 			svc := cvtemplates.NewService(gc, st)
 			cvs, err := svc.List(context.Background(), "u1")
 
-			if tc.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-					t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected error %v, got %v", tc.wantErr, err)
 				}
 				return
 			}
@@ -307,10 +306,11 @@ func TestService_AddDoc(t *testing.T) {
 	cases := []struct {
 		name    string
 		url     string
-		wantErr bool
+		wantErr error
 	}{
 		{name: "valid URL", url: "https://docs.google.com/document/d/abc1234567890/edit"},
-		{name: "garbage URL", url: "not-a-url", wantErr: true},
+		{name: "garbage URL", url: "not-a-url", wantErr: cvtemplates.ErrInvalidDoc},
+		{name: "inaccessible doc", url: "https://docs.google.com/document/d/inaccessible123/edit", wantErr: cvtemplates.ErrInaccessibleDoc},
 	}
 
 	for _, tc := range cases {
@@ -323,14 +323,15 @@ func TestService_AddDoc(t *testing.T) {
 				tabErr:  map[string]error{},
 				metaErr: map[string]error{},
 			}
+			gc.metaErr["inaccessible123"] = errors.New("permission denied")
 			st := newStore(&mockTokenChecker{})
 
 			svc := cvtemplates.NewService(gc, st)
 			err := svc.AddDoc(context.Background(), "u1", tc.url)
 
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("expected %v, got %v", tc.wantErr, err)
 				}
 				docs, _ := st.ListTrackedDocs(context.Background(), "u1")
 				if len(docs) != 0 {

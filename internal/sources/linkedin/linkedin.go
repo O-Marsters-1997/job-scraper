@@ -131,16 +131,11 @@ var _ sources.SnapshotSource = (*Scraper)(nil)
 func New(cfg Config) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:      "linkedin",
-			URLPrefix: "https://www.linkedin.com/jobs",
-			UseProxy:  true,
+			Name:     "linkedin",
+			UseProxy: true,
 		}),
 		searches: cfg.Searches,
 	}
-}
-
-func (s *Scraper) CanHandle(url string) bool {
-	return strings.Contains(url, "linkedin.com")
 }
 
 // ponytail: not using PaginatedBase.IteratePages here — it needs a total result

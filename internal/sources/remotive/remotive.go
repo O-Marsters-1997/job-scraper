@@ -3,7 +3,6 @@ package remotive
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -18,12 +17,11 @@ type Config struct {
 
 func New(cfg Config) *sources.BoardSource {
 	return sources.NewBoardSource([]string{""}, sources.BoardSpec{
-		Name:      "remotive",
-		URLPrefix: "https://remotive.com",
-		URL:       func(string) string { return "https://remotive.com/api/remote-jobs" },
+		Name: "remotive",
+		URL:  func(string) string { return "https://remotive.com/api/remote-jobs" },
 		Parse: func(body []byte, _ string) ([]dto.Job, error) {
 			jobs, err := parse(body)
-			return filterByKeywords(jobs, cfg.Keywords), err
+			return sources.FilterByKeywords(jobs, cfg.Keywords), err
 		},
 	})
 }
@@ -81,24 +79,4 @@ func parsePublicationDate(raw string) time.Time {
 		}
 	}
 	return time.Now().UTC()
-}
-
-// filterByKeywords keeps jobs whose title or description contains any
-// keyword (case-insensitive substring match). An empty keyword list passes
-// every job through unfiltered, since the feed has no server-side search.
-func filterByKeywords(jobs []dto.Job, keywords []string) []dto.Job {
-	if len(keywords) == 0 {
-		return jobs
-	}
-	out := make([]dto.Job, 0, len(jobs))
-	for _, job := range jobs {
-		haystack := strings.ToLower(job.Title + " " + job.Description)
-		for _, kw := range keywords {
-			if strings.Contains(haystack, strings.ToLower(kw)) {
-				out = append(out, job)
-				break
-			}
-		}
-	}
-	return out
 }

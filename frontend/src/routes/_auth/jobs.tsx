@@ -1,16 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
-import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
-import { useApplicationsForJobs } from "../../hooks/useApplications";
-import { useJobPage } from "../../hooks/useJobs";
+import { useApplications } from "../../hooks/useApplications";
+import { useAllJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
+import type { JobApplicationSummary } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/jobs")({
 	// Return Partial so <Link to="/jobs"> callers don't need to supply search params.
@@ -24,38 +24,32 @@ function JobsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
 
-	const [cursor, setCursor] = createSignal("");
-	const [history, setHistory] = createSignal<string[]>([]);
-	const query = useJobPage(() => ({
-		cursor: cursor() || undefined,
-		limit: 10,
-	}));
+	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();
-	const jobs = () => query.data?.items ?? [];
-	const allJobIds = () => jobs().map((j) => j.ID);
+	const jobs = () => query.data ?? [];
+	const applications = useApplications();
+	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
+		Object.fromEntries(
+			(applications.data ?? []).map((app) => [
+				app.JobID,
+				{
+					ApplicationID: app.ID,
+					StatusID: app.StatusID,
+					StatusName: app.StatusName,
+					StatusColour: app.StatusColour,
+				},
+			]),
+		),
+	);
 
-	const appsForJobs = useApplicationsForJobs(allJobIds);
-
-	// Normalise partial URL params to a full JobFilters with defaults.
 	const filters = () => parseSearch(search() as Record<string, unknown>);
 	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
 	const srcOptions = () => sourceOptions(jobs());
 
 	const setFilters = (patch: Partial<JobFilters>) => {
-		setCursor("");
-		setHistory([]);
 		navigate({
 			to: "/jobs",
-			// Reset to page 1 whenever anything other than page itself changes.
-			search: (p) => {
-				const next = { ...p, ...patch };
-				if (!("page" in patch)) {
-					// omit page key entirely rather than setting it to undefined
-					const { page: _page, ...withoutPage } = next;
-					return withoutPage;
-				}
-				return next;
-			},
+			search: (p) => ({ ...p, ...patch }),
 			replace: true,
 		});
 	};
@@ -69,7 +63,7 @@ function JobsPage() {
 	};
 
 	const openEdit = (jobId: string) => {
-		if (!appsForJobs.data?.[jobId]) return;
+		if (!appsForJobs()[jobId]) return;
 		setTrackingJobId(jobId);
 		setModalOpen(true);
 	};
@@ -77,7 +71,7 @@ function JobsPage() {
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
 	const currentSummary = () => {
 		const id = trackingJobId();
-		return id ? appsForJobs.data?.[id] : undefined;
+		return id ? appsForJobs()[id] : undefined;
 	};
 	const existingApp = () => {
 		const summary = currentSummary();
@@ -86,7 +80,7 @@ function JobsPage() {
 	};
 
 	const columns = createJobColumns({
-		appsForJobs: () => appsForJobs.data,
+		appsForJobs,
 		onTrack: openTrack,
 		onEdit: openEdit,
 	});
@@ -133,29 +127,6 @@ function JobsPage() {
 					onChange={setFilters}
 					sourceOptions={srcOptions()}
 				/>
-				<div class="mt-3 flex justify-end gap-2">
-					<Button
-						variant="outline"
-						disabled={history().length === 0}
-						onClick={() => {
-							const previous = history().at(-1) ?? "";
-							setHistory((items) => items.slice(0, -1));
-							setCursor(previous);
-						}}
-					>
-						Previous
-					</Button>
-					<Button
-						variant="outline"
-						disabled={!query.data?.next_cursor}
-						onClick={() => {
-							setHistory((items) => [...items, cursor()]);
-							setCursor(query.data?.next_cursor ?? "");
-						}}
-					>
-						Next
-					</Button>
-				</div>
 			</Show>
 
 			<TrackApplicationDialog

@@ -4,29 +4,25 @@ import {
 	queryOptions,
 	useQueryClient,
 } from "@tanstack/solid-query";
-import { fetchJob, fetchJobs, requestJobReasoning } from "../api/jobs";
+import {
+	fetchAllJobs,
+	fetchJob,
+	fetchJobs,
+	requestJobReasoning,
+} from "../api/jobs";
 
 export const jobsQueryOptions = queryOptions({
 	queryKey: ["jobs"],
 	queryFn: () => fetchJobs().then((page) => page.items),
 });
 
-export function useJobPage(
-	options: () => {
-		cursor?: string | undefined;
-		companyId?: string | undefined;
-		limit?: number;
-	},
-) {
-	return createQuery(() => ({
-		queryKey: [
-			"job-page",
-			options().companyId,
-			options().cursor,
-			options().limit,
-		],
-		queryFn: () => fetchJobs(options()),
-	}));
+export const allJobsQueryOptions = queryOptions({
+	queryKey: ["jobs", "all"],
+	queryFn: fetchAllJobs,
+});
+
+export function useAllJobs() {
+	return createQuery(() => allJobsQueryOptions);
 }
 
 export function jobQueryOptions(id: string) {

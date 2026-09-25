@@ -16,7 +16,12 @@ import {
 } from "@/components/ui/select";
 import { Switch, SwitchControl, SwitchThumb } from "@/components/ui/switch";
 import { formatDate } from "@/lib/datetime";
-import { applyJobFilters, DEFAULT_FILTERS } from "@/lib/jobFilters";
+import {
+	applyJobFilters,
+	DEFAULT_FILTERS,
+	filterCompanyJobs,
+	sourceOptions,
+} from "@/lib/jobFilters";
 import {
 	companiesQueryOptions,
 	useAddCompanyBoard,
@@ -24,7 +29,7 @@ import {
 	useCompanyBoards,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
-import { useJobPage } from "../../hooks/useJobs";
+import { useAllJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 import type { CompanyBoard } from "../../types/company";
 
@@ -75,13 +80,7 @@ export const Route = createFileRoute("/_auth/companies_/$id")({
 function CompanyDetailPage() {
 	const params = Route.useParams();
 	const companiesQuery = useCompanies();
-	const [cursor, setCursor] = createSignal("");
-	const [history, setHistory] = createSignal<string[]>([]);
-	const jobsQuery = useJobPage(() => ({
-		companyId: params().id,
-		cursor: cursor() || undefined,
-		limit: 10,
-	}));
+	const jobsQuery = useAllJobs();
 	const trackMutation = useSetCompanyTracking();
 	const boardsQuery = useCompanyBoards(() => params().id);
 	const addBoardMutation = useAddCompanyBoard();
@@ -114,7 +113,11 @@ function CompanyDetailPage() {
 	const setFilterPatch = (patch: Partial<typeof DEFAULT_FILTERS>) =>
 		setFilters((f) => ({ ...f, ...patch }));
 
-	const jobsForCompany = createMemo(() => jobsQuery.data?.items ?? []);
+	const jobsForCompany = createMemo(() => {
+		const selected = company();
+		if (!selected) return [];
+		return filterCompanyJobs(jobsQuery.data ?? [], selected);
+	});
 	const companyJobs = createMemo(() =>
 		applyJobFilters(jobsForCompany(), filters()),
 	);
@@ -197,12 +200,22 @@ function CompanyDetailPage() {
 									<CardTitle>Jobs at {c().Name}</CardTitle>
 								</CardHeader>
 								<CardContent class="gap-0">
+									<Show when={jobsQuery.isPending}>
+										<p class="text-sm text-muted">Loading jobs…</p>
+									</Show>
+									<Show when={jobsQuery.isError}>
+										<p class="text-sm text-destructive-strong">
+											Could not load jobs.
+										</p>
+									</Show>
 									<Show
-										when={jobsForCompany().length > 0}
+										when={jobsQuery.isSuccess && jobsForCompany().length > 0}
 										fallback={
-											<p class="text-sm text-faint">
-												No jobs from this company yet.
-											</p>
+											<Show when={jobsQuery.isSuccess}>
+												<p class="text-sm text-faint">
+													No jobs from this company yet.
+												</p>
+											</Show>
 										}
 									>
 										<JobsDataTable
@@ -210,32 +223,9 @@ function CompanyDetailPage() {
 											data={companyJobs()}
 											filters={filters()}
 											onChange={setFilterPatch}
-											sourceOptions={[]}
+											sourceOptions={sourceOptions(jobsForCompany())}
 										/>
 									</Show>
-									<div class="mt-3 flex justify-end gap-2">
-										<Button
-											variant="outline"
-											disabled={history().length === 0}
-											onClick={() => {
-												const previous = history().at(-1) ?? "";
-												setHistory((items) => items.slice(0, -1));
-												setCursor(previous);
-											}}
-										>
-											Previous
-										</Button>
-										<Button
-											variant="outline"
-											disabled={!jobsQuery.data?.next_cursor}
-											onClick={() => {
-												setHistory((items) => [...items, cursor()]);
-												setCursor(jobsQuery.data?.next_cursor ?? "");
-											}}
-										>
-											Next
-										</Button>
-									</div>
 								</CardContent>
 							</Card>
 

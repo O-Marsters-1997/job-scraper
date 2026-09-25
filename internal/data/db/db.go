@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -56,14 +59,20 @@ func ConnString() (string, error) {
 		}
 	}
 	if len(missing) > 0 {
+		sort.Strings(missing)
 		return "", fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
 	}
 	sslmode := os.Getenv("POSTGRES_SSLMODE")
 	if sslmode == "" {
 		sslmode = "disable"
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"],
-		vars["POSTGRES_HOST"], vars["POSTGRES_PORT"], vars["POSTGRES_DB"], sslmode,
-	), nil
+	dbName := vars["POSTGRES_DB"]
+	return (&url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"]),
+		Host:     net.JoinHostPort(vars["POSTGRES_HOST"], vars["POSTGRES_PORT"]),
+		Path:     "/" + dbName,
+		RawPath:  "/" + url.PathEscape(dbName),
+		RawQuery: url.Values{"sslmode": {sslmode}}.Encode(),
+	}).String(), nil
 }

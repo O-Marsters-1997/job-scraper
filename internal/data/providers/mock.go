@@ -90,6 +90,9 @@ func (m *MockJobProvider) List(_ context.Context, _ string) ([]dto.Job, error) {
 }
 
 func (m *MockJobProvider) Page(ctx context.Context, userID string, options JobPageOptions) (JobPage, error) {
+	if options.Availability == "closed" {
+		return JobPage{Items: []dto.Job{}}, nil
+	}
 	jobs, err := m.List(ctx, userID)
 	if err != nil {
 		return JobPage{}, err

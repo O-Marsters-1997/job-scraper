@@ -9,6 +9,8 @@ import (
 	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 var (
@@ -79,4 +81,21 @@ func Slugify(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+func FilterByKeywords(jobs []dto.Job, keywords []string) []dto.Job {
+	if len(keywords) == 0 {
+		return jobs
+	}
+	out := make([]dto.Job, 0, len(jobs))
+	for _, job := range jobs {
+		haystack := strings.ToLower(job.Title + " " + job.Description)
+		for _, keyword := range keywords {
+			if strings.Contains(haystack, strings.ToLower(keyword)) {
+				out = append(out, job)
+				break
+			}
+		}
+	}
+	return out
 }

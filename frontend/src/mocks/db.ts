@@ -1,9 +1,5 @@
 import { faker } from "@faker-js/faker";
-import type {
-	Application,
-	ApplicationWithDetails,
-	JobApplicationSummary,
-} from "@/types/application";
+import type { Application, ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
 import type { Job } from "@/types/job";
@@ -388,25 +384,6 @@ export function getApplications(statusId?: string): ApplicationWithDetails[] {
 		? applications.filter((a) => a.StatusID === statusId)
 		: applications;
 	return list.map(buildWithDetails);
-}
-
-export function getApplicationsForJobs(
-	jobIds: string[],
-): Record<string, JobApplicationSummary> {
-	const result: Record<string, JobApplicationSummary> = {};
-	for (const app of applications) {
-		if (jobIds.includes(app.JobID)) {
-			const status = statuses.find((s) => s.ID === app.StatusID);
-			if (!status) continue;
-			result[app.JobID] = {
-				ApplicationID: app.ID,
-				StatusID: app.StatusID,
-				StatusName: status.Name,
-				StatusColour: status.Colour,
-			};
-		}
-	}
-	return result;
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────

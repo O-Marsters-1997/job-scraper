@@ -6,6 +6,7 @@ import {
 	activeFilterCount,
 	applyJobFilters,
 	DEFAULT_FILTERS,
+	filterCompanyJobs,
 	normalizeArrangement,
 	parseSalary,
 } from "./jobFilters";
@@ -135,6 +136,18 @@ ok(
 		src: ["LinkedIn"],
 		sal: true,
 	}) === 3,
+);
+
+eq(
+	filterCompanyJobs(
+		[
+			{ ID: "1", CompanyID: "company-a", CompanySlug: "other" },
+			{ ID: "2", CompanySlug: "acme" },
+			{ ID: "3", CompanyID: "company-b", CompanySlug: "acme" },
+		] as never[],
+		{ ID: "company-a", Slug: "acme" },
+	).map((job) => job.ID),
+	["1", "2"],
 );
 
 console.log("✓ jobFilters checks passed");

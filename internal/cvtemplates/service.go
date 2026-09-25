@@ -51,6 +51,11 @@ type Service struct {
 	store store
 }
 
+var (
+	ErrInvalidDoc      = errors.New("invalid Google Docs URL or ID")
+	ErrInaccessibleDoc = errors.New("cannot access document")
+)
+
 func NewService(gc googleClient, s store) *Service {
 	return &Service{gc: gc, store: s}
 }
@@ -59,7 +64,7 @@ func NewService(gc googleClient, s store) *Service {
 func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 	if _, err := s.store.GetGoogleToken(ctx, userID); err != nil {
 		if errors.Is(err, providers.ErrGoogleTokenNotFound) {
-			return nil, fmt.Errorf("google account not connected")
+			return nil, fmt.Errorf("google account not connected: %w", err)
 		}
 		return nil, fmt.Errorf("cvtemplates.List check token: %w", err)
 	}
@@ -129,10 +134,10 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 func (s *Service) AddDoc(ctx context.Context, userID, urlOrID string) error {
 	docID, err := docref.ParseDocID(urlOrID)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrInvalidDoc, err)
 	}
 	if _, err := s.gc.FileMeta(ctx, userID, docID); err != nil {
-		return fmt.Errorf("cannot access document: %w", err)
+		return fmt.Errorf("%w: %w", ErrInaccessibleDoc, err)
 	}
 	return s.store.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
 }

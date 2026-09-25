@@ -15,7 +15,6 @@ import (
 
 type detailSourceStub struct{}
 
-func (detailSourceStub) CanHandle(string) bool { return true }
 func (detailSourceStub) GetDetails(_ context.Context, url string) (dto.Job, error) {
 	return dto.Job{Title: "Job", URL: url}, nil
 }

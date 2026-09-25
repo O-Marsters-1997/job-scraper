@@ -26,7 +26,7 @@ func (ATSBoardVerifier) Verify(ctx context.Context, source, token string) error 
 		}
 		return verifyPages(ctx, entry.Source)
 	}
-	srcs := builder.BuildSources([]dto.SourceTarget{{Source: source, Value: token, Enabled: true}}, nil)
+	srcs := builder.BuildSources([]dto.SourceTarget{{Source: source, Value: token, Enabled: true}})
 	if len(srcs) != 1 {
 		return errors.New("unsupported board source")
 	}

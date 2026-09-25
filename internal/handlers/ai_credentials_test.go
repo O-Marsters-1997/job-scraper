@@ -6,17 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-// mockCredStore is a minimal in-memory CredentialStore for handler tests.
-// It stores plaintext so tests can assert the key was stored without going
-// through real AES-GCM encryption.
 type mockCredStore struct {
-	mu   sync.Mutex
 	data map[string]string // key: userID+"/"+provider
 
 	SaveErr   error
@@ -32,15 +27,11 @@ func (m *mockCredStore) Save(_ context.Context, userID, provider, plainKey strin
 	if m.SaveErr != nil {
 		return m.SaveErr
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.data[userID+"/"+provider] = plainKey
 	return nil
 }
 
 func (m *mockCredStore) Get(_ context.Context, userID, provider string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	return m.data[userID+"/"+provider], nil
 }
 
@@ -48,8 +39,6 @@ func (m *mockCredStore) Delete(_ context.Context, userID, provider string) error
 	if m.DeleteErr != nil {
 		return m.DeleteErr
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	delete(m.data, userID+"/"+provider)
 	return nil
 }
@@ -58,8 +47,6 @@ func (m *mockCredStore) ListProviders(_ context.Context, userID string) ([]strin
 	if m.ListErr != nil {
 		return nil, m.ListErr
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	prefix := userID + "/"
 	var out []string
 	for k := range m.data {
@@ -85,9 +72,7 @@ func TestAICredentialsHandler_UpsertCredential(t *testing.T) {
 			body:       `{"provider":"anthropic","apiKey":"sk-ant-secret"}`,
 			wantStatus: http.StatusNoContent,
 			check: func(t *testing.T, store *mockCredStore, w *httptest.ResponseRecorder) {
-				store.mu.Lock()
 				stored := store.data["user-1/anthropic"]
-				store.mu.Unlock()
 				if stored == "" {
 					t.Error("expected credential to be stored")
 				}
@@ -104,9 +89,7 @@ func TestAICredentialsHandler_UpsertCredential(t *testing.T) {
 			body:       `{"provider":"anthropic","apiKey":null}`,
 			wantStatus: http.StatusNoContent,
 			check: func(t *testing.T, store *mockCredStore, _ *httptest.ResponseRecorder) {
-				store.mu.Lock()
 				_, exists := store.data["user-1/anthropic"]
-				store.mu.Unlock()
 				if exists {
 					t.Error("credential should have been deleted")
 				}

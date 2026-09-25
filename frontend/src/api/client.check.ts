@@ -1,29 +1,28 @@
 import { z } from "zod";
+import { apiFetch } from "./client";
+import { API_BASE } from "./config";
 
-function ok(condition: boolean, msg: string) {
-	if (!condition) throw new Error(`FAIL: ${msg}`);
-}
-
-// schema.parse succeeds on valid data
-const schema = z.object({ id: z.string(), score: z.number() });
-const result = schema.parse({ id: "abc", score: 42 });
-ok(result.id === "abc" && result.score === 42, "parse returns typed data");
-
-// schema.parse throws on invalid data (trust boundary rejects bad shapes)
-let threw = false;
+const originalFetch = globalThis.fetch;
+let requested = "";
+let credentials: RequestCredentials | undefined;
+globalThis.fetch = async (input, init) => {
+	requested = String(input);
+	credentials = init?.credentials;
+	return Response.json({ id: 123 });
+};
 try {
-	schema.parse({ id: 123 });
-} catch {
-	threw = true;
+	let rejected = false;
+	try {
+		await apiFetch("/jobs", undefined, z.object({ id: z.string() }));
+	} catch {
+		rejected = true;
+	}
+	if (
+		!rejected ||
+		requested !== `${API_BASE}/jobs` ||
+		credentials !== "include"
+	)
+		throw new Error("apiFetch must validate responses and send credentials");
+} finally {
+	globalThis.fetch = originalFetch;
 }
-ok(threw, "parse throws on invalid shape");
-
-// schema.parse strips extra fields (no unexpected data leaks through)
-const strict = z.object({ name: z.string() }).strict();
-let strictThrew = false;
-try {
-	strict.parse({ name: "ok", extra: "bad" });
-} catch {
-	strictThrew = true;
-}
-ok(strictThrew, "strict schema rejects extra fields");
