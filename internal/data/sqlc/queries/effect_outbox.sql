@@ -91,8 +91,9 @@ RETURNING e.id, e.job_id, e.user_id, e.fingerprint, e.config_version, e.model, e
 
 -- name: FailScoringEffect :exec
 UPDATE effect_outbox SET
-    status = CASE WHEN attempts >= 8 THEN 'failed' ELSE 'pending' END,
-    due_at = NOW() + make_interval(secs => LEAST(3600, 30 * power(2, attempts)::int)),
+    status = CASE WHEN sqlc.arg(terminal)::bool OR attempts >= 8 THEN 'failed' ELSE 'pending' END,
+    due_at = NOW() + make_interval(secs =>
+        COALESCE(sqlc.narg(retry_after_secs)::int, LEAST(3600, 30 * power(2, attempts)::int))),
     lease_until = NULL,
     last_error = sqlc.arg(last_error)::text
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'running';

@@ -21,7 +21,7 @@ type EffectStore interface {
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	GetProfile(context.Context, string) (dto.Profile, error)
-	FailScoringEffect(context.Context, string, int, string) error
+	FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
 
@@ -45,8 +45,7 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	return w.process(ctx, effect)
 }
 
-// RunTick drains the queue, running up to maxConcurrentScoring effects at
-// once. One effect's failure is logged, not returned, so it doesn't stop the rest.
+// RunTick drains the queue, running up to maxConcurrentScoring effects at once.
 func (w *OutboxWorker) RunTick(ctx context.Context) error {
 	g := &errgroup.Group{}
 	g.SetLimit(maxConcurrentScoring)
@@ -71,7 +70,13 @@ func (w *OutboxWorker) RunTick(ctx context.Context) error {
 
 func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) error {
 	fail := func(err error) error {
-		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, err.Error()); saveErr != nil {
+		failure := dto.ScoringFailure{Reason: err.Error()}
+		var scorerErr *ScorerError
+		if errors.As(err, &scorerErr) {
+			failure.Terminal = scorerErr.Kind == FailureTerminal
+			failure.RetryAfter = scorerErr.RetryAfter
+		}
+		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, failure); saveErr != nil {
 			return errors.Join(err, saveErr)
 		}
 		return err

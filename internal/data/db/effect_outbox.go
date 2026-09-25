@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -23,12 +25,20 @@ func (db *DB) ClaimScoringEffect(ctx context.Context) (dto.ScoringEffect, error)
 	}, nil
 }
 
-func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, reason string) error {
+func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error {
 	effectID, err := parseUUID(id)
 	if err != nil {
 		return err
 	}
-	if err := db.queries.FailScoringEffect(ctx, pgsqlc.FailScoringEffectParams{ID: effectID, Attempts: int32(attempts), LastError: reason}); err != nil {
+	var retryAfterSecs pgtype.Int4
+	if failure.RetryAfter > 0 {
+		retryAfterSecs = pgtype.Int4{Int32: int32(failure.RetryAfter.Seconds()), Valid: true}
+	}
+	params := pgsqlc.FailScoringEffectParams{
+		ID: effectID, Attempts: int32(attempts), LastError: failure.Reason,
+		Terminal: failure.Terminal, RetryAfterSecs: retryAfterSecs,
+	}
+	if err := db.queries.FailScoringEffect(ctx, params); err != nil {
 		return fmt.Errorf("fail scoring effect: %w", err)
 	}
 	return nil
@@ -49,9 +59,7 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	return rows == 1, nil
 }
 
-// ScoringStatus is an alias so existing callers keep compiling; the type
-// itself lives in dto so internal/data/providers can declare an interface
-// against it without importing db.
+// ScoringStatus aliases dto.ScoringStatus.
 type ScoringStatus = dto.ScoringStatus
 
 func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatus, error) {
