@@ -105,6 +105,9 @@ func validateScoringQuestions(q dto.ScoringQuestions) error {
 	}
 	seen := make(map[string]bool, len(q.Criteria))
 	for _, c := range q.Criteria {
+		if c.Key == score.OverallQuestionKey {
+			return apperr.Invalid("criterion key is reserved: " + c.Key)
+		}
 		if seen[c.Key] {
 			return apperr.Invalid("duplicate criterion key: " + c.Key)
 		}

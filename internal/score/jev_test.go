@@ -204,6 +204,34 @@ func TestJevScorer_Score_BuildsQuestionsAndState(t *testing.T) {
 	}
 }
 
+func TestJevScorer_Score_ErrorsOnMissingAnswers(t *testing.T) {
+	tests := []struct {
+		name    string
+		answers map[string]jevAnswer
+	}{
+		{"missing overall", map[string]jevAnswer{"go_backend": {Type: "noul", Noul: 0.9}}},
+		{"missing criterion", map[string]jevAnswer{"overall": {Type: "score", Score: 3}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(jevResponse{Model: JevModel, Answers: tt.answers})
+			}))
+			defer server.Close()
+
+			scorer := &JevScorer{apiKey: "sk-or-test", http: server.Client(), baseURL: server.URL}
+			cfg := dto.SearchConfig{ScoringQuestions: dto.ScoringQuestions{
+				Criteria: []dto.ScoringCriterion{{Key: "go_backend", Required: true}},
+				Scale:    []string{"Not relevant", "Weak", "Possible", "Strong", "Apply today"},
+			}}
+
+			if _, err := scorer.Score(context.Background(), dto.Job{}, cfg, JevModel); err == nil {
+				t.Fatal("expected an error for a missing answer")
+			}
+		})
+	}
+}
+
 func TestClassifyJevStatus(t *testing.T) {
 	tests := []struct {
 		name           string

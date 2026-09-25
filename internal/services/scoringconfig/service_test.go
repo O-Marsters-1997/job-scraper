@@ -142,6 +142,17 @@ func TestUpdate(t *testing.T) {
 			},
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			name: "rejects a criterion key reserved for the overall question",
+			in: dto.ScoringConfigView{
+				ScoringQuestions: dto.ScoringQuestions{
+					Profile:  "senior go",
+					Criteria: []dto.ScoringCriterion{{Key: "overall"}},
+					Scale:    []string{"Low", "High"},
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

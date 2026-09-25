@@ -15,8 +15,9 @@ object and returns calibrated probabilities — no prose, no JSON-parsing of a c
 - Suitability is `100 × overall × min(P(yes) over required criteria)`, where the min over no
   required criteria is 1: a clear miss on a required criterion sinks the score, uncertainty only
   dampens it. `job_scores` gains `criteria` (per-key `P(yes)`), `confidence` (the `overall`
-  answer) and `cost`; matched/missing become a ≥0.5 read of `criteria` in the DTO rather than a
-  second thing to store.
+  answer) and `cost`. `dto.Job` exposes `Criteria`/`Confidence` so a ≥0.5 read of `criteria` can
+  stand in for the old matched/missing lists, but no frontend surface does that read yet — the
+  per-criterion UI is a separate, not-yet-built ticket.
 - The endpoint is `alpha`, so its request/response structs stay private to `internal/score` — a
   shape change is a one-file diff. The request's `model` is the Go constant `typesafe/jev-1.13`;
   the response's dated snapshot (e.g. `typesafe/jev-1.13-20260917`) is what lands in

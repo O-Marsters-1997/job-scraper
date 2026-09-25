@@ -29,8 +29,11 @@ const (
 
 	decisionsURL        = "https://openrouter.ai/api/alpha/decisions"
 	maxDescriptionRunes = 4096 * 4
-	overallQuestionKey  = "overall"
 	overallInstructions = "How well does this job fit what the candidate is looking for?"
+
+	// OverallQuestionKey is reserved: scoringconfig rejects a criterion key
+	// that collides with it.
+	OverallQuestionKey = "overall"
 )
 
 type JevScorer struct {
@@ -146,13 +149,19 @@ func (j *JevScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchConfig
 		return SuitabilityResult{}, fmt.Errorf("decode jev response: %w", err)
 	}
 
+	overallAnswer, ok := decoded.Answers[OverallQuestionKey]
+	if !ok {
+		return SuitabilityResult{}, fmt.Errorf("jev decisions: response missing answer for %q", OverallQuestionKey)
+	}
 	criteriaProbs := make(map[string]float64, len(questions.Criteria))
 	for _, c := range questions.Criteria {
-		if answer, ok := decoded.Answers[c.Key]; ok {
-			criteriaProbs[c.Key] = answer.Noul
+		answer, ok := decoded.Answers[c.Key]
+		if !ok {
+			return SuitabilityResult{}, fmt.Errorf("jev decisions: response missing answer for %q", c.Key)
 		}
+		criteriaProbs[c.Key] = answer.Noul
 	}
-	suitability, confidence := suitabilityScore(decoded.Answers[overallQuestionKey].Score, len(questions.Scale), questions.Criteria, criteriaProbs)
+	suitability, confidence := suitabilityScore(overallAnswer.Score, len(questions.Scale), questions.Criteria, criteriaProbs)
 
 	slog.Info("suitability scored via jev",
 		slog.String("url", job.URL),
@@ -181,7 +190,7 @@ func buildQuestions(q dto.ScoringQuestions) map[string]jevQuestion {
 			Criteria:     map[string]string{"true": c.True, "false": c.False},
 		}
 	}
-	questions[overallQuestionKey] = jevQuestion{
+	questions[OverallQuestionKey] = jevQuestion{
 		Type:         "score",
 		Instructions: overallInstructions,
 		Criteria:     q.Scale,

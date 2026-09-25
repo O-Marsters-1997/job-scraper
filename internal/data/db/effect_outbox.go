@@ -56,11 +56,15 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	if err != nil {
 		return false, fmt.Errorf("complete scoring effect: marshal criteria: %w", err)
 	}
+	cost, err := toNumeric(result.Cost)
+	if err != nil {
+		return false, fmt.Errorf("complete scoring effect: cost: %w", err)
+	}
 	rows, err := db.queries.CompleteScoringEffect(ctx, pgsqlc.CompleteScoringEffectParams{
 		ID: effectID, Attempts: int32(effect.Attempts), Score: int32(result.Score),
 		Criteria:     criteria,
 		Confidence:   pgtype.Float4{Float32: float32(result.Confidence), Valid: true},
-		Cost:         toNumeric(result.Cost),
+		Cost:         cost,
 		ScoreModel:   result.Model,
 		CurrentModel: score.JevModel,
 	})
@@ -157,8 +161,10 @@ func (db *DB) QueueTrackingScores(ctx context.Context, userID, companyID string)
 	return nil
 }
 
-func toNumeric(f float64) pgtype.Numeric {
+func toNumeric(f float64) (pgtype.Numeric, error) {
 	var n pgtype.Numeric
-	_ = n.ScanScientific(strconv.FormatFloat(f, 'f', -1, 64))
-	return n
+	if err := n.ScanScientific(strconv.FormatFloat(f, 'f', -1, 64)); err != nil {
+		return pgtype.Numeric{}, err
+	}
+	return n, nil
 }
