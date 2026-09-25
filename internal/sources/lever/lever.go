@@ -9,7 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Config holds Lever-specific settings.
 type Config struct {
 	// Boards is the list of Lever company slugs to scrape (e.g. "acmecorp").
 	Boards []string

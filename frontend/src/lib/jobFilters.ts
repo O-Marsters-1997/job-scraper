@@ -50,7 +50,6 @@ export function parseSalary(
 	raw: string | undefined | null,
 ): { min: number; max: number } | null {
 	if (!raw) return null;
-	// Strip currency symbols, whitespace; expand k/K suffix
 	const normalised = raw
 		.replace(/[£$€,]/g, "")
 		.replace(/\b(\d+(?:\.\d+)?)k\b/gi, (_, n) => String(Number(n) * 1000));
@@ -71,7 +70,6 @@ export function normalizeArrangement(job: Job): Arrangement {
 	if (wa === "remote") return "remote";
 	if (wa === "hybrid") return "hybrid";
 	if (wa === "onsite") return "onsite";
-	// Demo fallback via DaysInOffice
 	const d = job.DaysInOffice;
 	if (d === 0) return "remote";
 	if (typeof d === "number" && d >= 5) return "onsite";
@@ -82,25 +80,19 @@ export function normalizeArrangement(job: Job): Arrangement {
 export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 	const q = f.q.toLowerCase();
 	return jobs.filter((j) => {
-		// Search
 		if (q) {
 			const hay =
 				`${j.Title} ${j.CompanySlug} ${j.Location} ${j.Source}`.toLowerCase();
 			if (!hay.includes(q)) return false;
 		}
-		// Scores (null scores never satisfy a minimum)
 		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
 			return false;
 		if (f.rel !== undefined && (j.RelevanceScore ?? -Infinity) < f.rel)
 			return false;
-		// Source
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
-		// Work arrangement
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
 			return false;
-		// Salary range
 		if (f.sal) {
-			// ponytail: use SalaryRaw from live backend; fall back to SalaryRange in demo mode
 			const parsed = parseSalary(j.SalaryRaw ?? j.SalaryRange);
 			if (!parsed) return false;
 			const reqMin = f.salMin ?? -Infinity;

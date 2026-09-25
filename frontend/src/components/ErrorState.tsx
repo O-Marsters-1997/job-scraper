@@ -15,9 +15,7 @@ function errorDetail(error: unknown): string | null {
 	return null;
 }
 
-// Branded fallback for thrown render/loader errors. Renders inside whatever
-// boundary catches it: route-level errors keep the app shell, the root boundary
-// fills the page. Replaces TanStack Router's raw dev error screen.
+// Branded fallback for thrown render/loader errors.
 export function ErrorState(props: ErrorStateProps) {
 	const detail = () => errorDetail(props.error);
 

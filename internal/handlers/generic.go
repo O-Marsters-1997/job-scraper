@@ -1,8 +1,3 @@
-// Generic CRUD wrappers over a service function. Each one fixes a function
-// shape and a success status; a returned Out of struct{} always means 204
-// regardless of the verb's default. Path IDs travel on the input dto via a
-// `path:"..."` struct tag, filled from chi URL params before the service is
-// called, so the request body can never set them. See docs/adr/0020.
 package handlers
 
 import (
@@ -18,10 +13,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 )
 
-// decodeBody decodes the request body into T. An empty body decodes to T's
-// zero value rather than failing: bodyless actions (e.g. hide/show) and
-// dtos with only path-tagged fields never need to send one, and a required
-// field's absence is a service-level validation error, not a decode error.
 func decodeBody[T any](w http.ResponseWriter, r *http.Request) (in T, ok bool) {
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
 		writeError(w, r, apperr.Invalid("bad request"))
@@ -31,9 +22,6 @@ func decodeBody[T any](w http.ResponseWriter, r *http.Request) (in T, ok bool) {
 	return in, true
 }
 
-// decodeQuery flattens the request's URL query into Q by JSON round-trip: Q
-// should declare string fields with json tags matching the query keys, and
-// the service parses and validates them.
 func decodeQuery[Q any](r *http.Request) (Q, error) {
 	var q Q
 	values := r.URL.Query()
@@ -53,8 +41,6 @@ func decodeQuery[Q any](r *http.Request) (Q, error) {
 	return q, nil
 }
 
-// fillPath sets every `path:"name"` tagged field on in from the matching
-// chi URL param.
 func fillPath(r *http.Request, in any) {
 	v := reflect.ValueOf(in).Elem()
 	t := v.Type()
@@ -65,8 +51,6 @@ func fillPath(r *http.Request, in any) {
 	}
 }
 
-// respond writes out with status, except a struct{} Out always writes 204
-// with no body.
 func respond[Out any](w http.ResponseWriter, status int, out Out) {
 	if _, void := any(out).(struct{}); void {
 		writeJSON(w, http.StatusNoContent, nil)
@@ -75,8 +59,6 @@ func respond[Out any](w http.ResponseWriter, status int, out Out) {
 	writeJSON(w, status, out)
 }
 
-// GetAll adapts (ctx, userID) -> (Out, error) to a 200 collection or
-// singleton read.
 func GetAll[Out any](fn func(ctx context.Context, userID string) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)
@@ -92,9 +74,6 @@ func GetAll[Out any](fn func(ctx context.Context, userID string) (Out, error)) h
 	}
 }
 
-// GetByID adapts (ctx, userID, id) -> (Out, error) to a 200 read, id taken
-// from the "id" chi URL param. Reused for any action whose shape matches,
-// regardless of HTTP method (e.g. POST .../scrape).
 func GetByID[Out any](fn func(ctx context.Context, userID, id string) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)
@@ -110,8 +89,6 @@ func GetByID[Out any](fn func(ctx context.Context, userID, id string) (Out, erro
 	}
 }
 
-// Query adapts (ctx, userID, q Q) -> (Out, error) to a 200 read, q decoded
-// from the URL query string.
 func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)
@@ -132,9 +109,6 @@ func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, er
 	}
 }
 
-// Create adapts (ctx, userID, in In) -> (Out, error) to a 201 create; a
-// struct{} Out writes 204 instead. Path-tagged fields on In are filled from
-// chi URL params after decoding.
 func Create[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)
@@ -155,10 +129,6 @@ func Create[In, Out any](fn func(ctx context.Context, userID string, in In) (Out
 	}
 }
 
-// Update adapts (ctx, userID, in In) -> (Out, error) to a 200 update; a
-// struct{} Out writes 204 instead. Path-tagged fields on In are filled from
-// chi URL params after decoding, covering both a single {id} and a
-// multi-segment path (e.g. {docId}/{tabId}).
 func Update[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)
@@ -179,8 +149,6 @@ func Update[In, Out any](fn func(ctx context.Context, userID string, in In) (Out
 	}
 }
 
-// Delete adapts (ctx, userID, id) -> error to a 204 delete, id taken from
-// the "id" chi URL param.
 func Delete(fn func(ctx context.Context, userID, id string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := caller(w, r)

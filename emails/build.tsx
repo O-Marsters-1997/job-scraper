@@ -7,7 +7,6 @@ import IndividualEmail from "./templates/individual";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outDir = join(__dirname, "../internal/notify/templates");
 
-// Placeholder values that get replaced with Go template directives in the HTML output.
 const placeholders = {
 	title: "%%GO_TITLE%%",
 	company: "%%GO_COMPANY%%",

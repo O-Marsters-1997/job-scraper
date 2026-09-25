@@ -192,8 +192,6 @@ func cardJobURL(linkEl *goquery.Selection) string {
 	return baseURL + href
 }
 
-// ParseJobDetail extracts a fully-populated dto.Job from an Indeed job detail
-// page.
 func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {

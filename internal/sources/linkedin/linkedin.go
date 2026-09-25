@@ -84,8 +84,6 @@ func inSet(set map[string]bool) func(string) bool {
 	return func(s string) bool { return set[s] }
 }
 
-// setFilter sets param to value if value is non-empty and valid. An invalid value is
-// dropped with a warning rather than an error — a bad filter shouldn't kill the search.
 func setFilter(v url.Values, param, value string, valid func(string) bool) {
 	if value == "" {
 		return
@@ -352,9 +350,6 @@ func criteriaText(doc *goquery.Document, header string) string {
 	return text
 }
 
-// withCriteria folds seniority/employment-type/job-function/industries into the
-// description text since dto.Job has no dedicated columns for them and
-// score/claude.go reads Description directly for LLM scoring.
 func withCriteria(descriptionHTML string, criteria [][2]string) string {
 	var lines []string
 	for _, c := range criteria {

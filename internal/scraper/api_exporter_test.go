@@ -93,13 +93,12 @@ func TestAPIExporter_5xx_RetriesAndReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	pub := NewAPIExporter(srv.URL, "tok")
-	pub.initialBackoff = 0 // no sleep between retries in tests
+	pub.initialBackoff = 0
 
 	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
 	if err == nil {
 		t.Error("expected error after 5xx retries, got nil")
 	}
-	// initial attempt + 2 retries = 3 total
 	if calls != 3 {
 		t.Errorf("expected 3 calls (1 + 2 retries), got %d", calls)
 	}

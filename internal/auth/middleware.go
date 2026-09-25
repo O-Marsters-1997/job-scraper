@@ -17,13 +17,11 @@ func SessionFromContext(ctx context.Context) (dto.Session, bool) {
 	return s, ok
 }
 
-// Intended for use in tests.
 func WithSession(ctx context.Context, s dto.Session) context.Context {
 	return context.WithValue(ctx, ctxKeySession, s)
 }
 
-// Middleware reads the session_id cookie, validates it against the session store,
-// and stores the resolved dto.Session in the request context. Returns 401 on failure.
+// Middleware authenticates requests using the session_id cookie.
 func Middleware(sp providers.SessionProvider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

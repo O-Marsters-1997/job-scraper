@@ -1,6 +1,3 @@
-// Package scoringconfig holds the domain rules for reading and updating a
-// user's scoring config, including reconsidering existing candidates against
-// the new config. Persistence goes through providers.SearchConfigProvider.
 package scoringconfig
 
 import (
@@ -20,7 +17,6 @@ type Reconsiderer interface {
 	Reconsider(ctx context.Context, config dto.SearchConfig) error
 }
 
-// Rescorer queues an on-demand rescore of a user's existing jobs.
 type Rescorer interface {
 	QueueRescore(ctx context.Context, userID string) (int64, error)
 }
@@ -35,8 +31,6 @@ func New(configs providers.SearchConfigProvider, candidates Reconsiderer, rescor
 	return &Service{configs: configs, candidates: candidates, rescore: rescore}
 }
 
-// Rescore queues a rescore of the caller's existing jobs against their
-// current config.
 func (s *Service) Rescore(ctx context.Context, userID string) (dto.RescoreResult, error) {
 	queued, err := s.rescore.QueueRescore(ctx, userID)
 	return dto.RescoreResult{Queued: queued}, err

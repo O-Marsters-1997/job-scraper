@@ -15,7 +15,7 @@ func TestPageURL(t *testing.T) {
 	tests := []struct {
 		name   string
 		search Search
-		want   map[string]string // param -> expected value; absence means param must be unset
+		want   map[string]string
 	}{
 		{
 			name:   "keywords only, no filters set",

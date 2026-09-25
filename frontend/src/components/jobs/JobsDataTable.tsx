@@ -39,7 +39,6 @@ export function JobsDataTable<TData extends Job>(
 	const [showSkipped, setShowSkipped] = createSignal(true);
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
 
-	// Per-row expand state — keyed by Job ID, isolated from sort/filter/pagination
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
 	const isExpanded = (rowId: string) => expandedRow() === rowId;
 	const toggleExpanded = (rowId: string) =>

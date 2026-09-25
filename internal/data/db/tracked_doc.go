@@ -29,8 +29,7 @@ func (db *DB) AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput) e
 	return nil
 }
 
-// RemoveTrackedDoc deletes a tracked doc for the user. Returns ErrTrackedDocNotFound
-// if no row was deleted.
+// RemoveTrackedDoc deletes a tracked doc for the user, returning ErrTrackedDocNotFound if no row matched.
 func (db *DB) RemoveTrackedDoc(ctx context.Context, userID, docID string) error {
 	const q = `DELETE FROM tracked_docs WHERE user_id = $1 AND doc_id = $2`
 

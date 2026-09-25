@@ -71,7 +71,6 @@ export default function TweaksPanel() {
 	const [open, setOpen] = createSignal(false);
 	const [view, setView] = createSignal<"main" | "custom">("main");
 	const [tweaks, setTweaks] = createSignal<Tweaks>(DEFAULTS);
-	// Draft colours while the custom editor is open — not yet persisted
 	const [draft, setDraft] =
 		createSignal<Record<string, string>>(CUSTOM_DEFAULTS);
 
@@ -80,7 +79,6 @@ export default function TweaksPanel() {
 		setTweaks(loaded);
 		applyAll(loaded);
 
-		// Close panel when clicking outside (but not inside picker popovers)
 		function handlePointerDown(e: PointerEvent) {
 			if (!open()) return;
 			const target = e.target as Element | null;
@@ -113,13 +111,11 @@ export default function TweaksPanel() {
 	function openCustomEditor() {
 		const colors = tweaks().customColors ?? CUSTOM_DEFAULTS;
 		setDraft({ ...colors });
-		// Live-preview the current custom palette immediately
 		applyTheme("custom", colors);
 		setView("custom");
 	}
 
 	function cancelCustomEditor() {
-		// Revert any live preview edits
 		applyAll(tweaks());
 		setView("main");
 	}
@@ -139,14 +135,11 @@ export default function TweaksPanel() {
 	function updateDraftColor(varName: string, value: string) {
 		const updated = { ...draft(), [varName]: value };
 		setDraft(updated);
-		// Live-apply so the user can see the change immediately
 		applyTheme("custom", updated);
 	}
 
 	const t = () => tweaks();
 
-	// Derive a live swatch for the Custom button from saved customColors.
-	// Stored values are OKLCH; convert to hex for inline preview styling.
 	const customSwatch = () => {
 		const c = t().customColors ?? CUSTOM_DEFAULTS;
 		const hex = (key: string, fallback: string) =>
@@ -173,7 +166,6 @@ export default function TweaksPanel() {
 					class="flex w-72 flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
 					style={{ "max-height": "86vh" }}
 				>
-					{/* ── Header ── */}
 					<div class="flex shrink-0 items-center justify-between border-b border-border px-3.5 py-2.5">
 						<Show
 							when={view() === "custom"}
@@ -240,7 +232,6 @@ export default function TweaksPanel() {
 						</button>
 					</div>
 
-					{/* ── Body ── */}
 					<div
 						class="flex-1 overflow-y-auto"
 						style={{ "scrollbar-width": "thin" }}
@@ -284,7 +275,6 @@ export default function TweaksPanel() {
 						</Show>
 					</div>
 
-					{/* ── Footer ── */}
 					<div class="flex shrink-0 items-center justify-between border-t border-border px-3.5 py-2.5">
 						<Show
 							when={view() === "custom"}
@@ -323,7 +313,6 @@ export default function TweaksPanel() {
 				</div>
 			</Show>
 
-			{/* Toggle FAB */}
 			<button
 				type="button"
 				onClick={() => setOpen((o) => !o)}
@@ -336,7 +325,6 @@ export default function TweaksPanel() {
 				title="Tweaks"
 				aria-label="Open tweaks panel"
 			>
-				{/* Lucide SlidersHorizontal */}
 				<svg
 					width="16"
 					height="16"
@@ -363,8 +351,6 @@ export default function TweaksPanel() {
 	);
 }
 
-// ── Sub-panels ─────────────────────────────────────────────────────────────────
-
 function ThemeSection(props: {
 	selected: ThemeKey;
 	swatchFor: (key: ThemeKey) => {
@@ -390,7 +376,6 @@ function ThemeSection(props: {
 								aria-pressed={selected()}
 								class={themeButtonVariants({ selected: selected() })}
 							>
-								{/* Mini-app preview: sidebar + content card + accent */}
 								<div class="flex h-[3.25rem]">
 									<div
 										class="flex w-[36%] shrink-0 flex-col justify-center gap-[3px] px-2"
@@ -625,8 +610,6 @@ function CustomThemeEditor(props: {
 		</For>
 	);
 }
-
-// ── Shared layout primitives ───────────────────────────────────────────────────
 
 interface SectionProps {
 	label: string;

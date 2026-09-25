@@ -13,9 +13,8 @@ import (
 // MockJobProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockJobProvider struct {
 	mu   sync.Mutex
-	jobs map[string]dto.Job // keyed by URL
+	jobs map[string]dto.Job
 
-	// Injectable errors for failure-path tests.
 	SaveErr    error
 	NewURLsErr error
 }

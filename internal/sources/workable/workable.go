@@ -39,10 +39,8 @@ type jobLocation struct {
 	City string `json:"city"`
 }
 
-// The list carries no job URL or description, so the URL is built from the
-// shortcode and the description is left empty (the heuristic relevance gate
-// scores on title+location only).
-// ponytail: description omitted; add a per-job detail fetch if a scorer needs it.
+// Workable's list API returns no job URL or description; the URL here is
+// built from the shortcode.
 func parse(body []byte, token string) ([]dto.Job, error) {
 	var resp boardResponse
 	if err := json.Unmarshal(body, &resp); err != nil {

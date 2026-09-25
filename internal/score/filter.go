@@ -14,8 +14,6 @@ var SeniorityLevels = []string{
 	"intern", "junior", "mid", "senior", "staff", "principal", "lead", "manager", "director",
 }
 
-// senioritySignals maps each level to the title phrases that indicate it.
-// A title with no signal is ambiguous and passes.
 var senioritySignals = map[string][]string{
 	"intern":    {"intern", "internship", "trainee", "apprentice"},
 	"junior":    {"junior", "jr", "graduate", "entry level"},
@@ -28,8 +26,7 @@ var senioritySignals = map[string][]string{
 	"director":  {"director", "head of", "vp", "vice president", "chief", "cto"},
 }
 
-// Reject reports whether job trips any of cfg's exclusion filters. A job
-// passes by default; reason is non-empty only when rejected is true.
+// Reject reports whether job trips any of cfg's exclusion filters.
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
 		for _, excluded := range cfg.ExcludedCompanies {
@@ -64,9 +61,6 @@ func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	return "", false
 }
 
-// tokenize lowercases s and splits it into tokens, keeping letters, digits,
-// '+', and '#' together (so "C++" and "C#" survive as single tokens) and
-// treating every other rune as a separator.
 func tokenize(s string) []string {
 	var tokens []string
 	var b strings.Builder
@@ -87,10 +81,6 @@ func tokenize(s string) []string {
 	return tokens
 }
 
-// hasPhrase reports whether phrase appears in tokens as a contiguous
-// subsequence, so a single-word phrase only matches a whole token
-// ("java" does not match "javascript") and a multi-word phrase only
-// matches adjacent tokens in order.
 func hasPhrase(tokens []string, phrase string) bool {
 	phraseTokens := tokenize(phrase)
 	if len(phraseTokens) == 0 || len(phraseTokens) > len(tokens) {

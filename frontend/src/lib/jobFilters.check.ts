@@ -1,7 +1,3 @@
-/**
- * Self-check for jobFilters.ts — run with: bun src/lib/jobFilters.check.ts
- * (from the frontend/ directory)
- */
 import {
 	activeFilterCount,
 	applyJobFilters,
@@ -22,8 +18,6 @@ function eq(a: unknown, b: unknown): void {
 		);
 }
 
-// --- parseSalary ---
-
 eq(parseSalary("£80,000 to £95,000"), { min: 80000, max: 95000 });
 eq(parseSalary("£80k - £95k"), { min: 80000, max: 95000 });
 eq(parseSalary("Up to £90k"), { min: 90000, max: 90000 });
@@ -33,8 +27,6 @@ ok(parseSalary("") === null);
 ok(parseSalary(null) === null);
 ok(parseSalary("competitive salary") === null);
 
-// --- normalizeArrangement ---
-
 ok(normalizeArrangement({ WorkArrangement: "remote" } as never) === "remote");
 ok(normalizeArrangement({ WorkArrangement: "hybrid" } as never) === "hybrid");
 ok(normalizeArrangement({ WorkArrangement: "onsite" } as never) === "onsite");
@@ -42,8 +34,6 @@ ok(normalizeArrangement({ DaysInOffice: 0 } as never) === "remote");
 ok(normalizeArrangement({ DaysInOffice: 3 } as never) === "hybrid");
 ok(normalizeArrangement({ DaysInOffice: 5 } as never) === "onsite");
 ok(normalizeArrangement({} as never) === "unknown");
-
-// --- applyJobFilters ---
 
 const base = {
 	ID: "1",
@@ -87,17 +77,14 @@ const jobs = [
 	},
 ] as never[];
 
-// No filters — all pass
 ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 
-// Suitability ≥75: null excluded; only job 1 qualifies
 {
 	const r = applyJobFilters(jobs, { ...DEFAULT_FILTERS, suit: 75 });
 	ok(r.length === 1);
 	ok((r[0] as { ID: string }).ID === "1");
 }
 
-// Source filter
 {
 	const r = applyJobFilters(jobs, {
 		...DEFAULT_FILTERS,
@@ -106,7 +93,6 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 	ok(r.length === 2);
 }
 
-// Work arrangement — unknown (empty WorkArrangement) excluded when filter active
 {
 	const r = applyJobFilters(jobs, {
 		...DEFAULT_FILTERS,
@@ -115,7 +101,6 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 	ok(r.length === 2);
 }
 
-// Salary range overlap: job1=80k–100k, job2=60k, job3=no salary
 {
 	const r = applyJobFilters(jobs, {
 		...DEFAULT_FILTERS,
@@ -127,7 +112,6 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 	ok((r[0] as { ID: string }).ID === "1");
 }
 
-// activeFilterCount
 ok(activeFilterCount(DEFAULT_FILTERS) === 0);
 ok(
 	activeFilterCount({

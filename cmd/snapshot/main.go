@@ -93,8 +93,6 @@ func download(source, name, url string) error {
 	}
 	fmt.Printf("saved %s\n", outPath)
 
-	// For detail snapshots, write a sidecar URL file so rebase knows which
-	// URL to pass to ParseJobDetail.
 	if strings.HasPrefix(name, "detail_") {
 		urlPath := filepath.Join(dir, name+".url")
 		if err := os.WriteFile(urlPath, []byte(url), 0o644); err != nil {

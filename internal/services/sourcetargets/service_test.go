@@ -14,7 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-// emptyStore is a candidates.Store with nothing in it, so Reconsider is a no-op.
 type emptyStore struct{}
 
 func (emptyStore) SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]candidates.Candidate, error) {

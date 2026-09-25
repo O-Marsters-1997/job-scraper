@@ -35,8 +35,6 @@ const sidebarBadgeVariants = cva(
 );
 
 interface SidebarProps {
-	// Below the md breakpoint the sidebar is an off-canvas drawer driven by the
-	// app shell; on md+ it's an in-flow, collapsible rail.
 	mobileOpen?: boolean;
 	onMobileClose?: () => void;
 }
@@ -44,11 +42,8 @@ interface SidebarProps {
 export default function Sidebar(props: SidebarProps) {
 	const [expanded, setExpanded] = createSignal(true);
 	const location = useLocation();
-	// Drawer always shows labels regardless of the desktop collapse state.
 	const showLabels = () => props.mobileOpen || expanded();
 
-	// Close the drawer on navigation so a tapped link doesn't leave it covering
-	// the page it just opened.
 	createEffect(() => {
 		location().pathname;
 		props.onMobileClose?.();

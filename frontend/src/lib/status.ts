@@ -7,7 +7,6 @@ export const STATUS_FALLBACK_COLOUR = "#64748b";
 /**
  * Default colour palette for the status colour picker.
  * These are deliberate user-facing swatches, not design tokens.
- * The Slate entry is kept in sync with STATUS_FALLBACK_COLOUR.
  */
 export const STATUS_PALETTE = [
 	{ hex: "#6366f1", label: "Indigo" },

@@ -113,7 +113,7 @@ func TestFilterByKeywords(t *testing.T) {
 	tests := []struct {
 		name     string
 		keywords []string
-		want     []string // titles expected to pass
+		want     []string
 	}{
 		{
 			name:     "no keywords passes everything",

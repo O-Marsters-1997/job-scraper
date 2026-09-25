@@ -9,11 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 )
 
-// Ingest and IngestBatch stay misfits: they authenticate by service token
-// (auth.ServiceTokenMiddleware), not a user session, so they don't fit the
-// generic adapter's Caller-based wrappers. ingest.Ingester is already the
-// domain package; there's no service to add on top of it.
-
 func Ingest(ing *ingest.Ingester) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		job, ok := decodeBody[dto.Job](w, r)

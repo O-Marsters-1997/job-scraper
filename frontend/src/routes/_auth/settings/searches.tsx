@@ -395,7 +395,6 @@ function SearchesPage() {
 											</Select>
 										</div>
 
-										{/* Filter source (WIS): keywords + filter fields */}
 										<Show when={currentSourceInfo()?.kind === "filter"}>
 											<div class="flex flex-col gap-2">
 												<label
@@ -449,7 +448,6 @@ function SearchesPage() {
 											</For>
 										</Show>
 
-										{/* Board source: board token */}
 										<Show when={currentSourceInfo()?.kind === "board"}>
 											<div class="flex flex-col gap-2">
 												<label
@@ -468,7 +466,6 @@ function SearchesPage() {
 											</div>
 										</Show>
 
-										{/* URL source: full search URL */}
 										<Show when={currentSourceInfo()?.kind === "url"}>
 											<div class="flex flex-col gap-2">
 												<label

@@ -1,6 +1,4 @@
-// FastTrack "Velocity F" monogram — an italic F whose arms trail two speed
-// lines. Single-colour via currentColor so it adapts to the violet auth
-// front door and the teal in-app sidebar alike.
+// FastTrack "Velocity F" monogram — an italic F whose arms trail two speed lines.
 export function FastTrackMark(props: { class?: string; size?: number }) {
 	const size = () => props.size ?? 20;
 	return (

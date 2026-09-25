@@ -2,8 +2,6 @@ package dto
 
 import "time"
 
-// Company is a shared catalog record of an employer encountered by any scrape.
-// ATSSource/ATSToken are empty for companies only seen via discovery sources.
 type Company struct {
 	ID                string
 	Slug              string
@@ -15,7 +13,6 @@ type Company struct {
 	LastCrawledAt     *time.Time
 	FirstSeenAt       time.Time
 
-	// Per-user read-model fields, populated by ListCompaniesForUser only.
 	JobCount             int
 	Tracked              bool
 	TargetID             string

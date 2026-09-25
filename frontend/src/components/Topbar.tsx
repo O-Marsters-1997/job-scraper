@@ -15,8 +15,6 @@ const PAGE_LABELS: Record<string, string> = {
 	"/settings/integrations": "Integrations",
 };
 
-// Fallback so new routes get a sensible breadcrumb instead of duplicating the
-// product name: title-case the last path segment ("/settings/foo" -> "Foo").
 function deriveLabel(pathname: string): string | null {
 	const segment = pathname.split("/").filter(Boolean).pop();
 	if (!segment) return null;

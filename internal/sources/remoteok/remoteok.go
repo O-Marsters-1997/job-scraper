@@ -39,9 +39,6 @@ type feedJob struct {
 	SalaryMax   int    `json:"salary_max"`
 }
 
-// ponytail: URL-only dedup; a company posting both on its ATS board and on
-// this feed yields two rows for the same role. Add an {ats}:{company}:{job_id}
-// key only if measured dup rate is material.
 func parse(body []byte) ([]dto.Job, error) {
 	var raw []feedJob
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -51,7 +48,7 @@ func parse(body []byte) ([]dto.Job, error) {
 	jobs := make([]dto.Job, 0, len(raw))
 	for _, fj := range raw {
 		if fj.ID == "" {
-			continue // legal notice / metadata element, not a job
+			continue
 		}
 		jobs = append(jobs, dto.Job{
 			Title:           fj.Position,

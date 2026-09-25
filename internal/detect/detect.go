@@ -44,8 +44,6 @@ func Detect(rawURL string) ATSType {
 	}
 }
 
-// atsSourceName maps an ATSType to the registry source name. Aggregator and
-// UnknownHTML have no board source and return "".
 var atsSourceName = map[ATSType]string{
 	Greenhouse: "greenhouse",
 	Lever:      "lever",
@@ -57,13 +55,6 @@ var atsSourceName = map[ATSType]string{
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
 // URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
-// Path-based ATSes (greenhouse/lever/ashby/workable) take the token from the first
-// path segment; subdomain-based ATSes (recruitee/personio) take it from the leading
-// host label. Returns ok=false for aggregators, unknown hosts, or bare provider URLs.
-//
-// ponytail: direct ATS URLs only. Company careers pages that redirect to or embed an
-// ATS need a fetch-and-sniff step (follow redirect / parse window objects) — add that
-// only if manual entry proves too clumsy.
 func ResolveBoard(rawURL string) (source, token string, ok bool) {
 	t := Detect(rawURL)
 	source, known := atsSourceName[t]
@@ -85,7 +76,6 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 		}
 		return source, labels[0], true
 	default:
-		// Token is the first non-empty path segment.
 		for seg := range strings.SplitSeq(u.Path, "/") {
 			if seg != "" && seg != "embed" {
 				return source, seg, true
@@ -96,7 +86,6 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 }
 
 // RewriteToATS attempts to extract the underlying ATS URL from an aggregator URL.
-// Returns the ATS URL, its type, and true on success; ("", UnknownHTML, false) otherwise.
 func RewriteToATS(rawURL string) (string, ATSType, bool) {
 	u, err := neturl.Parse(rawURL)
 	if err != nil {

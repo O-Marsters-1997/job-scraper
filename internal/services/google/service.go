@@ -1,7 +1,3 @@
-// Package google holds the domain rules around a user's Google account link:
-// exchanging an OAuth code, reporting connection status (including the
-// UserInfo lookup), and disconnecting. The OAuth redirect and state-cookie
-// mechanics stay in the handler; those are HTTP concerns, not domain rules.
 package google
 
 import (
@@ -39,7 +35,6 @@ func (s *Service) AuthURL(state string) string {
 	return s.client.AuthURL(state)
 }
 
-// Connect exchanges an OAuth code for a token and saves it for the user.
 func (s *Service) Connect(ctx context.Context, userID, code string) error {
 	tok, err := s.client.Exchange(ctx, code)
 	if err != nil {
@@ -79,8 +74,7 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 	return dto.GoogleStatus{Connected: true, Email: info.Email}, nil
 }
 
-// Disconnect removes the user's stored Google token. The unused id param
-// lets it fit the Delete adapter shape directly.
+// Disconnect removes the user's stored Google token.
 func (s *Service) Disconnect(ctx context.Context, userID, _ string) error {
 	return s.client.DeleteToken(ctx, userID)
 }

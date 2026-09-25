@@ -1,7 +1,3 @@
-// Package sources adapts the source registry and board-URL detection to the
-// handler shapes: List and Resolve take (ctx, userID, ...) even though
-// neither depends on the caller, so they can bind through the generic
-// adapter instead of a closure in the router.
 package sources
 
 import (
