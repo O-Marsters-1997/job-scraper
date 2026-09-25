@@ -1,6 +1,8 @@
 # ADR 0020 — Handlers as an HTTP adapter over feature services
 
-**Status:** Accepted; implementation pending
+**Status:** Accepted; implementation pending. Partially superseded by
+[ADR 0022](0022-handle-as-the-one-handler-pipeline.md), which folds this ADR's adapter helpers
+into a single `Handle` function every handler goes through.
 
 ## Context
 

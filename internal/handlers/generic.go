@@ -1,8 +1,5 @@
-// Generic CRUD wrappers over a service function. Each one fixes a function
-// shape and a success status; a returned Out of struct{} always means 204
-// regardless of the verb's default. Path IDs travel on the input dto via a
-// `path:"..."` struct tag, filled from chi URL params before the service is
-// called, so the request body can never set them. See docs/adr/0021.
+// Handle is the pipeline every handler in this package is built from:
+// decode, call, respond. See docs/adr/0022.
 package handlers
 
 import (
@@ -18,17 +15,47 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 )
 
+// Handle wires decode -> call -> respond into an http.HandlerFunc. A decode
+// or call error goes to writeError; respond only runs on success and can't
+// fail itself — anything that can fail belongs in decode or call.
+func Handle[Req, Res any](
+	decode func(r *http.Request) (Req, error),
+	call func(ctx context.Context, req Req) (Res, error),
+	respond func(w http.ResponseWriter, r *http.Request, res Res),
+) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, err := decode(r)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		res, err := call(r.Context(), req)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		respond(w, r, res)
+	}
+}
+
+func respondJSON[Res any](status int) func(http.ResponseWriter, *http.Request, Res) {
+	return func(w http.ResponseWriter, _ *http.Request, res Res) {
+		respond(w, status, res)
+	}
+}
+
+func pass[T any](_ context.Context, v T) (T, error) { return v, nil }
+
 // decodeBody decodes the request body into T. An empty body decodes to T's
 // zero value rather than failing: bodyless actions (e.g. hide/show) and
 // dtos with only path-tagged fields never need to send one, and a required
 // field's absence is a service-level validation error, not a decode error.
-func decodeBody[T any](w http.ResponseWriter, r *http.Request) (in T, ok bool) {
+func decodeBody[T any](r *http.Request) (T, error) {
+	var in T
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
-		writeError(w, r, apperr.Invalid("bad request"))
-		var zero T
-		return zero, false
+		return in, apperr.Invalid("bad request")
 	}
-	return in, true
+	return in, nil
 }
 
 // decodeQuery flattens the request's URL query into Q by JSON round-trip: Q
@@ -75,84 +102,84 @@ func respond[Out any](w http.ResponseWriter, status int, out Out) {
 	writeJSON(w, status, out)
 }
 
+type byID struct{ userID, id string }
+
+func decodeByID(r *http.Request) (byID, error) {
+	uid, err := userID(r)
+	if err != nil {
+		return byID{}, err
+	}
+	return byID{userID: uid, id: chi.URLParam(r, "id")}, nil
+}
+
 // GetAll adapts (ctx, userID) -> (Out, error) to a 200 collection or
 // singleton read.
 func GetAll[Out any](fn func(ctx context.Context, userID string) (Out, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		out, err := fn(r.Context(), userID)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
-	}
+	return Handle(userID, fn, respondJSON[Out](http.StatusOK))
 }
 
 // GetByID adapts (ctx, userID, id) -> (Out, error) to a 200 read, id taken
 // from the "id" chi URL param. Reused for any action whose shape matches,
 // regardless of HTTP method (e.g. POST .../scrape).
 func GetByID[Out any](fn func(ctx context.Context, userID, id string) (Out, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		out, err := fn(r.Context(), userID, chi.URLParam(r, "id"))
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
-	}
+	return Handle(
+		decodeByID,
+		func(ctx context.Context, in byID) (Out, error) { return fn(ctx, in.userID, in.id) },
+		respondJSON[Out](http.StatusOK),
+	)
 }
 
 // Query adapts (ctx, userID, q Q) -> (Out, error) to a 200 read, q decoded
 // from the URL query string.
 func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		q, err := decodeQuery[Q](r)
-		if err != nil {
-			writeError(w, r, apperr.Invalid("bad request"))
-			return
-		}
-		out, err := fn(r.Context(), userID, q)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
+	type req struct {
+		userID string
+		q      Q
 	}
+	return Handle(
+		func(r *http.Request) (req, error) {
+			uid, err := userID(r)
+			if err != nil {
+				return req{}, err
+			}
+			q, err := decodeQuery[Q](r)
+			if err != nil {
+				return req{}, apperr.Invalid("bad request")
+			}
+			return req{userID: uid, q: q}, nil
+		},
+		func(ctx context.Context, in req) (Out, error) { return fn(ctx, in.userID, in.q) },
+		respondJSON[Out](http.StatusOK),
+	)
+}
+
+type userInput[In any] struct {
+	userID string
+	in     In
+}
+
+func decodeUserInput[In any](r *http.Request) (userInput[In], error) {
+	uid, err := userID(r)
+	if err != nil {
+		return userInput[In]{}, err
+	}
+	in, err := decodeBody[In](r)
+	if err != nil {
+		return userInput[In]{}, err
+	}
+	fillPath(r, &in)
+	return userInput[In]{userID: uid, in: in}, nil
+}
+
+func toServiceCall[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) func(context.Context, userInput[In]) (Out, error) {
+	return func(ctx context.Context, req userInput[In]) (Out, error) { return fn(ctx, req.userID, req.in) }
 }
 
 // Create adapts (ctx, userID, in In) -> (Out, error) to a 201 create; a
 // struct{} Out writes 204 instead. Path-tagged fields on In are filled from
 // chi URL params after decoding.
 func Create[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		in, ok := decodeBody[In](w, r)
-		if !ok {
-			return
-		}
-		fillPath(r, &in)
-		out, err := fn(r.Context(), userID, in)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		respond(w, http.StatusCreated, out)
-	}
+	return Handle(decodeUserInput[In], toServiceCall(fn), respondJSON[Out](http.StatusCreated))
 }
 
 // Update adapts (ctx, userID, in In) -> (Out, error) to a 200 update; a
@@ -160,37 +187,15 @@ func Create[In, Out any](fn func(ctx context.Context, userID string, in In) (Out
 // chi URL params after decoding, covering both a single {id} and a
 // multi-segment path (e.g. {docId}/{tabId}).
 func Update[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		in, ok := decodeBody[In](w, r)
-		if !ok {
-			return
-		}
-		fillPath(r, &in)
-		out, err := fn(r.Context(), userID, in)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		respond(w, http.StatusOK, out)
-	}
+	return Handle(decodeUserInput[In], toServiceCall(fn), respondJSON[Out](http.StatusOK))
 }
 
 // Delete adapts (ctx, userID, id) -> error to a 204 delete, id taken from
 // the "id" chi URL param.
 func Delete(fn func(ctx context.Context, userID, id string) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		if err := fn(r.Context(), userID, chi.URLParam(r, "id")); err != nil {
-			writeError(w, r, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
+	return Handle(
+		decodeByID,
+		func(ctx context.Context, in byID) (struct{}, error) { return struct{}{}, fn(ctx, in.userID, in.id) },
+		respondJSON[struct{}](http.StatusNoContent),
+	)
 }

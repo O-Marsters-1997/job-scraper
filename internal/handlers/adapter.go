@@ -1,6 +1,7 @@
 // Adapter turns a service or provider method into an http.HandlerFunc: it
 // resolves the caller, decodes the body, maps a returned apperr kind to a
-// status, and encodes the result. See docs/adr/0020 and docs/adr/0021.
+// status, and encodes the result. See docs/adr/0020, docs/adr/0021 and
+// docs/adr/0022.
 package handlers
 
 import (
@@ -13,15 +14,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/auth"
 )
 
-// caller resolves the authenticated user's ID, writing a 401 and returning
-// ok=false if no session is present.
-func caller(w http.ResponseWriter, r *http.Request) (userID string, ok bool) {
+func userID(r *http.Request) (string, error) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if !ok {
-		auth.WriteUnauthorized(w)
-		return "", false
+		return "", apperr.Unauthorized("unauthorized")
 	}
-	return session.UserID, true
+	return session.UserID, nil
 }
 
 // writeJSON writes v as the response body with the given status. A nil slice

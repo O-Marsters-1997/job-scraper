@@ -1,6 +1,10 @@
 # ADR 0021 — Feature services under internal/services; CRUD-shaped generics replace User/ID/Body/BodyID
 
-**Status:** Accepted
+**Status:** Accepted. Its "misfits stay in `internal/handlers`, as functions over a service, not
+a struct" clause is partially superseded by
+[ADR 0022](0022-handle-as-the-one-handler-pipeline.md): misfits still live there as
+`func(svc) http.HandlerFunc` closures, but now build that closure from the same `Handle`
+function the CRUD generics use.
 
 ## Context
 

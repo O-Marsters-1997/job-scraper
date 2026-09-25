@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -9,42 +10,46 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 )
 
-// Ingest and IngestBatch stay misfits: they authenticate by service token
-// (auth.ServiceTokenMiddleware), not a user session, so they don't fit the
-// generic adapter's Caller-based wrappers. ingest.Ingester is already the
-// domain package; there's no service to add on top of it.
-
+// Ingest and IngestBatch authenticate by service token, not a session, so
+// their decode step never calls userID.
 func Ingest(ing *ingest.Ingester) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		job, ok := decodeBody[dto.Job](w, r)
-		if !ok {
-			return
-		}
-		results, err := ing.IngestJobs(r.Context(), []dto.Job{job})
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, results[0])
-	}
+	return Handle(
+		decodeBody[dto.Job],
+		func(ctx context.Context, job dto.Job) (ingest.Result, error) {
+			results, err := ing.IngestJobs(ctx, []dto.Job{job})
+			if err != nil {
+				return ingest.Result{}, err
+			}
+			return results[0], nil
+		},
+		respondJSON[ingest.Result](http.StatusOK),
+	)
+}
+
+type ingestBatchInput struct {
+	Jobs []dto.Job `json:"jobs"`
+}
+
+type ingestBatchView struct {
+	Results []ingest.Result `json:"results"`
 }
 
 func IngestBatch(ing *ingest.Ingester) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var request struct {
-			Jobs []dto.Job `json:"jobs"`
-		}
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&request); err != nil || len(request.Jobs) == 0 || len(request.Jobs) > 100 {
-			writeError(w, r, apperr.Invalid("invalid batch"))
-			return
-		}
-		results, err := ing.IngestJobs(r.Context(), request.Jobs)
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, struct {
-			Results []ingest.Result `json:"results"`
-		}{Results: results})
-	}
+	return Handle(
+		func(r *http.Request) (ingestBatchInput, error) {
+			var in ingestBatchInput
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil || len(in.Jobs) == 0 || len(in.Jobs) > 100 {
+				return ingestBatchInput{}, apperr.Invalid("invalid batch")
+			}
+			return in, nil
+		},
+		func(ctx context.Context, in ingestBatchInput) (ingestBatchView, error) {
+			results, err := ing.IngestJobs(ctx, in.Jobs)
+			if err != nil {
+				return ingestBatchView{}, err
+			}
+			return ingestBatchView{Results: results}, nil
+		},
+		respondJSON[ingestBatchView](http.StatusOK),
+	)
 }

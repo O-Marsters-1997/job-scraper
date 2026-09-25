@@ -1,7 +1,6 @@
 # Pass-through routes
 
-Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
-and [ADR 0021](../../../../docs/adr/0021-services-directory-and-crud-generics.md): a route with
+Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md): a route with
 no domain logic binds a generic wrapper directly to a provider method value instead of routing
 through a service. Add a service method only when there's an actual rule or orchestration to
 hold — a service method that just forwards `(ctx, userID, ...)` to one provider call adds a
