@@ -48,7 +48,9 @@ export function ScoreAndGateChart(props: {
 	return (
 		<Card class="mb-3 mt-3">
 			<div class="border-b border-border px-5 py-4">
-				<h3 class="text-sm font-semibold text-foreground">Suitability scores</h3>
+				<h3 class="text-sm font-semibold text-foreground">
+					Suitability scores
+				</h3>
 				<p class="mt-0.5 text-xs text-faint">
 					How the suitability scorer has rated your feed so far
 				</p>
