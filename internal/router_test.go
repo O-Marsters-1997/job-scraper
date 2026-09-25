@@ -365,6 +365,11 @@ func TestRouterRoutes(t *testing.T) {
 		}
 		w = do(authed(http.MethodPut, "/scoring-config", jsonBody(t, map[string]any{
 			"suitabilityRubric": "test rubric", "notifyThreshold": 5,
+			"scoringQuestions": map[string]any{
+				"profile":  "test profile",
+				"criteria": []any{},
+				"scale":    []string{"Low", "High"},
+			},
 		}), cookie))
 		if w.Code != http.StatusOK {
 			t.Errorf("PUT = %d (body: %s)", w.Code, w.Body.String())

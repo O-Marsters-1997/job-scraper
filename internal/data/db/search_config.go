@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,6 +14,10 @@ import (
 )
 
 func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
+	var questions dto.ScoringQuestions
+	if len(row.ScoringQuestions) > 0 {
+		_ = json.Unmarshal(row.ScoringQuestions, &questions)
+	}
 	return dto.SearchConfig{
 		ID:                    row.ID.String(),
 		UserID:                row.UserID.String(),
@@ -22,6 +27,7 @@ func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
 		ExcludedLocations:     row.ExcludedLocations,
 		SuitabilityRubric:     row.SuitabilityRubric,
 		NotifyThreshold:       int(row.NotifyThreshold),
+		ScoringQuestions:      questions,
 		UpdatedAt:             row.UpdatedAt.Time,
 	}
 }
@@ -58,6 +64,10 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 	if err != nil {
 		return dto.SearchConfig{}, err
 	}
+	questions, err := json.Marshal(cfg.ScoringQuestions)
+	if err != nil {
+		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: marshal scoring questions: %w", err)
+	}
 	row, err := db.queries.UpsertSearchConfig(ctx, pgsqlc.UpsertSearchConfigParams{
 		UserID:                uid,
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
@@ -66,6 +76,7 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
 		SuitabilityRubric:     cfg.SuitabilityRubric,
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
+		ScoringQuestions:      questions,
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)
