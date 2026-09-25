@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -26,18 +25,18 @@ func (db *DB) ClaimScoringEffect(ctx context.Context) (dto.ScoringEffect, error)
 	}, nil
 }
 
-func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, reason string, terminal bool, retryAfter time.Duration) error {
+func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error {
 	effectID, err := parseUUID(id)
 	if err != nil {
 		return err
 	}
 	var retryAfterSecs pgtype.Int4
-	if retryAfter > 0 {
-		retryAfterSecs = pgtype.Int4{Int32: int32(retryAfter.Seconds()), Valid: true}
+	if failure.RetryAfter > 0 {
+		retryAfterSecs = pgtype.Int4{Int32: int32(failure.RetryAfter.Seconds()), Valid: true}
 	}
 	params := pgsqlc.FailScoringEffectParams{
-		ID: effectID, Attempts: int32(attempts), LastError: reason,
-		Terminal: terminal, RetryAfterSecs: retryAfterSecs,
+		ID: effectID, Attempts: int32(attempts), LastError: failure.Reason,
+		Terminal: failure.Terminal, RetryAfterSecs: retryAfterSecs,
 	}
 	if err := db.queries.FailScoringEffect(ctx, params); err != nil {
 		return fmt.Errorf("fail scoring effect: %w", err)
@@ -60,9 +59,7 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	return rows == 1, nil
 }
 
-// ScoringStatus is an alias so existing callers keep compiling; the type
-// itself lives in dto so internal/data/providers can declare an interface
-// against it without importing db.
+// ScoringStatus aliases dto.ScoringStatus.
 type ScoringStatus = dto.ScoringStatus
 
 func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatus, error) {

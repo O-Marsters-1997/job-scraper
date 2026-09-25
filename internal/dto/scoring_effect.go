@@ -12,3 +12,9 @@ type ScoringEffect struct {
 	Attempts       int
 	FirstDiscovery bool
 }
+
+type ScoringFailure struct {
+	Reason     string
+	Terminal   bool
+	RetryAfter time.Duration
+}

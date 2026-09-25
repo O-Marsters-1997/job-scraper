@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
@@ -22,7 +21,7 @@ type EffectStore interface {
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	GetProfile(context.Context, string) (dto.Profile, error)
-	FailScoringEffect(ctx context.Context, id string, attempts int, reason string, terminal bool, retryAfter time.Duration) error
+	FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
 
@@ -46,8 +45,7 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	return w.process(ctx, effect)
 }
 
-// RunTick drains the queue, running up to maxConcurrentScoring effects at
-// once. One effect's failure is logged, not returned, so it doesn't stop the rest.
+// RunTick drains the queue, running up to maxConcurrentScoring effects at once.
 func (w *OutboxWorker) RunTick(ctx context.Context) error {
 	g := &errgroup.Group{}
 	g.SetLimit(maxConcurrentScoring)
@@ -72,14 +70,13 @@ func (w *OutboxWorker) RunTick(ctx context.Context) error {
 
 func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) error {
 	fail := func(err error) error {
-		var terminal bool
-		var retryAfter time.Duration
+		failure := dto.ScoringFailure{Reason: err.Error()}
 		var scorerErr *ScorerError
 		if errors.As(err, &scorerErr) {
-			terminal = scorerErr.Kind == FailureTerminal
-			retryAfter = scorerErr.RetryAfter
+			failure.Terminal = scorerErr.Kind == FailureTerminal
+			failure.RetryAfter = scorerErr.RetryAfter
 		}
-		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, err.Error(), terminal, retryAfter); saveErr != nil {
+		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, failure); saveErr != nil {
 			return errors.Join(err, saveErr)
 		}
 		return err

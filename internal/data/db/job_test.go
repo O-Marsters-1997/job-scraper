@@ -263,7 +263,7 @@ func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
 		t.Fatal("leased effect claimed twice")
 	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "temporary failure", false, 0); err != nil {
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "temporary failure"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
@@ -298,7 +298,7 @@ func TestScoringEffect_TerminalFailureFailsAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "invalid api key", true, 0); err != nil {
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "invalid api key", Terminal: true}); err != nil {
 		t.Fatal(err)
 	}
 	var status, lastError string
@@ -330,7 +330,7 @@ func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "rate limited", false, 120*time.Second); err != nil {
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "rate limited", RetryAfter: 120 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
 	var status string

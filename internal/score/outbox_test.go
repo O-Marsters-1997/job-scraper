@@ -35,10 +35,10 @@ func (s *effectStore) GetSearchConfig(context.Context, string) (dto.SearchConfig
 	return s.config, nil
 }
 func (s *effectStore) GetProfile(context.Context, string) (dto.Profile, error) { return s.profile, nil }
-func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, reason string, terminal bool, retryAfter time.Duration) error {
-	s.failed = reason
-	s.failedTerminal = terminal
-	s.failedRetryAfter = retryAfter
+func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, failure dto.ScoringFailure) error {
+	s.failed = failure.Reason
+	s.failedTerminal = failure.Terminal
+	s.failedRetryAfter = failure.RetryAfter
 	return nil
 }
 func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error) {
@@ -197,7 +197,7 @@ func (s *queueStore) GetSearchConfig(context.Context, string) (dto.SearchConfig,
 }
 func (s *queueStore) GetProfile(context.Context, string) (dto.Profile, error) { return s.profile, nil }
 
-func (s *queueStore) FailScoringEffect(_ context.Context, id string, _ int, _ string) error {
+func (s *queueStore) FailScoringEffect(_ context.Context, id string, _ int, _ dto.ScoringFailure) error {
 	s.resultMu.Lock()
 	defer s.resultMu.Unlock()
 	s.failed = append(s.failed, id)

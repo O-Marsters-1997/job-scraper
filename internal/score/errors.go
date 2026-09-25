@@ -10,8 +10,7 @@ const (
 	FailureRateLimited
 )
 
-// ScorerError classifies a scoring failure so the outbox can decide how to
-// reschedule it, instead of applying the same backoff to every error.
+// ScorerError classifies a scoring failure for outbox retry scheduling.
 type ScorerError struct {
 	Kind       FailureKind
 	RetryAfter time.Duration
@@ -21,15 +20,12 @@ type ScorerError struct {
 func (e *ScorerError) Error() string { return e.err.Error() }
 func (e *ScorerError) Unwrap() error { return e.err }
 
-// TerminalScoreError marks err as unrecoverable without operator action
-// (e.g. a bad key or exhausted credit): the outbox fails the effect after
-// this one attempt instead of retrying.
+// TerminalScoreError marks err as unrecoverable without operator action.
 func TerminalScoreError(err error) error {
 	return &ScorerError{Kind: FailureTerminal, err: err}
 }
 
-// RateLimitedScoreError marks err as a rate limit: the outbox schedules the
-// retry at retryAfter instead of the exponential backoff.
+// RateLimitedScoreError marks err as rate-limited, to retry after retryAfter.
 func RateLimitedScoreError(err error, retryAfter time.Duration) error {
 	return &ScorerError{Kind: FailureRateLimited, RetryAfter: retryAfter, err: err}
 }
