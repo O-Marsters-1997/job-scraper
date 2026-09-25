@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roadmap</title>
+  <style>
+    /* Reset + base */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           background: #f5f5f4; color: #1c1917; padding: 2rem; min-height: 100vh; }
+
+    /* Header */
+    header { margin-bottom: 2rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    .subtitle { color: #78716c; font-size: 0.875rem; margin-top: 0.25rem; }
+
+    /* Board */
+    .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 2.5rem; }
+    @media (max-width: 640px) { .board { grid-template-columns: 1fr; } }
+
+    .column { background: #fff; border-radius: 0.75rem; padding: 1.25rem;
+               box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .column h2 { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em;
+                  text-transform: uppercase; margin-bottom: 1rem; padding-bottom: 0.5rem;
+                  border-bottom: 2px solid; }
+    .column.now   h2 { color: #d97706; border-color: #fbbf24; }
+    .column.next  h2 { color: #2563eb; border-color: #93c5fd; }
+    .column.later h2 { color: #64748b; border-color: #cbd5e1; }
+
+    /* Cards */
+    .card { background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 0.5rem;
+             padding: 0.75rem; margin-bottom: 0.75rem; }
+    .card:last-child { margin-bottom: 0; }
+    .card-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+    .card-context { font-size: 0.8rem; color: #78716c; line-height: 1.4; }
+    .card-dep { font-size: 0.75rem; color: #a8a29e; margin-top: 0.35rem;
+                padding-top: 0.35rem; border-top: 1px solid #e7e5e4; }
+
+    /* Open questions */
+    .open-questions { background: #fefce8; border: 1px solid #fde68a;
+                       border-radius: 0.75rem; padding: 1.25rem; }
+    .open-questions h2 { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em;
+                          text-transform: uppercase; color: #b45309; margin-bottom: 1rem; }
+    .open-questions ol { padding-left: 1.25rem; }
+    .open-questions li { font-size: 0.875rem; margin-bottom: 0.5rem; line-height: 1.5; }
+    .open-questions .q-note { color: #92400e; font-size: 0.8rem; }
+    .open-questions .empty { font-size: 0.875rem; color: #92400e; }
+
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      body { background: #1c1917; color: #fafaf9; }
+      .column { background: #292524; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+      .card { background: #1c1917; border-color: #44403c; }
+      .card-context { color: #a8a29e; }
+      .card-dep { color: #78716c; border-top-color: #44403c; }
+      .open-questions { background: #1c1409; border-color: #78350f; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Roadmap</h1>
+    <p class="subtitle">Generated from ideas/CONTEXT.md § Accepted ideas · 2026-09-25</p>
+  </header>
+
+  <div class="board">
+    <div class="column now">
+      <h2>Now</h2>
+      <div class="card">
+        <div class="card-title">BrightData proxy rollout</div>
+        <div class="card-context">Verify the existing BrightData Web Unlocker integration is working reliably, then let other sources opt into it as needed.</div>
+      </div>
+    </div>
+    <div class="column next">
+      <h2>Next</h2>
+    </div>
+    <div class="column later">
+      <h2>Later</h2>
+    </div>
+  </div>
+
+  <section class="open-questions">
+    <h2>Open Questions</h2>
+    <p class="empty">None carried forward — this board was built from Accepted ideas, not an approach doc.</p>
+  </section>
+</body>
+</html>
