@@ -54,6 +54,10 @@ _Avoid_: Followed company, watched company, subscription
 A User's requested interval for checking a Tracked Company's verified Boards, shared across that Company's Boards.
 _Avoid_: Schedule, cron, polling interval
 
+**Overdue Board**:
+A Verified Board whose next check under its Check Frequency is more than an hour late, which signals that scheduling or checking has stalled.
+_Avoid_: Stale Board, late Board, failed Board
+
 **ATS**:
 An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio) exposing a public, unauthenticated jobs API — the Tier-1 source of truth, extracted via API not HTML.
 _Avoid_: Platform (when ambiguous), provider
