@@ -65,7 +65,7 @@ jobs:
           go-version: "1.26"
           cache: true
       - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
       - name: Run sqlc generate
         run: sqlc generate
       - name: Check for uncommitted changes
