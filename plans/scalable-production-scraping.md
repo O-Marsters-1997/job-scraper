@@ -1,6 +1,6 @@
 # Plan: Scalable production scraping
 
-> Source: [domain context](../CONTEXT.md), [system overview and diagram](../docs/architecture/system-overview.md), [scalability review](../docs/architecture-reviews/scalable-multi-source-scraping.md), and accepted [ADR 0017](../docs/adr/0017-company-level-tracking-across-verified-boards.md) / [ADR 0018](../docs/adr/0018-explicit-source-fetchers-and-web-unlocker-failure.md). The approach document predates these decisions; the newer ADRs and context govern this plan.
+> Source: [domain context](../CONTEXT.md), [system overview and diagram](../docs/architecture/system-overview.md), [scalability review](../docs/architecture-reviews/scalable-multi-source-scraping.md), and accepted [ADR 0016](../docs/adr/0016-companies-and-company-level-tracking.md) / [ADR 0009](../docs/adr/0009-brightdata-web-unlocker.md). The approach document predates these decisions; the newer ADRs and context govern this plan.
 >
 > Target: one or a few Users tracking up to hundreds of Companies over the next year. Keep the Go API, worker, PostgreSQL, Valkey, and SolidJS SPA. One active scheduler is sufficient until measured capacity or deployment needs justify replicas.
 
@@ -161,7 +161,7 @@ Move score and notification work out of synchronous `POST /ingest` into the tran
 
 ### What to build
 
-Inject a direct or Web Unlocker `Fetcher` into each source adapter. Validate required `BRIGHTDATA_PROXY_URL` at worker startup, establish TLS verification with the provider CA or verified HTTPS, and remove direct fallback for protected sources. Classify zone exhaustion separately from transient rate limiting; pause protected sources, preserve their due work, probe once daily, and resume on success. Add URL/IP/redirect admission, response-size/time limits, per-host concurrency and per-User scrape-now admission. Update the source guide and deployment configuration to match ADR 0018.
+Inject a direct or Web Unlocker `Fetcher` into each source adapter. Validate required `BRIGHTDATA_PROXY_URL` at worker startup, establish TLS verification with the provider CA or verified HTTPS, and remove direct fallback for protected sources. Classify zone exhaustion separately from transient rate limiting; pause protected sources, preserve their due work, probe once daily, and resume on success. Add URL/IP/redirect admission, response-size/time limits, per-host concurrency and per-User scrape-now admission. Update the source guide and deployment configuration to match ADR 0009.
 
 ### Acceptance criteria
 

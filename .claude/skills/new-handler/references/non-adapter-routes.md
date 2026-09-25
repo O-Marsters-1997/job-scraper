@@ -1,7 +1,6 @@
 # Routes that don't fit the adapter
 
-Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
-and [ADR 0021](../../../../docs/adr/0021-services-directory-and-crud-generics.md), a few routes
+Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-services.md), a few routes
 never move onto `internal/handlers/generic.go`'s wrappers, because they need something the
 wrappers don't support:
 

@@ -16,24 +16,21 @@ snapshots.
 
 ## Anatomy of a handler
 
-Pending rollout of [ADR 0020](docs/adr/0020-handlers-as-http-adapter-over-feature-services.md)
-(accepted, in progress) — this is the target shape; don't copy the pre-ADR inline style from
-files not yet migrated:
+See [ADR 0020](docs/adr/0020-handlers-as-http-adapter-over-services.md):
 
-- `internal/handlers` is a thin HTTP adapter only: generic wrappers `User`/`ID`/`Body`/`BodyID`
+- `internal/handlers` is a thin HTTP adapter only: generic wrappers `GetAll`/`GetByID`/`Query`/`Create`/`Update`/`Delete`
   handle the session, decoding, `apperr` kind → status mapping, and JSON encoding. Handlers hold
   no business logic and don't log — only the adapter logs.
-- Domain validation and orchestration live in per-feature packages (`internal/companies`,
-  `internal/sourcetargets`, ...). A service's dependencies are required constructor args —
+- Domain validation and orchestration live in `internal/services/<feature>`. A service's dependencies are required constructor args —
   `providers.X` for persistence, small interfaces declared in the service's own package for
   anything else (queue publisher, verifier, scorer). No `With*` setters.
-- Request bodies decode into `dto` input types; the caller's user ID and path IDs are passed as
-  service args (`ctx, userID, id…, in`), never as dto fields. Services return `apperr` errors and
+- Request bodies decode into `dto` input types; path IDs fill `path:"…"`-tagged dto fields after
+  decoding, and the user ID is a service arg, so a body can never set either. Services return `apperr` errors and
   wire-ready `dto` values.
 - A route with no logic binds the adapter directly to a provider method value — add a service
   method only when there's a rule or orchestration to hold.
-- Routes that set cookies, redirect, stream, or use service-token auth stay as plain
-  `http.HandlerFunc`s using the shared `Caller`/`DecodeJSON`/`WriteJSON`/`WriteError` helpers.
+- Routes that set cookies, redirect, stream, or use service-token auth stay as hand-written
+  `func(svc) http.HandlerFunc`s in `internal/handlers`, using its private `caller`/`decodeBody`/`writeJSON`/`writeError` helpers.
 
 Use the `new-handler` skill for the end-to-end steps, backend and frontend.
 
@@ -51,7 +48,7 @@ Use the `schema-change` skill for the full migration → sqlc → wrapper proced
 
 - DB tests share `testDB` from `internal/data/db/db_test.go` (a real Postgres testcontainer) —
   don't start a second container.
-- Once ADR 0020 lands, services are tested with `providers.Mock*`
+- Services are tested with `providers.Mock*`
   (`internal/data/providers/mock_*.go`) plus small fake ports in the service package, without
   HTTP — prefer `providers.Mock*` over a local `fake`/`mock` struct.
 

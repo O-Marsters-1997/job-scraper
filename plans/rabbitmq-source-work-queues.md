@@ -1,6 +1,6 @@
 # Plan: RabbitMQ Source Work Queues
 
-> Source: `.claude/handoffs/job-scraper-feat-issue-181__rabbitmq-migration-plan.md`; [ADR 0019](../docs/adr/0019-rabbitmq-source-work-queues.md) is the settled queue decision.
+> Source: `.claude/handoffs/job-scraper-feat-issue-181__rabbitmq-migration-plan.md`; [ADR 0008](../docs/adr/0008-rabbitmq-source-work-queues.md) is the settled queue decision.
 
 ## Technical design decisions
 

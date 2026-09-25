@@ -4,11 +4,11 @@
 
 ## Technical design decisions
 
-Durable decisions that apply across all phases. Honours **ADR-0005** (phase-agnostic scoring; relevance computed pre-persistence) and **ADR-0006** (per-user scoping of `search_config` and `job_scores`).
+Durable decisions that apply across all phases. Honours **ADR-0005** (phase-agnostic scoring; relevance computed pre-persistence) and **ADR-0005** (per-user scoping of `search_config` and `job_scores`).
 
 ### Scoring architecture (current state to build on)
 - Suitability scoring runs as a fire-and-forget step in the ingest flow (`Ingest → save (relevance persisted) → score (suitability) → notify`).
-- The ingest service is constructed once at startup against a single `SCORING_USER_ID` (`internal/router.go:buildIngestSvc`). `score.IngestScorer.ScoreAndSave` already loads that user's `SearchConfig` — this is the single seam where per-user rubric, cutoff (gate), and model selection are read at score time. v1 scores for one configured user; storage is per-user and multi-tenant-ready (ADR-0006).
+- The ingest service is constructed once at startup against a single `SCORING_USER_ID` (`internal/router.go:buildIngestSvc`). `score.IngestScorer.ScoreAndSave` already loads that user's `SearchConfig` — this is the single seam where per-user rubric, cutoff (gate), and model selection are read at score time. v1 scores for one configured user; storage is per-user and multi-tenant-ready (ADR-0005).
 - The Claude suitability call (`internal/score/claude.go`) currently hardcodes model `claude-haiku-4-5-20251001` and caps `max_tokens` at 16 to force a bare integer. Capturing reasoning requires raising that cap and moving to a structured (JSON) response.
 
 ### Schema (additive, backward-safe)
