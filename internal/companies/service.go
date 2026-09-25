@@ -14,8 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// defaultCheckIntervalMinutes is the check frequency a newly tracked company
-// gets when the caller doesn't specify one.
 const defaultCheckIntervalMinutes = 360
 
 // BoardVerifier checks whether a resolved ATS board actually exists and is

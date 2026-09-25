@@ -16,7 +16,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
-// Reconsiderer re-scores a user's existing candidates against a new config.
 type Reconsiderer interface {
 	Reconsider(ctx context.Context, config dto.SearchConfig) error
 }
@@ -83,7 +82,6 @@ func nonNilStrings(s []string) []string {
 	return s
 }
 
-// cleanList trims and lowercases each entry, dropping any that are empty.
 func cleanList(items []string) []string {
 	cleaned := make([]string, 0, len(items))
 	for _, item := range items {

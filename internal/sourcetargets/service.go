@@ -93,8 +93,6 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	return target, nil
 }
 
-// validateSourceValue checks value (and, for filter sources, filters)
-// against what the registry expects for source.
 func validateSourceValue(source, value string, filters map[string]string) error {
 	if fields, isFilter := registry.LookupFilterFields(source); isFilter {
 		for k := range filters {
