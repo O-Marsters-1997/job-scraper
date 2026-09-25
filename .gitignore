@@ -5,6 +5,10 @@ bin/
 .env.test
 .claude/*
 !.claude/skills/
+.claude/skills/*
+!.claude/skills/add-source/
+!.claude/skills/new-handler/
+!.claude/skills/schema-change/
 .idea
 .vscode
 */**/node_modules
