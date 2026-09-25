@@ -211,9 +211,20 @@ func (p *taskProcessor) process(ctx context.Context, task queue.Task) error {
 		return p.processPage(ctx, task)
 	case queue.BoardCheckTask:
 		return p.processBoard(ctx, task)
+	case queue.BoardVerifyTask:
+		return p.verifyBoard(ctx, task)
 	default:
 		return fmt.Errorf("unsupported task kind %s", task.Kind)
 	}
+}
+
+func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error {
+	if err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken); err != nil {
+		slog.Warn("board verification failed", slog.String("company_id", task.CompanyID), slog.String("source", task.Source), slog.String("token", task.BoardToken), slog.Any("err", err))
+		return nil
+	}
+	_, err := p.db.VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
+	return err
 }
 
 func (p *taskProcessor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {

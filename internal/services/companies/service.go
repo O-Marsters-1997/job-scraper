@@ -4,28 +4,29 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 const defaultCheckIntervalMinutes = 360
 
-// BoardVerifier checks whether a resolved ATS board actually exists and is
-// scrapeable.
-type BoardVerifier interface {
-	Verify(ctx context.Context, source, token string) error
+type QueuePublisher interface {
+	Publish(ctx context.Context, task queue.Task) error
 }
 
 type Service struct {
 	companies providers.CompanyProvider
 	targets   providers.SourceTargetProvider
-	verifier  BoardVerifier
+	queue     QueuePublisher
 }
 
-func New(companies providers.CompanyProvider, targets providers.SourceTargetProvider, verifier BoardVerifier) *Service {
-	return &Service{companies: companies, targets: targets, verifier: verifier}
+func New(companies providers.CompanyProvider, targets providers.SourceTargetProvider, q QueuePublisher) *Service {
+	return &Service{companies: companies, targets: targets, queue: q}
 }
 
 // Create resolves an ATS URL into a company and, unless Track is explicitly
@@ -108,9 +109,9 @@ func (s *Service) AddBoard(ctx context.Context, _ string, in dto.AddCompanyBoard
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
-	if in.Confirm && board.Status == dto.BoardCandidate && s.verifier.Verify(ctx, source, token) == nil {
-		board, err = s.companies.VerifyCompanyBoard(ctx, companyID, source, token, "user_confirmed")
-		if err != nil {
+	if in.Confirm && board.Status == dto.BoardCandidate {
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.BoardVerifyTask, CompanyID: companyID, BoardToken: token}
+		if err := s.queue.Publish(ctx, task); err != nil {
 			return dto.CompanyBoard{}, err
 		}
 	}

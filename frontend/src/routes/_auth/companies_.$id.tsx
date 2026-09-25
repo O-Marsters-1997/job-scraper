@@ -1,5 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+} from "solid-js";
 import { createJobColumns } from "@/components/jobs/columns";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { SourceBadge } from "@/components/SourceBadge";
@@ -72,6 +79,9 @@ function FactRow(props: {
 	);
 }
 
+const BOARD_CHECK_POLL_MS = 2000;
+const BOARD_CHECK_TIMEOUT_MS = 30_000;
+
 export const Route = createFileRoute("/_auth/companies_/$id")({
 	loader: () => queryClient.ensureQueryData(companiesQueryOptions),
 	component: CompanyDetailPage,
@@ -82,24 +92,46 @@ function CompanyDetailPage() {
 	const companiesQuery = useCompanies();
 	const jobsQuery = useAllJobs();
 	const trackMutation = useSetCompanyTracking();
-	const boardsQuery = useCompanyBoards(() => params().id);
+	const [checkingBoardID, setCheckingBoardID] = createSignal<string>();
+	const boardsQuery = useCompanyBoards(
+		() => params().id,
+		() => (checkingBoardID() ? BOARD_CHECK_POLL_MS : false),
+	);
 	const addBoardMutation = useAddCompanyBoard();
 	const [boardURL, setBoardURL] = createSignal("");
 	const [boardMessage, setBoardMessage] = createSignal("");
+	let checkTimeout: ReturnType<typeof setTimeout> | undefined;
+	onCleanup(() => clearTimeout(checkTimeout));
+	createEffect(() => {
+		const id = checkingBoardID();
+		const board = boardsQuery.data?.find((b) => b.ID === id);
+		if (board?.Status !== "verified") return;
+		clearTimeout(checkTimeout);
+		setCheckingBoardID(undefined);
+		setBoardMessage("Board verified.");
+	});
 	const saveBoard = async (url: string) => {
 		setBoardMessage("");
+		clearTimeout(checkTimeout);
 		try {
 			const board = await addBoardMutation.mutateAsync({
 				id: params().id,
 				url,
 				confirm: true,
 			});
-			setBoardMessage(
-				board.Status === "verified"
-					? "Board verified."
-					: "Verification failed; retry when the board is available.",
-			);
 			setBoardURL("");
+			if (board.Status === "verified") {
+				setBoardMessage("Board verified.");
+				return;
+			}
+			setBoardMessage("Checking the board…");
+			setCheckingBoardID(board.ID);
+			checkTimeout = setTimeout(() => {
+				setCheckingBoardID(undefined);
+				setBoardMessage(
+					"Verification failed; retry when the board is available.",
+				);
+			}, BOARD_CHECK_TIMEOUT_MS);
 		} catch (error) {
 			setBoardMessage(
 				error instanceof Error ? error.message : "Could not add board.",

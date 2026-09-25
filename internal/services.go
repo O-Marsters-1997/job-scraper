@@ -66,7 +66,7 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		aiPrefs:             aiprefs.New(creds),
 		aiCredentials:       aicredentials.New(creds),
 		sourceTargets:       sourcetargets.New(db, db, candidateService, q),
-		companies:           companies.New(db, db, companies.ATSBoardVerifier{}),
+		companies:           companies.New(db, db, q),
 		cvTemplates:         cvtemplates.NewService(googleClient, db),
 	}
 }

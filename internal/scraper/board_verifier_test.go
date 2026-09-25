@@ -1,4 +1,4 @@
-package companies
+package scraper
 
 import (
 	"context"
@@ -51,9 +51,9 @@ func TestVerifyPagesStopsOnCancellation(t *testing.T) {
 	}
 }
 
-func TestVerifierRejectsUnsupportedBoards(t *testing.T) {
+func TestVerifyBoardRejectsUnsupportedBoards(t *testing.T) {
 	for _, pair := range [][2]string{{"missing", "acme"}, {"remoteok", "acme"}, {"greenhouse", ""}, {"greenhouse", "a/b"}} {
-		if err := (ATSBoardVerifier{}).Verify(t.Context(), pair[0], pair[1]); err == nil {
+		if err := VerifyBoard(t.Context(), pair[0], pair[1]); err == nil {
 			t.Errorf("accepted %q %q", pair[0], pair[1])
 		}
 	}

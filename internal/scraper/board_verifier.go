@@ -1,4 +1,4 @@
-package companies
+package scraper
 
 import (
 	"context"
@@ -12,9 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
-type ATSBoardVerifier struct{}
-
-func (ATSBoardVerifier) Verify(ctx context.Context, source, token string) error {
+func VerifyBoard(ctx context.Context, source, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if role, ok := sourcespec.SourceRole(source); !ok || role != sourcespec.RoleATS || !sourcespec.ValidBoardToken(token) {

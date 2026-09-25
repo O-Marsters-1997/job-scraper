@@ -22,6 +22,10 @@ func TestTaskValidate(t *testing.T) {
 		{"listing without run", Task{Version: 1, ID: id, Source: "linkedin", Kind: ListingPageTask, TargetID: id}, false},
 		{"board", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardCheckTask, BoardID: id}, true},
 		{"wrong board source", Task{Version: 1, ID: id, Source: "wis", Kind: BoardCheckTask, BoardID: id}, false},
+		{"board verify", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, true},
+		{"board verify without company", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, BoardToken: "acme"}, false},
+		{"board verify with bad token", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "a/b"}, false},
+		{"board verify on discovery source", Task{Version: 1, ID: id, Source: "wis", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

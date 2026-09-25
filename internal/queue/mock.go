@@ -27,6 +27,12 @@ func (m *MockQueue) Publish(_ context.Context, task Task) error {
 	return nil
 }
 
+func (m *MockQueue) Tasks() []Task {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Task(nil), m.tasks...)
+}
+
 func (m *MockQueue) ScrapeRequests() []dto.ScrapeRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
