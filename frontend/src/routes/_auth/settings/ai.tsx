@@ -54,12 +54,8 @@ function AiForm(props: { data: AiPrefs }) {
 	const [selectedReasoningModel, setSelectedReasoningModel] = createSignal(
 		props.data.reasoningModel,
 	);
-	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
-
-	const anthropicConfigured = () =>
-		props.data.configuredProviders.includes("anthropic");
 
 	const handleSave = async () => {
 		setSaved(false);
@@ -76,29 +72,12 @@ function AiForm(props: { data: AiPrefs }) {
 		}
 	};
 
-	const handleSaveKey = async () => {
+	const onKeySaved = () => {
 		setSaveError(null);
-		try {
-			await credsMutation.mutateAsync({
-				provider: "anthropic",
-				apiKey: apiKey() || null,
-			});
-			setApiKey("");
-			setSaved(true);
-			setTimeout(() => setSaved(false), 3000);
-		} catch {
-			setSaveError("Failed to save API key. Please try again.");
-		}
+		setSaved(true);
+		setTimeout(() => setSaved(false), 3000);
 	};
-
-	const handleClearKey = async () => {
-		setSaveError(null);
-		try {
-			await credsMutation.mutateAsync({ provider: "anthropic", apiKey: null });
-		} catch {
-			setSaveError("Failed to clear API key. Please try again.");
-		}
-	};
+	const onKeyError = (message: string) => setSaveError(message);
 
 	return (
 		<>
@@ -178,55 +157,27 @@ function AiForm(props: { data: AiPrefs }) {
 					</div>
 				</Card>
 
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">
-							Anthropic API key
-						</p>
-						<p class="mt-0.5 text-xs text-faint">
-							Your own key is used for scoring. Leave blank to use the shared
-							key.
-						</p>
-					</div>
-					<div class="px-5 py-4">
-						<Show
-							when={anthropicConfigured()}
-							fallback={
-								<div class="flex items-center gap-3">
-									<Input
-										type="password"
-										aria-label="Anthropic API key"
-										placeholder="sk-ant-…"
-										value={apiKey()}
-										onInput={(e) => setApiKey(e.currentTarget.value)}
-										class="flex-1"
-									/>
-									<Button
-										onClick={handleSaveKey}
-										disabled={credsMutation.isPending || !apiKey()}
-									>
-										{credsMutation.isPending ? "Saving…" : "Save key"}
-									</Button>
-								</div>
-							}
-						>
-							<div class="flex items-center gap-3">
-								<span class="text-sm text-foreground">
-									configured <span class="text-primary font-medium">✓</span>
-								</span>
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={handleClearKey}
-									disabled={credsMutation.isPending}
-									class="text-xs"
-								>
-									{credsMutation.isPending ? "Clearing…" : "Clear"}
-								</Button>
-							</div>
-						</Show>
-					</div>
-				</Card>
+				<CredentialCard
+					provider="anthropic"
+					title="Anthropic API key"
+					description="Your own key is used for scoring. Leave blank to use the shared key."
+					placeholder="sk-ant-…"
+					configured={props.data.configuredProviders.includes("anthropic")}
+					mutation={credsMutation}
+					onSaved={onKeySaved}
+					onError={onKeyError}
+				/>
+
+				<CredentialCard
+					provider="openrouter"
+					title="OpenRouter API key"
+					description="Used for Jev suitability scoring via OpenRouter."
+					placeholder="sk-or-v1-…"
+					configured={props.data.configuredProviders.includes("openrouter")}
+					mutation={credsMutation}
+					onSaved={onKeySaved}
+					onError={onKeyError}
+				/>
 
 				<div class="flex items-center gap-3">
 					<Button onClick={handleSave} disabled={saveMutation.isPending}>
@@ -235,5 +186,89 @@ function AiForm(props: { data: AiPrefs }) {
 				</div>
 			</div>
 		</>
+	);
+}
+
+function CredentialCard(props: {
+	provider: string;
+	title: string;
+	description: string;
+	placeholder: string;
+	configured: boolean;
+	mutation: ReturnType<typeof useUpdateAiCredentials>;
+	onSaved: () => void;
+	onError: (message: string) => void;
+}) {
+	const [apiKey, setApiKey] = createSignal("");
+
+	const handleSaveKey = async () => {
+		try {
+			await props.mutation.mutateAsync({
+				provider: props.provider,
+				apiKey: apiKey() || null,
+			});
+			setApiKey("");
+			props.onSaved();
+		} catch {
+			props.onError("Failed to save API key. Please try again.");
+		}
+	};
+
+	const handleClearKey = async () => {
+		try {
+			await props.mutation.mutateAsync({
+				provider: props.provider,
+				apiKey: null,
+			});
+		} catch {
+			props.onError("Failed to clear API key. Please try again.");
+		}
+	};
+
+	return (
+		<Card class="overflow-hidden">
+			<div class="border-b border-border px-5 py-4">
+				<p class="text-base font-semibold text-foreground">{props.title}</p>
+				<p class="mt-0.5 text-xs text-faint">{props.description}</p>
+			</div>
+			<div class="px-5 py-4">
+				<Show
+					when={props.configured}
+					fallback={
+						<div class="flex items-center gap-3">
+							<Input
+								type="password"
+								aria-label={props.title}
+								placeholder={props.placeholder}
+								value={apiKey()}
+								onInput={(e) => setApiKey(e.currentTarget.value)}
+								class="flex-1"
+							/>
+							<Button
+								onClick={handleSaveKey}
+								disabled={props.mutation.isPending || !apiKey()}
+							>
+								{props.mutation.isPending ? "Saving…" : "Save key"}
+							</Button>
+						</div>
+					}
+				>
+					<div class="flex items-center gap-3">
+						<span class="text-sm text-foreground">
+							configured <span class="text-primary font-medium">✓</span>
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={handleClearKey}
+							disabled={props.mutation.isPending}
+							class="text-xs"
+						>
+							{props.mutation.isPending ? "Clearing…" : "Clear"}
+						</Button>
+					</div>
+				</Show>
+			</div>
+		</Card>
 	);
 }
