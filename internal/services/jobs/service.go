@@ -73,7 +73,6 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (pro
 	return page, nil
 }
 
-// Get returns a single job for the caller.
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	job, err := s.jobs.GetJob(ctx, id, userID)
 	switch {

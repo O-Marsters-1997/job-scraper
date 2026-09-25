@@ -79,8 +79,8 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 	return dto.GoogleStatus{Connected: true, Email: info.Email}, nil
 }
 
-// Disconnect removes the user's stored Google token. id is unused; it's
-// unused so Disconnect fits the Delete adapter shape directly.
+// Disconnect removes the user's stored Google token. The unused id param
+// lets it fit the Delete adapter shape directly.
 func (s *Service) Disconnect(ctx context.Context, userID, _ string) error {
 	return s.client.DeleteToken(ctx, userID)
 }

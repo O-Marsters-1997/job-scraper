@@ -17,7 +17,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// sessionTTL is how long a session lasts after login or signup.
 const sessionTTL = 30 * 24 * time.Hour
 
 // bcryptCost is the work factor for hashing passwords. Overridden to
