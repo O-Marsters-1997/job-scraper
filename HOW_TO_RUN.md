@@ -4,11 +4,11 @@
 
 Sources are configured via the frontend under **Settings → Sources**. Add a source by selecting the provider (Greenhouse, Lever, Ashby, etc.) and entering the board token (for ATS sources) or search URL (for LinkedIn/Indeed).
 
-The worker picks up new sources on its next startup — restart the worker after adding one.
+Source targets are read from the database on each check — no worker restart needed after adding one.
 
 ## Triggering a scrape
 
-The worker scrapes automatically every hour, but only rebuilds sources for targets that are actually due (per-target `check_interval_minutes`, default 360). To see jobs flow immediately after adding a source, restart the worker — it runs the orchestrator once on boot before settling into the cron.
+The worker publishes due board checks to RabbitMQ hourly, but only for targets that are actually due (per-target `check_interval_minutes`, default 360). To see jobs flow immediately, use **Scrape now** on the source target in the frontend — it publishes the check directly to the queue.
 
 ## Tracking a company
 
@@ -23,5 +23,5 @@ Searches and keyword filters are configured per-user under **Settings → Search
 - **API up:** `curl http://localhost:8080/jobs` → `401` (not connection refused)
 - **Sources registered:** worker logs `sources built from db count=N` on startup; if `N=0`, no sources are configured
 - **Jobs flowing (ATS):** jobs appear in the frontend after a scrape; API logs show `/ingest` calls
-- **Jobs flowing (HTML/queue):** same as above; additionally check `just queue-list` to see URLs being enqueued before dispatch
+- **Jobs flowing (HTML/queue):** same as above; check `just rabbitmq-status` for broker health, or `just queue-list` for the dead-letter count if jobs seem stuck
 - **Scoring working:** jobs in the frontend show a suitability score; if missing, check `ANTHROPIC_API_KEY` and `SCORING_USER_ID` are set
