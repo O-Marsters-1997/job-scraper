@@ -11,13 +11,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/auth"
 )
 
-func caller(w http.ResponseWriter, r *http.Request) (userID string, ok bool) {
+func userID(r *http.Request) (string, error) {
 	session, ok := auth.SessionFromContext(r.Context())
 	if !ok {
-		auth.WriteUnauthorized(w)
-		return "", false
+		return "", apperr.Unauthorized("unauthorized")
 	}
-	return session.UserID, true
+	return session.UserID, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

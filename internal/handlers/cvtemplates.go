@@ -12,21 +12,29 @@ type cvExporter interface {
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
-func ExportCV(svc cvExporter) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		body, err := svc.ExportPDF(r.Context(), userID, chi.URLParam(r, "docId"), chi.URLParam(r, "tabId"))
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		defer func() { _ = body.Close() }()
+type exportRequest struct {
+	userID, docID, tabID string
+}
 
-		w.Header().Set("Content-Type", "application/pdf")
-		w.Header().Set("Content-Disposition", `inline; filename="cv.pdf"`)
-		_, _ = io.Copy(w, body)
-	}
+// ExportCV streams a PDF response rather than returning JSON, so it goes
+// through Handle directly rather than a CRUD generic.
+func ExportCV(svc cvExporter) http.HandlerFunc {
+	return Handle(
+		func(r *http.Request) (exportRequest, error) {
+			uid, err := userID(r)
+			if err != nil {
+				return exportRequest{}, err
+			}
+			return exportRequest{userID: uid, docID: chi.URLParam(r, "docId"), tabID: chi.URLParam(r, "tabId")}, nil
+		},
+		func(ctx context.Context, in exportRequest) (io.ReadCloser, error) {
+			return svc.ExportPDF(ctx, in.userID, in.docID, in.tabID)
+		},
+		func(w http.ResponseWriter, _ *http.Request, body io.ReadCloser) {
+			defer func() { _ = body.Close() }()
+			w.Header().Set("Content-Type", "application/pdf")
+			w.Header().Set("Content-Disposition", `inline; filename="cv.pdf"`)
+			_, _ = io.Copy(w, body)
+		},
+	)
 }

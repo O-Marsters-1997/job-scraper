@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
 	"github.com/ollymarsters/job-scraper/internal/auth"
@@ -121,7 +122,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
 		r.Post("/ingest", handlers.Ingest(svc.ingest))
-		r.Post("/ingest/batch", handlers.IngestBatch(svc.ingest))
+		r.With(middleware.RequestSize(2<<20)).Post("/ingest/batch", handlers.IngestBatch(svc.ingest))
 	})
 
 	return r

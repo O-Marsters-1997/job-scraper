@@ -15,8 +15,11 @@ covers the migration and sqlc regen. Come back here once the provider method exi
 
 ## Backend
 
-The shape below is current: [ADR 0020](../../../docs/adr/0020-handlers-as-http-adapter-over-services.md) is rolled out. `internal/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth,
-google, ingest, cv export) — no handler struct owns your route.
+The shape below is current: [ADR 0020](../../../docs/adr/0020-handlers-as-http-adapter-over-services.md)
+and [ADR 0023](../../../docs/adr/0023-handle-as-the-one-handler-pipeline.md) are rolled out.
+`internal/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth, google,
+ingest, cv export) — no handler struct owns your route, and every handler in the package is
+built from `Handle(decode, call, respond)`, directly or through a CRUD generic.
 
 ### 1. dto input type
 

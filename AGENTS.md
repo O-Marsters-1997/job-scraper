@@ -16,21 +16,27 @@ snapshots.
 
 ## Anatomy of a handler
 
-See [ADR 0020](docs/adr/0020-handlers-as-http-adapter-over-services.md):
+See [ADR 0020](docs/adr/0020-handlers-as-http-adapter-over-services.md) and
+[ADR 0023](docs/adr/0023-handle-as-the-one-handler-pipeline.md):
 
-- `internal/handlers` is a thin HTTP adapter only: generic wrappers `GetAll`/`GetByID`/`Query`/`Create`/`Update`/`Delete`
-  handle the session, decoding, `apperr` kind → status mapping, and JSON encoding. Handlers hold
-  no business logic and don't log — only the adapter logs.
-- Domain validation and orchestration live in `internal/services/<feature>`. A service's dependencies are required constructor args —
-  `providers.X` for persistence, small interfaces declared in the service's own package for
-  anything else (queue publisher, verifier, scorer). No `With*` setters.
+- `internal/handlers` is a thin HTTP adapter only. Every handler is built from
+  `Handle(decode, call, respond)` (`internal/handlers/generic.go`), either directly or through
+  one of the CRUD-shaped generics (`GetAll`, `GetByID`, `Query`, `Create`, `Update`, `Delete`) —
+  there is no third way to write a handler in this package. Handlers hold no business logic and
+  don't log — only `writeError` logs, and only for an error with no `apperr` kind.
+- Domain validation and orchestration live in `internal/services/<feature>`. A service's
+  dependencies are required constructor args — `providers.X` for persistence, small interfaces
+  declared in the service's own package for anything else (queue publisher, verifier, scorer).
+  No `With*` setters.
 - Request bodies decode into `dto` input types; path IDs fill `path:"…"`-tagged dto fields after
-  decoding, and the user ID is a service arg, so a body can never set either. Services return `apperr` errors and
-  wire-ready `dto` values.
-- A route with no logic binds the adapter directly to a provider method value — add a service
+  decoding, and the user ID is a service arg, so a body can never set either. Services return
+  `apperr` errors and wire-ready `dto` values.
+- A route with no logic binds a CRUD generic directly to a provider method value — add a service
   method only when there's a rule or orchestration to hold.
-- Routes that set cookies, redirect, stream, or use service-token auth stay as hand-written
-  `func(svc) http.HandlerFunc`s in `internal/handlers`, using its private `caller`/`decodeBody`/`writeJSON`/`writeError` helpers.
+- Routes that set cookies, redirect, stream, or use service-token auth (`Login`/`Signup`/
+  `Logout`/`Me`, OAuth start/callback, CV export, ingest) call `Handle` directly with their own
+  decode/call/respond, instead of one of the CRUD generics — see `internal/handlers/auth.go` and
+  `google.go` for the pattern.
 
 Use the `new-handler` skill for the end-to-end steps, backend and frontend.
 

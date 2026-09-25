@@ -2,11 +2,58 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 )
+
+func TestHandle(t *testing.T) {
+	tests := []struct {
+		name       string
+		decode     func(*http.Request) (string, error)
+		call       func(context.Context, string) (string, error)
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "decode error goes to writeError, call is never reached",
+			decode:     func(*http.Request) (string, error) { return "", apperr.Invalid("bad request") },
+			call:       func(context.Context, string) (string, error) { t.Fatal("call should not run"); return "", nil },
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "bad request",
+		},
+		{
+			name:       "call error goes to writeError",
+			decode:     func(*http.Request) (string, error) { return "in", nil },
+			call:       func(context.Context, string) (string, error) { return "", errors.New("boom") },
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "decoded request reaches call, call's result reaches respond",
+			decode:     func(*http.Request) (string, error) { return "in", nil },
+			call:       func(_ context.Context, in string) (string, error) { return in + ":out", nil },
+			wantStatus: http.StatusOK,
+			wantBody:   "in:out",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := Handle(tt.decode, tt.call, respondJSON[string](http.StatusOK))
+			w := httptest.NewRecorder()
+			h(w, httptest.NewRequest(http.MethodGet, "/x", nil))
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (body: %s)", w.Code, tt.wantStatus, w.Body.String())
+			}
+			if tt.wantBody != "" && !strings.Contains(w.Body.String(), tt.wantBody) {
+				t.Fatalf("body = %q, want it to contain %q", w.Body.String(), tt.wantBody)
+			}
+		})
+	}
+}
 
 func TestQueryDecodesURLParamsIntoDto(t *testing.T) {
 	type q struct {

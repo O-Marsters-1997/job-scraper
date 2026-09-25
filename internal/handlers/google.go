@@ -22,42 +22,56 @@ type googleSvc interface {
 	Connect(ctx context.Context, userID, code string) error
 }
 
-func OAuthStart(svc googleSvc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		state, err := generateState()
-		if err != nil {
-			writeError(w, r, err)
-			return
-		}
-		setStateCookie(w, state)
-		http.Redirect(w, r, svc.AuthURL(state), http.StatusTemporaryRedirect)
-	}
+type oauthRedirect struct {
+	state, authURL string
 }
 
+// OAuthStart is public so the OAuth redirect URL stays clean; it redirects,
+// so it goes through Handle directly rather than a CRUD generic.
+func OAuthStart(svc googleSvc) http.HandlerFunc {
+	return Handle(
+		func(r *http.Request) (string, error) { return generateState() },
+		func(_ context.Context, state string) (oauthRedirect, error) {
+			return oauthRedirect{state: state, authURL: svc.AuthURL(state)}, nil
+		},
+		func(w http.ResponseWriter, r *http.Request, out oauthRedirect) {
+			setStateCookie(w, out.state)
+			http.Redirect(w, r, out.authURL, http.StatusTemporaryRedirect)
+		},
+	)
+}
+
+type oauthConnect struct {
+	userID, code string
+}
+
+// OAuthCallback redirects, so it goes through Handle directly rather than a
+// CRUD generic. The state cookie is cleared only on success; on failure it
+// simply expires (10 minutes) and the next /oauth/start overwrites it.
 func OAuthCallback(svc googleSvc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !validateStateCookie(r, r.URL.Query().Get("state")) {
-			writeError(w, r, apperr.Invalid("invalid oauth state"))
-			return
-		}
-		http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
-
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			writeError(w, r, apperr.Invalid("missing code"))
-			return
-		}
-
-		userID, ok := caller(w, r)
-		if !ok {
-			return
-		}
-		if err := svc.Connect(r.Context(), userID, code); err != nil {
-			writeError(w, r, err)
-			return
-		}
-		http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
-	}
+	return Handle(
+		func(r *http.Request) (oauthConnect, error) {
+			if !validateStateCookie(r, r.URL.Query().Get("state")) {
+				return oauthConnect{}, apperr.Invalid("invalid oauth state")
+			}
+			code := r.URL.Query().Get("code")
+			if code == "" {
+				return oauthConnect{}, apperr.Invalid("missing code")
+			}
+			uid, err := userID(r)
+			if err != nil {
+				return oauthConnect{}, err
+			}
+			return oauthConnect{userID: uid, code: code}, nil
+		},
+		func(ctx context.Context, in oauthConnect) (struct{}, error) {
+			return struct{}{}, svc.Connect(ctx, in.userID, in.code)
+		},
+		func(w http.ResponseWriter, r *http.Request, _ struct{}) {
+			http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
+			http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
+		},
+	)
 }
 
 func generateState() (string, error) {
