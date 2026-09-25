@@ -11,7 +11,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type CanonicalSaver interface {
@@ -83,7 +83,7 @@ func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
 		seen[j.CompanySlug] = true
 
 		atsSource, atsToken := "", ""
-		if role, _ := registry.SourceRole(j.Source); role == registry.RoleATS {
+		if role, _ := sourcespec.SourceRole(j.Source); role == sourcespec.RoleATS {
 			atsSource, atsToken = j.Source, j.CompanySlug
 		}
 		upsert := dto.CompanyUpsert{

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -59,23 +58,6 @@ func WarnDefaulted(source, field, url string) {
 		slog.String("field", field),
 		slog.String("url", url),
 	)
-}
-
-// Slugify lowercases s, maps each space or hyphen to a hyphen, drops any other
-// non-alphanumeric rune, and trims leading/trailing hyphens, e.g. "Acme Corp" ->
-// "acme-corp".
-func Slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			b.WriteRune(r)
-		case unicode.IsSpace(r) || r == '-':
-			b.WriteByte('-')
-		}
-	}
-	return strings.Trim(b.String(), "-")
 }
 
 func FilterByKeywords(jobs []dto.Job, keywords []string) []dto.Job {

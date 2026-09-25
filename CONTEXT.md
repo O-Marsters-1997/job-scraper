@@ -106,7 +106,7 @@ A discovery Source searched through User-supplied keywords and structured filter
 _Avoid_: keyword source, search source
 
 **FilterField**:
-A structured parameter declaration on a filter source — carries `Name` (the map key, e.g. `"region"`), `Label` (human-readable), and `Required`. The registry exposes declared fields via `LookupFilterFields(name)`; the `Create` handler validates submitted `filters` maps against them.
+A structured parameter declaration on a filter source — carries `Name` (the map key, e.g. `"region"`), `Label` (human-readable), and `Required`. `sourcespec` exposes declared fields via `LookupFilterFields(name)`; the `Create` handler validates submitted `filters` maps against them.
 _Avoid_: filter param, filter key
 
 **ScrapeRequest**:

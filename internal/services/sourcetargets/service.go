@@ -13,7 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type QueuePublisher interface {
@@ -39,7 +39,7 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		return dto.SourceTarget{}, apperr.Invalid("source and value are required")
 	}
 
-	if role, _ := registry.SourceRole(in.Source); role == registry.RoleDiscovery {
+	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleDiscovery {
 		if t := detect.Detect(in.Value); t != detect.UnknownHTML && t != detect.Aggregator {
 			return dto.SourceTarget{}, apperr.Invalid("that looks like an ATS board — add it under Tracked companies")
 		}
@@ -59,9 +59,9 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		enabled = *in.Enabled
 	}
 
-	role, _ := registry.SourceRole(in.Source)
-	startNow := enabled && (role == registry.RoleDiscovery || in.ScrapeNow)
-	if startNow && role == registry.RoleATS {
+	role, _ := sourcespec.SourceRole(in.Source)
+	startNow := enabled && (role == sourcespec.RoleDiscovery || in.ScrapeNow)
+	if startNow && role == sourcespec.RoleATS {
 		if _, err := s.targets.GetVerifiedBoardID(ctx, in.Source, in.Value); err != nil {
 			return dto.SourceTarget{}, apperr.Unprocessable("verified Board required to start search")
 		}
@@ -88,7 +88,7 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 }
 
 func validateSourceValue(source, value string, filters map[string]string) error {
-	if fields, isFilter := registry.LookupFilterFields(source); isFilter {
+	if fields, isFilter := sourcespec.LookupFilterFields(source); isFilter {
 		for k := range filters {
 			if !isKnownFilterField(k, fields) {
 				return apperr.Invalid("unknown filter key: " + k)
@@ -102,7 +102,7 @@ func validateSourceValue(source, value string, filters map[string]string) error 
 		return nil
 	}
 
-	urlPrefix, isURL, ok := registry.LookupSource(source)
+	urlPrefix, isURL, ok := sourcespec.LookupSource(source)
 	if !ok {
 		return apperr.Invalid("unsupported source")
 	}
@@ -115,7 +115,7 @@ func validateSourceValue(source, value string, filters map[string]string) error 
 	return nil
 }
 
-func isKnownFilterField(key string, fields []registry.FilterField) bool {
+func isKnownFilterField(key string, fields []sourcespec.FilterField) bool {
 	for _, f := range fields {
 		if f.Name == key {
 			return true
@@ -143,7 +143,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	if in.Enabled == nil || !*in.Enabled {
 		return target, nil
 	}
-	if role, _ := registry.SourceRole(target.Source); role != registry.RoleDiscovery {
+	if role, _ := sourcespec.SourceRole(target.Source); role != sourcespec.RoleDiscovery {
 		return target, nil
 	}
 
@@ -187,7 +187,7 @@ func (s *Service) Scrape(ctx context.Context, userID, id string) (dto.SourceTarg
 }
 
 func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.SourceTarget, error) {
-	if role, _ := registry.SourceRole(target.Source); role == registry.RoleATS {
+	if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
 		if _, err := s.targets.GetVerifiedBoardID(ctx, target.Source, target.Value); err != nil {
 			return dto.SourceTarget{}, err
 		}
@@ -202,7 +202,7 @@ func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.
 func (s *Service) publishRun(ctx context.Context, queued dto.SourceTarget) (dto.SourceTarget, error) {
 	queued.Enabled = true
 	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: queued.Source, TargetID: queued.ID, RunID: queued.RunID}
-	if role, _ := registry.SourceRole(queued.Source); role == registry.RoleATS {
+	if role, _ := sourcespec.SourceRole(queued.Source); role == sourcespec.RoleATS {
 		boardID, err := s.targets.GetVerifiedBoardID(ctx, queued.Source, queued.Value)
 		if err != nil {
 			return queued, err

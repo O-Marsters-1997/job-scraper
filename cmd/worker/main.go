@@ -29,8 +29,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func main() {
@@ -127,7 +127,7 @@ func main() {
 				continue
 			}
 			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: target.Source, TargetID: target.ID, RunID: target.RunID, Recovery: true}
-			if role, _ := registry.SourceRole(target.Source); role == registry.RoleATS {
+			if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
 				boardID, err := db.GetVerifiedBoardID(ctx, target.Source, target.Value)
 				if err != nil {
 					slog.Error("recover Board run failed", slog.String("target_id", target.ID), slog.Any("err", err))

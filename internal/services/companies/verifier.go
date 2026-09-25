@@ -9,6 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type ATSBoardVerifier struct{}
@@ -16,7 +17,7 @@ type ATSBoardVerifier struct{}
 func (ATSBoardVerifier) Verify(ctx context.Context, source, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if role, ok := registry.SourceRole(source); !ok || role != registry.RoleATS || !registry.ValidBoardToken(token) {
+	if role, ok := sourcespec.SourceRole(source); !ok || role != sourcespec.RoleATS || !sourcespec.ValidBoardToken(token) {
 		return errors.New("unsupported board configuration")
 	}
 	if source == "greenhouse" {

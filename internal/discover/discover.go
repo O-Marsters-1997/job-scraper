@@ -10,7 +10,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
 // Company is a harvested catalog candidate. Zero-value fields are unknown.
@@ -109,7 +109,7 @@ func (r *Runner) upsert(ctx context.Context, c Company) error {
 	}
 
 	_, err := r.companies.UpsertCompany(ctx, dto.CompanyUpsert{
-		Slug:              sources.Slugify(slugSource),
+		Slug:              slug.Make(slugSource),
 		Name:              c.Name,
 		ATSSource:         c.ATSSource,
 		ATSToken:          c.ATSToken,

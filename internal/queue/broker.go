@@ -13,7 +13,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 const (
@@ -86,7 +86,7 @@ func declareTopology(ch *amqp.Channel) error {
 	if err := ch.QueueBind(deadQueue, deadQueue, deadExchange, false, nil); err != nil {
 		return fmt.Errorf("bind dead queue: %w", err)
 	}
-	for _, src := range registry.Sources() {
+	for _, src := range sourcespec.Sources() {
 		name := "source." + src.Name
 		args := amqp.Table{
 			"x-queue-type":              "quorum",
@@ -167,7 +167,7 @@ func (b *Broker) Publish(ctx context.Context, task Task) error {
 
 func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) error {
 	var wg sync.WaitGroup
-	for _, source := range registry.Sources() {
+	for _, source := range sourcespec.Sources() {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()

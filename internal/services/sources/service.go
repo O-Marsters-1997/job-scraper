@@ -6,7 +6,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type Service struct{}
@@ -15,8 +15,8 @@ func New() *Service {
 	return &Service{}
 }
 
-func (s *Service) List(context.Context, string) ([]registry.SourceInfo, error) {
-	return registry.Sources(), nil
+func (s *Service) List(context.Context, string) ([]sourcespec.SourceInfo, error) {
+	return sourcespec.Sources(), nil
 }
 
 func (s *Service) Resolve(_ context.Context, _ string, q dto.ResolveBoardQuery) (dto.ResolvedBoard, error) {

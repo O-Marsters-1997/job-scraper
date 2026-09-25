@@ -16,6 +16,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
@@ -252,7 +253,7 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 			Title:       title,
 			Location:    location,
 			URL:         baseURL + "/jobs/view/" + id,
-			CompanySlug: sources.Slugify(company),
+			CompanySlug: slug.Make(company),
 		})
 	})
 	return jobs, nil
@@ -328,7 +329,7 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 		Title:           title,
 		Location:        location,
 		URL:             resolvedURL,
-		CompanySlug:     sources.Slugify(company),
+		CompanySlug:     slug.Make(company),
 		Source:          "linkedin",
 		Description:     description,
 		SalaryRaw:       salaryRaw,

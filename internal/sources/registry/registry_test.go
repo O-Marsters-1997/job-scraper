@@ -5,6 +5,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func TestGreenhouseRegistrationMatchesSourceInfo(t *testing.T) {
@@ -12,7 +13,7 @@ func TestGreenhouseRegistrationMatchesSourceInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, info := range registry.Sources() {
+	for _, info := range sourcespec.Sources() {
 		if info.Name == entry.Name {
 			if info.Role != entry.Role || info.Kind != "board" || entry.RequestGap <= 0 {
 				t.Fatalf("source info = %+v, entry = %+v", info, entry)

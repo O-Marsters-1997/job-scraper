@@ -6,7 +6,7 @@ import (
 	"unicode"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
 // SeniorityLevels are the canonical values accepted in SearchConfig.ExcludedSeniority.
@@ -30,7 +30,7 @@ var senioritySignals = map[string][]string{
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
 		for _, excluded := range cfg.ExcludedCompanies {
-			if sources.Slugify(excluded) == job.CompanySlug {
+			if slug.Make(excluded) == job.CompanySlug {
 				return fmt.Sprintf("company: %s", job.CompanySlug), true
 			}
 		}

@@ -28,7 +28,7 @@ Discovery searches start when created and can be rerun with `POST /source-target
 
 An HTML Source implements `DetailFetcher`; ATS Sources return complete Jobs. Listing cards are saved as Candidates and assessed against the user's search config before detail publication. The worker fetches details using the task's Source identity and sends completed Jobs to `/ingest`. The API's canonical URL and provider identity rules deduplicate repeated deliveries.
 
-To add a Source, copy an existing one (`internal/sources/greenhouse` for an ATS API, `internal/sources/wis` for an HTML listing), then register it in `internal/sources/registry/registry.go` and wire it in `internal/sources/builder/build.go`.
+To add a Source, copy an existing one (`internal/sources/greenhouse` for an ATS API, `internal/sources/wis` for an HTML listing), then register it in `internal/sourcespec/sourcespec.go` and wire it in `internal/sources/builder/build.go`.
 
 ## Commands
 

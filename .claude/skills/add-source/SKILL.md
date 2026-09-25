@@ -25,7 +25,8 @@ patterns and is a legacy outlier, not something to imitate.
 
 ## 2. Register it
 
-Add an entry to the `entries` slice in `internal/sources/registry/registry.go`:
+Add an entry to the `entries` slice in `internal/sourcespec/sourcespec.go` (metadata the API
+and worker both read; it must not import any adapter):
 
 - `name` — must equal the name baked into the source's own `Config`/`BoardSpec`.
 - `kind` — `kindBoard` (value is a board token), `kindURL` (value is a full URL),

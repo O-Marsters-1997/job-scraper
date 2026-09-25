@@ -5,11 +5,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sources/builder"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
-	for _, info := range registry.Sources() {
+	for _, info := range sourcespec.Sources() {
 		target := dto.SourceTarget{Source: info.Name, Enabled: true}
 		switch info.Kind {
 		case "board":

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
@@ -54,7 +55,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Title:           fj.Position,
 			Location:        fj.Location,
 			URL:             fj.URL,
-			CompanySlug:     sources.Slugify(fj.Company),
+			CompanySlug:     slug.Make(fj.Company),
 			Source:          "remoteok",
 			Description:     fj.Description,
 			SalaryRaw:       formatSalary(fj.SalaryMin, fj.SalaryMax),

@@ -13,11 +13,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/sources/personio"
 	"github.com/ollymarsters/job-scraper/internal/sources/recruitee"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 	"github.com/ollymarsters/job-scraper/internal/sources/remoteok"
 	"github.com/ollymarsters/job-scraper/internal/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/sources/workable"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func BuildSources(targets []dto.SourceTarget) []sources.Source {
@@ -33,7 +33,7 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 		if !t.Enabled {
 			continue
 		}
-		if registry.IsFilterSource(t.Source) {
+		if sourcespec.IsFilterSource(t.Source) {
 			switch t.Source {
 			case "wis":
 				wisSearches = append(wisSearches, wis.Search{
@@ -60,7 +60,7 @@ func BuildSources(targets []dto.SourceTarget) []sources.Source {
 			}
 			continue
 		}
-		_, isURL, ok := registry.LookupSource(t.Source)
+		_, isURL, ok := sourcespec.LookupSource(t.Source)
 		if !ok {
 			continue
 		}
