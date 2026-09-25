@@ -16,21 +16,21 @@ import (
 
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
-	"github.com/ollymarsters/job-scraper/internal/discover"
-	"github.com/ollymarsters/job-scraper/internal/discover/crawl"
-	"github.com/ollymarsters/job-scraper/internal/discover/getro"
-	"github.com/ollymarsters/job-scraper/internal/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
-	"github.com/ollymarsters/job-scraper/internal/proxy"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/scraper"
-	"github.com/ollymarsters/job-scraper/internal/sources"
-	"github.com/ollymarsters/job-scraper/internal/sources/builder"
-	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
-	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
-	"github.com/ollymarsters/job-scraper/internal/sources/wis"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/crawl"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/getro"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/yc"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 func main() {
@@ -127,7 +127,7 @@ func main() {
 				continue
 			}
 			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: target.Source, TargetID: target.ID, RunID: target.RunID, Recovery: true}
-			if role, _ := registry.SourceRole(target.Source); role == registry.RoleATS {
+			if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
 				boardID, err := db.GetVerifiedBoardID(ctx, target.Source, target.Value)
 				if err != nil {
 					slog.Error("recover Board run failed", slog.String("target_id", target.ID), slog.Any("err", err))
@@ -211,9 +211,20 @@ func (p *taskProcessor) process(ctx context.Context, task queue.Task) error {
 		return p.processPage(ctx, task)
 	case queue.BoardCheckTask:
 		return p.processBoard(ctx, task)
+	case queue.BoardVerifyTask:
+		return p.verifyBoard(ctx, task)
 	default:
 		return fmt.Errorf("unsupported task kind %s", task.Kind)
 	}
+}
+
+func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error {
+	if err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken); err != nil {
+		slog.Warn("board verification failed", slog.String("company_id", task.CompanyID), slog.String("source", task.Source), slog.String("token", task.BoardToken), slog.Any("err", err))
+		return nil
+	}
+	_, err := p.db.VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
+	return err
 }
 
 func (p *taskProcessor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {

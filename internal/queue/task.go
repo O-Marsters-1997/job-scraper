@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type TaskKind string
@@ -17,6 +17,7 @@ const (
 	ListingPageTask TaskKind = "listing_page"
 	DetailTask      TaskKind = "detail"
 	BoardCheckTask  TaskKind = "board_check"
+	BoardVerifyTask TaskKind = "board_verify"
 )
 
 type Task struct {
@@ -30,6 +31,8 @@ type Task struct {
 	URL         string   `json:"url,omitempty"`
 	Card        dto.Job  `json:"card,omitempty"`
 	BoardID     string   `json:"board_id,omitempty"`
+	CompanyID   string   `json:"company_id,omitempty"`
+	BoardToken  string   `json:"board_token,omitempty"`
 	Manual      bool     `json:"manual,omitempty"`
 	Recovery    bool     `json:"recovery,omitempty"`
 	Redelivered bool     `json:"-"`
@@ -39,7 +42,7 @@ func (t Task) Validate() error {
 	if t.Version != 1 || uuid.Validate(t.ID) != nil {
 		return errors.New("unsupported task version or invalid task ID")
 	}
-	role, ok := registry.SourceRole(t.Source)
+	role, ok := sourcespec.SourceRole(t.Source)
 	if !ok {
 		return fmt.Errorf("unknown source %q", t.Source)
 	}
@@ -56,12 +59,16 @@ func (t Task) Validate() error {
 			return errors.New("detail card source differs from task source")
 		}
 	case ListingPageTask:
-		if role != registry.RoleDiscovery || t.TargetID == "" {
+		if role != sourcespec.RoleDiscovery || t.TargetID == "" {
 			return errors.New("listing page requires discovery source and target/run")
 		}
 	case BoardCheckTask:
-		if role != registry.RoleATS || uuid.Validate(t.BoardID) != nil {
+		if role != sourcespec.RoleATS || uuid.Validate(t.BoardID) != nil {
 			return errors.New("board check requires ATS source and board ID")
+		}
+	case BoardVerifyTask:
+		if role != sourcespec.RoleATS || uuid.Validate(t.CompanyID) != nil || !sourcespec.ValidBoardToken(t.BoardToken) {
+			return errors.New("board verify requires ATS source, company ID and board token")
 		}
 	default:
 		return fmt.Errorf("unknown task kind %q", t.Kind)

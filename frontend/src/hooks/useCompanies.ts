@@ -22,11 +22,15 @@ export function useCompanies() {
 	return createQuery(() => companiesQueryOptions);
 }
 
-export function useCompanyBoards(id: () => string) {
+export function useCompanyBoards(
+	id: () => string,
+	refetchInterval: () => number | false = () => false,
+) {
 	return createQuery(() => ({
 		queryKey: ["company-boards", id()],
 		queryFn: () => fetchCompanyBoards(id()),
 		enabled: Boolean(id()),
+		refetchInterval: refetchInterval(),
 	}));
 }
 

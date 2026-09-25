@@ -8,7 +8,7 @@ Currently `Iterate` returns full `[]dto.Job` (all details, all pages), dedup is 
 
 ## Changes
 
-### 1. `internal/sources/source.go`
+### 1. `internal/worker/sources/source.go`
 
 - Remove `FetchJobs` from the interface — replace with `FetchURLs`
 - Add `URLFilter` type
@@ -26,7 +26,7 @@ type Source interface {
 }
 ```
 
-### 2. `internal/sources/wis/wis.go`
+### 2. `internal/worker/sources/wis/wis.go`
 
 **Rename `ParseHTML` → `ParseURLs`** and simplify: instead of building a `dto.Job` per card, just extract the `href` from the `<a>` inside `<h2>`. No company, location, or title parsing needed.
 
@@ -52,7 +52,7 @@ Per page:
 
 **Snapshot tests**: `ParseHTML` is gone; `wis_test.go` switches to `ParseURLs`. Snapshot JSON files become `[]string` (URL arrays) — rebase snapshots after the change.
 
-### 3. `internal/sources/greenhouse/greenhouse.go`
+### 3. `internal/worker/sources/greenhouse/greenhouse.go`
 
 - Rename `FetchJobs` → `FetchURLs`: extracts only `absolute_url` from the API response, returns `[]string`
 - `Iterate(ctx, filter URLFilter) ([]string, error)`: calls `FetchURLs`, passes result through `filter`, returns new URLs
@@ -93,7 +93,7 @@ type JobProvider interface {
 }
 ```
 
-### 8. `internal/scraper/scrape.go`
+### 8. `internal/worker/scraper/scrape.go`
 
 - `Run` accepts `providers.JobProvider`
 - Constructs `filter sources.URLFilter` from `db.FilterNewURLs`
@@ -117,15 +117,15 @@ func Run(ctx context.Context, srcs []sources.Source, db providers.JobProvider, q
 
 | File                                        | Change                                                                                                                                 |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `internal/sources/source.go`                | `FetchURLs` replaces `FetchJobs`; add `URLFilter`; update `Iterate`                                                                    |
-| `internal/sources/wis/wis.go`               | `ParseURLs` replaces `ParseHTML`; `FetchURLs` replaces `FetchJobs`; `fetchPage` returns `[]string`; `Iterate` uses filter + early stop |
-| `internal/sources/wis/wis_test.go`          | Switch to `ParseURLs`; rebase snapshots to `[]string` JSON                                                                             |
-| `internal/sources/greenhouse/greenhouse.go` | `FetchURLs` replaces `FetchJobs`; update `Iterate`                                                                                     |
+| `internal/worker/sources/source.go`                | `FetchURLs` replaces `FetchJobs`; add `URLFilter`; update `Iterate`                                                                    |
+| `internal/worker/sources/wis/wis.go`               | `ParseURLs` replaces `ParseHTML`; `FetchURLs` replaces `FetchJobs`; `fetchPage` returns `[]string`; `Iterate` uses filter + early stop |
+| `internal/worker/sources/wis/wis_test.go`          | Switch to `ParseURLs`; rebase snapshots to `[]string` JSON                                                                             |
+| `internal/worker/sources/greenhouse/greenhouse.go` | `FetchURLs` replaces `FetchJobs`; update `Iterate`                                                                                     |
 | `internal/data/sqlc/queries/jobs.sql`       | Add `ExistingURLs`                                                                                                                     |
 | `internal/data/db/pgsqlc/jobs.sql.go`       | Regenerated                                                                                                                            |
 | `internal/data/db/job.go`                   | Add `FilterNewURLs`                                                                                                                    |
 | `internal/data/providers/job.go`            | Add `FilterNewURLs` to interface                                                                                                       |
-| `internal/scraper/scrape.go`                | `Run` accepts `providers.JobProvider`, passes filter to `Iterate`                                                                      |
+| `internal/worker/scraper/scrape.go`                | `Run` accepts `providers.JobProvider`, passes filter to `Iterate`                                                                      |
 | `cmd/main.go`                               | DB init + pass to `Run`                                                                                                                |
 
 ## Verification

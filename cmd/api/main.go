@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	app "github.com/ollymarsters/job-scraper/internal"
-	"github.com/ollymarsters/job-scraper/internal/credstore"
+	"github.com/ollymarsters/job-scraper/internal/api"
+	"github.com/ollymarsters/job-scraper/internal/api/credstore"
+	"github.com/ollymarsters/job-scraper/internal/api/notify"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
-	"github.com/ollymarsters/job-scraper/internal/notify"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
@@ -94,7 +94,7 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: app.NewRouter(db, q, cs)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs)}
 
 	go func() {
 		<-ctx.Done()

@@ -15,7 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sources/registry"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func normalizeJobURL(raw string) (string, error) {
@@ -145,10 +145,10 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", providers.ErrCanonicalConflict)
 	}
 	if status != "unchanged" {
-		role, _ := registry.SourceRole(job.Source)
+		role, _ := sourcespec.SourceRole(job.Source)
 		in := scoringEffectsInput{
 			Job: job, JobID: jobID, CompanyID: companyID,
-			Discovery: role == registry.RoleDiscovery, FirstDiscovery: status == "new",
+			Discovery: role == sourcespec.RoleDiscovery, FirstDiscovery: status == "new",
 		}
 		if err := queueScoringEffects(ctx, queries, in); err != nil {
 			return dto.Job{}, "", fmt.Errorf("queue scoring effects: %w", err)

@@ -1,7 +1,7 @@
 ---
 name: new-handler
 description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
-paths: ["internal/handlers/**", "internal/router.go", "internal/services/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
+paths: ["internal/api/handlers/**", "internal/api/router.go", "internal/api/services/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
 ---
 
 # New Handler
@@ -17,7 +17,7 @@ covers the migration and sqlc regen. Come back here once the provider method exi
 
 The shape below is current: [ADR 0020](../../../docs/adr/0020-handlers-as-http-adapter-over-services.md)
 and [ADR 0023](../../../docs/adr/0023-handle-as-the-one-handler-pipeline.md) are rolled out.
-`internal/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth, google,
+`internal/api/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth, google,
 ingest, cv export) — no handler struct owns your route, and every handler in the package is
 built from `Handle(decode, call, respond)`, directly or through a CRUD generic.
 
@@ -32,11 +32,11 @@ set it.
 
 ### 2. Service
 
-Package `internal/services/<feature>` (e.g. `internal/services/companies`,
-`internal/services/sourcetargets`) — not bare `internal/<feature>`. The exception:
-`internal/candidates` and `internal/ingest` stay where they are, because the worker/scraper
+Package `internal/api/services/<feature>` (e.g. `internal/api/services/companies`,
+`internal/api/services/sourcetargets`) — not bare `internal/<feature>`. The exception:
+`internal/candidates` and `internal/api/ingest` stay where they are, because the worker/scraper
 import them too; only a service that exists purely to back an HTTP route goes under
-`internal/services/`.
+`internal/api/services/`.
 
 Constructor args are all required — `providers.X` interfaces (already in
 `internal/data/providers/`) for persistence, small interfaces declared in the service's own
@@ -52,12 +52,12 @@ service at all; see `references/pass-through-routes.md`.
 
 ### 3. Route + wiring
 
-`internal/services.go` builds every service once in `newServices(db, q, creds) *services`.
+`internal/api/services.go` builds every service once in `newServices(db, q, creds) *services`.
 Add your service's field and construction there, next to its siblings — this is the only place
 that constructs it.
 
-`internal/router.go` adds the chi route, binding it to a generic wrapper from
-`internal/handlers/generic.go`:
+`internal/api/router.go` adds the chi route, binding it to a generic wrapper from
+`internal/api/handlers/generic.go`:
 
 | Wrapper | Your method's shape | Status |
 |---|---|---|
@@ -109,7 +109,7 @@ Copy `frontend/src/hooks/useProfile.ts` — `queryOptions` + `createQuery` for r
 ## Verify
 
 ```
-go test ./internal/handlers/... ./internal/services/<feature>/...
+go test ./internal/api/handlers/... ./internal/api/services/<feature>/...
 cd frontend && bun run typecheck && bun run test && bunx playwright test
 ```
 

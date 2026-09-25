@@ -329,7 +329,7 @@ Each feature is a user-facing capability. No priority tiers — use `approach-to
 
 ## Constraints
 
-- Go backend; existing package layout (`cmd/worker`, `internal/scraper`, `internal/sources`, `internal/queue`, `internal/data`) is the extension surface — no package restructuring
+- Go backend; existing package layout (`cmd/worker`, `internal/worker/scraper`, `internal/worker/sources`, `internal/queue`, `internal/data`) is the extension surface — no package restructuring
 - RabbitMQ source queues with bounded retry and a shared DLQ; accepted tasks remain durable, and repeated deliveries preserve canonical Job identity (ADR 0008)
 - Postgres with sqlc; schema changes via numbered migrations in `scripts/migrations/`
 - Single recipient (`NOTIFY_EMAIL_TO`) and single configured intent for v1 — no multi-tenancy; criteria are not startup-specific
