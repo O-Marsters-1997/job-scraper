@@ -167,7 +167,6 @@ func (s *Service) Update(ctx context.Context, userID, id string, in dto.UpdateSo
 	return target, nil
 }
 
-// Scrape starts (or restarts) a run for the caller's source target with id.
 func (s *Service) Scrape(ctx context.Context, userID, id string) (dto.SourceTarget, error) {
 	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
 	if err != nil {

@@ -6,6 +6,7 @@ package aiprefs
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -23,8 +24,6 @@ const (
 	defaultReasoningModel   = "claude-sonnet-4-6"
 )
 
-// CredentialLister is the subset of credstore.CredentialStore used to report
-// which AI providers a user has configured credentials for.
 type CredentialLister interface {
 	ListProviders(ctx context.Context, userID string) ([]string, error)
 }
@@ -38,8 +37,6 @@ func New(prefs providers.UserAIPrefsProvider, creds CredentialLister) *Service {
 	return &Service{prefs: prefs, creds: creds}
 }
 
-// Get returns the user's AI prefs, falling back to the defaults when the user
-// has none saved yet.
 func (s *Service) Get(ctx context.Context, userID string) (dto.AIPrefsView, error) {
 	prefs, err := s.prefs.GetUserAIPrefs(ctx, userID)
 	if err != nil && !errors.Is(err, providers.ErrNotFound) {
@@ -52,8 +49,6 @@ func (s *Service) Get(ctx context.Context, userID string) (dto.AIPrefsView, erro
 	return s.view(ctx, userID, suitabilityModel, reasoningModel)
 }
 
-// Update validates and saves the user's model choices, defaulting an empty
-// reasoning model, then returns the resulting view.
 func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateAIPrefsInput) (dto.AIPrefsView, error) {
 	if !isValidModel(in.SuitabilityModel) {
 		return dto.AIPrefsView{}, apperr.Invalid("invalid model")
@@ -89,10 +84,5 @@ func (s *Service) view(ctx context.Context, userID, suitabilityModel, reasoningM
 }
 
 func isValidModel(model string) bool {
-	for _, m := range availableModels {
-		if m == model {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(availableModels, model)
 }

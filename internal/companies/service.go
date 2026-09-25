@@ -99,9 +99,6 @@ func (s *Service) ListBoards(ctx context.Context, _ string, companyID string) ([
 	return s.companies.ListCompanyBoards(ctx, companyID)
 }
 
-// AddBoard resolves a URL into an ATS board and links it to the company,
-// verifying it immediately when the caller confirms and the verifier
-// succeeds.
 func (s *Service) AddBoard(ctx context.Context, _ string, companyID string, in dto.AddCompanyBoardInput) (dto.CompanyBoard, error) {
 	if _, err := s.companies.GetCompany(ctx, companyID); err != nil {
 		return dto.CompanyBoard{}, err
@@ -123,7 +120,6 @@ func (s *Service) AddBoard(ctx context.Context, _ string, companyID string, in d
 	return board, nil
 }
 
-// humanizeToken turns a board token like "acme-corp" into "Acme Corp".
 // ponytail: name derived from the token; good enough until a source carries a real company name.
 func humanizeToken(token string) string {
 	words := strings.Split(token, "-")
