@@ -43,6 +43,11 @@ generate:
 build-emails:
     cd emails && bun run build.tsx
 
+# push ops/grafana/ (contact point, notification policy, alert rules, dashboards) to Grafana
+# (requires yq and jq; needs GRAFANA_URL and GRAFANA_SA_TOKEN)
+grafana-push:
+    ./scripts/grafana-push.sh
+
 # ── Code quality ──────────────────────────────────────────────────────────────
 
 # format all Go files (uses .golangci.yml formatters, same as CI)

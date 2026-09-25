@@ -67,6 +67,23 @@ services:
       timeout: 5s
       retries: 5
 
+  alloy:
+    image: grafana/alloy:v1.19.2
+    restart: unless-stopped
+    profiles: [observability]
+    depends_on:
+      - api
+      - worker
+    env_file: .env.docker-compose
+    environment:
+      ENV: prod
+    volumes:
+      - ./ops/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    command: ["run", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+
 volumes:
   db_data:
   rabbitmq_data:
+  alloy_data:

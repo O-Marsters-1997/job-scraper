@@ -9,6 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
 	"github.com/ollymarsters/job-scraper/internal/api/notify"
@@ -17,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/score"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 func main() {
@@ -36,6 +40,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9091"
+	}
+	go func() {
+		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
+			slog.Error("metrics server failed", slog.Any("err", err))
+		}
+	}()
 
 	cs, err := credstore.New(db)
 	if err != nil {
