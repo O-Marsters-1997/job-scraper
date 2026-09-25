@@ -17,8 +17,6 @@ import (
 
 const oauthStateCookie = "oauth_state"
 
-// googleSvc is the interface handlers.OAuthStart/OAuthCallback need from
-// services/google.Service; declared here, not imported.
 type googleSvc interface {
 	AuthURL(state string) string
 	Connect(ctx context.Context, userID, code string) error
@@ -76,7 +74,6 @@ func OAuthCallback(svc googleSvc) http.HandlerFunc {
 	)
 }
 
-// generateState returns a 16-byte cryptographically random hex string.
 func generateState() (string, error) {
 	b := make([]byte, 16)
 	if _, err := io.ReadFull(rand.Reader, b); err != nil {
@@ -85,7 +82,6 @@ func generateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// setStateCookie writes an HMAC-signed state cookie to the response.
 func setStateCookie(w http.ResponseWriter, state string) {
 	signed := signState(state)
 	secure := os.Getenv("COOKIE_SECURE") == "true"
@@ -112,7 +108,6 @@ func validateStateCookie(r *http.Request, state string) bool {
 	return hmac.Equal([]byte(cookie.Value), []byte(signState(state)))
 }
 
-// signState returns "state:HMAC(state)" using SESSION_SECRET as the key.
 func signState(state string) string {
 	secret := os.Getenv("SESSION_SECRET")
 	mac := hmac.New(sha256.New, []byte(secret))

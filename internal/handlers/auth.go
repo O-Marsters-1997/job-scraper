@@ -10,9 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// authSvc is the interface handlers.Login/Signup/Logout need from
-// services/auth.Service; declared here, not imported, so the handler
-// package doesn't depend on the service package.
 type authSvc interface {
 	Login(ctx context.Context, username, password string) (dto.Session, dto.User, error)
 	Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error)

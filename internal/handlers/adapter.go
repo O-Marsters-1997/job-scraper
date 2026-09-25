@@ -19,8 +19,6 @@ func userID(r *http.Request) (string, error) {
 	return session.UserID, nil
 }
 
-// writeJSON writes v as the response body with the given status. A nil slice
-// is written as [], and a 204 status carries no body regardless of v.
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -34,9 +32,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// writeError maps err to a status via its apperr kind and writes
-// {"error": msg, ...fields}. An error without a kind is logged with the
-// route and returned as a 500 whose body hides the underlying message.
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, ok := apperr.StatusFor(err)
 	msg := err.Error()

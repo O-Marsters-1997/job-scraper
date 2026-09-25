@@ -8,8 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// cvExporter is the interface handlers.ExportCV needs from
-// services/cvtemplates.Service; declared here, not imported.
 type cvExporter interface {
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }

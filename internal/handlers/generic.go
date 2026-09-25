@@ -1,5 +1,3 @@
-// Handle is the pipeline every handler in this package is built from:
-// decode, call, respond. See docs/adr/0022.
 package handlers
 
 import (
@@ -46,10 +44,6 @@ func respondJSON[Res any](status int) func(http.ResponseWriter, *http.Request, R
 
 func pass[T any](_ context.Context, v T) (T, error) { return v, nil }
 
-// decodeBody decodes the request body into T. An empty body decodes to T's
-// zero value rather than failing: bodyless actions (e.g. hide/show) and
-// dtos with only path-tagged fields never need to send one, and a required
-// field's absence is a service-level validation error, not a decode error.
 func decodeBody[T any](r *http.Request) (T, error) {
 	var in T
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
@@ -58,9 +52,6 @@ func decodeBody[T any](r *http.Request) (T, error) {
 	return in, nil
 }
 
-// decodeQuery flattens the request's URL query into Q by JSON round-trip: Q
-// should declare string fields with json tags matching the query keys, and
-// the service parses and validates them.
 func decodeQuery[Q any](r *http.Request) (Q, error) {
 	var q Q
 	values := r.URL.Query()
@@ -80,8 +71,6 @@ func decodeQuery[Q any](r *http.Request) (Q, error) {
 	return q, nil
 }
 
-// fillPath sets every `path:"name"` tagged field on in from the matching
-// chi URL param.
 func fillPath(r *http.Request, in any) {
 	v := reflect.ValueOf(in).Elem()
 	t := v.Type()
@@ -92,8 +81,6 @@ func fillPath(r *http.Request, in any) {
 	}
 }
 
-// respond writes out with status, except a struct{} Out always writes 204
-// with no body.
 func respond[Out any](w http.ResponseWriter, status int, out Out) {
 	if _, void := any(out).(struct{}); void {
 		writeJSON(w, http.StatusNoContent, nil)
@@ -184,8 +171,7 @@ func Create[In, Out any](fn func(ctx context.Context, userID string, in In) (Out
 
 // Update adapts (ctx, userID, in In) -> (Out, error) to a 200 update; a
 // struct{} Out writes 204 instead. Path-tagged fields on In are filled from
-// chi URL params after decoding, covering both a single {id} and a
-// multi-segment path (e.g. {docId}/{tabId}).
+// chi URL params after decoding (a single {id} or a multi-segment path).
 func Update[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error)) http.HandlerFunc {
 	return Handle(decodeUserInput[In], toServiceCall(fn), respondJSON[Out](http.StatusOK))
 }
