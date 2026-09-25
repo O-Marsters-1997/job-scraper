@@ -8,9 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+const maxConcurrentScoring = 4
 
 type EffectStore interface {
 	ClaimScoringEffect(context.Context) (dto.ScoringEffect, error)
@@ -32,11 +37,40 @@ func NewOutboxWorker(store EffectStore, getKey func(context.Context, string) (st
 	return &OutboxWorker{store: store, getKey: getKey, scorerFor: scorerFor, sendAlert: sendAlert}
 }
 
+// RunOnce claims and processes a single effect.
 func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	effect, err := w.store.ClaimScoringEffect(ctx)
 	if err != nil {
 		return err
 	}
+	return w.process(ctx, effect)
+}
+
+// RunTick drains the queue, running up to maxConcurrentScoring effects at
+// once. One effect's failure is logged, not returned, so it doesn't stop the rest.
+func (w *OutboxWorker) RunTick(ctx context.Context) error {
+	g := &errgroup.Group{}
+	g.SetLimit(maxConcurrentScoring)
+	for {
+		effect, err := w.store.ClaimScoringEffect(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			_ = g.Wait()
+			return err
+		}
+		g.Go(func() error {
+			if err := w.process(ctx, effect); err != nil {
+				slog.Error("scoring effect failed", slog.String("effect_id", effect.ID), slog.Any("err", err))
+			}
+			return nil
+		})
+	}
+	return g.Wait()
+}
+
+func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) error {
 	fail := func(err error) error {
 		var terminal bool
 		var retryAfter time.Duration

@@ -91,6 +91,14 @@ at 3-year high (53%); platforms suppress automation (~23% restricted in 90 days)
   (`SCORING_USER_ID`); `multi-tenant-byok.md` Phases 2–4 pending.
 - LinkedIn source; BrightData Web Unlocker proxy; batch suitability scoring (Claude cache amortise).
 
+## Accepted ideas
+
+*Ideas you've decided to build, not yet shipped. `to-roadmap` boards this section when there is no
+approach doc, so accepting is what puts an idea on the board.*
+
+- [2026-09-25] BrightData proxy rollout — verify the existing BrightData Web Unlocker integration is working reliably, then let other sources opt into it as needed
+- [2026-09-25] Observability with Grafana Cloud — ship structured logs, metrics and traces from the API, worker and queue to Grafana Cloud via OpenTelemetry, with dashboards and alerts for scrape runs, scoring and API errors
+
 ## Proposed ideas (pending)
 
 - [2026-07-01] **Best-CV-for-this-job + real gap analysis** — fetch CV tab text (new
