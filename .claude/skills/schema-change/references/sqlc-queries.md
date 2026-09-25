@@ -45,8 +45,8 @@ of whether it's talking to Postgres or a test mock.
 
 **Unique-violation (23505) handling exists, but it's not a shared sentinel
 in the `db` package.** Three call sites check the Postgres code directly —
-`internal/data/db/auth.go:67`, `internal/handlers/source_targets.go:162`,
-`internal/handlers/applications.go:80` — each with its own
+`internal/data/db/auth.go:67`, `internal/api/handlers/source_targets.go:162`,
+`internal/api/handlers/applications.go:80` — each with its own
 `errors.As(err, &pgErr) && pgErr.Code == "23505"` check inline, mapped to
 whatever conflict error fits that call site (not a single
 `providers.ErrConflict` reused everywhere). If your new query can violate a

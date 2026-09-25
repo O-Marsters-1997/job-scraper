@@ -4,7 +4,7 @@
 
 ## Context
 
-ADR 0020 gave `internal/handlers` six CRUD-shaped generics (`GetAll`, `GetByID`, `Query`,
+ADR 0020 gave `internal/api/handlers` six CRUD-shaped generics (`GetAll`, `GetByID`, `Query`,
 `Create`, `Update`, `Delete`) and left everything else — cookie-setting, redirecting, streaming
 and service-token routes — as a hand-written `func X(svc) http.HandlerFunc`, each repeating its
 own version of "read the session, decode, call the service, map the error, write the response."
@@ -17,7 +17,7 @@ session/decode/call/error shell six times.
 
 ## Decision
 
-- **`Handle[Req, Res any](decode, call, respond) http.HandlerFunc`** (`internal/handlers/generic.go`)
+- **`Handle[Req, Res any](decode, call, respond) http.HandlerFunc`** (`internal/api/handlers/generic.go`)
   is the one function every handler in the package is built from. `decode(r) (Req, error)` only
   reads the request — it never writes to `http.ResponseWriter` — and its error, like `call`'s,
   goes to the same `writeError`. `respond(w, r, res)` can't fail; anything that can fail belongs
@@ -61,7 +61,7 @@ session/decode/call/error shell six times.
 
 ## Consequences
 
-- `internal/handlers` has exactly one code path from request to response, regardless of which
+- `internal/api/handlers` has exactly one code path from request to response, regardless of which
   handler you're reading — `decode`, `call`, `respond`, in that order, every time.
 - Adding a genuine misfit route no longer means deciding how much of the adapter convention to
   reimplement by hand; it means picking three functions.
@@ -69,13 +69,13 @@ session/decode/call/error shell six times.
   decode / call / error-map shell they used to repeat lives once in `Handle`.
 - `Me`'s and `OAuthCallback`'s behaviour changes are covered by `TestRouterRoutes` (the /auth/me
   and cv-templates/OAuth-adjacent subtests) and `TestHandle`
-  (`internal/handlers/generic_test.go`), not by dedicated new tests — neither had unit coverage
+  (`internal/api/handlers/generic_test.go`), not by dedicated new tests — neither had unit coverage
   before this ADR.
 
 ## Supersedes
 
 Supersedes the part of ADR 0020's "Misfits" bullet that left cookie/redirect/stream/
 service-token routes as free-standing `func(svc) http.HandlerFunc`s following the adapter
-contract "by convention." They still live in `internal/handlers` as
+contract "by convention." They still live in `internal/api/handlers` as
 `func(svc) http.HandlerFunc` closures — that part is unchanged — they just build that closure
 from `Handle` now, same as every other handler in the package.

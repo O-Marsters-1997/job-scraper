@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/sources"
-	"github.com/ollymarsters/job-scraper/internal/sources/indeed"
-	"github.com/ollymarsters/job-scraper/internal/sources/linkedin"
-	"github.com/ollymarsters/job-scraper/internal/sources/wis"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 var parsers = map[string]sources.SnapshotSource{
@@ -171,7 +171,7 @@ func rebase(source string) error {
 func snapshotDir(source string) string {
 	_, filename, _, _ := runtime.Caller(0)
 	moduleRoot := filepath.Join(filepath.Dir(filename), "../..")
-	return filepath.Join(moduleRoot, "internal", "sources", source, "snapshots")
+	return filepath.Join(moduleRoot, "internal", "worker", "sources", source, "snapshots")
 }
 
 func knownSources() string {

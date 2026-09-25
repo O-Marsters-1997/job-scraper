@@ -1,6 +1,6 @@
 # Capturing and rebasing HTML snapshots
 
-Snapshot fixtures live in `internal/sources/<name>/snapshots/` as paired
+Snapshot fixtures live in `internal/worker/sources/<name>/snapshots/` as paired
 `<name>.html` / `<name>.json` files, consumed by `sources.RunSnapshotTests` /
 `RunSnapshotTestsURLs`. Never hand-edit the `.json` files — they're generated.
 
@@ -14,7 +14,7 @@ e.g. `just cli download wis page1 "https://workinstartups.com/search?q=engineer"
 
 This runs `go run ./cmd/snapshot download <source> <name> <url>` (the `cli`
 recipe in `justfile`), fetches the URL with a browser-like User-Agent, and
-writes `internal/sources/<source>/snapshots/<name>.html`. Names starting with
+writes `internal/worker/sources/<source>/snapshots/<name>.html`. Names starting with
 `detail_` also get a `<name>.url` sidecar recording the source URL, since detail
 parsing (`ParseJobDetail`) needs the URL as well as the HTML.
 

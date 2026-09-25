@@ -9,8 +9,8 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/scraper"
-	"github.com/ollymarsters/job-scraper/internal/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 type detailSourceStub struct{}

@@ -10,6 +10,27 @@ linters:
     - unused # unused code
     - misspell # spelling
     - exhaustive # exhaustive enum switches
+    - depguard # internal/api, internal/worker and shared package boundaries
+  settings:
+    depguard:
+      rules:
+        api:
+          files: ["**/internal/api/**", "**/cmd/api/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/worker
+              desc: the API never fetches from sources; publish a queue task for the worker (ADR 0026)
+        worker:
+          files: ["**/internal/worker/**", "**/cmd/worker/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/api
+              desc: the worker reaches the API over POST /ingest, not by import (ADR 0022)
+        shared:
+          files: ["**/internal/**", "!**/internal/api/**", "!**/internal/worker/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/api
+              desc: packages at the internal/ root are shared; move this code under internal/api
+            - pkg: github.com/ollymarsters/job-scraper/internal/worker
+              desc: packages at the internal/ root are shared; move this code under internal/worker
 
 formatters:
   enable:
