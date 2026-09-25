@@ -10,7 +10,7 @@ import (
 // MockSearchConfigProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockSearchConfigProvider struct {
 	mu      sync.Mutex
-	configs map[string]dto.SearchConfig // keyed by userID
+	configs map[string]dto.SearchConfig
 
 	GetErr    error
 	UpsertErr error

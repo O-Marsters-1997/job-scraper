@@ -389,12 +389,10 @@ func TestListDueSourceTargets(t *testing.T) {
 		t.Fatalf("CreateSourceTarget disabled: %v", err)
 	}
 
-	// fresh: checked 1 minute ago, interval 360 (default) — not due.
 	if _, err := testDB.Pool().Exec(ctx,
 		"UPDATE source_targets SET last_checked_at = NOW() - interval '1 minute' WHERE id = $1", fresh.ID); err != nil {
 		t.Fatalf("set fresh last_checked_at: %v", err)
 	}
-	// stale: checked 7 hours ago, interval 360 (6h) — due.
 	if _, err := testDB.Pool().Exec(ctx,
 		"UPDATE source_targets SET last_checked_at = NOW() - interval '7 hours' WHERE id = $1", stale.ID); err != nil {
 		t.Fatalf("set stale last_checked_at: %v", err)

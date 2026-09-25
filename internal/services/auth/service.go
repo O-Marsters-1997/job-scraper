@@ -1,7 +1,3 @@
-// Package auth holds the domain rules for signing up, logging in and out:
-// password hashing, username uniqueness and session creation. Persistence
-// goes through the Store port declared here. Cookie handling stays in the
-// handler; it's HTTP mechanics, not a domain rule.
 package auth
 
 import (
@@ -19,8 +15,6 @@ import (
 
 const sessionTTL = 30 * 24 * time.Hour
 
-// bcryptCost is the work factor for hashing passwords. Overridden to
-// bcrypt.MinCost in tests.
 var bcryptCost = bcrypt.DefaultCost
 
 type Store interface {
@@ -37,7 +31,6 @@ func New(store Store) *Service {
 	return &Service{store: store}
 }
 
-// Login verifies the given credentials and starts a session.
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
 	user, err := s.store.GetUserByUsername(ctx, username)
 	if err != nil {
@@ -67,8 +60,6 @@ func (s *Service) Signup(ctx context.Context, username, password, email string) 
 		}
 		return dto.Session{}, dto.User{}, err
 	}
-	// Best-effort: a signed-up user without seeded statuses can still add
-	// their own, so this doesn't fail the signup.
 	if err := s.store.SeedDefaultStatuses(ctx, user.ID); err != nil {
 		slog.Error("seed default statuses failed", slog.Any("err", err))
 	}

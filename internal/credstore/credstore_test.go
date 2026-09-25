@@ -8,9 +8,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/credstore"
 )
 
-// mapStore is an in-memory RawStore for testing.
 type mapStore struct {
-	m map[string]string // key: userID+"/"+provider
+	m map[string]string
 }
 
 func newMapStore() *mapStore { return &mapStore{m: make(map[string]string)} }
@@ -43,7 +42,6 @@ func (s *mapStore) ListUserAICredentialProviders(_ context.Context, userID strin
 
 func testStore(t *testing.T) *credstore.EnvCredentialStore {
 	t.Helper()
-	// 32 random bytes, base64-encoded.
 	key := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	t.Setenv("AI_CREDENTIAL_ENC_KEY", key)
 	cs, err := credstore.New(newMapStore())
@@ -84,7 +82,6 @@ func TestNew_MissingKey(t *testing.T) {
 }
 
 func TestNew_WrongLength(t *testing.T) {
-	// 16 bytes → wrong length
 	t.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 16)))
 	if _, err := credstore.New(newMapStore()); err == nil {
 		t.Fatal("expected error for wrong key length")

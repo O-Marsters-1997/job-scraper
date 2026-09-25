@@ -10,7 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources"
 )
 
-// Config holds Recruitee-specific settings.
 type Config struct {
 	// Boards is the list of Recruitee company subdomains to scrape (e.g. "acmecorp").
 	Boards []string

@@ -24,15 +24,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
-// This is the ADR 0020 router-level table test: it checks that every route
-// is wired to the right shape (adapter kind, path parameters) and status,
-// not that every service's business rules are correct (those are unit
-// tested against providers.Mock* in each feature package).
-
 const ingestTestToken = "router-test-ingest-token" //nolint:gosec // test-only static token, not a credential
 
-// nilUUID is a validly-formatted but non-existent UUID, for exercising a
-// not-found path without hitting an earlier "malformed id" branch.
 const nilUUID = "00000000-0000-0000-0000-000000000000"
 
 var router http.Handler
@@ -73,8 +66,6 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("INGEST_SERVICE_TOKEN", ingestTestToken); err != nil {
 		log.Fatalf("set INGEST_SERVICE_TOKEN: %v", err)
 	}
-	// Zero-value broker: never dialed unless a route actually calls Publish,
-	// and every route exercised below avoids that path (see comments).
 	router = app.NewRouter(testDB, &queue.Broker{}, newFakeCredStore())
 
 	code := m.Run()
@@ -86,8 +77,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// fakeCredStore is a minimal in-memory credstore.CredentialStore, so
-// ai-prefs/ai-credentials routes can be exercised without real encryption.
 type fakeCredStore struct {
 	mu sync.Mutex
 	m  map[[2]string]string
@@ -155,9 +144,6 @@ func decode[T any](t *testing.T, w *httptest.ResponseRecorder) T {
 	return v
 }
 
-// signup creates a fresh user via the real /auth/signup route and returns
-// their session cookie, so authenticated route tests exercise the real
-// auth.Middleware wiring rather than a synthetic session.
 func signup(t *testing.T) *http.Cookie {
 	t.Helper()
 	body := jsonBody(t, map[string]string{
@@ -191,11 +177,6 @@ func authed(method, path string, body *bytes.Reader, cookie *http.Cookie) *http.
 	return req
 }
 
-// TestRouterRequiresAuth checks that every route inside the session-auth
-// group actually sits behind auth.Middleware: hit without a session cookie,
-// each must 401 rather than reach its handler. This is the cheapest and
-// highest-value regression guard against a route being wired outside its
-// intended group.
 func TestRouterRequiresAuth(t *testing.T) {
 	routes := []struct {
 		method, path string
@@ -261,16 +242,11 @@ func TestIngestRequiresServiceToken(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Authorization", "Bearer "+ingestTestToken)
 	w = do(req)
-	// The token gate passed; an empty batch is then rejected by the handler.
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("with token: status = %d, want 400 (body: %s)", w.Code, w.Body.String())
 	}
 }
 
-// TestRouterRoutes exercises each authenticated route with a minimal valid
-// (or deliberately absent) input and checks the status and path-parameter
-// wiring the ADR calls for. It shares one signed-up user across subtests,
-// chaining IDs where a route needs one that only another route can create.
 func TestRouterRoutes(t *testing.T) {
 	cookie := signup(t)
 
@@ -281,8 +257,6 @@ func TestRouterRoutes(t *testing.T) {
 		if w := do(authed(http.MethodGet, "/jobs/all", nil, cookie)); w.Code != http.StatusOK {
 			t.Errorf("GET /jobs/all = %d", w.Code)
 		}
-		// No such job scored yet: exercises the ID adapter's path param and
-		// the service's first validation branch, no fixture data needed.
 		w := do(authed(http.MethodPost, "/jobs/"+nilUUID+"/reasoning", nil, cookie))
 		if w.Code != http.StatusUnprocessableEntity {
 			t.Errorf("POST /jobs/{id}/reasoning = %d, want 422 (body: %s)", w.Code, w.Body.String())
@@ -315,7 +289,6 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET / = %d", w.Code)
 		}
-		// enabled:false so Create never reaches board verification or the queue.
 		w = do(authed(http.MethodPost, "/source-targets/", jsonBody(t, map[string]any{
 			"source": "greenhouse", "value": "acmecorp", "enabled": false,
 		}), cookie))
@@ -328,8 +301,6 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Errorf("PATCH /{id} = %d (body: %s)", w.Code, w.Body.String())
 		}
-		// No verified board exists, so this fails past the ID lookup —
-		// proving the path param and service wiring without a live queue.
 		w = do(authed(http.MethodPost, "/source-targets/"+id+"/scrape", nil, cookie))
 		if w.Code != http.StatusServiceUnavailable {
 			t.Errorf("POST /{id}/scrape = %d, want 503 (body: %s)", w.Code, w.Body.String())
@@ -433,10 +404,6 @@ func TestRouterRoutes(t *testing.T) {
 		}
 	})
 
-	// No Google account is linked for this user, so every cv-templates /
-	// tracked-docs route below fails deterministically past the path-param
-	// and body-decode stage — exactly what this table test needs to check,
-	// without a real Google API call.
 	t.Run("cv-templates and tracked-docs", func(t *testing.T) {
 		w := do(authed(http.MethodGet, "/cv-templates/", nil, cookie))
 		if w.Code != http.StatusUnauthorized {
@@ -456,8 +423,6 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("DELETE /tracked-docs/{id} = %d, want 404 (body: %s)", w.Code, w.Body.String())
 		}
-		// docId/tabId are two distinct path params (the ID2 adapter) — this
-		// is the case a same-named {id} param would silently break.
 		w = do(authed(http.MethodPost, "/tracked-docs/doc1/tabs/tab1/hide", nil, cookie))
 		if w.Code != http.StatusNotFound {
 			t.Errorf("POST /tracked-docs/{docId}/tabs/{tabId}/hide = %d, want 404 (body: %s)", w.Code, w.Body.String())

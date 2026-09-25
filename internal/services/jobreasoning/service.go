@@ -1,8 +1,3 @@
-// Package jobreasoning generates on-demand suitability reasoning for an
-// already-scored job: it re-scores the job with the user's configured
-// reasoning model, overwriting the provisional ingest-time score with the
-// authoritative result. If reasoning already exists, the cached result is
-// returned without a new scoring call.
 package jobreasoning
 
 import (

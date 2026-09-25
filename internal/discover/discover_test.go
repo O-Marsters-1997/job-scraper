@@ -10,7 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
-// fakeGate is an in-memory ScrapeGate double.
 type fakeGate struct {
 	mu   sync.Mutex
 	last map[string]time.Time
@@ -53,7 +52,7 @@ func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
 	h := &fakeHarvester{name: "yc", companies: []Company{
 		{Name: "Acme Corp", Domain: "acme.com"},
 		{Domain: "onlydomain.io"},
-		{}, // no name, no domain: nothing to upsert
+		{},
 	}}
 	companies := providers.NewMockCompanyProvider()
 	r := NewRunner([]Harvester{h}, companies, newFakeGate())
@@ -107,7 +106,7 @@ func TestRunner_RespectsGate(t *testing.T) {
 	h := &fakeHarvester{name: "yc", companies: []Company{{Name: "Acme"}}}
 	companies := providers.NewMockCompanyProvider()
 	gate := newFakeGate()
-	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-time.Hour) // harvested 1h ago, well inside 24h gate
+	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-time.Hour)
 
 	r := NewRunner([]Harvester{h}, companies, gate)
 	r.tick(context.Background())
@@ -125,7 +124,7 @@ func TestRunner_HarvestsWhenGateExpired(t *testing.T) {
 	h := &fakeHarvester{name: "yc", companies: []Company{{Name: "Acme"}}}
 	companies := providers.NewMockCompanyProvider()
 	gate := newFakeGate()
-	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-25 * time.Hour) // past the 24h gate
+	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-25 * time.Hour)
 
 	r := NewRunner([]Harvester{h}, companies, gate)
 	r.tick(context.Background())

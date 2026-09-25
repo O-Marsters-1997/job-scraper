@@ -9,9 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// authSvc is the interface handlers.Login/Signup/Logout need from
-// services/auth.Service; declared here, not imported, so the handler
-// package doesn't depend on the service package.
 type authSvc interface {
 	Login(ctx context.Context, username, password string) (dto.Session, dto.User, error)
 	Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error)
@@ -35,7 +32,6 @@ func newSessionCookie(id string, maxAge int) *http.Cookie {
 	}
 }
 
-// Login authenticates a user by username/password and starts a session.
 func Login(svc authSvc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, ok := decodeBody[struct {
@@ -55,7 +51,6 @@ func Login(svc authSvc) http.HandlerFunc {
 	}
 }
 
-// Signup creates a user and starts a session.
 func Signup(svc authSvc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, ok := decodeBody[struct {
@@ -76,7 +71,6 @@ func Signup(svc authSvc) http.HandlerFunc {
 	}
 }
 
-// Logout clears the caller's session.
 func Logout(svc authSvc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, ok := auth.SessionFromContext(r.Context())
@@ -88,7 +82,6 @@ func Logout(svc authSvc) http.HandlerFunc {
 	}
 }
 
-// Me returns the caller's session identity.
 func Me(w http.ResponseWriter, r *http.Request) {
 	session, _ := auth.SessionFromContext(r.Context())
 	writeJSON(w, http.StatusOK, map[string]string{

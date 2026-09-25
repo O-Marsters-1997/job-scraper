@@ -1,6 +1,5 @@
 import { parseColor } from "@kobalte/core/colors";
 
-// ── sRGB ↔ oklch (no external deps) ─────────────────────────────────────────
 // Standard OKLab/OKLCH matrices. Validated against the project's @theme tokens:
 //   oklch(0.55 0.18 285)        → #6645D9  (violet primary)
 //   oklch(0.23 0.055 285)       → #2A1F57  (indigo sidebar)
@@ -61,9 +60,7 @@ function oklchToRgb(L: number, C: number, H: number): [number, number, number] {
 	];
 }
 
-// ── Parse oklch CSS string ───────────────────────────────────────────────────
 // Accepts: oklch(L C H) or oklch(L C H / a)
-// Returns null when not an oklch string (caller falls through).
 function parseOklch(
 	css: string,
 ): { L: number; C: number; H: number; alpha: number } | null {
@@ -81,12 +78,6 @@ function parseOklch(
 	};
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Return the L (lightness) component of an oklch CSS string, or null if the
- * string isn't oklch. Used to decide the auth brand panel's accessible ink tone.
- */
 export function oklchLightness(css: string): number | null {
 	return parseOklch(css)?.L ?? null;
 }
@@ -94,7 +85,6 @@ export function oklchLightness(css: string): number | null {
 /**
  * Read a CSS custom property off :root and return it as a hex string.
  * Used by Chart.js utilities — Canvas can't consume CSS vars or oklch directly.
- * Reuses oklchToHex, so oklch values are converted and hex/rgb values pass through.
  */
 export function cssVarHex(name: string, fallback = "#000000"): string {
 	if (typeof document === "undefined") return fallback;
@@ -111,7 +101,7 @@ export function cssVarHex(name: string, fallback = "#000000"): string {
  */
 export function oklchToHex(css: string): string {
 	const p = parseOklch(css);
-	if (!p) return css; // already hex / rgb — pass through
+	if (!p) return css;
 	const [r, g, b] = oklchToRgb(p.L, p.C, p.H);
 	const hex2 = (n: number) => n.toString(16).padStart(2, "0");
 	const base = `#${hex2(r)}${hex2(g)}${hex2(b)}`;
@@ -124,11 +114,9 @@ export function oklchToHex(css: string): string {
 
 /**
  * Convert a hex/rgba CSS string (as emitted by ColorPicker) to an oklch string.
- * Uses Kobalte's parseColor for reliable channel extraction.
  * Result: oklch(L C H) or oklch(L C H / a) when alpha < 1.
  */
 export function toOklch(css: string): string {
-	// If it's already oklch, nothing to do.
 	if (parseOklch(css)) return css;
 
 	let r: number, g: number, b: number, alpha: number;
@@ -139,7 +127,7 @@ export function toOklch(css: string): string {
 		b = c.getChannelValue("blue");
 		alpha = c.getChannelValue("alpha");
 	} catch {
-		return css; // unparseable — leave as-is
+		return css;
 	}
 
 	const [L, C, H] = rgbToOklch(r, g, b);

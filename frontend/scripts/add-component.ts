@@ -5,12 +5,6 @@
  * Usage:   bun run scripts/add-component.ts <name>
  * Example: bun run scripts/add-component.ts dialog
  *
- * Steps:
- *   1. Fetches src/registry/kobalte/ui/<name>.tsx from github.com/carere/zaidan
- *   2. Rewrites @/registry/kobalte/ui/ → @/components/ui/ import paths
- *   3. Extracts z-* CSS class names and injects their @apply definitions
- *      from style-luma.css into src/styles.css inside @layer components
- *
  * Browse available components:
  *   https://github.com/carere/zaidan/tree/main/src/registry/kobalte/ui
  */
@@ -39,7 +33,6 @@ async function get(url: string): Promise<string | null> {
 	return res.ok ? res.text() : null;
 }
 
-// 1. Fetch component TSX
 process.stdout.write(`Fetching ${name}… `);
 const raw = await get(`${ZAIDAN_UI}/${name}.tsx`);
 if (!raw) {
@@ -51,10 +44,8 @@ if (!raw) {
 }
 console.log("ok");
 
-// 2. Fix internal import paths
 const tsx = raw.replaceAll("@/registry/kobalte/ui/", "@/components/ui/");
 
-// 3. Write component file
 mkdirSync(UI_DIR, { recursive: true });
 const outPath = join(UI_DIR, `${name}.tsx`);
 const existed = existsSync(outPath);
@@ -63,7 +54,6 @@ console.log(
 	`✓ ${existed ? "overwrote" : "wrote"} src/components/ui/${name}.tsx`,
 );
 
-// 4. Extract z-* class names referenced in this component
 const zClasses = [
 	...new Set([...tsx.matchAll(/\bz-[\w-]+/g)].map((m) => m[0])),
 ];
@@ -72,7 +62,6 @@ if (zClasses.length === 0) {
 }
 console.log(`  CSS classes needed: ${zClasses.join(", ")}`);
 
-// 5. Fetch Zaidan style definitions
 process.stdout.write("Fetching style-luma.css… ");
 const cssSource = await get(ZAIDAN_CSS_URL);
 if (!cssSource) {
@@ -83,7 +72,7 @@ if (!cssSource) {
 }
 console.log("ok");
 
-// 6. Extract matching class blocks (single-level braces only — matches Zaidan's format)
+// Single-level braces only — matches Zaidan's format.
 const blocks: string[] = [];
 for (const cls of zClasses) {
 	const escaped = cls.replace(/[-]/g, "\\$&");
@@ -98,7 +87,6 @@ if (blocks.length === 0) {
 	process.exit(0);
 }
 
-// 7. Inject only missing class definitions into styles.css
 const styles = readFileSync(STYLES_PATH, "utf8");
 const missing = blocks.filter((block) => {
 	const cls = block.match(/\.([\w-]+)/)?.[1];

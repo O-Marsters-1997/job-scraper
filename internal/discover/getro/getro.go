@@ -24,10 +24,6 @@ import (
 
 // seedBoards are curated, verified-live Getro-powered VC-fund job boards
 // (checked by hand: each returns a 200 with a __NEXT_DATA__ jobs payload).
-//
-// ponytail: a fixed code-level catalog, same philosophy as ADR 0010a's source
-// registry — a DB-backed seed table is speculative infrastructure until a
-// second cadence or a real "add a board without a deploy" need shows up.
 var seedBoards = []string{
 	"https://jobsinvc.getro.com/jobs",
 	"https://jobs.underscore.vc/jobs",
@@ -111,14 +107,6 @@ type getroOrganization struct {
 	Slug string `json:"slug"`
 }
 
-// parseGetro is pure so it can be tested against a saved fixture without
-// network access. It extracts the __NEXT_DATA__ script embedded in a Getro
-// job board page and yields one Company per unique employer (organization)
-// referenced by the listed jobs, deduplicated by slug since a company usually
-// has several open roles on the same page. Each job's application URL is the
-// company's own careers/ATS link where present; detect.ResolveBoard maps it
-// to an ATS source+token when recognised, otherwise the company is yielded
-// with just a name for a later crawler to resolve.
 func parseGetro(body []byte) ([]discover.Company, error) {
 	m := nextDataRe.FindSubmatch(body)
 	if m == nil {

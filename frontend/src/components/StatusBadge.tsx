@@ -3,11 +3,7 @@ interface StatusBadgeProps {
 	colour: string;
 }
 
-/**
- * Status pill matching the design's "colored dot + soft tinted background"
- * rule. The tint is derived from the status's own (user-defined) hex via
- * color-mix, so any custom colour renders consistently.
- */
+// Status pill matching the design's "colored dot + soft tinted background" rule.
 export function StatusBadge(props: StatusBadgeProps) {
 	return (
 		<span

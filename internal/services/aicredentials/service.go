@@ -1,5 +1,3 @@
-// Package aicredentials holds the domain rule for storing or clearing a
-// user's AI provider API key.
 package aicredentials
 
 import (

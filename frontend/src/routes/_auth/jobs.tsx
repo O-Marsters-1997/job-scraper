@@ -13,7 +13,6 @@ import { queryClient } from "../../lib/queryClient";
 import type { JobApplicationSummary } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/jobs")({
-	// Return Partial so <Link to="/jobs"> callers don't need to supply search params.
 	validateSearch: (raw: Record<string, unknown>): Partial<JobFilters> =>
 		parseSearch(raw),
 	loader: () => queryClient.ensureQueryData(aiPrefsQueryOptions),

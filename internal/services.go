@@ -26,8 +26,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-// services is the app's composition root: every feature service and the
-// providers/clients they're built from, so NewRouter's body is just routes.
 type services struct {
 	auth                *authsvc.Service
 	google              *googlesvc.Service

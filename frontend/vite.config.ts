@@ -8,7 +8,6 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
 	plugins: [
 		devtools(),
-		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
 			projects: ["./tsconfig.json"],
 		}),

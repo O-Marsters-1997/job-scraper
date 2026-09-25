@@ -9,11 +9,9 @@ interface Props {
 function decodeEntities(s: string): string {
 	const el = document.createElement("textarea");
 	el.innerHTML = s;
-	// ponytail: decode once; double-encoded edge cases acceptable for job descriptions
 	return el.value;
 }
 
-/** Heuristic: does this string contain HTML markup? */
 function looksHtml(s: string): boolean {
 	return /<[a-z][\s\S]*?>/i.test(s);
 }

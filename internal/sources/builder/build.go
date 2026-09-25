@@ -21,9 +21,9 @@ import (
 )
 
 func BuildSources(targets []dto.SourceTarget) []sources.Source {
-	boards := make(map[string][]string)     // source name → deduped board tokens
-	seen := make(map[string]bool)           // "source\x00token" → already added
-	urlSources := make(map[string][]string) // source name → configured search URLs
+	boards := make(map[string][]string)
+	seen := make(map[string]bool)
+	urlSources := make(map[string][]string)
 	var wisSearches []wis.Search
 	var linkedinSearches []linkedin.Search
 	var remoteokKeywords []string

@@ -8,10 +8,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/registry"
 )
 
-// TestBuildSources_EveryRegisteredSourceInstantiates guards against the silent-drop
-// trap: a source added to the registry but never wired into BuildSources compiles fine
-// yet is dropped at runtime with no error. For each registered source we feed one
-// enabled target of the right kind and assert BuildSources produces it.
 func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
 	for _, info := range registry.Sources() {
 		target := dto.SourceTarget{Source: info.Name, Enabled: true}
@@ -155,7 +151,6 @@ func TestBuildSources_UnknownSourceIgnored(t *testing.T) {
 		{Source: "unknown-ats", Value: "sometoken", Enabled: true},
 	}
 	srcs := builder.BuildSources(targets)
-	// Unknown source produces no output; result is an empty slice, not a panic.
 	for _, s := range srcs {
 		if s.Cfg().Name == "unknown-ats" {
 			t.Errorf("unexpected source for unknown-ats")

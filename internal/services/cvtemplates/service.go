@@ -157,9 +157,7 @@ func (s *Service) ShowTab(ctx context.Context, userID string, in dto.TabVisibili
 	return struct{}{}, s.store.ShowTab(ctx, userID, in.DocID, in.TabID)
 }
 
-// ExportPDF streams a tab as a PDF. It stays a misfit route (streaming, not
-// JSON), so the handler calls it directly rather than through the generic
-// adapter.
+// ExportPDF streams a tab as a PDF.
 func (s *Service) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
 	body, err := s.gc.ExportPDF(ctx, userID, docID, tabID)
 	if err != nil {

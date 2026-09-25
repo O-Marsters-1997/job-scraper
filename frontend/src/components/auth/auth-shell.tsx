@@ -28,10 +28,6 @@ const Wordmark = (props: { class?: string; tone?: "dark" | "light" }) => (
 );
 
 export function AuthShell(props: { children: JSX.Element }) {
-	// Compute the panel tone synchronously so data-auth-tone is set as part of
-	// the initial DOM creation — before RoleCloud's onMount reads --auth-* vars.
-	// applyAll(loadTweaks()) has already run in main.tsx, so --color-sidebar is
-	// current on :root before any component renders.
 	const sidebarL = oklchLightness(
 		getComputedStyle(document.documentElement)
 			.getPropertyValue("--color-sidebar")
@@ -41,9 +37,6 @@ export function AuthShell(props: { children: JSX.Element }) {
 
 	return (
 		<div class="flex min-h-screen flex-col lg:grid lg:grid-cols-[1.05fr_0.95fr]">
-			{/* Mobile-only brand header — aurora + grain + wordmark + mark.
-			    Below lg the desktop split-screen panel is replaced by this banded
-			    header so the screen is never blank. */}
 			<div
 				class="auth-brand relative flex h-[254px] shrink-0 flex-col px-5 pt-[max(1.5rem,env(safe-area-inset-top))] lg:hidden"
 				data-auth-tone={authTone}
@@ -55,7 +48,6 @@ export function AuthShell(props: { children: JSX.Element }) {
 				</div>
 				<div class="auth-grain" />
 
-				{/* Animated role cloud — compact desktop effect, below the wordmark. */}
 				<div
 					class="absolute inset-x-0 bottom-0 top-[72px] z-[1]"
 					aria-hidden="true"
@@ -99,9 +91,6 @@ export function AuthShell(props: { children: JSX.Element }) {
 				</div>
 			</section>
 
-			{/* Form column. On mobile this is a white card pulled up over the
-			    header (-mt-5) with rounded top corners, exposing the indigo
-			    behind the notches; on lg it is the centred right-hand panel. */}
 			<section class="relative z-[1] flex flex-1 flex-col bg-surface lg:items-center lg:justify-center lg:p-8">
 				<div class="auth-rise -mt-5 w-full flex-1 rounded-t-[22px] bg-surface px-[22px] pt-7 pb-[max(2.75rem,env(safe-area-inset-bottom))] lg:mt-0 lg:max-w-[380px] lg:flex-none lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:pb-0">
 					{props.children}

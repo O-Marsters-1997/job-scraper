@@ -173,7 +173,6 @@ func TestDeleteExpiredSessions(t *testing.T) {
 		t.Fatalf("CreateSession (valid): %v", err)
 	}
 
-	// Insert an expired session directly — CreateSession rejects past expiry times.
 	_, err = testDB.Pool().Exec(ctx,
 		"INSERT INTO sessions (user_id, expires_at) VALUES ($1, $2)",
 		user.ID, time.Now().Add(-time.Second),

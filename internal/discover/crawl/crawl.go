@@ -1,9 +1,6 @@
 // Package crawl is the self-expanding step of company discovery: it visits
 // the careers page of companies with a known domain but no resolved ATS
-// board, and writes back whatever board it finds. A company is still not
-// scraped afterwards — this package only resolves ats_source/ats_token on
-// the shared companies catalog; the Companies-page tracking toggle is what
-// turns a resolved company into an actual source_targets row.
+// board, and writes back whatever board it finds.
 package crawl
 
 import (
@@ -34,8 +31,6 @@ const (
 	userAgent = userAgentToken + "/1.0 (+https://github.com/ollymarsters/job-scraper)"
 )
 
-// candidatePaths are tried in order before falling back to homepage nav
-// scanning. Stops at the first page that yields a resolved ATS.
 var candidatePaths = []string{"/careers", "/jobs"}
 
 const (
@@ -44,14 +39,9 @@ const (
 	selScriptSrc  = "script[src]"
 )
 
-// careersNavPattern matches homepage nav/link text or hrefs that likely point
-// at a careers page, for sites that don't use a conventional /careers or
-// /jobs path.
 var careersNavPattern = regexp.MustCompile(`(?i)careers|jobs|join`)
 
-// CompanyStore is the narrow subset of *db.DB the crawler needs: the work
-// list, the writeback, and the miss bookkeeping that keeps a non-hit from
-// being retried every tick.
+// CompanyStore is the narrow subset of *db.DB the crawler needs.
 type CompanyStore interface {
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
 	TouchCompanyCrawled(ctx context.Context, id string) error
@@ -101,9 +91,6 @@ func (c *Crawler) tick(ctx context.Context) {
 	}
 }
 
-// crawlCompany resolves one company's ATS board, if any, and always touches
-// last_crawled_at afterwards — a miss is retried on ListCompaniesToCrawl's
-// 30-day window rather than being hammered on every 6h tick.
 func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
 	log := slog.With(slog.String("company", company.Slug), slog.String("domain", company.Domain))
 
@@ -127,10 +114,6 @@ func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
 	}
 }
 
-// resolve fetches a company's careers page(s), stopping at the first page
-// that yields a resolved ATS board. Order: /careers, /jobs, homepage (with a
-// same-host nav-link follow as a last resort). Never more than
-// maxFetchesPerCompany HTTP fetches total, including robots.txt.
 func (c *Crawler) resolve(ctx context.Context, log *slog.Logger, domain string) (source, token string, ok bool) {
 	if domain == "" {
 		return "", "", false
@@ -168,8 +151,6 @@ func (c *Crawler) resolve(ctx context.Context, log *slog.Logger, domain string) 
 	return extract(navBody, navPageURL)
 }
 
-// extract runs the link-scan extractor first, falling back to the body-sniff
-// extractor when link-scan resolves nothing.
 func extract(body []byte, pageURL *neturl.URL) (source, token string, ok bool) {
 	links, err := ParseATSLinks(bytes.NewReader(body), pageURL)
 	if err == nil {
@@ -182,8 +163,6 @@ func extract(body []byte, pageURL *neturl.URL) (source, token string, ok bool) {
 	return detect.SniffATS(body)
 }
 
-// session is one company's crawl: it tracks the shared fetch budget and
-// robots.txt politeness across every request made to that company's host.
 type session struct {
 	client  *http.Client
 	host    string
@@ -209,15 +188,10 @@ func (s *session) fetchRobots(ctx context.Context) {
 	s.polite = polite
 }
 
-// get fetches a path on the session's host. ok=false means the fetch budget
-// was exhausted, robots.txt disallows the path, or the fetch itself failed —
-// callers should move on to the next candidate.
 func (s *session) get(ctx context.Context, path string) ([]byte, *neturl.URL, bool) {
 	return s.fetchIfAllowed(ctx, &neturl.URL{Scheme: "https", Host: s.host, Path: path})
 }
 
-// getAbsolute is get for a URL already resolved elsewhere (e.g. a followed
-// nav link), reusing the same budget/robots/delay bookkeeping.
 func (s *session) getAbsolute(ctx context.Context, u *neturl.URL) ([]byte, *neturl.URL, bool) {
 	return s.fetchIfAllowed(ctx, u)
 }
@@ -303,9 +277,6 @@ func ParseATSLinks(r io.Reader, base *neturl.URL) ([]string, error) {
 	return links, nil
 }
 
-// findCareersNavLink scans a homepage for the first same-host link whose
-// visible text or href matches careers/jobs/join, for sites that don't
-// expose their careers page at a conventional /careers or /jobs path.
 func findCareersNavLink(r io.Reader, base *neturl.URL) (*neturl.URL, bool) {
 	doc, err := goquery.NewDocumentFromReader(r)
 	if err != nil {

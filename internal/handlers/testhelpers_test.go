@@ -15,8 +15,6 @@ func withSession(r *http.Request, userID string) *http.Request {
 	return r.WithContext(ctx)
 }
 
-// withRouteID sets one or more chi URL params as alternating name, value
-// pairs, e.g. withRouteID(r, "docId", "d1", "tabId", "t1").
 func withRouteID(r *http.Request, pairs ...string) *http.Request {
 	rctx := chi.NewRouteContext()
 	for i := 0; i+1 < len(pairs); i += 2 {

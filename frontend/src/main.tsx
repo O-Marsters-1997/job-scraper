@@ -7,8 +7,6 @@ import { loadTweaks } from "./lib/tweaks";
 import { applyAll } from "./lib/tweaks.apply";
 import { routeTree } from "./routeTree.gen";
 
-// Apply persisted tweaks immediately so auth pages (login/signup) reflect the
-// active preset on cold load — before any component mounts.
 applyAll(loadTweaks());
 
 const router = createRouter({

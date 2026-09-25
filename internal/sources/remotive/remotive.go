@@ -41,9 +41,6 @@ type feedJob struct {
 	PublicationDate string `json:"publication_date"`
 }
 
-// ponytail: URL-only dedup; a company posting both on its ATS board and on
-// this feed yields two rows for the same role. Add an {ats}:{company}:{job_id}
-// key only if measured dup rate is material.
 func parse(body []byte) ([]dto.Job, error) {
 	var resp feedResponse
 	if err := json.Unmarshal(body, &resp); err != nil {

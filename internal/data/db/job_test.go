@@ -23,7 +23,6 @@ var baseJob = dto.Job{
 	UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 }
 
-// jobCmpOpts compares dto.Job values, ignoring DB-generated fields (ID, ScrapedAt).
 var jobCmpOpts = cmp.Options{
 	cmpopts.IgnoreFields(dto.Job{}, "ID", "ScrapedAt"),
 	cmp.Comparer(func(x, y time.Time) bool {
@@ -520,7 +519,6 @@ func TestOpenJobURLsForBoard_MarkJobsClosed(t *testing.T) {
 		t.Fatalf("want 3 open urls, got %d", len(open))
 	}
 
-	// Only jobs 1 and 2 present in this run; job 3 disappeared.
 	currentRun := map[string]bool{jobs[0].URL: true, jobs[1].URL: true}
 	var toClose []string
 	for _, url := range open {
@@ -549,7 +547,6 @@ func TestOpenJobURLsForBoard_MarkJobsClosed(t *testing.T) {
 		}
 	}
 
-	// Re-scraping the closed job (fresh Save) reopens it for free.
 	reopened := jobs[2]
 	reopened.UpdatedAt = time.Now()
 	if _, err := testDB.Save(ctx, []dto.Job{reopened}); err != nil {

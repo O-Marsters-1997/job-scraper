@@ -11,7 +11,7 @@ import (
 // MockProfileProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockProfileProvider struct {
 	mu       sync.Mutex
-	profiles map[string]dto.Profile // keyed by userID
+	profiles map[string]dto.Profile
 
 	GetErr    error
 	UpdateErr error

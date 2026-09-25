@@ -1,6 +1,4 @@
-// Package apperr defines error kinds with fixed HTTP statuses, so an error
-// carries its mapping from where it originates and the HTTP adapter never
-// needs to know about a specific error type.
+// Package apperr defines error kinds with fixed HTTP statuses.
 package apperr
 
 import (
@@ -61,7 +59,7 @@ func Upstream(msg string) error      { return &Error{kind: KindUpstream, msg: ms
 func Unavailable(msg string) error   { return &Error{kind: KindUnavailable, msg: msg} }
 
 // StatusFor reports the HTTP status for err's kind, found via errors.As so a
-// wrapped apperr.Error is still detected. ok is false when err carries no kind.
+// wrapped apperr.Error is still detected.
 func StatusFor(err error) (status int, ok bool) {
 	ae, ok := errors.AsType[*Error](err)
 	if !ok {
@@ -70,8 +68,6 @@ func StatusFor(err error) (status int, ok bool) {
 	return ae.kind.Status(), true
 }
 
-// fielded wraps an error with extra fields the adapter merges into the JSON
-// error body next to "error", e.g. the in-use count on a 409.
 type fielded struct {
 	error
 	fields map[string]any
@@ -80,8 +76,7 @@ type fielded struct {
 func (f *fielded) Unwrap() error { return f.error }
 
 // WithFields attaches extra fields to err for the adapter to include in the
-// response body. err should carry a kind (e.g. from Conflict) so it still
-// maps to a status.
+// response body.
 func WithFields(err error, fields map[string]any) error {
 	return &fielded{error: err, fields: fields}
 }
