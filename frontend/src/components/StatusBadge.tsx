@@ -1,3 +1,5 @@
+import { tint } from "@/lib/scoreColour";
+
 interface StatusBadgeProps {
 	name: string;
 	colour: string;
@@ -8,10 +10,7 @@ export function StatusBadge(props: StatusBadgeProps) {
 	return (
 		<span
 			class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium"
-			style={{
-				"background-color": `color-mix(in srgb, ${props.colour} 14%, white)`,
-				color: `color-mix(in srgb, ${props.colour} 78%, black)`,
-			}}
+			style={tint(props.colour, { bg: 14, fg: 78 })}
 		>
 			<span
 				class="h-1.5 w-1.5 rounded-full"

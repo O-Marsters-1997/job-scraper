@@ -8,3 +8,15 @@ export function scoreColour(n: number): string {
 	if (n >= 50) return WARNING_COLOUR;
 	return MISSING_COLOUR;
 }
+
+export function tint(
+	colour: string,
+	opts?: { bg?: number; fg?: number },
+): { background: string; color: string } {
+	const bg = opts?.bg ?? 12;
+	const fg = opts?.fg ?? 80;
+	return {
+		background: `color-mix(in srgb, ${colour} ${bg}%, white)`,
+		color: `color-mix(in srgb, ${colour} ${fg}%, black)`,
+	};
+}

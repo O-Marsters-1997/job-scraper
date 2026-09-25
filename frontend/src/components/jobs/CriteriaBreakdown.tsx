@@ -2,7 +2,7 @@ import { createMemo, For, Show } from "solid-js";
 import { Badge } from "@/components/ui/badge";
 import { useScoringConfig } from "@/hooks/useScoringConfig";
 import { criterionScores } from "@/lib/criteria";
-import { MATCHED_COLOUR, MISSING_COLOUR } from "@/lib/scoreColour";
+import { MATCHED_COLOUR, MISSING_COLOUR, tint } from "@/lib/scoreColour";
 import type { Job } from "@/types/job";
 
 export function CriteriaBreakdown(props: { job: Job }) {
@@ -69,8 +69,7 @@ export function CriteriaBreakdown(props: { job: Job }) {
 									<span
 										class="inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
 										style={{
-											background: `color-mix(in srgb, ${MATCHED_COLOUR} 12%, white)`,
-											color: `color-mix(in srgb, ${MATCHED_COLOUR} 80%, black)`,
+											...tint(MATCHED_COLOUR),
 											border: `1px solid color-mix(in srgb, ${MATCHED_COLOUR} 28%, white)`,
 										}}
 										title={c.label}

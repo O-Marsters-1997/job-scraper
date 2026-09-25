@@ -1,6 +1,6 @@
 import { Show } from "solid-js";
 import { isLowConfidence } from "@/lib/criteria";
-import { WARNING_COLOUR } from "@/lib/scoreColour";
+import { tint, WARNING_COLOUR } from "@/lib/scoreColour";
 
 export function SuitabilityScoreValue(props: {
 	score: number | null;
@@ -22,10 +22,7 @@ export function SuitabilityScoreValue(props: {
 				<Show when={isLowConfidence(props.confidence)}>
 					<span
 						class="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium"
-						style={{
-							background: `color-mix(in srgb, ${WARNING_COLOUR} 12%, white)`,
-							color: `color-mix(in srgb, ${WARNING_COLOUR} 80%, black)`,
-						}}
+						style={tint(WARNING_COLOUR)}
 					>
 						Low confidence
 					</span>

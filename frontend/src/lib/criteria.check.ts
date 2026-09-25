@@ -1,30 +1,29 @@
 import { criterionScores, isLowConfidence } from "./criteria";
 
-function ok(cond: boolean, msg: string): void {
-	if (!cond) throw new Error(`FAIL: ${msg}`);
+// ponytail: inline assert so tsgo doesn't need @types/node
+function ok(cond: boolean, msg?: string): void {
+	if (!cond) throw new Error(msg ?? "assertion failed");
 }
-function eq(a: unknown, b: unknown, msg: string): void {
+function eq(a: unknown, b: unknown): void {
 	if (JSON.stringify(a) !== JSON.stringify(b))
 		throw new Error(
-			`FAIL: ${msg} — expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`,
+			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
 		);
 }
 
-eq(criterionScores(null), [], "null criteria yields no scores");
-eq(criterionScores(undefined), [], "undefined criteria yields no scores");
-eq(criterionScores({}), [], "empty criteria yields no scores");
+eq(criterionScores(null), []);
+eq(criterionScores(undefined), []);
+eq(criterionScores({}), []);
 
-eq(
-	criterionScores({ go_backend: 0.5, remote: 0.49 }),
-	[
-		{ key: "go_backend", probability: 0.5, matched: true },
-		{ key: "remote", probability: 0.49, matched: false },
-	],
-	"matches at the 0.5 boundary, misses just below it",
-);
+eq(criterionScores({ go_backend: 0.5, remote: 0.49 }), [
+	{ key: "go_backend", probability: 0.5, matched: true },
+	{ key: "remote", probability: 0.49, matched: false },
+]);
 
 ok(!isLowConfidence(null), "null confidence is not flagged");
 ok(!isLowConfidence(undefined), "undefined confidence is not flagged");
 ok(!isLowConfidence(0.4), "confidence at the threshold is not flagged");
 ok(isLowConfidence(0.39), "confidence just below the threshold is flagged");
 ok(isLowConfidence(0), "zero confidence is flagged");
+
+console.log("✓ criteria checks passed");
