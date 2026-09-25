@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
+	"github.com/ollymarsters/job-scraper/internal/applications"
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
@@ -36,6 +37,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 	jobReasoningH := handlers.NewJobReasoningHandler(db, creds)
 	authH := handlers.NewAuthHandler(db)
 	appH := handlers.NewApplicationHandler(db)
+	applicationsSvc := applications.New(db)
 	statusH := handlers.NewApplicationStatusHandler(db)
 	candidateService := candidates.New(db, q)
 	stH := handlers.NewSourceTargetHandler(db, q).WithCandidates(candidateService, db)
@@ -98,9 +100,9 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 
 		r.Route("/applications", func(r chi.Router) {
 			r.Get("/", appH.ListApplications)
-			r.Post("/", appH.CreateApplication)
-			r.Patch("/{id}", appH.UpdateApplication)
-			r.Delete("/{id}", appH.DeleteApplication)
+			r.Post("/", handlers.Body(applicationsSvc.Create, http.StatusCreated))
+			r.Patch("/{id}", handlers.BodyID(applicationsSvc.Update, http.StatusOK))
+			r.Delete("/{id}", handlers.ID(db.DeleteApplication, http.StatusNoContent))
 			r.Get("/for-jobs", appH.GetApplicationsForJobs)
 		})
 
