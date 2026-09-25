@@ -3,9 +3,13 @@ package score
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/anthropics/anthropic-sdk-go"
@@ -63,7 +67,7 @@ func (c *ClaudeScorer) Score(ctx context.Context, job dto.Job, cfg dto.SearchCon
 		},
 	})
 	if err != nil {
-		return SuitabilityResult{}, fmt.Errorf("anthropic messages.new: %w", err)
+		return SuitabilityResult{}, classifyAnthropicError(err)
 	}
 
 	raw := msg.Content[0].Text
@@ -125,6 +129,37 @@ func buildUserMessage(job dto.Job, desc string) string {
 	sb.WriteString("\nDescription:\n")
 	sb.WriteString(desc)
 	return sb.String()
+}
+
+func classifyAnthropicError(err error) error {
+	wrapped := fmt.Errorf("anthropic messages.new: %w", err)
+
+	var apiErr *anthropic.Error
+	if !errors.As(err, &apiErr) {
+		return wrapped
+	}
+	switch apiErr.StatusCode {
+	case http.StatusUnauthorized, http.StatusPaymentRequired:
+		return TerminalScoreError(wrapped)
+	case http.StatusTooManyRequests:
+		if retryAfter, ok := parseRetryAfter(apiErr.Response); ok {
+			return RateLimitedScoreError(wrapped, retryAfter)
+		}
+	}
+	return wrapped
+}
+
+// ponytail: seconds form only (RFC 9110 also allows an HTTP-date); add that
+// if a provider sends one.
+func parseRetryAfter(resp *http.Response) (time.Duration, bool) {
+	if resp == nil {
+		return 0, false
+	}
+	secs, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+	if err != nil || secs < 0 {
+		return 0, false
+	}
+	return time.Duration(secs) * time.Second, true
 }
 
 func truncate(s string, maxChars int) string {

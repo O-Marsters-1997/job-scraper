@@ -4,20 +4,23 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 type effectStore struct {
-	effect      dto.ScoringEffect
-	job         dto.Job
-	config      dto.SearchConfig
-	profile     dto.Profile
-	failed      string
-	completed   bool
-	completeErr error
-	unsaved     bool
+	effect           dto.ScoringEffect
+	job              dto.Job
+	config           dto.SearchConfig
+	profile          dto.Profile
+	failed           string
+	failedTerminal   bool
+	failedRetryAfter time.Duration
+	completed        bool
+	completeErr      error
+	unsaved          bool
 }
 
 func (s *effectStore) ClaimScoringEffect(context.Context) (dto.ScoringEffect, error) {
@@ -28,8 +31,10 @@ func (s *effectStore) GetSearchConfig(context.Context, string) (dto.SearchConfig
 	return s.config, nil
 }
 func (s *effectStore) GetProfile(context.Context, string) (dto.Profile, error) { return s.profile, nil }
-func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, reason string) error {
+func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, reason string, terminal bool, retryAfter time.Duration) error {
 	s.failed = reason
+	s.failedTerminal = terminal
+	s.failedRetryAfter = retryAfter
 	return nil
 }
 func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error) {
@@ -40,10 +45,16 @@ func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, 
 	return !s.unsaved, nil
 }
 
-type failingScorer struct{}
+type erroringScorer struct{ err error }
 
-func (failingScorer) Score(context.Context, dto.Job, dto.SearchConfig, string) (score.SuitabilityResult, error) {
-	return score.SuitabilityResult{}, errors.New("AI unavailable")
+func (s erroringScorer) Score(context.Context, dto.Job, dto.SearchConfig, string) (score.SuitabilityResult, error) {
+	return score.SuitabilityResult{}, s.err
+}
+
+func newOutboxTest(store *effectStore, scorer score.SuitabilityScorer) (*score.OutboxWorker, *bool) {
+	sent := false
+	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return scorer }, func(context.Context, dto.Job, string) error { sent = true; return nil })
+	return worker, &sent
 }
 
 func TestOutboxWorker_RetriesScoringFailure(t *testing.T) {
@@ -51,13 +62,43 @@ func TestOutboxWorker_RetriesScoringFailure(t *testing.T) {
 		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
 		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
 	}
-	sent := false
-	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return failingScorer{} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
+	worker, sent := newOutboxTest(store, erroringScorer{errors.New("AI unavailable")})
 	if err := worker.RunOnce(context.Background()); err == nil {
 		t.Fatal("expected scoring error")
 	}
-	if store.failed == "" || store.completed || sent {
-		t.Fatalf("failure handling = failed %q completed %v sent %v", store.failed, store.completed, sent)
+	if store.failed == "" || store.completed || *sent {
+		t.Fatalf("failure handling = failed %q completed %v sent %v", store.failed, store.completed, *sent)
+	}
+	if store.failedTerminal || store.failedRetryAfter != 0 {
+		t.Fatalf("unclassified error should keep default backoff: terminal=%v retryAfter=%v", store.failedTerminal, store.failedRetryAfter)
+	}
+}
+
+func TestOutboxWorker_TerminalScoringFailureFailsAtOnce(t *testing.T) {
+	store := &effectStore{
+		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
+		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
+	}
+	worker, sent := newOutboxTest(store, erroringScorer{score.TerminalScoreError(errors.New("invalid api key"))})
+	if err := worker.RunOnce(context.Background()); err == nil {
+		t.Fatal("expected scoring error")
+	}
+	if !store.failedTerminal || *sent {
+		t.Fatalf("terminal failure handling = terminal %v sent %v", store.failedTerminal, *sent)
+	}
+}
+
+func TestOutboxWorker_RateLimitedScoringFailureHonoursRetryAfter(t *testing.T) {
+	store := &effectStore{
+		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
+		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
+	}
+	worker, sent := newOutboxTest(store, erroringScorer{score.RateLimitedScoreError(errors.New("rate limited"), 120*time.Second)})
+	if err := worker.RunOnce(context.Background()); err == nil {
+		t.Fatal("expected scoring error")
+	}
+	if store.failedTerminal || store.failedRetryAfter != 120*time.Second || *sent {
+		t.Fatalf("rate-limited failure handling = terminal %v retryAfter %v sent %v", store.failedTerminal, store.failedRetryAfter, *sent)
 	}
 }
 

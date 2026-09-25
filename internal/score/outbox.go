@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -16,7 +17,7 @@ type EffectStore interface {
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	GetProfile(context.Context, string) (dto.Profile, error)
-	FailScoringEffect(context.Context, string, int, string) error
+	FailScoringEffect(ctx context.Context, id string, attempts int, reason string, terminal bool, retryAfter time.Duration) error
 	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
 
@@ -37,7 +38,14 @@ func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 		return err
 	}
 	fail := func(err error) error {
-		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, err.Error()); saveErr != nil {
+		var terminal bool
+		var retryAfter time.Duration
+		var scorerErr *ScorerError
+		if errors.As(err, &scorerErr) {
+			terminal = scorerErr.Kind == FailureTerminal
+			retryAfter = scorerErr.RetryAfter
+		}
+		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, err.Error(), terminal, retryAfter); saveErr != nil {
 			return errors.Join(err, saveErr)
 		}
 		return err

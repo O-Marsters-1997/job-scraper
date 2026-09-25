@@ -263,7 +263,7 @@ func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
 		t.Fatal("leased effect claimed twice")
 	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "temporary failure"); err != nil {
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "temporary failure", false, 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
@@ -275,6 +275,75 @@ func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	second, err := testDB.ClaimScoringEffect(ctx)
 	if err != nil || second.ID != first.ID {
 		t.Fatalf("retry claim = %+v, %v", second, err)
+	}
+}
+
+func TestScoringEffect_TerminalFailureFailsAtOnce(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "terminal-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/terminal"
+	job.CompanySlug = "terminal-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "invalid api key", true, 0); err != nil {
+		t.Fatal(err)
+	}
+	var status, lastError string
+	if err := testDB.Pool().QueryRow(ctx, "SELECT status, last_error FROM effect_outbox WHERE id = $1", first.ID).Scan(&status, &lastError); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || lastError != "invalid api key" {
+		t.Fatalf("status = %q last_error = %q, want failed / invalid api key", status, lastError)
+	}
+}
+
+func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/ratelimit"
+	job.CompanySlug = "ratelimit-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimScoringEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, "rate limited", false, 120*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	var dueInSecs float64
+	query := "SELECT status, EXTRACT(EPOCH FROM due_at - NOW())::float8 FROM effect_outbox WHERE id = $1"
+	if err := testDB.Pool().QueryRow(ctx, query, first.ID).Scan(&status, &dueInSecs); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending" {
+		t.Fatalf("status = %q, want pending", status)
+	}
+	if dueInSecs < 110 || dueInSecs > 130 {
+		t.Fatalf("due_at - NOW() = %.1fs, want ~120s", dueInSecs)
 	}
 }
 

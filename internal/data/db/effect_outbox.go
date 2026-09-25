@@ -3,6 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -23,12 +26,20 @@ func (db *DB) ClaimScoringEffect(ctx context.Context) (dto.ScoringEffect, error)
 	}, nil
 }
 
-func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, reason string) error {
+func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, reason string, terminal bool, retryAfter time.Duration) error {
 	effectID, err := parseUUID(id)
 	if err != nil {
 		return err
 	}
-	if err := db.queries.FailScoringEffect(ctx, pgsqlc.FailScoringEffectParams{ID: effectID, Attempts: int32(attempts), LastError: reason}); err != nil {
+	var retryAfterSecs pgtype.Int4
+	if retryAfter > 0 {
+		retryAfterSecs = pgtype.Int4{Int32: int32(retryAfter.Seconds()), Valid: true}
+	}
+	params := pgsqlc.FailScoringEffectParams{
+		ID: effectID, Attempts: int32(attempts), LastError: reason,
+		Terminal: terminal, RetryAfterSecs: retryAfterSecs,
+	}
+	if err := db.queries.FailScoringEffect(ctx, params); err != nil {
 		return fmt.Errorf("fail scoring effect: %w", err)
 	}
 	return nil
