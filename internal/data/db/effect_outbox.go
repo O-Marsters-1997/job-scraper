@@ -52,9 +52,6 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	return rows == 1, nil
 }
 
-// ScoringStatus is an alias so existing callers keep compiling; the type
-// itself lives in dto so internal/data/providers can declare an interface
-// against it without importing db.
 type ScoringStatus = dto.ScoringStatus
 
 func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatus, error) {
@@ -81,9 +78,18 @@ func (db *DB) QueueRescore(ctx context.Context, userID string) (int64, error) {
 	return count, nil
 }
 
-func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, job dto.Job, jobID, companyID pgtype.UUID, discovery, firstDiscovery bool) error {
+type scoringEffectsInput struct {
+	Job            dto.Job
+	JobID          pgtype.UUID
+	CompanyID      pgtype.UUID
+	Discovery      bool
+	FirstDiscovery bool
+}
+
+func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, in scoringEffectsInput) error {
+	job := in.Job
 	users, err := queries.FindInterestedUsers(ctx, pgsqlc.FindInterestedUsersParams{
-		CompanyID: companyID, CompanySlug: job.CompanySlug, Source: job.Source, Discovery: discovery,
+		CompanyID: in.CompanyID, CompanySlug: job.CompanySlug, Source: job.Source, Discovery: in.Discovery,
 	})
 	if err != nil {
 		return fmt.Errorf("find interested users: %w", err)
@@ -108,8 +114,8 @@ func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, job dto.J
 			continue
 		}
 		if err := queries.InsertScoringEffect(ctx, pgsqlc.InsertScoringEffectParams{
-			JobID: jobID, UserID: user.UserID, Fingerprint: job.ContentFingerprint,
-			ConfigVersion: user.ConfigVersion, Model: user.Model, FirstDiscovery: firstDiscovery,
+			JobID: in.JobID, UserID: user.UserID, Fingerprint: job.ContentFingerprint,
+			ConfigVersion: user.ConfigVersion, Model: user.Model, FirstDiscovery: in.FirstDiscovery,
 		}); err != nil {
 			return fmt.Errorf("insert scoring effect: %w", err)
 		}
