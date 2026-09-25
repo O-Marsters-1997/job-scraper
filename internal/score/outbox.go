@@ -7,16 +7,21 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+const maxConcurrentScoring = 4
 
 type EffectStore interface {
 	ClaimScoringEffect(context.Context) (dto.ScoringEffect, error)
 	GetJob(context.Context, string, string) (dto.Job, error)
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	GetProfile(context.Context, string) (dto.Profile, error)
-	FailScoringEffect(context.Context, string, int, string) error
+	FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
 }
 
@@ -31,13 +36,47 @@ func NewOutboxWorker(store EffectStore, getKey func(context.Context, string) (st
 	return &OutboxWorker{store: store, getKey: getKey, scorerFor: scorerFor, sendAlert: sendAlert}
 }
 
+// RunOnce claims and processes a single effect.
 func (w *OutboxWorker) RunOnce(ctx context.Context) error {
 	effect, err := w.store.ClaimScoringEffect(ctx)
 	if err != nil {
 		return err
 	}
+	return w.process(ctx, effect)
+}
+
+// RunTick drains the queue, running up to maxConcurrentScoring effects at once.
+func (w *OutboxWorker) RunTick(ctx context.Context) error {
+	g := &errgroup.Group{}
+	g.SetLimit(maxConcurrentScoring)
+	for {
+		effect, err := w.store.ClaimScoringEffect(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			_ = g.Wait()
+			return err
+		}
+		g.Go(func() error {
+			if err := w.process(ctx, effect); err != nil {
+				slog.Error("scoring effect failed", slog.String("effect_id", effect.ID), slog.Any("err", err))
+			}
+			return nil
+		})
+	}
+	return g.Wait()
+}
+
+func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) error {
 	fail := func(err error) error {
-		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, err.Error()); saveErr != nil {
+		failure := dto.ScoringFailure{Reason: err.Error()}
+		var scorerErr *ScorerError
+		if errors.As(err, &scorerErr) {
+			failure.Terminal = scorerErr.Kind == FailureTerminal
+			failure.RetryAfter = scorerErr.RetryAfter
+		}
+		if saveErr := w.store.FailScoringEffect(ctx, effect.ID, effect.Attempts, failure); saveErr != nil {
 			return errors.Join(err, saveErr)
 		}
 		return err

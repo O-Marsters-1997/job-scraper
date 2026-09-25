@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	app "github.com/ollymarsters/job-scraper/internal"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
@@ -73,8 +70,8 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := outbox.RunOnce(ctx); err != nil && !errors.Is(err, pgx.ErrNoRows) && ctx.Err() == nil {
-					slog.Error("scoring effect failed", slog.Any("err", err))
+				if err := outbox.RunTick(ctx); err != nil && ctx.Err() == nil {
+					slog.Error("scoring tick failed", slog.Any("err", err))
 				}
 			}
 		}

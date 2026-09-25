@@ -10,6 +10,12 @@ MIGRATIONS_DIR := "scripts/migrations"
 default:
     @just --list
 
+# ── Env ───────────────────────────────────────────────────────────────────────
+
+# sync .env's keys to .env.example: add missing keys empty, drop removed ones
+sync-env:
+    ./scripts/sync-env.sh
+
 # ── Build ─────────────────────────────────────────────────────────────────────
 
 # build all binaries

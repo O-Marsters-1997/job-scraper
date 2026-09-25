@@ -120,21 +120,30 @@ func (q *Queries) CompleteScoringEffect(ctx context.Context, arg CompleteScoring
 
 const failScoringEffect = `-- name: FailScoringEffect :exec
 UPDATE effect_outbox SET
-    status = CASE WHEN attempts >= 8 THEN 'failed' ELSE 'pending' END,
-    due_at = NOW() + make_interval(secs => LEAST(3600, 30 * power(2, attempts)::int)),
+    status = CASE WHEN $1::bool OR attempts >= 8 THEN 'failed' ELSE 'pending' END,
+    due_at = NOW() + make_interval(secs =>
+        COALESCE($2::int, LEAST(3600, 30 * power(2, attempts)::int))),
     lease_until = NULL,
-    last_error = $1::text
-WHERE id = $2::uuid AND attempts = $3::int AND status = 'running'
+    last_error = $3::text
+WHERE id = $4::uuid AND attempts = $5::int AND status = 'running'
 `
 
 type FailScoringEffectParams struct {
-	LastError string
-	ID        pgtype.UUID
-	Attempts  int32
+	Terminal       bool
+	RetryAfterSecs pgtype.Int4
+	LastError      string
+	ID             pgtype.UUID
+	Attempts       int32
 }
 
 func (q *Queries) FailScoringEffect(ctx context.Context, arg FailScoringEffectParams) error {
-	_, err := q.db.Exec(ctx, failScoringEffect, arg.LastError, arg.ID, arg.Attempts)
+	_, err := q.db.Exec(ctx, failScoringEffect,
+		arg.Terminal,
+		arg.RetryAfterSecs,
+		arg.LastError,
+		arg.ID,
+		arg.Attempts,
+	)
 	return err
 }
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -399,6 +400,27 @@ func TestRouterRoutes(t *testing.T) {
 			t.Errorf("PUT /ai-prefs = %d (body: %s)", w.Code, w.Body.String())
 		}
 		w = do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "anthropic", "apiKey": nil}), cookie))
+		if w.Code != http.StatusNoContent {
+			t.Errorf("PUT /ai-credentials (delete) = %d (body: %s)", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("ai-credentials accepts an openrouter key", func(t *testing.T) {
+		key := "sk-or-v1-test"
+		w := do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "openrouter", "apiKey": &key}), cookie))
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("PUT /ai-credentials = %d (body: %s)", w.Code, w.Body.String())
+		}
+		w = do(authed(http.MethodGet, "/ai-prefs", nil, cookie))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /ai-prefs = %d", w.Code)
+		}
+		prefs := decode[map[string]any](t, w)
+		configured, _ := prefs["configuredProviders"].([]any)
+		if !slices.Contains(configured, "openrouter") {
+			t.Errorf("configuredProviders = %v, want to contain openrouter", configured)
+		}
+		w = do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "openrouter", "apiKey": nil}), cookie))
 		if w.Code != http.StatusNoContent {
 			t.Errorf("PUT /ai-credentials (delete) = %d (body: %s)", w.Code, w.Body.String())
 		}
