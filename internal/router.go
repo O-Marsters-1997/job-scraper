@@ -57,7 +57,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 		r.Get("/jobs", handlers.Query(svc.jobs.List))
 		r.Get("/jobs/all", handlers.GetAll(db.List))
 		r.Get("/jobs/{id}", handlers.GetByID(svc.jobs.Get))
-		r.Post("/jobs/{id}/reasoning", handlers.GetByID(svc.jobReasoning.Generate))
 
 		r.Route("/application-statuses", func(r chi.Router) {
 			r.Get("/", handlers.GetAll(db.ListApplicationStatusesByUser))
@@ -86,7 +85,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 		r.Post("/scores/rescore", handlers.GetAll(svc.scoringConfig.Rescore))
 
 		r.Get("/ai-prefs", handlers.GetAll(svc.aiPrefs.Get))
-		r.Put("/ai-prefs", handlers.Update(svc.aiPrefs.Update))
 
 		r.Put("/ai-credentials", handlers.Update(svc.aiCredentials.Update))
 

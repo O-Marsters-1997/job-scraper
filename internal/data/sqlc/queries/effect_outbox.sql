@@ -4,11 +4,9 @@ SELECT u.id AS user_id,
     COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
     COALESCE(sc.excluded_seniority, '{}')::text[] AS excluded_seniority,
     COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
-    COALESCE(sc.updated_at, 'epoch'::timestamptz) AS config_version,
-    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001') AS model
+    COALESCE(sc.updated_at, 'epoch'::timestamptz) AS config_version
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
-LEFT JOIN user_ai_prefs p ON p.user_id = u.id
 WHERE EXISTS (
     SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
     WHERE tc.user_id = u.id AND tc.enabled AND
@@ -29,10 +27,9 @@ ON CONFLICT DO NOTHING;
 INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model)
 SELECT j.id, sqlc.arg(user_id)::uuid, j.content_fingerprint,
     COALESCE(sc.updated_at, 'epoch'::timestamptz),
-    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001')
+    sqlc.arg(model)::text
 FROM jobs j JOIN companies c ON c.id = sqlc.arg(company_id)::uuid
 LEFT JOIN search_config sc ON sc.user_id = sqlc.arg(user_id)::uuid
-LEFT JOIN user_ai_prefs p ON p.user_id = sqlc.arg(user_id)::uuid
 WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
     AND (j.company_id = c.id OR j.company_slug = c.slug)
 ON CONFLICT DO NOTHING;
@@ -58,17 +55,16 @@ WITH interested AS (
 INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model)
 SELECT j.id, sqlc.arg(user_id)::uuid, j.content_fingerprint,
     COALESCE(sc.updated_at, 'epoch'::timestamptz),
-    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001')
+    sqlc.arg(model)::text
 FROM interested i JOIN jobs j ON j.id = i.job_id
 LEFT JOIN search_config sc ON sc.user_id = sqlc.arg(user_id)::uuid
-LEFT JOIN user_ai_prefs p ON p.user_id = sqlc.arg(user_id)::uuid
 WHERE j.closed_at IS NULL
     AND j.content_fingerprint IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM effect_outbox e
         WHERE e.job_id = j.id AND e.user_id = sqlc.arg(user_id)::uuid
         AND e.fingerprint = j.content_fingerprint
         AND e.config_version = COALESCE(sc.updated_at, 'epoch'::timestamptz)
-        AND e.model = COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001'))
+        AND e.model = sqlc.arg(model)::text)
 ORDER BY j.id LIMIT 100
 ON CONFLICT DO NOTHING;
 
@@ -78,11 +74,10 @@ SELECT
     (SELECT count(*) FROM effect_outbox WHERE user_id = sqlc.arg(user_id)::uuid AND status = 'failed') AS failed,
     (SELECT count(*) FROM job_scores s JOIN jobs j ON j.id = s.job_id
         LEFT JOIN search_config sc ON sc.user_id = s.user_id
-        LEFT JOIN user_ai_prefs p ON p.user_id = s.user_id
         WHERE s.user_id = sqlc.arg(user_id)::uuid AND
             (s.score_fingerprint IS DISTINCT FROM j.content_fingerprint OR
              s.score_config_version IS DISTINCT FROM COALESCE(sc.updated_at, 'epoch'::timestamptz) OR
-             s.score_model IS DISTINCT FROM COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001'))) AS stale;
+             NOT starts_with(COALESCE(s.score_model, ''), sqlc.arg(model)::text))) AS stale;
 
 -- name: ClaimScoringEffect :one
 WITH next AS (
@@ -111,20 +106,19 @@ WITH completed AS (
     WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'running'
     RETURNING job_id, user_id, fingerprint, config_version, model
 )
-INSERT INTO job_scores (job_id, user_id, suitability_score, reasoning, matched, missing,
-    suitability_skipped, score_fingerprint, score_config_version, score_model)
-SELECT e.job_id, e.user_id, sqlc.arg(score)::int, sqlc.arg(reasoning)::text,
-    sqlc.arg(matched)::text[], sqlc.arg(missing)::text[], false,
-    e.fingerprint, e.config_version, e.model
+INSERT INTO job_scores (job_id, user_id, suitability_score, criteria, confidence, cost,
+    score_fingerprint, score_config_version, score_model)
+SELECT e.job_id, e.user_id, sqlc.arg(score)::int, sqlc.arg(criteria)::jsonb,
+    sqlc.narg(confidence)::real, sqlc.narg(cost)::numeric,
+    e.fingerprint, e.config_version, sqlc.arg(score_model)::text
 FROM completed e JOIN jobs j ON j.id = e.job_id
 LEFT JOIN search_config sc ON sc.user_id = e.user_id
-LEFT JOIN user_ai_prefs p ON p.user_id = e.user_id
 WHERE j.content_fingerprint = e.fingerprint
     AND COALESCE(sc.updated_at, 'epoch'::timestamptz) = e.config_version
-    AND COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001') = e.model
+    AND e.model = sqlc.arg(current_model)::text
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score, reasoning = EXCLUDED.reasoning,
-    matched = EXCLUDED.matched, missing = EXCLUDED.missing, suitability_skipped = false,
+    suitability_score = EXCLUDED.suitability_score, criteria = EXCLUDED.criteria,
+    confidence = EXCLUDED.confidence, cost = EXCLUDED.cost,
     score_fingerprint = EXCLUDED.score_fingerprint,
     score_config_version = EXCLUDED.score_config_version, score_model = EXCLUDED.score_model,
     updated_at = NOW();

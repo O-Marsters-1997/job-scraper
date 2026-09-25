@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
@@ -22,7 +21,7 @@ type EffectStore interface {
 	GetSearchConfig(context.Context, string) (dto.SearchConfig, error)
 	GetProfile(context.Context, string) (dto.Profile, error)
 	FailScoringEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
-	CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error)
+	CompleteScoringEffect(context.Context, dto.ScoringEffect, SuitabilityResult) (bool, error)
 }
 
 type OutboxWorker struct {
@@ -86,7 +85,7 @@ func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) er
 		return fail(fmt.Errorf("load scoring job: %w", err))
 	}
 	if job.ContentFingerprint != effect.Fingerprint {
-		_, err := w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		_, err := w.store.CompleteScoringEffect(ctx, effect, SuitabilityResult{})
 		return err
 	}
 	cfg, err := w.store.GetSearchConfig(ctx, effect.UserID)
@@ -96,11 +95,8 @@ func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) er
 		return fail(fmt.Errorf("load scoring config: %w", err))
 	}
 	if !cfg.UpdatedAt.Equal(effect.ConfigVersion) && !cfg.UpdatedAt.IsZero() {
-		_, err := w.store.CompleteScoringEffect(ctx, effect, 0, "", nil, nil)
+		_, err := w.store.CompleteScoringEffect(ctx, effect, SuitabilityResult{})
 		return err
-	}
-	if !strings.HasPrefix(effect.Model, "claude-") {
-		return fail(fmt.Errorf("unsupported scoring model %q", effect.Model))
 	}
 	key, err := w.getKey(ctx, effect.UserID)
 	if err != nil {
@@ -118,7 +114,7 @@ func (w *OutboxWorker) process(ctx context.Context, effect dto.ScoringEffect) er
 		}
 		email = profile.Email
 	}
-	saved, err := w.store.CompleteScoringEffect(ctx, effect, result.Score, result.Rationale, result.Matched, result.Missing)
+	saved, err := w.store.CompleteScoringEffect(ctx, effect, result)
 	if err != nil {
 		return err
 	}

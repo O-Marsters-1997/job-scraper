@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -45,14 +47,22 @@ func (db *DB) FailScoringEffect(ctx context.Context, id string, attempts int, fa
 	return nil
 }
 
-func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffect, score int, reasoning string, matched, missing []string) (bool, error) {
+func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffect, result score.SuitabilityResult) (bool, error) {
 	effectID, err := parseUUID(effect.ID)
 	if err != nil {
 		return false, err
 	}
+	criteria, err := json.Marshal(result.Criteria)
+	if err != nil {
+		return false, fmt.Errorf("complete scoring effect: marshal criteria: %w", err)
+	}
 	rows, err := db.queries.CompleteScoringEffect(ctx, pgsqlc.CompleteScoringEffectParams{
-		ID: effectID, Attempts: int32(effect.Attempts), Score: int32(score), Reasoning: reasoning,
-		Matched: matched, Missing: missing,
+		ID: effectID, Attempts: int32(effect.Attempts), Score: int32(result.Score),
+		Criteria:     criteria,
+		Confidence:   pgtype.Float4{Float32: float32(result.Confidence), Valid: true},
+		Cost:         toNumeric(result.Cost),
+		ScoreModel:   result.Model,
+		CurrentModel: score.JevModel,
 	})
 	if err != nil {
 		return false, fmt.Errorf("complete scoring effect: %w", err)
@@ -67,7 +77,7 @@ func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatu
 	if err != nil {
 		return ScoringStatus{}, err
 	}
-	row, err := db.queries.GetScoringStatus(ctx, uid)
+	row, err := db.queries.GetScoringStatus(ctx, pgsqlc.GetScoringStatusParams{UserID: uid, Model: score.JevModel})
 	if err != nil {
 		return ScoringStatus{}, fmt.Errorf("get scoring status: %w", err)
 	}
@@ -79,7 +89,7 @@ func (db *DB) QueueRescore(ctx context.Context, userID string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	count, err := db.queries.QueueRescore(ctx, uid)
+	count, err := db.queries.QueueRescore(ctx, pgsqlc.QueueRescoreParams{UserID: uid, Model: score.JevModel})
 	if err != nil {
 		return 0, fmt.Errorf("queue rescore: %w", err)
 	}
@@ -123,7 +133,7 @@ func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, in scorin
 		}
 		if err := queries.InsertScoringEffect(ctx, pgsqlc.InsertScoringEffectParams{
 			JobID: in.JobID, UserID: user.UserID, Fingerprint: job.ContentFingerprint,
-			ConfigVersion: user.ConfigVersion, Model: user.Model, FirstDiscovery: in.FirstDiscovery,
+			ConfigVersion: user.ConfigVersion, Model: score.JevModel, FirstDiscovery: in.FirstDiscovery,
 		}); err != nil {
 			return fmt.Errorf("insert scoring effect: %w", err)
 		}
@@ -140,8 +150,15 @@ func (db *DB) QueueTrackingScores(ctx context.Context, userID, companyID string)
 	if err != nil {
 		return err
 	}
-	if err := db.queries.QueueTrackingScores(ctx, pgsqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid}); err != nil {
+	params := pgsqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid, Model: score.JevModel}
+	if err := db.queries.QueueTrackingScores(ctx, params); err != nil {
 		return fmt.Errorf("queue tracking scores: %w", err)
 	}
 	return nil
+}
+
+func toNumeric(f float64) pgtype.Numeric {
+	var n pgtype.Numeric
+	_ = n.ScanScientific(strconv.FormatFloat(f, 'f', -1, 64))
+	return n
 }

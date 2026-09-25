@@ -1,7 +1,6 @@
 package dto
 
 type ScoringConfigView struct {
-	SuitabilityRubric     string           `json:"suitabilityRubric"`
 	NotifyThreshold       int              `json:"notifyThreshold"`
 	ExcludedTitleKeywords []string         `json:"excludedTitleKeywords"`
 	ExcludedCompanies     []string         `json:"excludedCompanies"`

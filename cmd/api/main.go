@@ -58,7 +58,7 @@ func main() {
 	outbox := score.NewOutboxWorker(db,
 		func(ctx context.Context, userID string) (string, error) { return cs.Get(ctx, userID, score.Provider) },
 		func(apiKey string) score.SuitabilityScorer {
-			return score.NewClaudeScorer(apiKey)
+			return score.NewJevScorer(apiKey)
 		},
 		sendAlert,
 	)

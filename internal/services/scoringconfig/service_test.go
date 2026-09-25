@@ -47,16 +47,14 @@ func TestGet(t *testing.T) {
 			name: "returns saved config",
 			setup: func(store *providers.MockSearchConfigProvider) {
 				_, err := store.UpsertSearchConfig(context.Background(), dto.SearchConfig{
-					UserID:            "user-1",
-					SuitabilityRubric: "senior go",
-					NotifyThreshold:   5,
+					UserID:          "user-1",
+					NotifyThreshold: 5,
 				})
 				if err != nil {
 					t.Fatal(err)
 				}
 			},
 			want: dto.ScoringConfigView{
-				SuitabilityRubric:     "senior go",
 				NotifyThreshold:       5,
 				ExcludedTitleKeywords: []string{},
 				ExcludedCompanies:     []string{},
@@ -170,7 +168,6 @@ func TestUpdateSucceeds(t *testing.T) {
 		Scale: []string{"Not relevant", "Weak", "Possible", "Strong", "Apply today"},
 	}
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
-		SuitabilityRubric:     "  Senior Go  ",
 		NotifyThreshold:       7,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
 		ExcludedSeniority:     []string{"Junior"},
@@ -178,9 +175,6 @@ func TestUpdateSucceeds(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if got.SuitabilityRubric != "  Senior Go  " {
-		t.Fatalf("rubric = %q, want unchanged", got.SuitabilityRubric)
 	}
 	if want := []string{"intern"}; len(got.ExcludedTitleKeywords) != 1 || got.ExcludedTitleKeywords[0] != want[0] {
 		t.Fatalf("excluded title keywords = %v, want %v", got.ExcludedTitleKeywords, want)

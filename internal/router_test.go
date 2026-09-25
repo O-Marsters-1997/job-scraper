@@ -185,7 +185,6 @@ func TestRouterRequiresAuth(t *testing.T) {
 		{http.MethodGet, "/jobs"},
 		{http.MethodGet, "/jobs/all"},
 		{http.MethodGet, "/jobs/x"},
-		{http.MethodPost, "/jobs/x/reasoning"},
 		{http.MethodGet, "/application-statuses/"},
 		{http.MethodPost, "/application-statuses/"},
 		{http.MethodPatch, "/application-statuses/x"},
@@ -204,7 +203,6 @@ func TestRouterRequiresAuth(t *testing.T) {
 		{http.MethodGet, "/scores/status"},
 		{http.MethodPost, "/scores/rescore"},
 		{http.MethodGet, "/ai-prefs"},
-		{http.MethodPut, "/ai-prefs"},
 		{http.MethodPut, "/ai-credentials"},
 		{http.MethodGet, "/source-targets/"},
 		{http.MethodPost, "/source-targets/"},
@@ -257,10 +255,6 @@ func TestRouterRoutes(t *testing.T) {
 		}
 		if w := do(authed(http.MethodGet, "/jobs/all", nil, cookie)); w.Code != http.StatusOK {
 			t.Errorf("GET /jobs/all = %d", w.Code)
-		}
-		w := do(authed(http.MethodPost, "/jobs/"+nilUUID+"/reasoning", nil, cookie))
-		if w.Code != http.StatusUnprocessableEntity {
-			t.Errorf("POST /jobs/{id}/reasoning = %d, want 422 (body: %s)", w.Code, w.Body.String())
 		}
 	})
 
@@ -365,7 +359,7 @@ func TestRouterRoutes(t *testing.T) {
 			t.Errorf("GET = %d", w.Code)
 		}
 		w = do(authed(http.MethodPut, "/scoring-config", jsonBody(t, map[string]any{
-			"suitabilityRubric": "test rubric", "notifyThreshold": 5,
+			"notifyThreshold": 5,
 			"scoringQuestions": map[string]any{
 				"profile":  "test profile",
 				"criteria": []any{},
@@ -390,7 +384,7 @@ func TestRouterRoutes(t *testing.T) {
 
 	t.Run("ai-credentials and ai-prefs", func(t *testing.T) {
 		key := "sk-test"
-		w := do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "anthropic", "apiKey": &key}), cookie))
+		w := do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "openrouter", "apiKey": &key}), cookie))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("PUT /ai-credentials = %d (body: %s)", w.Code, w.Body.String())
 		}
@@ -398,13 +392,7 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET /ai-prefs = %d", w.Code)
 		}
-		w = do(authed(http.MethodPut, "/ai-prefs", jsonBody(t, map[string]string{
-			"suitabilityModel": "claude-haiku-4-5-20251001", "reasoningModel": "claude-sonnet-4-6",
-		}), cookie))
-		if w.Code != http.StatusOK {
-			t.Errorf("PUT /ai-prefs = %d (body: %s)", w.Code, w.Body.String())
-		}
-		w = do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "anthropic", "apiKey": nil}), cookie))
+		w = do(authed(http.MethodPut, "/ai-credentials", jsonBody(t, map[string]any{"provider": "openrouter", "apiKey": nil}), cookie))
 		if w.Code != http.StatusNoContent {
 			t.Errorf("PUT /ai-credentials (delete) = %d (body: %s)", w.Code, w.Body.String())
 		}

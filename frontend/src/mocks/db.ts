@@ -215,8 +215,6 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		UpdatedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
 		DaysInOffice: daysInOffice,
-		RelevanceScore:
-			i % 4 === 0 ? null : faker.number.int({ min: 40, max: 100 }),
 		SuitabilityScore:
 			i % 5 === 0 ? null : faker.number.int({ min: 30, max: 100 }),
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,

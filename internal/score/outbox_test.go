@@ -41,7 +41,7 @@ func (s *effectStore) FailScoringEffect(_ context.Context, _ string, _ int, fail
 	s.failedRetryAfter = failure.RetryAfter
 	return nil
 }
-func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, int, string, []string, []string) (bool, error) {
+func (s *effectStore) CompleteScoringEffect(context.Context, dto.ScoringEffect, score.SuitabilityResult) (bool, error) {
 	if s.completeErr != nil {
 		return false, s.completeErr
 	}
@@ -63,7 +63,7 @@ func newOutboxTest(store *effectStore, scorer score.SuitabilityScorer) (*score.O
 
 func TestOutboxWorker_RetriesScoringFailure(t *testing.T) {
 	store := &effectStore{
-		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
+		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.JevModel, Attempts: 1, FirstDiscovery: true},
 		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
 	}
 	worker, sent := newOutboxTest(store, erroringScorer{errors.New("AI unavailable")})
@@ -80,7 +80,7 @@ func TestOutboxWorker_RetriesScoringFailure(t *testing.T) {
 
 func TestOutboxWorker_TerminalScoringFailureFailsAtOnce(t *testing.T) {
 	store := &effectStore{
-		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
+		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.JevModel, Attempts: 1, FirstDiscovery: true},
 		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
 	}
 	worker, sent := newOutboxTest(store, erroringScorer{score.TerminalScoreError(errors.New("invalid api key"))})
@@ -94,7 +94,7 @@ func TestOutboxWorker_TerminalScoringFailureFailsAtOnce(t *testing.T) {
 
 func TestOutboxWorker_RateLimitedScoringFailureHonoursRetryAfter(t *testing.T) {
 	store := &effectStore{
-		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel, Attempts: 1, FirstDiscovery: true},
+		effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "user", Fingerprint: "same", Model: score.JevModel, Attempts: 1, FirstDiscovery: true},
 		job:    dto.Job{ID: "job", ContentFingerprint: "same"},
 	}
 	worker, sent := newOutboxTest(store, erroringScorer{score.RateLimitedScoreError(errors.New("rate limited"), 120*time.Second)})
@@ -126,7 +126,7 @@ func TestOutboxWorkerRoutesFirstDiscoveryPerUser(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: tt.name, Fingerprint: "same", Model: score.DefaultSuitabilityModel, FirstDiscovery: tt.firstDiscovery}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, config: dto.SearchConfig{NotifyThreshold: tt.threshold}, profile: dto.Profile{Email: tt.email}}
+			store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: tt.name, Fingerprint: "same", Model: score.JevModel, FirstDiscovery: tt.firstDiscovery}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, config: dto.SearchConfig{NotifyThreshold: tt.threshold}, profile: dto.Profile{Email: tt.email}}
 			var recipients []string
 			worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{tt.score} }, func(_ context.Context, _ dto.Job, email string) error {
 				recipients = append(recipients, email)
@@ -149,7 +149,7 @@ func TestOutboxWorkerRoutesFirstDiscoveryPerUser(t *testing.T) {
 }
 
 func TestOutboxWorkerDoesNotSendUntilScoreIsStored(t *testing.T) {
-	store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "alice", Fingerprint: "same", Model: score.DefaultSuitabilityModel, FirstDiscovery: true}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, profile: dto.Profile{Email: "alice@example.com"}, completeErr: errors.New("database unavailable")}
+	store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "alice", Fingerprint: "same", Model: score.JevModel, FirstDiscovery: true}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, profile: dto.Profile{Email: "alice@example.com"}, completeErr: errors.New("database unavailable")}
 	sent := false
 	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{95} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
 	if err := worker.RunOnce(t.Context()); err == nil || sent {
@@ -158,7 +158,7 @@ func TestOutboxWorkerDoesNotSendUntilScoreIsStored(t *testing.T) {
 }
 
 func TestOutboxWorkerDoesNotSendWhenCompletionIsStale(t *testing.T) {
-	store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "alice", Fingerprint: "same", Model: score.DefaultSuitabilityModel, FirstDiscovery: true}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, profile: dto.Profile{Email: "alice@example.com"}, unsaved: true}
+	store := &effectStore{effect: dto.ScoringEffect{ID: "effect", JobID: "job", UserID: "alice", Fingerprint: "same", Model: score.JevModel, FirstDiscovery: true}, job: dto.Job{ID: "job", ContentFingerprint: "same"}, profile: dto.Profile{Email: "alice@example.com"}, unsaved: true}
 	sent := false
 	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{95} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
 	if err := worker.RunOnce(t.Context()); err != nil || sent {
@@ -204,7 +204,7 @@ func (s *queueStore) FailScoringEffect(_ context.Context, id string, _ int, _ dt
 	return nil
 }
 
-func (s *queueStore) CompleteScoringEffect(_ context.Context, effect dto.ScoringEffect, _ int, _ string, _, _ []string) (bool, error) {
+func (s *queueStore) CompleteScoringEffect(_ context.Context, effect dto.ScoringEffect, _ score.SuitabilityResult) (bool, error) {
 	s.resultMu.Lock()
 	defer s.resultMu.Unlock()
 	s.completed = append(s.completed, effect.ID)
@@ -216,7 +216,7 @@ func newQueueStore(n int) (*queueStore, []dto.ScoringEffect) {
 	jobs := make(map[string]dto.Job, n)
 	for i := range effects {
 		jobID := fmt.Sprintf("job-%d", i)
-		effects[i] = dto.ScoringEffect{ID: fmt.Sprintf("effect-%d", i), JobID: jobID, UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel}
+		effects[i] = dto.ScoringEffect{ID: fmt.Sprintf("effect-%d", i), JobID: jobID, UserID: "user", Fingerprint: "same", Model: score.JevModel}
 		jobs[jobID] = dto.Job{ID: jobID, ContentFingerprint: "same"}
 	}
 	return &queueStore{effects: effects, jobs: jobs}, effects
