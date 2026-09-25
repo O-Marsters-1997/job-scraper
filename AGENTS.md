@@ -11,23 +11,8 @@
 
 ## Adding a new source
 
-1. **Pick the source type.** Public JSON/XML board API (Greenhouse, Lever, Ashby, Workable,
-   Recruitee, Personio) → **ATS source**: build a `sources.BoardSpec` and call
-   `sources.NewBoardSource` — copy `internal/sources/greenhouse/greenhouse.go` (65 lines),
-   implements `Source` only. HTML listing page only → **HTML source**: embed
-   `sources.PaginatedBase`, implement `Iterate` + `DetailFetcher` (`CanHandle`/`GetDetails`) —
-   copy `internal/sources/wis/wis.go`. Don't copy `internal/sources/indeed`; it's a legacy outlier.
-2. **Register it** in `internal/sources/registry/registry.go`'s `entries` slice: `name` (must
-   equal the name baked into the source's own `Config`/`BoardSpec`), `kind` (`kindBoard` = board
-   token, `kindURL` = full URL, `kindFilter` = keyword + structured `filters`), and `role`
-   (`RoleATS` / `RoleDiscovery`).
-3. **Wire instantiation** in `internal/sources/builder/build.go`'s `BuildSources` — this has no
-   compile-time safety net; skip it and the source silently never runs.
-   `TestBuildSources_EveryRegisteredSourceInstantiates` catches a missing wire-up: run
-   `go test ./internal/sources/builder/`.
-4. **HTML sources only:** add the source to the `detailers` map in `cmd/worker/main.go` (detail
-   fetching isn't automatic), and add snapshot tests under `internal/sources/<name>/snapshots/`
-   (capture with `just cli download`, regenerate with `just cli rebase`).
+Use the `add-source` skill — it covers the ATS vs. HTML branch, registry/builder wiring, and
+snapshots.
 
 ## Anatomy of a handler
 
@@ -50,15 +35,17 @@ files not yet migrated:
 - Routes that set cookies, redirect, stream, or use service-token auth stay as plain
   `http.HandlerFunc`s using the shared `Caller`/`DecodeJSON`/`WriteJSON`/`WriteError` helpers.
 
+Use the `new-handler` skill for the end-to-end steps, backend and frontend.
+
 ## sqlc
 
 - Schema lives in `internal/data/sqlc/schema.sql`, queries in `internal/data/sqlc/queries/*.sql`
   — sqlc reads neither from `scripts/migrations/`; mirror every migration there by hand.
 - `just generate` (`sqlc generate`) regenerates `internal/data/db/pgsqlc/**` — never hand-edit it.
   CI runs `sqlc generate && git diff --exit-code`, so commit generated code with the schema change.
-- Wrap generated calls in `internal/data/db/*.go`: map `pgx.ErrNoRows` → `providers.ErrNotFound`,
-  wrap other errors as `fmt.Errorf("db.Method: %w", err)`. Copy `internal/data/db/profile.go`.
-  Inputs are DTOs (ADR-0001).
+- Inputs are DTOs (ADR-0001).
+
+Use the `schema-change` skill for the full migration → sqlc → wrapper procedure.
 
 ## Tests
 
