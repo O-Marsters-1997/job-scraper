@@ -14,13 +14,9 @@ export function SuitabilityPanel(props: { job: Job }) {
 	const missing = () => props.job.Missing ?? [];
 	const skipped = () => props.job.SuitabilitySkipped ?? false;
 
-	// skipped — below relevance cutoff, no Claude call made
 	const isSkipped = () => skipped() && score() == null;
-	// scored — has score + reasoning
 	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
-	// scored, no reasoning yet — show explain button
 	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
-	// pending — no score, not skipped
 	const isPending = () => !isSkipped() && score() == null;
 
 	return (
@@ -37,7 +33,6 @@ export function SuitabilityPanel(props: { job: Job }) {
 				</Show>
 
 				<Show when={isScored()}>
-					{/* Score display */}
 					<div class="flex items-baseline gap-1">
 						<span class="font-mono text-lg font-semibold tabular-nums text-foreground">
 							{score()}
@@ -45,12 +40,10 @@ export function SuitabilityPanel(props: { job: Job }) {
 						<span class="text-xs text-faint">/ 100</span>
 					</div>
 
-					{/* Rationale */}
 					<p class="rounded-md bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted">
 						{reasoning()}
 					</p>
 
-					{/* Matched chips */}
 					<Show when={matched().length > 0}>
 						<div class="flex flex-col gap-1.5">
 							<span class="text-xs font-medium text-faint">Matched</span>
@@ -74,7 +67,6 @@ export function SuitabilityPanel(props: { job: Job }) {
 						</div>
 					</Show>
 
-					{/* Missing chips */}
 					<Show when={missing().length > 0}>
 						<div class="flex flex-col gap-1.5">
 							<span class="text-xs font-medium text-faint">Missing</span>

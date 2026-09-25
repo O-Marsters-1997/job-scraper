@@ -53,7 +53,6 @@ function OverviewPage() {
 	const applications = () => appsQuery.data ?? [];
 	const statuses = () => statusesQuery.data ?? [];
 
-	// ── Stat derivations ──────────────────────────────────────────────────────
 	const totalJobs = () => jobs().length;
 	const sourceCount = () => new Set(jobs().map((j) => j.Source)).size;
 
@@ -62,7 +61,6 @@ function OverviewPage() {
 	const todaySources = () => new Set(todayJobs().map((j) => j.Source)).size;
 
 	const totalApps = () => applications().length;
-	// First two statuses (Saved + Applied) = still awaiting a response
 	const firstTwoIds = () =>
 		statuses()
 			.slice(0, 2)
@@ -73,7 +71,6 @@ function OverviewPage() {
 	const responseRate = () =>
 		totalApps() > 0 ? Math.round((respondedCount() / totalApps()) * 100) : 0;
 
-	// ── Pipeline counts ───────────────────────────────────────────────────────
 	const appsByStatus = () => {
 		const map: Record<string, number> = {};
 		for (const app of applications()) {
@@ -85,13 +82,11 @@ function OverviewPage() {
 	const pipeline = () =>
 		statuses().map((s) => ({ ...s, count: appsByStatus()[s.ID] ?? 0 }));
 
-	// ── Recents ───────────────────────────────────────────────────────────────
 	const recentJobs = () => jobs().slice(0, 5);
 	const recentApps = () => applications().slice(0, 5);
 
 	return (
 		<div class="px-7 py-6">
-			{/* Page header */}
 			<div class="mb-5">
 				<h1 class="text-lg font-bold tracking-tight text-foreground">
 					Overview
@@ -99,7 +94,6 @@ function OverviewPage() {
 				<p class="mt-0.5 text-xs text-faint">Your job search at a glance</p>
 			</div>
 
-			{/* Key metrics — lead with the two you act on daily, group the rest */}
 			<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1.2fr]">
 				<FeatureStat
 					label="New today (recent 100)"
@@ -153,7 +147,6 @@ function OverviewPage() {
 				</Card>
 			</div>
 
-			{/* Application pipeline */}
 			<div class="mb-4">
 				<div class="mb-2 flex items-center justify-between">
 					<span class="text-sm font-semibold text-foreground">
@@ -196,9 +189,7 @@ function OverviewPage() {
 				</Show>
 			</div>
 
-			{/* Dashboard grid: recent jobs (wide) + recent applications (fixed) */}
 			<div class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
-				{/* Recent jobs */}
 				<Card>
 					<div class="flex items-center justify-between border-b border-border px-5 py-4">
 						<h3 class="text-base font-semibold leading-snug text-foreground">
@@ -253,7 +244,6 @@ function OverviewPage() {
 					</Show>
 				</Card>
 
-				{/* Recent applications */}
 				<Card>
 					<div class="flex items-center justify-between border-b border-border px-5 py-4">
 						<h3 class="text-base font-semibold leading-snug text-foreground">
@@ -309,8 +299,6 @@ interface FeatureStatProps {
 	cta?: JSX.Element;
 }
 
-// Primary metric tile: oversized number, optional action link. The two daily
-// decisions (what's new, what's in flight) get this treatment.
 function FeatureStat(props: FeatureStatProps) {
 	return (
 		<Card class="bg-accent-subtle/30 ring-1 ring-accent-border/40">
@@ -341,7 +329,6 @@ interface MiniStatProps {
 	hint: string;
 }
 
-// Secondary metric row inside the grouped context card.
 function MiniStat(props: MiniStatProps) {
 	return (
 		<div class="flex items-center justify-between gap-3 px-5 py-3.5">

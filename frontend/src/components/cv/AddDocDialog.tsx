@@ -19,7 +19,6 @@ export function AddDocDialog(props: {
 	const [docUrl, setDocUrl] = createSignal("");
 	const [urlError, setUrlError] = createSignal<string | null>(null);
 
-	// Reset form state when dialog closes.
 	createEffect(() => {
 		if (!props.open) {
 			setDocUrl("");

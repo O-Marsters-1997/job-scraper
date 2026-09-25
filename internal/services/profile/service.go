@@ -1,5 +1,3 @@
-// Package profile holds the domain rules for reading and updating a user's
-// profile. Persistence goes through the store port declared here.
 package profile
 
 import (

@@ -1,7 +1,3 @@
-// Package sourcetargets holds the domain rules for creating, updating and
-// (re)running a source target. Persistence goes through
-// providers.SourceTargetProvider; queue publishing goes through the
-// QueuePublisher port declared here.
 package sourcetargets
 
 import (
@@ -44,8 +40,6 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	}
 
 	if role, _ := registry.SourceRole(in.Source); role == registry.RoleDiscovery {
-		// An ATS board URL pasted into a discovery source belongs under Tracked
-		// companies, not here. (Discovery values are keywords or aggregator URLs.)
 		if t := detect.Detect(in.Value); t != detect.UnknownHTML && t != detect.Aggregator {
 			return dto.SourceTarget{}, apperr.Invalid("that looks like an ATS board — add it under Tracked companies")
 		}
@@ -115,7 +109,6 @@ func validateSourceValue(source, value string, filters map[string]string) error 
 	if isURL && !strings.HasPrefix(value, urlPrefix) {
 		return apperr.Invalid("value must be a URL starting with " + urlPrefix)
 	}
-	// ATS board slot: value must be a bare token, not a URL.
 	if !isURL && (strings.Contains(value, "://") || strings.Contains(value, "/")) {
 		return apperr.Invalid("enter just the board token, e.g. acmecorp, not the full URL")
 	}

@@ -1,7 +1,3 @@
-// Package companies holds the domain rules for resolving ATS boards into
-// companies, tracking them for a user, and managing their candidate boards.
-// Persistence goes through providers.CompanyProvider and
-// providers.SourceTargetProvider.
 package companies
 
 import (
@@ -121,7 +117,6 @@ func (s *Service) AddBoard(ctx context.Context, _ string, in dto.AddCompanyBoard
 	return board, nil
 }
 
-// ponytail: name derived from the token; good enough until a source carries a real company name.
 func humanizeToken(token string) string {
 	words := strings.Split(token, "-")
 	for i, w := range words {

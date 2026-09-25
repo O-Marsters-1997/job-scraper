@@ -151,7 +151,6 @@ func (db *DB) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Compan
 	return out, nil
 }
 
-// TouchCompanyCrawled records that a company's careers page was just crawled.
 func (db *DB) TouchCompanyCrawled(ctx context.Context, id string) error {
 	cid, err := parseUUID(id)
 	if err != nil {

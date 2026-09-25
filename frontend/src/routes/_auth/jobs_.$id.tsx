@@ -150,16 +150,13 @@ function JobDetailPage() {
 			>
 				{(j) => (
 					<div class="px-7 py-6 pb-16">
-						{/* ── Hero card ───────────────────────────────────── */}
 						<Card class="mb-4">
 							<CardContent class="pt-5">
 								<div class="flex gap-4">
-									{/* Company avatar */}
 									<div class="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-base font-semibold text-accent-text">
 										{titleCase(j().CompanySlug).slice(0, 2)}
 									</div>
 
-									{/* Title + meta */}
 									<div class="min-w-0 flex-1">
 										<h1 class="text-xl font-bold tracking-tight text-foreground">
 											{j().Title}
@@ -168,7 +165,6 @@ function JobDetailPage() {
 											{titleCase(j().CompanySlug)} · {j().Location}
 										</p>
 
-										{/* Meta strip — only rendered items */}
 										<Show
 											when={
 												workStyle(j().DaysInOffice) ||
@@ -290,7 +286,6 @@ function JobDetailPage() {
 											</div>
 										</Show>
 
-										{/* Badges row */}
 										<div class="mt-3 flex flex-wrap items-center gap-2">
 											<Show when={app()?.StatusName}>
 												{(name) => (
@@ -309,7 +304,6 @@ function JobDetailPage() {
 										</div>
 									</div>
 
-									{/* Actions menu */}
 									<div class="shrink-0">
 										<JobActionsMenu
 											job={j()}
@@ -322,9 +316,7 @@ function JobDetailPage() {
 							</CardContent>
 						</Card>
 
-						{/* ── Two-column body ─────────────────────────────── */}
 						<div class="grid grid-cols-[1fr_284px] items-start gap-4">
-							{/* Left: Description */}
 							<Card>
 								<CardHeader>
 									<CardTitle>Description</CardTitle>
@@ -351,9 +343,7 @@ function JobDetailPage() {
 								</CardContent>
 							</Card>
 
-							{/* Right: sticky sidebar */}
 							<div class="sticky top-0 flex flex-col gap-3">
-								{/* Details card */}
 								<Card>
 									<CardHeader class="pb-2">
 										<CardTitle>Details</CardTitle>
@@ -413,7 +403,6 @@ function JobDetailPage() {
 									</CardContent>
 								</Card>
 
-								{/* Skills card — only when present */}
 								<Show when={(j().Skills?.length ?? 0) > 0}>
 									<Card>
 										<CardHeader class="pb-2">
@@ -433,10 +422,8 @@ function JobDetailPage() {
 									</Card>
 								</Show>
 
-								{/* Suitability card */}
 								<SuitabilityPanel job={j()} />
 
-								{/* Application card */}
 								<Card>
 									<CardHeader class="pb-2">
 										<CardTitle>Application</CardTitle>

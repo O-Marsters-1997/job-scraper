@@ -42,7 +42,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 	})
 
 	r.Route("/google", func(r chi.Router) {
-		// /start is public so the OAuth redirect URL stays clean.
 		r.Get("/oauth/start", handlers.OAuthStart(svc.google))
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(db))

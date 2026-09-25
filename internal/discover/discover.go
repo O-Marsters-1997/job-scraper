@@ -1,8 +1,6 @@
 // Package discover drains code-registered Harvesters into the shared companies
-// catalog on a fixed cadence. Harvesters yield company candidates (name/domain,
-// occasionally an ATS board); the Runner deduplicates via CompanyProvider's
-// COALESCE-upsert and gates each harvester to one run per interval, reusing the
-// PostgreSQL harvest_runs state.
+// catalog on a fixed cadence, deduplicating candidates and gating each
+// harvester to one run per interval.
 package discover
 
 import (
@@ -34,8 +32,6 @@ type ScrapeGate interface {
 }
 
 const (
-	// harvestInterval is one gate for every harvester. Add per-harvester
-	// config only once a second cadence is actually needed.
 	harvestInterval = 24 * time.Hour
 	tickInterval    = time.Hour
 	gateKeyPrefix   = "harvest:"
@@ -103,9 +99,6 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
 	}
 }
 
-// upsert skips records with neither a name nor a domain — there's nothing
-// useful to store. The slug prefers the name; when only a domain is known,
-// that becomes the slug source instead.
 func (r *Runner) upsert(ctx context.Context, c Company) error {
 	slugSource := c.Name
 	if slugSource == "" {

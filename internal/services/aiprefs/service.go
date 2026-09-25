@@ -1,6 +1,3 @@
-// Package aiprefs holds the domain rules for reading and updating a user's AI
-// model preferences. Persistence goes through providers.UserAIPrefsProvider;
-// which providers a user has configured comes from a CredentialLister.
 package aiprefs
 
 import (

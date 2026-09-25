@@ -24,8 +24,6 @@ type CredentialStore interface {
 }
 
 // RawStore is the persistence layer used by EnvCredentialStore.
-// Method names mirror providers.UserAICredentialsProvider so that *db.DB
-// satisfies this interface without an adapter.
 type RawStore interface {
 	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
 	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
@@ -35,8 +33,6 @@ type RawStore interface {
 
 // EnvCredentialStore is an AES-256-GCM CredentialStore that reads
 // AI_CREDENTIAL_ENC_KEY (base64, must decode to 32 bytes) at construction.
-//
-// ponytail: key loaded once at New(); no per-op env reads.
 type EnvCredentialStore struct {
 	key []byte
 	raw RawStore

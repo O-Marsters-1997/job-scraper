@@ -110,8 +110,6 @@ func humanizeSlug(slug string) string {
 	return strings.Join(words, " ")
 }
 
-// ProviderForModel resolves the AI provider name for a model ID.
-// ponytail: claude-* only; extend when other providers are added.
 func ProviderForModel(modelID string) string {
 	if strings.HasPrefix(modelID, "claude-") {
 		return "anthropic"

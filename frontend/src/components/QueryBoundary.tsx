@@ -3,13 +3,6 @@ import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonList } from "@/components/ui/skeleton";
 
-// Encapsulates the four async states (loading / error / empty / success) so
-// individual routes don't have to repeat the pattern or forget the error branch.
-//
-// Usage:
-//   <QueryBoundary query={query} fallbackRows={4}>
-//     {(data) => <MyContent data={data} />}
-//   </QueryBoundary>
 type Props<T> = {
 	query: {
 		isPending: boolean;

@@ -45,8 +45,6 @@ export const sourceHex = (source: string) =>
 		cssVarHex("--color-faint"),
 	);
 
-// Time-series line chart with zoom/pan — used by the Jobs discovered chart.
-// Drag = box-zoom, scroll = zoom, shift+drag = pan.
 export function lineChartOptions(): ChartOptions<"line"> {
 	const faint = cssVarHex("--color-faint");
 	const fg = cssVarHex("--color-foreground");
@@ -141,7 +139,6 @@ export function donutChartOptions(): ChartOptions<"doughnut"> {
 	};
 }
 
-// Legend is hidden — replaced by custom HTML chips in insights.tsx
 export function stackedBarOptions(): ChartOptions<"bar"> {
 	const faint = cssVarHex("--color-faint");
 	const fg = cssVarHex("--color-foreground");
@@ -178,7 +175,6 @@ export function stackedBarOptions(): ChartOptions<"bar"> {
 	};
 }
 
-// Multi-category horizontal bar — skill gap, source quality.
 export function horizontalBarOptions(): ChartOptions<"bar"> {
 	const faint = cssVarHex("--color-faint");
 	const muted = cssVarHex("--color-muted");
@@ -219,7 +215,6 @@ export function horizontalBarOptions(): ChartOptions<"bar"> {
 	};
 }
 
-// Standard vertical bar — score distribution.
 export function verticalBarOptions(): ChartOptions<"bar"> {
 	const faint = cssVarHex("--color-faint");
 	const fg = cssVarHex("--color-foreground");
@@ -260,7 +255,6 @@ export function verticalBarOptions(): ChartOptions<"bar"> {
 
 export const destructiveHex = () => cssVarHex("--color-destructive");
 
-// Append a two-hex-digit alpha to a colour string, e.g. hexAlpha("#6645d9", "1a").
 export function hexAlpha(hex: string, alpha: string): string {
 	return `${hex}${alpha}`;
 }

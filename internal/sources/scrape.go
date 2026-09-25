@@ -14,9 +14,6 @@ import (
 )
 
 var (
-	// salaryRe matches a currency amount or range in plain text, e.g.
-	// "£80,000 to £95,000", "$120,000", "€70,000 – €90,000", "£90,000.00 to £140,000.00".
-	// Intentionally not matching "£80k"-style; refine if real snapshots show it.
 	salaryRe = regexp.MustCompile(`[£$€]\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:\s*(?:-|–|to)\s*[£$€]?\s?\d{1,3}(?:,\d{3})+(?:\.\d+)?)?`)
 
 	remoteRe = regexp.MustCompile(`(?i)\bremote\b|\bwork from home\b|\bwfh\b`)
@@ -56,8 +53,6 @@ func DetectWorkArrangement(text string) string {
 	}
 }
 
-// WarnDefaulted logs that a required field was defaulted because it could not be parsed
-// from the page.
 func WarnDefaulted(source, field, url string) {
 	slog.Warn("defaulted field",
 		slog.String("source", source),

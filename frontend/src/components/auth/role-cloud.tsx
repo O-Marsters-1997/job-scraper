@@ -1,9 +1,5 @@
 import { onCleanup, onMount } from "solid-js";
 
-// Canvas-rendered floating role cloud for the auth brand panel.
-// Source-tagged role pills wander omnidirectionally with depth (forward/back),
-// signifying the breadth of roles that stream in. Pure 2D canvas, no deps.
-
 type SourceKey = "li" | "gh" | "lv" | "in";
 
 const SOURCES: Record<
@@ -39,7 +35,6 @@ const JOBS: ReadonlyArray<readonly [string, SourceKey]> = [
 	["iOS Engineer", "lv"],
 ];
 
-// Pill metrics (CSS px, scaled per-frame for depth).
 const ROLE_PX = 13;
 const SRC_PX = 10;
 const DOT = 15;
@@ -48,16 +43,13 @@ const DOT_GAP = 9;
 const LABEL_GAP = 7;
 const PILL_H = 31;
 
-// Depth → presentation. z in [0,1]: 0 far/small/faint/blurred, 1 near/large/sharp.
 const SCALE_FAR = 0.62;
 const SCALE_NEAR = 1.16;
 const ALPHA_FAR = 0.55;
 const ALPHA_NEAR = 1;
-const BLUR_FAR = 2.8; // px of defocus on the farthest pills
-const FOCUS_Z = 0.55; // z at/above which pills are perfectly sharp
+const BLUR_FAR = 2.8;
+const FOCUS_Z = 0.55;
 
-// Motion (normalized field units per second). Constant per pill — DVD-style:
-// straight-line travel, direction only ever flips on a wall bounce.
 const SPD_MIN = 0.026;
 const SPD_MAX = 0.07;
 const VZ_MIN = 0.05;
@@ -68,7 +60,6 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) =>
 	v < lo ? lo : v > hi ? hi : v;
 
-// Deterministic PRNG (mulberry32) so layout/motion are stable across renders.
 function mulberry32(seed: number) {
 	let s = seed >>> 0;
 	return () => {
@@ -83,14 +74,12 @@ type Pill = {
 	role: string;
 	srcLabel: string;
 	srcKey: SourceKey;
-	// live state in normalized field space ([0,1] x/y, z depth) + constant velocity
 	x: number;
 	y: number;
 	z: number;
 	vx: number;
 	vy: number;
 	vz: number;
-	// text metrics, re-measured each frame
 	w: number;
 	roleW: number;
 };
@@ -104,8 +93,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		const ctx = el.getContext("2d");
 		if (!ctx) return;
 
-		// Per-variant layout/scale. `compact` (mobile brand band) shows fewer,
-		// slightly smaller pills; `full` is the desktop split-screen, unchanged.
 		const cfg =
 			props.variant === "compact"
 				? {
@@ -123,7 +110,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 						scaleNear: SCALE_NEAR,
 					};
 
-		// Resolve themed colors from the element (inherits --auth-* from .auth-brand).
 		const cs = getComputedStyle(el);
 		const cssVar = (name: string, fallback: string) =>
 			cs.getPropertyValue(name).trim() || fallback;
@@ -136,7 +122,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		const monoFamily = cssVar("--font-mono", "ui-monospace, monospace");
 		const roleFont = `600 ${ROLE_PX}px "Plus Jakarta Sans", ui-sans-serif, sans-serif`;
 		const srcFont = `600 ${SRC_PX}px ${monoFamily}`;
-		// Derive from centralised --auth-* vars so light-tone and preset overrides flow in.
 		const inkRole = cssVar("--auth-ink", "oklch(0.97 0.01 290)");
 		const pillBg = cssVar("--auth-pill-bg", "oklch(1 0 0 / 0.08)");
 		const pillBorder = cssVar("--auth-pill-border", "oklch(1 0 0 / 0.16)");
@@ -144,10 +129,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		const primary = cssVar("--color-primary", "oklch(0.55 0.18 285)");
 		const glow = `color-mix(in oklch, ${primary}, transparent 45%)`;
 
-		// One shared deterministic stream so every pill's coordinates are independent.
-		// Stratified start: one pill per cell of a jittered grid, so x/y are always
-		// evenly scattered (8 purely-random points clump together too often), while
-		// depth and heading stay fully random. Each keeps its direction forever.
 		const rng = mulberry32(0x9e3779b1);
 		const pills: Pill[] = cfg.jobs.map(([role, key], idx) => {
 			const col = idx % cfg.cols;
@@ -215,7 +196,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 			const h = PILL_H;
 			ctx.save();
 			ctx.translate(x, y);
-			// depth-of-field: far pills defocus so an overlapping nearer pill reads as in front
 			if (blur > 0.05) ctx.filter = `blur(${blur}px)`;
 			ctx.scale(s, s);
 			ctx.globalAlpha = lerp(ALPHA_FAR, ALPHA_NEAR, z);
@@ -262,10 +242,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 
 		const order = pills.map((_, i) => i);
 
-		// Physics step: constant-velocity straight-line travel with wall bounces on
-		// all three axes (x, y, depth). Direction is only ever flipped by a bounce —
-		// speed and heading are otherwise preserved forever, so motion never repeats
-		// or resets. A bounce negates one component, exactly like the DVD logo.
 		const integrate = (dt: number) => {
 			for (const p of pills) {
 				p.x += p.vx * dt;
@@ -306,7 +282,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 			ctx.clearRect(0, 0, cssW, cssH);
 			measure();
-			// painter's algorithm: far (small z) first, near last
 			order.sort((a, b) => (pills[a]?.z ?? 0) - (pills[b]?.z ?? 0));
 			for (const i of order) {
 				const p = pills[i];
@@ -321,8 +296,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 			typeof ResizeObserver !== "undefined"
 				? new ResizeObserver(() => {
 						resize();
-						// The animation loop repaints itself; the static frame doesn't, so
-						// redraw it here once the parent finally reports a real size.
 						if (reduce.matches && ready) paint();
 					})
 				: null;
@@ -336,8 +309,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 			let dt = (now - prev) / 1000;
 			prev = now;
 			if (dt > 0.05) dt = 0.05; // cap big gaps (tab refocus) so nothing teleports
-			// Hold the seeded (stratified) layout until layout is real; otherwise the
-			// first frames would collapse every pill to the center.
 			if (ready) {
 				integrate(dt);
 				paint();
@@ -348,7 +319,7 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		const startMotion = () => {
 			cancelAnimationFrame(raf);
 			if (reduce.matches) {
-				paint(); // static frame at the seeded positions
+				paint();
 			} else {
 				prev = 0;
 				raf = requestAnimationFrame(loop);
@@ -369,6 +340,5 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		});
 	});
 
-	// Decorative; hidden from assistive tech via the aria-hidden .auth-field parent.
 	return <canvas ref={canvas} class="auth-canvas" />;
 }

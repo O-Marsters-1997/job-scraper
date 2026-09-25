@@ -7,8 +7,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// mockTabRow carries the owner keys (userID, docID) that the real DB resolves via a join
-// on tracked_docs, so HideTab can match without one.
 type mockTabRow struct {
 	userID       string
 	docID        string

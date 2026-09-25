@@ -23,7 +23,6 @@ type politeness struct {
 	data *robotstxt.RobotsData
 }
 
-// parseRobots parses robots.txt bytes fetched from a host.
 func parseRobots(body []byte) (*politeness, error) {
 	data, err := robotstxt.FromBytes(body)
 	if err != nil {

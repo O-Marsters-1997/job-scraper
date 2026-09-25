@@ -60,7 +60,6 @@ export default function SettingsPanel() {
 				</SheetHeader>
 
 				<div class="flex flex-col gap-6 px-6 py-5">
-					{/* Account / persona settings */}
 					<div class="flex flex-col gap-1">
 						<p class="mb-2 text-2xs font-semibold uppercase tracking-wider text-faint">
 							Account
@@ -130,7 +129,6 @@ export default function SettingsPanel() {
 
 					<div class="border-t border-border" />
 
-					{/* Session toggle */}
 					<SettingRow
 						label="Preview demo data"
 						description="Show seeded sample data for this session only."
@@ -147,7 +145,6 @@ export default function SettingsPanel() {
 	);
 }
 
-/** A nav link row that navigates and closes the drawer in one action. */
 function SettingsNavRow(props: {
 	to: string;
 	label: string;

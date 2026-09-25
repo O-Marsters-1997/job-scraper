@@ -1,6 +1,3 @@
-// Package applicationstatuses holds the domain rules for creating, updating
-// and deleting a user's application statuses. Persistence goes through
-// providers.ApplicationStatusProvider.
 package applicationstatuses
 
 import (

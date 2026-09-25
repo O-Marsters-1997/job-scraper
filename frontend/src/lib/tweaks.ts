@@ -59,7 +59,6 @@ export const DEFAULTS: Tweaks = {
 
 export const STORAGE_KEY = "job-scraper-tweaks";
 
-// CSS variable names that theme switching can override
 export const THEME_VAR_NAMES = [
 	"--color-sidebar",
 	"--color-sidebar-hover",
@@ -155,7 +154,6 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 			su: "oklch(1 0 0)",
 			bd: "oklch(0.93 0.01 290)",
 		},
-		// empty = use pristine @theme values (violet is the system default)
 		vars: {},
 	},
 	midnight: {
@@ -377,8 +375,6 @@ export const FONTS: Record<FontKey, FontEntry> = {
 };
 
 export const FONT_KEYS: FontKey[] = ["jakarta", "dm", "sora", "outfit", "ibm"];
-
-// ── Persistence ────────────────────────────────────────────────────────────
 
 function savedChoice<T extends string>(
 	value: unknown,

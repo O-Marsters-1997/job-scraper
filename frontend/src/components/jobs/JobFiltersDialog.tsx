@@ -68,13 +68,11 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 				<Overlay class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
 				<Content
 					class={cn(
-						// Mobile: bottom sheet
 						"fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-border bg-surface shadow-2xl",
 						"data-[expanded]:animate-in data-[closed]:animate-out",
 						"data-[expanded]:slide-in-from-bottom data-[closed]:slide-out-to-bottom",
 						"data-[expanded]:fade-in-0 data-[closed]:fade-out-0",
 						"data-[expanded]:duration-300 data-[closed]:duration-200",
-						// Desktop: centered modal
 						"md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border",
 						"md:data-[expanded]:slide-in-from-bottom-0 md:data-[expanded]:zoom-in-95 md:data-[closed]:zoom-out-95",
 					)}

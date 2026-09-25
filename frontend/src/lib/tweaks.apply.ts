@@ -53,7 +53,6 @@ export function applyTheme(
 	// Remove all theme var overrides first (restores @theme values for violet)
 	for (const v of THEME_VAR_NAMES) root.style.removeProperty(v);
 	if (key === "custom") {
-		// Apply every custom colour entry
 		const colors = customColors ?? CUSTOM_DEFAULTS;
 		for (const [v, val] of Object.entries(colors)) {
 			root.style.setProperty(v, val);

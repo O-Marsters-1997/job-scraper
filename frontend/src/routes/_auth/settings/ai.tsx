@@ -105,7 +105,6 @@ function AiForm(props: { data: AiPrefs }) {
 			<FormFeedback success={saved()} error={saveError()} />
 
 			<div class="flex flex-col gap-5">
-				{/* Scoring model picker */}
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">Scoring model</p>
@@ -141,7 +140,6 @@ function AiForm(props: { data: AiPrefs }) {
 					</div>
 				</Card>
 
-				{/* Reasoning model picker */}
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">
@@ -180,7 +178,6 @@ function AiForm(props: { data: AiPrefs }) {
 					</div>
 				</Card>
 
-				{/* API key */}
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">

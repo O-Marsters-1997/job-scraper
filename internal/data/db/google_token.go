@@ -15,7 +15,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
-// GetGoogleToken retrieves and decrypts the stored OAuth token for the user.
 func (db *DB) GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error) {
 	const q = `
 		SELECT access_token_enc, refresh_token_enc, token_type, expiry, scope
@@ -49,7 +48,6 @@ func (db *DB) GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToke
 	}, nil
 }
 
-// UpsertGoogleToken inserts or replaces the encrypted OAuth token for the user.
 func (db *DB) UpsertGoogleToken(ctx context.Context, input dto.UpsertGoogleTokenInput) error {
 	const q = `
 		INSERT INTO google_oauth_tokens
@@ -90,8 +88,7 @@ func (db *DB) DeleteGoogleToken(ctx context.Context, userID string) error {
 	return nil
 }
 
-// GoogleTokenStore adapts *DB to the google.TokenStore interface, handling
-// encryption/decryption of access and refresh tokens.
+// GoogleTokenStore adapts *DB to the google.TokenStore interface.
 type GoogleTokenStore struct {
 	db *DB
 }

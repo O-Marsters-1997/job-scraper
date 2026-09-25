@@ -11,7 +11,6 @@ export function ApplicationPipelineChart(props: {
 	statuses: ApplicationStatus[];
 	chartsReady: boolean;
 }) {
-	// Loader guarantees statuses are present at mount — initialize directly.
 	const [selectedStatuses, setSelectedStatuses] = createSignal(
 		new Set(props.statuses.map((s) => s.ID)),
 	);
@@ -65,7 +64,6 @@ export function ApplicationPipelineChart(props: {
 					when={totalApps() > 0}
 					fallback={<p class="text-sm text-faint">No applications yet.</p>}
 				>
-					{/* Multiselect chips */}
 					<div class="mb-3 flex flex-wrap items-center gap-1.5">
 						<For each={props.statuses}>
 							{(s) => {
@@ -109,7 +107,6 @@ export function ApplicationPipelineChart(props: {
 								);
 							}}
 						</For>
-						{/* All / None */}
 						<span class="ml-0.5 flex items-center gap-1 text-xs text-faint">
 							<button
 								type="button"

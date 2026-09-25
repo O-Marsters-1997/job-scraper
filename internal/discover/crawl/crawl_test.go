@@ -74,8 +74,6 @@ func TestParseATSLinks(t *testing.T) {
 	}
 }
 
-// fakeStore is an in-memory CompanyStore for exercising the crawl loop
-// without a real database.
 type fakeStore struct {
 	toCrawl []dto.Company
 	upserts []dto.CompanyUpsert

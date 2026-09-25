@@ -1,15 +1,15 @@
-# ADR 0022 — `Handle` as the one pipeline every handler goes through
+# ADR 0023 — `Handle` as the one pipeline every handler goes through
 
 **Status:** Accepted
 
 ## Context
 
-ADR 0021 gave `internal/handlers` six CRUD-shaped generics (`GetAll`, `GetByID`, `Query`,
-`Create`, `Update`, `Delete`) and let everything else — cookie-setting, redirecting, streaming
-and service-token routes — stay a hand-written `func X(svc) http.HandlerFunc`, each repeating
-its own version of "read the session, decode, call the service, map the error, write the
-response." That's fine for the six shaped routes, which all funnel through the same adapter
-helpers (`caller`, `decodeBody`/`decodeQuery`, `writeJSON`, `writeError`), but the misfits
+ADR 0020 gave `internal/handlers` six CRUD-shaped generics (`GetAll`, `GetByID`, `Query`,
+`Create`, `Update`, `Delete`) and left everything else — cookie-setting, redirecting, streaming
+and service-token routes — as a hand-written `func X(svc) http.HandlerFunc`, each repeating its
+own version of "read the session, decode, call the service, map the error, write the response."
+That's fine for the six shaped routes, which all funnel through the same adapter helpers
+(`caller`, `decodeBody`/`decodeQuery`, `writeJSON`, `writeError`), but the misfits
 (`Login`/`Signup`/`Logout`/`Me`, `OAuthStart`/`OAuthCallback`, `ExportCV`, `Ingest`/
 `IngestBatch`) only share those helpers by convention — nothing stops a new misfit from
 skipping a step, and the six generics themselves duplicate the same four-line
@@ -57,7 +57,7 @@ session/decode/call/error shell six times.
   `router.go` gets `middleware.RequestSize(2 << 20)` instead. Same cap, enforced one layer up.
 - **No new enforcement mechanism.** This ADR and `AGENTS.md` state the rule; a handler that
   doesn't go through `Handle` is something a reviewer (human or agent) should catch, the same
-  way ADR 0021's "no closures in `router.go`" rule is enforced today.
+  way ADR 0020's "no closures in `router.go`" rule is enforced today.
 
 ## Consequences
 
@@ -74,8 +74,8 @@ session/decode/call/error shell six times.
 
 ## Supersedes
 
-Supersedes the "misfits stay in `internal/handlers`, as functions over a service, not a
-struct" clause of ADR 0021 (and, by extension, ADR 0020's original adapter helpers) to the
-extent that clause implied those routes didn't need to share `Handle`'s structure — they still
-live in `internal/handlers` as `func(svc) http.HandlerFunc` closures, they just build that
-closure from `Handle` now.
+Supersedes the part of ADR 0020's "Misfits" bullet that left cookie/redirect/stream/
+service-token routes as free-standing `func(svc) http.HandlerFunc`s following the adapter
+contract "by convention." They still live in `internal/handlers` as
+`func(svc) http.HandlerFunc` closures — that part is unchanged — they just build that closure
+from `Handle` now, same as every other handler in the package.

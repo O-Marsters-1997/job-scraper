@@ -431,14 +431,12 @@ func TestService_RemoveDoc(t *testing.T) {
 
 			svc := cvtemplates.NewService(gc, st)
 
-			// First removal always succeeds; second (i==1) tests the sentinel.
 			if i == 0 {
 				if err := svc.RemoveDoc(context.Background(), "u1", "docA"); err != nil {
 					t.Fatalf("unexpected error on first remove: %v", err)
 				}
 				return
 			}
-			// Remove once to clear the doc, then remove again to hit the sentinel.
 			_ = svc.RemoveDoc(context.Background(), "u1", "docA")
 			err := svc.RemoveDoc(context.Background(), "u1", "docA")
 			if !errors.Is(err, tc.wantErr) {

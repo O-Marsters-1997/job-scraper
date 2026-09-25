@@ -1,5 +1,3 @@
-// Package applications holds the domain rules for creating and updating a
-// job application. Persistence goes through providers.ApplicationProvider.
 package applications
 
 import (
@@ -50,8 +48,7 @@ func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQue
 	return s.applications.ListApplicationsByUser(ctx, userID)
 }
 
-// ForJobs returns each of q.JobIDs's application summary, keyed by job ID. An
-// empty JobIDs returns an empty map rather than looking anything up.
+// ForJobs returns each of q.JobIDs's application summary, keyed by job ID.
 func (s *Service) ForJobs(ctx context.Context, userID string, q dto.ApplicationsForJobsQuery) (map[string]dto.JobApplicationSummary, error) {
 	if q.JobIDs == "" {
 		return map[string]dto.JobApplicationSummary{}, nil

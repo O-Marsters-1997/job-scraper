@@ -1,12 +1,9 @@
-// Adapter turns a service or provider method into an http.HandlerFunc: it
-// resolves the caller, decodes the body, maps a returned apperr kind to a
-// status, and encodes the result. See docs/adr/0020, docs/adr/0021 and
-// docs/adr/0022.
 package handlers
 
 import (
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
 	"reflect"
 
@@ -52,9 +49,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		msg = "internal server error"
 	}
 	body := map[string]any{"error": msg}
-	for k, v := range apperr.FieldsFor(err) {
-		body[k] = v
-	}
+	maps.Copy(body, apperr.FieldsFor(err))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)

@@ -10,7 +10,7 @@ import (
 // MockJobScoreProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockJobScoreProvider struct {
 	mu     sync.Mutex
-	scores map[string]dto.JobScore // keyed by jobID
+	scores map[string]dto.JobScore
 
 	GetErr    error
 	UpsertErr error

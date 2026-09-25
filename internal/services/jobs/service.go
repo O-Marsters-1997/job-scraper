@@ -1,6 +1,3 @@
-// Package jobs holds the domain rules for listing and reading jobs,
-// including cursor-based pagination. Persistence goes through
-// providers.JobProvider.
 package jobs
 
 import (
@@ -31,7 +28,6 @@ func New(jobs providers.JobProvider) *Service {
 	return &Service{jobs: jobs}
 }
 
-// List returns a cursor-paginated page of the caller's jobs.
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (providers.JobPage, error) {
 	limit := defaultLimit
 	if q.Limit != "" {

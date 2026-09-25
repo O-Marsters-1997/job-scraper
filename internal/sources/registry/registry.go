@@ -10,17 +10,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sources/greenhouse"
 )
 
-// sourceKind classifies how a source target's value is interpreted.
 type sourceKind int
 
 const (
-	// kindBoard identifies ATS sources whose value is a board token (e.g. "acmecorp").
 	kindBoard sourceKind = iota
-	// kindURL identifies sources whose value is a URL (e.g. a LinkedIn search URL).
 	kindURL
-	// kindFilter identifies sources whose value is a keyword string and whose structured
-	// parameters (e.g. region) are stored in the filters map. The source builds its own
-	// start URLs from the user input merged with hardcoded params.
 	kindFilter
 )
 
@@ -67,12 +61,11 @@ type registryEntry struct {
 	kind          sourceKind
 	role          string
 	urlPrefix     string
-	filters       []FilterField // non-nil only for kindFilter sources
+	filters       []FilterField
 	requestGap    time.Duration
 	newPageSource func(string) sources.PageSource
 }
 
-// The names here must match the Name field baked into each source's Config.
 var entries = []registryEntry{
 	{name: "greenhouse", label: "Greenhouse", kind: kindBoard, role: RoleATS, urlPrefix: "https://boards.greenhouse.io", requestGap: 2 * time.Second, newPageSource: func(token string) sources.PageSource {
 		return greenhouse.New(greenhouse.Config{Boards: []string{token}})
@@ -101,7 +94,6 @@ var entries = []registryEntry{
 	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com"},
 }
 
-// Sources returns the full registry as a slice of serialisable SourceInfo values.
 func Sources() []SourceInfo {
 	infos := make([]SourceInfo, len(entries))
 	for i, e := range entries {
@@ -174,7 +166,6 @@ type Entry struct {
 	Details    sources.PageDetailFetcher
 }
 
-// Open constructs a page source for one saved target.
 func Open(target dto.SourceTarget) (Entry, error) {
 	registration, ok := findEntry(target.Source)
 	if !ok || registration.newPageSource == nil {

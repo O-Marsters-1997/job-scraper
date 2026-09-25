@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	baseURL = "https://api.ycombinator.com/v0.1/companies?page=1"
-	// maxPages bounds pagination so a misbehaving nextPage chain can't loop forever.
+	baseURL  = "https://api.ycombinator.com/v0.1/companies?page=1"
 	maxPages = 100
 )
 
@@ -81,8 +80,6 @@ type apiCompany struct {
 	Website string `json:"website"`
 }
 
-// parseCompanies is pure so it can be tested against a saved fixture without
-// network access.
 func parseCompanies(body []byte) (companies []discover.Company, next string, err error) {
 	var resp apiResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -102,9 +99,6 @@ func parseCompanies(body []byte) (companies []discover.Company, next string, err
 	return companies, resp.NextPage, nil
 }
 
-// hostOf strips scheme, path, and a leading "www." label from a website URL,
-// e.g. "https://www.acme.com/careers" -> "acme.com". Returns "" for blank or
-// unparseable input.
 func hostOf(website string) string {
 	if website == "" {
 		return ""

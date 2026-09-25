@@ -29,6 +29,5 @@ export function setDemoData(value: boolean): void {
 	} catch {
 		// Private/incognito mode may block sessionStorage writes — ignore.
 	}
-	// Query keys don't encode the flag; invalidate so active queries refetch.
 	queryClient.invalidateQueries();
 }

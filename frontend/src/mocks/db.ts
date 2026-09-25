@@ -7,8 +7,6 @@ import type { SourceTarget } from "@/types/sourceTarget";
 
 faker.seed(1234);
 
-// ─── Statuses ─────────────────────────────────────────────────────────────────
-
 const STATUS_DEFINITIONS = [
 	{ name: "Saved", colour: "#64748b" },
 	{ name: "Applied", colour: "#2563eb" },
@@ -25,8 +23,6 @@ let statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	Colour: s.colour,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
-
-// ─── Jobs ─────────────────────────────────────────────────────────────────────
 
 const COMPANIES = [
 	"Monzo",
@@ -91,7 +87,7 @@ const SOURCES = [
 	"Lever",
 ];
 
-// ─── Optional rich-field pools (index-modular, no faker calls — seed preserved) ─
+// Optional rich-field pools (index-modular, no faker calls — seed preserved)
 
 const JOB_DESCRIPTIONS = [
 	`We're building the infrastructure that powers payments for millions of people. As a key member of our engineering team, you'll design, build, and scale distributed systems that handle real-time financial transactions at global scale.\n\nYou'll work closely with product, data, and design teams to ship features end-to-end — from architecture decisions to production monitoring. We operate a 'you build it, you run it' culture, so you'll own your services in production.\n\nWe're looking for engineers who care deeply about reliability, security, and developer experience. You'll be joining a team of 8 engineers embedded in a product squad, shipping roughly every two weeks.`,
@@ -223,7 +219,6 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 			i % 4 === 0 ? null : faker.number.int({ min: 40, max: 100 }),
 		SuitabilityScore:
 			i % 5 === 0 ? null : faker.number.int({ min: 30, max: 100 }),
-		// Optional rich fields — index-modular, no faker (seed preserved)
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
 		Skills: SKILL_SETS[i % SKILL_SETS.length]!,
 		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length]!,
@@ -234,12 +229,9 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 	};
 });
 
-// Sort descending so most-recent jobs appear first
 jobs.sort(
 	(a, b) => new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
 );
-
-// ─── Companies ────────────────────────────────────────────────────────────────
 
 const ATS_SOURCES = [
 	"greenhouse",
@@ -250,7 +242,6 @@ const ATS_SOURCES = [
 	"personio",
 ];
 
-// ponytail: even index → has a known ATS board, every fourth of those is tracked
 let companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 	const slug = slugify(name);
 	const hasBoard = i % 2 === 0;
@@ -305,8 +296,6 @@ function humanizeSlug(slug: string): string {
 		.join(" ");
 }
 
-// ─── Applications ─────────────────────────────────────────────────────────────
-//
 // Distribution across 12 jobs gives 42 % response rate (5 of 12 heard back)
 // and 7 awaiting response (Saved + Applied).
 

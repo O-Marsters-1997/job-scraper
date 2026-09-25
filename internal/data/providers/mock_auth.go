@@ -9,14 +9,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// MockApplicationStatusProvider is an in-memory mock for use in tests. Zero
-// value is usable; CountsInUse lets a test make DeleteApplicationStatus see
-// a status as still in use.
 type MockApplicationStatusProvider struct {
 	mu       sync.Mutex
-	statuses map[string]dto.ApplicationStatus // keyed by id
+	statuses map[string]dto.ApplicationStatus
 
-	CountsInUse map[string]int64 // keyed by status id
+	CountsInUse map[string]int64
 }
 
 func (m *MockApplicationStatusProvider) SeedDefaultStatuses(_ context.Context, _ string) error {
@@ -72,7 +69,7 @@ func (m *MockApplicationStatusProvider) CountApplicationsUsingStatus(_ context.C
 // MockUserProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockUserProvider struct {
 	mu    sync.Mutex
-	users map[string]dto.User // keyed by username
+	users map[string]dto.User
 
 	GetUserErr error
 	CreateErr  error
@@ -115,7 +112,7 @@ func (m *MockUserProvider) CreateUser(_ context.Context, username, passwordHash,
 // MockSessionProvider lives outside _test.go so it can be imported by tests in other packages.
 type MockSessionProvider struct {
 	mu       sync.Mutex
-	sessions map[string]dto.Session // keyed by session id
+	sessions map[string]dto.Session
 
 	CreateErr error
 	GetErr    error

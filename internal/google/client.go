@@ -192,7 +192,6 @@ func (s *savingSource) Token() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Best-effort persist; ignore the error so the caller still gets a client.
 	_ = s.store.SaveToken(s.ctx, s.userID, tok)
 	return tok, nil
 }

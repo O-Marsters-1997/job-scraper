@@ -17,11 +17,8 @@ export function JobRowExpander(props: Props) {
 	const skipped = () => props.job.SuitabilitySkipped ?? false;
 
 	const isSkipped = () => skipped();
-	// State 1: scored with reasoning
 	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
-	// State 2: scored, no reasoning yet — show explain button
 	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
-	// State 3: pending
 	const isPending = () => !isSkipped() && score() == null;
 
 	return (
@@ -33,10 +30,8 @@ export function JobRowExpander(props: Props) {
 			</Show>
 
 			<Show when={isScored()}>
-				{/* Rationale */}
 				<p class="text-xs leading-relaxed text-muted">{reasoning()}</p>
 
-				{/* Matched chips */}
 				<Show when={matched().length > 0}>
 					<div class="flex flex-col gap-1">
 						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
@@ -62,7 +57,6 @@ export function JobRowExpander(props: Props) {
 					</div>
 				</Show>
 
-				{/* Missing chips */}
 				<Show when={missing().length > 0}>
 					<div class="flex flex-col gap-1">
 						<span class="text-2xs font-medium uppercase tracking-wide text-faint">

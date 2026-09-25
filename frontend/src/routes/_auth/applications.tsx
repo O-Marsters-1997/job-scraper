@@ -104,7 +104,6 @@ function ApplicationsPage() {
 				subtitle="Track where each application stands"
 			/>
 
-			{/* Filter bar */}
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
 				<button
 					type="button"
@@ -192,7 +191,6 @@ function ApplicationsPage() {
 				)}
 			</QueryBoundary>
 
-			{/* Edit modal */}
 			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>
 				<DialogContent>
 					<DialogHeader>
@@ -263,7 +261,6 @@ function ApplicationsPage() {
 				</DialogContent>
 			</Dialog>
 
-			{/* Delete confirmation */}
 			<Dialog
 				open={deletingApp() !== null}
 				onOpenChange={(open) => !open && setDeletingApp(null)}
