@@ -185,6 +185,7 @@ type SearchConfig struct {
 	ExcludedLocations     []string
 	SuitabilityRubric     string
 	NotifyThreshold       int32
+	ScoringQuestions      []byte
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
 }
