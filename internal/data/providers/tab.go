@@ -2,12 +2,12 @@ package providers
 
 import (
 	"context"
-	"errors"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrTabNotFound = errors.New("tab not found")
+var ErrTabNotFound = apperr.NotFound("tab not found")
 
 type TabProvider interface {
 	EnsureTabs(ctx context.Context, trackedDocID string, tabIDs []string, titles []string) error

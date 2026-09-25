@@ -2,12 +2,12 @@ package providers
 
 import (
 	"context"
-	"errors"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var ErrTrackedDocNotFound = errors.New("tracked doc not found")
+var ErrTrackedDocNotFound = apperr.NotFound("tracked doc not found")
 
 type TrackedDocProvider interface {
 	AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput) error

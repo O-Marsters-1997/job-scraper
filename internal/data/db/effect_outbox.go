@@ -5,8 +5,11 @@ import (
 	"fmt"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
+
+var _ providers.ScoringEffectsProvider = (*DB)(nil)
 
 func (db *DB) ClaimScoringEffect(ctx context.Context) (dto.ScoringEffect, error) {
 	row, err := db.queries.ClaimScoringEffect(ctx)
@@ -46,11 +49,10 @@ func (db *DB) CompleteScoringEffect(ctx context.Context, effect dto.ScoringEffec
 	return rows == 1, nil
 }
 
-type ScoringStatus struct {
-	Pending int64 `json:"pending"`
-	Failed  int64 `json:"failed"`
-	Stale   int64 `json:"stale"`
-}
+// ScoringStatus is an alias so existing callers keep compiling; the type
+// itself lives in dto so internal/data/providers can declare an interface
+// against it without importing db.
+type ScoringStatus = dto.ScoringStatus
 
 func (db *DB) GetScoringStatus(ctx context.Context, userID string) (ScoringStatus, error) {
 	uid, err := parseUUID(userID)

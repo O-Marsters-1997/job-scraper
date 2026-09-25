@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/docref"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -52,8 +53,8 @@ type Service struct {
 }
 
 var (
-	ErrInvalidDoc      = errors.New("invalid Google Docs URL or ID")
-	ErrInaccessibleDoc = errors.New("cannot access document")
+	ErrInvalidDoc      = apperr.Invalid("invalid Google Docs URL or ID")
+	ErrInaccessibleDoc = apperr.NotFound("cannot access document")
 )
 
 func NewService(gc googleClient, s store) *Service {

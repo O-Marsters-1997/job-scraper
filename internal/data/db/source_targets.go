@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
@@ -188,6 +189,10 @@ func (db *DB) CreateSourceTarget(ctx context.Context, userID, source, value stri
 		Filters: filtersJSON,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return dto.SourceTarget{}, providers.ErrSourceTargetExists
+		}
 		return dto.SourceTarget{}, fmt.Errorf("db.CreateSourceTarget: %w", err)
 	}
 	return fromSourceTarget(row), nil
@@ -206,6 +211,10 @@ func (db *DB) CreateSourceTargetWithRun(ctx context.Context, userID, source, val
 		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return dto.SourceTarget{}, providers.ErrSourceTargetExists
+		}
 		return dto.SourceTarget{}, fmt.Errorf("create source target with run: %w", err)
 	}
 	return fromSourceTarget(row), nil

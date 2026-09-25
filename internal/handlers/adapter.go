@@ -104,6 +104,23 @@ func ID[Out any](fn func(ctx context.Context, userID, id string) (Out, error), s
 	}
 }
 
+// ID2 adapts a function of (ctx, userID, docID, tabID) to an http.HandlerFunc,
+// taking docID and tabID from the "docId" and "tabId" chi URL params.
+func ID2[Out any](fn func(ctx context.Context, userID, docID, tabID string) (Out, error), status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := Caller(w, r)
+		if !ok {
+			return
+		}
+		out, err := fn(r.Context(), userID, chi.URLParam(r, "docId"), chi.URLParam(r, "tabId"))
+		if err != nil {
+			WriteError(w, r, err)
+			return
+		}
+		WriteJSON(w, status, out)
+	}
+}
+
 // Body adapts a function of (ctx, userID, in) to an http.HandlerFunc, in
 // decoded from the request body.
 func Body[In, Out any](fn func(ctx context.Context, userID string, in In) (Out, error), status int) http.HandlerFunc {

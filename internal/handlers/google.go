@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
@@ -32,8 +33,7 @@ func NewGoogleHandler(client *igoogle.Client) *GoogleHandler {
 func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
 	state, err := generateState()
 	if err != nil {
-		slog.Error("generate oauth state failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 	setStateCookie(w, state)
@@ -42,7 +42,7 @@ func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
 
 func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if !validateStateCookie(r, r.URL.Query().Get("state")) {
-		http.Error(w, "invalid oauth state", http.StatusBadRequest)
+		WriteError(w, r, apperr.Invalid("invalid oauth state"))
 		return
 	}
 
@@ -55,14 +55,13 @@ func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "missing code", http.StatusBadRequest)
+		WriteError(w, r, apperr.Invalid("missing code"))
 		return
 	}
 
 	tok, err := h.client.Exchange(r.Context(), code)
 	if err != nil {
-		slog.Error("oauth token exchange failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
@@ -73,8 +72,7 @@ func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.client.SaveToken(r.Context(), session.UserID, tok); err != nil {
-		slog.Error("save google token failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
@@ -97,23 +95,19 @@ func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, providers.ErrGoogleTokenNotFound):
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(response{Connected: false})
+			WriteJSON(w, http.StatusOK, response{Connected: false})
 		case errors.Is(err, providers.ErrGoogleTokenUnusable):
 			slog.Warn("google token unusable, treating as disconnected", slog.Any("err", err))
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(response{Connected: false})
+			WriteJSON(w, http.StatusOK, response{Connected: false})
 		default:
-			slog.Error("get google http client failed", slog.Any("err", err))
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			WriteError(w, r, err)
 		}
 		return
 	}
 
 	resp, err := hc.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		slog.Error("google userinfo fetch failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -122,13 +116,11 @@ func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		slog.Error("decode google userinfo failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response{Connected: true, Email: info.Email})
+	WriteJSON(w, http.StatusOK, response{Connected: true, Email: info.Email})
 }
 
 func (h *GoogleHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
@@ -139,8 +131,7 @@ func (h *GoogleHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.client.DeleteToken(r.Context(), session.UserID); err != nil {
-		slog.Error("delete google token failed", slog.Any("err", err))
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 

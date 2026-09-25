@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -50,13 +51,13 @@ func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 		var err error
 		limit, err = strconv.Atoi(raw)
 		if err != nil || limit < 1 || limit > 100 {
-			http.Error(w, "limit must be between 1 and 100", http.StatusBadRequest)
+			WriteError(w, r, apperr.Invalid("limit must be between 1 and 100"))
 			return
 		}
 	}
 	availability := r.URL.Query().Get("availability")
 	if availability != "" && availability != "open" && availability != "closed" && availability != "all" {
-		http.Error(w, "invalid availability", http.StatusBadRequest)
+		WriteError(w, r, apperr.Invalid("invalid availability"))
 		return
 	}
 	options := providers.JobPageOptions{Limit: int32(limit + 1), Availability: availability, CompanyID: r.URL.Query().Get("company_id")}
@@ -70,7 +71,7 @@ func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 			err = json.Unmarshal(data, &cursor)
 		}
 		if err != nil || cursor.Time.IsZero() || cursor.ID == "" {
-			http.Error(w, "invalid cursor", http.StatusBadRequest)
+			WriteError(w, r, apperr.Invalid("invalid cursor"))
 			return
 		}
 		options.CursorTime, options.CursorID = cursor.Time, cursor.ID
@@ -78,13 +79,10 @@ func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	jobs, err := h.jobs.Page(r.Context(), session.UserID, options)
 	if err != nil {
 		if errors.Is(err, providers.ErrInvalidID) {
-			http.Error(w, "invalid company or cursor ID", http.StatusBadRequest)
+			WriteError(w, r, apperr.Invalid("invalid company or cursor ID"))
 			return
 		}
-		slog.Error("list jobs failed",
-			slog.Any("err", err),
-		)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		WriteError(w, r, err)
 		return
 	}
 
@@ -101,12 +99,7 @@ func (h *JobHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 		jobs.Items = []dto.Job{}
 	}
 	slog.Info("list jobs", slog.Duration("latency", time.Since(started)), slog.Int("count", len(jobs.Items)))
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(jobs); err != nil {
-		slog.Error("encode jobs failed",
-			slog.Any("err", err),
-		)
-	}
+	WriteJSON(w, http.StatusOK, jobs)
 }
 
 func (h *JobHandler) ListAllJobs(w http.ResponseWriter, r *http.Request) {
