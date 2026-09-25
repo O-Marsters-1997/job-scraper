@@ -27,7 +27,6 @@ func fromSearchConfig(row pgsqlc.SearchConfig) (dto.SearchConfig, error) {
 		ExcludedCompanies:     row.ExcludedCompanies,
 		ExcludedSeniority:     row.ExcludedSeniority,
 		ExcludedLocations:     row.ExcludedLocations,
-		SuitabilityRubric:     row.SuitabilityRubric,
 		NotifyThreshold:       int(row.NotifyThreshold),
 		ScoringQuestions:      questions,
 		UpdatedAt:             row.UpdatedAt.Time,
@@ -84,7 +83,6 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedSeniority:     nonNilStrings(cfg.ExcludedSeniority),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
-		SuitabilityRubric:     cfg.SuitabilityRubric,
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
 		ScoringQuestions:      questions,
 	})

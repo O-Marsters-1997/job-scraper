@@ -5,8 +5,6 @@ function ok(cond: boolean, msg: string) {
 }
 
 const base = {
-	suitabilityRubric:
-		"I am a Go engineer looking for distributed systems roles.",
 	notifyThreshold: 70,
 	excludedTitleKeywords: ["java", "sales"],
 	excludedCompanies: ["acme corp"],

@@ -11,12 +11,9 @@ export interface Job {
 	DaysInOffice?: number | null;
 	WorkArrangement?: string;
 	SalaryRaw?: string;
-	RelevanceScore: number | null;
 	SuitabilityScore: number | null;
-	Reasoning?: string | null;
-	Matched?: string[] | null;
-	Missing?: string[] | null;
-	SuitabilitySkipped?: boolean;
+	Criteria?: Record<string, number> | null;
+	Confidence?: number | null;
 	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description?: string;
 	Skills?: string[];

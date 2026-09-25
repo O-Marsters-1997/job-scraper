@@ -1,15 +1,5 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
-import {
-	fetchAllJobs,
-	fetchJob,
-	fetchJobs,
-	requestJobReasoning,
-} from "../api/jobs";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { fetchAllJobs, fetchJob, fetchJobs } from "../api/jobs";
 
 export const jobsQueryOptions = queryOptions({
 	queryKey: ["jobs"],
@@ -35,12 +25,4 @@ export function useJob(id: () => string) {
 
 export function useJobs() {
 	return createQuery(() => jobsQueryOptions);
-}
-
-export function useRequestReasoning() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (jobId: string) => requestJobReasoning(jobId),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
-	}));
 }

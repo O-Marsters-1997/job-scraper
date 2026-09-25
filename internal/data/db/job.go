@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -54,32 +55,29 @@ func fromRow(row pgsqlc.Job) dto.Job {
 	return j
 }
 
-func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
+func fromListRow(row pgsqlc.ListJobsRow) (dto.Job, error) {
 	j := dto.Job{
-		ID:                 row.ID.String(),
-		Title:              row.Title,
-		Location:           row.Location,
-		URL:                row.Url,
-		CompanySlug:        row.CompanySlug,
-		Source:             row.Source,
-		UpdatedAt:          row.UpdatedAt.Time,
-		ScrapedAt:          row.ScrapedAt.Time,
-		SalaryRaw:          row.SalaryRaw,
-		WorkArrangement:    row.WorkArrangement,
-		Matched:            row.Matched,
-		Missing:            row.Missing,
-		SuitabilitySkipped: row.SuitabilitySkipped,
+		ID:              row.ID.String(),
+		Title:           row.Title,
+		Location:        row.Location,
+		URL:             row.Url,
+		CompanySlug:     row.CompanySlug,
+		Source:          row.Source,
+		UpdatedAt:       row.UpdatedAt.Time,
+		ScrapedAt:       row.ScrapedAt.Time,
+		SalaryRaw:       row.SalaryRaw,
+		WorkArrangement: row.WorkArrangement,
 	}
-	if row.RelevanceScore.Valid {
-		v := int(row.RelevanceScore.Int32)
-		j.RelevanceScore = &v
+	if err := unmarshalCriteria(row.Criteria, &j.Criteria); err != nil {
+		return dto.Job{}, err
 	}
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		j.SuitabilityScore = &v
 	}
-	if row.Reasoning.Valid {
-		j.Reasoning = &row.Reasoning.String
+	if row.Confidence.Valid {
+		v := float64(row.Confidence.Float32)
+		j.Confidence = &v
 	}
 	if row.CompanyID.Valid {
 		j.CompanyID = row.CompanyID.String()
@@ -89,7 +87,17 @@ func fromListRow(row pgsqlc.ListJobsRow) dto.Job {
 	}
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
-	return j
+	return j, nil
+}
+
+func unmarshalCriteria(raw []byte, out *map[string]float64) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return fmt.Errorf("unmarshal job score criteria: %w", err)
+	}
+	return nil
 }
 
 func (db *DB) Save(ctx context.Context, jobs []dto.Job) ([]dto.Job, error) {
@@ -142,7 +150,11 @@ func (db *DB) List(ctx context.Context, userID string) ([]dto.Job, error) {
 	}
 	jobs := make([]dto.Job, len(rows))
 	for i, row := range rows {
-		jobs[i] = fromListRow(row)
+		job, err := fromListRow(row)
+		if err != nil {
+			return nil, fmt.Errorf("db.List: %w", err)
+		}
+		jobs[i] = job
 	}
 	return jobs, nil
 }
@@ -175,7 +187,10 @@ func (db *DB) Page(ctx context.Context, userID string, options providers.JobPage
 	}
 	page := providers.JobPage{Items: make([]dto.Job, len(rows))}
 	for i, row := range rows {
-		job := dto.Job{ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url, CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time, ScrapedAt: row.ScrapedAt.Time, SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement, Matched: row.Matched, Missing: row.Missing, SuitabilitySkipped: row.SuitabilitySkipped}
+		job := dto.Job{ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url, CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time, ScrapedAt: row.ScrapedAt.Time, SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement}
+		if err := unmarshalCriteria(row.Criteria, &job.Criteria); err != nil {
+			return providers.JobPage{}, fmt.Errorf("db.Page: %w", err)
+		}
 		if row.CompanyID.Valid {
 			job.CompanyID = row.CompanyID.String()
 		}
@@ -184,49 +199,43 @@ func (db *DB) Page(ctx context.Context, userID string, options providers.JobPage
 		}
 		job.ProviderPostingID = row.ProviderPostingID.String
 		job.ContentFingerprint = row.ContentFingerprint.String
-		if row.RelevanceScore.Valid {
-			v := int(row.RelevanceScore.Int32)
-			job.RelevanceScore = &v
-		}
 		if row.SuitabilityScore.Valid {
 			v := int(row.SuitabilityScore.Int32)
 			job.SuitabilityScore = &v
 		}
-		if row.Reasoning.Valid {
-			job.Reasoning = &row.Reasoning.String
+		if row.Confidence.Valid {
+			v := float64(row.Confidence.Float32)
+			job.Confidence = &v
 		}
 		page.Items[i] = job
 	}
 	return page, nil
 }
 
-func fromGetJobRow(row pgsqlc.GetJobRow) dto.Job {
+func fromGetJobRow(row pgsqlc.GetJobRow) (dto.Job, error) {
 	j := dto.Job{
-		ID:                 row.ID.String(),
-		Title:              row.Title,
-		Location:           row.Location,
-		URL:                row.Url,
-		CompanySlug:        row.CompanySlug,
-		Source:             row.Source,
-		UpdatedAt:          row.UpdatedAt.Time,
-		ScrapedAt:          row.ScrapedAt.Time,
-		Description:        row.Description,
-		SalaryRaw:          row.SalaryRaw,
-		WorkArrangement:    row.WorkArrangement,
-		Matched:            row.Matched,
-		Missing:            row.Missing,
-		SuitabilitySkipped: row.SuitabilitySkipped,
+		ID:              row.ID.String(),
+		Title:           row.Title,
+		Location:        row.Location,
+		URL:             row.Url,
+		CompanySlug:     row.CompanySlug,
+		Source:          row.Source,
+		UpdatedAt:       row.UpdatedAt.Time,
+		ScrapedAt:       row.ScrapedAt.Time,
+		Description:     row.Description,
+		SalaryRaw:       row.SalaryRaw,
+		WorkArrangement: row.WorkArrangement,
 	}
-	if row.RelevanceScore.Valid {
-		v := int(row.RelevanceScore.Int32)
-		j.RelevanceScore = &v
+	if err := unmarshalCriteria(row.Criteria, &j.Criteria); err != nil {
+		return dto.Job{}, err
 	}
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		j.SuitabilityScore = &v
 	}
-	if row.Reasoning.Valid {
-		j.Reasoning = &row.Reasoning.String
+	if row.Confidence.Valid {
+		v := float64(row.Confidence.Float32)
+		j.Confidence = &v
 	}
 	if row.CompanyID.Valid {
 		j.CompanyID = row.CompanyID.String()
@@ -236,7 +245,7 @@ func fromGetJobRow(row pgsqlc.GetJobRow) dto.Job {
 	}
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
-	return j
+	return j, nil
 }
 
 func (db *DB) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error) {
@@ -255,7 +264,11 @@ func (db *DB) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	if err != nil {
 		return dto.Job{}, fmt.Errorf("db.GetJob: %w", err)
 	}
-	return fromGetJobRow(row), nil
+	job, err := fromGetJobRow(row)
+	if err != nil {
+		return dto.Job{}, fmt.Errorf("db.GetJob: %w", err)
+	}
+	return job, nil
 }
 
 func (db *DB) OpenJobURLsForBoard(ctx context.Context, source, companySlug string) ([]string, error) {

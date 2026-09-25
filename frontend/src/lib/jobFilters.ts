@@ -3,7 +3,6 @@ import type { Job } from "@/types/job";
 export interface JobFilters {
 	q: string;
 	suit?: number | undefined;
-	rel?: number | undefined;
 	src: string[];
 	work: string[];
 	sal: boolean;
@@ -17,7 +16,6 @@ export const DEFAULT_FILTERS: JobFilters = {
 	work: [],
 	sal: false,
 	suit: undefined,
-	rel: undefined,
 	salMin: undefined,
 	salMax: undefined,
 };
@@ -36,7 +34,6 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 	return {
 		q: typeof raw.q === "string" ? raw.q : "",
 		suit: coerceNum(raw.suit),
-		rel: coerceNum(raw.rel),
 		src: coerceArr(raw.src),
 		work: coerceArr(raw.work),
 		sal: raw.sal === true || raw.sal === "true",
@@ -86,8 +83,6 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 			if (!hay.includes(q)) return false;
 		}
 		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
-			return false;
-		if (f.rel !== undefined && (j.RelevanceScore ?? -Infinity) < f.rel)
 			return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))

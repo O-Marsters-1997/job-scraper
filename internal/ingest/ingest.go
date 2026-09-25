@@ -109,10 +109,3 @@ func humanizeSlug(slug string) string {
 	}
 	return strings.Join(words, " ")
 }
-
-func ProviderForModel(modelID string) string {
-	if strings.HasPrefix(modelID, "claude-") {
-		return "anthropic"
-	}
-	return ""
-}

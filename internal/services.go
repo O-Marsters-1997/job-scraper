@@ -9,7 +9,6 @@ import (
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/ingest"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/services/aicredentials"
 	"github.com/ollymarsters/job-scraper/internal/services/aiprefs"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
@@ -18,7 +17,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	googlesvc "github.com/ollymarsters/job-scraper/internal/services/google"
-	"github.com/ollymarsters/job-scraper/internal/services/jobreasoning"
 	"github.com/ollymarsters/job-scraper/internal/services/jobs"
 	"github.com/ollymarsters/job-scraper/internal/services/profile"
 	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
@@ -42,7 +40,6 @@ type services struct {
 	sourceTargets       *sourcetargets.Service
 	companies           *companies.Service
 	cvTemplates         *cvtemplates.Service
-	jobReasoning        *jobreasoning.Service
 }
 
 func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) *services {
@@ -66,13 +63,10 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		sources:             sources.New(),
 		profile:             profile.New(db),
 		scoringConfig:       scoringconfig.New(db, candidateService, db),
-		aiPrefs:             aiprefs.New(db, creds),
+		aiPrefs:             aiprefs.New(creds),
 		aiCredentials:       aicredentials.New(creds),
 		sourceTargets:       sourcetargets.New(db, db, candidateService, q),
 		companies:           companies.New(db, db, companies.ATSBoardVerifier{}),
 		cvTemplates:         cvtemplates.NewService(googleClient, db),
-		jobReasoning: jobreasoning.New(db, db, db, db, creds, func(apiKey string) score.SuitabilityScorer {
-			return score.NewClaudeScorer(apiKey)
-		}),
 	}
 }

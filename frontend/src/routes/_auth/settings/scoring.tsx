@@ -166,7 +166,6 @@ function ScoringForm(props: { data: ScoringConfig }) {
 		setSaveError(null);
 		try {
 			await mutation.mutateAsync({
-				suitabilityRubric: props.data.suitabilityRubric,
 				notifyThreshold: threshold(),
 				excludedTitleKeywords: splitList(titleKeywords()),
 				excludedCompanies: splitList(companies()),

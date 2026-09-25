@@ -57,7 +57,6 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 
 	cfg := dto.SearchConfig{
 		UserID:                userID,
-		SuitabilityRubric:     in.SuitabilityRubric,
 		NotifyThreshold:       in.NotifyThreshold,
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
@@ -77,7 +76,6 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 	return dto.ScoringConfigView{
-		SuitabilityRubric:     cfg.SuitabilityRubric,
 		NotifyThreshold:       cfg.NotifyThreshold,
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
@@ -107,6 +105,9 @@ func validateScoringQuestions(q dto.ScoringQuestions) error {
 	}
 	seen := make(map[string]bool, len(q.Criteria))
 	for _, c := range q.Criteria {
+		if c.Key == score.OverallQuestionKey {
+			return apperr.Invalid("criterion key is reserved: " + c.Key)
+		}
 		if seen[c.Key] {
 			return apperr.Invalid("duplicate criterion key: " + c.Key)
 		}

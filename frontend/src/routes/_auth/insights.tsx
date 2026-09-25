@@ -4,7 +4,6 @@ import { ApplicationPipelineChart } from "@/components/insights/ApplicationPipel
 import { JobsBySourceChart } from "@/components/insights/JobsBySourceChart";
 import { JobsOverTimeChart } from "@/components/insights/JobsOverTimeChart";
 import { ScoreAndGateChart } from "@/components/insights/ScoreAndGateChart";
-import { SkillGapChart } from "@/components/insights/SkillGapChart";
 import { SourceQualityChart } from "@/components/insights/SourceQualityChart";
 import { registerCharts } from "@/lib/charts";
 import {
@@ -71,8 +70,6 @@ function InsightsPage() {
 			<ScoreAndGateChart jobs={jobs()} chartsReady={chartsReady()} />
 
 			<SourceQualityChart jobs={jobs()} chartsReady={chartsReady()} />
-
-			<SkillGapChart jobs={jobs()} chartsReady={chartsReady()} />
 		</div>
 	);
 }

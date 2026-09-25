@@ -98,12 +98,10 @@ CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    relevance_score      INT,
     suitability_score    INT,
-    reasoning            TEXT,
-    matched              TEXT[],
-    missing              TEXT[],
-    suitability_skipped  BOOLEAN     NOT NULL DEFAULT false,
+    criteria             JSONB       NOT NULL DEFAULT '{}',
+    confidence           REAL,
+    cost                 NUMERIC,
     score_fingerprint    TEXT,
     score_config_version TIMESTAMPTZ,
     score_model          TEXT,
@@ -138,20 +136,10 @@ CREATE TABLE IF NOT EXISTS search_config (
     excluded_companies      TEXT[]      NOT NULL DEFAULT '{}',
     excluded_seniority      TEXT[]      NOT NULL DEFAULT '{}',
     excluded_locations      TEXT[]      NOT NULL DEFAULT '{}',
-    suitability_rubric      TEXT        NOT NULL DEFAULT '',
     notify_threshold        INT         NOT NULL DEFAULT 70,
     scoring_questions       JSONB       NOT NULL DEFAULT '{}',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS user_ai_prefs (
-    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id           UUID        UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    suitability_model TEXT        NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
-    reasoning_model   TEXT        NOT NULL DEFAULT 'claude-sonnet-4-6',
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS user_ai_credentials (

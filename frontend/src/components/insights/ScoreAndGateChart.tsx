@@ -12,14 +12,12 @@ export function ScoreAndGateChart(props: {
 }) {
 	const gateStats = createMemo(() => {
 		let scored = 0;
-		let gated = 0;
 		let unscored = 0;
 		for (const job of props.jobs) {
 			if (job.SuitabilityScore != null) scored++;
-			else if (job.SuitabilitySkipped) gated++;
 			else unscored++;
 		}
-		return { scored, gated, unscored };
+		return { scored, unscored };
 	});
 
 	const hasScores = () => gateStats().scored > 0;
@@ -50,9 +48,11 @@ export function ScoreAndGateChart(props: {
 	return (
 		<Card class="mb-3 mt-3">
 			<div class="border-b border-border px-5 py-4">
-				<h3 class="text-sm font-semibold text-foreground">Score &amp; gate</h3>
+				<h3 class="text-sm font-semibold text-foreground">
+					Suitability scores
+				</h3>
 				<p class="mt-0.5 text-xs text-faint">
-					How the relevance gate and suitability scorer shaped your feed
+					How the suitability scorer has rated your feed so far
 				</p>
 			</div>
 			<div class="grid grid-cols-1 lg:grid-cols-[1fr_180px]">
@@ -75,17 +75,6 @@ export function ScoreAndGateChart(props: {
 						</div>
 						<p class="font-mono text-lg font-medium tabular-nums text-foreground">
 							{gateStats().scored}
-						</p>
-					</div>
-					<div class="flex items-center justify-between px-5 py-3.5">
-						<div>
-							<p class="text-xs font-medium text-muted">Gated</p>
-							<p class="mt-0.5 text-xs text-faint">
-								Blocked by relevance cutoff
-							</p>
-						</div>
-						<p class="font-mono text-lg font-medium tabular-nums text-foreground">
-							{gateStats().gated}
 						</p>
 					</div>
 					<div class="flex items-center justify-between px-5 py-3.5">

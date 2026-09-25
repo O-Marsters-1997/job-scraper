@@ -16,7 +16,6 @@ export const scoringQuestionsSchema = z.object({
 });
 
 export const scoringConfigSchema = z.object({
-	suitabilityRubric: z.string(),
 	notifyThreshold: z.number().int().min(0).max(100),
 	excludedTitleKeywords: z.array(z.string()),
 	excludedCompanies: z.array(z.string()),

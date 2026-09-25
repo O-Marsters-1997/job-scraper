@@ -1,113 +1,15 @@
-import { For, Show } from "solid-js";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useRequestReasoning } from "@/hooks/useJobs";
 import type { Job } from "@/types/job";
+import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export function SuitabilityPanel(props: { job: Job }) {
-	const reasoningMutation = useRequestReasoning();
-
-	const score = () => props.job.SuitabilityScore;
-	const reasoning = () => props.job.Reasoning ?? null;
-	const matched = () => props.job.Matched ?? [];
-	const missing = () => props.job.Missing ?? [];
-	const skipped = () => props.job.SuitabilitySkipped ?? false;
-
-	const isSkipped = () => skipped() && score() == null;
-	const isScored = () => !isSkipped() && score() != null && reasoning() != null;
-	const isLegacy = () => !isSkipped() && score() != null && reasoning() == null;
-	const isPending = () => !isSkipped() && score() == null;
-
 	return (
 		<Card>
 			<CardHeader class="pb-2">
 				<CardTitle>Suitability</CardTitle>
 			</CardHeader>
 			<CardContent class="gap-3">
-				<Show when={isSkipped()}>
-					<p class="rounded-md border border-border bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted">
-						Suitability scoring skipped — this job's relevance score was below
-						your cutoff.
-					</p>
-				</Show>
-
-				<Show when={isScored()}>
-					<div class="flex items-baseline gap-1">
-						<span class="font-mono text-lg font-semibold tabular-nums text-foreground">
-							{score()}
-						</span>
-						<span class="text-xs text-faint">/ 100</span>
-					</div>
-
-					<p class="rounded-md bg-surface-muted px-3 py-2 text-xs leading-relaxed text-muted">
-						{reasoning()}
-					</p>
-
-					<Show when={matched().length > 0}>
-						<div class="flex flex-col gap-1.5">
-							<span class="text-xs font-medium text-faint">Matched</span>
-							<div class="flex flex-wrap gap-1">
-								<For each={matched()}>
-									{(item) => (
-										<span
-											class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-											style={{
-												background: "color-mix(in srgb, #059669 12%, white)",
-												color: "color-mix(in srgb, #059669 80%, black)",
-												border:
-													"1px solid color-mix(in srgb, #059669 28%, white)",
-											}}
-										>
-											{item}
-										</span>
-									)}
-								</For>
-							</div>
-						</div>
-					</Show>
-
-					<Show when={missing().length > 0}>
-						<div class="flex flex-col gap-1.5">
-							<span class="text-xs font-medium text-faint">Missing</span>
-							<div class="flex flex-wrap gap-1">
-								<For each={missing()}>
-									{(item) => <Badge variant="secondary">{item}</Badge>}
-								</For>
-							</div>
-						</div>
-					</Show>
-				</Show>
-
-				<Show when={isLegacy()}>
-					<div class="flex items-baseline gap-1">
-						<span class="font-mono text-lg font-semibold tabular-nums text-foreground">
-							{score()}
-						</span>
-						<span class="text-xs text-faint">/ 100</span>
-					</div>
-					<Show
-						when={!reasoningMutation.isError}
-						fallback={
-							<p class="text-xs text-destructive-strong">
-								Failed to generate reasoning. Please try again.
-							</p>
-						}
-					>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => reasoningMutation.mutate(props.job.ID)}
-							disabled={reasoningMutation.isPending}
-						>
-							{reasoningMutation.isPending ? "Generating…" : "Explain score"}
-						</Button>
-					</Show>
-				</Show>
-
-				<Show when={isPending()}>
-					<p class="text-xs text-faint">Not yet scored.</p>
-				</Show>
+				<SuitabilityScoreValue score={props.job.SuitabilityScore} size="lg" />
 			</CardContent>
 		</Card>
 	);

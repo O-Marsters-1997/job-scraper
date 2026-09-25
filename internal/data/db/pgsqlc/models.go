@@ -149,12 +149,10 @@ type JobScore struct {
 	ID                 pgtype.UUID
 	JobID              pgtype.UUID
 	UserID             pgtype.UUID
-	RelevanceScore     pgtype.Int4
 	SuitabilityScore   pgtype.Int4
-	Reasoning          pgtype.Text
-	Matched            []string
-	Missing            []string
-	SuitabilitySkipped bool
+	Criteria           []byte
+	Confidence         pgtype.Float4
+	Cost               pgtype.Numeric
 	ScoreFingerprint   pgtype.Text
 	ScoreConfigVersion pgtype.Timestamptz
 	ScoreModel         pgtype.Text
@@ -183,7 +181,6 @@ type SearchConfig struct {
 	ExcludedCompanies     []string
 	ExcludedSeniority     []string
 	ExcludedLocations     []string
-	SuitabilityRubric     string
 	NotifyThreshold       int32
 	ScoringQuestions      []byte
 	CreatedAt             pgtype.Timestamptz
@@ -255,13 +252,4 @@ type UserAiCredential struct {
 	ApiKeyEnc string
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
-}
-
-type UserAiPref struct {
-	ID               pgtype.UUID
-	UserID           pgtype.UUID
-	SuitabilityModel string
-	ReasoningModel   string
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
 }

@@ -18,10 +18,7 @@ type Job struct {
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
-	RelevanceScore     *int
 	SuitabilityScore   *int
-	Reasoning          *string
-	Matched            []string
-	Missing            []string
-	SuitabilitySkipped bool
+	Criteria           map[string]float64
+	Confidence         *float64
 }

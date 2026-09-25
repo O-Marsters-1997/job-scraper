@@ -88,7 +88,9 @@ A 0–100 heuristic score of a Job's listing-card signals (title/company/locatio
 _Avoid_: Match score, filter score — keep distinct from Suitability
 
 **Suitability**:
-A 0–100 LLM (Claude Haiku) score of how well a Job fits a User's criteria, computed from full job text against a rubric after persistence; gates notification and ranks the list.
+A 0–100 score from Jev (TypeSafe, via OpenRouter) of how well a Job fits a User's criteria and
+scale, computed from structured job fields and a candidate profile after persistence; gates
+notification and ranks the list.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
@@ -112,7 +114,7 @@ A request to run a discovery Source Target now, including when it is first creat
 _Avoid_: immediate scrape, manual scrape, trigger
 
 **Search Config**:
-A User's editable search criteria (role, location, keywords), suitability rubric, relevance cutoff, and notify threshold — exactly one per User; the single source of truth feeding the relevance gate, the suitability scorer, and notifications.
+A User's editable search criteria (role, location, keywords), scoring questions (profile, criteria, scale), relevance cutoff, and notify threshold — exactly one per User; the single source of truth feeding the relevance gate, the suitability scorer, and notifications.
 _Avoid_: Settings, preferences, query
 
 ### CV templates

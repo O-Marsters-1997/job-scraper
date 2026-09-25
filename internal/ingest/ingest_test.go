@@ -33,18 +33,3 @@ func TestIngestJobsKeepsValidJobsAfterRejection(t *testing.T) {
 		t.Fatalf("results = %+v", results)
 	}
 }
-
-func TestProviderForModel(t *testing.T) {
-	for _, tc := range []struct {
-		modelID string
-		want    string
-	}{
-		{"claude-haiku-4-5-20251001", "anthropic"},
-		{"gpt-5", ""},
-		{"", ""},
-	} {
-		if got := ingest.ProviderForModel(tc.modelID); got != tc.want {
-			t.Errorf("ProviderForModel(%q) = %q; want %q", tc.modelID, got, tc.want)
-		}
-	}
-}

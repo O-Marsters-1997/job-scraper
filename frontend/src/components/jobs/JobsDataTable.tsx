@@ -36,7 +36,6 @@ export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
-	const [showSkipped, setShowSkipped] = createSignal(true);
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
 
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
@@ -44,14 +43,9 @@ export function JobsDataTable<TData extends Job>(
 	const toggleExpanded = (rowId: string) =>
 		setExpandedRow((prev) => (prev === rowId ? null : rowId));
 
-	const filteredData = () =>
-		showSkipped()
-			? props.data
-			: props.data.filter((job) => !job.SuitabilitySkipped);
-
 	const table = createSolidTable({
 		get data() {
-			return filteredData();
+			return props.data;
 		},
 		columns: props.columns,
 		getCoreRowModel: getCoreRowModel(),
@@ -127,17 +121,6 @@ export function JobsDataTable<TData extends Job>(
 						</Badge>
 					</Show>
 				</Button>
-				<label class="flex cursor-pointer items-center gap-1.5">
-					<input
-						type="checkbox"
-						checked={showSkipped()}
-						onChange={(e) => setShowSkipped(e.currentTarget.checked)}
-						class="h-3.5 w-3.5 rounded border-border accent-primary"
-					/>
-					<span class="text-xs font-medium text-muted">
-						Show below-cutoff jobs
-					</span>
-				</label>
 			</div>
 
 			<div class="overflow-hidden rounded-xl border border-border bg-surface">

@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 var baseJob = dto.Job{
@@ -221,7 +222,7 @@ func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
 	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	job := baseJob
@@ -309,7 +310,7 @@ func TestSaveCanonical_RejectFiltersSkipOnlyMatchingUser(t *testing.T) {
 			if _, err := testDB.SetCompanyTracking(ctx, filteredUser.ID, company.ID, true, 360); err != nil {
 				t.Fatal(err)
 			}
-			if err := testDB.UpsertUserAICredential(ctx, filteredUser.ID, "anthropic", "enc-key"); err != nil {
+			if err := testDB.UpsertUserAICredential(ctx, filteredUser.ID, "openrouter", "enc-key"); err != nil {
 				t.Fatal(err)
 			}
 
@@ -320,7 +321,7 @@ func TestSaveCanonical_RejectFiltersSkipOnlyMatchingUser(t *testing.T) {
 			if _, err := testDB.SetCompanyTracking(ctx, controlUser.ID, company.ID, true, 360); err != nil {
 				t.Fatal(err)
 			}
-			if err := testDB.UpsertUserAICredential(ctx, controlUser.ID, "anthropic", "enc-key"); err != nil {
+			if err := testDB.UpsertUserAICredential(ctx, controlUser.ID, "openrouter", "enc-key"); err != nil {
 				t.Fatal(err)
 			}
 
@@ -370,7 +371,7 @@ func TestSaveCanonical_NoCredentialQueuesNoEffect(t *testing.T) {
 	if _, err := testDB.SetCompanyTracking(ctx, credUser.ID, company.ID, true, 360); err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, credUser.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, credUser.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -397,7 +398,7 @@ func TestScoringEffect_LeaseAndRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
@@ -438,7 +439,7 @@ func TestScoringEffect_TerminalFailureFailsAtOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
@@ -473,7 +474,7 @@ func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
@@ -506,14 +507,14 @@ func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
 	}
 }
 
-func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
+func TestScoringEffect_RescoreAfterConfigChange(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "rescore-user", "hash", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "rescore-company", true, nil); err != nil {
@@ -529,15 +530,16 @@ func TestScoringEffect_RescoreAfterRubricChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 80, "", nil, nil); err != nil || !saved {
+	result := score.SuitabilityResult{Score: 80, Model: score.JevModel + "-snapshot"}
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, result); err != nil || !saved {
 		t.Fatal(err)
 	}
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "New rubric"}); err != nil {
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, NotifyThreshold: 90}); err != nil {
 		t.Fatal(err)
 	}
 	status, err := testDB.GetScoringStatus(ctx, user.ID)
 	if err != nil || status.Stale != 1 {
-		t.Fatalf("status after rubric edit = %+v, %v", status, err)
+		t.Fatalf("status after config edit = %+v, %v", status, err)
 	}
 	queued, err := testDB.QueueRescore(ctx, user.ID)
 	if err != nil || queued != 1 {
@@ -556,7 +558,7 @@ func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-key"); err != nil {
+	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "stale-effect-company", true, nil); err != nil {
@@ -572,10 +574,10 @@ func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, SuitabilityRubric: "Changed during scoring"}); err != nil {
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, NotifyThreshold: 90}); err != nil {
 		t.Fatal(err)
 	}
-	if saved, err := testDB.CompleteScoringEffect(ctx, effect, 90, "", nil, nil); err != nil || saved {
+	if saved, err := testDB.CompleteScoringEffect(ctx, effect, score.SuitabilityResult{Score: 90}); err != nil || saved {
 		t.Fatalf("stale score persisted=%v err=%v", saved, err)
 	}
 	if queued, err := testDB.QueueRescore(ctx, user.ID); err != nil || queued != 1 {
