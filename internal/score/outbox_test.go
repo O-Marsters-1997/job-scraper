@@ -3,7 +3,12 @@ package score_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/score"
@@ -118,5 +123,136 @@ func TestOutboxWorkerDoesNotSendWhenCompletionIsStale(t *testing.T) {
 	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{95} }, func(context.Context, dto.Job, string) error { sent = true; return nil })
 	if err := worker.RunOnce(t.Context()); err != nil || sent {
 		t.Fatalf("stale completion: err=%v sent=%v", err, sent)
+	}
+}
+
+type queueStore struct {
+	mu      sync.Mutex
+	effects []dto.ScoringEffect
+	jobs    map[string]dto.Job
+	config  dto.SearchConfig
+	profile dto.Profile
+
+	resultMu  sync.Mutex
+	completed []string
+	failed    []string
+}
+
+func (s *queueStore) ClaimScoringEffect(context.Context) (dto.ScoringEffect, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.effects) == 0 {
+		return dto.ScoringEffect{}, pgx.ErrNoRows
+	}
+	effect := s.effects[0]
+	s.effects = s.effects[1:]
+	return effect, nil
+}
+
+func (s *queueStore) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) {
+	return s.jobs[jobID], nil
+}
+func (s *queueStore) GetSearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return s.config, nil
+}
+func (s *queueStore) GetProfile(context.Context, string) (dto.Profile, error) { return s.profile, nil }
+
+func (s *queueStore) FailScoringEffect(_ context.Context, id string, _ int, _ string) error {
+	s.resultMu.Lock()
+	defer s.resultMu.Unlock()
+	s.failed = append(s.failed, id)
+	return nil
+}
+
+func (s *queueStore) CompleteScoringEffect(_ context.Context, effect dto.ScoringEffect, _ int, _ string, _, _ []string) (bool, error) {
+	s.resultMu.Lock()
+	defer s.resultMu.Unlock()
+	s.completed = append(s.completed, effect.ID)
+	return true, nil
+}
+
+func newQueueStore(n int) (*queueStore, []dto.ScoringEffect) {
+	effects := make([]dto.ScoringEffect, n)
+	jobs := make(map[string]dto.Job, n)
+	for i := range effects {
+		jobID := fmt.Sprintf("job-%d", i)
+		effects[i] = dto.ScoringEffect{ID: fmt.Sprintf("effect-%d", i), JobID: jobID, UserID: "user", Fingerprint: "same", Model: score.DefaultSuitabilityModel}
+		jobs[jobID] = dto.Job{ID: jobID, ContentFingerprint: "same"}
+	}
+	return &queueStore{effects: effects, jobs: jobs}, effects
+}
+
+func TestOutboxWorkerRunTickDrainsQueue(t *testing.T) {
+	store, effects := newQueueStore(10)
+	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return fixedScorer{50} }, nil)
+
+	if err := worker.RunTick(t.Context()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(store.completed) != len(effects) {
+		t.Fatalf("completed %d effects, want %d", len(store.completed), len(effects))
+	}
+}
+
+type concurrencyScorer struct {
+	mu       sync.Mutex
+	inFlight int
+	maxSeen  int
+}
+
+func (s *concurrencyScorer) Score(context.Context, dto.Job, dto.SearchConfig, string) (score.SuitabilityResult, error) {
+	s.mu.Lock()
+	s.inFlight++
+	if s.inFlight > s.maxSeen {
+		s.maxSeen = s.inFlight
+	}
+	s.mu.Unlock()
+
+	time.Sleep(10 * time.Millisecond)
+
+	s.mu.Lock()
+	s.inFlight--
+	s.mu.Unlock()
+	return score.SuitabilityResult{Score: 50}, nil
+}
+
+func TestOutboxWorkerRunTickLimitsConcurrency(t *testing.T) {
+	store, _ := newQueueStore(20)
+	scorer := &concurrencyScorer{}
+	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return scorer }, nil)
+
+	if err := worker.RunTick(t.Context()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if scorer.maxSeen > 4 {
+		t.Fatalf("max concurrent scorer calls = %d, want <= 4", scorer.maxSeen)
+	}
+	if scorer.maxSeen < 2 {
+		t.Fatalf("expected overlapping scorer calls, max concurrent = %d", scorer.maxSeen)
+	}
+}
+
+type selectiveFailScorer struct{ failJobID string }
+
+func (s selectiveFailScorer) Score(_ context.Context, job dto.Job, _ dto.SearchConfig, _ string) (score.SuitabilityResult, error) {
+	if job.ID == s.failJobID {
+		return score.SuitabilityResult{}, errors.New("boom")
+	}
+	return score.SuitabilityResult{Score: 50}, nil
+}
+
+func TestOutboxWorkerRunTickContinuesAfterEffectFailure(t *testing.T) {
+	store, effects := newQueueStore(5)
+	scorer := selectiveFailScorer{failJobID: "job-2"}
+	worker := score.NewOutboxWorker(store, func(context.Context, string) (string, error) { return "key", nil }, func(string) score.SuitabilityScorer { return scorer }, nil)
+
+	if err := worker.RunTick(t.Context()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(store.failed) != 1 || store.failed[0] != "effect-2" {
+		t.Fatalf("failed = %v, want [effect-2]", store.failed)
+	}
+	if len(store.completed) != len(effects)-1 {
+		t.Fatalf("completed = %d, want %d", len(store.completed), len(effects)-1)
 	}
 }
