@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 var _ providers.ScoringEffectsProvider = (*DB)(nil)
@@ -76,6 +79,42 @@ func (db *DB) QueueRescore(ctx context.Context, userID string) (int64, error) {
 		return 0, fmt.Errorf("queue rescore: %w", err)
 	}
 	return count, nil
+}
+
+func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, job dto.Job, jobID, companyID pgtype.UUID, discovery, firstDiscovery bool) error {
+	users, err := queries.FindInterestedUsers(ctx, pgsqlc.FindInterestedUsersParams{
+		CompanyID: companyID, CompanySlug: job.CompanySlug, Source: job.Source, Discovery: discovery,
+	})
+	if err != nil {
+		return fmt.Errorf("find interested users: %w", err)
+	}
+	for _, user := range users {
+		cfg := dto.SearchConfig{
+			ExcludedTitleKeywords: user.ExcludedTitleKeywords,
+			ExcludedCompanies:     user.ExcludedCompanies,
+			ExcludedSeniority:     user.ExcludedSeniority,
+			ExcludedLocations:     user.ExcludedLocations,
+		}
+		if _, rejected := score.Reject(job, cfg); rejected {
+			continue
+		}
+		hasCredential, err := queries.HasUserAICredential(ctx, pgsqlc.HasUserAICredentialParams{
+			UserID: user.UserID, Provider: score.Provider,
+		})
+		if err != nil {
+			return fmt.Errorf("check scoring credential: %w", err)
+		}
+		if !hasCredential {
+			continue
+		}
+		if err := queries.InsertScoringEffect(ctx, pgsqlc.InsertScoringEffectParams{
+			JobID: jobID, UserID: user.UserID, Fingerprint: job.ContentFingerprint,
+			ConfigVersion: user.ConfigVersion, Model: user.Model, FirstDiscovery: firstDiscovery,
+		}); err != nil {
+			return fmt.Errorf("insert scoring effect: %w", err)
+		}
+	}
+	return nil
 }
 
 func (db *DB) QueueTrackingScores(ctx context.Context, userID, companyID string) error {

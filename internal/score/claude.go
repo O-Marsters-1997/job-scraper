@@ -15,6 +15,9 @@ import (
 )
 
 const (
+	// Provider is the credential provider key ClaudeScorer scores under.
+	Provider = "anthropic"
+
 	DefaultSuitabilityModel = "claude-haiku-4-5-20251001"
 	DefaultReasoningModel   = "claude-sonnet-4-6"
 	maxDescriptionChars     = 4096 * 4
