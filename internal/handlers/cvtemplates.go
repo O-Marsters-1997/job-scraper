@@ -14,7 +14,7 @@ type cvExporter interface {
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
-// ExportCV stays a misfit per ADR 0020/0021: it streams a PDF response
+// ExportCV stays a misfit per ADR 0020: it streams a PDF response
 // rather than returning JSON.
 func ExportCV(svc cvExporter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

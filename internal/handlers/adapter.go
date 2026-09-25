@@ -1,6 +1,6 @@
 // Adapter turns a service or provider method into an http.HandlerFunc: it
 // resolves the caller, decodes the body, maps a returned apperr kind to a
-// status, and encodes the result. See docs/adr/0020 and docs/adr/0021.
+// status, and encodes the result. See docs/adr/0020.
 package handlers
 
 import (

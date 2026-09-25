@@ -2,7 +2,7 @@
 // shape and a success status; a returned Out of struct{} always means 204
 // regardless of the verb's default. Path IDs travel on the input dto via a
 // `path:"..."` struct tag, filled from chi URL params before the service is
-// called, so the request body can never set them. See docs/adr/0021.
+// called, so the request body can never set them. See docs/adr/0020.
 package handlers
 
 import (
