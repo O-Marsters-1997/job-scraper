@@ -1,32 +1,17 @@
 package app
 
 import (
-	"context"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
-	"github.com/ollymarsters/job-scraper/internal/aiprefs"
-	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/applications"
 	"github.com/ollymarsters/job-scraper/internal/auth"
-	"github.com/ollymarsters/job-scraper/internal/candidates"
-	"github.com/ollymarsters/job-scraper/internal/companies"
 	"github.com/ollymarsters/job-scraper/internal/credstore"
-	"github.com/ollymarsters/job-scraper/internal/cvtemplates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/dto"
-	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
-	"github.com/ollymarsters/job-scraper/internal/ingest"
-	"github.com/ollymarsters/job-scraper/internal/jobreasoning"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
-	"github.com/ollymarsters/job-scraper/internal/scoringconfig"
-	"github.com/ollymarsters/job-scraper/internal/sourcetargets"
 )
 
 func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
@@ -43,168 +28,101 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 		AllowCredentials: true,
 	}))
 
-	jobH := handlers.NewJobHandler(db)
-	authH := handlers.NewAuthHandler(db)
-	appH := handlers.NewApplicationHandler(db)
-	applicationsSvc := applications.New(db)
-	statusH := handlers.NewApplicationStatusHandler(db)
-	candidateService := candidates.New(db, q)
-	sourceTargetsSvc := sourcetargets.New(db, db, candidateService, q)
-	companiesSvc := companies.New(db, db, handlers.ATSBoardVerifier{})
-	scoringConfigSvc := scoringconfig.New(db, candidateService)
-	aiPrefsSvc := aiprefs.New(db, creds)
-	jobReasoningSvc := jobreasoning.New(db, db, db, db, creds, func(apiKey string) score.SuitabilityScorer {
-		return score.NewClaudeScorer(apiKey)
-	})
-
-	tokenStore := jobsdb.NewGoogleTokenStore(db)
-	googleClient := igoogle.NewClient(
-		os.Getenv("GOOGLE_CLIENT_ID"),
-		os.Getenv("GOOGLE_CLIENT_SECRET"),
-		os.Getenv("GOOGLE_REDIRECT_URL"),
-		tokenStore,
-	)
-	googleH := handlers.NewGoogleHandler(googleClient)
-
-	cvSvc := cvtemplates.NewService(googleClient, db)
-	cvH := handlers.NewCVTemplatesHandler(googleClient)
-
-	ingestH := handlers.NewIngestHandler(ingest.New(db, db))
+	svc := newServices(db, q, creds)
 
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/login", authH.Login)
-		r.Post("/signup", authH.Signup)
+		r.Post("/login", handlers.Login(svc.auth))
+		r.Post("/signup", handlers.Signup(svc.auth))
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(db))
-			r.Post("/logout", authH.Logout)
-			r.Get("/me", authH.Me)
+			r.Post("/logout", handlers.Logout(svc.auth))
+			r.Get("/me", handlers.Me)
 		})
 	})
 
 	r.Route("/google", func(r chi.Router) {
 		// /start is public so the OAuth redirect URL stays clean.
-		r.Get("/oauth/start", googleH.OAuthStart)
+		r.Get("/oauth/start", handlers.OAuthStart(svc.google))
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(db))
-			r.Get("/oauth/callback", googleH.OAuthCallback)
-			r.Get("/status", googleH.GetStatus)
-			r.Delete("/link", googleH.Disconnect)
+			r.Get("/oauth/callback", handlers.OAuthCallback(svc.google))
+			r.Get("/status", handlers.GetAll(svc.google.Status))
+			r.Delete("/link", handlers.Delete(svc.google.Disconnect))
 		})
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(db))
 
-		r.Get("/jobs", jobH.ListJobs)
-		r.Get("/jobs/all", jobH.ListAllJobs)
-		r.Get("/jobs/{id}", jobH.GetJob)
-		r.Post("/jobs/{id}/reasoning", handlers.ID(jobReasoningSvc.Generate, http.StatusOK))
+		r.Get("/jobs", handlers.Query(svc.jobs.List))
+		r.Get("/jobs/all", handlers.GetAll(db.List))
+		r.Get("/jobs/{id}", handlers.GetByID(svc.jobs.Get))
+		r.Post("/jobs/{id}/reasoning", handlers.GetByID(svc.jobReasoning.Generate))
 
 		r.Route("/application-statuses", func(r chi.Router) {
-			r.Get("/", handlers.User(db.ListApplicationStatusesByUser, http.StatusOK))
-			r.Post("/", handlers.Body(func(ctx context.Context, userID string, in dto.ApplicationStatusInput) (dto.ApplicationStatus, error) {
-				if in.Name == "" || in.Colour == "" {
-					return dto.ApplicationStatus{}, apperr.Invalid("name and colour are required")
-				}
-				return db.CreateApplicationStatus(ctx, userID, in.Name, in.Colour)
-			}, http.StatusCreated))
-			r.Patch("/{id}", handlers.BodyID(func(ctx context.Context, userID, id string, in dto.ApplicationStatusInput) (dto.ApplicationStatus, error) {
-				if in.Name == "" || in.Colour == "" {
-					return dto.ApplicationStatus{}, apperr.Invalid("name and colour are required")
-				}
-				return db.UpdateApplicationStatus(ctx, id, userID, in.Name, in.Colour)
-			}, http.StatusOK))
-			r.Delete("/{id}", statusH.DeleteApplicationStatus)
+			r.Get("/", handlers.GetAll(db.ListApplicationStatusesByUser))
+			r.Post("/", handlers.Create(svc.applicationStatuses.Create))
+			r.Patch("/{id}", handlers.Update(svc.applicationStatuses.Update))
+			r.Delete("/{id}", handlers.Delete(svc.applicationStatuses.Delete))
 		})
 
 		r.Route("/applications", func(r chi.Router) {
-			r.Get("/", appH.ListApplications)
-			r.Post("/", handlers.Body(applicationsSvc.Create, http.StatusCreated))
-			r.Patch("/{id}", handlers.BodyID(applicationsSvc.Update, http.StatusOK))
-			r.Delete("/{id}", handlers.ID(func(ctx context.Context, userID, id string) (struct{}, error) {
-				return struct{}{}, db.DeleteApplication(ctx, userID, id)
-			}, http.StatusNoContent))
-			r.Get("/for-jobs", appH.GetApplicationsForJobs)
+			r.Get("/", handlers.Query(svc.applications.List))
+			r.Post("/", handlers.Create(svc.applications.Create))
+			r.Patch("/{id}", handlers.Update(svc.applications.Update))
+			r.Delete("/{id}", handlers.Delete(svc.applications.Delete))
+			r.Get("/for-jobs", handlers.Query(svc.applications.ForJobs))
 		})
 
-		r.Get("/sources", handlers.Sources)
-		r.Get("/sources/resolve", handlers.ResolveBoard)
+		r.Get("/sources", handlers.GetAll(svc.sources.List))
+		r.Get("/sources/resolve", handlers.Query(svc.sources.Resolve))
 
-		r.Get("/profile", handlers.User(func(ctx context.Context, userID string) (dto.ProfileView, error) {
-			p, err := db.GetProfile(ctx, userID)
-			return dto.ProfileView(p), err
-		}, http.StatusOK))
-		r.Put("/profile", handlers.Body(func(ctx context.Context, userID string, in dto.UpdateProfileInput) (struct{}, error) {
-			_, err := db.UpdateEmail(ctx, userID, in.Email)
-			return struct{}{}, err
-		}, http.StatusNoContent))
+		r.Get("/profile", handlers.GetAll(svc.profile.Get))
+		r.Put("/profile", handlers.Update(svc.profile.Update))
 
-		r.Get("/scoring-config", handlers.User(scoringConfigSvc.Get, http.StatusOK))
-		r.Put("/scoring-config", handlers.Body(scoringConfigSvc.Update, http.StatusOK))
-		r.Get("/scores/status", handlers.User(db.GetScoringStatus, http.StatusOK))
-		r.Post("/scores/rescore", handlers.User(func(ctx context.Context, userID string) (dto.RescoreResult, error) {
-			queued, err := db.QueueRescore(ctx, userID)
-			return dto.RescoreResult{Queued: queued}, err
-		}, http.StatusOK))
+		r.Get("/scoring-config", handlers.GetAll(svc.scoringConfig.Get))
+		r.Put("/scoring-config", handlers.Update(svc.scoringConfig.Update))
+		r.Get("/scores/status", handlers.GetAll(db.GetScoringStatus))
+		r.Post("/scores/rescore", handlers.GetAll(svc.scoringConfig.Rescore))
 
-		r.Get("/ai-prefs", handlers.User(aiPrefsSvc.Get, http.StatusOK))
-		r.Put("/ai-prefs", handlers.Body(aiPrefsSvc.Update, http.StatusOK))
+		r.Get("/ai-prefs", handlers.GetAll(svc.aiPrefs.Get))
+		r.Put("/ai-prefs", handlers.Update(svc.aiPrefs.Update))
 
-		r.Put("/ai-credentials", handlers.Body(func(ctx context.Context, userID string, in dto.UpsertCredentialInput) (struct{}, error) {
-			if in.Provider == "" {
-				return struct{}{}, apperr.Invalid("provider required")
-			}
-			if in.APIKey == nil {
-				return struct{}{}, creds.Delete(ctx, userID, in.Provider)
-			}
-			return struct{}{}, creds.Save(ctx, userID, in.Provider, strings.Trim(*in.APIKey, `"`))
-		}, http.StatusNoContent))
+		r.Put("/ai-credentials", handlers.Update(svc.aiCredentials.Update))
 
 		r.Route("/source-targets", func(r chi.Router) {
-			r.Get("/", handlers.User(db.ListSourceTargetsByUser, http.StatusOK))
-			r.Post("/", handlers.Body(sourceTargetsSvc.Create, http.StatusCreated))
-			r.Patch("/{id}", handlers.BodyID(sourceTargetsSvc.Update, http.StatusOK))
-			r.Post("/{id}/scrape", handlers.ID(sourceTargetsSvc.Scrape, http.StatusAccepted))
-			r.Delete("/{id}", handlers.ID(func(ctx context.Context, userID, id string) (struct{}, error) {
-				return struct{}{}, db.DeleteSourceTarget(ctx, id, userID)
-			}, http.StatusNoContent))
+			r.Get("/", handlers.GetAll(db.ListSourceTargetsByUser))
+			r.Post("/", handlers.Create(svc.sourceTargets.Create))
+			r.Patch("/{id}", handlers.Update(svc.sourceTargets.Update))
+			r.Post("/{id}/scrape", handlers.GetByID(svc.sourceTargets.Scrape))
+			r.Delete("/{id}", handlers.Delete(svc.sourceTargets.Delete))
 		})
 
 		r.Route("/companies", func(r chi.Router) {
-			r.Get("/", handlers.User(db.ListCompaniesForUser, http.StatusOK))
-			r.Post("/", handlers.Body(companiesSvc.Create, http.StatusCreated))
-			r.Put("/{id}/tracking", handlers.BodyID(companiesSvc.SetTracking, http.StatusOK))
-			r.Get("/{id}/boards", handlers.ID(companiesSvc.ListBoards, http.StatusOK))
-			r.Post("/{id}/boards", handlers.BodyID(companiesSvc.AddBoard, http.StatusOK))
+			r.Get("/", handlers.GetAll(db.ListCompaniesForUser))
+			r.Post("/", handlers.Create(svc.companies.Create))
+			r.Put("/{id}/tracking", handlers.Update(svc.companies.SetTracking))
+			r.Get("/{id}/boards", handlers.GetByID(svc.companies.ListBoards))
+			r.Post("/{id}/boards", handlers.Create(svc.companies.AddBoard))
 		})
 
 		r.Route("/cv-templates", func(r chi.Router) {
-			r.Get("/", handlers.User(cvSvc.List, http.StatusOK))
-			r.Get("/{docId}/{tabId}/pdf", cvH.ExportCV)
+			r.Get("/", handlers.GetAll(svc.cvTemplates.List))
+			r.Get("/{docId}/{tabId}/pdf", handlers.ExportCV(svc.cvTemplates))
 		})
 
 		r.Route("/tracked-docs", func(r chi.Router) {
-			r.Post("/", handlers.Body(func(ctx context.Context, userID string, in struct {
-				URL string `json:"url"`
-			}) (struct{}, error) {
-				return struct{}{}, cvSvc.AddDoc(ctx, userID, in.URL)
-			}, http.StatusCreated))
-			r.Delete("/{id}", handlers.ID(func(ctx context.Context, userID, id string) (struct{}, error) {
-				return struct{}{}, cvSvc.RemoveDoc(ctx, userID, id)
-			}, http.StatusNoContent))
-			r.Post("/{docId}/tabs/{tabId}/hide", handlers.ID2(func(ctx context.Context, userID, docID, tabID string) (struct{}, error) {
-				return struct{}{}, cvSvc.HideTab(ctx, userID, docID, tabID)
-			}, http.StatusNoContent))
-			r.Post("/{docId}/tabs/{tabId}/show", handlers.ID2(func(ctx context.Context, userID, docID, tabID string) (struct{}, error) {
-				return struct{}{}, cvSvc.ShowTab(ctx, userID, docID, tabID)
-			}, http.StatusNoContent))
+			r.Post("/", handlers.Create(svc.cvTemplates.AddDoc))
+			r.Delete("/{id}", handlers.Delete(svc.cvTemplates.RemoveDoc))
+			r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(svc.cvTemplates.HideTab))
+			r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(svc.cvTemplates.ShowTab))
 		})
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
-		r.Post("/ingest", ingestH.Ingest)
-		r.Post("/ingest/batch", ingestH.IngestBatch)
+		r.Post("/ingest", handlers.Ingest(svc.ingest))
+		r.Post("/ingest/batch", handlers.IngestBatch(svc.ingest))
 	})
 
 	return r

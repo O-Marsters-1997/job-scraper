@@ -63,9 +63,35 @@ func Unavailable(msg string) error   { return &Error{kind: KindUnavailable, msg:
 // StatusFor reports the HTTP status for err's kind, found via errors.As so a
 // wrapped apperr.Error is still detected. ok is false when err carries no kind.
 func StatusFor(err error) (status int, ok bool) {
-	var ae *Error
-	if errors.As(err, &ae) {
-		return ae.kind.Status(), true
+	ae, ok := errors.AsType[*Error](err)
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	return ae.kind.Status(), true
+}
+
+// fielded wraps an error with extra fields the adapter merges into the JSON
+// error body next to "error", e.g. the in-use count on a 409.
+type fielded struct {
+	error
+	fields map[string]any
+}
+
+func (f *fielded) Unwrap() error { return f.error }
+
+// WithFields attaches extra fields to err for the adapter to include in the
+// response body. err should carry a kind (e.g. from Conflict) so it still
+// maps to a status.
+func WithFields(err error, fields map[string]any) error {
+	return &fielded{error: err, fields: fields}
+}
+
+// FieldsFor returns the fields attached via WithFields, found through the
+// wrap chain, or nil if none were attached.
+func FieldsFor(err error) map[string]any {
+	f, ok := errors.AsType[*fielded](err)
+	if !ok {
+		return nil
+	}
+	return f.fields
 }

@@ -9,26 +9,64 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// MockApplicationStatusProvider is a no-op mock for use in tests.
-type MockApplicationStatusProvider struct{}
+// MockApplicationStatusProvider is an in-memory mock for use in tests. Zero
+// value is usable; CountsInUse lets a test make DeleteApplicationStatus see
+// a status as still in use.
+type MockApplicationStatusProvider struct {
+	mu       sync.Mutex
+	statuses map[string]dto.ApplicationStatus // keyed by id
+
+	CountsInUse map[string]int64 // keyed by status id
+}
 
 func (m *MockApplicationStatusProvider) SeedDefaultStatuses(_ context.Context, _ string) error {
 	return nil
 }
-func (m *MockApplicationStatusProvider) CreateApplicationStatus(_ context.Context, _, _, _ string) (dto.ApplicationStatus, error) {
-	return dto.ApplicationStatus{}, nil
+
+func (m *MockApplicationStatusProvider) CreateApplicationStatus(_ context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.statuses == nil {
+		m.statuses = make(map[string]dto.ApplicationStatus)
+	}
+	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(m.statuses)), UserID: userID, Name: name, Colour: colour}
+	m.statuses[s.ID] = s
+	return s, nil
 }
-func (m *MockApplicationStatusProvider) ListApplicationStatusesByUser(_ context.Context, _ string) ([]dto.ApplicationStatus, error) {
-	return nil, nil
+
+func (m *MockApplicationStatusProvider) ListApplicationStatusesByUser(_ context.Context, userID string) ([]dto.ApplicationStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []dto.ApplicationStatus
+	for _, s := range m.statuses {
+		if s.UserID == userID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
 }
-func (m *MockApplicationStatusProvider) UpdateApplicationStatus(_ context.Context, _, _, _, _ string) (dto.ApplicationStatus, error) {
-	return dto.ApplicationStatus{}, nil
+
+func (m *MockApplicationStatusProvider) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.statuses[id]
+	if !ok || s.UserID != userID {
+		return dto.ApplicationStatus{}, fmt.Errorf("status not found")
+	}
+	s.Name, s.Colour = name, colour
+	m.statuses[id] = s
+	return s, nil
 }
-func (m *MockApplicationStatusProvider) DeleteApplicationStatus(_ context.Context, _, _ string) error {
+
+func (m *MockApplicationStatusProvider) DeleteApplicationStatus(_ context.Context, id, _ string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.statuses, id)
 	return nil
 }
-func (m *MockApplicationStatusProvider) CountApplicationsUsingStatus(_ context.Context, _, _ string) (int64, error) {
-	return 0, nil
+
+func (m *MockApplicationStatusProvider) CountApplicationsUsingStatus(_ context.Context, id, _ string) (int64, error) {
+	return m.CountsInUse[id], nil
 }
 
 // MockUserProvider lives outside _test.go so it can be imported by tests in other packages.

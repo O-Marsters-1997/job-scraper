@@ -9,6 +9,7 @@ type CreateSourceTargetInput struct {
 }
 
 type UpdateSourceTargetInput struct {
-	Enabled              *bool `json:"enabled"`
-	CheckIntervalMinutes *int  `json:"check_interval_minutes"`
+	ID                   string `json:"-" path:"id"`
+	Enabled              *bool  `json:"enabled"`
+	CheckIntervalMinutes *int   `json:"check_interval_minutes"`
 }

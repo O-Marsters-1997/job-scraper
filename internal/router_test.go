@@ -367,7 +367,7 @@ func TestRouterRoutes(t *testing.T) {
 		w = do(authed(http.MethodPost, "/companies/"+companyID+"/boards", jsonBody(t, map[string]any{
 			"url": "https://boards.greenhouse.io/otherco", "confirm": false,
 		}), cookie))
-		if w.Code != http.StatusOK {
+		if w.Code != http.StatusCreated {
 			t.Errorf("POST /{id}/boards = %d (body: %s)", w.Code, w.Body.String())
 		}
 		w = do(authed(http.MethodGet, "/companies/"+nilUUID+"/boards", nil, cookie))

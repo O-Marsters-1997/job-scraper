@@ -15,10 +15,22 @@ type CreateApplicationInput struct {
 }
 
 type UpdateApplicationInput struct {
+	ID         string            `json:"-" path:"id"`
 	StatusID   string            `json:"status_id"`
 	Notes      string            `json:"notes"`
 	SalaryInfo string            `json:"salary_info"`
 	AppliedAt  fp.Option[string] `json:"applied_at"`
+}
+
+// ApplicationsQuery is the query-string shape for GET /applications.
+type ApplicationsQuery struct {
+	StatusID string `json:"status_id"`
+}
+
+// ApplicationsForJobsQuery is the query-string shape for GET
+// /applications/for-jobs: JobIDs is a comma-separated list of job IDs.
+type ApplicationsForJobsQuery struct {
+	JobIDs string `json:"job_ids"`
 }
 
 type ApplicationStatus struct {

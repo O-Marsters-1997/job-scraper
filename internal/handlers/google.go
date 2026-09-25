@@ -1,141 +1,69 @@
 package handlers
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/auth"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
-	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 )
 
 const oauthStateCookie = "oauth_state"
 
-type GoogleHandler struct {
-	client *igoogle.Client
+// googleSvc is the interface handlers.OAuthStart/OAuthCallback need from
+// services/google.Service; declared here, not imported.
+type googleSvc interface {
+	AuthURL(state string) string
+	Connect(ctx context.Context, userID, code string) error
 }
 
-func NewGoogleHandler(client *igoogle.Client) *GoogleHandler {
-	return &GoogleHandler{client: client}
-}
-
-func (h *GoogleHandler) OAuthStart(w http.ResponseWriter, r *http.Request) {
-	state, err := generateState()
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-	setStateCookie(w, state)
-	http.Redirect(w, r, h.client.AuthURL(state), http.StatusTemporaryRedirect)
-}
-
-func (h *GoogleHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
-	if !validateStateCookie(r, r.URL.Query().Get("state")) {
-		WriteError(w, r, apperr.Invalid("invalid oauth state"))
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:   oauthStateCookie,
-		Value:  "",
-		MaxAge: -1,
-		Path:   "/",
-	})
-
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		WriteError(w, r, apperr.Invalid("missing code"))
-		return
-	}
-
-	tok, err := h.client.Exchange(r.Context(), code)
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	session, ok := auth.SessionFromContext(r.Context())
-	if !ok {
-		auth.WriteUnauthorized(w)
-		return
-	}
-
-	if err := h.client.SaveToken(r.Context(), session.UserID, tok); err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
-}
-
-func (h *GoogleHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
-	session, ok := auth.SessionFromContext(r.Context())
-	if !ok {
-		auth.WriteUnauthorized(w)
-		return
-	}
-
-	type response struct {
-		Connected bool   `json:"connected"`
-		Email     string `json:"email,omitempty"`
-	}
-
-	hc, err := h.client.HTTPClientForUser(r.Context(), session.UserID)
-	if err != nil {
-		switch {
-		case errors.Is(err, providers.ErrGoogleTokenNotFound):
-			WriteJSON(w, http.StatusOK, response{Connected: false})
-		case errors.Is(err, providers.ErrGoogleTokenUnusable):
-			slog.Warn("google token unusable, treating as disconnected", slog.Any("err", err))
-			WriteJSON(w, http.StatusOK, response{Connected: false})
-		default:
-			WriteError(w, r, err)
+// OAuthStart is public so the OAuth redirect URL stays clean; it redirects,
+// so it stays a misfit rather than going through the generic adapter.
+func OAuthStart(svc googleSvc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		state, err := generateState()
+		if err != nil {
+			writeError(w, r, err)
+			return
 		}
-		return
+		setStateCookie(w, state)
+		http.Redirect(w, r, svc.AuthURL(state), http.StatusTemporaryRedirect)
 	}
-
-	resp, err := hc.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		WriteError(w, r, err)
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	var info struct {
-		Email string `json:"email"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		WriteError(w, r, err)
-		return
-	}
-
-	WriteJSON(w, http.StatusOK, response{Connected: true, Email: info.Email})
 }
 
-func (h *GoogleHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
-	session, ok := auth.SessionFromContext(r.Context())
-	if !ok {
-		auth.WriteUnauthorized(w)
-		return
-	}
+// OAuthCallback redirects, so it stays a misfit rather than going through
+// the generic adapter.
+func OAuthCallback(svc googleSvc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateStateCookie(r, r.URL.Query().Get("state")) {
+			writeError(w, r, apperr.Invalid("invalid oauth state"))
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
 
-	if err := h.client.DeleteToken(r.Context(), session.UserID); err != nil {
-		WriteError(w, r, err)
-		return
-	}
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			writeError(w, r, apperr.Invalid("missing code"))
+			return
+		}
 
-	w.WriteHeader(http.StatusNoContent)
+		userID, ok := caller(w, r)
+		if !ok {
+			return
+		}
+		if err := svc.Connect(r.Context(), userID, code); err != nil {
+			writeError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
+	}
 }
 
 // generateState returns a 16-byte cryptographically random hex string.

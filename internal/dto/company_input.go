@@ -6,11 +6,13 @@ type CreateCompanyInput struct {
 }
 
 type SetCompanyTrackingInput struct {
-	Enabled              *bool `json:"enabled"`
-	CheckIntervalMinutes *int  `json:"check_interval_minutes"`
+	CompanyID            string `json:"-" path:"id"`
+	Enabled              *bool  `json:"enabled"`
+	CheckIntervalMinutes *int   `json:"check_interval_minutes"`
 }
 
 type AddCompanyBoardInput struct {
-	URL     string `json:"url"`
-	Confirm bool   `json:"confirm"`
+	CompanyID string `json:"-" path:"id"`
+	URL       string `json:"url"`
+	Confirm   bool   `json:"confirm"`
 }
