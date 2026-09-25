@@ -1,9 +1,11 @@
--- name: QueueScoringEffects :exec
-INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model, first_discovery)
-SELECT sqlc.arg(job_id)::uuid, u.id, sqlc.arg(fingerprint)::text,
-    COALESCE(sc.updated_at, 'epoch'::timestamptz),
-    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001'),
-    sqlc.arg(first_discovery)::boolean
+-- name: FindInterestedUsers :many
+SELECT u.id AS user_id,
+    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
+    COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
+    COALESCE(sc.excluded_seniority, '{}')::text[] AS excluded_seniority,
+    COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
+    COALESCE(sc.updated_at, 'epoch'::timestamptz) AS config_version,
+    COALESCE(p.suitability_model, 'claude-haiku-4-5-20251001') AS model
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
 LEFT JOIN user_ai_prefs p ON p.user_id = u.id
@@ -15,7 +17,12 @@ WHERE EXISTS (
     SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled
         AND st.source = sqlc.arg(source)::text
         AND (sqlc.arg(discovery)::boolean OR st.value = sqlc.arg(company_slug)::text)
-)
+);
+
+-- name: InsertScoringEffect :exec
+INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model, first_discovery)
+VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(user_id)::uuid, sqlc.arg(fingerprint)::text,
+    sqlc.arg(config_version)::timestamptz, sqlc.arg(model)::text, sqlc.arg(first_discovery)::boolean)
 ON CONFLICT DO NOTHING;
 
 -- name: QueueTrackingScores :exec
