@@ -11,5 +11,6 @@ type SearchConfig struct {
 	ExcludedLocations     []string
 	SuitabilityRubric     string
 	NotifyThreshold       int
+	ScoringQuestions      ScoringQuestions
 	UpdatedAt             time.Time
 }

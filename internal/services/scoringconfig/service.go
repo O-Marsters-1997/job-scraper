@@ -51,6 +51,9 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 			return dto.ScoringConfigView{}, apperr.Invalid("unknown seniority level: " + level)
 		}
 	}
+	if err := validateScoringQuestions(in.ScoringQuestions); err != nil {
+		return dto.ScoringConfigView{}, err
+	}
 
 	cfg := dto.SearchConfig{
 		UserID:                userID,
@@ -60,6 +63,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
 		ExcludedSeniority:     seniority,
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
+		ScoringQuestions:      in.ScoringQuestions,
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
 	if err != nil {
@@ -79,7 +83,36 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedSeniority:     nonNilStrings(cfg.ExcludedSeniority),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
+		ScoringQuestions: dto.ScoringQuestions{
+			Profile:  cfg.ScoringQuestions.Profile,
+			Criteria: nonNilCriteria(cfg.ScoringQuestions.Criteria),
+			Scale:    nonNilStrings(cfg.ScoringQuestions.Scale),
+		},
 	}
+}
+
+func nonNilCriteria(c []dto.ScoringCriterion) []dto.ScoringCriterion {
+	if c == nil {
+		return []dto.ScoringCriterion{}
+	}
+	return c
+}
+
+func validateScoringQuestions(q dto.ScoringQuestions) error {
+	if len(q.Scale) < 2 {
+		return apperr.Invalid("scale must have at least 2 levels")
+	}
+	if strings.TrimSpace(q.Profile) == "" && len(q.Criteria) == 0 {
+		return apperr.Invalid("profile or at least one criterion is required")
+	}
+	seen := make(map[string]bool, len(q.Criteria))
+	for _, c := range q.Criteria {
+		if seen[c.Key] {
+			return apperr.Invalid("duplicate criterion key: " + c.Key)
+		}
+		seen[c.Key] = true
+	}
+	return nil
 }
 
 func nonNilStrings(s []string) []string {

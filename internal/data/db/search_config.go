@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -12,7 +13,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
+func fromSearchConfig(row pgsqlc.SearchConfig) (dto.SearchConfig, error) {
+	var questions dto.ScoringQuestions
+	if len(row.ScoringQuestions) > 0 {
+		if err := json.Unmarshal(row.ScoringQuestions, &questions); err != nil {
+			return dto.SearchConfig{}, fmt.Errorf("unmarshal scoring questions: %w", err)
+		}
+	}
 	return dto.SearchConfig{
 		ID:                    row.ID.String(),
 		UserID:                row.UserID.String(),
@@ -22,8 +29,9 @@ func fromSearchConfig(row pgsqlc.SearchConfig) dto.SearchConfig {
 		ExcludedLocations:     row.ExcludedLocations,
 		SuitabilityRubric:     row.SuitabilityRubric,
 		NotifyThreshold:       int(row.NotifyThreshold),
+		ScoringQuestions:      questions,
 		UpdatedAt:             row.UpdatedAt.Time,
-	}
+	}, nil
 }
 
 func (db *DB) ListSearchConfigs(ctx context.Context) ([]dto.SearchConfig, error) {
@@ -33,7 +41,11 @@ func (db *DB) ListSearchConfigs(ctx context.Context) ([]dto.SearchConfig, error)
 	}
 	cfgs := make([]dto.SearchConfig, len(rows))
 	for i, row := range rows {
-		cfgs[i] = fromSearchConfig(row)
+		cfg, err := fromSearchConfig(row)
+		if err != nil {
+			return nil, fmt.Errorf("db.ListSearchConfigs: %w", err)
+		}
+		cfgs[i] = cfg
 	}
 	return cfgs, nil
 }
@@ -50,13 +62,21 @@ func (db *DB) GetSearchConfig(ctx context.Context, userID string) (dto.SearchCon
 		}
 		return dto.SearchConfig{}, fmt.Errorf("db.GetSearchConfig: %w", err)
 	}
-	return fromSearchConfig(row), nil
+	cfg, err := fromSearchConfig(row)
+	if err != nil {
+		return dto.SearchConfig{}, fmt.Errorf("db.GetSearchConfig: %w", err)
+	}
+	return cfg, nil
 }
 
 func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	uid, err := parseUUID(cfg.UserID)
 	if err != nil {
 		return dto.SearchConfig{}, err
+	}
+	questions, err := json.Marshal(cfg.ScoringQuestions)
+	if err != nil {
+		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: marshal scoring questions: %w", err)
 	}
 	row, err := db.queries.UpsertSearchConfig(ctx, pgsqlc.UpsertSearchConfigParams{
 		UserID:                uid,
@@ -66,11 +86,16 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
 		SuitabilityRubric:     cfg.SuitabilityRubric,
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
+		ScoringQuestions:      questions,
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)
 	}
-	return fromSearchConfig(row), nil
+	updated, err := fromSearchConfig(row)
+	if err != nil {
+		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)
+	}
+	return updated, nil
 }
 
 // nonNilStrings replaces a nil slice with empty so pgx encodes it as an
