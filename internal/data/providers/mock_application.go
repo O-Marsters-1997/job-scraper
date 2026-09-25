@@ -81,11 +81,11 @@ func (m *MockApplicationProvider) UpdateApplication(_ context.Context, userID, i
 	return app, nil
 }
 
-func (m *MockApplicationProvider) DeleteApplication(_ context.Context, userID, id string) (struct{}, error) {
+func (m *MockApplicationProvider) DeleteApplication(_ context.Context, userID, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.apps, id)
-	return struct{}{}, nil
+	return nil
 }
 
 func (m *MockApplicationProvider) GetApplicationsForJobs(_ context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {

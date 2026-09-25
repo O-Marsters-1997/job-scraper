@@ -26,6 +26,6 @@ type ApplicationProvider interface {
 	ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error)
 	ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
 	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
-	DeleteApplication(ctx context.Context, userID, id string) (struct{}, error)
+	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 }

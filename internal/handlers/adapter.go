@@ -72,7 +72,6 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-// User adapts a function of (ctx, userID) to an http.HandlerFunc.
 func User[Out any](fn func(ctx context.Context, userID string) (Out, error), status int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, ok := Caller(w, r)

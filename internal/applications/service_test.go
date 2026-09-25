@@ -2,6 +2,7 @@ package applications_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -11,24 +12,47 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
-func TestCreateRejectsInvalidAppliedAt(t *testing.T) {
-	store := providers.NewMockApplicationProvider()
-	svc := applications.New(store)
-	_, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{
-		JobID:     "job-1",
-		AppliedAt: fp.Some("not-a-date"),
-	})
-	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
-		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
+func TestCreate(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(store *providers.MockApplicationProvider)
+		in         dto.CreateApplicationInput
+		wantStatus int
+	}{
+		{
+			name:       "requires job id",
+			in:         dto.CreateApplicationInput{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects invalid applied_at",
+			in: dto.CreateApplicationInput{
+				JobID:     "job-1",
+				AppliedAt: fp.Some("not-a-date"),
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "surfaces conflict from provider",
+			setup: func(store *providers.MockApplicationProvider) {
+				store.CreateErr = providers.ErrApplicationExists
+			},
+			in:         dto.CreateApplicationInput{JobID: "job-1"},
+			wantStatus: http.StatusConflict,
+		},
 	}
-}
-
-func TestCreateRequiresJobID(t *testing.T) {
-	store := providers.NewMockApplicationProvider()
-	svc := applications.New(store)
-	_, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{})
-	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
-		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := providers.NewMockApplicationProvider()
+			if tt.setup != nil {
+				tt.setup(store)
+			}
+			svc := applications.New(store)
+			_, err := svc.Create(context.Background(), "user-1", tt.in)
+			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
+				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
+			}
+		})
 	}
 }
 
@@ -47,33 +71,34 @@ func TestCreateSucceeds(t *testing.T) {
 	}
 }
 
-func TestCreateSurfacesConflictFromProvider(t *testing.T) {
-	store := providers.NewMockApplicationProvider()
-	store.CreateErr = providers.ErrApplicationExists
-	svc := applications.New(store)
-	_, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1"})
-	if status, ok := apperr.StatusFor(err); !ok || status != 409 {
-		t.Fatalf("status = %v, ok = %v, want 409", status, ok)
+func TestUpdate(t *testing.T) {
+	tests := []struct {
+		name       string
+		id         string
+		in         dto.UpdateApplicationInput
+		wantStatus int
+	}{
+		{
+			name:       "rejects invalid applied_at",
+			id:         "app-1",
+			in:         dto.UpdateApplicationInput{AppliedAt: fp.Some("not-a-date")},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "surfaces not found from provider",
+			id:         "missing",
+			wantStatus: http.StatusNotFound,
+		},
 	}
-}
-
-func TestUpdateRejectsInvalidAppliedAt(t *testing.T) {
-	store := providers.NewMockApplicationProvider()
-	svc := applications.New(store)
-	_, err := svc.Update(context.Background(), "user-1", "app-1", dto.UpdateApplicationInput{
-		AppliedAt: fp.Some("not-a-date"),
-	})
-	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
-		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
-	}
-}
-
-func TestUpdateSurfacesNotFoundFromProvider(t *testing.T) {
-	store := providers.NewMockApplicationProvider()
-	svc := applications.New(store)
-	_, err := svc.Update(context.Background(), "user-1", "missing", dto.UpdateApplicationInput{})
-	if status, ok := apperr.StatusFor(err); !ok || status != 404 {
-		t.Fatalf("status = %v, ok = %v, want 404", status, ok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := providers.NewMockApplicationProvider()
+			svc := applications.New(store)
+			_, err := svc.Update(context.Background(), "user-1", tt.id, tt.in)
+			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
+				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
+			}
+		})
 	}
 }
 

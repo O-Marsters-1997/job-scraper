@@ -182,22 +182,22 @@ func (db *DB) UpdateApplication(ctx context.Context, userID, id string, input dt
 	return fromApplication(a), nil
 }
 
-func (db *DB) DeleteApplication(ctx context.Context, userID, id string) (struct{}, error) {
+func (db *DB) DeleteApplication(ctx context.Context, userID, id string) error {
 	aid, err := parseUUID(id)
 	if err != nil {
-		return struct{}{}, err
+		return err
 	}
 	uid, err := parseUUID(userID)
 	if err != nil {
-		return struct{}{}, err
+		return err
 	}
 	if err := db.queries.DeleteApplication(ctx, pgsqlc.DeleteApplicationParams{
 		ID:     aid,
 		UserID: uid,
 	}); err != nil {
-		return struct{}{}, fmt.Errorf("db.DeleteApplication: %w", err)
+		return fmt.Errorf("db.DeleteApplication: %w", err)
 	}
-	return struct{}{}, nil
+	return nil
 }
 
 func (db *DB) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {

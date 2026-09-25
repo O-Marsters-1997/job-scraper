@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/http"
 	"os"
 
@@ -102,7 +103,9 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 			r.Get("/", appH.ListApplications)
 			r.Post("/", handlers.Body(applicationsSvc.Create, http.StatusCreated))
 			r.Patch("/{id}", handlers.BodyID(applicationsSvc.Update, http.StatusOK))
-			r.Delete("/{id}", handlers.ID(db.DeleteApplication, http.StatusNoContent))
+			r.Delete("/{id}", handlers.ID(func(ctx context.Context, userID, id string) (struct{}, error) {
+				return struct{}{}, db.DeleteApplication(ctx, userID, id)
+			}, http.StatusNoContent))
 			r.Get("/for-jobs", appH.GetApplicationsForJobs)
 		})
 

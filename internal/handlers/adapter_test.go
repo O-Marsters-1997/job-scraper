@@ -8,21 +8,72 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 )
 
-func TestUserNoSessionReturns401(t *testing.T) {
-	h := User(func(context.Context, string) (string, error) {
-		t.Fatal("fn should not be called without a session")
-		return "", nil
-	}, http.StatusOK)
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
-	w := httptest.NewRecorder()
-	h(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", w.Code)
+func TestUser(t *testing.T) {
+	tests := []struct {
+		name          string
+		session       bool
+		handler       http.HandlerFunc
+		wantStatus    int
+		wantBodyHas   string
+		wantBodyLacks string
+	}{
+		{
+			name: "no session returns 401",
+			handler: User(func(context.Context, string) (string, error) {
+				return "unexpected", nil
+			}, http.StatusOK),
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:    "kinded error maps to its status",
+			session: true,
+			handler: User(func(context.Context, string) (string, error) {
+				return "", apperr.Conflict("board belongs to another company")
+			}, http.StatusOK),
+			wantStatus:  http.StatusConflict,
+			wantBodyHas: "board belongs to another company",
+		},
+		{
+			name:    "unkinded error hides message and returns 500",
+			session: true,
+			handler: User(func(context.Context, string) (string, error) {
+				return "", errors.New("pq: connection refused on 10.0.0.5:5432")
+			}, http.StatusOK),
+			wantStatus:    http.StatusInternalServerError,
+			wantBodyHas:   "internal server error",
+			wantBodyLacks: "10.0.0.5",
+		},
+		{
+			name:    "nil slice is written as empty array",
+			session: true,
+			handler: User(func(context.Context, string) ([]string, error) {
+				return nil, nil
+			}, http.StatusOK),
+			wantStatus:  http.StatusOK,
+			wantBodyHas: "[]",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/x", nil)
+			if tt.session {
+				req = withSession(req, "user-1")
+			}
+			w := httptest.NewRecorder()
+			tt.handler(w, req)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantBodyHas != "" && !strings.Contains(w.Body.String(), tt.wantBodyHas) {
+				t.Fatalf("body = %q, want it to contain %q", w.Body.String(), tt.wantBodyHas)
+			}
+			if tt.wantBodyLacks != "" && strings.Contains(w.Body.String(), tt.wantBodyLacks) {
+				t.Fatalf("body = %q, want it not to contain %q", w.Body.String(), tt.wantBodyLacks)
+			}
+		})
 	}
 }
 
@@ -45,83 +96,44 @@ func TestBodyDecodeErrorReturns400WithJSONBody(t *testing.T) {
 	}
 }
 
-func TestKindedErrorMapsToItsStatus(t *testing.T) {
-	h := User(func(context.Context, string) (string, error) {
-		return "", apperr.Conflict("board belongs to another company")
-	}, http.StatusOK)
-	req := withSession(httptest.NewRequest(http.MethodGet, "/x", nil), "user-1")
-	w := httptest.NewRecorder()
-	h(w, req)
-	if w.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", w.Code)
+func TestID(t *testing.T) {
+	tests := []struct {
+		name        string
+		handler     http.HandlerFunc
+		wantStatus  int
+		wantBodyHas string
+	}{
+		{
+			name: "no content status writes no body",
+			handler: ID(func(context.Context, string, string) (struct{}, error) {
+				return struct{}{}, nil
+			}, http.StatusNoContent),
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "passes chi url param as id",
+			handler: ID(func(_ context.Context, userID, id string) (string, error) {
+				return userID + ":" + id, nil
+			}, http.StatusOK),
+			wantStatus:  http.StatusOK,
+			wantBodyHas: "user-1:abc-123",
+		},
 	}
-	if !strings.Contains(w.Body.String(), "board belongs to another company") {
-		t.Fatalf("body = %q, want the kinded message", w.Body.String())
-	}
-}
-
-func TestUnkindedErrorHidesMessageAndReturns500(t *testing.T) {
-	h := User(func(context.Context, string) (string, error) {
-		return "", errors.New("pq: connection refused on 10.0.0.5:5432")
-	}, http.StatusOK)
-	req := withSession(httptest.NewRequest(http.MethodGet, "/x", nil), "user-1")
-	w := httptest.NewRecorder()
-	h(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", w.Code)
-	}
-	if strings.Contains(w.Body.String(), "10.0.0.5") {
-		t.Fatalf("body leaked the underlying error: %q", w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "internal server error") {
-		t.Fatalf("body = %q, want the generic message", w.Body.String())
-	}
-}
-
-func TestNilSliceIsWrittenAsEmptyArray(t *testing.T) {
-	h := User(func(context.Context, string) ([]string, error) {
-		return nil, nil
-	}, http.StatusOK)
-	req := withSession(httptest.NewRequest(http.MethodGet, "/x", nil), "user-1")
-	w := httptest.NewRecorder()
-	h(w, req)
-	if got := strings.TrimSpace(w.Body.String()); got != "[]" {
-		t.Fatalf("body = %q, want []", got)
-	}
-}
-
-func TestNoContentStatusWritesNoBody(t *testing.T) {
-	h := ID(func(context.Context, string, string) (struct{}, error) {
-		return struct{}{}, nil
-	}, http.StatusNoContent)
-	req := withSession(httptest.NewRequest(http.MethodDelete, "/x/1", nil), "user-1")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "1")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	w := httptest.NewRecorder()
-	h(w, req)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want 204", w.Code)
-	}
-	if w.Body.Len() != 0 {
-		t.Fatalf("body = %q, want empty", w.Body.String())
-	}
-}
-
-func TestIDPassesChiURLParam(t *testing.T) {
-	var gotID string
-	h := ID(func(_ context.Context, userID, id string) (string, error) {
-		gotID = id
-		return userID, nil
-	}, http.StatusOK)
-	req := withSession(httptest.NewRequest(http.MethodDelete, "/x/abc-123", nil), "user-1")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "abc-123")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	w := httptest.NewRecorder()
-	h(w, req)
-	if gotID != "abc-123" {
-		t.Fatalf("id = %q, want abc-123", gotID)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := withRouteID(withSession(httptest.NewRequest(http.MethodDelete, "/x/abc-123", nil), "user-1"), "abc-123")
+			w := httptest.NewRecorder()
+			tt.handler(w, req)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", w.Code, tt.wantStatus)
+			}
+			if tt.wantBodyHas != "" && !strings.Contains(w.Body.String(), tt.wantBodyHas) {
+				t.Fatalf("body = %q, want it to contain %q", w.Body.String(), tt.wantBodyHas)
+			}
+			if tt.wantStatus == http.StatusNoContent && w.Body.Len() != 0 {
+				t.Fatalf("body = %q, want empty", w.Body.String())
+			}
+		})
 	}
 }
 
@@ -129,21 +141,17 @@ func TestBodyIDCombinesIDAndDecodedBody(t *testing.T) {
 	type in struct {
 		Notes string `json:"notes"`
 	}
-	var gotID, gotUserID, gotNotes string
 	h := BodyID(func(_ context.Context, userID, id string, body in) (string, error) {
-		gotUserID, gotID, gotNotes = userID, id, body.Notes
-		return "ok", nil
+		return userID + ":" + id + ":" + body.Notes, nil
 	}, http.StatusOK)
-	req := withSession(httptest.NewRequest(http.MethodPatch, "/x/app-1", strings.NewReader(`{"notes":"followed up"}`)), "user-1")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", "app-1")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req := withRouteID(withSession(httptest.NewRequest(http.MethodPatch, "/x/app-1", strings.NewReader(`{"notes":"followed up"}`)), "user-1"), "app-1")
 	w := httptest.NewRecorder()
 	h(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 	}
-	if gotUserID != "user-1" || gotID != "app-1" || gotNotes != "followed up" {
-		t.Fatalf("got userID=%q id=%q notes=%q", gotUserID, gotID, gotNotes)
+	want := "user-1:app-1:followed up"
+	if got := w.Body.String(); !strings.Contains(got, want) {
+		t.Fatalf("body = %q, want it to contain %q", got, want)
 	}
 }
