@@ -1,9 +1,13 @@
 package queue
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 func TestRabbitMQWorkQueue(t *testing.T) {
@@ -89,6 +94,25 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 		if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
 			t.Fatal(err)
+		}
+	})
+
+	t.Run("publish stamps timestamp", func(t *testing.T) {
+		task := Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: DetailTask, URL: "https://workinstartups.com/job/timestamp", Card: dto.Job{Source: "wis"}}
+		before := time.Now()
+		if err := broker.Publish(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		delivery, ok, err := ch.Get("source.wis", false)
+		if err != nil || !ok {
+			t.Fatalf("get: %v %v", ok, err)
+		}
+		_ = delivery.Ack(false)
+		if delivery.Timestamp.IsZero() {
+			t.Fatal("published message has zero Timestamp")
+		}
+		if delivery.Timestamp.Before(before.Add(-time.Second)) || delivery.Timestamp.After(time.Now().Add(time.Second)) {
+			t.Fatalf("Timestamp = %v, want close to %v", delivery.Timestamp, before)
 		}
 	})
 
@@ -305,6 +329,89 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		<-done
 	})
 
+	t.Run("task.done logs one line per delivery", func(t *testing.T) {
+		runOne := func(t *testing.T, task Task, handler func(context.Context, Task) error) map[string]any {
+			t.Helper()
+			buf := captureTaskDoneLogs(t)
+			consumeCtx, cancel := context.WithCancel(ctx)
+			entered := make(chan struct{})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				_ = broker.Consume(consumeCtx, func(ctx context.Context, got Task) error {
+					defer close(entered)
+					return handler(ctx, got)
+				}, nil)
+			}()
+			<-entered
+			cancel()
+			<-done
+			lines := taskDoneLines(t, buf)
+			if len(lines) != 1 {
+				t.Fatalf("task.done lines = %d, want 1: %v", len(lines), lines)
+			}
+			line := lines[0]
+			if line["task_id"] != task.ID {
+				t.Fatalf("task_id = %v, want %s", line["task_id"], task.ID)
+			}
+			if line["run_id"] != task.RunID {
+				t.Fatalf("run_id = %v, want %s", line["run_id"], task.RunID)
+			}
+			if line["source"] != task.Source {
+				t.Fatalf("source = %v, want %s", line["source"], task.Source)
+			}
+			if line["kind"] != string(task.Kind) {
+				t.Fatalf("kind = %v, want %s", line["kind"], task.Kind)
+			}
+			duration, ok := line["duration_ms"].(float64)
+			if !ok || duration < 0 {
+				t.Fatalf("duration_ms = %v, want >= 0", line["duration_ms"])
+			}
+			return line
+		}
+
+		t.Run("ok outcome carries wait_ms", func(t *testing.T) {
+			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			if err := broker.Publish(ctx, task); err != nil {
+				t.Fatal(err)
+			}
+			line := runOne(t, task, func(context.Context, Task) error { return nil })
+			if line["outcome"] != "ok" {
+				t.Fatalf("outcome = %v, want ok", line["outcome"])
+			}
+			waitMs, ok := line["wait_ms"].(float64)
+			if !ok || waitMs < 0 {
+				t.Fatalf("wait_ms = %v, want >= 0", line["wait_ms"])
+			}
+		})
+
+		t.Run("error outcome", func(t *testing.T) {
+			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			if err := broker.Publish(ctx, task); err != nil {
+				t.Fatal(err)
+			}
+			line := runOne(t, task, func(context.Context, Task) error { return errors.New("handler boom") })
+			if line["outcome"] != "error" {
+				t.Fatalf("outcome = %v, want error", line["outcome"])
+			}
+		})
+
+		t.Run("zero Timestamp omits wait_ms", func(t *testing.T) {
+			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			body, err := json.Marshal(task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := ch.PublishWithContext(ctx, workExchange, "indeed", true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, MessageId: task.ID, Body: body}); err != nil {
+				t.Fatal(err)
+			}
+			line := runOne(t, task, func(context.Context, Task) error { return nil })
+			if _, ok := line["wait_ms"]; ok {
+				t.Fatalf("wait_ms present for zero-Timestamp delivery: %v", line)
+			}
+		})
+	})
+
 	t.Run("confirmed message survives restart", func(t *testing.T) {
 		task := Task{Version: 1, ID: uuid.NewString(), Source: "linkedin", Kind: DetailTask, URL: "https://www.linkedin.com/jobs/view/1", Card: dto.Job{Source: "linkedin"}}
 		if err := broker.Publish(ctx, task); err != nil {
@@ -355,4 +462,32 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			time.Sleep(250 * time.Millisecond)
 		}
 	})
+}
+
+func captureTaskDoneLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return buf
+}
+
+func taskDoneLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var lines []map[string]any
+	scanner := bufio.NewScanner(buf)
+	for scanner.Scan() {
+		var line map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
+			t.Fatalf("unmarshal log line: %v", err)
+		}
+		if line["event"] == telemetry.EventTaskDone {
+			lines = append(lines, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan log buffer: %v", err)
+	}
+	return lines
 }

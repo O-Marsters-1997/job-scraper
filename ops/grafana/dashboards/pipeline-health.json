@@ -24,6 +24,34 @@
       "targets": [
         { "refId": "A", "expr": "{env=\"prod\"}" }
       ]
+    },
+    {
+      "id": 3,
+      "title": "Queue wait p95 by source and kind",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json event=\"event\" | event=\"task.done\" | unwrap wait_ms [5m]) by (source, kind)",
+          "legendFormat": "{{source}} / {{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Task duration p95 by source and kind",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json event=\"event\" | event=\"task.done\" | unwrap duration_ms [5m]) by (source, kind)",
+          "legendFormat": "{{source}} / {{kind}}"
+        }
+      ]
     }
   ]
 }
