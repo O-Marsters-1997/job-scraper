@@ -13,6 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/handlers"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
@@ -22,6 +23,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 	}
 
 	r := chi.NewRouter()
+	r.Use(telemetry.AccessLog)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{allowedOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

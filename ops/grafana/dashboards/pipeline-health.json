@@ -27,9 +27,31 @@
     },
     {
       "id": 3,
-      "title": "Queue wait p95 by source and kind",
+      "title": "Outbox pending",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_outbox_pending", "legendFormat": "pending" },
+        { "refId": "B", "expr": "jobscraper_outbox_failed", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Outbox oldest pending age",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_outbox_oldest_pending_seconds", "legendFormat": "oldest pending" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Queue wait p95 by source and kind",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
       "targets": [
         {
@@ -40,10 +62,10 @@
       ]
     },
     {
-      "id": 4,
+      "id": 6,
       "title": "Task duration p95 by source and kind",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
       "targets": [
         {
