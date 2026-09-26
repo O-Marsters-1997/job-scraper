@@ -25,7 +25,7 @@ services:
       rabbitmq:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file: .env.docker-compose
     environment:
       POSTGRES_HOST: db
@@ -40,7 +40,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
