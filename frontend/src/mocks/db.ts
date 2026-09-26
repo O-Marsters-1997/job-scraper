@@ -5,6 +5,11 @@ import type { Company, CompanyBoard } from "@/types/company";
 import type { Job } from "@/types/job";
 import type { SourceTarget } from "@/types/sourceTarget";
 import type { ScoringConfig } from "../api/scoringConfig";
+import type {
+	DimensionSpec,
+	ScoringOption,
+	ScoringOptionsView,
+} from "../api/scoringOptions";
 
 faker.seed(1234);
 
@@ -226,6 +231,25 @@ let scoringConfig: ScoringConfig = {
 	},
 };
 
+const scoringDimensions: DimensionSpec[] = [
+	{ key: "tech", kind: "pair", stances: ["nice", "avoid"] },
+	{ key: "role", kind: "pair", stances: ["nice", "avoid"] },
+	{ key: "domain", kind: "pair", stances: ["nice", "avoid", "block"] },
+	{ key: "seniority", kind: "multi", stances: ["nice"] },
+	{ key: "work", kind: "multi", stances: ["nice"] },
+	{ key: "stage", kind: "multi", stances: ["nice"] },
+];
+
+const scoringOptions: ScoringOption[] = [
+	{ id: "tech:go", dimension: "tech", label: "Go" },
+	{ id: "tech:python", dimension: "tech", label: "Python" },
+	{ id: "role:backend", dimension: "role", label: "Backend" },
+	{ id: "domain:fintech", dimension: "domain", label: "fintech" },
+	{ id: "seniority:senior", dimension: "seniority", label: "Senior" },
+	{ id: "work:remote", dimension: "work", label: "Remote" },
+	{ id: "stage:seed", dimension: "stage", label: "Seed" },
+];
+
 function slugify(name: string): string {
 	return name
 		.toLowerCase()
@@ -425,6 +449,10 @@ export function getApplications(statusId?: string): ApplicationWithDetails[] {
 
 export function getScoringConfig(): ScoringConfig {
 	return structuredClone(scoringConfig);
+}
+
+export function getScoringOptions(): ScoringOptionsView {
+	return { dimensions: scoringDimensions, options: scoringOptions };
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────

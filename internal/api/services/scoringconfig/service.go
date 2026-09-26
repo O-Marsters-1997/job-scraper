@@ -26,10 +26,11 @@ type Service struct {
 	configs    providers.SearchConfigProvider
 	candidates Reconsiderer
 	rescore    Rescorer
+	options    providers.ScoringOptionsProvider
 }
 
-func New(configs providers.SearchConfigProvider, candidates Reconsiderer, rescore Rescorer) *Service {
-	return &Service{configs: configs, candidates: candidates, rescore: rescore}
+func New(configs providers.SearchConfigProvider, candidates Reconsiderer, rescore Rescorer, options providers.ScoringOptionsProvider) *Service {
+	return &Service{configs: configs, candidates: candidates, rescore: rescore, options: options}
 }
 
 func (s *Service) Rescore(ctx context.Context, userID string) (dto.RescoreResult, error) {

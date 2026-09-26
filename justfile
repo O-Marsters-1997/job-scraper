@@ -102,6 +102,12 @@ migrate-down:
 migrate-create name:
     goose -dir {{MIGRATIONS_DIR}} create {{name}} sql
 
+# ── Seeds ─────────────────────────────────────────────────────────────────────
+
+# seed the scoring-options bank (idempotent; safe to rerun in any environment)
+seed-scoring-options:
+    psql "{{MIGRATION_URL}}" -f scripts/seed/scoring_options.sql
+
 # ── Database ──────────────────────────────────────────────────────────────────
 
 # start postgres
