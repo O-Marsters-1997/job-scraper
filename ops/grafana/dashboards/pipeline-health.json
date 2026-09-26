@@ -27,19 +27,41 @@
     },
     {
       "id": 3,
-      "title": "Queue depth (ready)",
+      "title": "Outbox pending",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_outbox_pending", "legendFormat": "pending" },
+        { "refId": "B", "expr": "jobscraper_outbox_failed", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Outbox oldest pending age",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_outbox_oldest_pending_seconds", "legendFormat": "oldest pending" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Queue depth (ready)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
         { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_ready{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
       ]
     },
     {
-      "id": 4,
+      "id": 6,
       "title": "Queue depth (unacked)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
         { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_unacked{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }

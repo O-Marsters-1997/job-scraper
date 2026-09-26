@@ -1,6 +1,6 @@
-# plans/grafana-observability.md. datasourceUid placeholders are filled in by
-# scripts/grafana-push.sh, which looks up the connected Prometheus and Loki datasource UIDs by
-# type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
+# Phase 1, 2, 4 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
+# filled in by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki
+# datasource UIDs by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
 folder:
   uid: pipeline-health
   title: Pipeline health
@@ -80,6 +80,114 @@ rules:
                 type: gt
                 params: [20]
 
+  - uid: state-scrape-failing
+    title: State scrape failing
+    condition: C
+    for: 10m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "the last OpsState read failed"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_state_up == 0
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
+  - uid: scoring-stalled
+    title: Scoring stalled
+    condition: C
+    for: 5m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "the oldest pending scoring effect is {{ $values.A }}s old"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_outbox_oldest_pending_seconds
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [1800]
+
+  - uid: scoring-failed
+    title: Scoring failed
+    condition: C
+    for: 5m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $values.A }} scoring effects have failed"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_outbox_failed
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
   - uid: dead-letters
     title: Dead letters
     condition: C
@@ -157,3 +265,81 @@ rules:
           refId: C
           type: math
           expression: "$A > 0 && $B >= 0"
+
+  - uid: api-5xx
+    title: API 5xx
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.service }} 5xx ratio is above 5% over the last 10m"
+    data:
+      - refId: A
+        queryType: range
+        relativeTimeRange:
+          from: 600
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: A
+          queryType: range
+          expr: sum by (service) (count_over_time({env="prod"} | json | event="http.request" [10m]))
+      - refId: B
+        queryType: range
+        relativeTimeRange:
+          from: 600
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: B
+          queryType: range
+          expr: sum by (service) (count_over_time({env="prod"} | json | event="http.request" | status >= 500 [10m]))
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: math
+          expression: "$A > 20 && ($B / $A) > 0.05"
+
+  - uid: api-slow
+    title: API slow
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.service }} p95 request latency is {{ $values.A }}ms over the last 15m"
+    data:
+      - refId: A
+        queryType: range
+        relativeTimeRange:
+          from: 900
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: A
+          queryType: range
+          expr: quantile_over_time(0.95, {env="prod"} | json | event="http.request" | unwrap duration_ms [15m]) by (service)
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [2000]

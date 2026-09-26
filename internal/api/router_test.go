@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 const ingestTestToken = "router-test-ingest-token" //nolint:gosec // test-only static token, not a credential
@@ -228,6 +231,19 @@ func TestRouterRequiresAuth(t *testing.T) {
 				t.Errorf("status = %d, want 401 (body: %s)", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestAccessLogWiredIntoRouter(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	do(httptest.NewRequest(http.MethodGet, "/jobs", nil))
+
+	if !strings.Contains(buf.String(), `"event":"`+telemetry.EventHTTPRequest+`"`) {
+		t.Fatalf("expected an %s log line, got: %s", telemetry.EventHTTPRequest, buf.String())
 	}
 }
 
