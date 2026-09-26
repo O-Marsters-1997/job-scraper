@@ -61,10 +61,7 @@ export default function Sidebar(props: SidebarProps) {
 	const isCompaniesActive = () => location().pathname.startsWith("/companies");
 	const isApplicationsActive = () => location()?.pathname === "/applications";
 	const isInsightsActive = () => location().pathname === "/insights";
-	const isStatusesActive = () => location().pathname === "/settings/statuses";
-	const isSearchesActive = () => location().pathname === "/settings/searches";
-	const isIntegrationsActive = () =>
-		location().pathname === "/settings/integrations";
+	const isSettingsActive = () => location().pathname.startsWith("/settings");
 	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 	const navigate = useNavigate();
 
@@ -286,16 +283,10 @@ export default function Sidebar(props: SidebarProps) {
 						</Show>
 					</Link>
 
-					<Show when={showLabels()}>
-						<span class="px-2.5 pb-1 pt-4 text-2xs font-semibold uppercase tracking-wider text-sidebar-foreground/70">
-							Settings
-						</span>
-					</Show>
-
 					<Link
-						to="/settings/statuses"
-						title="Status settings"
-						class={navLinkVariants({ active: isStatusesActive() })}
+						to="/settings"
+						title="Settings"
+						class={navLinkVariants({ active: isSettingsActive() })}
 					>
 						<svg
 							aria-hidden="true"
@@ -313,57 +304,7 @@ export default function Sidebar(props: SidebarProps) {
 							<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
 						</svg>
 						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">Statuses</span>
-						</Show>
-					</Link>
-
-					<Link
-						to="/settings/searches"
-						title="Tracked searches"
-						class={navLinkVariants({ active: isSearchesActive() })}
-					>
-						<svg
-							aria-hidden="true"
-							class="shrink-0"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<circle cx="11" cy="11" r="8" />
-							<line x1="21" y1="21" x2="16.65" y2="16.65" />
-						</svg>
-						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">Searches</span>
-						</Show>
-					</Link>
-
-					<Link
-						to="/settings/integrations"
-						title="Integrations"
-						class={navLinkVariants({ active: isIntegrationsActive() })}
-					>
-						<svg
-							aria-hidden="true"
-							class="shrink-0"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-							<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-						</svg>
-						<Show when={showLabels()}>
-							<span class="whitespace-nowrap">Integrations</span>
+							<span class="whitespace-nowrap">Settings</span>
 						</Show>
 					</Link>
 				</nav>

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/solid-router";
-import { Show } from "solid-js";
+import { Match, Switch } from "solid-js";
 import { queryClient } from "../lib/queryClient";
+import { findSettingsSection } from "../lib/settingsSections";
 import type { Job } from "../types/job";
 import SettingsPanel from "./SettingsPanel";
 
@@ -10,9 +11,6 @@ const PAGE_LABELS: Record<string, string> = {
 	"/applications": "Applications",
 	"/insights": "Insights",
 	"/cv-templates": "CV Templates",
-	"/settings/statuses": "Statuses",
-	"/settings/searches": "Searches",
-	"/settings/integrations": "Integrations",
 };
 
 function deriveLabel(pathname: string): string | null {
@@ -45,6 +43,8 @@ export default function Topbar(props: TopbarProps) {
 	const pageLabel = () =>
 		PAGE_LABELS[location().pathname] ?? deriveLabel(location().pathname);
 
+	const settingsSection = () => findSettingsSection(location().pathname);
+
 	return (
 		<header class="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
 			<nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
@@ -72,25 +72,42 @@ export default function Topbar(props: TopbarProps) {
 				</button>
 				<span class="text-faint">FastTrack</span>
 				<span class="text-border-strong">/</span>
-				<Show
-					when={jobDetailId()}
+				<Switch
 					fallback={
 						<span class="font-semibold text-foreground">
 							{pageLabel() ?? "FastTrack"}
 						</span>
 					}
 				>
-					<Link
-						to="/jobs"
-						class="text-faint transition-colors hover:text-foreground"
-					>
-						Jobs
-					</Link>
-					<span class="text-border-strong">/</span>
-					<span class="font-semibold text-foreground">
-						{jobDetailTitle() ?? "Job"}
-					</span>
-				</Show>
+					<Match when={jobDetailId()}>
+						<Link
+							to="/jobs"
+							class="text-faint transition-colors hover:text-foreground"
+						>
+							Jobs
+						</Link>
+						<span class="text-border-strong">/</span>
+						<span class="font-semibold text-foreground">
+							{jobDetailTitle() ?? "Job"}
+						</span>
+					</Match>
+					<Match when={settingsSection()}>
+						{(section) => (
+							<>
+								<Link
+									to="/settings"
+									class="text-faint transition-colors hover:text-foreground"
+								>
+									Settings
+								</Link>
+								<span class="text-border-strong">/</span>
+								<span class="font-semibold text-foreground">
+									{section().label}
+								</span>
+							</>
+						)}
+					</Match>
+				</Switch>
 			</nav>
 			<SettingsPanel />
 		</header>
