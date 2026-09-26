@@ -1,0 +1,53 @@
+{
+  "uid": "jobscraper-traffic-cost",
+  "title": "Traffic & cost",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" [5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "5xx ratio",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" | status >= 500 [5m])) / sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" [5m]))",
+          "legendFormat": "{{service}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "p95 duration by route",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json | event=\"http.request\" | unwrap duration_ms [5m]) by (route)",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    }
+  ]
+}
