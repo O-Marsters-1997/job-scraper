@@ -12,9 +12,9 @@ default:
 
 # ── Env ───────────────────────────────────────────────────────────────────────
 
-# sync .env's keys to .env.example: add missing keys empty, drop removed ones
-sync-env:
-    ./scripts/sync-env.sh
+# sync an env file's keys to .env.example: add missing keys with the example's value, drop removed ones
+sync-env target=".env":
+    ./scripts/sync-env.sh {{target}}
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ build:
 
 # run the worker
 run *args:
-    go run ./cmd/worker {{args}}
+    METRICS_ADDR=:9092 go run ./cmd/worker {{args}}
 
 run-api:
     go run ./cmd/api

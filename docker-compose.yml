@@ -71,12 +71,13 @@ services:
     image: grafana/alloy:v1.19.2
     restart: unless-stopped
     profiles: [observability]
-    depends_on:
-      - api
-      - worker
     env_file: .env.docker-compose
     environment:
-      ENV: prod
+      ENV: ${ALLOY_ENV:-dev}
+      API_METRICS_TARGET: ${API_METRICS_TARGET:-api:9091}
+      WORKER_METRICS_TARGET: ${WORKER_METRICS_TARGET:-worker:9091}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./ops/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -56,8 +56,8 @@ loki.write "grafana_cloud" {
 
 prometheus.scrape "services" {
 	targets = [
-		{"__address__" = "api:9091", "job" = "api"},
-		{"__address__" = "worker:9091", "job" = "worker"},
+		{"__address__" = sys.env("API_METRICS_TARGET"), "job" = "api"},
+		{"__address__" = sys.env("WORKER_METRICS_TARGET"), "job" = "worker"},
 	]
 	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }

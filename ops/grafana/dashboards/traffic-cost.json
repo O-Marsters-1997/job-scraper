@@ -4,6 +4,16 @@
   "timezone": "browser",
   "schemaVersion": 39,
   "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "type": "custom",
+        "query": "prod,dev",
+        "current": { "text": "prod", "value": "prod" }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -14,7 +24,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" [5m]))",
+          "expr": "sum by (service) (rate({env=\"$env\"} | json | event=\"http.request\" [5m]))",
           "legendFormat": "{{service}}"
         }
       ]
@@ -29,7 +39,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" | status >= 500 [5m])) / sum by (service) (rate({env=\"prod\"} | json | event=\"http.request\" [5m]))",
+          "expr": "sum by (service) (rate({env=\"$env\"} | json | event=\"http.request\" | status >= 500 [5m])) / sum by (service) (rate({env=\"$env\"} | json | event=\"http.request\" [5m]))",
           "legendFormat": "{{service}}"
         }
       ]
@@ -44,7 +54,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json | event=\"http.request\" | unwrap duration_ms [5m]) by (route)",
+          "expr": "quantile_over_time(0.95, {env=\"$env\"} | json | event=\"http.request\" | unwrap duration_ms [5m]) by (route)",
           "legendFormat": "{{route}}"
         }
       ]

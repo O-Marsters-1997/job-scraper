@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Syncs .env's key set to .env.example: adds missing keys empty, drops keys
-# .env.example no longer lists. Existing values are left untouched.
+# Syncs an env file's key set to .env.example: adds missing keys with the example's
+# value, drops keys .env.example no longer lists. Existing values are left untouched.
+#
+# Usage: scripts/sync-env.sh [target]   (default target: .env)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 example=".env.example"
-target=".env"
+target="${1:-.env}"
 
 [ -f "$example" ] || {
   echo "missing $example" >&2
@@ -32,7 +34,7 @@ mv "$tmp" "$target"
 added=0
 while IFS= read -r key; do
   if ! grep -qE "^${key}=" "$target"; then
-    echo "${key}=" >>"$target"
+    grep -m1 -E "^${key}=" "$example" >>"$target"
     echo "+ $key"
     added=$((added + 1))
   fi

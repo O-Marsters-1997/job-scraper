@@ -27,7 +27,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: up{job=~"api|worker"} == 0
+          expr: up{env="prod", job=~"api|worker"} == 0
           instant: true
       - refId: C
         queryType: ""
@@ -99,7 +99,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: jobscraper_state_up == 0
+          expr: jobscraper_state_up{env="prod"} == 0
           instant: true
       - refId: C
         queryType: ""
@@ -135,7 +135,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: jobscraper_outbox_oldest_pending_seconds
+          expr: jobscraper_outbox_oldest_pending_seconds{env="prod"}
           instant: true
       - refId: C
         queryType: ""
@@ -171,7 +171,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: jobscraper_outbox_failed
+          expr: jobscraper_outbox_failed{env="prod"}
           instant: true
       - refId: C
         queryType: ""
@@ -207,7 +207,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: rabbitmq_detailed_queue_messages_ready{queue="source.dead"}
+          expr: rabbitmq_detailed_queue_messages_ready{env="prod", queue="source.dead"}
           instant: true
       - refId: C
         queryType: ""
@@ -243,7 +243,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: A
-          expr: rabbitmq_detailed_queue_messages_ready{queue=~"source\\..*", queue!="source.dead"}
+          expr: rabbitmq_detailed_queue_messages_ready{env="prod", queue=~"source\\..*", queue!="source.dead"}
           instant: true
       - refId: B
         queryType: ""
@@ -253,7 +253,7 @@ rules:
         datasourceUid: __PROM_DATASOURCE_UID__
         model:
           refId: B
-          expr: deriv(rabbitmq_detailed_queue_messages_ready{queue=~"source\\..*", queue!="source.dead"}[30m])
+          expr: deriv(rabbitmq_detailed_queue_messages_ready{env="prod", queue=~"source\\..*", queue!="source.dead"}[30m])
           instant: true
       - refId: C
         queryType: ""

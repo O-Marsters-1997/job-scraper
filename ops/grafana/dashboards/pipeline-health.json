@@ -4,6 +4,16 @@
   "timezone": "browser",
   "schemaVersion": 39,
   "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "type": "custom",
+        "query": "prod,dev",
+        "current": { "text": "prod", "value": "prod" }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -12,7 +22,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
-        { "refId": "A", "expr": "up{job=~\"api|worker\"}", "legendFormat": "{{job}}" }
+        { "refId": "A", "expr": "up{env=\"$env\", job=~\"api|worker\"}", "legendFormat": "{{job}}" }
       ]
     },
     {
@@ -22,7 +32,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
       "targets": [
-        { "refId": "A", "expr": "{env=\"prod\"}" }
+        { "refId": "A", "expr": "{env=\"$env\"}" }
       ]
     },
     {
@@ -32,8 +42,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
-        { "refId": "A", "expr": "jobscraper_outbox_pending", "legendFormat": "pending" },
-        { "refId": "B", "expr": "jobscraper_outbox_failed", "legendFormat": "failed" }
+        { "refId": "A", "expr": "jobscraper_outbox_pending{env=\"$env\"}", "legendFormat": "pending" },
+        { "refId": "B", "expr": "jobscraper_outbox_failed{env=\"$env\"}", "legendFormat": "failed" }
       ]
     },
     {
@@ -44,7 +54,7 @@
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
-        { "refId": "A", "expr": "jobscraper_outbox_oldest_pending_seconds", "legendFormat": "oldest pending" }
+        { "refId": "A", "expr": "jobscraper_outbox_oldest_pending_seconds{env=\"$env\"}", "legendFormat": "oldest pending" }
       ]
     },
     {
@@ -54,7 +64,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
-        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_ready{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_ready{env=\"$env\", queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
       ]
     },
     {
@@ -64,7 +74,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
       "targets": [
-        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_unacked{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_unacked{env=\"$env\", queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
       ]
     },
     {
@@ -76,7 +86,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json event=\"event\" | event=\"task.done\" | unwrap wait_ms [5m]) by (source, kind)",
+          "expr": "quantile_over_time(0.95, {env=\"$env\"} | json event=\"event\" | event=\"task.done\" | unwrap wait_ms [5m]) by (source, kind)",
           "legendFormat": "{{source}} / {{kind}}"
         }
       ]
@@ -90,7 +100,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {env=\"prod\"} | json event=\"event\" | event=\"task.done\" | unwrap duration_ms [5m]) by (source, kind)",
+          "expr": "quantile_over_time(0.95, {env=\"$env\"} | json event=\"event\" | event=\"task.done\" | unwrap duration_ms [5m]) by (source, kind)",
           "legendFormat": "{{source}} / {{kind}}"
         }
       ]
