@@ -35,3 +35,14 @@ Everything below needs the live Grafana Cloud stack from step 6 and can't be ver
 Everything else — the metrics endpoint, `Serve`'s shutdown behaviour, the compose profile gating,
 and the Alloy config's syntax — is covered by `go test ./internal/telemetry/...` and
 `docker compose --profile observability config`.
+
+## Manual verification (Phase 2 acceptance criteria)
+
+Everything below needs the live Grafana Cloud stack and can't be verified headless:
+
+- [ ] A pending effect older than 30m in prod fires **Scoring stalled** by email to
+      `ollyn.marsters@gmail.com` within ~5 minutes of crossing the threshold.
+
+Everything else — `OpsState`'s counts and ages, the collector's happy and failure paths, and the
+worker's `/metrics` carrying no `jobscraper_*` series — is covered by `go test ./internal/data/db/...`
+and `go test ./internal/telemetry/...`.
