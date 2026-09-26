@@ -24,6 +24,26 @@
       "targets": [
         { "refId": "A", "expr": "{env=\"prod\"}" }
       ]
+    },
+    {
+      "id": 3,
+      "title": "Queue depth (ready)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_ready{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Queue depth (unacked)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_unacked{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+      ]
     }
   ]
 }

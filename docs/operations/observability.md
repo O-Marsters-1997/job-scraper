@@ -1,8 +1,8 @@
 # Grafana Cloud observability: operations
 
 See `plans/grafana-observability.md` and ADR-0025 for the design. This covers the human setup
-step the plan calls out, and the Phase 1 acceptance criteria that need a live Grafana Cloud
-stack to verify.
+step the plan calls out, and the acceptance criteria from each phase that need a live Grafana
+Cloud stack to verify.
 
 ## One-time setup
 
@@ -35,3 +35,16 @@ Everything below needs the live Grafana Cloud stack from step 6 and can't be ver
 Everything else — the metrics endpoint, `Serve`'s shutdown behaviour, the compose profile gating,
 and the Alloy config's syntax — is covered by `go test ./internal/telemetry/...` and
 `docker compose --profile observability config`.
+
+## Manual verification (Phase 4 acceptance criteria)
+
+Everything below needs the live Grafana Cloud stack and can't be verified headless:
+
+- [ ] `rabbitmq_detailed_queue_messages_ready{queue="source.dead"}` and one series per
+      `source.<name>` queue show in Grafana Cloud.
+- [ ] Publishing a task that fails 5 times in a dev env lands it in `source.dead` and fires
+      **Dead letters** by email within ~5 minutes.
+- [ ] A normal scheduled Board burst does not fire **Queue not draining**.
+
+The scrape config's syntax and the alert rules' shape are covered by `alloy validate` and pushing
+`ops/grafana/` to a throwaway Grafana OSS stack (see below).
