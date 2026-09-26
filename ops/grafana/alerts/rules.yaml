@@ -1,4 +1,4 @@
-# Phase 1 rules only (plans/grafana-observability.md). datasourceUid placeholders are filled in
+# Phase 1 and 2 rules (plans/grafana-observability.md). datasourceUid placeholders are filled in
 # by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki datasource UIDs
 # by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
 folder:
@@ -79,3 +79,111 @@ rules:
             - evaluator:
                 type: gt
                 params: [20]
+
+  - uid: state-scrape-failing
+    title: State scrape failing
+    condition: C
+    for: 10m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "the last OpsState read failed"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_state_up == 0
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
+  - uid: scoring-stalled
+    title: Scoring stalled
+    condition: C
+    for: 5m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "the oldest pending scoring effect is {{ $values.A }}s old"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_outbox_oldest_pending_seconds
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [1800]
+
+  - uid: scoring-failed
+    title: Scoring failed
+    condition: C
+    for: 5m
+    noDataState: NoData
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $values.A }} scoring effects have failed"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_outbox_failed
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
