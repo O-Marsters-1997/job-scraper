@@ -49,9 +49,29 @@
     },
     {
       "id": 5,
-      "title": "Queue wait p95 by source and kind",
+      "title": "Queue depth (ready)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_ready{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Queue depth (unacked)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "rabbitmq_detailed_queue_messages_unacked{queue=~\"source\\\\..*\"}", "legendFormat": "{{queue}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Queue wait p95 by source and kind",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
       "targets": [
         {
@@ -62,10 +82,10 @@
       ]
     },
     {
-      "id": 6,
+      "id": 8,
       "title": "Task duration p95 by source and kind",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
       "targets": [
         {

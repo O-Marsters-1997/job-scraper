@@ -1,4 +1,4 @@
-# Phase 1, 2, 5 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
+# Phase 1, 2, 4, 5 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
 # filled in by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki
 # datasource UIDs by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
 folder:
@@ -187,6 +187,84 @@ rules:
             - evaluator:
                 type: gt
                 params: [0]
+
+  - uid: dead-letters
+    title: Dead letters
+    condition: C
+    for: 5m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $values.A }} messages ready in source.dead"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: rabbitmq_detailed_queue_messages_ready{queue="source.dead"}
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
+  - uid: queue-not-draining
+    title: Queue not draining
+    condition: C
+    for: 30m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.queue }} has {{ $values.A }} ready messages and isn't draining"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: rabbitmq_detailed_queue_messages_ready{queue=~"source\\..*", queue!="source.dead"}
+          instant: true
+      - refId: B
+        queryType: ""
+        relativeTimeRange:
+          from: 1800
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: B
+          expr: deriv(rabbitmq_detailed_queue_messages_ready{queue=~"source\\..*", queue!="source.dead"}[30m])
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: math
+          expression: "$A > 0 && $B >= 0"
 
   - uid: queue-wait-high
     title: Queue wait high
