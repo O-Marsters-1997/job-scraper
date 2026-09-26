@@ -1,5 +1,5 @@
-// Grafana Alloy config for the observability profile (ADR-0025, plans/grafana-observability.md
-// Phase 1). Ships api/worker container logs and /metrics scrapes to Grafana Cloud. Credentials
+// Grafana Alloy config for the observability profile (ADR-0025, plans/grafana-observability.md).
+// Ships api/worker/rabbitmq container logs and /metrics scrapes to Grafana Cloud. Credentials
 // come from the environment (.env.docker-compose); this file holds no secrets.
 
 discovery.docker "containers" {
@@ -59,6 +59,17 @@ prometheus.scrape "services" {
 		{"__address__" = "api:9091", "job" = "api"},
 		{"__address__" = "worker:9091", "job" = "worker"},
 	]
+	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.scrape "rabbitmq" {
+	targets = [
+		{"__address__" = "rabbitmq:15692", "job" = "rabbitmq"},
+	]
+	metrics_path = "/metrics/detailed"
+	params       = {
+		family = ["queue_coarse_metrics"],
+	}
 	forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
 

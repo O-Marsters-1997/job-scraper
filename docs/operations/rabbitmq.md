@@ -28,3 +28,9 @@ Restore the archive into an **empty** `rabbitmq_data` volume with the same Rabbi
 `./queue count` reports DLQ depth. `./queue list [limit]` and `./queue inspect TASK_ID` use the management API's requeue mode, leaving messages in place. `./queue replay TASK_ID` publishes the original typed task with a fresh task ID, checks mandatory routing and a publisher confirm, then acknowledges its DLQ delivery. A publish failure requeues the original DLQ delivery.
 
 Keep the previous API and worker image/configuration until cutover checks pass. If rolling back after RabbitMQ accepted real tasks, stop publishers and workers, drain the broker or export and replay its outstanding tasks into the rollback system before switching binaries. Rolling back without handling those tasks abandons them even though they remain in the RabbitMQ volume.
+
+## Alerts
+
+"Dead letters" and "Queue not draining" (`ops/grafana/alerts/rules.yaml`, folder "Pipeline health")
+fire on `source.dead` depth and on a stalled `source.<name>` queue. Inspect and act on either with
+`just queue-list` and `just queue-dead inspect|replay` (see "Replay and rollback" above).
