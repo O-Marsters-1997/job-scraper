@@ -83,6 +83,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 
 		r.Get("/scoring-config", handlers.GetAll(svc.scoringConfig.Get))
 		r.Put("/scoring-config", handlers.Update(svc.scoringConfig.Update))
+		r.Get("/scoring-options", handlers.GetAll(svc.scoringConfig.Options))
 		r.Get("/scores/status", handlers.GetAll(db.GetScoringStatus))
 		r.Post("/scores/rescore", handlers.GetAll(svc.scoringConfig.Rescore))
 

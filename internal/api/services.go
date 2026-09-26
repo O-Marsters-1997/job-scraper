@@ -62,7 +62,7 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		applications:        applications.New(db),
 		sources:             sources.New(),
 		profile:             profile.New(db),
-		scoringConfig:       scoringconfig.New(db, candidateService, db),
+		scoringConfig:       scoringconfig.New(db, candidateService, db, db),
 		aiPrefs:             aiprefs.New(creds),
 		aiCredentials:       aicredentials.New(creds),
 		sourceTargets:       sourcetargets.New(db, db, candidateService, q),

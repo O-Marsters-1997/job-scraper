@@ -5,8 +5,57 @@
 package pgsqlc
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type ScoringDimension string
+
+const (
+	ScoringDimensionTech      ScoringDimension = "tech"
+	ScoringDimensionRole      ScoringDimension = "role"
+	ScoringDimensionDomain    ScoringDimension = "domain"
+	ScoringDimensionSeniority ScoringDimension = "seniority"
+	ScoringDimensionWork      ScoringDimension = "work"
+	ScoringDimensionStage     ScoringDimension = "stage"
+)
+
+func (e *ScoringDimension) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ScoringDimension(s)
+	case string:
+		*e = ScoringDimension(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ScoringDimension: %T", src)
+	}
+	return nil
+}
+
+type NullScoringDimension struct {
+	ScoringDimension ScoringDimension
+	Valid            bool // Valid is true if ScoringDimension is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullScoringDimension) Scan(value interface{}) error {
+	if value == nil {
+		ns.ScoringDimension, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ScoringDimension.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullScoringDimension) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ScoringDimension), nil
+}
 
 type Application struct {
 	ID         pgtype.UUID
@@ -172,6 +221,14 @@ type NotificationDigest struct {
 	ID       pgtype.UUID
 	SentAt   pgtype.Timestamptz
 	JobCount int32
+}
+
+type ScoringOption struct {
+	ID        string
+	Dimension ScoringDimension
+	Label     string
+	Question  string
+	RetiredAt pgtype.Timestamptz
 }
 
 type SearchConfig struct {

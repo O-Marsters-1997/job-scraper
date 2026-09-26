@@ -271,3 +271,13 @@ CREATE TABLE IF NOT EXISTS candidate_assessments (
     evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (candidate_id, user_id)
 );
+
+CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage');
+
+CREATE TABLE scoring_options (
+    id         TEXT PRIMARY KEY,
+    dimension  scoring_dimension NOT NULL,
+    label      TEXT NOT NULL,
+    question   TEXT NOT NULL,
+    retired_at TIMESTAMPTZ
+);

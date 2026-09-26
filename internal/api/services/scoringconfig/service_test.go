@@ -80,7 +80,7 @@ func TestGet(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil)
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil, providers.NewMockScoringOptionsProvider())
 			got, err := svc.Get(context.Background(), "user-1")
 			if tt.wantErr {
 				if err == nil {
@@ -157,7 +157,7 @@ func TestUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSearchConfigProvider()
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil)
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil, providers.NewMockScoringOptionsProvider())
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
@@ -169,7 +169,7 @@ func TestUpdate(t *testing.T) {
 func TestUpdateSucceeds(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{}
-	svc := scoringconfig.New(store, reconsiderer, nil)
+	svc := scoringconfig.New(store, reconsiderer, nil, providers.NewMockScoringOptionsProvider())
 
 	questions := dto.ScoringQuestions{
 		Profile: "Senior Go engineer",
@@ -204,7 +204,7 @@ func TestUpdateSucceeds(t *testing.T) {
 func TestUpdateReconsiderFails(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{err: errors.New("reconsideration blew up")}
-	svc := scoringconfig.New(store, reconsiderer, nil)
+	svc := scoringconfig.New(store, reconsiderer, nil, providers.NewMockScoringOptionsProvider())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		ScoringQuestions: dto.ScoringQuestions{
@@ -230,7 +230,7 @@ func (f *fakeRescorer) QueueRescore(context.Context, string) (int64, error) {
 }
 
 func TestRescore(t *testing.T) {
-	svc := scoringconfig.New(providers.NewMockSearchConfigProvider(), &fakeReconsiderer{}, &fakeRescorer{queued: 3})
+	svc := scoringconfig.New(providers.NewMockSearchConfigProvider(), &fakeReconsiderer{}, &fakeRescorer{queued: 3}, providers.NewMockScoringOptionsProvider())
 	got, err := svc.Rescore(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
