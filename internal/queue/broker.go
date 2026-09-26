@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 const (
@@ -129,7 +130,7 @@ func (b *Broker) Publish(ctx context.Context, task Task) error {
 	if task.Kind != DetailTask {
 		priority = 8
 	}
-	msg := amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: task.ID, Priority: priority, Body: body}
+	msg := amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: task.ID, Priority: priority, Timestamp: time.Now(), Body: body}
 	if err := b.pub.PublishWithContext(ctx, workExchange, task.Source, true, false, msg); err != nil {
 		return fmt.Errorf("publish %s: %w", task.ID, err)
 	}
@@ -221,6 +222,7 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			if !ok {
 				return errors.New("delivery channel closed")
 			}
+			consumedAt := time.Now()
 			var task Task
 			err := json.Unmarshal(delivery.Body, &task)
 			task.Redelivered = delivery.Redelivered
@@ -231,7 +233,9 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 				err = fmt.Errorf("task source %s delivered to %s", task.Source, source)
 			}
 			if err == nil {
+				handlerStart := time.Now()
 				err = handler(ctx, task)
+				logTaskDone(source, task, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
 			}
 			if ctx.Err() != nil {
 				return nil
@@ -253,6 +257,26 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			}
 		}
 	}
+}
+
+func logTaskDone(source string, task Task, publishedAt, consumedAt time.Time, duration time.Duration, err error) {
+	outcome := "ok"
+	if err != nil {
+		outcome = "error"
+	}
+	attrs := []slog.Attr{
+		slog.String("event", telemetry.EventTaskDone),
+		slog.String("source", source),
+		slog.String("kind", string(task.Kind)),
+		slog.String("outcome", outcome),
+		slog.Int64("duration_ms", duration.Milliseconds()),
+		slog.String("task_id", task.ID),
+		slog.String("run_id", task.RunID),
+	}
+	if !publishedAt.IsZero() {
+		attrs = append(attrs, slog.Int64("wait_ms", consumedAt.Sub(publishedAt).Milliseconds()))
+	}
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "queue task done", attrs...)
 }
 
 func deliveryCount(value any) int64 {

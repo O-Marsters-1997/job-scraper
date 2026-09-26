@@ -1,4 +1,4 @@
-# Phase 1, 2, 4 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
+# Phase 1, 2, 4, 5 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
 # filled in by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki
 # datasource UIDs by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
 folder:
@@ -265,6 +265,42 @@ rules:
           refId: C
           type: math
           expression: "$A > 0 && $B >= 0"
+
+  - uid: queue-wait-high
+    title: Queue wait high
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "queue wait p95 is {{ $values.A }}ms over the last 30m"
+    data:
+      - refId: A
+        queryType: range
+        relativeTimeRange:
+          from: 1800
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: A
+          queryType: range
+          expr: quantile_over_time(0.95, {env="prod"} | json event="event" | event="task.done" | unwrap wait_ms [30m])
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [900000]
 
   - uid: api-5xx
     title: API 5xx
