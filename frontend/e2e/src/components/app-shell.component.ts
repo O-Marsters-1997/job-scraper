@@ -4,7 +4,7 @@ export class AppShellComponent {
   readonly overviewLink: Locator;
   readonly jobsLink: Locator;
   readonly applicationsLink: Locator;
-  readonly statusesLink: Locator;
+  readonly settingsLink: Locator;
   readonly signOutButton: Locator;
 
   constructor(
@@ -14,7 +14,7 @@ export class AppShellComponent {
     this.overviewLink = root.getByTitle("Overview");
     this.jobsLink = root.getByTitle("Jobs");
     this.applicationsLink = root.getByTitle("Applications");
-    this.statusesLink = root.getByTitle("Status settings");
+    this.settingsLink = root.getByTitle("Settings");
     this.signOutButton = root.getByTitle("Sign out");
   }
   async navigateTo(link: Locator) {
