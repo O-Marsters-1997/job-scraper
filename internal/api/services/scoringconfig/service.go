@@ -10,6 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
@@ -47,7 +48,7 @@ func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView
 func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfigView) (dto.ScoringConfigView, error) {
 	seniority := cleanList(in.ExcludedSeniority)
 	for _, level := range seniority {
-		if !slices.Contains(score.SeniorityLevels, level) {
+		if !slices.Contains(filter.SeniorityLevels, level) {
 			return dto.ScoringConfigView{}, apperr.Invalid("unknown seniority level: " + level)
 		}
 	}

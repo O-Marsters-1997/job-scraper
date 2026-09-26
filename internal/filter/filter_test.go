@@ -1,10 +1,10 @@
-package score_test
+package filter_test
 
 import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/score"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 )
 
 func TestReject(t *testing.T) {
@@ -114,7 +114,7 @@ func TestReject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			reason, rejected := score.Reject(tt.job, tt.cfg)
+			reason, rejected := filter.Reject(tt.job, tt.cfg)
 			if rejected != tt.wantRejected {
 				t.Errorf("rejected = %v, want %v (reason %q)", rejected, tt.wantRejected, reason)
 			}

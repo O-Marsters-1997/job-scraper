@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
@@ -123,7 +124,7 @@ func queueScoringEffects(ctx context.Context, queries *pgsqlc.Queries, in scorin
 			ExcludedSeniority:     user.ExcludedSeniority,
 			ExcludedLocations:     user.ExcludedLocations,
 		}
-		if _, rejected := score.Reject(job, cfg); rejected {
+		if _, rejected := filter.Reject(job, cfg); rejected {
 			continue
 		}
 		hasCredential, err := queries.HasUserAICredential(ctx, pgsqlc.HasUserAICredentialParams{

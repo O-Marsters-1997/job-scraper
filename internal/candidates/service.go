@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/score"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 )
 
 const batchSize = 100
@@ -67,7 +67,7 @@ func (s *Service) Reconsider(ctx context.Context, config dto.SearchConfig) error
 
 func (s *Service) assess(ctx context.Context, candidates []Candidate, config dto.SearchConfig) error {
 	for _, candidate := range candidates {
-		_, rejected := score.Reject(candidate.Card, config)
+		_, rejected := filter.Reject(candidate.Card, config)
 		queueDetail, err := s.store.Assess(ctx, candidate.ID, config.UserID, config.UpdatedAt, !rejected)
 		if err != nil {
 			return fmt.Errorf("assess candidate %s: %w", candidate.ID, err)
