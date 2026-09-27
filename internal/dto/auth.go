@@ -27,6 +27,13 @@ type SignupInput struct {
 	Email    string `json:"email"`
 }
 
+// CreateUserInput is the identity facade's input for cmd/admin's CreateUser.
+type CreateUserInput struct {
+	Username     string
+	PasswordHash string
+	Email        string
+}
+
 type AuthUserView struct {
 	Username string `json:"username"`
 }
