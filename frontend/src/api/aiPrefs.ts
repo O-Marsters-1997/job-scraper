@@ -1,17 +1,11 @@
+import { type AiPrefs, aiPrefsSchema } from "../types/aiPrefs";
 import { apiFetch } from "./client";
 import { useMocks } from "./config";
 
-export interface AiPrefs {
-	configuredProviders: string[];
-	scoringEnabled: boolean;
-}
-
 export async function fetchAiPrefs(): Promise<AiPrefs> {
 	if (useMocks()) {
-		return {
-			configuredProviders: ["openrouter"],
-			scoringEnabled: true,
-		};
+		const { getAiPrefs } = await import("../mocks/db");
+		return getAiPrefs();
 	}
-	return apiFetch<AiPrefs>("/ai-prefs");
+	return apiFetch("/ai-prefs", undefined, aiPrefsSchema);
 }

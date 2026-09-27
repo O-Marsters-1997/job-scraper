@@ -1,34 +1,47 @@
-export interface Company {
-	ID: string;
-	Slug: string;
-	Name: string;
-	ATSSource: string;
-	ATSToken: string;
-	FirstSeenAt: string;
-	JobCount: number;
-	Tracked: boolean;
-	TargetID: string;
-	CheckIntervalMinutes: number;
-	LastCheckedAt: string | null;
-}
+import { z } from "zod";
 
-export interface CompanyTracking {
-	CompanyID: string;
-	UserID: string;
-	Enabled: boolean;
-	CheckIntervalMinutes: number;
-}
+export const companySchema = z.object({
+	ID: z.string(),
+	Slug: z.string(),
+	Name: z.string(),
+	ATSSource: z.string(),
+	ATSToken: z.string(),
+	FirstSeenAt: z.string(),
+	JobCount: z.number(),
+	Tracked: z.boolean(),
+	TargetID: z.string(),
+	CheckIntervalMinutes: z.number(),
+	LastCheckedAt: z.string().nullable(),
+});
 
-export interface CompanyBoard {
-	ID: string;
-	CompanyID: string;
-	Source: string;
-	BoardToken: string;
-	Status: "candidate" | "verified" | "retired";
-	VerificationMethod: string;
-	VerifiedAt: string | null;
-	LastLinkedAt: string | null;
-	RetiredAt: string | null;
-	LastCompletedAt: string | null;
-	CreatedAt: string;
+export type Company = z.infer<typeof companySchema>;
+
+export const companyTrackingSchema = z.object({
+	CompanyID: z.string(),
+	UserID: z.string(),
+	Enabled: z.boolean(),
+	CheckIntervalMinutes: z.number(),
+});
+
+export type CompanyTracking = z.infer<typeof companyTrackingSchema>;
+
+export const companyBoardSchema = z.object({
+	ID: z.string(),
+	CompanyID: z.string(),
+	Source: z.string(),
+	BoardToken: z.string(),
+	Status: z.enum(["candidate", "verified", "retired"]),
+	VerificationMethod: z.string(),
+	VerifiedAt: z.string().nullable(),
+	LastLinkedAt: z.string().nullable(),
+	RetiredAt: z.string().nullable(),
+	LastCompletedAt: z.string().nullable(),
+	CreatedAt: z.string(),
+});
+
+export type CompanyBoard = z.infer<typeof companyBoardSchema>;
+
+export interface AddCompanyPayload {
+	url: string;
+	track?: boolean;
 }

@@ -6,8 +6,8 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Profile } from "../../../api/profile";
 import { useProfile, useUpdateProfile } from "../../../hooks/useProfile";
+import type { Profile } from "../../../types/profile";
 
 export const Route = createFileRoute("/_auth/settings/profile")({
 	component: ProfilePage,

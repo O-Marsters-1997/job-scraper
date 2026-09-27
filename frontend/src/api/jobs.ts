@@ -1,11 +1,7 @@
-import type { Job } from "../types/job";
+import type { Job, JobPage } from "../types/job";
+import { jobPageSchema, jobSchema } from "../types/job";
 import { apiFetch } from "./client";
 import { mockDelay, useMocks } from "./config";
-
-export interface JobPage {
-	items: Job[];
-	next_cursor: string;
-}
 
 export async function fetchAllJobs(): Promise<Job[]> {
 	if (useMocks()) {
@@ -13,7 +9,7 @@ export async function fetchAllJobs(): Promise<Job[]> {
 		await mockDelay();
 		return getJobs();
 	}
-	return apiFetch<Job[]>("/jobs/all");
+	return apiFetch("/jobs/all", undefined, jobSchema.array());
 }
 
 export async function fetchJobs(
@@ -42,7 +38,7 @@ export async function fetchJobs(
 	const params = new URLSearchParams({ limit: String(options.limit ?? 100) });
 	if (options.cursor) params.set("cursor", options.cursor);
 	if (options.companyId) params.set("company_id", options.companyId);
-	return apiFetch<JobPage>(`/jobs?${params}`);
+	return apiFetch(`/jobs?${params}`, undefined, jobPageSchema);
 }
 
 export async function fetchJob(id: string): Promise<Job> {
@@ -53,5 +49,5 @@ export async function fetchJob(id: string): Promise<Job> {
 		if (!job) throw new Error("Job not found");
 		return job;
 	}
-	return apiFetch<Job>(`/jobs/${encodeURIComponent(id)}`);
+	return apiFetch(`/jobs/${encodeURIComponent(id)}`, undefined, jobSchema);
 }

@@ -11,11 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { uniqueCapitalised } from "@/lib/capitalise";
 import { cn } from "@/lib/utils";
-import type { ScoringConfig } from "../../../api/scoringConfig";
-import type {
-	ScoringOption,
-	ScoringOptionsView,
-} from "../../../api/scoringOptions";
 import { useCompanies } from "../../../hooks/useCompanies";
 import { useRecomputeScores, useScoringStatus } from "../../../hooks/useScores";
 import {
@@ -23,6 +18,11 @@ import {
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
 import { useScoringOptions } from "../../../hooks/useScoringOptions";
+import type { ScoringConfig } from "../../../types/scoringConfig";
+import type {
+	ScoringOption,
+	ScoringOptionsView,
+} from "../../../types/scoringOptions";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,

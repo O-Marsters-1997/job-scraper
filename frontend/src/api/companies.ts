@@ -1,11 +1,16 @@
-import type { Company, CompanyBoard, CompanyTracking } from "../types/company";
+import type {
+	AddCompanyPayload,
+	Company,
+	CompanyBoard,
+	CompanyTracking,
+} from "../types/company";
+import {
+	companyBoardSchema,
+	companySchema,
+	companyTrackingSchema,
+} from "../types/company";
 import { apiFetch } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
-
-export interface AddCompanyPayload {
-	url: string;
-	track?: boolean;
-}
 
 export class UnresolvableBoardError extends Error {
 	constructor() {
@@ -19,7 +24,7 @@ export async function fetchCompanies(): Promise<Company[]> {
 		await mockDelay();
 		return getCompanies();
 	}
-	return apiFetch<Company[]>("/companies");
+	return apiFetch("/companies", undefined, companySchema.array());
 }
 
 export async function addCompany(payload: AddCompanyPayload): Promise<Company> {
@@ -30,15 +35,16 @@ export async function addCompany(payload: AddCompanyPayload): Promise<Company> {
 		if (!company) throw new UnresolvableBoardError();
 		return company;
 	}
-	const res = await fetch(`${API_BASE}/companies`, {
+	const response = await fetch(`${API_BASE}/companies`, {
 		method: "POST",
 		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
 	});
-	if (res.status === 422) throw new UnresolvableBoardError();
-	if (!res.ok) throw new Error(`Failed to add company: ${res.status}`);
-	return res.json();
+	if (response.status === 422) throw new UnresolvableBoardError();
+	if (!response.ok)
+		throw new Error(`Failed to add company: ${response.status}`);
+	return companySchema.parse(await response.json());
 }
 
 export async function setCompanyTracking(
@@ -51,14 +57,18 @@ export async function setCompanyTracking(
 		await mockDelay(80);
 		return mockSetTracking(id, enabled, checkIntervalMinutes);
 	}
-	return apiFetch<CompanyTracking>(`/companies/${id}/tracking`, {
-		method: "PUT",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			enabled,
-			check_interval_minutes: checkIntervalMinutes,
-		}),
-	});
+	return apiFetch(
+		`/companies/${id}/tracking`,
+		{
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				enabled,
+				check_interval_minutes: checkIntervalMinutes,
+			}),
+		},
+		companyTrackingSchema,
+	);
 }
 
 export async function fetchCompanyBoards(id: string): Promise<CompanyBoard[]> {
@@ -67,7 +77,11 @@ export async function fetchCompanyBoards(id: string): Promise<CompanyBoard[]> {
 		await mockDelay();
 		return getCompanyBoards(id);
 	}
-	return apiFetch<CompanyBoard[]>(`/companies/${id}/boards`);
+	return apiFetch(
+		`/companies/${id}/boards`,
+		undefined,
+		companyBoardSchema.array(),
+	);
 }
 
 export async function addCompanyBoard(
@@ -82,15 +96,15 @@ export async function addCompanyBoard(
 		if (!board) throw new UnresolvableBoardError();
 		return board;
 	}
-	const res = await fetch(`${API_BASE}/companies/${id}/boards`, {
+	const response = await fetch(`${API_BASE}/companies/${id}/boards`, {
 		method: "POST",
 		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ url, confirm }),
 	});
-	if (res.status === 422) throw new UnresolvableBoardError();
-	if (res.status === 409)
+	if (response.status === 422) throw new UnresolvableBoardError();
+	if (response.status === 409)
 		throw new Error("This board belongs to another company.");
-	if (!res.ok) throw new Error(`Failed to add board: ${res.status}`);
-	return res.json();
+	if (!response.ok) throw new Error(`Failed to add board: ${response.status}`);
+	return companyBoardSchema.parse(await response.json());
 }
