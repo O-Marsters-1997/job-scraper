@@ -9,7 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docref"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/google"
+	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
 var (
