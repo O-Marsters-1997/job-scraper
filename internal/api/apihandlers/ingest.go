@@ -1,4 +1,4 @@
-package handlers
+package apihandlers
 
 import (
 	"context"
@@ -8,14 +8,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/ingest"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	kernel "github.com/ollymarsters/job-scraper/internal/handlers"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
 // Ingest and IngestBatch authenticate by service token, not a session, so
 // their decode step never calls UserID.
 func Ingest(ing *ingest.Ingester) http.HandlerFunc {
-	return kernel.Handle(
-		kernel.DecodeBody[dto.Job],
+	return handlers.Handle(
+		handlers.DecodeBody[dto.Job],
 		func(ctx context.Context, job dto.Job) (ingest.Result, error) {
 			results, err := ing.IngestJobs(ctx, []dto.Job{job})
 			if err != nil {
@@ -24,7 +24,7 @@ func Ingest(ing *ingest.Ingester) http.HandlerFunc {
 			return results[0], nil
 		},
 		func(w http.ResponseWriter, _ *http.Request, res ingest.Result) {
-			kernel.WriteJSON(w, http.StatusOK, res)
+			handlers.WriteJSON(w, http.StatusOK, res)
 		},
 	)
 }
@@ -38,7 +38,7 @@ type ingestBatchView struct {
 }
 
 func IngestBatch(ing *ingest.Ingester) http.HandlerFunc {
-	return kernel.Handle(
+	return handlers.Handle(
 		func(r *http.Request) (ingestBatchInput, error) {
 			var in ingestBatchInput
 			if err := json.NewDecoder(r.Body).Decode(&in); err != nil || len(in.Jobs) == 0 || len(in.Jobs) > 100 {
@@ -54,7 +54,7 @@ func IngestBatch(ing *ingest.Ingester) http.HandlerFunc {
 			return ingestBatchView{Results: results}, nil
 		},
 		func(w http.ResponseWriter, _ *http.Request, res ingestBatchView) {
-			kernel.WriteJSON(w, http.StatusOK, res)
+			handlers.WriteJSON(w, http.StatusOK, res)
 		},
 	)
 }

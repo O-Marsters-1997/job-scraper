@@ -8,9 +8,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/ollymarsters/job-scraper/internal/api/apihandlers"
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	apihandlers "github.com/ollymarsters/job-scraper/internal/api/handlers"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/handlers"

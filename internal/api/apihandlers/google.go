@@ -1,4 +1,4 @@
-package handlers
+package apihandlers
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	kernel "github.com/ollymarsters/job-scraper/internal/handlers"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
 const oauthStateCookie = "oauth_state"
@@ -30,7 +30,7 @@ type oauthRedirect struct {
 // OAuthStart is public so the OAuth redirect URL stays clean; it redirects,
 // so it goes through Handle directly rather than a CRUD generic.
 func OAuthStart(svc googleSvc) http.HandlerFunc {
-	return kernel.Handle(
+	return handlers.Handle(
 		func(r *http.Request) (string, error) { return generateState() },
 		func(_ context.Context, state string) (oauthRedirect, error) {
 			return oauthRedirect{state: state, authURL: svc.AuthURL(state)}, nil
@@ -50,7 +50,7 @@ type oauthConnect struct {
 // CRUD generic. The state cookie is cleared only on success; on failure it
 // simply expires (10 minutes) and the next /oauth/start overwrites it.
 func OAuthCallback(svc googleSvc) http.HandlerFunc {
-	return kernel.Handle(
+	return handlers.Handle(
 		func(r *http.Request) (oauthConnect, error) {
 			if !validateStateCookie(r, r.URL.Query().Get("state")) {
 				return oauthConnect{}, apperr.Invalid("invalid oauth state")
@@ -59,7 +59,7 @@ func OAuthCallback(svc googleSvc) http.HandlerFunc {
 			if code == "" {
 				return oauthConnect{}, apperr.Invalid("missing code")
 			}
-			uid, err := kernel.UserID(r)
+			uid, err := handlers.UserID(r)
 			if err != nil {
 				return oauthConnect{}, err
 			}
