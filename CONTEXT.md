@@ -91,10 +91,41 @@ _Avoid_: Stage, state, step
 A 0–100 heuristic score of a Job's listing-card signals (title/company/location) against a User's criteria, computed pre-persistence; the relevance cutoff gates whether the Job advances to the next expensive stage.
 _Avoid_: Match score, filter score — keep distinct from Suitability
 
+**Option**:
+One thing a User can pick a stance on — a technology, role, industry, level, work arrangement or
+company stage — carrying the single atomic yes/no question Jev is asked about every Job on its
+behalf. The full set (~160) is the bank, stored in `scoring_options` and shared by every User.
+_Avoid_: Criterion, question — the bank replaces hand-written per-user criteria
+
+**Dimension**:
+One of six fixed groups an Option belongs to (`tech`, `role`, `domain`, `seniority`, `work`,
+`stage`), fixed in Go code as `pair` (nice/avoid) or `multi` (nice only), deciding which stances a
+Pick on that Option may take.
+_Avoid_: Category, section
+
+**Pick**:
+A User's stance (nice, avoid, or block for `domain`) on one Option. Nice Picks in the same
+Dimension are alternatives — a Job matching any one earns that Dimension's boost once; avoid Picks
+cost a Job only when the Job has them.
+_Avoid_: Preference (too broad), rule
+
+**Answer**:
+Jev's reply to one Option's question about one Job — three probabilities (yes/no/not_stated) plus
+confidence, resolved to whichever is most likely (below 0.6, or not_stated, resolves unknown).
+Shared across every User, keyed on the Job, its content fingerprint, the question's text hash and
+the model, so identical questions across Users and Custom questions answer once.
+_Avoid_: Score, judgement — an Answer is a fact about the Job, not a fit verdict
+
+**Hard filter**:
+A company-blocklist or no-go-tech check that runs in code before any Jev spend, at answer-effect
+time rather than at ingest; a Job that trips every interested User's filter is never sent to Jev.
+_Avoid_: Exclusion (too broad — Search Config's location exclusion is a Relevance-only filter, not
+a Hard filter)
+
 **Suitability**:
-A 0–100 score from Jev (TypeSafe, via OpenRouter) of how well a Job fits a User's criteria and
-scale, computed from structured job fields and a candidate profile after persistence; gates
-notification and ranks the list.
+A 0–100 score per (Job, User) from a pure function over the User's Picks and the Job's cached
+Answers — no per-Job Jev call, since Suitability is derived entirely from data already fetched
+once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Source Target**:
@@ -118,8 +149,11 @@ A request to run a discovery Source Target now, including when it is first creat
 _Avoid_: immediate scrape, manual scrape, trigger
 
 **Search Config**:
-A User's editable search criteria (role, location, keywords), scoring questions (profile, criteria, scale), relevance cutoff, and notify threshold — exactly one per User; the single source of truth feeding the relevance gate, the suitability scorer, and notifications.
-_Avoid_: Settings, preferences, query
+A User's editable search criteria (role, location, keywords), Picks (in `preferences`), relevance
+cutoff, and notify threshold — exactly one per User; the single source of truth feeding the
+relevance gate, Suitability, and notifications.
+_Avoid_: Settings, query — "preferences" is the Search Config field holding Picks, not a synonym
+for the whole Search Config
 
 ### CV templates
 
@@ -160,7 +194,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - A **Job** is eligible for a new-Job alert only when first discovered and its **Suitability** reaches the User's notification threshold; later edits and reopening do not create another new-Job alert
 - Promoting an older **Job Candidate** after changed User interest does not count as first discovery and does not send a new-Job alert
 - A User who starts tracking a **Company** sees its already known open **Jobs** immediately and receives fresh **Suitability** assessments for them without new-Job alerts
-- A changed **Search Config** makes the User's existing **Suitability** assessments potentially stale; new assessments use the current rubric, while old Jobs are reassessed on the User's request
+- A changed **Search Config** never makes the User's existing **Suitability** assessments stale: saving Picks recomputes every scored Job for that User for free, from already-cached **Answers**, with no new Jev call
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
 - A **User** defines zero or more discovery **Source Targets**; each Target maps to a supported **Source**
@@ -190,8 +224,8 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 > **Owner:** "No. Recheck them soon, but only fetch details for Candidates that pass the new cheap gate."
 > **Dev:** "Does the same Job stay frozen if the company edits its salary?"
 > **Owner:** "No. Update the Job from the trusted source and reassess Suitability when its title, description, location, salary, or work arrangement changes."
-> **Dev:** "If I edit my rubric, do all my old Jobs get rescored immediately?"
-> **Owner:** "No. Mark their Suitability as potentially stale and let me request a rescore; newly assessed Jobs use the current rubric."
+> **Dev:** "If I change my Picks, do all my old Jobs get rescored immediately?"
+> **Owner:** "Yes, for free. Every Answer is already cached, so saving just re-runs the formula over every Job I've been scored for — no new Jev call."
 > **Dev:** "Does reopening an old Job announce it as new again?"
 > **Owner:** "No. The new-Job alert belongs to first discovery only."
 > **Dev:** "Does every new Job produce an alert before Suitability is known?"
@@ -233,7 +267,10 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "scrape once" implied a Job never changes — resolved: a **Job** keeps its identity across edits, while relevant changed details can require new **Suitability** assessments.
 - "deliver once" could mean one fetch, one ingest request, or one Job — resolved: repeat fetches and ingest requests are acceptable, while the same opportunity keeps one canonical **Job** identity.
 - "unclassified detail" suggested a general crawler — resolved: every detail task must retain its **Source**, and missing Source identity is an error.
-- "stale score" has two causes with different responses — resolved: changed Job details prompt reassessment; a changed User rubric marks existing **Suitability** as potentially stale until an on-demand rescore.
+- "stale score" previously had two causes with different responses — resolved: changed Job details
+  change the content fingerprint and re-queue an answer effect (Answers are re-asked); a changed
+  User Search Config has no stale-score response at all, because Save recomputes every scored Job
+  immediately from cached Answers.
 - "closed Job" could imply the position was filled — resolved: **Closed Job** means the source no longer advertises it after sufficient confirmation; one complete nonempty check can close a missing Job, while an empty Board requires two complete successful checks.
 - "Tracked Company" previously meant one board-specific **Source Target** — resolved: it is one User choice covering current and later verified **Boards**, even when no Board is yet known.
 - "Check Frequency" previously belonged to each ATS **Source Target** — resolved: it belongs to the User's **Tracked Company** and applies across its verified **Boards**.

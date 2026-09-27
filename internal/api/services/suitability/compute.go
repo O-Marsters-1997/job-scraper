@@ -15,8 +15,6 @@ const (
 	resolveThreshold = 0.6
 )
 
-// evaluatedPick is one pick joined with its option's dimension and label and
-// the job's cached answer, if any.
 type evaluatedPick struct {
 	dimension dto.Dimension
 	key       string

@@ -15,10 +15,9 @@
 - `internal/api/` — used only by `cmd/api` (router, handlers, services, auth, notify, …).
 - `internal/worker/` — used only by `cmd/worker` (scraper, discover, source adapters, proxy);
   `cmd/snapshot` also reads the adapters.
-- Anything directly under `internal/` is shared (`data`, `queue`, `dto`, `score`, `filter`,
-  `candidates`, `detect`, `sourcespec`, …) and imports neither group. `depguard` in `.golangci.yml`
-  enforces all three rules. If the API needs something that fetches, publish a queue task
-  (ADR 0026).
+- Anything directly under `internal/` is shared (`data`, `queue`, `dto`, `filter`, `candidates`,
+  `detect`, `sourcespec`, …) and imports neither group. `depguard` in `.golangci.yml` enforces all
+  three rules. If the API needs something that fetches, publish a queue task (ADR 0026).
 
 ## Adding a new source
 
