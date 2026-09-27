@@ -4,7 +4,11 @@ import { unknownCount } from "@/lib/scoreRows";
 import type { Job, ScoreRow } from "@/types/job";
 
 function isVisible(row: ScoreRow): boolean {
-	if (row.effect === "meets" || row.effect === "unknown" || row.effect === "retired")
+	if (
+		row.effect === "meets" ||
+		row.effect === "unknown" ||
+		row.effect === "retired"
+	)
 		return true;
 	return row.effect === "misses" && row.stance === "avoid";
 }
@@ -15,7 +19,9 @@ export function ScoreBreakdown(props: { job: Job }) {
 	const avoidHits = createMemo(() =>
 		rows().filter((r) => r.effect === "misses"),
 	);
-	const retired = createMemo(() => rows().filter((r) => r.effect === "retired"));
+	const retired = createMemo(() =>
+		rows().filter((r) => r.effect === "retired"),
+	);
 	const unknowns = createMemo(() => unknownCount(props.job.Breakdown));
 
 	return (
