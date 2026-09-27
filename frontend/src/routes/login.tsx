@@ -4,6 +4,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { queryClient } from "@/lib/queryClient";
 import { login } from "../api/auth";
 
 export const Route = createFileRoute("/login")({
@@ -27,6 +28,7 @@ function LoginPage() {
 		try {
 			const res = await login(username(), password());
 			if (res.ok) {
+				queryClient.clear();
 				navigate({ to: "/jobs" });
 			} else {
 				setError("Invalid username or password.");
