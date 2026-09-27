@@ -8,26 +8,17 @@ const base = {
 	notifyThreshold: 70,
 	excludedTitleKeywords: ["java", "sales"],
 	excludedCompanies: ["acme corp"],
-	excludedSeniority: ["intern", "junior"],
 	excludedLocations: ["united states"],
-	scoringQuestions: {
-		profile: "I am a Go engineer looking for distributed systems roles.",
-		criteria: [
-			{
-				key: "go_backend",
-				instructions: "Does the job involve Go backend work?",
-				true: "Go is a primary language",
-				false: "Go isn't used",
-				required: true,
-			},
-		],
-		scale: ["Not relevant", "Weak", "Possible", "Strong", "Apply today"],
+	preferences: {
+		picks: [{ optionId: "tech:go", stance: "nice", source: "manual" }],
 	},
+	updatedAt: "2026-09-27T00:00:00Z",
 };
 
 const valid = scoringConfigSchema.parse(base);
 ok(valid.notifyThreshold === 70, "valid config parses");
 ok(valid.excludedTitleKeywords.length === 2, "exclusion lists parse");
+ok(valid.preferences.picks.length === 1, "picks parse");
 
 let threw = false;
 try {
@@ -61,20 +52,13 @@ try {
 }
 ok(threw, "non-string exclusion entry rejected");
 
-const valid2 = scoringConfigSchema.parse(base);
-ok(valid2.scoringQuestions.criteria.length === 1, "criteria parse");
-ok(valid2.scoringQuestions.scale.length === 5, "scale parses");
-
 threw = false;
 try {
 	scoringConfigSchema.parse({
 		...base,
-		scoringQuestions: {
-			...base.scoringQuestions,
-			criteria: [{ ...base.scoringQuestions.criteria[0], required: "yes" }],
-		},
+		preferences: { picks: [{ optionId: "tech:go", stance: "nice" }] },
 	});
 } catch {
 	threw = true;
 }
-ok(threw, "non-boolean criterion required rejected");
+ok(threw, "a pick missing source is rejected");

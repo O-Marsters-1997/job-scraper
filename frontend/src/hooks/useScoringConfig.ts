@@ -23,7 +23,9 @@ export function useUpdateScoringConfig() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
 		mutationFn: (payload: ScoringConfig) => updateScoringConfig(payload),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["scoring-config"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["scoring-config"] });
+			queryClient.invalidateQueries({ queryKey: ["jobs"] });
+		},
 	}));
 }

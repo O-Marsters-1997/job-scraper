@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job } from "@/types/job";
-import { CriteriaBreakdown } from "./CriteriaBreakdown";
+import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export function SuitabilityPanel(props: { job: Job }) {
@@ -12,10 +12,10 @@ export function SuitabilityPanel(props: { job: Job }) {
 			<CardContent class="gap-3">
 				<SuitabilityScoreValue
 					score={props.job.SuitabilityScore}
-					confidence={props.job.Confidence}
+					breakdown={props.job.Breakdown}
 					size="lg"
 				/>
-				<CriteriaBreakdown job={props.job} />
+				<ScoreBreakdown job={props.job} />
 			</CardContent>
 		</Card>
 	);
