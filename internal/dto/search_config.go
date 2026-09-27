@@ -7,9 +7,8 @@ type SearchConfig struct {
 	UserID                string
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
-	ExcludedSeniority     []string
 	ExcludedLocations     []string
 	NotifyThreshold       int
-	ScoringQuestions      ScoringQuestions
+	Preferences           Preferences
 	UpdatedAt             time.Time
 }

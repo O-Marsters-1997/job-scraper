@@ -23,6 +23,28 @@ func (f *fakeReconsiderer) Reconsider(_ context.Context, config dto.SearchConfig
 	return f.err
 }
 
+type fakeRecomputer struct {
+	err        error
+	calledWith string
+	calls      int
+}
+
+func (f *fakeRecomputer) Recompute(_ context.Context, userID string) (dto.RecomputeResult, error) {
+	f.calledWith = userID
+	f.calls++
+	return dto.RecomputeResult{}, f.err
+}
+
+func seededOptions() *providers.MockScoringOptionsProvider {
+	options := providers.NewMockScoringOptionsProvider()
+	options.Seed([]dto.ScoringOption{
+		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
+		{ID: "domain:gambling", Dimension: dto.DimensionDomain, Label: "Gambling", Question: "Is the company's main business gambling?"},
+		{ID: "seniority:senior", Dimension: dto.DimensionSeniority, Label: "Senior", Question: "Seniority?"},
+	})
+	return options
+}
+
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -33,22 +55,17 @@ func TestGet(t *testing.T) {
 		{
 			name: "returns empty config when none saved",
 			want: dto.ScoringConfigView{
+				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
 				ExcludedTitleKeywords: []string{},
 				ExcludedCompanies:     []string{},
-				ExcludedSeniority:     []string{},
 				ExcludedLocations:     []string{},
-				ScoringQuestions: dto.ScoringQuestions{
-					Criteria: []dto.ScoringCriterion{},
-					Scale:    []string{},
-				},
 			},
 		},
 		{
 			name: "returns saved config",
 			setup: func(store *providers.MockSearchConfigProvider) {
 				_, err := store.UpsertSearchConfig(context.Background(), dto.SearchConfig{
-					UserID:          "user-1",
-					NotifyThreshold: 5,
+					UserID: "user-1", NotifyThreshold: 5,
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -56,14 +73,10 @@ func TestGet(t *testing.T) {
 			},
 			want: dto.ScoringConfigView{
 				NotifyThreshold:       5,
+				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
 				ExcludedTitleKeywords: []string{},
 				ExcludedCompanies:     []string{},
-				ExcludedSeniority:     []string{},
 				ExcludedLocations:     []string{},
-				ScoringQuestions: dto.ScoringQuestions{
-					Criteria: []dto.ScoringCriterion{},
-					Scale:    []string{},
-				},
 			},
 		},
 		{
@@ -80,7 +93,7 @@ func TestGet(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil, providers.NewMockScoringOptionsProvider())
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{})
 			got, err := svc.Get(context.Background(), "user-1")
 			if tt.wantErr {
 				if err == nil {
@@ -105,59 +118,30 @@ func TestUpdate(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name:       "rejects unknown seniority level",
-			in:         dto.ScoringConfigView{ExcludedSeniority: []string{"wizard"}},
+			name:       "rejects an unknown option",
+			in:         dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice"}}}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "rejects scale with fewer than 2 levels",
-			in: dto.ScoringConfigView{
-				ScoringQuestions: dto.ScoringQuestions{
-					Profile: "senior go",
-					Scale:   []string{"Only level"},
-				},
-			},
+			name:       "rejects a stance the dimension doesn't allow",
+			in:         dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "block"}}}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "rejects empty profile with no criteria",
-			in: dto.ScoringConfigView{
-				ScoringQuestions: dto.ScoringQuestions{
-					Scale: []string{"Low", "High"},
-				},
-			},
+			name:       "rejects a notify threshold below 0",
+			in:         dto.ScoringConfigView{NotifyThreshold: -1},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "rejects duplicate criterion keys",
-			in: dto.ScoringConfigView{
-				ScoringQuestions: dto.ScoringQuestions{
-					Profile: "senior go",
-					Criteria: []dto.ScoringCriterion{
-						{Key: "go_backend"},
-						{Key: "go_backend"},
-					},
-					Scale: []string{"Low", "High"},
-				},
-			},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "rejects a criterion key reserved for the overall question",
-			in: dto.ScoringConfigView{
-				ScoringQuestions: dto.ScoringQuestions{
-					Profile:  "senior go",
-					Criteria: []dto.ScoringCriterion{{Key: "overall"}},
-					Scale:    []string{"Low", "High"},
-				},
-			},
+			name:       "rejects a notify threshold above 100",
+			in:         dto.ScoringConfigView{NotifyThreshold: 101},
 			wantStatus: http.StatusBadRequest,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSearchConfigProvider()
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, nil, providers.NewMockScoringOptionsProvider())
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{})
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
@@ -169,20 +153,16 @@ func TestUpdate(t *testing.T) {
 func TestUpdateSucceeds(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{}
-	svc := scoringconfig.New(store, reconsiderer, nil, providers.NewMockScoringOptionsProvider())
+	recomputer := &fakeRecomputer{}
+	svc := scoringconfig.New(store, reconsiderer, seededOptions(), recomputer)
 
-	questions := dto.ScoringQuestions{
-		Profile: "Senior Go engineer",
-		Criteria: []dto.ScoringCriterion{
-			{Key: "go_backend", Instructions: "Does the job use Go?", True: "yes", False: "no", Required: true},
-		},
-		Scale: []string{"Not relevant", "Weak", "Possible", "Strong", "Apply today"},
-	}
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
-		NotifyThreshold:       7,
+		NotifyThreshold:       70,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
-		ExcludedSeniority:     []string{"Junior"},
-		ScoringQuestions:      questions,
+		Preferences: dto.Preferences{Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "text"},
+			{OptionID: "domain:gambling", Stance: "block"},
+		}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,28 +170,27 @@ func TestUpdateSucceeds(t *testing.T) {
 	if want := []string{"intern"}; len(got.ExcludedTitleKeywords) != 1 || got.ExcludedTitleKeywords[0] != want[0] {
 		t.Fatalf("excluded title keywords = %v, want %v", got.ExcludedTitleKeywords, want)
 	}
-	if want := []string{"junior"}; len(got.ExcludedSeniority) != 1 || got.ExcludedSeniority[0] != want[0] {
-		t.Fatalf("excluded seniority = %v, want %v", got.ExcludedSeniority, want)
+	wantPicks := []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
 	}
-	if !reflect.DeepEqual(got.ScoringQuestions, questions) {
-		t.Fatalf("scoring questions = %+v, want %+v", got.ScoringQuestions, questions)
+	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
+		t.Fatalf("picks = %+v, want %+v (source forced to manual)", got.Preferences.Picks, wantPicks)
 	}
 	if reconsiderer.calledWith.UserID != "user-1" {
 		t.Fatalf("reconsiderer called with %+v, want user-1", reconsiderer.calledWith)
+	}
+	if recomputer.calledWith != "user-1" || recomputer.calls != 1 {
+		t.Fatalf("recomputer called %d times with %q, want once with user-1", recomputer.calls, recomputer.calledWith)
 	}
 }
 
 func TestUpdateReconsiderFails(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{err: errors.New("reconsideration blew up")}
-	svc := scoringconfig.New(store, reconsiderer, nil, providers.NewMockScoringOptionsProvider())
+	svc := scoringconfig.New(store, reconsiderer, seededOptions(), &fakeRecomputer{})
 
-	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
-		ScoringQuestions: dto.ScoringQuestions{
-			Profile: "senior go",
-			Scale:   []string{"Low", "High"},
-		},
-	})
+	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
@@ -220,22 +199,12 @@ func TestUpdateReconsiderFails(t *testing.T) {
 	}
 }
 
-type fakeRescorer struct {
-	queued int64
-	err    error
-}
+func TestUpdateRecomputeFails(t *testing.T) {
+	store := providers.NewMockSearchConfigProvider()
+	svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{err: errors.New("recompute blew up")})
 
-func (f *fakeRescorer) QueueRescore(context.Context, string) (int64, error) {
-	return f.queued, f.err
-}
-
-func TestRescore(t *testing.T) {
-	svc := scoringconfig.New(providers.NewMockSearchConfigProvider(), &fakeReconsiderer{}, &fakeRescorer{queued: 3}, providers.NewMockScoringOptionsProvider())
-	got, err := svc.Rescore(context.Background(), "user-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Queued != 3 {
-		t.Fatalf("queued = %d, want 3", got.Queued)
+	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
+	if err == nil {
+		t.Fatal("want error, got nil")
 	}
 }

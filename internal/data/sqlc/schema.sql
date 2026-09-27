@@ -99,11 +99,9 @@ CREATE TABLE IF NOT EXISTS job_scores (
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     suitability_score    INT,
-    criteria             JSONB       NOT NULL DEFAULT '{}',
-    confidence           REAL,
+    breakdown            JSONB       NOT NULL DEFAULT '[]',
     cost                 NUMERIC,
     score_fingerprint    TEXT,
-    score_config_version TIMESTAMPTZ,
     score_model          TEXT,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -113,20 +111,18 @@ CREATE TABLE IF NOT EXISTS job_scores (
 CREATE TABLE effect_outbox (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     fingerprint TEXT NOT NULL,
-    config_version TIMESTAMPTZ NOT NULL,
-    model TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT 'typesafe/jev-1.13',
     first_discovery BOOLEAN NOT NULL DEFAULT FALSE,
     status TEXT NOT NULL DEFAULT 'pending',
     attempts INT NOT NULL DEFAULT 0,
     due_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lease_until TIMESTAMPTZ,
     last_error TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (job_id, user_id, fingerprint, config_version, model)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX effect_outbox_user_job_idx ON effect_outbox (user_id, job_id);
+CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerprint, model)
+    WHERE status IN ('pending', 'running');
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
 CREATE TABLE IF NOT EXISTS search_config (
@@ -134,10 +130,9 @@ CREATE TABLE IF NOT EXISTS search_config (
     user_id                 UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     excluded_title_keywords TEXT[]      NOT NULL DEFAULT '{}',
     excluded_companies      TEXT[]      NOT NULL DEFAULT '{}',
-    excluded_seniority      TEXT[]      NOT NULL DEFAULT '{}',
     excluded_locations      TEXT[]      NOT NULL DEFAULT '{}',
     notify_threshold        INT         NOT NULL DEFAULT 70,
-    scoring_questions       JSONB       NOT NULL DEFAULT '{}',
+    preferences             JSONB       NOT NULL DEFAULT '{}',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -280,4 +275,17 @@ CREATE TABLE scoring_options (
     label      TEXT NOT NULL,
     question   TEXT NOT NULL,
     retired_at TIMESTAMPTZ
+);
+
+CREATE TABLE option_answers (
+    job_id        UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    fingerprint   TEXT NOT NULL,
+    question_hash TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    p_yes         REAL NOT NULL,
+    p_no          REAL NOT NULL,
+    p_not_stated  REAL NOT NULL,
+    confidence    REAL NOT NULL,
+    answered_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (job_id, fingerprint, question_hash, model)
 );

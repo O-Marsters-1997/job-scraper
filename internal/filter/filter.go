@@ -9,23 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
-// SeniorityLevels are the canonical values accepted in SearchConfig.ExcludedSeniority.
-var SeniorityLevels = []string{
-	"intern", "junior", "mid", "senior", "staff", "principal", "lead", "manager", "director",
-}
-
-var senioritySignals = map[string][]string{
-	"intern":    {"intern", "internship", "trainee", "apprentice"},
-	"junior":    {"junior", "jr", "graduate", "entry level"},
-	"mid":       {"mid level", "midlevel"},
-	"senior":    {"senior", "sr"},
-	"staff":     {"staff"},
-	"principal": {"principal"},
-	"lead":      {"lead"},
-	"manager":   {"manager"},
-	"director":  {"director", "head of", "vp", "vice president", "chief", "cto"},
-}
-
 // Reject reports whether job trips any of cfg's exclusion filters.
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
@@ -40,14 +23,6 @@ func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	for _, kw := range cfg.ExcludedTitleKeywords {
 		if hasPhrase(titleTokens, kw) {
 			return fmt.Sprintf("title keyword: %s", strings.ToLower(kw)), true
-		}
-	}
-
-	for _, level := range cfg.ExcludedSeniority {
-		for _, signal := range senioritySignals[level] {
-			if hasPhrase(titleTokens, signal) {
-				return fmt.Sprintf("seniority: %s", level), true
-			}
 		}
 	}
 

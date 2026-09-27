@@ -11,12 +11,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
 	"github.com/ollymarsters/job-scraper/internal/api/handlers"
+	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
-func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) http.Handler {
+func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -31,7 +32,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 		AllowCredentials: true,
 	}))
 
-	svc := newServices(db, q, creds)
+	svc := newServices(db, q, creds, suitabilitySvc)
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", handlers.Login(svc.auth))
@@ -85,7 +86,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) 
 		r.Put("/scoring-config", handlers.Update(svc.scoringConfig.Update))
 		r.Get("/scoring-options", handlers.GetAll(svc.scoringConfig.Options))
 		r.Get("/scores/status", handlers.GetAll(db.GetScoringStatus))
-		r.Post("/scores/rescore", handlers.GetAll(svc.scoringConfig.Rescore))
+		r.Post("/scores/recompute", handlers.GetAll(svc.suitability.Recompute))
 
 		r.Get("/ai-prefs", handlers.GetAll(svc.aiPrefs.Get))
 

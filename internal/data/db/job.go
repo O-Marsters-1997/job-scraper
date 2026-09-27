@@ -68,16 +68,12 @@ func fromListRow(row pgsqlc.ListJobsRow) (dto.Job, error) {
 		SalaryRaw:       row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement,
 	}
-	if err := unmarshalCriteria(row.Criteria, &j.Criteria); err != nil {
+	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
 		return dto.Job{}, err
 	}
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		j.SuitabilityScore = &v
-	}
-	if row.Confidence.Valid {
-		v := float64(row.Confidence.Float32)
-		j.Confidence = &v
 	}
 	if row.CompanyID.Valid {
 		j.CompanyID = row.CompanyID.String()
@@ -90,12 +86,12 @@ func fromListRow(row pgsqlc.ListJobsRow) (dto.Job, error) {
 	return j, nil
 }
 
-func unmarshalCriteria(raw []byte, out *map[string]float64) error {
+func unmarshalBreakdown(raw []byte, out *[]dto.ScoreRow) error {
 	if len(raw) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return fmt.Errorf("unmarshal job score criteria: %w", err)
+		return fmt.Errorf("unmarshal job score breakdown: %w", err)
 	}
 	return nil
 }
@@ -188,7 +184,7 @@ func (db *DB) Page(ctx context.Context, userID string, options providers.JobPage
 	page := providers.JobPage{Items: make([]dto.Job, len(rows))}
 	for i, row := range rows {
 		job := dto.Job{ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url, CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time, ScrapedAt: row.ScrapedAt.Time, SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement}
-		if err := unmarshalCriteria(row.Criteria, &job.Criteria); err != nil {
+		if err := unmarshalBreakdown(row.Breakdown, &job.Breakdown); err != nil {
 			return providers.JobPage{}, fmt.Errorf("db.Page: %w", err)
 		}
 		if row.CompanyID.Valid {
@@ -202,10 +198,6 @@ func (db *DB) Page(ctx context.Context, userID string, options providers.JobPage
 		if row.SuitabilityScore.Valid {
 			v := int(row.SuitabilityScore.Int32)
 			job.SuitabilityScore = &v
-		}
-		if row.Confidence.Valid {
-			v := float64(row.Confidence.Float32)
-			job.Confidence = &v
 		}
 		page.Items[i] = job
 	}
@@ -226,16 +218,12 @@ func fromGetJobRow(row pgsqlc.GetJobRow) (dto.Job, error) {
 		SalaryRaw:       row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement,
 	}
-	if err := unmarshalCriteria(row.Criteria, &j.Criteria); err != nil {
+	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
 		return dto.Job{}, err
 	}
 	if row.SuitabilityScore.Valid {
 		v := int(row.SuitabilityScore.Int32)
 		j.SuitabilityScore = &v
-	}
-	if row.Confidence.Valid {
-		v := float64(row.Confidence.Float32)
-		j.Confidence = &v
 	}
 	if row.CompanyID.Valid {
 		j.CompanyID = row.CompanyID.String()

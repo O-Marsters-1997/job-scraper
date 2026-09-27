@@ -1,10 +1,12 @@
 package dto
 
+import "time"
+
 type ScoringConfigView struct {
-	NotifyThreshold       int              `json:"notifyThreshold"`
-	ExcludedTitleKeywords []string         `json:"excludedTitleKeywords"`
-	ExcludedCompanies     []string         `json:"excludedCompanies"`
-	ExcludedSeniority     []string         `json:"excludedSeniority"`
-	ExcludedLocations     []string         `json:"excludedLocations"`
-	ScoringQuestions      ScoringQuestions `json:"scoringQuestions"`
+	Preferences           Preferences `json:"preferences"`
+	ExcludedTitleKeywords []string    `json:"excludedTitleKeywords"`
+	ExcludedCompanies     []string    `json:"excludedCompanies"`
+	ExcludedLocations     []string    `json:"excludedLocations"`
+	NotifyThreshold       int         `json:"notifyThreshold"`
+	UpdatedAt             time.Time   `json:"updatedAt"`
 }

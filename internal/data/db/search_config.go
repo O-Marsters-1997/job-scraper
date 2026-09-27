@@ -14,10 +14,10 @@ import (
 )
 
 func fromSearchConfig(row pgsqlc.SearchConfig) (dto.SearchConfig, error) {
-	var questions dto.ScoringQuestions
-	if len(row.ScoringQuestions) > 0 {
-		if err := json.Unmarshal(row.ScoringQuestions, &questions); err != nil {
-			return dto.SearchConfig{}, fmt.Errorf("unmarshal scoring questions: %w", err)
+	var prefs dto.Preferences
+	if len(row.Preferences) > 0 {
+		if err := json.Unmarshal(row.Preferences, &prefs); err != nil {
+			return dto.SearchConfig{}, fmt.Errorf("unmarshal preferences: %w", err)
 		}
 	}
 	return dto.SearchConfig{
@@ -25,10 +25,9 @@ func fromSearchConfig(row pgsqlc.SearchConfig) (dto.SearchConfig, error) {
 		UserID:                row.UserID.String(),
 		ExcludedTitleKeywords: row.ExcludedTitleKeywords,
 		ExcludedCompanies:     row.ExcludedCompanies,
-		ExcludedSeniority:     row.ExcludedSeniority,
 		ExcludedLocations:     row.ExcludedLocations,
 		NotifyThreshold:       int(row.NotifyThreshold),
-		ScoringQuestions:      questions,
+		Preferences:           prefs,
 		UpdatedAt:             row.UpdatedAt.Time,
 	}, nil
 }
@@ -73,18 +72,17 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 	if err != nil {
 		return dto.SearchConfig{}, err
 	}
-	questions, err := json.Marshal(cfg.ScoringQuestions)
+	prefs, err := json.Marshal(cfg.Preferences)
 	if err != nil {
-		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: marshal scoring questions: %w", err)
+		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: marshal preferences: %w", err)
 	}
 	row, err := db.queries.UpsertSearchConfig(ctx, pgsqlc.UpsertSearchConfigParams{
 		UserID:                uid,
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
-		ExcludedSeniority:     nonNilStrings(cfg.ExcludedSeniority),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
-		ScoringQuestions:      questions,
+		Preferences:           prefs,
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)

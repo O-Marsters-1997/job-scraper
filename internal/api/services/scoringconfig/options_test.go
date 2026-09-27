@@ -17,7 +17,7 @@ func TestOptions(t *testing.T) {
 		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
 		{ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retired},
 	})
-	svc := scoringconfig.New(providers.NewMockSearchConfigProvider(), &fakeReconsiderer{}, nil, options)
+	svc := scoringconfig.New(providers.NewMockSearchConfigProvider(), &fakeReconsiderer{}, options, &fakeRecomputer{})
 
 	got, err := svc.Options(context.Background(), "user-1")
 	if err != nil {

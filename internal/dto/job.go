@@ -19,6 +19,5 @@ type Job struct {
 	SalaryRaw          string
 	WorkArrangement    string
 	SuitabilityScore   *int
-	Criteria           map[string]float64
-	Confidence         *float64
+	Breakdown          []ScoreRow
 }

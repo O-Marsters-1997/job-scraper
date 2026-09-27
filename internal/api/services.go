@@ -19,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/services/scoringconfig"
 	"github.com/ollymarsters/job-scraper/internal/api/services/sources"
 	"github.com/ollymarsters/job-scraper/internal/api/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	"github.com/ollymarsters/job-scraper/internal/candidates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -35,6 +36,7 @@ type services struct {
 	sources             *sources.Service
 	profile             *profile.Service
 	scoringConfig       *scoringconfig.Service
+	suitability         *suitability.Service
 	aiPrefs             *aiprefs.Service
 	aiCredentials       *aicredentials.Service
 	sourceTargets       *sourcetargets.Service
@@ -42,7 +44,7 @@ type services struct {
 	cvTemplates         *cvtemplates.Service
 }
 
-func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore) *services {
+func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service) *services {
 	candidateService := candidates.New(db, q)
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -62,7 +64,8 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		applications:        applications.New(db),
 		sources:             sources.New(),
 		profile:             profile.New(db),
-		scoringConfig:       scoringconfig.New(db, candidateService, db, db),
+		scoringConfig:       scoringconfig.New(db, candidateService, db, suitabilitySvc),
+		suitability:         suitabilitySvc,
 		aiPrefs:             aiprefs.New(creds),
 		aiCredentials:       aicredentials.New(creds),
 		sourceTargets:       sourcetargets.New(db, db, candidateService, q),

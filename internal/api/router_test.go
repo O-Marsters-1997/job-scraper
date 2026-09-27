@@ -22,11 +22,18 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
+	"github.com/ollymarsters/job-scraper/internal/api/jev"
+	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
+
+type noAlerts struct{}
+
+func (noAlerts) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 const ingestTestToken = "router-test-ingest-token" //nolint:gosec // test-only static token, not a credential
 
@@ -70,7 +77,9 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("INGEST_SERVICE_TOKEN", ingestTestToken); err != nil {
 		log.Fatalf("set INGEST_SERVICE_TOKEN: %v", err)
 	}
-	router = api.NewRouter(testDB, &queue.Broker{}, newFakeCredStore())
+	creds := newFakeCredStore()
+	suitabilitySvc := suitability.New(testDB, testDB, testDB, jev.NewClient(), creds, noAlerts{}, testDB)
+	router = api.NewRouter(testDB, &queue.Broker{}, creds, suitabilitySvc)
 
 	code := m.Run()
 
@@ -203,8 +212,9 @@ func TestRouterRequiresAuth(t *testing.T) {
 		{http.MethodPut, "/profile"},
 		{http.MethodGet, "/scoring-config"},
 		{http.MethodPut, "/scoring-config"},
+		{http.MethodGet, "/scoring-options"},
 		{http.MethodGet, "/scores/status"},
-		{http.MethodPost, "/scores/rescore"},
+		{http.MethodPost, "/scores/recompute"},
 		{http.MethodGet, "/ai-prefs"},
 		{http.MethodPut, "/ai-credentials"},
 		{http.MethodGet, "/source-targets/"},
@@ -376,14 +386,14 @@ func TestRouterRoutes(t *testing.T) {
 		}
 		w = do(authed(http.MethodPut, "/scoring-config", jsonBody(t, map[string]any{
 			"notifyThreshold": 5,
-			"scoringQuestions": map[string]any{
-				"profile":  "test profile",
-				"criteria": []any{},
-				"scale":    []string{"Low", "High"},
-			},
+			"preferences":     map[string]any{"picks": []any{}},
 		}), cookie))
 		if w.Code != http.StatusOK {
 			t.Errorf("PUT = %d (body: %s)", w.Code, w.Body.String())
+		}
+		w = do(authed(http.MethodGet, "/scoring-options", nil, cookie))
+		if w.Code != http.StatusOK {
+			t.Errorf("GET /scoring-options = %d", w.Code)
 		}
 	})
 
@@ -392,9 +402,9 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Errorf("GET /status = %d", w.Code)
 		}
-		w = do(authed(http.MethodPost, "/scores/rescore", nil, cookie))
+		w = do(authed(http.MethodPost, "/scores/recompute", nil, cookie))
 		if w.Code != http.StatusOK {
-			t.Errorf("POST /rescore = %d (body: %s)", w.Code, w.Body.String())
+			t.Errorf("POST /recompute = %d (body: %s)", w.Code, w.Body.String())
 		}
 	})
 
