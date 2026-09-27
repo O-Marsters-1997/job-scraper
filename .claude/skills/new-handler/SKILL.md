@@ -1,62 +1,78 @@
 ---
 name: new-handler
-description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
-paths: ["internal/api/handlers/**", "internal/api/router.go", "internal/api/services/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
+description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, module route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
+paths: ["internal/*/module.go", "internal/*/routes.go", "internal/*/internal/**", "internal/handlers/**", "internal/api/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
 ---
 
 # New Handler
 
-An endpoint touches five backend pieces and four frontend ones. Work top to bottom.
+An endpoint touches four backend pieces and four frontend ones. Work top to bottom.
 
-## 0. New persistence?
+## 0. Which context, and has it moved?
 
-If the endpoint needs a new table/column/query, run the `schema-change` skill first — it
-covers the migration and sqlc regen. Come back here once the provider method exists.
+Find the owning context in [ADR 0011](../../../docs/adr/0011-modular-monolith-by-context.md)
+(`jobsearch`, `scoring`, `applications`, `cvtemplates`, `identity`). Pick it by which tables the
+endpoint *writes*. Reads may join other contexts' tables. If the route would write two contexts'
+tables, it belongs to one of them and calls the other's tx-scoped port. Nothing fits? Stop and ask.
+
+Check `AGENTS.md` § Migration status. If the context hasn't moved yet, use the legacy layout
+described there (`internal/api/services/<feature>`, `internal/api/router.go`, `providers.X`) and
+skip the paths below. Don't move a context as a side effect of adding one route.
+
+If the endpoint needs a new table, column or query, run the `schema-change` skill first. Come
+back once the store method exists.
 
 ## Backend
 
-The shape below is current: [ADR 0008](../../../docs/adr/0008-handlers-over-feature-services.md) is rolled out.
-`internal/api/handlers` holds only `adapter.go`, `generic.go` and the misfit files (auth, google,
-ingest, cv export) — no handler struct owns your route, and every handler in the package is
-built from `Handle(decode, call, respond)`, directly or through a CRUD generic.
+Every handler is built from `Handle(decode, call, respond)` in `internal/handlers`, directly or
+through a CRUD generic ([ADR 0008](../../../docs/adr/0008-handlers-over-feature-services.md)).
 
 ### 1. dto input type
 
-Add the input type to `internal/dto/` — plain struct, JSON tags, no business logic. If a path
-ID belongs on it (anything but a plain `GetByID`/`Delete`), tag that field
-`json:"-" path:"id"` (or `path:"docId"`/`path:"tabId"` for a two-segment route) — see
-`internal/dto/company_input.go`'s `SetCompanyTrackingInput` for the pattern. The generic
-wrapper fills it from the chi URL param after decoding the body, so a request body can never
-set it.
+Only if the body or response is new. Add it to `internal/dto/`: a plain struct with JSON tags
+and no business logic. `dto` holds wire shapes and types that cross a facade; a shape used only
+inside the context goes in that context's own package. If a path ID belongs on it (anything but
+a plain `GetByID`/`Delete`), tag that field `json:"-" path:"id"` (or `path:"docId"`/`path:"tabId"`
+for a two-segment route), as in `SetCompanyTrackingInput`. The generic wrapper fills the field
+from the chi URL param after decoding the body, so a request body can never set it.
 
 ### 2. Service
 
-Package `internal/api/services/<feature>` (e.g. `internal/api/services/companies`,
-`internal/api/services/sourcetargets`) — not bare `internal/<feature>`. The exception:
-`internal/candidates` and `internal/api/ingest` stay where they are, because the worker/scraper
-import them too; only a service that exists purely to back an HTTP route goes under
-`internal/api/services/`.
+Package `internal/<ctx>/internal/<feature>`. All constructor args are required:
 
-Constructor args are all required — `providers.X` interfaces (already in
-`internal/data/providers/`) for persistence, small interfaces declared in the service's own
-package for anything else (queue publisher, verifier, scorer). No `With*` setters.
+- a `store` interface declared in this package, listing only the store methods it calls
+- small local interfaces for anything else: queue publisher, verifier, or another context's
+  facade (declared here and satisfied by that `*Module`)
 
-Match your method's signature to whichever generic wrapper it'll bind to (step 3) — see that
-table. Return `(dto.Y, error)`, the error being an `apperr` kind: `Invalid` (400),
-`Unauthorized` (401), `NotFound` (404), `Conflict` (409), `Unprocessable` (422), `Upstream`
-(502), `Unavailable` (503). Need an extra field in the error body (e.g. a count)? Wrap it:
-`apperr.WithFields(apperr.Conflict(...), map[string]any{"count": n})` — the adapter merges it
-into `{"error": ...}` automatically. If there's no rule or orchestration to add, don't write a
-service at all; see `references/pass-through-routes.md`.
+No `With*` setters, and no concrete type from another context.
 
-### 3. Route + wiring
+Match the method's signature to the generic wrapper it will bind to (see the table in step 3).
+Return `(dto.Y, error)`, where the error is an `apperr` kind:
 
-`internal/api/services.go` builds every service once in `newServices(db, q, creds) *services`.
-Add your service's field and construction there, next to its siblings — this is the only place
-that constructs it.
+| Kind | Status |
+|---|---|
+| `Invalid` | 400 |
+| `Unauthorized` | 401 |
+| `NotFound` | 404 |
+| `Conflict` | 409 |
+| `Unprocessable` | 422 |
+| `Upstream` | 502 |
+| `Unavailable` | 503 |
 
-`internal/api/router.go` adds the chi route, binding it to a generic wrapper from
-`internal/api/handlers/generic.go`:
+To add an extra field to the error body, wrap it:
+`apperr.WithFields(apperr.Conflict(...), map[string]any{"count": n})`. If there's no rule or
+orchestration, don't write a service at all; see `references/pass-through-routes.md`.
+
+Test it in the same package with a hand-written fake of the `store` interface. There are no
+generated mocks.
+
+### 3. Wire and route
+
+Construct the service in the context's `New` (`internal/<ctx>/module.go`), next to its
+siblings. That is the only place it's built. `cmd/api/main.go` builds modules, never services.
+
+Add the route in the module's `Routes` (`internal/<ctx>/routes.go`), binding it to a generic
+wrapper from `internal/handlers/generic.go`:
 
 | Wrapper | Your method's shape | Status |
 |---|---|---|
@@ -67,50 +83,50 @@ that constructs it.
 | `handlers.Update` | `(ctx, userID, in In) (Out, error)` | 200 |
 | `handlers.Delete` | `(ctx, userID, id) error` | 204 |
 
-Return `struct{}` as `Out` on `Create`/`Update` to get 204 instead of the verb's default (a
-bodyless action, or a write with nothing to send back). An action reuses whichever wrapper
-matches its shape regardless of HTTP method — `POST .../scrape` is still a `GetByID`. `Query`
-needs a query dto (step 1's sibling: string fields, json tags matching the query keys); the
-service parses and validates them.
+- To get 204 instead of the verb's default, return `struct{}` as `Out` on `Create`/`Update`. Use
+  this for a bodyless action, or a write with nothing to send back.
+- An action reuses whichever wrapper matches its shape, whatever the HTTP method.
+  `POST .../scrape` is still a `GetByID`.
+- `Query` needs a query dto with string fields and JSON tags matching the query keys. The
+  service parses and validates them.
 
-The line in `router.go` is exactly `r.<Method>("path", handlers.<Wrapper>(svc.Method))` — no
-`func` literal, no status argument, no inline validation. If your route sets cookies,
-redirects, streams, or uses service-token auth, see `references/non-adapter-routes.md` instead
-of the table above.
+The route line is exactly `r.<Method>("path", handlers.<Wrapper>(m.svc.Method))`: no `func`
+literal, no status argument, no inline validation. If the route sets cookies, redirects, streams
+or uses service-token auth, use `references/non-adapter-routes.md` instead of the table above.
 
-`cmd/api/main.go` only builds top-level infra (db, queue, credstore) and calls
-`app.NewRouter(db, q, cs)` — never wire a service there.
+A brand-new context also needs one line in `internal/api/router.go` mounting its `Routes`. An
+existing context is already mounted.
 
-## Frontend (ready now — these are real, current patterns)
+## Frontend
 
 ### 4. Type
 
-`frontend/src/types/<x>.ts` — the shared type, not declared inline in the api file.
+`frontend/src/types/<x>.ts`: the shared type, not declared inline in the api file.
 
 ### 5. api function + zod schema
 
-Copy `frontend/src/api/applicationStatuses.ts` for the function shape (one exported async
-function per operation, `useMocks()` branch first, `apiFetch` call second) and
-`frontend/src/api/scores.ts` for the zod schema pattern (`apiFetch(path, init, schema)` —
-parse the response, don't just cast it).
+Copy `frontend/src/api/applicationStatuses.ts` for the function shape: one exported async
+function per operation, the `useMocks()` branch first and the `apiFetch` call second. Copy
+`frontend/src/api/scores.ts` for the zod schema pattern: `apiFetch(path, init, schema)` parses
+the response rather than casting it.
 
 ### 6. Mocks
 
-Add a `useMocks()` branch to each new api function (see step 5) backed by fake rows in
-`frontend/src/mocks/db.ts`. Required if the page is covered by an e2e test — e2e runs with
-`VITE_MOCK=true` and no backend.
+Add a `useMocks()` branch to each new api function (see step 5), backed by fake rows in
+`frontend/src/mocks/db.ts`. This is required if an e2e test covers the page, because e2e runs
+with `VITE_MOCK=true` and no backend.
 
 ### 7. Hook
 
-Copy `frontend/src/hooks/useProfile.ts` — `queryOptions` + `createQuery` for reads,
+Copy `frontend/src/hooks/useProfile.ts`: `queryOptions` + `createQuery` for reads, and
 `createMutation` with `queryClient.invalidateQueries` for writes.
 
 ## Verify
 
 ```
-go test ./internal/api/handlers/... ./internal/api/services/<feature>/...
+go test ./internal/<ctx>/... ./internal/handlers/...
 cd frontend && bun run typecheck && bun run test && bunx playwright test
 ```
 
-`bun run test` runs every `*.check.ts` file (no test framework); `bunx playwright test` is the
-e2e suite. Use bun only — never npm/pnpm/yarn (`frontend/AGENTS.md`).
+`bun run test` runs every `*.check.ts` file (there's no test framework). `bunx playwright test`
+is the e2e suite. Use bun only, never npm/pnpm/yarn (`frontend/AGENTS.md`).

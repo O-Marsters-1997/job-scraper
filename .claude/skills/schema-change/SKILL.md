@@ -1,15 +1,23 @@
 ---
 name: schema-change
 description: Change the Postgres schema: create, alter or drop tables, columns, indexes or constraints, backfill data, and update the sqlc queries and generated code to match. Use for "write a migration", "change the schema", "add a column", "new index", "rename a field", "backfill".
-paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/data/db/**"]
+paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/data/db/**", "internal/*/internal/store/**", "sqlc.yaml"]
 ---
 
 # Schema change
 
 A schema change touches four layers that don't auto-sync: the migration, the
-hand-maintained `schema.sql` mirror, the sqlc-generated Go, and the wrapper
+hand-maintained `schema.sql` mirror, the sqlc-generated Go, and the store
 code around it. Do them in this order — skipping one leaves the layers
 inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
+
+0. **Find the owner.** Every table belongs to exactly one context
+   ([ADR 0011](../../../docs/adr/0011-modular-monolith-by-context.md)). A new
+   table goes to the context whose rules write it; if none fits, stop and ask.
+   Only the owner's store writes the table. Other contexts may read-join it.
+   Check `AGENTS.md` § Migration status: an unmoved context still uses the
+   legacy paths (`internal/data/sqlc/queries/`, `internal/data/db/`), and
+   steps 6–8 give both.
 
 1. **Check state.** `just up` starts Postgres, then `just migrate-status`
    shows what's already applied.
@@ -36,8 +44,11 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    (`AGENTS.md` "sqlc"). Add/change table and index definitions to match
    what the migration produces after Up.
 
-6. **Update the queries.** Edit or add to
-   `internal/data/sqlc/queries/<table>.sql`. See
+6. **Update the queries.** Edit or add to the owning context's
+   `internal/<ctx>/internal/store/queries/<table>.sql` (legacy:
+   `internal/data/sqlc/queries/<table>.sql`). A query that writes a table
+   belongs in that table's owner; a read-join may live in any context's
+   store. See
    `references/sqlc-queries.md` for which annotation
    (`:one`/`:many`/`:exec`/`:execrows`/`:batchexec`) fits, and
    `sqlc.arg`/`sqlc.narg` usage.
@@ -45,26 +56,33 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
 7. **Regenerate.** Confirm your local `sqlc version` matches the version
    pinned in `.github/workflows/ci.yml` (`sqlc-dev/sqlc/cmd/sqlc@v1.31.1` as
    of writing — check the file, it drifts), then run `just generate`. This
-   rewrites `internal/data/db/pgsqlc/**` — never hand-edit that tree
-   (`AGENTS.md` "Boundaries").
+   rewrites every generated tree (`internal/<ctx>/internal/store/sqlc/**`,
+   legacy `internal/data/db/pgsqlc/**`); never hand-edit them
+   (`AGENTS.md` "Boundaries"). A context's first query also needs its own
+   `sql:` block in `sqlc.yaml` pointing at the shared `schema.sql`.
 
-8. **Update the wrappers.** In `internal/data/db/*.go`, wrap generated calls:
-   map `pgx.ErrNoRows` → `providers.ErrNotFound`, wrap other errors as
-   `fmt.Errorf("db.Method: %w", err)`. Copy the pattern in
-   `internal/data/db/profile.go`. Wherever a signature changed, update the
-   matching provider interface and mock in `internal/data/providers/`
-   (copy `internal/data/providers/mock_profile.go`). Error-mapping detail,
-   including whether a unique-violation sentinel exists, is in
-   `references/sqlc-queries.md`.
+8. **Update the store.** In `internal/<ctx>/internal/store/*.go`, wrap
+   generated calls. Map `pgx.ErrNoRows` to the store's own `ErrNotFound`,
+   and wrap other errors as `fmt.Errorf("store.Method: %w", err)`. Return
+   `dto` or store-local types, never generated sqlc structs. Wherever a
+   signature changed, update the consuming service's own `store`
+   interface and its hand fake. There is no shared mock package.
+   Legacy contexts do the same in `internal/data/db/*.go` with
+   `providers.ErrNotFound` and `providers.Mock*`. Error-mapping detail is
+   in `references/sqlc-queries.md`.
+
+   If the change adds a side effect in another context's tables inside the
+   same transaction, don't write those tables. Call the owner's tx-scoped
+   port instead, e.g. `scoring.JobsChanged(ctx, tx, jobIDs)`.
 
 9. **Verify.** Needs Docker (`just up`):
    ```
-   sqlc generate && git diff --exit-code internal/data/db/pgsqlc && go test ./internal/data/db/...
+   sqlc generate && git diff --exit-code && go test ./internal/<ctx>/...
    ```
-   DB tests use a real Postgres testcontainer via `testDB` in
-   `internal/data/db/db_test.go` — don't start a second container. Run
-   `go test` from the repo root; migrations resolve `scripts/migrations`
-   relative to CWD.
+   Store tests use a real Postgres testcontainer via `internal/pgtest`. Legacy
+   tests use `testDB` in `internal/data/db/db_test.go`; don't start a second
+   container there. Run `go test` from the repo root, because migrations
+   resolve `scripts/migrations` relative to CWD.
 
 ## References
 
@@ -77,4 +95,4 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
 - `references/ordering.md` — why migration timestamps matter across
   branches and how to fix a collision.
 - `references/sqlc-queries.md` — annotation choice, `sqlc.arg`/`sqlc.narg`,
-  and the actual error-mapping convention in this codebase.
+  and the store error-mapping convention.

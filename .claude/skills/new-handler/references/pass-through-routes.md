@@ -1,31 +1,38 @@
 # Pass-through routes
 
-Per [ADR 0008](../../../../docs/adr/0008-handlers-over-feature-services.md): a route with
-no domain logic binds a generic wrapper directly to a provider method value instead of routing
-through a service. Add a service method only when there's an actual rule or orchestration to
-hold — a service method that just forwards `(ctx, userID, ...)` to one provider call adds a
-layer with nothing in it.
-
-This is real and current:
+Per [ADR 0008](../../../../docs/adr/0008-handlers-over-feature-services.md), a route with no
+domain logic binds a generic wrapper directly to a store method value in the module's `Routes`,
+without going through a service. Add a service method only when there's an actual rule or
+orchestration to hold. A service method that just forwards `(ctx, userID, ...)` to one store
+call adds a layer with nothing in it.
 
 ```go
-r.Get("/companies", handlers.GetAll(db.ListCompaniesForUser))
-r.Get("/scores/status", handlers.GetAll(db.GetScoringStatus))
-r.Get("/source-targets", handlers.GetAll(db.ListSourceTargetsByUser))
+func (m *Module) Routes(r chi.Router) {
+	r.Get("/companies", handlers.GetAll(m.store.ListCompaniesForUser))
+	r.Get("/source-targets", handlers.GetAll(m.store.ListSourceTargetsByUser))
+}
 ```
 
-`db.ListCompaniesForUser` already has the shape `handlers.GetAll` wants —
-`func(ctx, userID) (Out, error)` — so it binds straight to the route with no service in
-between.
+`m.store.ListCompaniesForUser` already has the shape `handlers.GetAll` wants,
+`func(ctx, userID) (Out, error)`, so it binds straight to the route. The module can reach its
+own `internal/store` because `Routes` lives in the context's root package.
 
-The moment the route needs anything past that — reordering arguments to match the wrapper,
-converting the output type, validating input, calling more than one provider, deciding a
-status by branching — write a named method on a service instead of a closure in `router.go`.
-`companies.AddBoard` is the example: `AddCompanyBoardInput` carries the company ID (via its
-`path:"id"` tag) and the URL to resolve, and the method validates, resolves the board and
-calls two providers. There is no shortcut version of that logic that still belongs in
-`router.go`.
+As soon as the route needs anything more, write a named method on a service instead of a closure
+in `Routes`. "Anything more" means:
 
-If you're tempted to write `handlers.Create(func(ctx, userID string, in dto.X) (dto.Y, error) { ... })`
-directly in `router.go`, that closure is the tell: give it a name and move it into the
-feature's service package instead.
+- reordering arguments to match the wrapper
+- converting the output type
+- validating input
+- calling more than one store method or another module's facade
+- choosing a status by branching
+
+`companies.AddBoard` is the example. `AddCompanyBoardInput` carries the company ID (via its
+`path:"id"` tag) and the URL to resolve. The method validates the input, resolves the board and
+makes two store calls. No shortcut version of that logic belongs in `Routes`.
+
+If you're about to write
+`handlers.Create(func(ctx, userID string, in dto.X) (dto.Y, error) { ... })` in `Routes`, the
+closure is the sign. Give it a name and move it into the feature's service package.
+
+Legacy contexts (see `AGENTS.md` § Migration status) do the same in `internal/api/router.go`,
+binding `db.Method` values.

@@ -8,6 +8,8 @@ A Go service that discovers jobs from selected sources, deduplicates them in Pos
 - `cmd/worker` publishes due verified ATS Board checks, reconciles unfinished Source Target starts, and consumes one durable RabbitMQ queue per known Source. It also harvests the company catalog and performs daily cleanup.
 - `cmd/queue` lists, inspects, and replays tasks in the shared dead-letter queue.
 
+The API is a modular monolith split into `jobsearch`, `scoring`, `applications`, `cvtemplates` and `identity`, each owning its tables ([ADR 0011](docs/adr/0011-modular-monolith-by-context.md)).
+
 Creating or rerunning a discovery Source Target stores a fresh run ID and `queued` status in PostgreSQL, then publishes its first listing-page task. WIS and LinkedIn continue through explicit page cursors; Indeed, RemoteOK, and Remotive finish in one page. A listing page saves and assesses Candidate cards, confirms detail and next-page tasks, then acknowledges. The matching Scrape Run succeeds at the terminal page; detail outcomes are tracked separately. Verified ATS Boards share the same Source queues and export complete Jobs without detail tasks. Scheduled checks keep each Tracked Company's frequency; manual checks do not shift it.
 
 RabbitMQ 4.3 quorum queues use persistent messages, publisher confirms, manual acknowledgements, listing priority, delayed bounded retries, and one shared durable DLQ. The worker runs one sequential consumer per Source; different Sources can progress together. PostgreSQL run IDs fence stale work, and canonical Job identity absorbs duplicate deliveries. See [ADR 0008](docs/adr/0008-rabbitmq-source-work-queues.md) and the [operations guide](docs/operations/rabbitmq.md).

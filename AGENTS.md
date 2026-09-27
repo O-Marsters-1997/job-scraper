@@ -11,61 +11,87 @@
 
 ## Layout
 
-- `cmd/<binary>` — entrypoints only: wiring and env.
-- `internal/api/` — used only by `cmd/api` (router, handlers, services, auth, notify, …).
-- `internal/worker/` — used only by `cmd/worker` (scraper, discover, source adapters, proxy);
-  `cmd/snapshot` also reads the adapters.
-- Anything directly under `internal/` is shared (`data`, `queue`, `dto`, `filter`, `candidates`,
-  `detect`, `sourcespec`, …) and imports neither group. `depguard` in `.golangci.yml` enforces all
-  three rules. If the API needs something that fetches, publish a queue task (ADR 0009).
+The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular-monolith-by-context.md)):
+`jobsearch`, `scoring`, `applications`, `cvtemplates` and `identity`.
+
+- `cmd/<binary>`: entrypoints only, with wiring and env. `cmd/api/main.go` is the only composition root:
+  it builds every module with `<ctx>.New(...)`.
+- `internal/<ctx>/module.go`: `New(deps) *Module` and the narrow facade (exported methods that other
+  contexts, the worker or `cmd/admin` call). `internal/<ctx>/routes.go`: `m.Routes(r)`.
+- `internal/<ctx>/internal/<feature>/`: services. `internal/<ctx>/internal/store/`: the store, its queries
+  and its generated sqlc. Go's `internal/` rule hides both from other contexts.
+- `internal/api/`: the HTTP shell only (middleware, CORS, mounting each module's `Routes`), used only by `cmd/api`.
+- `internal/worker/`: used only by `cmd/worker` (scraper, discover, source adapters, proxy); `cmd/snapshot`
+  also reads the adapters. It imports context roots for state, never `internal/api` (ADR 0009).
+- Everything else directly under `internal/` is the shared kernel (`dto`, `apperr`, `queue`, `handlers`,
+  `pgtest`, `telemetry`, `sourcespec`, …). It imports no context, no `internal/api` and no `internal/worker`.
+  `depguard` in `.golangci.yml` enforces the api/worker/shared rules.
+
+### Context rules
+
+- Only the owning context writes its tables. Any store may SELECT-join another context's tables.
+- A write that must also change another context's rows in the same transaction calls that context's
+  tx-scoped port, e.g. `scoring.JobsChanged(ctx, tx, jobIDs)`. Never write another context's table directly.
+- `dto` holds only HTTP shapes and types that cross a facade; context-private shapes stay in the context.
+- Stores declare their own sentinels (`apperr`-kinded when they map to a status). The root re-exports only
+  those other contexts must match.
+- Place new code by the table map in ADR 0011. If a feature doesn't fit a context, stop and ask.
+
+### Migration status
+
+Moved to the context layout: **none yet**. Order: `applications` → `identity` → `cvtemplates` →
+`scoring` → `jobsearch`. A feature whose context hasn't moved still uses the legacy layout:
+`internal/api/services/<feature>`, `internal/api/router.go` + `services.go`, `providers.X` interfaces and
+`*jobsdb.DB` in `internal/data/db`. Don't add new `providers` interfaces or `*jobsdb.DB` methods for a
+context that has moved; update this list as each context lands.
 
 ## Adding a new source
 
-Use the `add-source` skill — it covers the ATS vs. HTML branch, registry/builder wiring, and
+Use the `add-source` skill. It covers the ATS vs. HTML branch, registry/builder wiring, and
 snapshots.
 
 ## Anatomy of a handler
 
 See [ADR 0008](docs/adr/0008-handlers-over-feature-services.md):
 
-- `internal/api/handlers` is a thin HTTP adapter only. Every handler is built from
-  `Handle(decode, call, respond)` (`internal/api/handlers/generic.go`), either directly or through
-  one of the CRUD-shaped generics (`GetAll`, `GetByID`, `Query`, `Create`, `Update`, `Delete`) —
-  there is no third way to write a handler in this package. Handlers hold no business logic and
-  don't log — only `writeError` logs, and only for an error with no `apperr` kind.
-- Domain validation and orchestration live in `internal/api/services/<feature>`. A service's
-  dependencies are required constructor args — `providers.X` for persistence, small interfaces
-  declared in the service's own package for anything else (queue publisher, verifier, scorer).
+- Every handler is built from `Handle(decode, call, respond)` (`internal/handlers/generic.go`),
+  either directly or through one of the CRUD-shaped generics (`GetAll`, `GetByID`, `Query`, `Create`,
+  `Update`, `Delete`). There is no third way. Routes are registered in the owning module's `Routes`.
+  Handlers hold no business logic and don't log; only `writeError` logs, and only for an error with no
+  `apperr` kind.
+- Domain validation and orchestration live in `internal/<ctx>/internal/<feature>`. A service's
+  dependencies are required constructor args: a store interface declared in the service's own package,
+  plus small local interfaces for anything else (queue publisher, verifier, another module's facade).
   No `With*` setters.
 - Request bodies decode into `dto` input types; path IDs fill `path:"…"`-tagged dto fields after
   decoding, and the user ID is a service arg, so a body can never set either. Services return
   `apperr` errors and wire-ready `dto` values.
-- A route with no logic binds a CRUD generic directly to a provider method value — add a service
-  method only when there's a rule or orchestration to hold.
-- Routes that set cookies, redirect, stream, or use service-token auth (`Login`/`Signup`/
-  `Logout`/`Me`, OAuth start/callback, CV export, ingest) call `Handle` directly with their own
-  decode/call/respond, instead of one of the CRUD generics — see `internal/api/handlers/auth.go` and
-  `google.go` for the pattern.
+- A route with no logic binds a CRUD generic directly to a store method value. Add a service method
+  only when there's a rule or orchestration to hold.
+- Routes that set cookies, redirect, stream, or use service-token auth (login/signup/logout/me, OAuth
+  start/callback, CV export, ingest) call `Handle` directly with their own decode/call/respond.
 
 Use the `new-handler` skill for the end-to-end steps, backend and frontend.
 
 ## sqlc
 
-- Schema lives in `internal/data/sqlc/schema.sql`, queries in `internal/data/sqlc/queries/*.sql`
-  — sqlc reads neither from `scripts/migrations/`; mirror every migration there by hand.
-- `just generate` (`sqlc generate`) regenerates `internal/data/db/pgsqlc/**` — never hand-edit it.
+- Schema lives in `internal/data/sqlc/schema.sql`. sqlc never reads `scripts/migrations/`, so mirror
+  every migration there by hand.
+- Each context has one `sql:` block in `sqlc.yaml`: queries in `internal/<ctx>/internal/store/queries/`,
+  generated into `internal/<ctx>/internal/store/sqlc/`. Legacy contexts still use
+  `internal/data/sqlc/queries/` → `internal/data/db/pgsqlc/`.
+- `just generate` (`sqlc generate`) regenerates all generated trees; never hand-edit them.
   CI runs `sqlc generate && git diff --exit-code`, so commit generated code with the schema change.
-- Inputs are DTOs (ADR 0001).
 
-Use the `schema-change` skill for the full migration → sqlc → wrapper procedure.
+Use the `schema-change` skill for the full migration → sqlc → store procedure.
 
 ## Tests
 
-- DB tests share `testDB` from `internal/data/db/db_test.go` (a real Postgres testcontainer) —
-  don't start a second container.
-- Services are tested with `providers.Mock*`
-  (`internal/data/providers/mock_*.go`) plus small fake ports in the service package, without
-  HTTP — prefer `providers.Mock*` over a local `fake`/`mock` struct.
+- Services are tested without HTTP, using small hand fakes of their own store interface in the same
+  package. No generated mocks.
+- Store tests run against a real Postgres testcontainer via `internal/pgtest` (one container per test
+  binary). Legacy DB tests share `testDB` from `internal/data/db/db_test.go`; don't start a second
+  container there.
 
 ## Commands
 
@@ -82,8 +108,9 @@ DB-backed tests need Docker (`just up`).
 
 ## Boundaries — never hand-edit
 
-- `internal/data/db/pgsqlc/**`        → `sqlc generate`
-- `internal/api/notify/templates/*.tmpl`  → edit `emails/templates/*.tsx`, run `just build-emails`
+- `internal/*/internal/store/sqlc/**`, `internal/data/db/pgsqlc/**` → `sqlc generate`
+- `internal/api/notify/templates/*.tmpl` (moves to `internal/scoring/internal/notify/` with scoring) → edit
+  `emails/templates/*.tsx`, run `just build-emails`
 - `frontend/src/routeTree.gen.ts`     → regenerated by the TanStack router Vite plugin
 - `frontend/src/components/ui/**`     → vendored (Zaidan/Kobalte); re-run `bun run add-component <name>`
 - `internal/worker/sources/*/snapshots/*.json` → `just cli rebase <source>`

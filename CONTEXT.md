@@ -77,6 +77,32 @@ The two decoupled scraper phases — Crawl discovers and enqueues job URLs; Enri
 One initiated discovery Source Target search or Verified Board check, complete when its Crawl work succeeds or has a recorded terminal failure.
 _Avoid_: Source, schedule
 
+**Relevance**:
+A 0–100 heuristic score of a Job's listing-card signals (title/company/location) against a User's criteria, computed pre-persistence; the relevance cutoff gates whether the Job advances to the next expensive stage.
+_Avoid_: Match score, filter score — keep distinct from Suitability
+
+**Source Target**:
+A User's chosen discovery search on a Source, identified by a search URL or criteria; tracking an ATS Company is a separate choice.
+_Avoid_: Board config, tracked company, integration
+
+**Role**:
+A Source's purpose: `ats` Sources read verified Company Boards, while `discovery` Sources search for Job Candidates.
+_Avoid_: kind (kind is value shape: board/url/filter), type
+
+**Filter Source**:
+A discovery Source searched through User-supplied keywords and structured filters rather than a fixed Board or search URL.
+_Avoid_: keyword source, search source
+
+**FilterField**:
+A structured parameter declaration on a filter source — carries `Name` (the map key, e.g. `"region"`), `Label` (human-readable), and `Required`. `sourcespec` exposes declared fields via `LookupFilterFields(name)`; the `Create` handler validates submitted `filters` maps against them.
+_Avoid_: filter param, filter key
+
+**ScrapeRequest**:
+A request to run a discovery Source Target now, including when it is first created or explicitly rerun. Discovery searches do not have a recurring schedule to cover a missed request.
+_Avoid_: immediate scrape, manual scrape, trigger
+
+### Applications
+
 **Application**:
 A user's tracked pursuit of a Job, moving through Statuses.
 _Avoid_: Submission, app
@@ -86,10 +112,6 @@ A stage in the application pipeline (saved, applied, phone, interview, offer, re
 _Avoid_: Stage, state, step
 
 ### Scoring & criteria
-
-**Relevance**:
-A 0–100 heuristic score of a Job's listing-card signals (title/company/location) against a User's criteria, computed pre-persistence; the relevance cutoff gates whether the Job advances to the next expensive stage.
-_Avoid_: Match score, filter score — keep distinct from Suitability
 
 **Option**:
 One thing a User can pick a stance on — a technology, role, industry, level, work arrangement or
@@ -127,26 +149,6 @@ A 0–100 score per (Job, User) from a pure function over the User's Picks and t
 Answers — no per-Job Jev call, since Suitability is derived entirely from data already fetched
 once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
-
-**Source Target**:
-A User's chosen discovery search on a Source, identified by a search URL or criteria; tracking an ATS Company is a separate choice.
-_Avoid_: Board config, tracked company, integration
-
-**Role**:
-A Source's purpose: `ats` Sources read verified Company Boards, while `discovery` Sources search for Job Candidates.
-_Avoid_: kind (kind is value shape: board/url/filter), type
-
-**Filter Source**:
-A discovery Source searched through User-supplied keywords and structured filters rather than a fixed Board or search URL.
-_Avoid_: keyword source, search source
-
-**FilterField**:
-A structured parameter declaration on a filter source — carries `Name` (the map key, e.g. `"region"`), `Label` (human-readable), and `Required`. `sourcespec` exposes declared fields via `LookupFilterFields(name)`; the `Create` handler validates submitted `filters` maps against them.
-_Avoid_: filter param, filter key
-
-**ScrapeRequest**:
-A request to run a discovery Source Target now, including when it is first created or explicitly rerun. Discovery searches do not have a recurring schedule to cover a missed request.
-_Avoid_: immediate scrape, manual scrape, trigger
 
 **Search Config**:
 A User's editable search criteria (role, location, keywords), Picks (in `preferences`), relevance
