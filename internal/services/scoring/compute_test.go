@@ -26,7 +26,6 @@ func blockPick(key string, pYes, pNo, pNotStated float64) evaluatedPick {
 		answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
-
 func TestCompute(t *testing.T) {
 	tests := []struct {
 		name      string
