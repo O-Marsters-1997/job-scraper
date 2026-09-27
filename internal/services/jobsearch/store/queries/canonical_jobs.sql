@@ -48,8 +48,3 @@ INSERT INTO job_urls (job_id, normalized_url, source)
 VALUES ($1::uuid, $2, $3)
 ON CONFLICT (normalized_url) DO UPDATE SET last_seen_at = NOW()
 WHERE job_urls.job_id = EXCLUDED.job_id;
-
--- name: DeleteStaleOptionAnswers :exec
--- Writes scoring's option_answers table directly; documented exception
--- (ADR 0011, issue #264) pending #267.
-DELETE FROM option_answers WHERE job_id = sqlc.arg(job_id)::uuid AND fingerprint != sqlc.arg(fingerprint)::text;
