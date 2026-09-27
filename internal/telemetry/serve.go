@@ -1,4 +1,4 @@
-// Package telemetry ships metrics and logs to Grafana Cloud via Alloy (ADR-0025).
+// Package telemetry ships metrics and logs to Grafana Cloud via Alloy (ADR 0010).
 // The Go binaries hold no Grafana credentials and import no vendor SDK.
 package telemetry
 

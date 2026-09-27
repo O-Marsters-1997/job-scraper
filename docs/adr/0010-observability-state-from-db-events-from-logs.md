@@ -1,6 +1,4 @@
-# ADR 0025 — Observability: state from the database, events from logs
-
-**Status:** Accepted
+# ADR 0010 — Observability: state from the database, events from logs
 
 ## Context
 
@@ -49,4 +47,3 @@ across two sources); package-level `promauto` vars (global state).
   histograms.
 - Traces are out of scope. Adding them later means carrying trace context in AMQP headers and
   the ingest call, plus an OTLP receiver in Alloy.
-- Plan: `plans/grafana-observability.md`.

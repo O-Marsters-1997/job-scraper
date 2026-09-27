@@ -33,3 +33,8 @@ __debug_bin*
 .impeccable/live/sessions/
 
 ideas/
+
+# Plans and PRDs are local working files
+plans/
+docs/plans/
+docs/prd-*.md

@@ -1,4 +1,4 @@
-# Phase 1, 2, 4, 5 and 6 rules (plans/grafana-observability.md). datasourceUid placeholders are
+# The datasourceUid placeholders are
 # filled in by scripts/grafana-push.sh, which looks up the connected Prometheus and Loki
 # datasource UIDs by type — Grafana Cloud assigns these per-stack, so they can't be hardcoded here.
 folder:

@@ -1,8 +1,7 @@
 # Grafana Cloud observability: operations
 
-See `plans/grafana-observability.md` and ADR-0025 for the design. This covers the human setup
-step the plan calls out, and the acceptance criteria from each phase that need a live Grafana
-Cloud stack to verify.
+See ADR 0010 for the design. This covers the human setup step and the checks that need a live
+Grafana Cloud stack to verify.
 
 ## One-time setup
 
@@ -21,7 +20,7 @@ Cloud stack to verify.
    dashboard. Safe to re-run; it upserts by UID.
 6. Start the stack with the profile: `docker compose --profile observability up -d`.
 
-## Manual verification (Phase 1 acceptance criteria)
+## Manual verification: shipping and target alerts
 
 Everything below needs the live Grafana Cloud stack from step 6 and can't be verified headless:
 
@@ -36,7 +35,7 @@ Everything else — the metrics endpoint, `Serve`'s shutdown behaviour, the comp
 and the Alloy config's syntax — is covered by `go test ./internal/telemetry/...` and
 `docker compose --profile observability config`.
 
-## Manual verification (Phase 2 acceptance criteria)
+## Manual verification: database state alerts
 
 Everything below needs the live Grafana Cloud stack and can't be verified headless:
 
@@ -47,7 +46,7 @@ Everything else — `OpsState`'s counts and ages, the collector's happy and fail
 worker's `/metrics` carrying no `jobscraper_*` series — is covered by `go test ./internal/data/db/...`
 and `go test ./internal/telemetry/...`.
 
-## Manual verification (Phase 4 acceptance criteria)
+## Manual verification: RabbitMQ alerts
 
 Everything below needs the live Grafana Cloud stack and can't be verified headless:
 

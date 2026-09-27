@@ -13,6 +13,13 @@ Read `../DESIGN.md` before any UI change; it's the source of truth for colours, 
   - Shared types live in `src/types/*.ts`, not declared inline in the api file.
 - **Unit check** — a `src/**/*.check.ts` file that throws at import time (copy
   `src/lib/jobFilters.check.ts`). There's no test framework; `bun run test` runs every `*.check.ts`.
+- **Styling**
+  - Use `cva` when a component has two or more mutually exclusive variants a caller picks
+    between; single-style components take overrides through `cn()`.
+  - Text sizes come from named `--text-*` tokens in `@theme` (`src/styles.css`). No arbitrary
+    `text-[Npx]`: add a token. One-off layout values (grid columns, a single max-width) may stay
+    arbitrary.
+  - Colour uses semantic `--color-*` tokens only, with no hex or raw Tailwind colour utilities.
 - **E2E** — page object in `e2e/src/pages/`, spec in `e2e/tests/` (copy an existing pair, e.g.
   `companies.page.ts` + `companies.spec.ts`).
 

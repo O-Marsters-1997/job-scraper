@@ -18,12 +18,12 @@ linters:
           files: ["**/internal/api/**", "**/cmd/api/**"]
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/worker
-              desc: the API never fetches from sources; publish a queue task for the worker (ADR 0026)
+              desc: the API never fetches from sources; publish a queue task for the worker (ADR 0009)
         worker:
           files: ["**/internal/worker/**", "**/cmd/worker/**"]
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/api
-              desc: the worker reaches the API over POST /ingest, not by import (ADR 0022)
+              desc: the worker reaches the API over POST /ingest, not by import (ADR 0009)
         shared:
           files: ["**/internal/**", "!**/internal/api/**", "!**/internal/worker/**"]
           deny:
