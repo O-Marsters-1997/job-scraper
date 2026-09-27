@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
@@ -39,7 +40,13 @@ const ingestTestToken = "router-test-ingest-token" //nolint:gosec // test-only s
 
 const nilUUID = "00000000-0000-0000-0000-000000000000"
 
-var router http.Handler
+var (
+	router          http.Handler
+	testDB          *db.DB
+	testBroker      = &queue.Broker{}
+	testCreds       *fakeCredStore
+	testSuitability *suitability.Service
+)
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
@@ -66,7 +73,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("connection string: %v", err)
 	}
 
-	testDB, err := db.New(ctx, connStr)
+	testDB, err = db.New(ctx, connStr)
 	if err != nil {
 		log.Fatalf("db.New: %v", err)
 	}
@@ -77,9 +84,9 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("INGEST_SERVICE_TOKEN", ingestTestToken); err != nil {
 		log.Fatalf("set INGEST_SERVICE_TOKEN: %v", err)
 	}
-	creds := newFakeCredStore()
-	suitabilitySvc := suitability.New(testDB, testDB, testDB, jev.NewClient(), creds, noAlerts{}, testDB)
-	router = api.NewRouter(testDB, &queue.Broker{}, creds, suitabilitySvc)
+	testCreds = newFakeCredStore()
+	testSuitability = suitability.New(testDB, testDB, testDB, jev.NewClient(), testCreds, noAlerts{}, testDB)
+	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability)
 
 	code := m.Run()
 
@@ -473,4 +480,38 @@ func TestRouterRoutes(t *testing.T) {
 			t.Errorf("POST /tracked-docs/{docId}/tabs/{tabId}/show = %d, want 404 (body: %s)", w.Code, w.Body.String())
 		}
 	})
+}
+
+type fakeModule struct{}
+
+func (fakeModule) Routes(r chi.Router) {
+	r.Get("/fake-private", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+}
+
+func (fakeModule) PublicRoutes(r chi.Router) {
+	r.Get("/fake-public", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+}
+
+func TestRouterMountsModules(t *testing.T) {
+	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, fakeModule{})
+
+	w := httptest.NewRecorder()
+	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-private", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("GET /fake-private without session = %d, want 401", w.Code)
+	}
+
+	cookie := signup(t)
+	req := authed(http.MethodGet, "/fake-private", nil, cookie)
+	w = httptest.NewRecorder()
+	moduleRouter.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /fake-private with session = %d, want 200", w.Code)
+	}
+
+	w = httptest.NewRecorder()
+	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-public", nil))
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /fake-public without session = %d, want 200", w.Code)
+	}
 }
