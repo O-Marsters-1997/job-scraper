@@ -29,6 +29,11 @@ const (
 	Provider = "openrouter"
 
 	maxDescriptionRunes = 4096 * 4
+
+	// tokenBudget is under Jev's 32k context, leaving headroom for its reply.
+	tokenBudget   = 28000
+	charsPerToken = 4
+	maxBatchChars = tokenBudget * charsPerToken
 )
 
 var choiceOptions = []string{"yes", "no", "not_stated"}
@@ -80,29 +85,85 @@ type choiceResponse struct {
 }
 
 // Answer asks Jev each of questions as a choice between yes, no and
-// not_stated, against the given job's state.
+// not_stated, against the given job's state, batching under Jev's context
+// budget. Any batch failure fails the whole call.
 func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
 	desc := truncateRunes(stripHTML(job.Description), maxDescriptionRunes)
+
+	state := choiceState{
+		Title:           job.Title,
+		Company:         job.CompanySlug,
+		Location:        job.Location,
+		WorkArrangement: job.WorkArrangement,
+		SalaryRaw:       job.SalaryRaw,
+		Description:     desc,
+	}
 
 	qs := make(map[string]choiceQuestion, len(questions))
 	for _, q := range questions {
 		qs[q] = choiceQuestion{Type: "choice", Instructions: q, Options: choiceOptions}
 	}
 
-	reqBody := choiceRequest{
-		Model: Model,
-		State: choiceState{
-			Title:           job.Title,
-			Company:         job.CompanySlug,
-			Location:        job.Location,
-			WorkArrangement: job.WorkArrangement,
-			SalaryRaw:       job.SalaryRaw,
-			Description:     desc,
-		},
-		Questions: qs,
+	stateChars, err := marshalledChars(state)
+	if err != nil {
+		return nil, dto.Usage{}, fmt.Errorf("marshal jev state: %w", err)
 	}
 
-	body, err := json.Marshal(reqBody)
+	answers := make(map[string]dto.Answer, len(questions))
+	var usage dto.Usage
+	for _, batch := range batchQuestions(questions, qs, stateChars, maxBatchChars) {
+		batchAnswers, batchUsage, err := c.answerBatch(ctx, apiKey, state, qs, batch)
+		if err != nil {
+			return nil, dto.Usage{}, err
+		}
+		for q, a := range batchAnswers {
+			answers[q] = a
+		}
+		usage.Model = batchUsage.Model
+		usage.Cost += batchUsage.Cost
+	}
+
+	return answers, usage, nil
+}
+
+func batchQuestions(questions []string, qs map[string]choiceQuestion, stateChars, maxChars int) [][]string {
+	var batches [][]string
+	var current []string
+	currentChars := stateChars
+	for _, q := range questions {
+		qChars, err := marshalledChars(map[string]choiceQuestion{q: qs[q]})
+		if err != nil {
+			qChars = 0
+		}
+		if len(current) > 0 && currentChars+qChars > maxChars {
+			batches = append(batches, current)
+			current = nil
+			currentChars = stateChars
+		}
+		current = append(current, q)
+		currentChars += qChars
+	}
+	if len(current) > 0 {
+		batches = append(batches, current)
+	}
+	return batches
+}
+
+func marshalledChars(v any) (int, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return 0, err
+	}
+	return len(b), nil
+}
+
+func (c *Client) answerBatch(ctx context.Context, apiKey string, state choiceState, qs map[string]choiceQuestion, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	batchQs := make(map[string]choiceQuestion, len(questions))
+	for _, q := range questions {
+		batchQs[q] = qs[q]
+	}
+
+	body, err := json.Marshal(choiceRequest{Model: Model, State: state, Questions: batchQs})
 	if err != nil {
 		return nil, dto.Usage{}, fmt.Errorf("marshal jev request: %w", err)
 	}
