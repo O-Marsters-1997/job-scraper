@@ -50,10 +50,9 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 	}, nil
 }
 
-// NewFacade wires only identity's user/session store, for cmd/admin's
-// create-user command and the worker's daily session cleanup (ADR 0011).
-// Routes, PublicRoutes and the Google/AI credential facade methods panic on
-// a Module built this way.
+// NewFacade wires only identity's user/session store, for cmd/admin and the
+// worker's daily cleanup (ADR 0011). Routes, PublicRoutes and the Google/AI
+// facade methods panic on a Module built this way.
 func NewFacade(pool *pgxpool.Pool, seeder StatusSeeder) *Module {
 	st := store.New(pool)
 	return &Module{store: st, service: NewService(st, seeder)}

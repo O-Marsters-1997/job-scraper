@@ -11,7 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// ErrTokenNotFound means userID has no stored Google token.
 var ErrTokenNotFound = apperr.Unauthorized("google account not connected")
 
 // ErrTokenUnusable means a token row exists but cannot be decrypted (e.g.

@@ -24,8 +24,6 @@ export interface Tweaks {
 	customColors: Record<string, string>;
 }
 
-// OKLCH defaults mirroring the violet @theme block in src/styles.css.
-// Keeping oklch so custom palette storage stays consistent with the design system.
 export const CUSTOM_DEFAULTS: Record<string, string> = {
 	"--color-sidebar": "oklch(0.23 0.055 285)",
 	"--color-sidebar-hover": "oklch(0.29 0.06 285)",
@@ -139,10 +137,7 @@ export const THEME_VAR_GROUPS: ThemeVarGroup[] = [
 
 interface ThemeEntry {
 	name: string;
-	// Preview swatch colours (inline styles only, independent of applied theme).
-	// sb=sidebar, cv=canvas, ac=accent, su=surface card, bd=border.
 	swatch: { sb: string; cv: string; ac: string; su: string; bd: string };
-	// CSS variable overrides — empty means "use pristine @theme values"
 	vars: Record<string, string>;
 }
 
@@ -318,7 +313,6 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 			"--color-accent-text": "oklch(0.14 0 0)",
 		},
 	},
-	// Custom theme: swatch is a placeholder; actual colours come from customColors at runtime
 	custom: {
 		name: "Custom",
 		swatch: {

@@ -53,7 +53,7 @@ func (f *fakeDocsClient) ExportPDF(context.Context, string, string, string) (io.
 
 type fakeStore struct {
 	docs []dto.TrackedDoc
-	tabs map[string][]dto.Tab // trackedDocID -> tabs
+	tabs map[string][]dto.Tab
 }
 
 func (f *fakeStore) ListTrackedDocs(_ context.Context, _ string) ([]dto.TrackedDoc, error) {

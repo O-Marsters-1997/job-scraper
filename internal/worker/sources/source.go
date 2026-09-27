@@ -30,10 +30,9 @@ type Config struct {
 type Source interface {
 	Cfg() Config
 
-	// Iterate pages through all jobs from the source, calling fn for each
-	// page's jobs. ATS sources yield fully-populated dto.Job; HTML sources
-	// yield partial dto.Job{URL: url}. fn returning stop=true triggers early
-	// termination. Respects ctx cancellation.
+	// Iterate pages through all jobs, calling fn per page. ATS sources yield
+	// full dto.Job values; HTML sources yield partial dto.Job{URL: url}. fn
+	// returning stop=true ends iteration early; ctx cancellation is respected.
 	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
 }
 

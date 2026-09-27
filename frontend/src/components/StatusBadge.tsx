@@ -3,7 +3,6 @@ interface StatusBadgeProps {
 	colour: string;
 }
 
-// Status pill matching the design's "colored dot + soft tinted background" rule.
 export function StatusBadge(props: StatusBadgeProps) {
 	return (
 		<span

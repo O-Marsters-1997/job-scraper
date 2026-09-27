@@ -1,13 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Fetches a Kobalte UI component from the Zaidan registry and installs it.
- *
- * Usage:   bun run scripts/add-component.ts <name>
- * Example: bun run scripts/add-component.ts dialog
- *
- * Browse available components:
- *   https://github.com/carere/zaidan/tree/main/src/registry/kobalte/ui
- */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

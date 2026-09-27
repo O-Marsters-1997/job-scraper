@@ -38,9 +38,6 @@ func TestParseURLs_AntiBotBlock(t *testing.T) {
 	}
 }
 
-// TestParseURLs_NoResultsIsNotAnError verifies a genuine empty-search-results
-// page (zero cards, but a real "no results" marker) does not error — only an
-// unrecognized zero-card page should be treated as a suspected block.
 func TestParseURLs_NoResultsIsNotAnError(t *testing.T) {
 	const noResultsHTML = `<!DOCTYPE html><html><body>
 		<div id="mosaic-provider-jobcards">

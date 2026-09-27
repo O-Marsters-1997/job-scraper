@@ -20,15 +20,9 @@ type SnapshotSource interface {
 	ParseJobDetail(r io.Reader, url string) (dto.Job, error)
 }
 
-// RunSnapshotTests runs snapshot tests for all HTML files in the snapshots/ directory.
-//
-// File prefix convention:
-//   - list_*.html  — parsed with src.ParseURLs; fixture is []dto.Job
-//   - detail_*.html — parsed with src.ParseJobDetail; fixture is []dto.Job with one element
-//     whose URL field is passed into the parser (read from the fixture file)
-//
-// To create fixtures: just cli download <source> list_<name> <url>
-// To regenerate:      just cli rebase <source>
+// RunSnapshotTests runs snapshot tests for every HTML file in snapshots/.
+// list_*.html fixtures parse with ParseURLs; detail_*.html fixtures parse
+// with ParseJobDetail, using the JSON fixture's first entry's URL.
 func RunSnapshotTests(t *testing.T, src SnapshotSource) {
 	t.Helper()
 

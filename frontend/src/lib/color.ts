@@ -1,9 +1,6 @@
 import { parseColor } from "@kobalte/core/colors";
 
-// Standard OKLab/OKLCH matrices. Validated against the project's @theme tokens:
-//   oklch(0.55 0.18 285)        → #6645D9  (violet primary)
-//   oklch(0.23 0.055 285)       → #2A1F57  (indigo sidebar)
-//   oklch(0.9842 0.0034 247.86) → #F8FAFC  (canvas)
+// Standard OKLab/OKLCH conversion matrices.
 
 function srgbToLinear(c: number): number {
 	return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
