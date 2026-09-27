@@ -1,5 +1,14 @@
 import { createFileRoute, useParams } from "@tanstack/solid-router";
-import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
+import type { Accessor } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	For,
+	Match,
+	Show,
+	Switch,
+	untrack,
+} from "solid-js";
 import { createStore } from "solid-js/store";
 import { ChoiceGroup, Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
@@ -52,23 +61,25 @@ function ScoringPage() {
 }
 
 function ScoringForm(props: {
-	config: ScoringConfig;
-	options: ScoringOptionsView;
+	config: Accessor<ScoringConfig>;
+	options: Accessor<ScoringOptionsView>;
 }) {
 	const mutation = useUpdateScoringConfig();
 	const recompute = useRecomputeScores();
 	const scoringStatus = useScoringStatus();
 
+	const initialConfig = untrack(() => props.config());
+
 	const [stances, setStances] = createStore<StanceMap>(
 		Object.fromEntries(
-			props.config.preferences.picks
+			initialConfig.preferences.picks
 				.filter((p) => p.source === "manual")
 				.map((p) => [p.optionId, p.stance as Stance]),
 		),
 	);
 
 	const optionsFor = (dim: Dim) =>
-		props.options.options.filter((o) => o.dimension === dim);
+		props.options().options.filter((o) => o.dimension === dim);
 	const idsWith = (dim: Dim, stance: Stance) =>
 		optionsFor(dim)
 			.filter((o) => stances[o.id] === stance)
@@ -84,26 +95,26 @@ function ScoringForm(props: {
 		setStances(id, isNice(id) ? undefined : "nice");
 
 	const textPicks = createMemo(() =>
-		props.config.preferences.picks.filter((p) => p.source === "text"),
+		props.config().preferences.picks.filter((p) => p.source === "text"),
 	);
 	const labelFor = (optionId: string) =>
-		props.options.options.find((o) => o.id === optionId)?.label ?? optionId;
+		props.options().options.find((o) => o.id === optionId)?.label ?? optionId;
 
 	const [preferenceText, setPreferenceText] = createSignal(
-		props.config.preferences.preferenceText,
+		initialConfig.preferences.preferenceText,
 	);
 	const [salaryFloor, setSalaryFloor] = createSignal(
-		props.config.preferences.salaryFloor?.amount.toString() ?? "",
+		initialConfig.preferences.salaryFloor?.amount.toString() ?? "",
 	);
-	const [threshold, setThreshold] = createSignal(props.config.notifyThreshold);
+	const [threshold, setThreshold] = createSignal(initialConfig.notifyThreshold);
 	const [titleKeywords, setTitleKeywords] = createSignal(
-		props.config.excludedTitleKeywords,
+		initialConfig.excludedTitleKeywords,
 	);
 	const [companies, setCompanies] = createSignal(
-		props.config.excludedCompanies,
+		initialConfig.excludedCompanies,
 	);
 	const [locations, setLocations] = createSignal(
-		props.config.excludedLocations,
+		initialConfig.excludedLocations,
 	);
 	const companiesQuery = useCompanies();
 	const companyOptions = createMemo(() =>
@@ -143,7 +154,7 @@ function ScoringForm(props: {
 						: null,
 					preferenceText: preferenceText(),
 				},
-				updatedAt: props.config.updatedAt,
+				updatedAt: props.config().updatedAt,
 			});
 			flash("Saved.");
 		} catch {

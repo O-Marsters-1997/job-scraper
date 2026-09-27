@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createSignal } from "solid-js";
+import type { Accessor } from "solid-js";
+import { createSignal, untrack } from "solid-js";
 import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -22,11 +23,9 @@ function ProfilePage() {
 	);
 }
 
-// Extracted so createSignal initializes from resolved data once at mount —
-// background refetches never clobber in-progress edits.
-function ProfileForm(props: { data: Profile }) {
+function ProfileForm(props: { data: Accessor<Profile> }) {
 	const mutation = useUpdateProfile();
-	const [email, setEmail] = createSignal(props.data.email);
+	const [email, setEmail] = createSignal(untrack(() => props.data().email));
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
 
@@ -52,7 +51,7 @@ function ProfileForm(props: { data: Profile }) {
 			<FormFeedback success={saved()} error={saveError()} />
 			<div>
 				<p class="text-sm font-medium text-foreground">Username</p>
-				<p class="mt-2 text-sm text-muted">{props.data.username}</p>
+				<p class="mt-2 text-sm text-muted">{props.data().username}</p>
 			</div>
 			<Field label="Email" for="email">
 				<Input

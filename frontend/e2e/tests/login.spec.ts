@@ -15,17 +15,9 @@ test("should render the sign-in form", async ({ loginPage, page }) => {
 
 	await expect(page.locator("#username")).toBeVisible();
 	await expect(page.locator("#password")).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: /sign in/i }),
-	).toBeVisible();
+	await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
 });
 
-test.fixme(
-	"should show error on invalid credentials — needs real backend",
-	async () => {},
-);
+test.fixme("should show error on invalid credentials — needs real backend", async () => {});
 
-test.fixme(
-	"should redirect to /login when not authenticated — needs real backend",
-	async () => {},
-);
+test.fixme("should redirect to /login when not authenticated — needs real backend", async () => {});

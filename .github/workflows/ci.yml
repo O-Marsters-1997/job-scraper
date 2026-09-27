@@ -98,6 +98,8 @@ jobs:
         run: go build ./...
 
   e2e:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -156,6 +158,7 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run check
+          bun run lint:solid
 
   build-frontend:
     needs: changes

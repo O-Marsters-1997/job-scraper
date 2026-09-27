@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import type { PDFPageProxy } from "pdfjs-dist";
 import * as pdfjsLib from "pdfjs-dist";
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show, untrack } from "solid-js";
 import { API_BASE } from "../../api/config";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -137,7 +137,7 @@ function CVDetailPage() {
 function PDFCanvas(props: { page: PDFPageProxy }) {
 	let canvasRef: HTMLCanvasElement | undefined;
 
-	const viewport = props.page.getViewport({ scale: 1.5 });
+	const viewport = untrack(() => props.page.getViewport({ scale: 1.5 }));
 
 	const render = () => {
 		if (!canvasRef) return;

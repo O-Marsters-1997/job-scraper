@@ -1,8 +1,8 @@
+import { createQuery } from "@tanstack/solid-query";
 import { Link, useLocation } from "@tanstack/solid-router";
 import { Match, Switch } from "solid-js";
-import { queryClient } from "../lib/queryClient";
+import { jobQueryOptions } from "../hooks/useJobs";
 import { findSettingsSection } from "../lib/settingsSections";
-import type { Job } from "../types/job";
 import SettingsPanel from "./SettingsPanel";
 
 const PAGE_LABELS: Record<string, string> = {
@@ -34,11 +34,11 @@ export default function Topbar(props: TopbarProps) {
 		return m ? m[1] : null;
 	};
 
-	const jobDetailTitle = () => {
-		const id = jobDetailId();
-		if (!id) return null;
-		return queryClient.getQueryData<Job>(["job", id])?.Title ?? null;
-	};
+	const jobQuery = createQuery(() => ({
+		...jobQueryOptions(jobDetailId() ?? ""),
+		enabled: jobDetailId() != null,
+	}));
+	const jobDetailTitle = () => jobQuery.data?.Title ?? null;
 
 	const pageLabel = () =>
 		PAGE_LABELS[location().pathname] ?? deriveLabel(location().pathname);

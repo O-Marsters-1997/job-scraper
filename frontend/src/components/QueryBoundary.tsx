@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import type { Accessor, JSX } from "solid-js";
 import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonList } from "@/components/ui/skeleton";
@@ -12,12 +12,10 @@ type Props<T> = {
 		data: T | undefined;
 	};
 	fallbackRows?: number;
-	children: (data: T) => JSX.Element;
+	children: (data: Accessor<NonNullable<T>>) => JSX.Element;
 };
 
 export function QueryBoundary<T>(props: Props<T>): JSX.Element {
-	// Use Show's accessor form (when={data}) so children are lazy —
-	// they mount only once data is defined, not while loading/erroring.
 	return (
 		<Show
 			when={props.query.data}
@@ -33,7 +31,7 @@ export function QueryBoundary<T>(props: Props<T>): JSX.Element {
 				</Show>
 			}
 		>
-			{(data) => props.children(data() as T)}
+			{(data) => props.children(data)}
 		</Show>
 	);
 }
