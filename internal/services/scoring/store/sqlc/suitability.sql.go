@@ -237,8 +237,13 @@ SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confi
 FROM job_scores s
 JOIN jobs j ON j.id = s.job_id
 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
-WHERE s.user_id = $1::uuid
+WHERE s.user_id = $1::uuid AND a.model = $2::text
 `
+
+type ListScoringAnswersForUserParams struct {
+	UserID pgtype.UUID
+	Model  string
+}
 
 type ListScoringAnswersForUserRow struct {
 	JobID        pgtype.UUID
@@ -249,8 +254,8 @@ type ListScoringAnswersForUserRow struct {
 	Confidence   float32
 }
 
-func (q *Queries) ListScoringAnswersForUser(ctx context.Context, userID pgtype.UUID) ([]ListScoringAnswersForUserRow, error) {
-	rows, err := q.db.Query(ctx, listScoringAnswersForUser, userID)
+func (q *Queries) ListScoringAnswersForUser(ctx context.Context, arg ListScoringAnswersForUserParams) ([]ListScoringAnswersForUserRow, error) {
+	rows, err := q.db.Query(ctx, listScoringAnswersForUser, arg.UserID, arg.Model)
 	if err != nil {
 		return nil, err
 	}

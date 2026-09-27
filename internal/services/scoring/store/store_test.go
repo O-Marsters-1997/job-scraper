@@ -391,7 +391,7 @@ func TestListScoringInputsThenSaveScores(t *testing.T) {
 		t.Fatalf("seed answer: %v", err)
 	}
 
-	inputs, err := st.ListScoringInputs(ctx, userID)
+	inputs, err := st.ListScoringInputs(ctx, userID, "typesafe/jev-1.13")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,6 +408,32 @@ func TestListScoringInputsThenSaveScores(t *testing.T) {
 	}
 	if score != 90 {
 		t.Fatalf("score = %d, want 90", score)
+	}
+}
+
+func TestListScoringInputs_IgnoresAnswersUnderAnotherModel(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	jobID := insertJob(t, pool, "fp-1")
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1, $2, 50, '[]')`,
+		jobID, userID); err != nil {
+		t.Fatalf("seed job score: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-1', 'hash-1', 'old-model', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
+		t.Fatalf("seed answer: %v", err)
+	}
+
+	inputs, err := st.ListScoringInputs(ctx, userID, "typesafe/jev-1.13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs) != 1 || len(inputs[0].Answers) != 0 {
+		t.Fatalf("inputs = %+v, want one job with no answers (answer stored under another model)", inputs)
 	}
 }
 

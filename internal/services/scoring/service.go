@@ -31,7 +31,7 @@ type Store interface {
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
-	ListScoringInputs(ctx context.Context, userID string) ([]store.ScoringInput, error)
+	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 }
 
@@ -130,9 +130,12 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return fail(fmt.Errorf("load scoring options: %w", err))
 	}
 	byID := optionsByID(options)
-	questionByHash := make(map[string]string, len(options))
-	for _, o := range options {
-		questionByHash[questionHash(o.Question)] = o.Question
+
+	asked := make(map[string]string)
+	for _, cfg := range surviving {
+		for hash, question := range pickedQuestionHashes(cfg.Preferences.Picks, byID) {
+			asked[hash] = question
+		}
 	}
 
 	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
@@ -141,7 +144,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	}
 
 	var missing []string
-	for hash, question := range questionByHash {
+	for hash, question := range asked {
 		if _, ok := cached[hash]; !ok {
 			missing = append(missing, question)
 		}
@@ -231,7 +234,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 	}
 	byID := optionsByID(options)
 
-	inputs, err := s.store.ListScoringInputs(ctx, userID)
+	inputs, err := s.store.ListScoringInputs(ctx, userID, jev.Model)
 	if err != nil {
 		return dto.RecomputeResult{}, err
 	}
