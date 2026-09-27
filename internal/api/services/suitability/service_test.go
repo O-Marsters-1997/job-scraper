@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -151,6 +152,88 @@ func TestProcess_AlertsOnlyOnFirstDiscoveryAboveThreshold(t *testing.T) {
 	}
 	if len(alerter.notified) != 1 || alerter.notified[0] != "user@example.com" {
 		t.Fatalf("notified = %v, want [user@example.com]", alerter.notified)
+	}
+}
+
+type flakyClaimStore struct {
+	*providers.MockSuitabilityProvider
+	failsLeft int
+	completed chan struct{}
+}
+
+func (f *flakyClaimStore) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
+	if f.failsLeft > 0 {
+		f.failsLeft--
+		return dto.AnswerEffect{}, errors.New("claim boom")
+	}
+	return f.MockSuitabilityProvider.ClaimAnswerEffect(ctx)
+}
+
+func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+	saved, err := f.MockSuitabilityProvider.CompleteAnswerEffect(ctx, effect, answers, scores)
+	f.completed <- struct{}{}
+	return saved, err
+}
+
+func TestRun_ReturnsWhenContextCancelled(t *testing.T) {
+	svc := New(providers.NewMockSuitabilityProvider(), newOptions(), providers.NewMockSearchConfigProvider(),
+		&fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- svc.Run(ctx) }()
+	cancel()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return after context cancellation")
+	}
+}
+
+func TestRun_KeepsTickingAfterFailedTick(t *testing.T) {
+	original := answerEffectTickInterval
+	answerEffectTickInterval = time.Millisecond
+	t.Cleanup(func() { answerEffectTickInterval = original })
+
+	job := dto.Job{ID: "job-4", Title: "Backend Engineer", ContentFingerprint: "fp-4", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+	}}
+	inner := providers.NewMockSuitabilityProvider()
+	inner.SeedJob(job, []dto.SearchConfig{cfg})
+	inner.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
+		questionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+		questionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
+		questionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+	})
+	inner.SeedEffect(dto.AnswerEffect{ID: "effect-4", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	store := &flakyClaimStore{MockSuitabilityProvider: inner, failsLeft: 1, completed: make(chan struct{}, 1)}
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(),
+		&fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- svc.Run(ctx) }()
+
+	select {
+	case <-store.completed:
+	case <-time.After(time.Second):
+		t.Fatal("effect never completed after the failed tick")
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run returned %v, want nil", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return after context cancellation")
 	}
 }
 
