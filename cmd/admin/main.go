@@ -91,7 +91,7 @@ func runCreateUser(args []string) {
 	defer db.Close()
 
 	apps := applications.New(db.Pool())
-	idm := identity.New(db.Pool(), apps)
+	idm := identity.NewFacade(db.Pool(), apps)
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)

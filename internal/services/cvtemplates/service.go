@@ -14,12 +14,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/google"
+	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
-// DocsClient is the narrow Google Docs/Drive surface cvtemplates needs.
-// internal/google.Client satisfies it until identity exposes its own
-// DocsClient (#266).
+// DocsClient is the narrow Google Docs/Drive surface cvtemplates needs;
+// identity's *google.Client satisfies it (ADR 0011).
 type DocsClient interface {
 	HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error)
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)

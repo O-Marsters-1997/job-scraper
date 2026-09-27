@@ -68,7 +68,7 @@ func main() {
 	defer pool.Close()
 
 	apps := applications.New(pool)
-	idm := identity.New(pool, apps)
+	idm := identity.NewFacade(pool, apps)
 	scoringModule := scoring.NewFacade(pool)
 
 	reg := prometheus.NewRegistry()
