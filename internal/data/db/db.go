@@ -36,6 +36,10 @@ func New(ctx context.Context, connString string) (*DB, error) {
 	return &DB{pool: pool, queries: pgsqlc.New(pool)}, nil
 }
 
+func NewFromPool(pool *pgxpool.Pool) *DB {
+	return &DB{pool: pool, queries: pgsqlc.New(pool)}
+}
+
 func (db *DB) Close() {
 	db.pool.Close()
 }
