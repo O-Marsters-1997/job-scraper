@@ -63,7 +63,7 @@ func main() {
 	defer db.Close()
 
 	apps := applications.New(db.Pool())
-	idm := identity.New(db.Pool(), apps)
+	idm := identity.NewFacade(db.Pool(), apps)
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
