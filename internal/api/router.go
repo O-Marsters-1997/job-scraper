@@ -10,10 +10,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/apihandlers"
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
-	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -30,7 +28,7 @@ type Module interface {
 // rule keeps internal/api out of internal/services/**, so jobsearch itself
 // can't apply that middleware (ADR 0011). Every other moved context goes
 // through modules alone.
-func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
+func NewRouter(db *jobsdb.DB, creds credstore.CredentialStore, idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -45,7 +43,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 		AllowCredentials: true,
 	}))
 
-	svc := newServices(db, q, creds, suitabilitySvc, js)
+	svc := newServices(db, creds)
 
 	allModules := append([]Module{idm}, modules...)
 	for _, m := range allModules {
@@ -74,12 +72,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 
 		r.Get("/profile", handlers.GetAll(svc.profile.Get))
 		r.Put("/profile", handlers.Update(svc.profile.Update))
-
-		r.Get("/scoring-config", handlers.GetAll(svc.scoringConfig.Get))
-		r.Put("/scoring-config", handlers.Update(svc.scoringConfig.Update))
-		r.Get("/scoring-options", handlers.GetAll(svc.scoringConfig.Options))
-		r.Get("/scores/status", handlers.GetAll(db.GetScoringStatus))
-		r.Post("/scores/recompute", handlers.GetAll(svc.suitability.Recompute))
 
 		r.Get("/ai-prefs", handlers.GetAll(svc.aiPrefs.Get))
 

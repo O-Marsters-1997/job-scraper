@@ -56,6 +56,13 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	return &Module{store: st, scoring: mainService, scoringConfig: scoringConfig}
 }
 
+// NewFacade wires only the scoring store, for cmd/admin's option commands
+// and the worker's reject filter (ADR 0011). Run and the scoringConfig
+// routes panic on a Module built this way.
+func NewFacade(pool *pgxpool.Pool) *Module {
+	return &Module{store: store.New(pool)}
+}
+
 // Run drains the answer-effect queue until ctx is cancelled.
 func (m *Module) Run(ctx context.Context) error {
 	return m.scoring.Run(ctx)

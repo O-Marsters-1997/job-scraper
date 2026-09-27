@@ -1,4 +1,4 @@
-package suitability
+package scoring
 
 import (
 	"testing"

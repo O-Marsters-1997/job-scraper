@@ -10,10 +10,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
 var errSourceTargetExists = apperr.Conflict("source target already exists")
+
+type fakeSearchConfigReader struct{}
+
+func (fakeSearchConfigReader) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{}, scoring.ErrNotFound
+}
 
 type fakeStore struct {
 	mu        sync.Mutex
@@ -123,14 +130,8 @@ type fakeReconsiderer struct{ err error }
 
 func (f fakeReconsiderer) Reconsider(context.Context, dto.SearchConfig) error { return f.err }
 
-type fakeSearchConfigGetter struct{}
-
-func (fakeSearchConfigGetter) GetSearchConfig(context.Context, string) (dto.SearchConfig, error) {
-	return dto.SearchConfig{}, nil
-}
-
 func newService(targets *fakeStore, q *queue.MockQueue) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigGetter{}, fakeReconsiderer{}, q)
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, fakeReconsiderer{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {

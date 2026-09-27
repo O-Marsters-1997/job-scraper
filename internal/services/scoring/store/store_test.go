@@ -3,7 +3,10 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -11,6 +14,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
+
+var seedCounter atomic.Int64
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	t.Helper()
@@ -21,9 +26,9 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 func insertUser(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
 	var id string
+	username := fmt.Sprintf("user-%s-%d", t.Name(), seedCounter.Add(1))
 	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`,
-		"user-"+t.Name()).Scan(&id)
+		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`, username).Scan(&id)
 	if err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
@@ -33,24 +38,15 @@ func insertUser(t *testing.T, pool *pgxpool.Pool) string {
 func insertJob(t *testing.T, pool *pgxpool.Pool, fingerprint string) string {
 	t.Helper()
 	var id string
+	url := fmt.Sprintf("https://example.com/%s/%d", t.Name(), seedCounter.Add(1))
 	err := pool.QueryRow(context.Background(),
 		`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, content_fingerprint)
 		 VALUES ('Engineer', 'Remote', $1, 'acme', 'greenhouse', NOW(), $2) RETURNING id`,
-		"https://example.com/"+t.Name(), fingerprint).Scan(&id)
+		url, fingerprint).Scan(&id)
 	if err != nil {
 		t.Fatalf("insert job: %v", err)
 	}
 	return id
-}
-
-func insertScoringOption(t *testing.T, pool *pgxpool.Pool, id, dimension, label, question string) {
-	t.Helper()
-	_, err := pool.Exec(context.Background(),
-		`INSERT INTO scoring_options (id, dimension, label, question) VALUES ($1, $2, $3, $4)`,
-		id, dimension, label, question)
-	if err != nil {
-		t.Fatalf("insert scoring option: %v", err)
-	}
 }
 
 func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) string {
@@ -153,6 +149,52 @@ func TestRetireScoringOption_MissingReturnsErrNotFound(t *testing.T) {
 	}
 }
 
+func TestRetireScoringOption_AlreadyRetiredReturnsErrNotFound(t *testing.T) {
+	st, _ := newStore(t)
+	ctx := context.Background()
+	if err := st.AddScoringOption(ctx, "tech:zig", "tech", "Zig", "Does the role use Zig?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RetireScoringOption(ctx, "tech:zig"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RetireScoringOption(ctx, "tech:zig"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+
+	userID := insertUser(t, pool)
+	scored := insertJob(t, pool, "fp-scored")
+	closed := insertJob(t, pool, "fp-closed")
+	unscored := insertJob(t, pool, "fp-unscored")
+	for _, jobID := range []string{scored, closed} {
+		if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userID); err != nil {
+			t.Fatalf("seed job_scores: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = NOW() WHERE id = $1", closed); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+
+	if err := st.AddScoringOption(ctx, "tech:zig", "tech", "Zig", "Does the role use Zig?"); err != nil {
+		t.Fatalf("AddScoringOption: %v", err)
+	}
+
+	for jobID, want := range map[string]int{scored: 1, closed: 0, unscored: 0} {
+		var count int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Errorf("effects for job %s = %d, want %d", jobID, count, want)
+		}
+	}
+}
+
 func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
@@ -216,6 +258,87 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	}
 	if status.Pending != 0 {
 		t.Fatalf("pending = %d, want 0 after completion", status.Pending)
+	}
+}
+
+func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	alice := insertUser(t, pool)
+	bob := insertUser(t, pool)
+	jobID := insertJob(t, pool, "fp-1")
+	insertEffect(t, pool, jobID, "fp-1")
+
+	effect, err := st.ClaimAnswerEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scores := []dto.JobScore{
+		{JobID: jobID, UserID: alice, Score: 79, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
+		{JobID: jobID, UserID: bob, Score: 21, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
+	}
+	saved, err := st.CompleteAnswerEffect(ctx, effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores)
+	if err != nil {
+		t.Fatalf("CompleteAnswerEffect: %v", err)
+	}
+	if len(saved) != 2 {
+		t.Fatalf("saved users = %v, want 2", saved)
+	}
+
+	var scoreCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM job_scores WHERE job_id = $1", jobID).Scan(&scoreCount); err != nil {
+		t.Fatal(err)
+	}
+	if scoreCount != 2 {
+		t.Fatalf("job_scores rows = %d, want 2", scoreCount)
+	}
+}
+
+func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	jobID := insertJob(t, pool, "fp-1")
+	insertEffect(t, pool, jobID, "fp-1")
+
+	effect, err := st.ClaimAnswerEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET content_fingerprint = 'fp-2' WHERE id = $1", jobID); err != nil {
+		t.Fatalf("change fingerprint: %v", err)
+	}
+
+	saved, err := st.CompleteAnswerEffect(ctx, effect,
+		map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79}},
+	)
+	if err != nil {
+		t.Fatalf("CompleteAnswerEffect: %v", err)
+	}
+	if len(saved) != 0 {
+		t.Fatalf("saved users = %v, want none (fingerprint moved on)", saved)
+	}
+
+	var answerCount, scoreCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM option_answers WHERE job_id = $1", jobID).Scan(&answerCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM job_scores WHERE job_id = $1", jobID).Scan(&scoreCount); err != nil {
+		t.Fatal(err)
+	}
+	if answerCount != 0 || scoreCount != 0 {
+		t.Fatalf("answers = %d, scores = %d, want 0 and 0", answerCount, scoreCount)
+	}
+
+	var status string
+	if err := pool.QueryRow(ctx, "SELECT status FROM effect_outbox WHERE id = $1", effect.ID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "done" {
+		t.Fatalf("effect status = %q, want done (a stale effect is still marked done)", status)
 	}
 }
 
@@ -288,17 +411,51 @@ func TestListScoringInputsThenSaveScores(t *testing.T) {
 	}
 }
 
-func TestOpsState_CountsPendingAndFailed(t *testing.T) {
+func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, createdAt time.Time) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO effect_outbox (job_id, fingerprint, status, created_at) VALUES ($1, 'fp', $2, $3)`,
+		jobID, status, createdAt); err != nil {
+		t.Fatalf("insert effect_outbox (%s): %v", status, err)
+	}
+}
+
+func TestOpsState_CountsPendingRunningAndFailed(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+
+	now := time.Now()
+	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-1"), "pending", now.Add(-2*time.Hour))
+	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-2"), "running", now.Add(-10*time.Minute))
+	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-3"), "failed", now)
+	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-4"), "failed", now)
+	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-5"), "done", now)
 
 	state, err := st.OpsState(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("OpsState: %v", err)
 	}
-	if state.OutboxPending != 1 || state.OutboxFailed != 0 {
-		t.Fatalf("state = %+v, want 1 pending, 0 failed", state)
+	if state.OutboxPending != 2 {
+		t.Errorf("OutboxPending = %d, want 2", state.OutboxPending)
+	}
+	if state.OutboxFailed != 2 {
+		t.Errorf("OutboxFailed = %d, want 2", state.OutboxFailed)
+	}
+	if state.OutboxOldestPendingAge < 115*time.Minute || state.OutboxOldestPendingAge > 125*time.Minute {
+		t.Errorf("OutboxOldestPendingAge = %s, want ~2h", state.OutboxOldestPendingAge)
+	}
+}
+
+func TestOpsState_NoPendingIsZero(t *testing.T) {
+	st, _ := newStore(t)
+	state, err := st.OpsState(context.Background())
+	if err != nil {
+		t.Fatalf("OpsState: %v", err)
+	}
+	if state.OutboxPending != 0 || state.OutboxFailed != 0 {
+		t.Errorf("expected zero counts, got %+v", state)
+	}
+	if state.OutboxOldestPendingAge != 0 {
+		t.Errorf("OutboxOldestPendingAge = %s, want 0", state.OutboxOldestPendingAge)
 	}
 }

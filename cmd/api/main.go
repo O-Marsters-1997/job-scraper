@@ -13,25 +13,18 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	"github.com/ollymarsters/job-scraper/internal/api/jev"
-	"github.com/ollymarsters/job-scraper/internal/api/notify"
-	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
-
-// noAlerts is the Alerter used when no RESEND_API_KEY is configured (dev).
-type noAlerts struct{}
-
-func (noAlerts) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 func main() {
 	slog.SetDefault(logger.New())
@@ -51,44 +44,6 @@ func main() {
 	}
 	defer db.Close()
 
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	reg.MustRegister(telemetry.NewStateCollector(db))
-	metricsAddr := os.Getenv("METRICS_ADDR")
-	if metricsAddr == "" {
-		metricsAddr = ":9091"
-	}
-	go func() {
-		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
-			slog.Error("metrics server failed", slog.Any("err", err))
-		}
-	}()
-
-	cs, err := credstore.New(db)
-	if err != nil {
-		slog.Error("credstore init failed", slog.Any("err", err))
-		os.Exit(1)
-	}
-	var alerter suitability.Alerter = noAlerts{}
-	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
-		renderer, err := notify.NewRenderer()
-		if err != nil {
-			slog.Error("notify templates unavailable", slog.Any("err", err))
-		} else {
-			from := os.Getenv("NOTIFY_EMAIL_FROM")
-			if from == "" {
-				from = "onboarding@resend.dev"
-			}
-			alerter = notify.NewNotificationService(notify.NewResendNotifier(apiKey, from), renderer)
-		}
-	}
-	suitabilitySvc := suitability.New(db, db, db, jev.NewClient(), cs, alerter, db)
-	go func() {
-		if err := suitabilitySvc.Run(ctx); err != nil {
-			slog.Error("answer effect loop failed", slog.Any("err", err))
-		}
-	}()
-
 	brokerURL := os.Getenv("RABBITMQ_URL")
 	if brokerURL == "" {
 		brokerURL = "amqp://guest:guest@localhost:5672/"
@@ -100,6 +55,36 @@ func main() {
 	}
 	slog.Info("queue client ready")
 	defer func() { _ = q.Close() }()
+
+	cs, err := credstore.New(db)
+	if err != nil {
+		slog.Error("credstore init failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+	notifyFrom := os.Getenv("NOTIFY_EMAIL_FROM")
+	if notifyFrom == "" {
+		notifyFrom = "onboarding@resend.dev"
+	}
+	candidateService := candidates.New(db, q)
+	scoringModule := scoring.New(db.Pool(), cs, db, candidateService, os.Getenv("RESEND_API_KEY"), notifyFrom)
+	go func() {
+		if err := scoringModule.Run(ctx); err != nil {
+			slog.Error("answer effect loop failed", slog.Any("err", err))
+		}
+	}()
+
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	reg.MustRegister(telemetry.NewStateCollector(scoringModule))
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9091"
+	}
+	go func() {
+		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
+			slog.Error("metrics server failed", slog.Any("err", err))
+		}
+	}()
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
@@ -117,9 +102,9 @@ func main() {
 	)
 	cvTemplates := cvtemplates.New(db.Pool(), googleClient)
 
-	js := jobsearch.New(db.Pool(), q, db)
+	js := jobsearch.New(db.Pool(), q, scoringModule)
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, idm, js, apps, cvTemplates)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, cs, idm, js, apps, cvTemplates, scoringModule)}
 
 	go func() {
 		<-ctx.Done()

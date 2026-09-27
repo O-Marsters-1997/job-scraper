@@ -60,7 +60,6 @@ func nonNilStrings(s []string) []string {
 	return s
 }
 
-
 func (s *Store) GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
@@ -106,7 +105,6 @@ func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (d
 	}
 	return updated, nil
 }
-
 
 func (s *Store) ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error) {
 	rows, err := s.queries.ListScoringOptions(ctx)
@@ -184,7 +182,6 @@ func (s *Store) RetireScoringOption(ctx context.Context, id string) error {
 	}
 	return nil
 }
-
 
 func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
 	row, err := s.queries.ClaimAnswerEffect(ctx)
@@ -427,7 +424,6 @@ func (s *Store) GetScoringStatus(ctx context.Context, userID string) (dto.Scorin
 	}
 	return dto.ScoringStatus{Pending: pending}, nil
 }
-
 
 func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	row, err := s.queries.OpsState(ctx)
