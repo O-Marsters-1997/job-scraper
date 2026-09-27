@@ -66,7 +66,7 @@ SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confi
 FROM job_scores s
 JOIN jobs j ON j.id = s.job_id
 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
-WHERE s.user_id = sqlc.arg(user_id)::uuid;
+WHERE s.user_id = sqlc.arg(user_id)::uuid AND a.model = sqlc.arg(model)::text;
 
 -- name: GetScoringStatus :one
 SELECT count(*) AS pending

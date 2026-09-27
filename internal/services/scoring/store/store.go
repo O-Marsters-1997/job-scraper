@@ -426,7 +426,7 @@ func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore,
 	})
 }
 
-func (s *Store) ListScoringInputs(ctx context.Context, userID string) ([]ScoringInput, error) {
+func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]ScoringInput, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return nil, err
@@ -435,7 +435,7 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID string) ([]Scoring
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringInputs: %w", err)
 	}
-	answerRows, err := s.queries.ListScoringAnswersForUser(ctx, uid)
+	answerRows, err := s.queries.ListScoringAnswersForUser(ctx, sqlc.ListScoringAnswersForUserParams{UserID: uid, Model: model})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringInputs: %w", err)
 	}

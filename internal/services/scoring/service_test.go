@@ -165,7 +165,7 @@ func (f *fakeStore) UpsertSearchConfig(cfg dto.SearchConfig) {
 	f.search[cfg.UserID] = cfg
 }
 
-func (f *fakeStore) ListScoringInputs(_ context.Context, userID string) ([]store.ScoringInput, error) {
+func (f *fakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]store.ScoringInput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.inputs[userID], nil
@@ -255,7 +255,11 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 	st := newFakeStore()
 	job := dto.Job{ID: "job-2", Title: "Backend Engineer", ContentFingerprint: "fp-2", Source: "greenhouse"}
 	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+		Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+			{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
+			{OptionID: "role:backend", Stance: "nice", Source: "manual"},
+		},
 	}}
 	st.SeedJob(job, []dto.SearchConfig{cfg})
 	st.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
@@ -278,6 +282,106 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 	}
 	if len(st.Completed) != 1 || len(st.Completed[0].Answers) != 3 {
 		t.Fatalf("completed effects = %+v, want 1 effect with 3 new answers", st.Completed)
+	}
+}
+
+func TestProcess_OnlyPickedQuestionsSent(t *testing.T) {
+	st := newFakeStore()
+	job := dto.Job{ID: "job-picked", Title: "Backend Engineer", ContentFingerprint: "fp-picked", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+	}}
+	st.SeedJob(job, []dto.SearchConfig{cfg})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-picked", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	answerer := &fakeAnswerer{t: t}
+	svc := NewService(st, answerer, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(answerer.calls) != 1 || !slices.Equal(answerer.calls[0], []string{"Does the role use Go?"}) {
+		t.Fatalf("questions sent = %v, want exactly [%q] (only the picked question)", answerer.calls, "Does the role use Go?")
+	}
+}
+
+func TestProcess_UnionOfOverlappingPicksNoDuplicates(t *testing.T) {
+	st := newFakeStore()
+	job := dto.Job{ID: "job-union", Title: "Backend Engineer", ContentFingerprint: "fp-union", Source: "greenhouse"}
+	cfg1 := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+			{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
+		},
+	}}
+	cfg2 := dto.SearchConfig{UserID: "user-2", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{
+			{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
+			{OptionID: "role:backend", Stance: "nice", Source: "manual"},
+		},
+	}}
+	st.SeedJob(job, []dto.SearchConfig{cfg1, cfg2})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-union", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	answerer := &fakeAnswerer{t: t}
+	svc := NewService(st, answerer, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(answerer.calls) != 1 {
+		t.Fatalf("Answer calls = %d, want 1 (one call covering the union)", len(answerer.calls))
+	}
+	got := slices.Clone(answerer.calls[0])
+	slices.Sort(got)
+	want := []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"}
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("questions sent = %v, want %v (union, no duplicates)", got, want)
+	}
+}
+
+func TestProcess_RetiredOptionPickNeverSent(t *testing.T) {
+	st := newFakeStore()
+	retiredAt := time.Now().Add(-time.Hour)
+	st.options = append(append([]dto.ScoringOption{}, bank...), dto.ScoringOption{
+		ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retiredAt,
+	})
+	job := dto.Job{ID: "job-retired", Title: "Backend Engineer", ContentFingerprint: "fp-retired", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+			{OptionID: "tech:cobol", Stance: "avoid", Source: "manual"},
+		},
+	}}
+	st.SeedJob(job, []dto.SearchConfig{cfg})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-retired", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	answerer := &fakeAnswerer{t: t}
+	svc := NewService(st, answerer, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(answerer.calls) != 1 || !slices.Equal(answerer.calls[0], []string{"Does the role use Go?"}) {
+		t.Fatalf("questions sent = %v, want exactly [%q] (retired option never asked)", answerer.calls, "Does the role use Go?")
+	}
+}
+
+func TestProcess_NoPicksSkipsJevCallAndStillWritesScore(t *testing.T) {
+	st := newFakeStore()
+	job := dto.Job{ID: "job-nopicks", Title: "Backend Engineer", ContentFingerprint: "fp-nopicks", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70}
+	st.SeedJob(job, []dto.SearchConfig{cfg})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-nopicks", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	svc := NewService(st, &fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(st.Completed) != 1 || len(st.Completed[0].Scores) != 1 {
+		t.Fatalf("completed effects = %+v, want 1 effect with a score written from the prior", st.Completed)
 	}
 }
 

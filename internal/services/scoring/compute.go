@@ -115,3 +115,15 @@ func questionHash(question string) string {
 	sum := sha256.Sum256([]byte(question))
 	return hex.EncodeToString(sum[:])
 }
+
+func pickedQuestionHashes(picks []dto.Pick, byID map[string]dto.ScoringOption) map[string]string {
+	hashes := make(map[string]string, len(picks))
+	for _, p := range picks {
+		opt, ok := byID[p.OptionID]
+		if !ok || opt.RetiredAt != nil {
+			continue
+		}
+		hashes[questionHash(opt.Question)] = opt.Question
+	}
+	return hashes
+}
