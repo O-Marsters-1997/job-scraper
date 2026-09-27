@@ -24,6 +24,7 @@ function deriveLabel(pathname: string): string | null {
 
 interface TopbarProps {
 	onMenuClick?: () => void;
+	menuButtonRef?: (el: HTMLButtonElement) => void;
 }
 
 export default function Topbar(props: TopbarProps) {
@@ -50,6 +51,7 @@ export default function Topbar(props: TopbarProps) {
 			<nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
 				<button
 					type="button"
+					ref={props.menuButtonRef}
 					onClick={() => props.onMenuClick?.()}
 					aria-label="Open menu"
 					class="-ml-1 mr-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground md:hidden"
