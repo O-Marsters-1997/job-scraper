@@ -9,7 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
-// Reject reports whether job trips any of cfg's exclusion filters.
+// Reject reports whether job trips a company or blocked-tech filter.
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
 		for _, excluded := range cfg.ExcludedCompanies {
@@ -19,20 +19,24 @@ func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 		}
 	}
 
-	titleTokens := tokenize(job.Title)
-	for _, kw := range cfg.ExcludedTitleKeywords {
-		if hasPhrase(titleTokens, kw) {
-			return fmt.Sprintf("title keyword: %s", strings.ToLower(kw)), true
+	contentTokens := tokenize(job.Title + " " + job.Description)
+	for _, tech := range cfg.Preferences.BlockedTech {
+		if hasPhrase(contentTokens, tech) {
+			return fmt.Sprintf("blocked tech: %s", strings.ToLower(tech)), true
 		}
 	}
 
+	return "", false
+}
+
+// RejectLocation reports whether job trips cfg's excluded-locations filter.
+func RejectLocation(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	locationTokens := tokenize(job.Location)
 	for _, loc := range cfg.ExcludedLocations {
 		if hasPhrase(locationTokens, loc) {
 			return fmt.Sprintf("location: %s", strings.ToLower(loc)), true
 		}
 	}
-
 	return "", false
 }
 

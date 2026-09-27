@@ -5,7 +5,10 @@ import type { Job, ScoreRow } from "@/types/job";
 
 function isVisible(row: ScoreRow): boolean {
 	if (row.effect === "meets" || row.effect === "unknown") return true;
-	return row.effect === "misses" && row.stance === "avoid";
+	return (
+		row.effect === "misses" &&
+		(row.stance === "avoid" || row.stance === "block")
+	);
 }
 
 export function ScoreBreakdown(props: { job: Job }) {

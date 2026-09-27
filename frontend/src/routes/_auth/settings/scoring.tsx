@@ -23,12 +23,12 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
 });
 
-type Stance = "nice" | "avoid";
+type Stance = "nice" | "avoid" | "block";
 type StanceMap = Record<string, Stance | undefined>;
 
 const PAIR_COPY: Record<
 	string,
-	{ title: string; like: string; avoid: string; help: string }
+	{ title: string; like: string; avoid: string; block?: string; help: string }
 > = {
 	role: {
 		title: "Roles",
@@ -46,7 +46,8 @@ const PAIR_COPY: Record<
 		title: "Industries",
 		like: "Which industries would you enjoy working in?",
 		avoid: "Which industries would you avoid?",
-		help: "Type to search.",
+		block: "Which industries should be hidden completely?",
+		help: "Type to search. Blocked industries are hidden from the jobs list, not just scored down.",
 	},
 };
 
@@ -68,6 +69,7 @@ const MULTI_COPY: Record<string, { title: string; help: string }> = {
 const STANCE_TONE: Record<Stance, string> = {
 	nice: "border-accent-border bg-accent-subtle text-accent-text",
 	avoid: "border-destructive/40 bg-destructive-subtle text-destructive-strong",
+	block: "border-destructive bg-destructive text-white",
 };
 
 function StancePicker(props: {
@@ -196,6 +198,19 @@ function PairSection(props: {
 					pick={props.pick}
 					unpick={props.unpick}
 				/>
+				<Show when={copy.block}>
+					{(label) => (
+						<StancePicker
+							dim={props.dim}
+							stance="block"
+							label={label()}
+							options={props.options}
+							stances={props.stances}
+							pick={props.pick}
+							unpick={props.unpick}
+						/>
+					)}
+				</Show>
 			</div>
 		</div>
 	);
@@ -294,8 +309,8 @@ function ScoringForm(props: {
 		props.config.preferences.salaryFloor?.amount.toString() ?? "",
 	);
 	const [threshold, setThreshold] = createSignal(props.config.notifyThreshold);
-	const [titleKeywords, setTitleKeywords] = createSignal(
-		props.config.excludedTitleKeywords.join(", "),
+	const [noGoTech, setNoGoTech] = createSignal(
+		props.config.preferences.blockedTech.join(", "),
 	);
 	const [companies, setCompanies] = createSignal(
 		props.config.excludedCompanies.join(", "),
@@ -321,7 +336,6 @@ function ScoringForm(props: {
 		try {
 			await mutation.mutateAsync({
 				notifyThreshold: threshold(),
-				excludedTitleKeywords: splitList(titleKeywords()),
 				excludedCompanies: splitList(companies()),
 				excludedLocations: splitList(locations()),
 				preferences: {
@@ -335,6 +349,7 @@ function ScoringForm(props: {
 					salaryFloor: salaryFloor()
 						? { amount: Number(salaryFloor()), currency: "GBP" }
 						: null,
+					blockedTech: splitList(noGoTech()),
 				},
 				updatedAt: props.config.updatedAt,
 			});
@@ -425,27 +440,28 @@ function ScoringForm(props: {
 							Exclusion filters
 						</p>
 						<p class="mt-0.5 text-xs text-faint">
-							Jobs matching any of these are dropped before scoring runs. Leave
-							a field blank to exclude nothing on that axis.
+							Company and no-go tech are checked before any scoring runs, so a
+							match never reaches Jev. Leave a field blank to exclude nothing on
+							that axis.
 						</p>
 					</div>
 					<div class="divide-y divide-border">
 						<div class="px-5 py-4">
 							<label
-								for="excluded-titles"
+								for="no-go-tech"
 								class="text-xs font-medium text-foreground"
 							>
-								Excluded title keywords
+								No-go tech
 							</label>
 							<p class="mt-0.5 text-xs text-faint">
-								Comma-separated. Matches whole words in the title only (e.g.
-								"java" won't reject "JavaScript").
+								Comma-separated. Matches whole words in the title or description
+								(e.g. "java" won't reject "JavaScript").
 							</p>
 							<Input
-								id="excluded-titles"
-								value={titleKeywords()}
-								onInput={(e) => setTitleKeywords(e.currentTarget.value)}
-								placeholder="recruiter, sales, .net"
+								id="no-go-tech"
+								value={noGoTech()}
+								onInput={(e) => setNoGoTech(e.currentTarget.value)}
+								placeholder="kubernetes, php"
 								class="mt-2"
 							/>
 						</div>
@@ -472,9 +488,12 @@ function ScoringForm(props: {
 								for="excluded-locations"
 								class="text-xs font-medium text-foreground"
 							>
-								Excluded locations
+								Excluded locations (discovery only)
 							</label>
-							<p class="mt-0.5 text-xs text-faint">Comma-separated.</p>
+							<p class="mt-0.5 text-xs text-faint">
+								Comma-separated. Stops these jobs being scanned for detail; it
+								never affects a score you already have.
+							</p>
 							<Input
 								id="excluded-locations"
 								value={locations()}

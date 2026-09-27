@@ -8,8 +8,9 @@ type Pick struct {
 }
 
 // Preferences is a user's editable scoring input: their picks against the
-// option bank and a salary floor.
+// option bank, a salary floor, and a no-go tech list.
 type Preferences struct {
-	Picks       []Pick `json:"picks"`
-	SalaryFloor *Money `json:"salaryFloor"`
+	Picks       []Pick   `json:"picks"`
+	SalaryFloor *Money   `json:"salaryFloor"`
+	BlockedTech []string `json:"blockedTech"`
 }

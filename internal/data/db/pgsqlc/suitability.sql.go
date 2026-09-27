@@ -106,7 +106,6 @@ func (q *Queries) InsertOptionAnswer(ctx context.Context, arg InsertOptionAnswer
 
 const listInterestedConfigs = `-- name: ListInterestedConfigs :many
 SELECT u.id AS user_id,
-    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
     COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
     COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
     COALESCE(sc.notify_threshold, 70) AS notify_threshold,
@@ -129,12 +128,11 @@ type ListInterestedConfigsParams struct {
 }
 
 type ListInterestedConfigsRow struct {
-	UserID                pgtype.UUID
-	ExcludedTitleKeywords []string
-	ExcludedCompanies     []string
-	ExcludedLocations     []string
-	NotifyThreshold       int32
-	Preferences           []byte
+	UserID            pgtype.UUID
+	ExcludedCompanies []string
+	ExcludedLocations []string
+	NotifyThreshold   int32
+	Preferences       []byte
 }
 
 func (q *Queries) ListInterestedConfigs(ctx context.Context, arg ListInterestedConfigsParams) ([]ListInterestedConfigsRow, error) {
@@ -148,7 +146,6 @@ func (q *Queries) ListInterestedConfigs(ctx context.Context, arg ListInterestedC
 		var i ListInterestedConfigsRow
 		if err := rows.Scan(
 			&i.UserID,
-			&i.ExcludedTitleKeywords,
 			&i.ExcludedCompanies,
 			&i.ExcludedLocations,
 			&i.NotifyThreshold,
@@ -317,13 +314,15 @@ func (q *Queries) ListScoringInputJobs(ctx context.Context, userID pgtype.UUID) 
 }
 
 const updateJobScoreBreakdown = `-- name: UpdateJobScoreBreakdown :exec
-UPDATE job_scores SET suitability_score = $1::int, breakdown = $2::jsonb, updated_at = NOW()
-WHERE job_id = $3::uuid AND user_id = $4::uuid
+UPDATE job_scores SET suitability_score = $1::int, breakdown = $2::jsonb,
+    hidden = $3::boolean, updated_at = NOW()
+WHERE job_id = $4::uuid AND user_id = $5::uuid
 `
 
 type UpdateJobScoreBreakdownParams struct {
 	Score     int32
 	Breakdown []byte
+	Hidden    bool
 	JobID     pgtype.UUID
 	UserID    pgtype.UUID
 }
@@ -332,6 +331,7 @@ func (q *Queries) UpdateJobScoreBreakdown(ctx context.Context, arg UpdateJobScor
 	_, err := q.db.Exec(ctx, updateJobScoreBreakdown,
 		arg.Score,
 		arg.Breakdown,
+		arg.Hidden,
 		arg.JobID,
 		arg.UserID,
 	)
@@ -339,12 +339,13 @@ func (q *Queries) UpdateJobScoreBreakdown(ctx context.Context, arg UpdateJobScor
 }
 
 const upsertJobScore = `-- name: UpsertJobScore :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, cost, score_fingerprint, score_model)
+INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, hidden, cost, score_fingerprint, score_model)
 VALUES ($1::uuid, $2::uuid, $3::int, $4::jsonb,
-    $5::numeric, $6::text, $7::text)
+    $5::boolean, $6::numeric, $7::text, $8::text)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
-    score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model, updated_at = NOW()
+    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, hidden = EXCLUDED.hidden,
+    cost = EXCLUDED.cost, score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model,
+    updated_at = NOW()
 `
 
 type UpsertJobScoreParams struct {
@@ -352,6 +353,7 @@ type UpsertJobScoreParams struct {
 	UserID      pgtype.UUID
 	Score       int32
 	Breakdown   []byte
+	Hidden      bool
 	Cost        pgtype.Numeric
 	Fingerprint string
 	Model       string
@@ -363,6 +365,7 @@ func (q *Queries) UpsertJobScore(ctx context.Context, arg UpsertJobScoreParams) 
 		arg.UserID,
 		arg.Score,
 		arg.Breakdown,
+		arg.Hidden,
 		arg.Cost,
 		arg.Fingerprint,
 		arg.Model,

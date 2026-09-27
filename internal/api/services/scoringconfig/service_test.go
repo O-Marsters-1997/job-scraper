@@ -55,10 +55,9 @@ func TestGet(t *testing.T) {
 		{
 			name: "returns empty config when none saved",
 			want: dto.ScoringConfigView{
-				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
-				ExcludedTitleKeywords: []string{},
-				ExcludedCompanies:     []string{},
-				ExcludedLocations:     []string{},
+				Preferences:       dto.Preferences{Picks: []dto.Pick{}, BlockedTech: []string{}},
+				ExcludedCompanies: []string{},
+				ExcludedLocations: []string{},
 			},
 		},
 		{
@@ -72,11 +71,10 @@ func TestGet(t *testing.T) {
 				}
 			},
 			want: dto.ScoringConfigView{
-				NotifyThreshold:       5,
-				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
-				ExcludedTitleKeywords: []string{},
-				ExcludedCompanies:     []string{},
-				ExcludedLocations:     []string{},
+				NotifyThreshold:   5,
+				Preferences:       dto.Preferences{Picks: []dto.Pick{}, BlockedTech: []string{}},
+				ExcludedCompanies: []string{},
+				ExcludedLocations: []string{},
 			},
 		},
 		{
@@ -167,9 +165,9 @@ func TestUpdateSucceeds(t *testing.T) {
 	svc := scoringconfig.New(store, reconsiderer, seededOptions(), recomputer)
 
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
-		NotifyThreshold:       70,
-		ExcludedTitleKeywords: []string{" Intern ", ""},
+		NotifyThreshold: 70,
 		Preferences: dto.Preferences{
+			BlockedTech: []string{" Kubernetes ", ""},
 			Picks: []dto.Pick{
 				{OptionID: "tech:go", Stance: "nice", Source: "text"},
 				{OptionID: "domain:gambling", Stance: "block"},
@@ -180,8 +178,8 @@ func TestUpdateSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"intern"}; len(got.ExcludedTitleKeywords) != 1 || got.ExcludedTitleKeywords[0] != want[0] {
-		t.Fatalf("excluded title keywords = %v, want %v", got.ExcludedTitleKeywords, want)
+	if want := []string{"kubernetes"}; len(got.Preferences.BlockedTech) != 1 || got.Preferences.BlockedTech[0] != want[0] {
+		t.Fatalf("blocked tech = %v, want %v", got.Preferences.BlockedTech, want)
 	}
 	wantPicks := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},

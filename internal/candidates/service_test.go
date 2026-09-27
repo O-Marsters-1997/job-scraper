@@ -108,8 +108,8 @@ func TestCaptureRetainsRejectedCardAndReconsiderationQueuesOnce(t *testing.T) {
 	q := &memoryQueue{}
 	service := New(store, q)
 	target := dto.SourceTarget{ID: "target-1", UserID: "user-1", Source: "wis"}
-	card := dto.Job{URL: "https://example.com/1", Title: "Senior Engineer"}
-	first := dto.SearchConfig{UserID: target.UserID, ExcludedTitleKeywords: []string{"senior"}, UpdatedAt: time.Now().UTC()}
+	card := dto.Job{URL: "https://example.com/1", Title: "Senior Engineer", Location: "United States"}
+	first := dto.SearchConfig{UserID: target.UserID, ExcludedLocations: []string{"united states"}, UpdatedAt: time.Now().UTC()}
 	if err := service.CapturePage(ctx, target, []dto.Job{card, card}, first); err != nil {
 		t.Fatal(err)
 	}

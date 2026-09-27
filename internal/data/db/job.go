@@ -68,6 +68,7 @@ func fromListRow(row pgsqlc.ListJobsRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.Hidden = row.Hidden
 	j.CompanyID = uuidString(row.CompanyID)
 	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -206,6 +207,7 @@ func fromPageRow(row pgsqlc.PageJobsRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.Hidden = row.Hidden
 	j.CompanyID = uuidString(row.CompanyID)
 	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -231,6 +233,7 @@ func fromGetJobRow(row pgsqlc.GetJobRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.Hidden = row.Hidden
 	j.CompanyID = uuidString(row.CompanyID)
 	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String

@@ -213,6 +213,18 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 									</div>
 								</Show>
 							</div>
+
+							<Switch
+								checked={props.filters.showHidden}
+								onChange={(v) => props.onChange({ showHidden: v })}
+							>
+								<div class="flex items-center gap-2">
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+									<SwitchLabel>Show hidden jobs</SwitchLabel>
+								</div>
+							</Switch>
 						</div>
 					</div>
 

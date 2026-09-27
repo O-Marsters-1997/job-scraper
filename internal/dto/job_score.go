@@ -8,4 +8,5 @@ type JobScore struct {
 	Rows     []ScoreRow
 	Unknowns int
 	Cost     float64
+	Hidden   bool
 }

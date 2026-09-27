@@ -20,4 +20,5 @@ type Job struct {
 	WorkArrangement    string
 	SuitabilityScore   *int
 	Breakdown          []ScoreRow
+	Hidden             bool
 }
