@@ -1,7 +1,6 @@
 # Routes that don't fit a CRUD generic
 
-Per [ADR 0020](../../../../docs/adr/0020-handlers-as-http-adapter-over-services.md) and
-[ADR 0023](../../../../docs/adr/0023-handle-as-the-one-handler-pipeline.md), a few routes never
+Per [ADR 0008](../../../../docs/adr/0008-handlers-over-feature-services.md), a few routes never
 bind to one of `internal/api/handlers/generic.go`'s CRUD generics (`GetAll`, `GetByID`, `Query`,
 `Create`, `Update`, `Delete`), because they need something those fixed decode/respond pairs
 don't support:

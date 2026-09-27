@@ -17,7 +17,7 @@
   `cmd/snapshot` also reads the adapters.
 - Anything directly under `internal/` is shared (`data`, `queue`, `dto`, `filter`, `candidates`,
   `detect`, `sourcespec`, …) and imports neither group. `depguard` in `.golangci.yml` enforces all
-  three rules. If the API needs something that fetches, publish a queue task (ADR 0026).
+  three rules. If the API needs something that fetches, publish a queue task (ADR 0009).
 
 ## Adding a new source
 
@@ -26,8 +26,7 @@ snapshots.
 
 ## Anatomy of a handler
 
-See [ADR 0020](docs/adr/0020-handlers-as-http-adapter-over-services.md) and
-[ADR 0023](docs/adr/0023-handle-as-the-one-handler-pipeline.md):
+See [ADR 0008](docs/adr/0008-handlers-over-feature-services.md):
 
 - `internal/api/handlers` is a thin HTTP adapter only. Every handler is built from
   `Handle(decode, call, respond)` (`internal/api/handlers/generic.go`), either directly or through
@@ -56,7 +55,7 @@ Use the `new-handler` skill for the end-to-end steps, backend and frontend.
   — sqlc reads neither from `scripts/migrations/`; mirror every migration there by hand.
 - `just generate` (`sqlc generate`) regenerates `internal/data/db/pgsqlc/**` — never hand-edit it.
   CI runs `sqlc generate && git diff --exit-code`, so commit generated code with the schema change.
-- Inputs are DTOs (ADR-0001).
+- Inputs are DTOs (ADR 0001).
 
 Use the `schema-change` skill for the full migration → sqlc → wrapper procedure.
 

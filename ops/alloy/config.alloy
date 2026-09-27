@@ -1,4 +1,4 @@
-// Grafana Alloy config for the observability profile (ADR-0025, plans/grafana-observability.md).
+// Grafana Alloy config for the observability profile (ADR 0010).
 // Ships api/worker/rabbitmq container logs and /metrics scrapes to Grafana Cloud. Credentials
 // come from the environment (.env.docker-compose); this file holds no secrets.
 
