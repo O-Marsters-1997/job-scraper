@@ -44,6 +44,7 @@ function FilterChip(props: {
 		<button
 			type="button"
 			onClick={() => props.onClick()}
+			aria-pressed={props.active}
 			class={cn(
 				"rounded-full border px-3 py-1 text-xs font-medium transition-colors",
 				props.active

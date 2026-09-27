@@ -468,6 +468,7 @@ function TypographySection(props: {
 						<button
 							type="button"
 							onClick={() => props.onSelect(key as FontKey)}
+							aria-pressed={props.selected === key}
 							style={{ "font-family": FONTS[key].ui }}
 							class={cn(
 								"flex flex-col items-center gap-0.5 rounded-md border-[1.5px] px-1 py-2",
@@ -512,6 +513,7 @@ function SizeSection(props: {
 						<button
 							type="button"
 							onClick={() => props.onSelect(opt.key)}
+							aria-pressed={props.selected === opt.key}
 							class={cn(
 								"flex flex-1 flex-col items-center gap-0.5 rounded-md border-[1.5px] px-1 py-1.5",
 								selectableButtonVariants({
@@ -669,6 +671,7 @@ function SegControl(props: SegControlProps) {
 					<button
 						type="button"
 						onClick={() => props.onChange(opt.value)}
+						aria-pressed={props.value === opt.value}
 						class={cn(
 							"flex-1 py-1.5 text-xs font-medium transition-colors",
 							i() < props.options.length - 1 && "border-r border-border",

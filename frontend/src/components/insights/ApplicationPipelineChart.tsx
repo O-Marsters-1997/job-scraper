@@ -83,6 +83,7 @@ export function ApplicationPipelineChart(props: {
 									<button
 										type="button"
 										onClick={() => toggleStatus(s.ID)}
+										aria-pressed={isOn()}
 										class={cn(
 											"flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
 											isOn()

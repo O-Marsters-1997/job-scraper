@@ -110,6 +110,7 @@ function ApplicationsPage() {
 					onClick={() =>
 						navigate({ to: "/applications", search: { status: undefined } })
 					}
+					aria-pressed={!search().status}
 					class={chipClass(!search().status)}
 				>
 					All
@@ -121,6 +122,7 @@ function ApplicationsPage() {
 							onClick={() =>
 								navigate({ to: "/applications", search: { status: s.ID } })
 							}
+							aria-pressed={search().status === s.ID}
 							class={chipClass(search().status === s.ID)}
 						>
 							<span
