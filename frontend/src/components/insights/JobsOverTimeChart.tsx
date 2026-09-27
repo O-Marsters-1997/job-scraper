@@ -111,6 +111,7 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 								<button
 									type="button"
 									onClick={() => applyPreset(p)}
+									aria-pressed={activePreset() === p}
 									class={cn(
 										"px-2.5 py-1 text-xs font-medium transition-colors first:rounded-l-[5px] last:rounded-r-[5px] not-last:border-r not-last:border-border",
 										activePreset() === p

@@ -74,7 +74,7 @@ function IntegrationsPage() {
 								type="button"
 								onClick={() => disconnect.mutate()}
 								disabled={disconnect.isPending}
-								class="inline-flex h-8 items-center rounded-md border border-border bg-surface px-3 text-xs font-medium text-destructive transition hover:bg-destructive-subtle hover:border-destructive/30 disabled:opacity-50"
+								class="inline-flex h-8 items-center rounded-md border border-border bg-surface px-3 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle hover:border-destructive/30 disabled:opacity-50"
 							>
 								Disconnect
 							</button>

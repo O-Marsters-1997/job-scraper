@@ -110,6 +110,7 @@ function ApplicationsPage() {
 					onClick={() =>
 						navigate({ to: "/applications", search: { status: undefined } })
 					}
+					aria-pressed={!search().status}
 					class={chipClass(!search().status)}
 				>
 					All
@@ -121,6 +122,7 @@ function ApplicationsPage() {
 							onClick={() =>
 								navigate({ to: "/applications", search: { status: s.ID } })
 							}
+							aria-pressed={search().status === s.ID}
 							class={chipClass(search().status === s.ID)}
 						>
 							<span
@@ -179,7 +181,7 @@ function ApplicationsPage() {
 										<button
 											type="button"
 											onClick={() => setDeletingApp(app)}
-											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
+											class="shrink-0 rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
 										>
 											Delete
 										</button>

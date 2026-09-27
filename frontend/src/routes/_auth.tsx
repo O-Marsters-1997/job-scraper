@@ -19,14 +19,21 @@ export const Route = createFileRoute("/_auth")({
 
 function AuthLayout() {
 	const [mobileNavOpen, setMobileNavOpen] = createSignal(false);
+	let menuButtonEl: HTMLButtonElement | undefined;
 	return (
 		<div class="flex h-screen overflow-hidden">
 			<Sidebar
 				mobileOpen={mobileNavOpen()}
 				onMobileClose={() => setMobileNavOpen(false)}
+				restoreFocusTo={() => menuButtonEl}
 			/>
 			<div class="flex min-w-0 flex-1 flex-col">
-				<Topbar onMenuClick={() => setMobileNavOpen(true)} />
+				<Topbar
+					onMenuClick={() => setMobileNavOpen(true)}
+					menuButtonRef={(el) => {
+						menuButtonEl = el;
+					}}
+				/>
 				<main class="scroll-slim relative flex-1 overflow-y-auto">
 					<div class="brand-aurora-shell" aria-hidden="true">
 						<span class="brand-ribbon brand-ribbon-top" />

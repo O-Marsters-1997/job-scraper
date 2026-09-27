@@ -260,7 +260,7 @@ function SearchesPage() {
 										type="button"
 										onClick={() => handleDelete(t.ID)}
 										disabled={deleteMutation.isPending}
-										class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-50"
+										class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle disabled:opacity-50"
 									>
 										Delete
 									</button>
@@ -358,7 +358,6 @@ function SearchesPage() {
 										</div>
 
 										<div class="flex flex-col gap-2">
-											<p class="text-xs font-medium text-foreground">Source</p>
 											<Select<SourceInfo>
 												options={sourcesQuery.data ?? []}
 												optionValue="name"
@@ -380,6 +379,9 @@ function SearchesPage() {
 													</SelectItem>
 												)}
 											>
+												<Select.Label class="block text-xs font-medium text-foreground">
+													Source
+												</Select.Label>
 												<SelectTrigger>
 													<Select.Value<SourceInfo>>
 														{(state) =>

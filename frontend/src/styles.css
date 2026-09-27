@@ -134,6 +134,13 @@
 	html {
 		@apply font-sans;
 	}
+
+	/* Base layer, so a component's own focus-visible:ring-* utility
+	   (in Tailwind's higher-priority utilities layer) still wins. */
+	:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
 }
 
 @layer components {

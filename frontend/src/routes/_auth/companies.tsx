@@ -14,7 +14,13 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Switch, SwitchControl, SwitchThumb } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@/components/ui/switch";
 import {
 	Table,
 	TableBody,
@@ -116,7 +122,11 @@ function CompaniesPage() {
 			/>
 
 			<div class="mb-4 max-w-xs">
+				<Label for="companies-search" class="sr-only">
+					Search companies
+				</Label>
 				<Input
+					id="companies-search"
 					placeholder="Search companies…"
 					value={search()}
 					onInput={(e) => setSearch(e.currentTarget.value)}
@@ -173,6 +183,9 @@ function CompaniesPage() {
 													onChange={() => handleToggle(c)}
 													disabled={trackMutation.isPending}
 												>
+													<SwitchLabel class="sr-only">
+														Track {c.Name}
+													</SwitchLabel>
 													<SwitchControl>
 														<SwitchThumb />
 													</SwitchControl>

@@ -22,7 +22,7 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 		<DropdownMenu>
 			<DropdownMenuTrigger
 				as="button"
-				class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground focus:outline-none"
+				class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground"
 				aria-label="Job actions"
 			>
 				<svg

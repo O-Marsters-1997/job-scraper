@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createSignal, onMount } from "solid-js";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
@@ -127,9 +127,9 @@ function LoginPage() {
 
 			<p class="mt-6 text-center text-sm text-faint">
 				Don't have an account?{" "}
-				<a href="/signup" class="font-semibold text-primary hover:underline">
+				<Link to="/signup" class="font-semibold text-primary hover:underline">
 					Sign up
-				</a>
+				</Link>
 			</p>
 		</AuthShell>
 	);

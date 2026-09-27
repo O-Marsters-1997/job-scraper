@@ -140,11 +140,9 @@ function JobDetailPage() {
 								</code>
 							</p>
 						</div>
-						<Link to="/jobs">
-							<Button variant="outline" size="sm">
-								← Back to Jobs
-							</Button>
-						</Link>
+						<Button as={Link} to="/jobs" variant="outline" size="sm">
+							← Back to Jobs
+						</Button>
 					</div>
 				}
 			>
@@ -389,16 +387,17 @@ function JobDetailPage() {
 											{(cs) => <FactRow label="Company size" value={cs()} />}
 										</Show>
 										<div class="pt-1">
-											<a
+											<Button
+												as="a"
 												href={j().URL}
 												target="_blank"
 												rel="noopener noreferrer"
-												class="block"
+												variant="secondary"
+												size="sm"
+												class="w-full"
 											>
-												<Button variant="secondary" size="sm" class="w-full">
-													View listing ↗
-												</Button>
-											</a>
+												View listing ↗
+											</Button>
 										</div>
 									</CardContent>
 								</Card>

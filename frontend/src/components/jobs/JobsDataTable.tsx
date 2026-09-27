@@ -10,14 +10,15 @@ import {
 import { createSignal, For, Show } from "solid-js";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
+import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
 	Table,
 	TableBody,
 	TableCell,
-	TableHead,
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
@@ -87,7 +88,11 @@ export function JobsDataTable<TData extends Job>(
 						<circle cx="11" cy="11" r="8" />
 						<line x1="21" y1="21" x2="16.65" y2="16.65" />
 					</svg>
+					<Label for="jobs-search" class="sr-only">
+						Search jobs
+					</Label>
 					<Input
+						id="jobs-search"
 						type="search"
 						placeholder="Search by role or company…"
 						value={props.filters.q}
@@ -133,32 +138,27 @@ export function JobsDataTable<TData extends Job>(
 								<TableRow class="hover:bg-transparent">
 									<For each={headerGroup.headers}>
 										{(header) => (
-											<TableHead
-												class={
+											<SortableTableHead
+												sorted={
 													header.column.getCanSort()
-														? "cursor-pointer select-none"
-														: undefined
+														? header.column.getIsSorted() === "asc"
+															? "ascending"
+															: header.column.getIsSorted() === "desc"
+																? "descending"
+																: "none"
+														: false
 												}
-												onClick={header.column.getToggleSortingHandler()}
+												onToggle={(e) =>
+													header.column.getToggleSortingHandler()?.(e)
+												}
 											>
-												<div class="flex items-center gap-1">
-													{header.isPlaceholder
-														? null
-														: flexRender(
-																header.column.columnDef.header,
-																header.getContext(),
-															)}
-													<Show when={header.column.getCanSort()}>
-														<span class="text-faint">
-															{header.column.getIsSorted() === "asc"
-																? "↑"
-																: header.column.getIsSorted() === "desc"
-																	? "↓"
-																	: "↕"}
-														</span>
-													</Show>
-												</div>
-											</TableHead>
+												{header.isPlaceholder
+													? null
+													: flexRender(
+															header.column.columnDef.header,
+															header.getContext(),
+														)}
+											</SortableTableHead>
 										)}
 									</For>
 								</TableRow>
