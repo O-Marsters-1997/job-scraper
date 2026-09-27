@@ -134,30 +134,47 @@ export function JobsDataTable<TData extends Job>(
 									<For each={headerGroup.headers}>
 										{(header) => (
 											<TableHead
-												class={
+												aria-sort={
 													header.column.getCanSort()
-														? "cursor-pointer select-none"
+														? header.column.getIsSorted() === "asc"
+															? "ascending"
+															: header.column.getIsSorted() === "desc"
+																? "descending"
+																: "none"
 														: undefined
 												}
-												onClick={header.column.getToggleSortingHandler()}
 											>
-												<div class="flex items-center gap-1">
-													{header.isPlaceholder
-														? null
-														: flexRender(
-																header.column.columnDef.header,
-																header.getContext(),
-															)}
-													<Show when={header.column.getCanSort()}>
-														<span class="text-faint">
+												<Show
+													when={header.column.getCanSort()}
+													fallback={
+														header.isPlaceholder
+															? null
+															: flexRender(
+																	header.column.columnDef.header,
+																	header.getContext(),
+																)
+													}
+												>
+													<button
+														type="button"
+														onClick={header.column.getToggleSortingHandler()}
+														class="flex items-center gap-1 select-none hover:text-foreground"
+													>
+														{header.isPlaceholder
+															? null
+															: flexRender(
+																	header.column.columnDef.header,
+																	header.getContext(),
+																)}
+														<span class="text-faint" aria-hidden="true">
 															{header.column.getIsSorted() === "asc"
 																? "↑"
 																: header.column.getIsSorted() === "desc"
 																	? "↓"
 																	: "↕"}
 														</span>
-													</Show>
-												</div>
+													</button>
+												</Show>
 											</TableHead>
 										)}
 									</For>

@@ -60,7 +60,12 @@ function CVTemplatesPage() {
 		useTableSort<SortKey>("Title");
 
 	const thClass = (key: SortKey) =>
-		`cursor-pointer select-none transition-colors hover:text-foreground${sortKey() === key ? " text-foreground" : ""}`;
+		`select-none transition-colors hover:text-foreground${sortKey() === key ? " text-foreground" : ""}`;
+
+	const ariaSort = (key: SortKey): "ascending" | "descending" | "none" => {
+		if (sortKey() !== key) return "none";
+		return sortDir() === "asc" ? "ascending" : "descending";
+	};
 
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
@@ -223,24 +228,30 @@ function CVTemplatesPage() {
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead
-											class={thClass("Title")}
-											onClick={() => handleSort("Title")}
-										>
-											Title{" "}
-											<span class="font-mono text-2xs">
-												{sortIcon("Title")}
-											</span>
+										<TableHead aria-sort={ariaSort("Title")}>
+											<button
+												type="button"
+												onClick={() => handleSort("Title")}
+												class={thClass("Title")}
+											>
+												Title{" "}
+												<span class="font-mono text-2xs" aria-hidden="true">
+													{sortIcon("Title")}
+												</span>
+											</button>
 										</TableHead>
 										<TableHead>Source doc</TableHead>
-										<TableHead
-											class={thClass("ModifiedAt")}
-											onClick={() => handleSort("ModifiedAt")}
-										>
-											Last modified{" "}
-											<span class="font-mono text-2xs">
-												{sortIcon("ModifiedAt")}
-											</span>
+										<TableHead aria-sort={ariaSort("ModifiedAt")}>
+											<button
+												type="button"
+												onClick={() => handleSort("ModifiedAt")}
+												class={thClass("ModifiedAt")}
+											>
+												Last modified{" "}
+												<span class="font-mono text-2xs" aria-hidden="true">
+													{sortIcon("ModifiedAt")}
+												</span>
+											</button>
 										</TableHead>
 										<TableHead class="w-10" />
 									</TableRow>
@@ -259,14 +270,40 @@ function CVTemplatesPage() {
 											>
 												<TableCell class="py-2.5">
 													<div class="flex items-center gap-2">
+														<Link
+															to="/cv-templates/$docId/$tabId"
+															params={{ docId: cv.DocID, tabId: cv.TabID }}
+															onClick={(e) => e.stopPropagation()}
+															class="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+														>
+															{cv.Title || "—"}
+														</Link>
 														<a
 															href={cv.DocURL}
 															target="_blank"
 															rel="noreferrer"
 															onClick={(e) => e.stopPropagation()}
-															class="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+															title="Open in Google Docs"
+															class="text-faint transition-colors hover:text-foreground"
 														>
-															{cv.Title || "—"}
+															<svg
+																aria-hidden="true"
+																width="12"
+																height="12"
+																viewBox="0 0 24 24"
+																fill="none"
+																stroke="currentColor"
+																stroke-width="2"
+																stroke-linecap="round"
+																stroke-linejoin="round"
+															>
+																<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+																<polyline points="15 3 21 3 21 9" />
+																<line x1="10" y1="14" x2="21" y2="3" />
+															</svg>
+															<span class="sr-only">
+																Open {cv.Title || "document"} in Google Docs
+															</span>
 														</a>
 														<Show when={!cv.Visible}>
 															<Badge variant="secondary">Hidden</Badge>
