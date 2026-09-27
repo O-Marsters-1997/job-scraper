@@ -12,7 +12,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/notify"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
+
+var _ telemetry.StateReader = (*Module)(nil)
 
 // ErrNotFound is the scoring store's not-found sentinel, re-exported for
 // contexts that must match it (ADR 0011).
