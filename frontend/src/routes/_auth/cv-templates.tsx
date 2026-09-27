@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
 	Switch,
 	SwitchControl,
@@ -182,7 +183,11 @@ function CVTemplatesPage() {
 
 				<Show when={(query.data?.length ?? 0) > 0}>
 					<div class="mb-3 flex items-center gap-3">
+						<Label for="cv-search" class="sr-only">
+							Search CVs
+						</Label>
 						<Input
+							id="cv-search"
 							type="search"
 							placeholder="Search by title or source…"
 							value={searchQuery()}

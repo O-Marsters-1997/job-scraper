@@ -9,7 +9,12 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet";
-import { Switch, SwitchControl, SwitchThumb } from "@/components/ui/switch";
+import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@/components/ui/switch";
 import { demoDataEnabled, setDemoData } from "@/lib/demoData";
 import {
 	SETTINGS_SECTIONS,
@@ -72,6 +77,7 @@ export default function SettingsPanel() {
 						description="Show seeded sample data for this session only."
 					>
 						<Switch checked={demoDataEnabled()} onChange={setDemoData}>
+							<SwitchLabel class="sr-only">Preview demo data</SwitchLabel>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>

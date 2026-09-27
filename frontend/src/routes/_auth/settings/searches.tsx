@@ -358,7 +358,6 @@ function SearchesPage() {
 										</div>
 
 										<div class="flex flex-col gap-2">
-											<p class="text-xs font-medium text-foreground">Source</p>
 											<Select<SourceInfo>
 												options={sourcesQuery.data ?? []}
 												optionValue="name"
@@ -380,6 +379,9 @@ function SearchesPage() {
 													</SelectItem>
 												)}
 											>
+												<Select.Label class="block text-xs font-medium text-foreground">
+													Source
+												</Select.Label>
 												<SelectTrigger>
 													<Select.Value<SourceInfo>>
 														{(state) =>

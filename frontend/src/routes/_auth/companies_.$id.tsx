@@ -21,7 +21,12 @@ import {
 	SelectItemLabel,
 	SelectTrigger,
 } from "@/components/ui/select";
-import { Switch, SwitchControl, SwitchThumb } from "@/components/ui/switch";
+import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@/components/ui/switch";
 import { formatDate } from "@/lib/datetime";
 import {
 	applyJobFilters,
@@ -205,23 +210,23 @@ function CompanyDetailPage() {
 											</Show>
 										</div>
 									</div>
-									<div class="flex shrink-0 items-center gap-2">
-										<span class="text-xs text-faint">Tracked</span>
-										<Switch
-											checked={c().Tracked}
-											onChange={() =>
-												trackMutation.mutate({
-													id: c().ID,
-													enabled: !c().Tracked,
-												})
-											}
-											disabled={trackMutation.isPending}
-										>
+									<Switch
+										checked={c().Tracked}
+										onChange={() =>
+											trackMutation.mutate({
+												id: c().ID,
+												enabled: !c().Tracked,
+											})
+										}
+										disabled={trackMutation.isPending}
+									>
+										<SwitchLabel class="flex shrink-0 items-center gap-2 text-xs text-faint">
 											<SwitchControl>
 												<SwitchThumb />
 											</SwitchControl>
-										</Switch>
-									</div>
+											Tracked
+										</SwitchLabel>
+									</Switch>
 								</div>
 							</CardContent>
 						</Card>

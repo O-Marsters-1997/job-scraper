@@ -56,8 +56,9 @@ export function AddDocDialog(props: {
 
 				<div class="flex flex-col gap-3">
 					<div>
-						<Label>Google Docs URL</Label>
+						<Label for="add-doc-url">Google Docs URL</Label>
 						<Input
+							id="add-doc-url"
 							type="url"
 							placeholder="https://docs.google.com/document/d/…"
 							value={docUrl()}
@@ -66,9 +67,16 @@ export function AddDocDialog(props: {
 								setUrlError(null);
 							}}
 							onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+							aria-invalid={!!urlError()}
+							aria-describedby={urlError() ? "add-doc-url-error" : undefined}
 						/>
 						<Show when={urlError()}>
-							<p class="mt-1.5 text-xs text-destructive">{urlError()}</p>
+							<p
+								id="add-doc-url-error"
+								class="mt-1.5 text-xs text-destructive-strong"
+							>
+								{urlError()}
+							</p>
 						</Show>
 					</div>
 				</div>

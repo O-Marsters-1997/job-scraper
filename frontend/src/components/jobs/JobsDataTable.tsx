@@ -13,6 +13,7 @@ import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
 	Table,
 	TableBody,
@@ -87,7 +88,11 @@ export function JobsDataTable<TData extends Job>(
 						<circle cx="11" cy="11" r="8" />
 						<line x1="21" y1="21" x2="16.65" y2="16.65" />
 					</svg>
+					<Label for="jobs-search" class="sr-only">
+						Search jobs
+					</Label>
 					<Input
+						id="jobs-search"
 						type="search"
 						placeholder="Search by role or company…"
 						value={props.filters.q}
