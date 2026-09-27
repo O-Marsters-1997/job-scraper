@@ -52,7 +52,17 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (dto.Use
 }
 
 func (s *Store) CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error) {
-	u, err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
+	return createUser(ctx, s.queries, username, passwordHash, email)
+}
+
+// CreateUserTx runs CreateUser inside tx, so signup can roll it back
+// alongside applications.SeedDefaults on seeding failure (ADR 0011).
+func (s *Store) CreateUserTx(ctx context.Context, tx pgx.Tx, username, passwordHash, email string) (dto.User, error) {
+	return createUser(ctx, s.queries.WithTx(tx), username, passwordHash, email)
+}
+
+func createUser(ctx context.Context, q *sqlc.Queries, username, passwordHash, email string) (dto.User, error) {
+	u, err := q.CreateUser(ctx, sqlc.CreateUserParams{
 		Username:     username,
 		PasswordHash: passwordHash,
 		Email:        pgtype.Text{String: email, Valid: email != ""},
@@ -65,6 +75,12 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash, email st
 		return dto.User{}, fmt.Errorf("store.CreateUser: %w", err)
 	}
 	return toUserDTO(u), nil
+}
+
+// Begin starts a transaction for signup, which must create the user and
+// seed their default Statuses atomically (ADR 0011).
+func (s *Store) Begin(ctx context.Context) (pgx.Tx, error) {
+	return s.pool.Begin(ctx)
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error) {

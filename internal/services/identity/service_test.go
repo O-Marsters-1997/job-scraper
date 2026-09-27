@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -14,14 +16,38 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
 )
 
+type fakeTx struct {
+	committed  bool
+	rolledBack bool
+}
+
+func (t *fakeTx) Begin(context.Context) (pgx.Tx, error) { return t, nil }
+func (t *fakeTx) Commit(context.Context) error          { t.committed = true; return nil }
+func (t *fakeTx) Rollback(context.Context) error        { t.rolledBack = true; return nil }
+func (t *fakeTx) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, nil
+}
+func (t *fakeTx) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults { return nil }
+func (t *fakeTx) LargeObjects() pgx.LargeObjects                         { return pgx.LargeObjects{} }
+func (t *fakeTx) Prepare(context.Context, string, string) (*pgconn.StatementDescription, error) {
+	return nil, nil
+}
+func (t *fakeTx) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, nil
+}
+func (t *fakeTx) Query(context.Context, string, ...any) (pgx.Rows, error) { return nil, nil }
+func (t *fakeTx) QueryRow(context.Context, string, ...any) pgx.Row        { return nil }
+func (t *fakeTx) Conn() *pgx.Conn                                         { return nil }
+
 type fakeStore struct {
 	usersByName map[string]dto.User
 	sessions    map[string]dto.Session
 	createErr   error
+	tx          *fakeTx
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{usersByName: map[string]dto.User{}, sessions: map[string]dto.Session{}}
+	return &fakeStore{usersByName: map[string]dto.User{}, sessions: map[string]dto.Session{}, tx: &fakeTx{}}
 }
 
 func (f *fakeStore) seed(u dto.User) { f.usersByName[u.Username] = u }
@@ -34,7 +60,9 @@ func (f *fakeStore) GetUserByUsername(_ context.Context, username string) (dto.U
 	return u, nil
 }
 
-func (f *fakeStore) CreateUser(_ context.Context, username, passwordHash, email string) (dto.User, error) {
+func (f *fakeStore) Begin(context.Context) (pgx.Tx, error) { return f.tx, nil }
+
+func (f *fakeStore) CreateUserTx(_ context.Context, _ pgx.Tx, username, passwordHash, email string) (dto.User, error) {
 	if f.createErr != nil {
 		return dto.User{}, f.createErr
 	}
@@ -56,11 +84,12 @@ func (f *fakeStore) DeleteSession(_ context.Context, id string) error {
 
 type fakeSeeder struct {
 	seededUserID string
+	err          error
 }
 
-func (f *fakeSeeder) SeedDefaults(_ context.Context, userID string) error {
+func (f *fakeSeeder) SeedDefaults(_ context.Context, _ pgx.Tx, userID string) error {
 	f.seededUserID = userID
-	return nil
+	return f.err
 }
 
 func TestLoginValidCredentials(t *testing.T) {
@@ -113,6 +142,25 @@ func TestSignupSeedsDefaultStatusesForTheNewUser(t *testing.T) {
 	}
 	if seeder.seededUserID != user.ID {
 		t.Fatalf("seededUserID = %q, want %q", seeder.seededUserID, user.ID)
+	}
+}
+
+func TestSignupRollsBackAndFailsWhenSeedingFails(t *testing.T) {
+	st := newFakeStore()
+	seedErr := errors.New("seed boom")
+
+	_, _, err := identity.NewService(st, &fakeSeeder{err: seedErr}).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
+	if !errors.Is(err, seedErr) {
+		t.Fatalf("err = %v, want %v", err, seedErr)
+	}
+	if st.tx.committed {
+		t.Error("want tx not committed when seeding fails")
+	}
+	if !st.tx.rolledBack {
+		t.Error("want tx rolled back when seeding fails")
+	}
+	if len(st.sessions) != 0 {
+		t.Errorf("sessions = %+v, want none created when seeding fails", st.sessions)
 	}
 }
 
