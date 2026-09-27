@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
-import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SettingsActions } from "@/components/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -274,11 +274,34 @@ function SearchesPage() {
 	);
 
 	return (
-		<div class="max-w-5xl px-7 py-6">
-			<PageHeading
-				title="Tracked searches"
-				subtitle="Discovery searches run when added or when you choose Run again."
-			/>
+		<>
+			<SettingsActions>
+				<Show when={!showAdd()}>
+					<Button
+						size="sm"
+						onClick={() => {
+							setScrapeQueued(false);
+							setConflictError(null);
+							setShowAdd(true);
+						}}
+					>
+						<svg
+							aria-hidden="true"
+							width="12"
+							height="12"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19" />
+							<line x1="5" y1="12" x2="19" y2="12" />
+						</svg>
+						Add search
+					</Button>
+				</Show>
+			</SettingsActions>
 			<FormFeedback
 				success={
 					scrapeQueued()
@@ -291,34 +314,6 @@ function SearchesPage() {
 			<QueryBoundary query={query} fallbackRows={3}>
 				{(data) => (
 					<>
-						<Show when={data.some((t) => sourceRole(t.Source) === "ats")}>
-							<div class="mb-2 mt-1">
-								<h2 class="text-sm font-semibold text-foreground">
-									Tracked companies
-								</h2>
-								<p class="text-xs text-faint">
-									ATS boards re-checked every few hours for new roles.
-								</p>
-							</div>
-							<TargetsCard
-								list={data.filter((t) => sourceRole(t.Source) === "ats")}
-							/>
-						</Show>
-
-						<Show when={data.some((t) => sourceRole(t.Source) !== "ats")}>
-							<div class="mb-2 mt-1">
-								<h2 class="text-sm font-semibold text-foreground">
-									Discovery searches
-								</h2>
-								<p class="text-xs text-faint">
-									Keyword and URL searches across aggregators and job boards.
-								</p>
-							</div>
-							<TargetsCard
-								list={data.filter((t) => sourceRole(t.Source) !== "ats")}
-							/>
-						</Show>
-
 						<Show when={showAdd()}>
 							<div class="mb-4 rounded-xl border border-border bg-surface px-4 py-4">
 								<Show
@@ -336,6 +331,7 @@ function SearchesPage() {
 											<div class="flex items-center gap-2">
 												<Input
 													id="paste-url"
+													autofocus
 													placeholder="e.g. https://boards.greenhouse.io/acmecorp"
 													value={pasteUrl()}
 													onInput={(e) => setPasteUrl(e.currentTarget.value)}
@@ -516,30 +512,32 @@ function SearchesPage() {
 								</Show>
 							</div>
 						</Show>
+						<Show when={data.some((t) => sourceRole(t.Source) === "ats")}>
+							<div class="mb-2 mt-1">
+								<h2 class="text-sm font-semibold text-foreground">
+									Tracked companies
+								</h2>
+								<p class="text-xs text-faint">
+									ATS boards re-checked every few hours for new roles.
+								</p>
+							</div>
+							<TargetsCard
+								list={data.filter((t) => sourceRole(t.Source) === "ats")}
+							/>
+						</Show>
 
-						<Show when={!showAdd()}>
-							<Button
-								onClick={() => {
-									setScrapeQueued(false);
-									setConflictError(null);
-									setShowAdd(true);
-								}}
-							>
-								<svg
-									aria-hidden="true"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.5"
-									stroke-linecap="round"
-								>
-									<line x1="12" y1="5" x2="12" y2="19" />
-									<line x1="5" y1="12" x2="19" y2="12" />
-								</svg>
-								Add search
-							</Button>
+						<Show when={data.some((t) => sourceRole(t.Source) !== "ats")}>
+							<div class="mb-2 mt-1">
+								<h2 class="text-sm font-semibold text-foreground">
+									Discovery searches
+								</h2>
+								<p class="text-xs text-faint">
+									Keyword and URL searches across aggregators and job boards.
+								</p>
+							</div>
+							<TargetsCard
+								list={data.filter((t) => sourceRole(t.Source) !== "ats")}
+							/>
 						</Show>
 
 						<p class="mt-3 text-xs text-faint">
@@ -548,6 +546,6 @@ function SearchesPage() {
 					</>
 				)}
 			</QueryBoundary>
-		</div>
+		</>
 	);
 }

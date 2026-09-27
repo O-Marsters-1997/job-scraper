@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
-import { PageHeading } from "@/components/PageHeading";
-import { Card } from "@/components/ui/card";
 import { API_BASE } from "../../../api/config";
 import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
@@ -15,14 +13,9 @@ function IntegrationsPage() {
 	const disconnect = useDisconnectGoogle();
 
 	return (
-		<div class="max-w-2xl px-7 py-6">
-			<PageHeading
-				title="Integrations"
-				subtitle="Connect external accounts to enable additional features"
-			/>
-
-			<Card class="overflow-hidden divide-y divide-border">
-				<div class="flex items-center gap-4 px-4 py-4">
+		<>
+			<div>
+				<div class="flex items-center gap-4">
 					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-muted">
 						<svg
 							aria-hidden="true"
@@ -88,11 +81,10 @@ function IntegrationsPage() {
 						</Show>
 					</Show>
 				</div>
-			</Card>
-
-			<p class="mt-3 text-xs text-faint">
-				Google Drive access lets FastTrack read your CV documents.
-			</p>
+				<p class="mt-3 text-xs text-faint">
+					Google Drive access lets FastTrack read your CV documents.
+				</p>
+			</div>
 
 			<Show when={status.isError}>
 				<ErrorState
@@ -101,6 +93,6 @@ function IntegrationsPage() {
 					message="Could not load Google integration status."
 				/>
 			</Show>
-		</div>
+		</>
 	);
 }

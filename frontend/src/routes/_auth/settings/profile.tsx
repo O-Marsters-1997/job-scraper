@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal } from "solid-js";
+import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
-import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { Profile } from "../../../api/profile";
 import { useProfile, useUpdateProfile } from "../../../hooks/useProfile";
@@ -16,12 +16,9 @@ export const Route = createFileRoute("/_auth/settings/profile")({
 function ProfilePage() {
 	const query = useProfile();
 	return (
-		<div class="max-w-2xl px-7 py-6">
-			<PageHeading title="Profile" subtitle="Manage your account details." />
-			<QueryBoundary query={query} fallbackRows={3}>
-				{(data) => <ProfileForm data={data} />}
-			</QueryBoundary>
-		</div>
+		<QueryBoundary query={query} fallbackRows={3}>
+			{(data) => <ProfileForm data={data} />}
+		</QueryBoundary>
 	);
 }
 
@@ -47,43 +44,25 @@ function ProfileForm(props: { data: Profile }) {
 
 	return (
 		<>
+			<SettingsActions>
+				<Button size="sm" onClick={handleSave} disabled={mutation.isPending}>
+					{mutation.isPending ? "Saving…" : "Save"}
+				</Button>
+			</SettingsActions>
 			<FormFeedback success={saved()} error={saveError()} />
-
-			<div class="flex flex-col gap-5">
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">
-							Account details
-						</p>
-					</div>
-					<div class="divide-y divide-border">
-						<div class="px-5 py-4">
-							<label for="username" class="text-xs font-medium text-foreground">
-								Username
-							</label>
-							<p class="mt-2 text-sm text-muted">{props.data.username}</p>
-						</div>
-						<div class="px-5 py-4">
-							<label for="email" class="text-xs font-medium text-foreground">
-								Email
-							</label>
-							<Input
-								id="email"
-								type="email"
-								value={email()}
-								onInput={(e) => setEmail(e.currentTarget.value)}
-								class="mt-2"
-							/>
-						</div>
-					</div>
-				</Card>
-
-				<div class="flex items-center gap-3">
-					<Button onClick={handleSave} disabled={mutation.isPending}>
-						{mutation.isPending ? "Saving…" : "Save"}
-					</Button>
-				</div>
+			<div>
+				<p class="text-sm font-medium text-foreground">Username</p>
+				<p class="mt-2 text-sm text-muted">{props.data.username}</p>
 			</div>
+			<Field label="Email" for="email">
+				<Input
+					id="email"
+					type="email"
+					value={email()}
+					onInput={(e) => setEmail(e.currentTarget.value)}
+					class="max-w-sm"
+				/>
+			</Field>
 		</>
 	);
 }

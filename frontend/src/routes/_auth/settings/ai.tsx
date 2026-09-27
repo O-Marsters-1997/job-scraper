@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
+import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
-import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { AiPrefs } from "../../../api/aiPrefs";
 import { useAiPrefs, useUpdateAiCredentials } from "../../../hooks/useAiPrefs";
@@ -16,133 +15,82 @@ export const Route = createFileRoute("/_auth/settings/ai")({
 function AiPage() {
 	const query = useAiPrefs();
 	return (
-		<div class="max-w-2xl px-7 py-6">
-			<PageHeading
-				title="AI settings"
-				subtitle="Connect the OpenRouter key used to score job suitability."
-			/>
-			<QueryBoundary query={query} fallbackRows={4}>
-				{(data) => <AiForm data={data} />}
-			</QueryBoundary>
-		</div>
+		<QueryBoundary query={query} fallbackRows={2}>
+			{(data) => <AiForm data={data} />}
+		</QueryBoundary>
 	);
 }
 
-// Extracted so createSignal initializes from resolved data once at mount —
-// background refetches never clobber in-progress edits.
 function AiForm(props: { data: AiPrefs }) {
-	const credsMutation = useUpdateAiCredentials();
-
+	const mutation = useUpdateAiCredentials();
+	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
 
-	const onKeySaved = () => {
+	const save = async (key: string | null, failure: string) => {
+		setSaved(false);
 		setSaveError(null);
-		setSaved(true);
-		setTimeout(() => setSaved(false), 3000);
+		try {
+			await mutation.mutateAsync({ provider: "openrouter", apiKey: key });
+			setApiKey("");
+			if (key) {
+				setSaved(true);
+				setTimeout(() => setSaved(false), 3000);
+			}
+		} catch {
+			setSaveError(failure);
+		}
 	};
-	const onKeyError = (message: string) => setSaveError(message);
 
 	return (
 		<>
 			<FormFeedback success={saved()} error={saveError()} />
-
-			<div class="flex flex-col gap-5">
-				<CredentialCard
-					provider="openrouter"
-					title="OpenRouter API key"
-					description="Used for Jev suitability scoring via OpenRouter."
-					placeholder="sk-or-v1-…"
-					configured={props.data.configuredProviders.includes("openrouter")}
-					mutation={credsMutation}
-					onSaved={onKeySaved}
-					onError={onKeyError}
-				/>
-			</div>
-		</>
-	);
-}
-
-function CredentialCard(props: {
-	provider: string;
-	title: string;
-	description: string;
-	placeholder: string;
-	configured: boolean;
-	mutation: ReturnType<typeof useUpdateAiCredentials>;
-	onSaved: () => void;
-	onError: (message: string) => void;
-}) {
-	const [apiKey, setApiKey] = createSignal("");
-
-	const handleSaveKey = async () => {
-		try {
-			await props.mutation.mutateAsync({
-				provider: props.provider,
-				apiKey: apiKey() || null,
-			});
-			setApiKey("");
-			props.onSaved();
-		} catch {
-			props.onError("Failed to save API key. Please try again.");
-		}
-	};
-
-	const handleClearKey = async () => {
-		try {
-			await props.mutation.mutateAsync({
-				provider: props.provider,
-				apiKey: null,
-			});
-		} catch {
-			props.onError("Failed to clear API key. Please try again.");
-		}
-	};
-
-	return (
-		<Card class="overflow-hidden">
-			<div class="border-b border-border px-5 py-4">
-				<p class="text-base font-semibold text-foreground">{props.title}</p>
-				<p class="mt-0.5 text-xs text-faint">{props.description}</p>
-			</div>
-			<div class="px-5 py-4">
+			<Field
+				label="OpenRouter API key"
+				for="openrouter-key"
+				hint="Used to score how well each job fits you."
+			>
 				<Show
-					when={props.configured}
+					when={props.data.configuredProviders.includes("openrouter")}
 					fallback={
-						<div class="flex items-center gap-3">
+						<form
+							class="flex max-w-lg items-center gap-2"
+							onSubmit={(e) => {
+								e.preventDefault();
+								save(apiKey(), "Failed to save API key. Please try again.");
+							}}
+						>
 							<Input
+								id="openrouter-key"
 								type="password"
-								aria-label={props.title}
-								placeholder={props.placeholder}
+								placeholder="sk-or-v1-…"
 								value={apiKey()}
 								onInput={(e) => setApiKey(e.currentTarget.value)}
 								class="flex-1"
 							/>
-							<Button
-								onClick={handleSaveKey}
-								disabled={props.mutation.isPending || !apiKey()}
-							>
-								{props.mutation.isPending ? "Saving…" : "Save key"}
+							<Button type="submit" disabled={mutation.isPending || !apiKey()}>
+								{mutation.isPending ? "Saving…" : "Save key"}
 							</Button>
-						</div>
+						</form>
 					}
 				>
 					<div class="flex items-center gap-3">
-						<span class="text-sm text-foreground">
-							configured <span class="text-primary font-medium">✓</span>
+						<span id="openrouter-key" class="text-sm text-foreground">
+							Key saved
 						</span>
 						<Button
 							variant="outline"
 							size="sm"
-							onClick={handleClearKey}
-							disabled={props.mutation.isPending}
-							class="text-xs"
+							disabled={mutation.isPending}
+							onClick={() =>
+								save(null, "Failed to clear API key. Please try again.")
+							}
 						>
-							{props.mutation.isPending ? "Clearing…" : "Clear"}
+							{mutation.isPending ? "Clearing…" : "Clear"}
 						</Button>
 					</div>
 				</Show>
-			</div>
-		</Card>
+			</Field>
+		</>
 	);
 }
