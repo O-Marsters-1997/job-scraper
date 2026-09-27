@@ -32,6 +32,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -50,6 +51,7 @@ var (
 	testCreds       *fakeCredStore
 	testSuitability *suitability.Service
 	testApps        *applications.Module
+	testIdentity    *identity.Module
 )
 
 func TestMain(m *testing.M) {
@@ -91,6 +93,7 @@ func TestMain(m *testing.M) {
 	testCreds = newFakeCredStore()
 	testSuitability = suitability.New(testDB, testDB, testDB, jev.NewClient(), testCreds, noAlerts{}, testDB)
 	testApps = applications.New(testDB.Pool())
+	testIdentity = identity.New(testDB.Pool(), testApps)
 	testGoogleClient := igoogle.NewClient(
 		os.Getenv("GOOGLE_CLIENT_ID"),
 		os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -98,7 +101,7 @@ func TestMain(m *testing.M) {
 		db.NewGoogleTokenStore(testDB),
 	)
 	testCVTemplates := cvtemplates.New(testDB.Pool(), testGoogleClient)
-	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps, testCVTemplates)
+	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testIdentity, testApps, testCVTemplates)
 
 	code := m.Run()
 
@@ -542,7 +545,7 @@ func (fakeModule) PublicRoutes(r chi.Router) {
 }
 
 func TestRouterMountsModules(t *testing.T) {
-	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps, fakeModule{})
+	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, testIdentity, testApps, fakeModule{})
 
 	w := httptest.NewRecorder()
 	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-private", nil))

@@ -15,11 +15,11 @@ func TestCompleteAnswerEffect_CommitsAnswersAndBothUsersScoresTogether(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	alice, err := testDB.CreateUser(ctx, "complete-alice", "hash", "")
+	alice, err := createTestUser(ctx, "complete-alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bob, err := testDB.CreateUser(ctx, "complete-bob", "hash", "")
+	bob, err := createTestUser(ctx, "complete-bob")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCompleteAnswerEffect_FingerprintChangeWritesNothing(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
-	user, err := testDB.CreateUser(ctx, "stale-user", "hash", "")
+	user, err := createTestUser(ctx, "stale-user")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/ingest"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aicredentials"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aiprefs"
-	authsvc "github.com/ollymarsters/job-scraper/internal/api/services/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/services/companies"
 	googlesvc "github.com/ollymarsters/job-scraper/internal/api/services/google"
 	"github.com/ollymarsters/job-scraper/internal/api/services/jobs"
@@ -21,11 +20,9 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
 type services struct {
-	auth          *authsvc.Service
 	google        *googlesvc.Service
 	googleClient  *igoogle.Client
 	ingest        *ingest.Ingester
@@ -40,7 +37,7 @@ type services struct {
 	companies     *companies.Service
 }
 
-func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, apps *applications.Module) *services {
+func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service) *services {
 	candidateService := candidates.New(db, q)
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -51,7 +48,6 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 	)
 
 	return &services{
-		auth:          authsvc.New(db, apps),
 		google:        googlesvc.New(googleClient),
 		googleClient:  googleClient,
 		ingest:        ingest.New(db, db),

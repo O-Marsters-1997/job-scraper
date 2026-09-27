@@ -10,7 +10,7 @@ import (
 
 func TestUpsertSearchConfig_PreferencesRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "preferences-user", "hash", "")
+	user, err := createTestUser(ctx, "preferences-user")
 	if err != nil {
 		t.Fatal(err)
 	}

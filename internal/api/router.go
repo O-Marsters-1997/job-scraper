@@ -15,7 +15,7 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -24,10 +24,9 @@ type Module interface {
 	Routes(chi.Router)
 }
 
-// NewRouter takes apps separately from modules because legacy signup also
-// wires it in as a StatusSeeder (ADR 0011); every other moved context can
-// go through modules alone.
-func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, apps *applications.Module, modules ...Module) http.Handler {
+// NewRouter takes idm separately from modules because its session
+// middleware wraps every protected route (ADR 0011).
+func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, idm *identity.Module, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -42,29 +41,19 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 		AllowCredentials: true,
 	}))
 
-	svc := newServices(db, q, creds, suitabilitySvc, apps)
+	svc := newServices(db, q, creds, suitabilitySvc)
 
-	allModules := append([]Module{apps}, modules...)
+	allModules := append([]Module{idm}, modules...)
 	for _, m := range allModules {
 		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
 			pm.PublicRoutes(r)
 		}
 	}
 
-	r.Route("/auth", func(r chi.Router) {
-		r.Post("/login", apihandlers.Login(svc.auth))
-		r.Post("/signup", apihandlers.Signup(svc.auth))
-		r.Group(func(r chi.Router) {
-			r.Use(auth.Middleware(db))
-			r.Post("/logout", apihandlers.Logout(svc.auth))
-			r.Get("/me", apihandlers.Me)
-		})
-	})
-
 	r.Route("/google", func(r chi.Router) {
 		r.Get("/oauth/start", apihandlers.OAuthStart(svc.google))
 		r.Group(func(r chi.Router) {
-			r.Use(auth.Middleware(db))
+			r.Use(idm.Middleware())
 			r.Get("/oauth/callback", apihandlers.OAuthCallback(svc.google))
 			r.Get("/status", handlers.GetAll(svc.google.Status))
 			r.Delete("/link", handlers.Delete(svc.google.Disconnect))
@@ -72,7 +61,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.Middleware(db))
+		r.Use(idm.Middleware())
 
 		r.Get("/jobs", handlers.Query(svc.jobs.List))
 		r.Get("/jobs/all", handlers.GetAll(db.List))

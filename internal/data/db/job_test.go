@@ -221,7 +221,7 @@ func effectCountForJob(t testing.TB, ctx context.Context, jobID string) int {
 func TestSaveCanonical_QueuesOneAnswerEffectPerContentVersion(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "outbox-user", "hash", "")
+	user, err := createTestUser(ctx, "outbox-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestSaveCanonical_QueuesRegardlessOfExclusionFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := testDB.CreateUser(ctx, "filtered-user", "hash", "")
+	user, err := createTestUser(ctx, "filtered-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestQueueTrackingScores_QueuesCachedOpenJobs(t *testing.T) {
 	if _, err := testDB.Save(ctx, []dto.Job{legacy}); err != nil {
 		t.Fatal(err)
 	}
-	user, err := testDB.CreateUser(ctx, "cached-user", "hash", "")
+	user, err := createTestUser(ctx, "cached-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestQueueTrackingScores_QueuesCachedOpenJobs(t *testing.T) {
 func TestAnswerEffect_LeaseAndRetry(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
+	user, err := createTestUser(ctx, "lease-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestAnswerEffect_LeaseAndRetry(t *testing.T) {
 func TestAnswerEffect_TerminalFailureFailsAtOnce(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "terminal-user", "hash", "")
+	user, err := createTestUser(ctx, "terminal-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestAnswerEffect_TerminalFailureFailsAtOnce(t *testing.T) {
 func TestAnswerEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
+	user, err := createTestUser(ctx, "ratelimit-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,7 +513,7 @@ func TestSaveCanonical_PrunesStaleOptionAnswersOnFingerprintChange(t *testing.T)
 		t.Fatalf("reverted to A: status=%q fingerprint=%q err=%v", status, updatedA.ContentFingerprint, err)
 	}
 
-	user, err := testDB.CreateUser(ctx, "prune-user", "hash", "")
+	user, err := createTestUser(ctx, "prune-user")
 	if err != nil {
 		t.Fatal(err)
 	}

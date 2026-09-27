@@ -12,7 +12,10 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
 )
 
 func usage() {
@@ -86,7 +89,9 @@ func runCreateUser(args []string) {
 	db := connectDB(ctx)
 	defer db.Close()
 
-	user, err := db.CreateUser(ctx, username, string(hash), "")
+	apps := applications.New(db.Pool())
+	idm := identity.New(db.Pool(), apps)
+	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
 		os.Exit(1)

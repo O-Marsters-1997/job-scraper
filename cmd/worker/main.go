@@ -21,6 +21,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -58,6 +60,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	apps := applications.New(db.Pool())
+	idm := identity.New(db.Pool(), apps)
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -167,7 +172,7 @@ func main() {
 		if err := proxy.Probe(ctx); err != nil {
 			slog.Warn("Web Unlocker daily probe failed", slog.Any("err", err))
 		}
-		if err := db.DeleteExpiredSessions(ctx); err != nil {
+		if err := idm.DeleteExpiredSessions(ctx); err != nil {
 			slog.Error("session cleanup failed", slog.Any("err", err))
 		}
 		if err := db.DeleteExpiredCandidates(ctx); err != nil {

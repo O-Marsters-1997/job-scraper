@@ -13,7 +13,7 @@ func TestCandidateRetentionAndDuplicateCards(t *testing.T) {
 	if _, err := testDB.Pool().Exec(ctx, "TRUNCATE job_candidates, source_targets, users CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	user, err := testDB.CreateUser(ctx, "candidate-user", "hash", "")
+	user, err := createTestUser(ctx, "candidate-user")
 	if err != nil {
 		t.Fatal(err)
 	}
