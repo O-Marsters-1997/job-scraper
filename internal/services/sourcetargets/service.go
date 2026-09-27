@@ -1,3 +1,5 @@
+// Package sourcetargets is the jobsearch context's source-target feature:
+// what to scrape, on what cadence, and starting a run (ADR 0011).
 package sourcetargets
 
 import (
@@ -8,9 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -21,14 +21,37 @@ type QueuePublisher interface {
 	Publish(ctx context.Context, task queue.Task) error
 }
 
+type Store interface {
+	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
+	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
+	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
+	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
+	DeleteSourceTarget(ctx context.Context, id, userID string) error
+	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
+	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
+}
+
+// SearchConfigGetter reads the caller's search config; scoring hasn't moved
+// under internal/services yet, so this is still satisfied by the legacy
+// *jobsdb.DB (ADR 0011 migration order).
+type SearchConfigGetter interface {
+	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
+}
+
+// Reconsiderer re-evaluates saved candidates against a search config; the
+// jobsearch context's own candidates sibling satisfies it.
+type Reconsiderer interface {
+	Reconsider(ctx context.Context, config dto.SearchConfig) error
+}
+
 type Service struct {
-	targets    providers.SourceTargetProvider
-	configs    providers.SearchConfigProvider
-	candidates *candidates.Service
+	targets    Store
+	configs    SearchConfigGetter
+	candidates Reconsiderer
 	queue      QueuePublisher
 }
 
-func New(targets providers.SourceTargetProvider, configs providers.SearchConfigProvider, candidates *candidates.Service, q QueuePublisher) *Service {
+func New(targets Store, configs SearchConfigGetter, candidates Reconsiderer, q QueuePublisher) *Service {
 	return &Service{targets: targets, configs: configs, candidates: candidates, queue: q}
 }
 

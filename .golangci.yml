@@ -53,6 +53,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/identity/store
               desc: only the identity context uses its store; call the identity Module facade (ADR 0011)
+        jobsearch-store:
+          files: ["$all", "!**/internal/services/jobsearch/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/jobsearch/store
+              desc: only the jobsearch context uses its store; call the jobsearch Module facade (ADR 0011)
 
 formatters:
   enable:

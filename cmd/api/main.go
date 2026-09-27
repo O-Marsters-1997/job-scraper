@@ -24,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -116,7 +117,9 @@ func main() {
 	)
 	cvTemplates := cvtemplates.New(db.Pool(), googleClient)
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, idm, apps, cvTemplates)}
+	js := jobsearch.New(db.Pool(), q, db)
+
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, idm, js, apps, cvTemplates)}
 
 	go func() {
 		<-ctx.Done()

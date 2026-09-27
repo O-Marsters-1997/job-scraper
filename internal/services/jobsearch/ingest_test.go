@@ -1,26 +1,25 @@
-package ingest_test
+package jobsearch
 
 import (
 	"context"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/api/ingest"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
-type canonicalSaver struct{}
+type fakeCanonicalSaver struct{}
 
-func (canonicalSaver) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
+func (fakeCanonicalSaver) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
 	if job.URL == "https://example.com/conflict" {
-		return dto.Job{}, "", providers.ErrCanonicalConflict
+		return dto.Job{}, "", store.ErrCanonicalConflict
 	}
 	job.ID = "job-1"
 	return job, "new", nil
 }
 
 func TestIngestJobsKeepsValidJobsAfterRejection(t *testing.T) {
-	ing := ingest.New(canonicalSaver{}, nil)
+	ing := newIngester(fakeCanonicalSaver{}, nil)
 	results, err := ing.IngestJobs(t.Context(), []dto.Job{
 		{Title: "Conflict", URL: "https://example.com/conflict"},
 		{Title: "Invalid URL", URL: "file:///tmp/job"},

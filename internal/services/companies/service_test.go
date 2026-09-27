@@ -1,22 +1,125 @@
 package companies_test
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/api/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/companies"
 )
 
 func boolPtr(b bool) *bool { return &b }
 func intPtr(i int) *int    { return &i }
 
-func newService(q *queue.MockQueue) (*companies.Service, *providers.MockCompanyProvider, *providers.MockSourceTargetProvider) {
-	companyStore := providers.NewMockCompanyProvider()
-	targetStore := providers.NewMockSourceTargetProvider()
+type fakeCompanyStore struct {
+	mu       sync.Mutex
+	byID     map[string]dto.Company
+	bySlug   map[string]string
+	boards   map[string][]dto.CompanyBoard
+	tracking map[string]dto.CompanyTracking
+}
+
+func newFakeCompanyStore() *fakeCompanyStore {
+	return &fakeCompanyStore{
+		byID: make(map[string]dto.Company), bySlug: make(map[string]string),
+		boards: make(map[string][]dto.CompanyBoard), tracking: make(map[string]dto.CompanyTracking),
+	}
+}
+
+func (f *fakeCompanyStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.Company, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if id, ok := f.bySlug[c.Slug]; ok {
+		return f.byID[id], nil
+	}
+	id := fmt.Sprintf("company-%d", len(f.byID)+1)
+	company := dto.Company{ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken}
+	f.byID[id] = company
+	f.bySlug[c.Slug] = id
+	return company, nil
+}
+
+func (f *fakeCompanyStore) GetCompany(_ context.Context, id string) (dto.Company, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	company, ok := f.byID[id]
+	if !ok {
+		return dto.Company{}, apperr.NotFound("company not found")
+	}
+	return company, nil
+}
+
+func (f *fakeCompanyStore) ListCompanyBoards(_ context.Context, companyID string) ([]dto.CompanyBoard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.boards[companyID], nil
+}
+
+func (f *fakeCompanyStore) UpsertCandidateBoard(_ context.Context, companyID, source, token string) (dto.CompanyBoard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, boards := range f.boards {
+		for _, b := range boards {
+			if b.Source == source && b.BoardToken == token && b.CompanyID != companyID {
+				return dto.CompanyBoard{}, apperr.Conflict("board belongs to another company")
+			}
+		}
+	}
+	board := dto.CompanyBoard{ID: fmt.Sprintf("board-%s-%s", source, token), CompanyID: companyID, Source: source, BoardToken: token, Status: dto.BoardCandidate}
+	f.boards[companyID] = append(f.boards[companyID], board)
+	return board, nil
+}
+
+func (f *fakeCompanyStore) SetCompanyTracking(_ context.Context, userID, companyID string, enabled bool, interval int) (dto.CompanyTracking, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := userID + ":" + companyID
+	existing, ok := f.tracking[key]
+	if interval == 0 && ok {
+		interval = existing.CheckIntervalMinutes
+	}
+	if interval == 0 {
+		interval = 360
+	}
+	tracking := dto.CompanyTracking{UserID: userID, CompanyID: companyID, Enabled: enabled, CheckIntervalMinutes: interval}
+	f.tracking[key] = tracking
+	return tracking, nil
+}
+
+func (f *fakeCompanyStore) TrackingFor(userID, companyID string) (dto.CompanyTracking, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tracking, ok := f.tracking[userID+":"+companyID]
+	return tracking, ok
+}
+
+type fakeSourceTargets struct {
+	mu      sync.Mutex
+	targets []dto.SourceTarget
+}
+
+func (f *fakeSourceTargets) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target := dto.SourceTarget{ID: fmt.Sprintf("target-%d", len(f.targets)+1), UserID: userID, Source: source, Value: value, CompanyID: companyID, Enabled: enabled, CheckIntervalMinutes: interval}
+	f.targets = append(f.targets, target)
+	return target, nil
+}
+
+func (f *fakeSourceTargets) list() []dto.SourceTarget {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]dto.SourceTarget(nil), f.targets...)
+}
+
+func newService(q *queue.MockQueue) (*companies.Service, *fakeCompanyStore, *fakeSourceTargets) {
+	companyStore := newFakeCompanyStore()
+	targetStore := &fakeSourceTargets{}
 	return companies.New(companyStore, targetStore, q), companyStore, targetStore
 }
 
@@ -75,15 +178,12 @@ func TestCreate(t *testing.T) {
 			if company.Slug != tt.wantSlug {
 				t.Errorf("slug = %q, want %q", company.Slug, tt.wantSlug)
 			}
-			listed, err := companyStore.ListCompaniesForUser(t.Context(), "user-1")
-			if err != nil {
-				t.Fatal(err)
+			tracking, ok := companyStore.TrackingFor("user-1", company.ID)
+			if tt.wantTrack && (!ok || !tracking.Enabled) {
+				t.Errorf("tracking = %+v, ok = %v, want enabled", tracking, ok)
 			}
-			if len(listed) != 1 {
-				t.Fatalf("want 1 company, got %d", len(listed))
-			}
-			if listed[0].Tracked != tt.wantTrack {
-				t.Errorf("tracked = %v, want %v", listed[0].Tracked, tt.wantTrack)
+			if !tt.wantTrack && ok && tracking.Enabled {
+				t.Errorf("tracking = %+v, want not tracked", tracking)
 			}
 		})
 	}
@@ -131,10 +231,7 @@ func TestSetTracking(t *testing.T) {
 		if !tracking.Enabled || tracking.CheckIntervalMinutes != 180 {
 			t.Errorf("tracking = %+v", tracking)
 		}
-		legacy, err := targetStore.ListSourceTargetsByUser(t.Context(), "user-1")
-		if err != nil {
-			t.Fatal(err)
-		}
+		legacy := targetStore.list()
 		if len(legacy) != 1 || legacy[0].CheckIntervalMinutes != 180 {
 			t.Errorf("legacy target = %+v", legacy)
 		}
@@ -150,11 +247,7 @@ func TestSetTracking(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		legacy, err := targetStore.ListSourceTargetsByUser(t.Context(), "user-1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(legacy) != 0 {
+		if legacy := targetStore.list(); len(legacy) != 0 {
 			t.Errorf("want no legacy target, got %+v", legacy)
 		}
 	})
