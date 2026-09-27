@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/api/notify"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/notify"
 )
 
 type sentEmail struct{ to string }
