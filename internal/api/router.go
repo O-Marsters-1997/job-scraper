@@ -17,7 +17,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
-func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service) http.Handler {
+// Module mounts a context's session-protected routes onto the router.
+// A Module that also implements PublicRoutes(chi.Router) gets those routes
+// mounted outside the session-protected group.
+type Module interface {
+	Routes(chi.Router)
+}
+
+func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -33,6 +40,12 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 	}))
 
 	svc := newServices(db, q, creds, suitabilitySvc)
+
+	for _, m := range modules {
+		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
+			pm.PublicRoutes(r)
+		}
+	}
 
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", handlers.Login(svc.auth))
@@ -119,6 +132,10 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 			r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(svc.cvTemplates.HideTab))
 			r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(svc.cvTemplates.ShowTab))
 		})
+
+		for _, m := range modules {
+			m.Routes(r)
+		}
 	})
 
 	r.Group(func(r chi.Router) {
