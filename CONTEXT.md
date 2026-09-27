@@ -115,8 +115,9 @@ _Avoid_: Stage, state, step
 
 **Option**:
 One thing a User can pick a stance on — a technology, role, industry, level, work arrangement or
-company stage — carrying the single atomic yes/no question Jev is asked about every Job on its
-behalf. The full set (~160) is the bank, stored in `scoring_options` and shared by every User.
+company stage — carrying the single atomic yes/no question Jev is asked about a Job once some
+interested User has picked it. The full set (~160) is the bank, stored in `scoring_options` and
+shared by every User.
 _Avoid_: Criterion, question — the bank replaces hand-written per-user criteria
 
 **Dimension**:
@@ -196,7 +197,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - A **Job** is eligible for a new-Job alert only when first discovered and its **Suitability** reaches the User's notification threshold; later edits and reopening do not create another new-Job alert
 - Promoting an older **Job Candidate** after changed User interest does not count as first discovery and does not send a new-Job alert
 - A User who starts tracking a **Company** sees its already known open **Jobs** immediately and receives fresh **Suitability** assessments for them without new-Job alerts
-- A changed **Search Config** never makes the User's existing **Suitability** assessments stale: saving Picks recomputes every scored Job for that User for free, from already-cached **Answers**, with no new Jev call
+- A changed **Search Config** never makes the User's existing **Suitability** assessments stale: saving recomputes every scored Job for that User from cached **Answers**, then asks Jev only the newly picked questions still unanswered on open Jobs
 - An **Application** has exactly one current **Status**
 - A **Source** iterates one or more **Boards** (ATS Sources only)
 - A **User** defines zero or more discovery **Source Targets**; each Target maps to a supported **Source**
@@ -227,7 +228,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 > **Dev:** "Does the same Job stay frozen if the company edits its salary?"
 > **Owner:** "No. Update the Job from the trusted source and reassess Suitability when its title, description, location, salary, or work arrangement changes."
 > **Dev:** "If I change my Picks, do all my old Jobs get rescored immediately?"
-> **Owner:** "Yes, for free. Every Answer is already cached, so saving just re-runs the formula over every Job I've been scored for — no new Jev call."
+> **Owner:** "Yes. Saving re-runs the formula over every Job I've been scored for straight away. Jev only answers the questions I've picked, so a new Pick shows unknown on older open Jobs until its Answers are backfilled a moment later."
 > **Dev:** "Does reopening an old Job announce it as new again?"
 > **Owner:** "No. The new-Job alert belongs to first discovery only."
 > **Dev:** "Does every new Job produce an alert before Suitability is known?"
@@ -272,7 +273,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "stale score" previously had two causes with different responses — resolved: changed Job details
   change the content fingerprint and re-queue an answer effect (Answers are re-asked); a changed
   User Search Config has no stale-score response at all, because Save recomputes every scored Job
-  immediately from cached Answers.
+  immediately from cached Answers and backfills only the missing Answers for new Picks.
 - "closed Job" could imply the position was filled — resolved: **Closed Job** means the source no longer advertises it after sufficient confirmation; one complete nonempty check can close a missing Job, while an empty Board requires two complete successful checks.
 - "Tracked Company" previously meant one board-specific **Source Target** — resolved: it is one User choice covering current and later verified **Boards**, even when no Board is yet known.
 - "Check Frequency" previously belonged to each ATS **Source Target** — resolved: it belongs to the User's **Tracked Company** and applies across its verified **Boards**.
