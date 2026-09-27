@@ -12,7 +12,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
 func usage() {
@@ -86,7 +90,9 @@ func runCreateUser(args []string) {
 	db := connectDB(ctx)
 	defer db.Close()
 
-	user, err := db.CreateUser(ctx, username, string(hash), "")
+	apps := applications.New(db.Pool())
+	idm := identity.New(db.Pool(), apps)
+	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
 		os.Exit(1)
@@ -119,25 +125,26 @@ func runOptions(args []string) {
 	ctx := context.Background()
 	db := connectDB(ctx)
 	defer db.Close()
+	scoringModule := scoring.NewFacade(db.Pool())
 
 	switch args[0] {
 	case "add":
 		id, dimension, label, question := args[1], args[2], args[3], args[4]
-		if err := db.AddScoringOption(ctx, id, dimension, label, question); err != nil {
+		if err := scoringModule.AddOption(ctx, id, dimension, label, question); err != nil {
 			fmt.Fprintf(os.Stderr, "add option: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf("Option %q added\n", id)
 	case "reword":
 		id, question := args[1], args[2]
-		if err := db.RewordScoringOption(ctx, id, question); err != nil {
+		if err := scoringModule.RewordOption(ctx, id, question); err != nil {
 			fmt.Fprintf(os.Stderr, "reword option: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf("Option %q reworded\n", id)
 	case "retire":
 		id := args[1]
-		if err := db.RetireScoringOption(ctx, id); err != nil {
+		if err := scoringModule.RetireOption(ctx, id); err != nil {
 			fmt.Fprintf(os.Stderr, "retire option: %v\n", err)
 			os.Exit(1)
 		}

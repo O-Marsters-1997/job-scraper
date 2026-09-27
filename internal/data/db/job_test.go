@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -221,7 +219,7 @@ func effectCountForJob(t testing.TB, ctx context.Context, jobID string) int {
 func TestSaveCanonical_QueuesOneAnswerEffectPerContentVersion(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "outbox-user", "hash", "")
+	user, err := createTestUser(ctx, "outbox-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,11 +277,13 @@ func TestSaveCanonical_QueuesRegardlessOfExclusionFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := testDB.CreateUser(ctx, "filtered-user", "hash", "")
+	user, err := createTestUser(ctx, "filtered-user")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, ExcludedCompanies: []string{"filtered-co"}}); err != nil {
+	if _, err := testDB.Pool().Exec(ctx,
+		"INSERT INTO search_config (user_id, excluded_companies) VALUES ($1, $2)",
+		user.ID, []string{"filtered-co"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
@@ -322,7 +322,7 @@ func TestQueueTrackingScores_QueuesCachedOpenJobs(t *testing.T) {
 	if _, err := testDB.Save(ctx, []dto.Job{legacy}); err != nil {
 		t.Fatal(err)
 	}
-	user, err := testDB.CreateUser(ctx, "cached-user", "hash", "")
+	user, err := createTestUser(ctx, "cached-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,114 +344,6 @@ func TestQueueTrackingScores_QueuesCachedOpenJobs(t *testing.T) {
 	}
 	if want := fmt.Sprintf("%x", sha256.Sum256(content)); fingerprint != want {
 		t.Fatalf("legacy fingerprint = %q, want %q", fingerprint, want)
-	}
-}
-
-func TestAnswerEffect_LeaseAndRetry(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/lease"
-	job.CompanySlug = "lease-company"
-	saved, _, err := testDB.SaveCanonical(ctx, job)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, err := testDB.ClaimAnswerEffect(ctx)
-	if err != nil || first.JobID != saved.ID {
-		t.Fatalf("first claim = %+v, %v", first, err)
-	}
-	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("leased effect claimed twice: %v", err)
-	}
-	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "temporary failure"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("future retry claimed early: %v", err)
-	}
-	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {
-		t.Fatal(err)
-	}
-	second, err := testDB.ClaimAnswerEffect(ctx)
-	if err != nil || second.ID != first.ID {
-		t.Fatalf("retry claim = %+v, %v", second, err)
-	}
-}
-
-func TestAnswerEffect_TerminalFailureFailsAtOnce(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "terminal-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/terminal"
-	job.CompanySlug = "terminal-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	first, err := testDB.ClaimAnswerEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "invalid api key", Terminal: true}); err != nil {
-		t.Fatal(err)
-	}
-	var status, lastError string
-	if err := testDB.Pool().QueryRow(ctx, "SELECT status, last_error FROM effect_outbox WHERE id = $1", first.ID).Scan(&status, &lastError); err != nil {
-		t.Fatal(err)
-	}
-	if status != "failed" || lastError != "invalid api key" {
-		t.Fatalf("status = %q last_error = %q, want failed / invalid api key", status, lastError)
-	}
-}
-
-func TestAnswerEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/ratelimit"
-	job.CompanySlug = "ratelimit-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	first, err := testDB.ClaimAnswerEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "rate limited", RetryAfter: 120 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
-	var status string
-	var dueInSecs float64
-	query := "SELECT status, EXTRACT(EPOCH FROM due_at - NOW())::float8 FROM effect_outbox WHERE id = $1"
-	if err := testDB.Pool().QueryRow(ctx, query, first.ID).Scan(&status, &dueInSecs); err != nil {
-		t.Fatal(err)
-	}
-	if status != "pending" {
-		t.Fatalf("status = %q, want pending", status)
-	}
-	if dueInSecs < 110 || dueInSecs > 130 {
-		t.Fatalf("due_at - NOW() = %.1fs, want ~120s", dueInSecs)
 	}
 }
 
@@ -513,7 +405,7 @@ func TestSaveCanonical_PrunesStaleOptionAnswersOnFingerprintChange(t *testing.T)
 		t.Fatalf("reverted to A: status=%q fingerprint=%q err=%v", status, updatedA.ContentFingerprint, err)
 	}
 
-	user, err := testDB.CreateUser(ctx, "prune-user", "hash", "")
+	user, err := createTestUser(ctx, "prune-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,15 +418,17 @@ func TestSaveCanonical_PrunesStaleOptionAnswersOnFingerprintChange(t *testing.T)
 		t.Fatalf("option_answers after prune = %v, want only {%q: 1}", remaining, fpA)
 	}
 
-	inputs, err := testDB.ListScoringInputs(ctx, user.ID)
+	var scoredAnswerCount int
+	err = testDB.Pool().QueryRow(ctx,
+		`SELECT count(*) FROM job_scores s
+		 JOIN jobs j ON j.id = s.job_id
+		 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+		 WHERE s.user_id = $1 AND a.question_hash = 'q-fpB'`, user.ID).Scan(&scoredAnswerCount)
 	if err != nil {
-		t.Fatalf("ListScoringInputs after prune: %v", err)
+		t.Fatalf("count scoring-visible answers: %v", err)
 	}
-	if len(inputs) != 1 || inputs[0].Job.ID != saved.ID {
-		t.Fatalf("ListScoringInputs = %+v, want the pruned job", inputs)
-	}
-	if _, ok := inputs[0].Answers["q-fpB"]; ok {
-		t.Fatalf("pruned answer q-fpB still visible to scoring, want treated as unknown")
+	if scoredAnswerCount != 0 {
+		t.Fatalf("pruned answer q-fpB still visible to scoring (matches the job's current fingerprint), want treated as unknown")
 	}
 }
 

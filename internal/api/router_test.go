@@ -23,31 +23,32 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	"github.com/ollymarsters/job-scraper/internal/api/jev"
-	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/dto"
+	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/candidates"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
-
-type noAlerts struct{}
-
-func (noAlerts) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 const ingestTestToken = "router-test-ingest-token" //nolint:gosec // test-only static token, not a credential
 
 const nilUUID = "00000000-0000-0000-0000-000000000000"
 
 var (
-	router          http.Handler
-	testDB          *db.DB
-	testBroker      = &queue.Broker{}
-	testCreds       *fakeCredStore
-	testSuitability *suitability.Service
-	testApps        *applications.Module
+	router        http.Handler
+	testDB        *db.DB
+	testBroker    = &queue.Broker{}
+	testCreds     *fakeCredStore
+	testScoring   *scoring.Module
+	testApps      *applications.Module
+	testIdentity  *identity.Module
+	testJobsearch *jobsearch.Module
 )
 
 func TestMain(m *testing.M) {
@@ -87,9 +88,19 @@ func TestMain(m *testing.M) {
 		log.Fatalf("set INGEST_SERVICE_TOKEN: %v", err)
 	}
 	testCreds = newFakeCredStore()
-	testSuitability = suitability.New(testDB, testDB, testDB, jev.NewClient(), testCreds, noAlerts{}, testDB)
+	candidateService := candidates.New(testDB, testBroker)
+	testScoring = scoring.New(testDB.Pool(), testCreds, testDB, candidateService, "", "")
 	testApps = applications.New(testDB.Pool())
-	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps)
+	testIdentity = identity.New(testDB.Pool(), testApps)
+	testGoogleClient := igoogle.NewClient(
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URL"),
+		db.NewGoogleTokenStore(testDB),
+	)
+	testCVTemplates := cvtemplates.New(testDB.Pool(), testGoogleClient)
+	testJobsearch = jobsearch.New(testDB.Pool(), testBroker, testScoring)
+	router = api.NewRouter(testDB, testCreds, testIdentity, testJobsearch, testApps, testCVTemplates, testScoring)
 
 	code := m.Run()
 
@@ -533,7 +544,7 @@ func (fakeModule) PublicRoutes(r chi.Router) {
 }
 
 func TestRouterMountsModules(t *testing.T) {
-	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps, fakeModule{})
+	moduleRouter := api.NewRouter(testDB, testCreds, testIdentity, testJobsearch, testApps, testScoring, fakeModule{})
 
 	w := httptest.NewRecorder()
 	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-private", nil))

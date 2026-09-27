@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
@@ -46,6 +47,21 @@ func (db *DB) Close() {
 
 func (db *DB) Pool() *pgxpool.Pool {
 	return db.pool
+}
+
+func parseUUID(s string) (pgtype.UUID, error) {
+	var id pgtype.UUID
+	if err := id.Scan(s); err != nil {
+		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
+	}
+	return id, nil
+}
+
+func uuidString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return id.String()
 }
 
 func ConnString() (string, error) {
