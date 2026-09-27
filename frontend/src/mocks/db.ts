@@ -201,11 +201,27 @@ let scoringConfig: ScoringConfig = {
 	excludedLocations: [],
 	preferences: {
 		picks: [
-			{ optionId: "tech:go", stance: "nice", source: "manual" },
-			{ optionId: "role:backend", stance: "nice", source: "manual" },
-			{ optionId: "domain:fintech", stance: "avoid", source: "manual" },
+			{
+				optionId: "tech:go",
+				stance: "nice",
+				source: "manual",
+				overridden: false,
+			},
+			{
+				optionId: "role:backend",
+				stance: "nice",
+				source: "manual",
+				overridden: false,
+			},
+			{
+				optionId: "domain:fintech",
+				stance: "avoid",
+				source: "manual",
+				overridden: false,
+			},
 		],
 		salaryFloor: null,
+		preferenceText: "",
 	},
 	updatedAt: new Date("2024-01-01").toISOString(),
 };

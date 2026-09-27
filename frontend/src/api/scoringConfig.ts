@@ -6,6 +6,7 @@ export const pickSchema = z.object({
 	optionId: z.string(),
 	stance: z.string(),
 	source: z.string(),
+	overridden: z.boolean(),
 });
 
 export const moneySchema = z.object({
@@ -16,6 +17,7 @@ export const moneySchema = z.object({
 export const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
+	preferenceText: z.string(),
 });
 
 export const scoringConfigSchema = z.object({

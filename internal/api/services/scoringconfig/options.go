@@ -24,11 +24,10 @@ func (s *Service) Options(ctx context.Context, _ string) (dto.ScoringOptionsView
 	if err != nil {
 		return dto.ScoringOptionsView{}, err
 	}
-	live := make([]dto.ScoringOption, 0, len(all))
-	for _, o := range all {
-		if o.RetiredAt == nil {
-			live = append(live, dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label})
-		}
+	live := newBank(all).live
+	out := make([]dto.ScoringOption, len(live))
+	for i, o := range live {
+		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label}
 	}
-	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: live}, nil
+	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out}, nil
 }

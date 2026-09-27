@@ -2,10 +2,13 @@ package scoringconfig
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/ollymarsters/job-scraper/internal/api/jev"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -20,14 +23,16 @@ type Recomputer interface {
 }
 
 type Service struct {
-	configs    providers.SearchConfigProvider
-	candidates Reconsiderer
-	options    providers.ScoringOptionsProvider
-	recompute  Recomputer
+	configs     providers.SearchConfigProvider
+	candidates  Reconsiderer
+	options     providers.ScoringOptionsProvider
+	recompute   Recomputer
+	extractor   Extractor
+	credentials Credentials
 }
 
-func New(configs providers.SearchConfigProvider, candidates Reconsiderer, options providers.ScoringOptionsProvider, recompute Recomputer) *Service {
-	return &Service{configs: configs, candidates: candidates, options: options, recompute: recompute}
+func New(configs providers.SearchConfigProvider, candidates Reconsiderer, options providers.ScoringOptionsProvider, recompute Recomputer, extractor Extractor, credentials Credentials) *Service {
+	return &Service{configs: configs, candidates: candidates, options: options, recompute: recompute, extractor: extractor, credentials: credentials}
 }
 
 func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
@@ -42,11 +47,28 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if in.NotifyThreshold < 0 || in.NotifyThreshold > 100 {
 		return dto.ScoringConfigView{}, apperr.Invalid("notify threshold must be between 0 and 100")
 	}
-	picks, err := s.validatedPicks(ctx, in.Preferences.Picks)
+	options, err := s.options.ListScoringOptions(ctx)
+	if err != nil {
+		return dto.ScoringConfigView{}, err
+	}
+	b := newBank(options)
+
+	manualPicks, err := validatedPicks(b, in.Preferences.Picks)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
 	floor, err := validatedSalaryFloor(in.Preferences.SalaryFloor)
+	if err != nil {
+		return dto.ScoringConfigView{}, err
+	}
+
+	existing, err := s.configs.GetSearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, providers.ErrNotFound) {
+		return dto.ScoringConfigView{}, err
+	}
+
+	text := strings.TrimSpace(in.Preferences.PreferenceText)
+	textPicks, hash, err := s.textPicks(ctx, userID, text, existing.Preferences, b)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
@@ -57,7 +79,12 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
-		Preferences:           dto.Preferences{Picks: picks, SalaryFloor: floor},
+		Preferences: dto.Preferences{
+			Picks:              append(manualPicks, textPicks...),
+			SalaryFloor:        floor,
+			PreferenceText:     text,
+			PreferenceTextHash: hash,
+		},
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
 	if err != nil {
@@ -72,31 +99,81 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	return toView(updated), nil
 }
 
-// validatedPicks rejects an unknown or retired option, or a stance the
-// option's dimension doesn't allow, and normalises every surviving pick's
-// source to manual: only extraction (not yet built) can write "text".
-func (s *Service) validatedPicks(ctx context.Context, picks []dto.Pick) ([]dto.Pick, error) {
-	options, err := s.options.ListScoringOptions(ctx)
-	if err != nil {
-		return nil, err
+func (s *Service) textPicks(ctx context.Context, userID, text string, existing dto.Preferences, b bank) ([]dto.Pick, string, error) {
+	hash := hashText(text)
+	if hash == existing.PreferenceTextHash {
+		return existingTextPicks(existing.Picks), hash, nil
 	}
+	if text == "" {
+		return nil, hash, nil
+	}
+	apiKey, err := s.credentials.Get(ctx, userID, jev.Provider)
+	if err != nil {
+		return nil, "", apperr.Unprocessable("connect an OpenRouter credential to extract preferences from text")
+	}
+	extracted, err := s.extractor.Extract(ctx, apiKey, text, b.live, Dimensions)
+	if err != nil {
+		return nil, "", fmt.Errorf("extract preferences: %w", err)
+	}
+	picks := make([]dto.Pick, 0, len(extracted))
+	for _, p := range extracted {
+		opt, ok := b.byID[p.OptionID]
+		if !ok || opt.RetiredAt != nil || !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
+			continue
+		}
+		picks = append(picks, dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "text"})
+	}
+	return picks, hash, nil
+}
+
+func existingTextPicks(picks []dto.Pick) []dto.Pick {
+	var out []dto.Pick
+	for _, p := range picks {
+		if p.Source == "text" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func hashText(text string) string {
+	if text == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
+type bank struct {
+	byID       map[string]dto.ScoringOption
+	dimensions map[dto.Dimension]dto.DimensionSpec
+	live       []dto.ScoringOption
+}
+
+func newBank(options []dto.ScoringOption) bank {
 	byID := make(map[string]dto.ScoringOption, len(options))
+	live := make([]dto.ScoringOption, 0, len(options))
 	for _, o := range options {
 		byID[o.ID] = o
+		if o.RetiredAt == nil {
+			live = append(live, o)
+		}
 	}
 	dimensions := make(map[dto.Dimension]dto.DimensionSpec, len(Dimensions))
 	for _, d := range Dimensions {
 		dimensions[d.Key] = d
 	}
+	return bank{byID: byID, dimensions: dimensions, live: live}
+}
 
+func validatedPicks(b bank, picks []dto.Pick) ([]dto.Pick, error) {
 	out := make([]dto.Pick, len(picks))
 	for i, p := range picks {
-		opt, ok := byID[p.OptionID]
+		opt, ok := b.byID[p.OptionID]
 		if !ok || opt.RetiredAt != nil {
 			return nil, apperr.Invalid("unknown or retired option: " + p.OptionID)
 		}
-		spec := dimensions[opt.Dimension]
-		if !stanceAllowed(spec, p.Stance) {
+		if !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
 			return nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
 		}
 		out[i] = dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "manual"}
@@ -130,8 +207,9 @@ func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 	return dto.ScoringConfigView{
 		Preferences: dto.Preferences{
-			Picks:       nonNilPicks(cfg.Preferences.Picks),
-			SalaryFloor: cfg.Preferences.SalaryFloor,
+			Picks:          picksView(cfg.Preferences.Picks),
+			SalaryFloor:    cfg.Preferences.SalaryFloor,
+			PreferenceText: cfg.Preferences.PreferenceText,
 		},
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
@@ -141,11 +219,22 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 	}
 }
 
-func nonNilPicks(p []dto.Pick) []dto.Pick {
-	if p == nil {
+func picksView(picks []dto.Pick) []dto.Pick {
+	if picks == nil {
 		return []dto.Pick{}
 	}
-	return p
+	manual := make(map[string]bool, len(picks))
+	for _, p := range picks {
+		if p.Source == "manual" {
+			manual[p.OptionID] = true
+		}
+	}
+	out := make([]dto.Pick, len(picks))
+	for i, p := range picks {
+		out[i] = p
+		out[i].Overridden = p.Source == "text" && manual[p.OptionID]
+	}
+	return out
 }
 
 func nonNilStrings(s []string) []string {

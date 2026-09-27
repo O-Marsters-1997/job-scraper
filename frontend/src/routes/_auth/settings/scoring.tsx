@@ -7,6 +7,7 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { ScoringConfig } from "../../../api/scoringConfig";
 import type {
 	ScoringOption,
@@ -281,14 +282,23 @@ function ScoringForm(props: {
 
 	const [stances, setStances] = createStore<StanceMap>(
 		Object.fromEntries(
-			props.config.preferences.picks.map((p) => [
-				p.optionId,
-				p.stance as Stance,
-			]),
+			props.config.preferences.picks
+				.filter((p) => p.source === "manual")
+				.map((p) => [p.optionId, p.stance as Stance]),
 		),
 	);
 	const pick = (id: string, stance: Stance) => setStances(id, stance);
 	const unpick = (id: string) => setStances(id, undefined);
+
+	const textPicks = createMemo(() =>
+		props.config.preferences.picks.filter((p) => p.source === "text"),
+	);
+	const labelFor = (optionId: string) =>
+		props.options.options.find((o) => o.id === optionId)?.label ?? optionId;
+
+	const [preferenceText, setPreferenceText] = createSignal(
+		props.config.preferences.preferenceText,
+	);
 
 	const [salaryFloor, setSalaryFloor] = createSignal(
 		props.config.preferences.salaryFloor?.amount.toString() ?? "",
@@ -331,10 +341,12 @@ function ScoringForm(props: {
 							optionId,
 							stance,
 							source: "manual",
+							overridden: false,
 						})),
 					salaryFloor: salaryFloor()
 						? { amount: Number(salaryFloor()), currency: "GBP" }
 						: null,
+					preferenceText: preferenceText(),
 				},
 				updatedAt: props.config.updatedAt,
 			});
@@ -418,6 +430,53 @@ function ScoringForm(props: {
 						/>
 					</div>
 				</section>
+
+				<Card class="overflow-hidden">
+					<div class="border-b border-border px-5 py-4">
+						<p class="text-base font-semibold text-foreground">
+							Describe what you want
+						</p>
+						<p class="mt-0.5 text-xs text-faint">
+							Write a sentence or two in your own words. We'll turn anything
+							that matches a pick above into one, without touching your manual
+							choices.
+						</p>
+					</div>
+					<div class="px-5 py-4">
+						<label
+							for="preference-text"
+							class="text-xs font-medium text-foreground"
+						>
+							In your own words
+						</label>
+						<Textarea
+							id="preference-text"
+							value={preferenceText()}
+							onInput={(e) => setPreferenceText(e.currentTarget.value)}
+							placeholder="e.g. I want to work with people more senior than me, and avoid on-call rotations."
+							class="mt-2 min-h-24"
+						/>
+						<Show when={textPicks().length > 0}>
+							<div class="mt-3 flex flex-wrap gap-1.5">
+								<For each={textPicks()}>
+									{(p) => (
+										<span
+											class={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${
+												p.overridden
+													? "border-border text-faint line-through"
+													: (STANCE_TONE[p.stance as Stance] ??
+														"border-border-strong bg-surface-muted text-muted")
+											}`}
+										>
+											{labelFor(p.optionId)}
+											{p.overridden && " (overridden)"}
+										</span>
+									)}
+								</For>
+							</div>
+						</Show>
+					</div>
+				</Card>
 
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
