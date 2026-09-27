@@ -22,6 +22,7 @@ type Store interface {
 	ListForUser(context.Context, string, string, int) ([]Candidate, error)
 	Assess(context.Context, string, string, time.Time, bool) (bool, error)
 	MarkDetailPending(context.Context, string) error
+	DeleteExpiredCandidates(context.Context) error
 }
 
 type JobQueue interface {
@@ -63,6 +64,10 @@ func (s *Service) Reconsider(ctx context.Context, config dto.SearchConfig) error
 			return nil
 		}
 	}
+}
+
+func (s *Service) DeleteExpired(ctx context.Context) error {
+	return s.store.DeleteExpiredCandidates(ctx)
 }
 
 func (s *Service) assess(ctx context.Context, candidates []Candidate, config dto.SearchConfig) error {

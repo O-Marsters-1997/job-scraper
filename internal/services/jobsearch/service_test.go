@@ -54,6 +54,20 @@ func (f *fakeJobStore) GetJob(_ context.Context, id, _ string) (dto.Job, error) 
 	return dto.Job{}, store.ErrNotFound
 }
 
+func (f *fakeJobStore) NewURLs(_ context.Context, urls []string) ([]string, error) {
+	known := make(map[string]bool, len(f.jobs))
+	for _, j := range f.jobs {
+		known[j.URL] = true
+	}
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if !known[u] {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
 func TestListRejectsBadPagination(t *testing.T) {
 	svc := jobsearch.NewService(&fakeJobStore{})
 	for _, q := range []dto.JobsQuery{
