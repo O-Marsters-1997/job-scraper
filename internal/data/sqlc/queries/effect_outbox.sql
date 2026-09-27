@@ -36,6 +36,13 @@ FROM companies c
 WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
     AND j.closed_at IS NULL AND j.content_fingerprint IS NULL;
 
+-- name: QueueOptionBackfill :exec
+INSERT INTO effect_outbox (job_id, fingerprint)
+SELECT DISTINCT j.id, j.content_fingerprint
+FROM jobs j JOIN job_scores s ON s.job_id = j.id
+WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
+
 -- name: ClaimAnswerEffect :one
 WITH next AS (
     SELECT id FROM effect_outbox
