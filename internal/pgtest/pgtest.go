@@ -25,8 +25,7 @@ var (
 )
 
 // Pool returns the pool shared by this test binary, starting the
-// container and applying migrations on the first call. TestMain and
-// other non-test callers use this directly; New wraps it for tests.
+// container and applying migrations on the first call.
 func Pool() (*pgxpool.Pool, error) {
 	once.Do(func() {
 		pool, initErr = start(context.Background())
