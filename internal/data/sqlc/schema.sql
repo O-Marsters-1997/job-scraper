@@ -49,6 +49,18 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
 
+CREATE TABLE IF NOT EXISTS google_oauth_tokens (
+    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id           UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    access_token_enc  TEXT        NOT NULL,
+    refresh_token_enc TEXT        NOT NULL,
+    token_type        TEXT        NOT NULL,
+    expiry            TIMESTAMPTZ,
+    scope             TEXT        NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS application_statuses (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
