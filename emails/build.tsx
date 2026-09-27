@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import IndividualEmail from "./templates/individual";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const outDir = join(__dirname, "../internal/api/notify/templates");
+const outDir = join(__dirname, "../internal/services/notify/templates");
 
 const placeholders = {
 	title: "%%GO_TITLE%%",

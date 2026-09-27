@@ -40,3 +40,11 @@ sql:
         package: "sqlc"
         out: "internal/services/jobsearch/store/sqlc"
         sql_package: "pgx/v5"
+  - engine: "postgresql"
+    queries: "internal/services/scoring/store/queries"
+    schema: "internal/data/sqlc/schema.sql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/services/scoring/store/sqlc"
+        sql_package: "pgx/v5"

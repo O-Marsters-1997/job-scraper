@@ -10,10 +10,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
 var errSourceTargetExists = apperr.Conflict("source target already exists")
+
+type fakeSearchConfigReader struct{}
+
+func (fakeSearchConfigReader) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{}, scoring.ErrNotFound
+}
 
 type fakeStore struct {
 	mu        sync.Mutex
@@ -123,14 +130,8 @@ type fakeReconsiderer struct{ err error }
 
 func (f fakeReconsiderer) Reconsider(context.Context, dto.SearchConfig) error { return f.err }
 
-type fakeSearchConfigGetter struct{}
-
-func (fakeSearchConfigGetter) GetSearchConfig(context.Context, string) (dto.SearchConfig, error) {
-	return dto.SearchConfig{}, nil
-}
-
 func newService(targets *fakeStore, q *queue.MockQueue) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigGetter{}, fakeReconsiderer{}, q)
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, fakeReconsiderer{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
@@ -270,7 +271,7 @@ func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := sourcetargets.New(store, fakeSearchConfigGetter{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
+	svc := sourcetargets.New(store, fakeSearchConfigReader{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if status, ok := apperr.StatusFor(err); !ok || status != 503 {

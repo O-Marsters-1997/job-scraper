@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
@@ -31,11 +31,9 @@ type Store interface {
 	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
 }
 
-// SearchConfigGetter reads the caller's search config; scoring hasn't moved
-// under internal/services yet, so this is still satisfied by the legacy
-// *jobsdb.DB (ADR 0011 migration order).
-type SearchConfigGetter interface {
-	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
+// SearchConfigReader reads a user's Search Config from the scoring context.
+type SearchConfigReader interface {
+	SearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 }
 
 // Reconsiderer re-evaluates saved candidates against a search config; the
@@ -46,12 +44,12 @@ type Reconsiderer interface {
 
 type Service struct {
 	targets    Store
-	configs    SearchConfigGetter
+	configs    SearchConfigReader
 	candidates Reconsiderer
 	queue      QueuePublisher
 }
 
-func New(targets Store, configs SearchConfigGetter, candidates Reconsiderer, q QueuePublisher) *Service {
+func New(targets Store, configs SearchConfigReader, candidates Reconsiderer, q QueuePublisher) *Service {
 	return &Service{targets: targets, configs: configs, candidates: candidates, queue: q}
 }
 
@@ -171,8 +169,8 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 		return target, nil
 	}
 
-	cfg, err := s.configs.GetSearchConfig(ctx, userID)
-	if errors.Is(err, data.ErrNotFound) {
+	cfg, err := s.configs.SearchConfig(ctx, userID)
+	if errors.Is(err, scoring.ErrNotFound) {
 		cfg = dto.SearchConfig{UserID: userID}
 	} else if err != nil {
 		return dto.SourceTarget{}, apperr.Unavailable("search saved but candidate reconsideration failed")

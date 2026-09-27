@@ -2,22 +2,28 @@ package scraper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/candidates"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
+
+// SearchConfigReader reads a user's Search Config from the scoring context.
+type SearchConfigReader interface {
+	SearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
+}
 
 type Orchestrator struct {
 	db providers.JobProvider
 	q  interface {
 		EnqueueJobs(context.Context, []dto.QueuedJob) error
 	}
-	cfgDB       providers.SearchConfigProvider
+	cfgDB       SearchConfigReader
 	buildTarget func(dto.SourceTarget) []sources.Source
 	candidates  *candidates.Service
 }
@@ -33,7 +39,7 @@ func (o *Orchestrator) WithSourceBuilder(build func(dto.SourceTarget) []sources.
 	return o
 }
 
-func (o *Orchestrator) WithRejectFilter(cfgDB providers.SearchConfigProvider) {
+func (o *Orchestrator) WithRejectFilter(cfgDB SearchConfigReader) {
 	o.cfgDB = cfgDB
 }
 
@@ -45,8 +51,8 @@ func (o *Orchestrator) WithCandidates(store candidates.Store) *Orchestrator {
 func (o *Orchestrator) searchConfig(ctx context.Context, target dto.SourceTarget) (dto.SearchConfig, error) {
 	config := dto.SearchConfig{UserID: target.UserID}
 	if o.cfgDB != nil {
-		stored, err := o.cfgDB.GetSearchConfig(ctx, target.UserID)
-		if err != nil && err != data.ErrNotFound {
+		stored, err := o.cfgDB.SearchConfig(ctx, target.UserID)
+		if err != nil && !errors.Is(err, scoring.ErrNotFound) {
 			return config, err
 		}
 		if err == nil {

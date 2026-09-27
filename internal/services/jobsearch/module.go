@@ -25,9 +25,8 @@ type Module struct {
 }
 
 // New builds the jobsearch context. configs is scoring's search config
-// reader, still satisfied by the legacy *jobsdb.DB since scoring hasn't
-// moved under internal/services yet (ADR 0011 migration order).
-func New(pool *pgxpool.Pool, q *queue.Broker, configs sourcetargets.SearchConfigGetter) *Module {
+// reader (ADR 0011 migration order).
+func New(pool *pgxpool.Pool, q *queue.Broker, configs sourcetargets.SearchConfigReader) *Module {
 	st := store.New(pool)
 	cand := candidates.New(st, q)
 	return &Module{

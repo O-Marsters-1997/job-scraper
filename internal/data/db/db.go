@@ -57,6 +57,13 @@ func parseUUID(s string) (pgtype.UUID, error) {
 	return id, nil
 }
 
+func uuidString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return id.String()
+}
+
 func ConnString() (string, error) {
 	vars := map[string]string{
 		"POSTGRES_USER":     os.Getenv("POSTGRES_USER"),

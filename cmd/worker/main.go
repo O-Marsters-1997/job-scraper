@@ -23,6 +23,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -97,7 +98,7 @@ func main() {
 		func(target dto.SourceTarget) []sources.Source {
 			return builder.BuildSources([]dto.SourceTarget{target})
 		})
-	orch.WithRejectFilter(db)
+	orch.WithRejectFilter(scoring.NewFacade(db.Pool()))
 	orch.WithCandidates(db)
 	processor := &taskProcessor{
 		db: db, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
