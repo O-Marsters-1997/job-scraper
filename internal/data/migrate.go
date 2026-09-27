@@ -13,8 +13,6 @@ import (
 
 const migrationsDir = "scripts/migrations"
 
-// The migrations directory is resolved relative to the working directory,
-// which is the module root when running via go run or a built binary.
 func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() { _ = db.Close() }()

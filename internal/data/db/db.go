@@ -28,9 +28,7 @@ type DB struct {
 	scoring ScoringPort
 }
 
-// WithScoring sets the scoring facade DB writes cross-context effects
-// through, set after New since scoring's pool dependency isn't built yet
-// at that point (mirrors scraper.Orchestrator.WithRejectFilter).
+// WithScoring sets the scoring facade DB writes cross-context effects through.
 func (db *DB) WithScoring(s ScoringPort) *DB {
 	db.scoring = s
 	return db

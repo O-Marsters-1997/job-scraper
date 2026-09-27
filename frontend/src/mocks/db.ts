@@ -95,7 +95,6 @@ const LOCATIONS = [
 	"Toronto, CA",
 ];
 
-// Weighted toward LinkedIn (4 out of 9 slots)
 const SOURCES = [
 	"LinkedIn",
 	"LinkedIn",
@@ -107,8 +106,6 @@ const SOURCES = [
 	"Greenhouse",
 	"Lever",
 ];
-
-// Optional rich-field pools (index-modular, no faker calls — seed preserved)
 
 const JOB_DESCRIPTIONS = [
 	`We're building the infrastructure that powers payments for millions of people. As a key member of our engineering team, you'll design, build, and scale distributed systems that handle real-time financial transactions at global scale.\n\nYou'll work closely with product, data, and design teams to ship features end-to-end — from architecture decisions to production monitoring. We operate a 'you build it, you run it' culture, so you'll own your services in production.\n\nWe're looking for engineers who care deeply about reliability, security, and developer experience. You'll be joining a team of 8 engineers embedded in a product squad, shipping roughly every two weeks.`,
@@ -445,16 +442,13 @@ function humanizeSlug(slug: string): string {
 		.join(" ");
 }
 
-// Distribution across 12 jobs gives 42 % response rate (5 of 12 heard back)
-// and 7 awaiting response (Saved + Applied).
-
 const APP_DISTRIBUTION: Array<{ statusIndex: number; count: number }> = [
-	{ statusIndex: 0, count: 2 }, // Saved
-	{ statusIndex: 1, count: 5 }, // Applied
-	{ statusIndex: 2, count: 2 }, // Phone Screen
-	{ statusIndex: 3, count: 1 }, // Interview
-	{ statusIndex: 4, count: 1 }, // Offer
-	{ statusIndex: 5, count: 1 }, // Rejected
+	{ statusIndex: 0, count: 2 },
+	{ statusIndex: 1, count: 5 },
+	{ statusIndex: 2, count: 2 },
+	{ statusIndex: 3, count: 1 },
+	{ statusIndex: 4, count: 1 },
+	{ statusIndex: 5, count: 1 },
 ];
 
 let applications: Application[] = [];
@@ -852,8 +846,6 @@ export function updateProfile(payload: { email: string }): void {
 	profile = { ...profile, email: payload.email };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function buildWithDetails(app: Application): ApplicationWithDetails {
 	const job = jobs.find((j) => j.ID === app.JobID);
 	const status = statuses.find((s) => s.ID === app.StatusID);
@@ -872,8 +864,6 @@ function buildWithDetails(app: Application): ApplicationWithDetails {
 		StatusColour: status.Colour,
 	};
 }
-
-// ─── Read helpers ─────────────────────────────────────────────────────────────
 
 export function getJobs(): Job[] {
 	return jobs;
@@ -918,8 +908,6 @@ export function recomputeScores(): RecomputeResult {
 	});
 	return { recomputed };
 }
-
-// ─── Mutation helpers ─────────────────────────────────────────────────────────
 
 export function createApplication(data: CreateApplicationPayload): Application {
 	const status = data.status_id

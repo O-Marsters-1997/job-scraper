@@ -33,7 +33,7 @@ func TestCompute(t *testing.T) {
 		salaryRaw string
 		floor     *dto.Money
 		wantScore int
-		wantRows  []dto.ScoreRow // Resolved/Effect only, matched by index
+		wantRows  []dto.ScoreRow
 	}{
 		{
 			name:      "nothing known scores 50",

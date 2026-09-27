@@ -22,8 +22,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
-// seedBoards are curated, verified-live Getro-powered VC-fund job boards
-// (checked by hand: each returns a 200 with a __NEXT_DATA__ jobs payload).
 var seedBoards = []string{
 	"https://jobsinvc.getro.com/jobs",
 	"https://jobs.underscore.vc/jobs",

@@ -1,29 +1,6 @@
 // Package indeed scrapes Indeed search-result and job-detail pages.
-//
-// Indeed sits behind aggressive anti-bot protection (Cloudflare + its own
-// fingerprinting), so this source runs through BrightData Web Unlocker
-// (UseProxy: true) rather than direct HTTP.
-//
-// Selector provenance: this environment could not reach Indeed live (no
-// BRIGHTDATA_PROXY_URL configured here, and a direct unproxied fetch is
-// blocked by a Cloudflare interstitial — see testdata/blocked_cloudflare.html
-// for the real captured block page). The selectors below are therefore NOT
-// verified against a live Indeed response. They follow the data-testid hooks
-// documented by long-running public Indeed scrapers (e.g. the JobSpy project,
-// github.com/speedyapply/JobSpy) as the most stable identifiers Indeed has
-// exposed in recent years: `[data-testid="company-name"]`,
-// `[data-testid="text-location"]` on cards, and
-// `[data-testid="inlineHeader-companyName"]` /
-// `[data-testid="inlineHeader-companyLocation"]` / `#jobDescriptionText` on
-// detail pages.
-//
-// snapshots/*.html are placeholder fixtures built to match these selectors —
-// NOT real captures. Regenerate against real pages once proxy access is
-// available:
-//
-//	just cli download indeed list_search <a-real-indeed-search-url>
-//	just cli download indeed detail_job <a-real-indeed-detail-url>
-//	just cli rebase indeed
+// It runs through BrightData Web Unlocker because Cloudflare and Indeed's own
+// fingerprinting block direct HTTP; selectors are unverified against a live page.
 package indeed
 
 import (
@@ -86,12 +63,9 @@ func New(cfg Config) *Scraper {
 	}
 }
 
-// Iterate fetches each configured search URL once.
-//
-// ponytail: no offset pagination (`&start=N`) — Indeed's total-result-count
-// element isn't verified without a live/proxied fetch, so PaginatedBase's
-// count-driven IteratePages isn't wired up. Add it once a real search-page
-// fixture confirms the count selector.
+// Iterate fetches each configured search URL once; it has no offset
+// pagination because Indeed's total-result-count selector is unverified
+// without a live fetch (see package doc).
 func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
 	for _, searchURL := range s.urls {
 		body, err := s.Get(ctx, searchURL)
@@ -137,13 +111,9 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	return ParseJobDetail(r, url)
 }
 
-// ParseURLs extracts partial job cards (Title, Location, URL, CompanySlug)
-// from an Indeed search-results page.
-//
-// BrightData's Web Unlocker returns HTTP 200 even for anti-bot interstitials,
-// so a page with zero job cards and no recognizable "no results" marker is
-// treated as a block and returns an error rather than an empty, falsely-fresh
-// result (see testdata/blocked_cloudflare.html + the accompanying test).
+// ParseURLs extracts job cards from a search-results page. A page with zero
+// cards and no "no results" marker errors instead of looking like an empty
+// scrape, since BrightData returns HTTP 200 even for anti-bot interstitials.
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {

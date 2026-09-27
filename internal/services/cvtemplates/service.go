@@ -120,7 +120,6 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 	return cvs, nil
 }
 
-// ExportPDF streams a tab as a PDF.
 func (s *Service) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
 	body, err := s.gc.ExportPDF(ctx, userID, docID, tabID)
 	if err != nil {

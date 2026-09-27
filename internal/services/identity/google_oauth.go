@@ -27,9 +27,6 @@ type oauthRedirect struct {
 	state, authURL string
 }
 
-// oauthStartHandler is public so the OAuth redirect URL stays clean; it
-// redirects, so it goes through handlers.Handle directly rather than a CRUD
-// generic.
 func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (string, error) { return generateState() },
@@ -47,10 +44,6 @@ type oauthConnect struct {
 	userID, code string
 }
 
-// oauthCallbackHandler redirects, so it goes through handlers.Handle
-// directly rather than a CRUD generic. The state cookie is cleared only on
-// success; on failure it simply expires (10 minutes) and the next
-// /google/oauth/start overwrites it.
 func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthConnect, error) {

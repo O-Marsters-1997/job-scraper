@@ -327,8 +327,6 @@ export function RoleCloud(props: { variant?: "full" | "compact" } = {}) {
 		};
 		startMotion();
 		reduce.addEventListener?.("change", startMotion);
-		// In the static (reduced-motion) case the rAF loop isn't re-measuring,
-		// so repaint once when webfonts finish loading.
 		document.fonts?.ready.then(() => {
 			if (reduce.matches) paint();
 		});

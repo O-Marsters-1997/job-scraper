@@ -75,7 +75,6 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 	return dto.GoogleStatus{Connected: true, Email: info.Email}, nil
 }
 
-// Disconnect removes the user's stored Google token.
 func (s *Service) Disconnect(ctx context.Context, userID, _ string) error {
 	return s.client.DeleteToken(ctx, userID)
 }

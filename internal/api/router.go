@@ -18,12 +18,9 @@ type Module interface {
 	Routes(chi.Router)
 }
 
-// NewRouter takes idm and js separately from modules: idm's session
-// middleware wraps every protected route, and js's PublicRoutes (ingest)
-// needs its own ServiceTokenMiddleware group here, since depguard's "shared"
-// rule keeps internal/api out of internal/services/**, so jobsearch itself
-// can't apply that middleware (ADR 0011). Every other moved context goes
-// through modules alone.
+// NewRouter takes idm and js separately from modules so js's PublicRoutes
+// (ingest) can get its own ServiceTokenMiddleware group here, since
+// depguard bars internal/api from internal/services/** (ADR 0011).
 func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {

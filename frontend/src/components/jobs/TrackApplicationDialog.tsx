@@ -41,8 +41,6 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 					</DialogTitle>
 					<p class="text-sm text-muted">{props.job?.Title}</p>
 				</DialogHeader>
-				{/* Mount fresh on each open so signals initialize from props.existingApp
-				    once — no createEffect needed to re-seed on open. */}
 				<Show when={props.open}>
 					<TrackApplicationForm
 						job={props.job}
