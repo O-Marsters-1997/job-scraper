@@ -129,7 +129,9 @@ _Avoid_: Category, section
 **Pick**:
 A User's stance (nice, avoid, or block for `domain`) on one Option. Nice Picks in the same
 Dimension are alternatives — a Job matching any one earns that Dimension's boost once; avoid Picks
-cost a Job only when the Job has them.
+cost a Job only when the Job has them; a block Pick that resolves yes zeroes Suitability and drops
+the Job from the User's list — unlike a Hard filter, it runs after Jev answers, since domain needs
+Jev to decide.
 _Avoid_: Preference (too broad), rule
 
 **Answer**:
