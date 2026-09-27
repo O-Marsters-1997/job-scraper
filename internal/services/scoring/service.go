@@ -267,7 +267,7 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 		answer, known := answers[questionHash(opt.Question)]
 		out = append(out, evaluatedPick{
 			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
-			answer: answer, known: known,
+			answer: answer, known: known, retired: opt.RetiredAt != nil,
 		})
 	}
 	return out
