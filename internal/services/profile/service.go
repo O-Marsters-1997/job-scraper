@@ -1,3 +1,4 @@
+// Package profile is the identity context's user profile read/update.
 package profile
 
 import (
@@ -6,16 +7,16 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-type store interface {
+type Store interface {
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
 }
 
 type Service struct {
-	store store
+	store Store
 }
 
-func New(store store) *Service {
+func New(store Store) *Service {
 	return &Service{store: store}
 }
 

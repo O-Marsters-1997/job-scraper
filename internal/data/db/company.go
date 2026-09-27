@@ -121,8 +121,8 @@ func (db *DB) SetCompanyTracking(ctx context.Context, userID, companyID string, 
 		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
 		}
-		if err := queries.QueueTrackingScores(ctx, cid); err != nil {
-			return dto.CompanyTracking{}, fmt.Errorf("queue tracked company scores: %w", err)
+		if err := db.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("scoring.CompanyTracked: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

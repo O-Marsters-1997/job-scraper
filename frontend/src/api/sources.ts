@@ -1,24 +1,29 @@
-import type { SourceInfo } from "../types/source";
+import {
+	type ResolvedBoard,
+	resolvedBoardSchema,
+	sourceInfoSchema,
+} from "../types/source";
 import { apiFetch } from "./client";
-import { API_BASE } from "./config";
+import { API_BASE, useMocks } from "./config";
 
-export async function fetchSources(): Promise<SourceInfo[]> {
-	return apiFetch<SourceInfo[]>("/sources");
+export async function fetchSources() {
+	if (useMocks()) {
+		const { getSources } = await import("../mocks/db");
+		return getSources();
+	}
+	return apiFetch("/sources", undefined, sourceInfoSchema.array());
 }
 
-export interface ResolvedBoard {
-	source: string;
-	value: string;
-}
-
-// resolveBoard turns a pasted ATS board URL into a {source, value} pair, or null
-// if the URL isn't a recognised ATS board (422/400).
 export async function resolveBoard(url: string): Promise<ResolvedBoard | null> {
-	const res = await fetch(
-		`${API_BASE}/sources/resolve?url=${encodeURIComponent(url)}`,
+	if (useMocks()) {
+		const { resolveBoard: mockResolve } = await import("../mocks/db");
+		return mockResolve(url);
+	}
+	const response = await fetch(
+		`${API_BASE}/sources/resolve?${new URLSearchParams({ url })}`,
 		{ credentials: "include" },
 	);
-	if (res.status === 422 || res.status === 400) return null;
-	if (!res.ok) throw new Error(`resolve: ${res.status}`);
-	return res.json();
+	if (response.status === 422 || response.status === 400) return null;
+	if (!response.ok) throw new Error(`resolve: ${response.status}`);
+	return resolvedBoardSchema.parse(await response.json());
 }

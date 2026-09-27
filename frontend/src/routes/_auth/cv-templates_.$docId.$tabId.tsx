@@ -1,8 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import type { PDFPageProxy } from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, PDFPageProxy } from "pdfjs-dist";
 import * as pdfjsLib from "pdfjs-dist";
-import { createResource, createSignal, For, Show, untrack } from "solid-js";
-import { API_BASE } from "../../api/config";
+import {
+	createResource,
+	For,
+	onCleanup,
+	type ResourceFetcherInfo,
+	Show,
+	untrack,
+} from "solid-js";
+import { fetchCVPdf } from "../../api/cvTemplates";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 	"pdfjs-dist/build/pdf.worker.min.mjs",
@@ -19,39 +26,46 @@ function tabParam(tabId: string): string {
 	return tabId.startsWith("t.") ? tabId : `t.${tabId}`;
 }
 
+type CVPdf = { loadingTask: PDFDocumentLoadingTask; pages: PDFPageProxy[] };
+type CVPdfSource = { docId: string; tabId: string };
+
+// Guards against a fetch that resolves after a newer one has already started:
+// without this, that PDF's loadingTask never becomes the resource's `value`
+// (solid drops stale resolutions) and so never gets destroy()ed.
+let cvPdfRequestSeq = 0;
+
+async function loadCVPdf(
+	source: CVPdfSource,
+	{ value }: ResourceFetcherInfo<CVPdf>,
+): Promise<CVPdf> {
+	const seq = ++cvPdfRequestSeq;
+	await value?.loadingTask.destroy();
+	const data = await fetchCVPdf(source.docId, source.tabId);
+	const loadingTask = pdfjsLib.getDocument({ data });
+	const pdf = await loadingTask.promise;
+	const pages = await Promise.all(
+		Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
+	);
+	if (seq !== cvPdfRequestSeq) {
+		await loadingTask.destroy();
+		throw new Error("superseded by a newer request");
+	}
+	return { loadingTask, pages };
+}
+
 function CVDetailPage() {
 	const params = Route.useParams();
 
-	const pdfUrl = () =>
-		`${API_BASE}/cv-templates/${params().docId}/${params().tabId}/pdf`;
 	const docsUrl = () =>
 		`https://docs.google.com/document/d/${params().docId}/edit?tab=${tabParam(params().tabId)}`;
 
-	const [pages, setPages] = createSignal<PDFPageProxy[]>([]);
-	const [error, setError] = createSignal<string | null>(null);
+	const [pdfResource] = createResource(
+		(): CVPdfSource => ({ docId: params().docId, tabId: params().tabId }),
+		loadCVPdf,
+	);
 
-	const [pdfResource] = createResource(pdfUrl, async (url) => {
-		setPages([]);
-		setError(null);
-
-		try {
-			const res = await fetch(url, { credentials: "include" });
-			if (!res.ok) {
-				throw new Error(`Server returned ${res.status}`);
-			}
-			const data = await res.arrayBuffer();
-
-			const pdf = await pdfjsLib.getDocument({ data }).promise;
-			const loadedPages: PDFPageProxy[] = [];
-			for (let i = 1; i <= pdf.numPages; i++) {
-				loadedPages.push(await pdf.getPage(i));
-			}
-			setPages(loadedPages);
-			return pdf;
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load PDF");
-			return null;
-		}
+	onCleanup(() => {
+		pdfResource.latest?.loadingTask.destroy();
 	});
 
 	return (
@@ -113,21 +127,29 @@ function CVDetailPage() {
 					</div>
 				</Show>
 
-				<Show when={error()}>
-					{(msg) => (
+				<Show when={pdfResource.error}>
+					{(err) => (
 						<div class="w-full max-w-3xl rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
 							<p class="mb-1 text-sm font-semibold text-destructive-strong">
 								Failed to load PDF
 							</p>
-							<p class="text-sm text-muted">{msg()}</p>
+							<p class="text-sm text-muted">
+								{err() instanceof Error ? err().message : "Failed to load PDF"}
+							</p>
 						</div>
 					)}
 				</Show>
 
-				<Show when={!pdfResource.loading && pages().length > 0}>
-					<div class="flex w-full max-w-3xl flex-col gap-4">
-						<For each={pages()}>{(page) => <PDFCanvas page={page} />}</For>
-					</div>
+				<Show
+					when={!pdfResource.loading && !pdfResource.error && pdfResource()}
+				>
+					{(res) => (
+						<div class="flex w-full max-w-3xl flex-col gap-4">
+							<For each={res().pages}>
+								{(page) => <PDFCanvas page={page} />}
+							</For>
+						</div>
+					)}
 				</Show>
 			</div>
 		</div>

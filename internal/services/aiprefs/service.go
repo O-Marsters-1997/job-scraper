@@ -1,3 +1,5 @@
+// Package aiprefs is the identity context's read model over a user's
+// configured AI provider credentials.
 package aiprefs
 
 import (

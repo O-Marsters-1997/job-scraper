@@ -210,12 +210,12 @@ func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobID
 	return out, nil
 }
 
-func (s *Store) SeedDefaultStatuses(ctx context.Context, userID string) error {
+func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return err
 	}
-	if err := s.queries.SeedDefaultStatuses(ctx, uid); err != nil {
+	if err := s.queries.WithTx(tx).SeedDefaultStatuses(ctx, uid); err != nil {
 		return fmt.Errorf("store.SeedDefaultStatuses: %w", err)
 	}
 	return nil

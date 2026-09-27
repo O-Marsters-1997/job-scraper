@@ -9,13 +9,12 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 const userInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-type Client interface {
+type oauthClient interface {
 	AuthURL(state string) string
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
 	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
@@ -23,11 +22,13 @@ type Client interface {
 	DeleteToken(ctx context.Context, userID string) error
 }
 
+// Service orchestrates the Google Link: connecting, checking status and
+// disconnecting.
 type Service struct {
-	client Client
+	client oauthClient
 }
 
-func New(client Client) *Service {
+func NewService(client oauthClient) *Service {
 	return &Service{client: client}
 }
 
@@ -49,9 +50,9 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 	hc, err := s.client.HTTPClientForUser(ctx, userID)
 	if err != nil {
 		switch {
-		case errors.Is(err, providers.ErrGoogleTokenNotFound):
+		case errors.Is(err, ErrTokenNotFound):
 			return dto.GoogleStatus{Connected: false}, nil
-		case errors.Is(err, providers.ErrGoogleTokenUnusable):
+		case errors.Is(err, ErrTokenUnusable):
 			slog.Warn("google token unusable, treating as disconnected", slog.Any("err", err))
 			return dto.GoogleStatus{Connected: false}, nil
 		default:

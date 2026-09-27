@@ -6,8 +6,8 @@ import { FormFeedback } from "@/components/FormFeedback";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AiPrefs } from "../../../api/aiPrefs";
 import { useAiPrefs, useUpdateAiCredentials } from "../../../hooks/useAiPrefs";
+import type { AiPrefs } from "../../../types/aiPrefs";
 
 export const Route = createFileRoute("/_auth/settings/ai")({
 	component: AiPage,

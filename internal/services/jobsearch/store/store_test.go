@@ -11,12 +11,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.New(t)
-	return store.New(pool), pool
+	return store.New(pool, scoring.NewFacade(pool)), pool
 }
 
 func insertUser(t *testing.T, pool *pgxpool.Pool) string {
