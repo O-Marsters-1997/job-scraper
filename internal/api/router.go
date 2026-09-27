@@ -18,8 +18,6 @@ import (
 )
 
 // Module mounts a context's session-protected routes onto the router.
-// A Module that also implements PublicRoutes(chi.Router) gets those routes
-// mounted outside the session-protected group.
 type Module interface {
 	Routes(chi.Router)
 }
