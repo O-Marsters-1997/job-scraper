@@ -10,9 +10,10 @@ import {
 	fetchApplicationStatuses,
 	updateApplicationStatus,
 } from "../api/applicationStatuses";
+import { keys } from "../api/keys";
 
 export const applicationStatusesQueryOptions = queryOptions({
-	queryKey: ["application-statuses"],
+	queryKey: keys.statuses,
 	queryFn: fetchApplicationStatuses,
 });
 
@@ -25,8 +26,10 @@ export function useCreateApplicationStatus() {
 	return createMutation(() => ({
 		mutationFn: ({ name, colour }: { name: string; colour: string }) =>
 			createApplicationStatus(name, colour),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["application-statuses"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: keys.statuses });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+		},
 	}));
 }
 
@@ -42,8 +45,10 @@ export function useUpdateApplicationStatus() {
 			name: string;
 			colour: string;
 		}) => updateApplicationStatus(id, name, colour),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["application-statuses"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: keys.statuses });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+		},
 	}));
 }
 
@@ -51,7 +56,9 @@ export function useDeleteApplicationStatus() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
 		mutationFn: (id: string) => deleteApplicationStatus(id),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["application-statuses"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: keys.statuses });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+		},
 	}));
 }

@@ -10,10 +10,11 @@ import {
 	fetchApplications,
 	updateApplication,
 } from "../api/applications";
+import { keys } from "../api/keys";
 
 export const applicationsQueryOptions = (statusId?: string) =>
 	queryOptions({
-		queryKey: ["applications", statusId ?? "all"],
+		queryKey: keys.applications.byStatus(statusId),
 		queryFn: () => fetchApplications(statusId),
 	});
 
@@ -26,7 +27,8 @@ export function useCreateApplication() {
 	return createMutation(() => ({
 		mutationFn: createApplication,
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["applications"] });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+			queryClient.invalidateQueries({ queryKey: keys.jobs.all });
 		},
 	}));
 }
@@ -42,7 +44,8 @@ export function useUpdateApplication() {
 			data: Parameters<typeof updateApplication>[1];
 		}) => updateApplication(id, data),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["applications"] });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+			queryClient.invalidateQueries({ queryKey: keys.jobs.all });
 		},
 	}));
 }
@@ -52,7 +55,8 @@ export function useDeleteApplication() {
 	return createMutation(() => ({
 		mutationFn: deleteApplication,
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["applications"] });
+			queryClient.invalidateQueries({ queryKey: keys.applications.all });
+			queryClient.invalidateQueries({ queryKey: keys.jobs.all });
 		},
 	}));
 }

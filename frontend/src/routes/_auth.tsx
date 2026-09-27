@@ -1,14 +1,16 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/solid-router";
 import { createSignal } from "solid-js";
-import { getMe } from "../api/auth";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import TweaksPanel from "../components/TweaksPanel";
+import { meQueryOptions } from "../hooks/useAuth";
+import { queryClient } from "../lib/queryClient";
 
 export const Route = createFileRoute("/_auth")({
 	beforeLoad: async () => {
-		const res = await getMe();
-		if (!res.ok) {
+		try {
+			await queryClient.ensureQueryData(meQueryOptions);
+		} catch {
 			throw redirect({ to: "/login" });
 		}
 	},

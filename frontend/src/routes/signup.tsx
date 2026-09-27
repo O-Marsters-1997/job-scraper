@@ -4,6 +4,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { queryClient } from "@/lib/queryClient";
 import { signup } from "../api/auth";
 
 export const Route = createFileRoute("/signup")({
@@ -27,6 +28,7 @@ function SignupPage() {
 		try {
 			const res = await signup(username(), password());
 			if (res.ok) {
+				queryClient.clear();
 				navigate({ to: "/jobs" });
 			} else if (res.status === 409) {
 				setError("That username is already taken.");
