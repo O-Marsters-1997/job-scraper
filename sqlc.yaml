@@ -16,3 +16,11 @@ sql:
         package: "sqlc"
         out: "internal/services/applications/store/sqlc"
         sql_package: "pgx/v5"
+  - engine: "postgresql"
+    queries: "internal/services/cvtemplates/store/queries"
+    schema: "internal/data/sqlc/schema.sql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/services/cvtemplates/store/sqlc"
+        sql_package: "pgx/v5"
