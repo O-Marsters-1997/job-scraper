@@ -1,15 +1,18 @@
 import { Bar } from "solid-chartjs";
 import { createMemo, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { hexAlpha, primaryHex, verticalBarOptions } from "@/lib/charts";
+import {
+	chartCanvasRef,
+	hexAlpha,
+	primaryHex,
+	themedMemo,
+	verticalBarOptions,
+} from "@/lib/charts";
 import type { Job } from "@/types/job";
 
 const SCORE_BANDS = ["0–19", "20–39", "40–59", "60–79", "80–100"];
 
-export function ScoreAndGateChart(props: {
-	jobs: Job[];
-	chartsReady: boolean;
-}) {
+export function ScoreAndGateChart(props: { jobs: Job[] }) {
 	const gateStats = createMemo(() => {
 		let scored = 0;
 		let unscored = 0;
@@ -22,7 +25,7 @@ export function ScoreAndGateChart(props: {
 
 	const hasScores = () => gateStats().scored > 0;
 
-	const scoreDistData = createMemo(() => {
+	const scoreDistData = themedMemo(() => {
 		const bands = [0, 0, 0, 0, 0];
 		for (const job of props.jobs) {
 			if (job.SuitabilityScore != null) {
@@ -45,6 +48,13 @@ export function ScoreAndGateChart(props: {
 		};
 	});
 
+	const options = themedMemo(verticalBarOptions);
+
+	const setCanvas = chartCanvasRef(
+		() =>
+			`Bar chart of suitability score distribution, ${gateStats().scored} scored job${gateStats().scored === 1 ? "" : "s"}`,
+	);
+
 	return (
 		<Card class="mb-3 mt-3">
 			<div class="border-b border-border px-5 py-4">
@@ -59,11 +69,11 @@ export function ScoreAndGateChart(props: {
 				<div class="px-5 py-4 lg:border-r lg:border-border">
 					<p class="mb-2 text-xs text-faint">Suitability score distribution</p>
 					<Show
-						when={hasScores() && props.chartsReady}
+						when={hasScores()}
 						fallback={<p class="text-sm text-faint">No scored jobs yet.</p>}
 					>
 						<div class="relative" style={{ height: "140px" }}>
-							<Bar data={scoreDistData()} options={verticalBarOptions()} />
+							<Bar ref={setCanvas} data={scoreDistData()} options={options()} />
 						</div>
 					</Show>
 				</div>

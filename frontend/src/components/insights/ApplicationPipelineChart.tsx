@@ -1,7 +1,12 @@
 import { Bar } from "solid-chartjs";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { hexAlpha, stackedBarOptions } from "@/lib/charts";
+import {
+	chartCanvasRef,
+	hexAlpha,
+	stackedBarOptions,
+	themedMemo,
+} from "@/lib/charts";
 import { cn } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
@@ -9,7 +14,6 @@ import type { ApplicationStatus } from "@/types/applicationStatus";
 export function ApplicationPipelineChart(props: {
 	applications: ApplicationWithDetails[];
 	statuses: ApplicationStatus[];
-	chartsReady: boolean;
 }) {
 	const [selectedStatuses, setSelectedStatuses] = createSignal(
 		new Set(props.statuses.map((s) => s.ID)),
@@ -46,7 +50,13 @@ export function ApplicationPipelineChart(props: {
 			})),
 	}));
 
+	const options = themedMemo(stackedBarOptions);
+
 	const totalApps = () => props.applications.length;
+	const setCanvas = chartCanvasRef(
+		() =>
+			`Stacked bar chart of application pipeline, ${totalApps()} application${totalApps() === 1 ? "" : "s"} across ${selectedStatuses().size} selected stage${selectedStatuses().size === 1 ? "" : "s"}`,
+	);
 
 	return (
 		<Card>
@@ -129,13 +139,13 @@ export function ApplicationPipelineChart(props: {
 					</div>
 
 					<Show
-						when={selectedStatuses().size > 0 && props.chartsReady}
+						when={selectedStatuses().size > 0}
 						fallback={
 							<p class="text-sm text-faint">Select at least one stage.</p>
 						}
 					>
 						<div class="relative" style={{ height: "56px" }}>
-							<Bar data={pipelineData()} options={stackedBarOptions()} />
+							<Bar ref={setCanvas} data={pipelineData()} options={options()} />
 						</div>
 					</Show>
 				</Show>

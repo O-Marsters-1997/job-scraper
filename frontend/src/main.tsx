@@ -4,10 +4,10 @@ import { render } from "solid-js/web";
 import { ErrorState, NotFoundState } from "./components/ErrorState";
 import { queryClient } from "./lib/queryClient";
 import { loadTweaks } from "./lib/tweaks";
-import { applyAll } from "./lib/tweaks.apply";
+import { applyTweaks } from "./lib/tweaks.apply";
 import { routeTree } from "./routeTree.gen";
 
-applyAll(loadTweaks());
+applyTweaks(loadTweaks());
 
 const router = createRouter({
 	routeTree,

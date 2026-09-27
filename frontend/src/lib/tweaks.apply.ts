@@ -3,6 +3,7 @@ import {
 	type DensityKey,
 	FONTS,
 	type FontKey,
+	markThemeApplied,
 	type RadiusKey,
 	type SidebarWidthKey,
 	type SizeKey,
@@ -115,4 +116,9 @@ export function applyAll(t: Tweaks): void {
 	applySidebarWidth(t.sidebarWidth);
 	applySize(t.size);
 	applyDensity(t.density);
+}
+
+export function applyTweaks(t: Tweaks): void {
+	applyAll(t);
+	markThemeApplied();
 }

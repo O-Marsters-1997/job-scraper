@@ -11,6 +11,7 @@ import {
 	FONTS,
 	type FontKey,
 	loadTweaks,
+	markThemeApplied,
 	type RadiusKey,
 	type SidebarWidthKey,
 	type SizeKey,
@@ -21,7 +22,7 @@ import {
 	type ThemeKey,
 	type Tweaks,
 } from "@/lib/tweaks";
-import { applyAll, applyTheme } from "@/lib/tweaks.apply";
+import { applyTheme, applyTweaks } from "@/lib/tweaks.apply";
 import { cn } from "@/lib/utils";
 
 const themeButtonVariants = cva(
@@ -77,7 +78,7 @@ export default function TweaksPanel() {
 	onMount(() => {
 		const loaded = loadTweaks();
 		setTweaks(loaded);
-		applyAll(loaded);
+		applyTweaks(loaded);
 
 		function handlePointerDown(e: PointerEvent) {
 			if (!open()) return;
@@ -85,26 +86,41 @@ export default function TweaksPanel() {
 			if (!target) return;
 			// Kobalte Popover portals render in <body>; let clicks inside them pass
 			if (target.closest("[data-tweaks-portal]")) return;
-			if (panelRef && !panelRef.contains(target)) setOpen(false);
+			if (panelRef && !panelRef.contains(target)) close();
+		}
+
+		function handleKeyDown(e: KeyboardEvent) {
+			if (e.key !== "Escape" || !open()) return;
+			const target = e.target as Element | null;
+			// Let Kobalte's own popover (e.g. the colour picker) handle its own Escape
+			if (target?.closest("[data-tweaks-portal]")) return;
+			close();
 		}
 
 		document.addEventListener("pointerdown", handlePointerDown);
-		onCleanup(() =>
-			document.removeEventListener("pointerdown", handlePointerDown),
-		);
+		document.addEventListener("keydown", handleKeyDown);
+		onCleanup(() => {
+			document.removeEventListener("pointerdown", handlePointerDown);
+			document.removeEventListener("keydown", handleKeyDown);
+		});
 	});
+
+	function close() {
+		if (view() === "custom") cancelCustomEditor();
+		setOpen(false);
+	}
 
 	function update<K extends keyof Tweaks>(key: K, value: Tweaks[K]) {
 		const next = { ...tweaks(), [key]: value };
 		setTweaks(next);
 		saveTweaks(next);
-		applyAll(next);
+		applyTweaks(next);
 	}
 
 	function reset() {
 		setTweaks({ ...DEFAULTS });
 		saveTweaks(DEFAULTS);
-		applyAll(DEFAULTS);
+		applyTweaks(DEFAULTS);
 		setView("main");
 	}
 
@@ -112,11 +128,12 @@ export default function TweaksPanel() {
 		const colors = tweaks().customColors ?? CUSTOM_DEFAULTS;
 		setDraft({ ...colors });
 		applyTheme("custom", colors);
+		markThemeApplied();
 		setView("custom");
 	}
 
 	function cancelCustomEditor() {
-		applyAll(tweaks());
+		applyTweaks(tweaks());
 		setView("main");
 	}
 
@@ -128,7 +145,7 @@ export default function TweaksPanel() {
 		};
 		setTweaks(next);
 		saveTweaks(next);
-		applyAll(next);
+		applyTweaks(next);
 		setView("main");
 	}
 
@@ -136,6 +153,7 @@ export default function TweaksPanel() {
 		const updated = { ...draft(), [varName]: value };
 		setDraft(updated);
 		applyTheme("custom", updated);
+		markThemeApplied();
 	}
 
 	const t = () => tweaks();
@@ -208,10 +226,7 @@ export default function TweaksPanel() {
 						</Show>
 						<button
 							type="button"
-							onClick={() => {
-								if (view() === "custom") cancelCustomEditor();
-								setOpen(false);
-							}}
+							onClick={close}
 							class="flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-background hover:text-foreground"
 							aria-label="Close tweaks"
 						>
@@ -315,7 +330,8 @@ export default function TweaksPanel() {
 
 			<button
 				type="button"
-				onClick={() => setOpen((o) => !o)}
+				onClick={() => (open() ? close() : setOpen(true))}
+				aria-expanded={open()}
 				class={cn(
 					"flex size-9 items-center justify-center rounded-full border shadow-lg transition-colors",
 					open()

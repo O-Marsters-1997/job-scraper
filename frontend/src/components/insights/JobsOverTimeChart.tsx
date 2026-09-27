@@ -1,8 +1,15 @@
 import { Chart as ChartJS } from "chart.js";
 import { Line } from "solid-chartjs";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { hexAlpha, lineChartOptions, primaryHex } from "@/lib/charts";
+import {
+	chartCanvasRef,
+	hexAlpha,
+	lineChartOptions,
+	primaryHex,
+	themedMemo,
+} from "@/lib/charts";
+import { dayKey } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
@@ -15,10 +22,7 @@ const PRESET_DAYS: Record<Preset, number | null> = {
 	All: null,
 };
 
-export function JobsOverTimeChart(props: {
-	jobs: Job[];
-	chartsReady: boolean;
-}) {
+export function JobsOverTimeChart(props: { jobs: Job[] }) {
 	const [activePreset, setActivePreset] = createSignal<Preset>("All");
 	let lineCanvas: HTMLCanvasElement | null = null;
 
@@ -42,7 +46,7 @@ export function JobsOverTimeChart(props: {
 		chart?.resetZoom();
 	}
 
-	const data = createMemo(() => {
+	const data = themedMemo(() => {
 		const allJobs = props.jobs;
 		if (allJobs.length === 0) return { datasets: [] };
 
@@ -55,12 +59,12 @@ export function JobsOverTimeChart(props: {
 		const spine = new Map<string, number>();
 		const cursor = new Date(earliest);
 		while (cursor <= today) {
-			spine.set(cursor.toISOString().slice(0, 10), 0);
+			spine.set(dayKey(cursor), 0);
 			cursor.setDate(cursor.getDate() + 1);
 		}
 
 		for (const job of allJobs) {
-			const key = new Date(job.ScrapedAt).toISOString().slice(0, 10);
+			const key = dayKey(job.ScrapedAt);
 			if (spine.has(key)) spine.set(key, (spine.get(key) ?? 0) + 1);
 		}
 
@@ -84,7 +88,13 @@ export function JobsOverTimeChart(props: {
 		};
 	});
 
+	const options = themedMemo(lineChartOptions);
+
 	const hasJobs = () => props.jobs.length > 0;
+	const setCanvas = chartCanvasRef(
+		() =>
+			`Line chart of jobs discovered per day, ${props.jobs.length} job${props.jobs.length === 1 ? "" : "s"} total`,
+	);
 
 	return (
 		<Card>
@@ -139,15 +149,16 @@ export function JobsOverTimeChart(props: {
 
 			<div class="relative px-5 pt-4" style={{ height: "220px" }}>
 				<Show
-					when={hasJobs() && props.chartsReady}
+					when={hasJobs()}
 					fallback={<p class="text-sm text-faint">No jobs scraped yet.</p>}
 				>
 					<Line
 						ref={(c: HTMLCanvasElement | null) => {
 							lineCanvas = c;
+							setCanvas(c);
 						}}
 						data={data()}
-						options={lineChartOptions()}
+						options={options()}
 					/>
 				</Show>
 			</div>

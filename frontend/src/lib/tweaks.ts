@@ -1,3 +1,5 @@
+import { createSignal } from "solid-js";
+
 export type ThemeKey =
 	| "violet"
 	| "midnight"
@@ -437,4 +439,13 @@ export function loadTweaks(): Tweaks {
 
 export function saveTweaks(t: Tweaks): void {
 	localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
+}
+
+// Charts derive their colours from CSS vars at render time (Canvas can't read
+// them live), so anything reading a theme-derived colour in a memo must also
+// read this to recompute when the applied theme changes.
+const [themeVersion, bumpThemeVersion] = createSignal(0);
+export { themeVersion };
+export function markThemeApplied(): void {
+	bumpThemeVersion((v) => v + 1);
 }

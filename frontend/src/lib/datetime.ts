@@ -1,4 +1,13 @@
+import { format } from "date-fns";
+
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+export function dayKey(input: Date | string): string {
+	return format(
+		typeof input === "string" ? new Date(input) : input,
+		"yyyy-MM-dd",
+	);
+}
 
 export function formatDate(iso: string): string {
 	if (!iso) return "—";
