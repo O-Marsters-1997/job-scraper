@@ -18,9 +18,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -104,7 +106,15 @@ func main() {
 
 	apps := applications.New(db.Pool())
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, apps)}
+	googleClient := igoogle.NewClient(
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URL"),
+		jobsdb.NewGoogleTokenStore(db),
+	)
+	cvTemplates := cvtemplates.New(db.Pool(), googleClient)
+
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, apps, cvTemplates)}
 
 	go func() {
 		<-ctx.Done()

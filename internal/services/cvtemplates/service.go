@@ -1,42 +1,36 @@
+// Package cvtemplates is the cvtemplates context: tracked CV docs, their
+// tabs, and rendering them as a PDF (ADR 0011).
 package cvtemplates
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/api/docref"
-	"github.com/ollymarsters/job-scraper/internal/api/google"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/google"
 )
 
-// The Docs API returns tabId values that already include the "t." prefix (e.g. "t.0"),
-// so we normalise defensively rather than assuming the format.
-func docTabURL(docID, tabID string) string {
-	tab := tabID
-	if !strings.HasPrefix(tab, "t.") {
-		tab = "t." + tab
-	}
-	return fmt.Sprintf("https://docs.google.com/document/d/%s/edit?tab=%s", docID, tab)
-}
-
-type googleClient interface {
+// DocsClient is the narrow Google Docs/Drive surface cvtemplates needs.
+// internal/google.Client satisfies it until identity exposes its own
+// DocsClient (#266).
+type DocsClient interface {
+	HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error)
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
-type store interface {
-	GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error)
-	providers.TrackedDocProvider
-	providers.TabProvider
+type Store interface {
+	ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error)
+	EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, titles []string) error
+	ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, error)
 }
 
 type CV struct {
@@ -50,26 +44,19 @@ type CV struct {
 }
 
 type Service struct {
-	gc    googleClient
-	store store
+	gc    DocsClient
+	store Store
 }
 
-var (
-	ErrInvalidDoc      = apperr.Invalid("invalid Google Docs URL or ID")
-	ErrInaccessibleDoc = apperr.NotFound("cannot access document")
-)
-
-func NewService(gc googleClient, s store) *Service {
-	return &Service{gc: gc, store: s}
+func NewService(gc DocsClient, store Store) *Service {
+	return &Service{gc: gc, store: store}
 }
 
-// Docs that are inaccessible (deleted, permissions revoked) are logged and skipped.
+// List returns userID's CVs, one per visible or hidden tab across their
+// tracked docs. A doc Google can no longer access is skipped, not an error.
 func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
-	if _, err := s.store.GetGoogleToken(ctx, userID); err != nil {
-		if errors.Is(err, providers.ErrGoogleTokenNotFound) {
-			return nil, fmt.Errorf("google account not connected: %w", err)
-		}
-		return nil, fmt.Errorf("cvtemplates.List check token: %w", err)
+	if _, err := s.gc.HTTPClientForUser(ctx, userID); err != nil {
+		return nil, fmt.Errorf("google account not connected: %w", err)
 	}
 
 	tracked, err := s.store.ListTrackedDocs(ctx, userID)
@@ -134,29 +121,6 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 	return cvs, nil
 }
 
-func (s *Service) AddDoc(ctx context.Context, userID string, in dto.TrackedDocInput) (struct{}, error) {
-	docID, err := docref.ParseDocID(in.URL)
-	if err != nil {
-		return struct{}{}, fmt.Errorf("%w: %w", ErrInvalidDoc, err)
-	}
-	if _, err := s.gc.FileMeta(ctx, userID, docID); err != nil {
-		return struct{}{}, fmt.Errorf("%w: %w", ErrInaccessibleDoc, err)
-	}
-	return struct{}{}, s.store.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
-}
-
-func (s *Service) RemoveDoc(ctx context.Context, userID, docID string) error {
-	return s.store.RemoveTrackedDoc(ctx, userID, docID)
-}
-
-func (s *Service) HideTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
-	return struct{}{}, s.store.HideTab(ctx, userID, in.DocID, in.TabID)
-}
-
-func (s *Service) ShowTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
-	return struct{}{}, s.store.ShowTab(ctx, userID, in.DocID, in.TabID)
-}
-
 // ExportPDF streams a tab as a PDF.
 func (s *Service) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
 	body, err := s.gc.ExportPDF(ctx, userID, docID, tabID)
@@ -164,4 +128,14 @@ func (s *Service) ExportPDF(ctx context.Context, userID, docID, tabID string) (i
 		return nil, apperr.Upstream("failed to export PDF")
 	}
 	return body, nil
+}
+
+// The Docs API returns tabId values that already include the "t." prefix
+// (e.g. "t.0"), so we normalise defensively rather than assuming the format.
+func docTabURL(docID, tabID string) string {
+	tab := tabID
+	if !strings.HasPrefix(tab, "t.") {
+		tab = "t." + tab
+	}
+	return fmt.Sprintf("https://docs.google.com/document/d/%s/edit?tab=%s", docID, tab)
 }

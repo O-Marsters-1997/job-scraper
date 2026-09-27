@@ -110,18 +110,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 			r.Post("/{id}/boards", handlers.Create(svc.companies.AddBoard))
 		})
 
-		r.Route("/cv-templates", func(r chi.Router) {
-			r.Get("/", handlers.GetAll(svc.cvTemplates.List))
-			r.Get("/{docId}/{tabId}/pdf", apihandlers.ExportCV(svc.cvTemplates))
-		})
-
-		r.Route("/tracked-docs", func(r chi.Router) {
-			r.Post("/", handlers.Create(svc.cvTemplates.AddDoc))
-			r.Delete("/{id}", handlers.Delete(svc.cvTemplates.RemoveDoc))
-			r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(svc.cvTemplates.HideTab))
-			r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(svc.cvTemplates.ShowTab))
-		})
-
 		for _, m := range allModules {
 			m.Routes(r)
 		}

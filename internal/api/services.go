@@ -5,13 +5,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
 	"github.com/ollymarsters/job-scraper/internal/api/extract"
-	igoogle "github.com/ollymarsters/job-scraper/internal/api/google"
 	"github.com/ollymarsters/job-scraper/internal/api/ingest"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aicredentials"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aiprefs"
 	authsvc "github.com/ollymarsters/job-scraper/internal/api/services/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/services/companies"
-	"github.com/ollymarsters/job-scraper/internal/api/services/cvtemplates"
 	googlesvc "github.com/ollymarsters/job-scraper/internal/api/services/google"
 	"github.com/ollymarsters/job-scraper/internal/api/services/jobs"
 	"github.com/ollymarsters/job-scraper/internal/api/services/profile"
@@ -21,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	"github.com/ollymarsters/job-scraper/internal/candidates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
@@ -39,7 +38,6 @@ type services struct {
 	aiCredentials *aicredentials.Service
 	sourceTargets *sourcetargets.Service
 	companies     *companies.Service
-	cvTemplates   *cvtemplates.Service
 }
 
 func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, apps *applications.Module) *services {
@@ -66,6 +64,5 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		aiCredentials: aicredentials.New(creds),
 		sourceTargets: sourcetargets.New(db, db, candidateService, q),
 		companies:     companies.New(db, db, q),
-		cvTemplates:   cvtemplates.NewService(googleClient, db),
 	}
 }

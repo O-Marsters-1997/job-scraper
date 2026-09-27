@@ -1,4 +1,4 @@
-package apihandlers
+package cvtemplates
 
 import (
 	"context"
@@ -10,6 +10,20 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
+func (m *Module) Routes(r chi.Router) {
+	r.Route("/cv-templates", func(r chi.Router) {
+		r.Get("/", handlers.GetAll(m.cv.List))
+		r.Get("/{docId}/{tabId}/pdf", exportCV(m.cv))
+	})
+
+	r.Route("/tracked-docs", func(r chi.Router) {
+		r.Post("/", handlers.Create(m.trackedDocs.AddDoc))
+		r.Delete("/{id}", handlers.Delete(m.trackedDocs.RemoveDoc))
+		r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(m.trackedDocs.HideTab))
+		r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(m.trackedDocs.ShowTab))
+	})
+}
+
 type cvExporter interface {
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
@@ -18,9 +32,7 @@ type exportRequest struct {
 	userID, docID, tabID string
 }
 
-// ExportCV streams a PDF response rather than returning JSON, so it goes
-// through Handle directly rather than a CRUD generic.
-func ExportCV(svc cvExporter) http.HandlerFunc {
+func exportCV(svc cvExporter) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (exportRequest, error) {
 			uid, err := handlers.UserID(r)
