@@ -47,14 +47,11 @@ func (q *Queries) ClaimPollState(ctx context.Context, arg ClaimPollStateParams) 
 	return i, err
 }
 
-const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :exec
-WITH closed AS (
-    UPDATE jobs SET closed_at = NOW()
-    WHERE primary_board_id = $1 AND closed_at IS NULL
-      AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2)
-    RETURNING id
-)
-DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
+const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :many
+UPDATE jobs SET closed_at = NOW()
+WHERE primary_board_id = $1 AND closed_at IS NULL
+  AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2)
+RETURNING id
 `
 
 type CloseMissingBoardJobsParams struct {
@@ -62,9 +59,24 @@ type CloseMissingBoardJobsParams struct {
 	LastSnapshotVersion int64
 }
 
-func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) error {
-	_, err := q.db.Exec(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
-	return err
+func (q *Queries) CloseMissingBoardJobs(ctx context.Context, arg CloseMissingBoardJobsParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, closeMissingBoardJobs, arg.PrimaryBoardID, arg.LastSnapshotVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const completePollState = `-- name: CompletePollState :execrows

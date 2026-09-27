@@ -153,8 +153,18 @@ func (db *DB) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) err
 		return fmt.Errorf("reopen board jobs: %w", err)
 	}
 	if len(urls) > 0 || state.ConsecutiveCompleteEmpty >= 1 {
-		if err := q.CloseMissingBoardJobs(ctx, pgsqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
+		closed, err := q.CloseMissingBoardJobs(ctx, pgsqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version})
+		if err != nil {
 			return fmt.Errorf("close missing board jobs: %w", err)
+		}
+		if len(closed) > 0 {
+			closedIDs := make([]string, len(closed))
+			for i, cid := range closed {
+				closedIDs[i] = cid.String()
+			}
+			if err := db.scoring.JobsClosed(ctx, tx, closedIDs); err != nil {
+				return fmt.Errorf("scoring.JobsClosed: %w", err)
+			}
 		}
 	}
 	if len(urls) == 0 && state.ConsecutiveCompleteEmpty >= 1 {

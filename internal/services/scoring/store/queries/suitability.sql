@@ -32,6 +32,16 @@ VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(question_h
     sqlc.arg(p_yes)::real, sqlc.arg(p_no)::real, sqlc.arg(p_not_stated)::real, sqlc.arg(confidence)::real)
 ON CONFLICT (job_id, fingerprint, question_hash, model) DO NOTHING;
 
+-- name: DropStaleAnswers :exec
+DELETE FROM option_answers
+USING jobs j
+WHERE option_answers.job_id = j.id
+    AND option_answers.job_id = ANY(sqlc.arg(job_ids)::uuid[])
+    AND option_answers.fingerprint != j.content_fingerprint;
+
+-- name: DeleteAnswersForJobs :exec
+DELETE FROM option_answers WHERE job_id = ANY(sqlc.arg(job_ids)::uuid[]);
+
 -- name: UpsertJobScore :exec
 INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, cost, score_fingerprint, score_model)
 VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(user_id)::uuid, sqlc.arg(score)::int, sqlc.arg(breakdown)::jsonb,

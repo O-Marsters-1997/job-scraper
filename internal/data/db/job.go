@@ -277,8 +277,26 @@ func (db *DB) MarkJobsClosed(ctx context.Context, urls []string) error {
 	if len(urls) == 0 {
 		return nil
 	}
-	if err := db.queries.MarkJobsClosed(ctx, urls); err != nil {
+	tx, err := db.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin mark jobs closed: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	closed, err := db.queries.WithTx(tx).MarkJobsClosed(ctx, urls)
+	if err != nil {
 		return fmt.Errorf("db.MarkJobsClosed: %w", err)
+	}
+	if len(closed) > 0 {
+		ids := make([]string, len(closed))
+		for i, id := range closed {
+			ids[i] = id.String()
+		}
+		if err := db.scoring.JobsClosed(ctx, tx, ids); err != nil {
+			return fmt.Errorf("scoring.JobsClosed: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit mark jobs closed: %w", err)
 	}
 	return nil
 }

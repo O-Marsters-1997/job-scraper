@@ -92,13 +92,15 @@ func main() {
 		slog.Error("API_BASE_URL is required")
 		os.Exit(1)
 	}
+	scoringFacade := scoring.NewFacade(db.Pool())
+	db.WithScoring(scoringFacade)
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
 	boardPoller := scraper.NewBoardPoller(db, scraper.SourceBoardFetcher{}, exporter)
 	orch := scraper.New(db, q).WithSourceBuilder(
 		func(target dto.SourceTarget) []sources.Source {
 			return builder.BuildSources([]dto.SourceTarget{target})
 		})
-	orch.WithRejectFilter(scoring.NewFacade(db.Pool()))
+	orch.WithRejectFilter(scoringFacade)
 	orch.WithCandidates(db)
 	processor := &taskProcessor{
 		db: db, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
