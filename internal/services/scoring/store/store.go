@@ -251,6 +251,22 @@ func (s *Store) RetireScoringOption(ctx context.Context, id string) error {
 	return nil
 }
 
+// QueueMissingAnswers queues an answer effect, without alerting, for each of
+// userID's open, scored, fingerprinted jobs missing any of hashes.
+func (s *Store) QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.queries.QueueMissingAnswers(ctx, sqlc.QueueMissingAnswersParams{
+		UserID: uid, QuestionHashes: hashes, Model: model,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("store.QueueMissingAnswers: %w", err)
+	}
+	return n, nil
+}
+
 func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
 	row, err := s.queries.ClaimAnswerEffect(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {

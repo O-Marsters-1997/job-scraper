@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
@@ -34,11 +35,20 @@ type fakeStore struct {
 	options []dto.ScoringOption
 	search  map[string]dto.SearchConfig
 
-	ClaimErr error
+	ClaimErr                  error
+	QueueMissingAnswersResult int64
+	QueueMissingAnswersErr    error
 
-	Failed    []dto.ScoringFailure
-	Completed []completedEffect
-	Saved     []dto.JobScore
+	Failed        []dto.ScoringFailure
+	Completed     []completedEffect
+	Saved         []dto.JobScore
+	QueuedMissing []queuedMissingCall
+}
+
+type queuedMissingCall struct {
+	UserID string
+	Hashes []string
+	Model  string
 }
 
 type completedEffect struct {
@@ -181,6 +191,13 @@ func (f *fakeStore) SaveScores(_ context.Context, scores []dto.JobScore) error {
 	defer f.mu.Unlock()
 	f.Saved = append(f.Saved, scores...)
 	return nil
+}
+
+func (f *fakeStore) QueueMissingAnswers(_ context.Context, userID string, hashes []string, model string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.QueuedMissing = append(f.QueuedMissing, queuedMissingCall{UserID: userID, Hashes: hashes, Model: model})
+	return f.QueueMissingAnswersResult, f.QueueMissingAnswersErr
 }
 
 type fakeAnswerer struct {
@@ -632,5 +649,97 @@ func TestRecompute_SalaryFloorReRanksWithoutAnswerer(t *testing.T) {
 	}
 	if len(st.Saved) != 1 || st.Saved[0].Score != 30 {
 		t.Fatalf("saved scores = %+v, want one score of 30 (salary below floor)", st.Saved)
+	}
+}
+
+func TestFillMissingAnswers_QueuesForPickedHashes(t *testing.T) {
+	st := newFakeStore()
+	st.UpsertSearchConfig(dto.SearchConfig{
+		UserID: "user-1",
+		Preferences: dto.Preferences{Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+			{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
+		}},
+	})
+	st.QueueMissingAnswersResult = 2
+
+	svc := NewService(st, &fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("FillMissingAnswers: %v", err)
+	}
+	if queued != 2 {
+		t.Fatalf("queued = %d, want 2", queued)
+	}
+	if len(st.QueuedMissing) != 1 {
+		t.Fatalf("queue calls = %d, want 1", len(st.QueuedMissing))
+	}
+	call := st.QueuedMissing[0]
+	if call.UserID != "user-1" || call.Model != jev.Model {
+		t.Fatalf("call = %+v, want user-1 with model %q", call, jev.Model)
+	}
+	wantHashes := map[string]bool{
+		questionHash("Does the role use Go?"):   true,
+		questionHash("Does the role use Rust?"): true,
+	}
+	if len(call.Hashes) != len(wantHashes) {
+		t.Fatalf("hashes = %v, want %v", call.Hashes, wantHashes)
+	}
+	for _, h := range call.Hashes {
+		if !wantHashes[h] {
+			t.Fatalf("unexpected hash %q", h)
+		}
+	}
+}
+
+func TestFillMissingAnswers_NoPicksQueuesNothing(t *testing.T) {
+	st := newFakeStore()
+	st.UpsertSearchConfig(dto.SearchConfig{UserID: "user-1"})
+
+	svc := NewService(st, &fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("FillMissingAnswers: %v", err)
+	}
+	if queued != 0 || len(st.QueuedMissing) != 0 {
+		t.Fatalf("queued = %d, calls = %d, want 0 and no store call", queued, len(st.QueuedMissing))
+	}
+}
+
+func TestFillMissingAnswers_NoSearchConfigQueuesNothing(t *testing.T) {
+	st := newFakeStore()
+	svc := NewService(st, &fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("FillMissingAnswers: %v", err)
+	}
+	if queued != 0 {
+		t.Fatalf("queued = %d, want 0", queued)
+	}
+}
+
+func TestFillMissingAnswers_RetiredPickNotAsked(t *testing.T) {
+	st := newFakeStore()
+	retired := time.Now()
+	st.options = append(slices.Clone(bank), dto.ScoringOption{
+		ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL",
+		Question: "Does the role use COBOL?", RetiredAt: &retired,
+	})
+	st.UpsertSearchConfig(dto.SearchConfig{
+		UserID:      "user-1",
+		Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice", Source: "manual"}}},
+	})
+
+	svc := NewService(st, &fakeAnswerer{t: t, forbidden: true}, &fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("FillMissingAnswers: %v", err)
+	}
+	if queued != 0 || len(st.QueuedMissing) != 0 {
+		t.Fatalf("queued = %d, calls = %d, want 0 (retired option never asked)", queued, len(st.QueuedMissing))
 	}
 }

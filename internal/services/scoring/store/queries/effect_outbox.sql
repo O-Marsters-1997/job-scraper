@@ -31,6 +31,24 @@ WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
     AND (j.company_id = c.id OR j.company_slug = c.slug)
 ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
 
+-- name: QueueMissingAnswers :execrows
+INSERT INTO effect_outbox (job_id, fingerprint, model, first_discovery)
+SELECT DISTINCT j.id, j.content_fingerprint, sqlc.arg(model)::text, FALSE
+FROM job_scores s
+JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = sqlc.arg(user_id)::uuid
+    AND j.closed_at IS NULL
+    AND j.content_fingerprint IS NOT NULL
+    AND EXISTS (
+        SELECT 1 FROM unnest(sqlc.arg(question_hashes)::text[]) AS missing(hash)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM option_answers a
+            WHERE a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+                AND a.model = sqlc.arg(model)::text AND a.question_hash = missing.hash
+        )
+    )
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
+
 -- name: ClaimAnswerEffect :one
 WITH next AS (
     SELECT id FROM effect_outbox

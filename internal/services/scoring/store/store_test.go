@@ -626,3 +626,104 @@ func TestOpsState_NoPendingIsZero(t *testing.T) {
 		t.Errorf("OutboxOldestPendingAge = %s, want 0", state.OutboxOldestPendingAge)
 	}
 }
+
+func TestQueueMissingAnswers_QueuesOnlyOpenScoredFingerprintedJobsMissingHash(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+
+	userA := insertUser(t, pool)
+	userB := insertUser(t, pool)
+	missing := insertJob(t, pool, "fp-missing")
+	closed := insertJob(t, pool, "fp-closed")
+	answered := insertJob(t, pool, "fp-answered")
+	otherUsers := insertJob(t, pool, "fp-other-user")
+
+	for _, jobID := range []string{missing, closed, answered} {
+		if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userA); err != nil {
+			t.Fatalf("seed job_scores: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", otherUsers, userB); err != nil {
+		t.Fatalf("seed job_scores: %v", err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = NOW() WHERE id = $1", closed); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-answered', $2, 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`,
+		answered, "hash-1"); err != nil {
+		t.Fatalf("seed option_answers: %v", err)
+	}
+
+	n, err := st.QueueMissingAnswers(ctx, userA, []string{"hash-1"}, "typesafe/jev-1.13")
+	if err != nil {
+		t.Fatalf("QueueMissingAnswers: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("queued = %d, want 1", n)
+	}
+
+	for jobID, want := range map[string]int{missing: 1, closed: 0, answered: 0, otherUsers: 0} {
+		var count int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			t.Errorf("effects for job %s = %d, want %d", jobID, count, want)
+		}
+	}
+
+	var firstDiscovery bool
+	if err := pool.QueryRow(ctx, "SELECT first_discovery FROM effect_outbox WHERE job_id = $1", missing).Scan(&firstDiscovery); err != nil {
+		t.Fatal(err)
+	}
+	if firstDiscovery {
+		t.Error("first_discovery = true, want false (no alert on backfill)")
+	}
+}
+
+func TestQueueMissingAnswers_QuiescesWhenNoGapOrEffectPending(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+
+	userID := insertUser(t, pool)
+	jobID := insertJob(t, pool, "fp-1")
+	if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userID); err != nil {
+		t.Fatalf("seed job_scores: %v", err)
+	}
+
+	n, err := st.QueueMissingAnswers(ctx, userID, []string{"hash-1"}, "typesafe/jev-1.13")
+	if err != nil {
+		t.Fatalf("QueueMissingAnswers: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("queued = %d, want 1", n)
+	}
+
+	n, err = st.QueueMissingAnswers(ctx, userID, []string{"hash-1"}, "typesafe/jev-1.13")
+	if err != nil {
+		t.Fatalf("QueueMissingAnswers: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("queued while effect pending = %d, want 0", n)
+	}
+
+	if _, err := pool.Exec(ctx, "DELETE FROM effect_outbox WHERE job_id = $1", jobID); err != nil {
+		t.Fatalf("clear outbox: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-1', $2, 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`,
+		jobID, "hash-1"); err != nil {
+		t.Fatalf("seed option_answers: %v", err)
+	}
+
+	n, err = st.QueueMissingAnswers(ctx, userID, []string{"hash-1"}, "typesafe/jev-1.13")
+	if err != nil {
+		t.Fatalf("QueueMissingAnswers: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("queued with no gap = %d, want 0", n)
+	}
+}

@@ -28,3 +28,9 @@ type Reconsiderer interface {
 type Recomputer interface {
 	Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error)
 }
+
+// Backfiller queues an answer effect for a user's already-scored jobs
+// missing an answer to a newly picked question.
+type Backfiller interface {
+	FillMissingAnswers(ctx context.Context, userID string) (int64, error)
+}

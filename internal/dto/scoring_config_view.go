@@ -9,4 +9,5 @@ type ScoringConfigView struct {
 	ExcludedLocations     []string    `json:"excludedLocations"`
 	NotifyThreshold       int         `json:"notifyThreshold"`
 	UpdatedAt             time.Time   `json:"updatedAt"`
+	BackfillQueued        int64       `json:"backfillQueued"`
 }

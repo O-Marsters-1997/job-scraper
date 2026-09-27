@@ -32,10 +32,11 @@ type Service struct {
 	recompute   Recomputer
 	extractor   Extractor
 	credentials Credentials
+	backfill    Backfiller
 }
 
-func New(store Store, candidates Reconsiderer, recompute Recomputer, extractor Extractor, credentials Credentials) *Service {
-	return &Service{store: store, candidates: candidates, recompute: recompute, extractor: extractor, credentials: credentials}
+func New(store Store, candidates Reconsiderer, recompute Recomputer, extractor Extractor, credentials Credentials, backfill Backfiller) *Service {
+	return &Service{store: store, candidates: candidates, recompute: recompute, extractor: extractor, credentials: credentials, backfill: backfill}
 }
 
 func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
@@ -99,7 +100,13 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if _, err := s.recompute.Recompute(ctx, userID); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("recompute scores: %w", err)
 	}
-	return toView(updated), nil
+	queued, err := s.backfill.FillMissingAnswers(ctx, userID)
+	if err != nil {
+		return dto.ScoringConfigView{}, fmt.Errorf("fill missing answers: %w", err)
+	}
+	view := toView(updated)
+	view.BackfillQueued = queued
+	return view, nil
 }
 
 func (s *Service) textPicks(ctx context.Context, userID, text string, existing dto.Preferences, b bank) ([]dto.Pick, string, error) {
