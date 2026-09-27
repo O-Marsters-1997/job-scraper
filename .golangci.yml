@@ -31,6 +31,13 @@ linters:
               desc: packages at the internal/ root are shared; move this code under internal/api
             - pkg: github.com/ollymarsters/job-scraper/internal/worker
               desc: packages at the internal/ root are shared; move this code under internal/worker
+        applications:
+          files: ["**/internal/applications/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/data/providers
+              desc: a moved context owns its own store; the legacy providers layer is being retired (ADR 0011)
+            - pkg: github.com/ollymarsters/job-scraper/internal/data/db
+              desc: a moved context owns its own store; the legacy *jobsdb.DB layer is being retired (ADR 0011)
 
 formatters:
   enable:
