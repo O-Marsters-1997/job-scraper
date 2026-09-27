@@ -10,10 +10,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
 func okHandler(w http.ResponseWriter, r *http.Request) {
-	session, ok := auth.SessionFromContext(r.Context())
+	session, ok := handlers.Session(r)
 	if !ok {
 		http.Error(w, "no session in context", http.StatusInternalServerError)
 		return

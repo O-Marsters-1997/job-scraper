@@ -1,11 +1,12 @@
-package handlers
+package apihandlers
 
 import (
 	"context"
 	"net/http"
 	"os"
 
-	"github.com/ollymarsters/job-scraper/internal/api/auth"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -41,14 +42,14 @@ type sessionUser struct {
 func respondSession(status int) func(http.ResponseWriter, *http.Request, sessionUser) {
 	return func(w http.ResponseWriter, _ *http.Request, out sessionUser) {
 		http.SetCookie(w, newSessionCookie(out.session.ID, 30*24*60*60))
-		respond(w, status, dto.AuthUserView{Username: out.user.Username})
+		handlers.WriteJSON(w, status, dto.AuthUserView{Username: out.user.Username})
 	}
 }
 
 // Login authenticates a user by username/password and starts a session.
 func Login(svc authSvc) http.HandlerFunc {
-	return Handle(
-		decodeBody[dto.LoginInput],
+	return handlers.Handle(
+		handlers.DecodeBody[dto.LoginInput],
 		func(ctx context.Context, in dto.LoginInput) (sessionUser, error) {
 			session, user, err := svc.Login(ctx, in.Username, in.Password)
 			return sessionUser{session, user}, err
@@ -59,8 +60,8 @@ func Login(svc authSvc) http.HandlerFunc {
 
 // Signup creates a user and starts a session.
 func Signup(svc authSvc) http.HandlerFunc {
-	return Handle(
-		decodeBody[dto.SignupInput],
+	return handlers.Handle(
+		handlers.DecodeBody[dto.SignupInput],
 		func(ctx context.Context, in dto.SignupInput) (sessionUser, error) {
 			session, user, err := svc.Signup(ctx, in.Username, in.Password, in.Email)
 			return sessionUser{session, user}, err
@@ -72,9 +73,9 @@ func Signup(svc authSvc) http.HandlerFunc {
 // Logout clears the caller's session; the service error is swallowed so the
 // browser is always logged out even if the underlying session delete fails.
 func Logout(svc authSvc) http.HandlerFunc {
-	return Handle(
+	return handlers.Handle(
 		func(r *http.Request) (string, error) {
-			session, _ := auth.SessionFromContext(r.Context())
+			session, _ := handlers.Session(r)
 			return session.ID, nil
 		},
 		func(ctx context.Context, sessionID string) (struct{}, error) {
@@ -91,14 +92,16 @@ func Logout(svc authSvc) http.HandlerFunc {
 }
 
 // Me returns the caller's session identity.
-var Me = Handle(
+var Me = handlers.Handle(
 	func(r *http.Request) (dto.MeView, error) {
-		session, ok := auth.SessionFromContext(r.Context())
+		session, ok := handlers.Session(r)
 		if !ok {
 			return dto.MeView{}, apperr.Unauthorized("unauthorized")
 		}
 		return dto.MeView{ID: session.UserID, Username: session.Username}, nil
 	},
-	pass[dto.MeView],
-	respondJSON[dto.MeView](http.StatusOK),
+	func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
+	func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {
+		handlers.WriteJSON(w, http.StatusOK, res)
+	},
 )

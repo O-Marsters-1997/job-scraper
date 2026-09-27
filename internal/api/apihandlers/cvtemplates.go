@@ -1,4 +1,4 @@
-package handlers
+package apihandlers
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
 type cvExporter interface {
@@ -19,9 +21,9 @@ type exportRequest struct {
 // ExportCV streams a PDF response rather than returning JSON, so it goes
 // through Handle directly rather than a CRUD generic.
 func ExportCV(svc cvExporter) http.HandlerFunc {
-	return Handle(
+	return handlers.Handle(
 		func(r *http.Request) (exportRequest, error) {
-			uid, err := userID(r)
+			uid, err := handlers.UserID(r)
 			if err != nil {
 				return exportRequest{}, err
 			}

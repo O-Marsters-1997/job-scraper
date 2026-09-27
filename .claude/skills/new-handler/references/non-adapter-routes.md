@@ -19,7 +19,7 @@ of a fixed pair.
 Write each one as `func x(svc) http.HandlerFunc` in the owning context's `routes.go`: a
 constructor that closes over the service and returns `Handle(...)`. Don't write a handler struct
 with methods, and don't reach the service some other way. Until `identity` moves,
-`internal/api/handlers/auth.go` and `google.go` are the templates.
+`internal/api/apihandlers/auth.go` and `google.go` are the templates.
 
 When `decode` needs the session, it calls `handlers.UserID(r) (string, error)` itself. A miss
 returns `apperr.Unauthorized`, which `writeError` handles like any other decode error. A route

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
+	"maps"
 	"net/http"
 	"reflect"
 
@@ -42,9 +44,9 @@ func respondJSON[Res any](status int) func(http.ResponseWriter, *http.Request, R
 	}
 }
 
-func pass[T any](_ context.Context, v T) (T, error) { return v, nil }
-
-func decodeBody[T any](r *http.Request) (T, error) {
+// DecodeBody decodes the request body as JSON, treating an empty body as
+// the zero value.
+func DecodeBody[T any](r *http.Request) (T, error) {
 	var in T
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
 		return in, apperr.Invalid("bad request")
@@ -52,7 +54,9 @@ func decodeBody[T any](r *http.Request) (T, error) {
 	return in, nil
 }
 
-func decodeQuery[Q any](r *http.Request) (Q, error) {
+// DecodeQuery decodes the request's URL query string into Q, matching query
+// keys to Q's JSON field names.
+func DecodeQuery[Q any](r *http.Request) (Q, error) {
 	var q Q
 	values := r.URL.Query()
 	flat := make(map[string]string, len(values))
@@ -83,16 +87,49 @@ func fillPath(r *http.Request, in any) {
 
 func respond[Out any](w http.ResponseWriter, status int, out Out) {
 	if _, void := any(out).(struct{}); void {
-		writeJSON(w, http.StatusNoContent, nil)
+		WriteJSON(w, http.StatusNoContent, nil)
 		return
 	}
-	writeJSON(w, status, out)
+	WriteJSON(w, status, out)
+}
+
+// WriteJSON writes v as a JSON response body with status, writing a nil
+// slice as "[]" and skipping the body entirely for a 204.
+func WriteJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if status == http.StatusNoContent {
+		return
+	}
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Slice && rv.IsNil() {
+		_, _ = w.Write([]byte("[]"))
+		return
+	}
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
+	status, ok := apperr.StatusFor(err)
+	msg := err.Error()
+	if !ok {
+		slog.Error("unhandled handler error",
+			slog.String("route", r.Method+" "+r.URL.Path),
+			slog.Any("err", err),
+		)
+		status = http.StatusInternalServerError
+		msg = "internal server error"
+	}
+	body := map[string]any{"error": msg}
+	maps.Copy(body, apperr.FieldsFor(err))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 type byID struct{ userID, id string }
 
 func decodeByID(r *http.Request) (byID, error) {
-	uid, err := userID(r)
+	uid, err := UserID(r)
 	if err != nil {
 		return byID{}, err
 	}
@@ -102,7 +139,7 @@ func decodeByID(r *http.Request) (byID, error) {
 // GetAll adapts (ctx, userID) -> (Out, error) to a 200 collection or
 // singleton read.
 func GetAll[Out any](fn func(ctx context.Context, userID string) (Out, error)) http.HandlerFunc {
-	return Handle(userID, fn, respondJSON[Out](http.StatusOK))
+	return Handle(UserID, fn, respondJSON[Out](http.StatusOK))
 }
 
 // GetByID adapts (ctx, userID, id) -> (Out, error) to a 200 read, id taken
@@ -125,11 +162,11 @@ func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, er
 	}
 	return Handle(
 		func(r *http.Request) (req, error) {
-			uid, err := userID(r)
+			uid, err := UserID(r)
 			if err != nil {
 				return req{}, err
 			}
-			q, err := decodeQuery[Q](r)
+			q, err := DecodeQuery[Q](r)
 			if err != nil {
 				return req{}, apperr.Invalid("bad request")
 			}
@@ -146,11 +183,11 @@ type userInput[In any] struct {
 }
 
 func decodeUserInput[In any](r *http.Request) (userInput[In], error) {
-	uid, err := userID(r)
+	uid, err := UserID(r)
 	if err != nil {
 		return userInput[In]{}, err
 	}
-	in, err := decodeBody[In](r)
+	in, err := DecodeBody[In](r)
 	if err != nil {
 		return userInput[In]{}, err
 	}
