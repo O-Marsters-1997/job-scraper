@@ -48,6 +48,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtemplates/store
               desc: only the cvtemplates context uses its store; call the cvtemplates Module facade (ADR 0011)
+        identity-store:
+          files: ["$all", "!**/internal/services/identity/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/identity/store
+              desc: only the identity context uses its store; call the identity Module facade (ADR 0011)
 
 formatters:
   enable:
