@@ -3,38 +3,138 @@ package sourcetargets_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
-	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/api/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/candidates"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-type emptyStore struct{}
+var errSourceTargetExists = apperr.Conflict("source target already exists")
 
-func (emptyStore) SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]candidates.Candidate, error) {
-	return nil, nil
+type fakeStore struct {
+	mu        sync.Mutex
+	targets   map[string]dto.SourceTarget
+	CreateErr error
 }
-func (emptyStore) ListForUser(context.Context, string, string, int) ([]candidates.Candidate, error) {
-	return nil, nil
-}
-func (emptyStore) Assess(context.Context, string, string, time.Time, bool) (bool, error) {
-	return true, nil
-}
-func (emptyStore) MarkDetailPending(context.Context, string) error { return nil }
 
-func newService(targets providers.SourceTargetProvider, q *queue.MockQueue) *sourcetargets.Service {
-	candidateSvc := candidates.New(emptyStore{}, nil)
-	configs := providers.NewMockSearchConfigProvider()
-	return sourcetargets.New(targets, configs, candidateSvc, q)
+func newFakeStore() *fakeStore {
+	return &fakeStore{targets: make(map[string]dto.SourceTarget)}
+}
+
+func (f *fakeStore) GetVerifiedBoardID(context.Context, string, string) (string, error) {
+	return "", apperr.NotFound("board not verified")
+}
+
+func (f *fakeStore) create(userID, source, value string, enabled bool, withRun bool) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.CreateErr != nil {
+		return dto.SourceTarget{}, f.CreateErr
+	}
+	for _, t := range f.targets {
+		if t.UserID == userID && t.Source == source && t.Value == value {
+			return dto.SourceTarget{}, errSourceTargetExists
+		}
+	}
+	target := dto.SourceTarget{
+		ID: fmt.Sprintf("target-%d", len(f.targets)+1), UserID: userID, Source: source, Value: value, Enabled: enabled,
+	}
+	if withRun {
+		target.RunID = "run-1"
+		target.RunStatus = "queued"
+	}
+	f.targets[target.ID] = target
+	return target, nil
+}
+
+func (f *fakeStore) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool, _ map[string]string) (dto.SourceTarget, error) {
+	return f.create(userID, source, value, enabled, false)
+}
+
+func (f *fakeStore) CreateSourceTargetWithRun(_ context.Context, userID, source, value string, enabled bool, _ map[string]string) (dto.SourceTarget, error) {
+	return f.create(userID, source, value, enabled, true)
+}
+
+func (f *fakeStore) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target, ok := f.targets[id]
+	if !ok || target.UserID != userID {
+		return dto.SourceTarget{}, apperr.NotFound("not found")
+	}
+	if enabled != nil {
+		target.Enabled = *enabled
+	}
+	if checkIntervalMinutes != nil {
+		target.CheckIntervalMinutes = *checkIntervalMinutes
+	}
+	f.targets[id] = target
+	return target, nil
+}
+
+func (f *fakeStore) DeleteSourceTarget(_ context.Context, id, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.targets, id)
+	return nil
+}
+
+func (f *fakeStore) ListSourceTargetsByUser(_ context.Context, userID string) ([]dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []dto.SourceTarget
+	for _, t := range f.targets {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target, ok := f.targets[id]
+	if !ok {
+		return dto.SourceTarget{}, apperr.NotFound("not found")
+	}
+	target.RunID = "run-" + id
+	target.RunStatus = "queued"
+	target.LastRunError = ""
+	target.Enabled = true
+	f.targets[id] = target
+	return target, nil
+}
+
+func (f *fakeStore) forceRunState(id, status, runError string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target := f.targets[id]
+	target.RunStatus = status
+	target.LastRunError = runError
+	f.targets[id] = target
+}
+
+type fakeReconsiderer struct{ err error }
+
+func (f fakeReconsiderer) Reconsider(context.Context, dto.SearchConfig) error { return f.err }
+
+type fakeSearchConfigGetter struct{}
+
+func (fakeSearchConfigGetter) GetSearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{}, nil
+}
+
+func newService(targets *fakeStore, q *queue.MockQueue) *sourcetargets.Service {
+	return sourcetargets.New(targets, fakeSearchConfigGetter{}, fakeReconsiderer{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
-	svc := newService(providers.NewMockSourceTargetProvider(), queue.NewMockQueue())
+	svc := newService(newFakeStore(), queue.NewMockQueue())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -42,7 +142,7 @@ func TestCreate_RequiresSourceAndValue(t *testing.T) {
 }
 
 func TestCreate_RejectsUnsupportedSource(t *testing.T) {
-	svc := newService(providers.NewMockSourceTargetProvider(), queue.NewMockQueue())
+	svc := newService(newFakeStore(), queue.NewMockQueue())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "unknown-ats", Value: "x"})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -51,7 +151,7 @@ func TestCreate_RejectsUnsupportedSource(t *testing.T) {
 
 func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 	q := queue.NewMockQueue()
-	svc := newService(providers.NewMockSourceTargetProvider(), q)
+	svc := newService(newFakeStore(), q)
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -67,7 +167,7 @@ func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 	q := queue.NewMockQueue()
 	q.EnqueueScrapeErr = errors.New("queue unavailable")
-	svc := newService(providers.NewMockSourceTargetProvider(), q)
+	svc := newService(newFakeStore(), q)
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -81,20 +181,28 @@ func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 }
 
 func TestCreate_PropagatesConflict(t *testing.T) {
-	store := providers.NewMockSourceTargetProvider()
-	store.CreateErr = providers.ErrSourceTargetExists
+	store := newFakeStore()
+	store.CreateErr = errSourceTargetExists
 	svc := newService(store, queue.NewMockQueue())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})
-	if !errors.Is(err, providers.ErrSourceTargetExists) {
+	if !errors.Is(err, errSourceTargetExists) {
 		t.Fatalf("err = %v, want ErrSourceTargetExists", err)
 	}
 }
+
+func createGreenhouseTarget(s *fakeStore) string {
+	created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
+	return created.ID
+}
+
+func boolPtr(b bool) *bool { return &b }
+func intPtr(i int) *int    { return &i }
 
 func TestUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
 		in         dto.UpdateSourceTargetInput
-		targetID   func(*providers.MockSourceTargetProvider) string
+		targetID   func(*fakeStore) string
 		wantStatus int
 	}{
 		{
@@ -122,14 +230,14 @@ func TestUpdate(t *testing.T) {
 		{
 			name:       "not found",
 			in:         dto.UpdateSourceTargetInput{Enabled: boolPtr(false)},
-			targetID:   func(*providers.MockSourceTargetProvider) string { return "missing-id" },
+			targetID:   func(*fakeStore) string { return "missing-id" },
 			wantStatus: 404,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := providers.NewMockSourceTargetProvider()
+			store := newFakeStore()
 			id := tt.targetID(store)
 			svc := newService(store, queue.NewMockQueue())
 
@@ -149,7 +257,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
-	store := providers.NewMockSourceTargetProvider()
+	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
 	svc := newService(store, queue.NewMockQueue())
 
@@ -159,16 +267,19 @@ func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 	}
 }
 
-func createGreenhouseTarget(s *providers.MockSourceTargetProvider) string {
-	created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
-	return created.ID
+func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
+	store := newFakeStore()
+	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
+	svc := sourcetargets.New(store, fakeSearchConfigGetter{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
+
+	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
+	if status, ok := apperr.StatusFor(err); !ok || status != 503 {
+		t.Fatalf("err = %v, want 503 apperr", err)
+	}
 }
 
-func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int    { return &i }
-
 func TestScrape(t *testing.T) {
-	store := providers.NewMockSourceTargetProvider()
+	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
 	svc := newService(store, queue.NewMockQueue())
 
@@ -199,9 +310,9 @@ func wantStatus(t *testing.T, err error) int {
 }
 
 func TestScrape_RetriesFailedRun(t *testing.T) {
-	store := providers.NewMockSourceTargetProvider()
+	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
-	_, _ = store.SetSourceTargetRunState(context.Background(), created.ID, "failed", "previous run failed")
+	store.forceRunState(created.ID, "failed", "previous run failed")
 	q := queue.NewMockQueue()
 	svc := newService(store, q)
 

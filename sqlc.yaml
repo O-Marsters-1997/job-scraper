@@ -32,3 +32,11 @@ sql:
         package: "sqlc"
         out: "internal/services/identity/store/sqlc"
         sql_package: "pgx/v5"
+  - engine: "postgresql"
+    queries: "internal/services/jobsearch/store/queries"
+    schema: "internal/data/sqlc/schema.sql"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/services/jobsearch/store/sqlc"
+        sql_package: "pgx/v5"

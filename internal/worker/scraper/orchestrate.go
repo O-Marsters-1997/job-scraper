@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ollymarsters/job-scraper/internal/candidates"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 

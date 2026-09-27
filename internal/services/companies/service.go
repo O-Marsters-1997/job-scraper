@@ -1,3 +1,5 @@
+// Package companies is the jobsearch context's company and board feature
+// (ADR 0011).
 package companies
 
 import (
@@ -7,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -19,13 +20,28 @@ type QueuePublisher interface {
 	Publish(ctx context.Context, task queue.Task) error
 }
 
+type Store interface {
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
+	GetCompany(ctx context.Context, id string) (dto.Company, error)
+	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
+	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
+	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
+}
+
+// SourceTargets keeps a legacy source target in sync when a tracked
+// company's ATS board changes; sourcetargets is the jobsearch context's own
+// sibling feature.
+type SourceTargets interface {
+	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error)
+}
+
 type Service struct {
-	companies providers.CompanyProvider
-	targets   providers.SourceTargetProvider
+	companies Store
+	targets   SourceTargets
 	queue     QueuePublisher
 }
 
-func New(companies providers.CompanyProvider, targets providers.SourceTargetProvider, q QueuePublisher) *Service {
+func New(companies Store, targets SourceTargets, q QueuePublisher) *Service {
 	return &Service{companies: companies, targets: targets, queue: q}
 }
 

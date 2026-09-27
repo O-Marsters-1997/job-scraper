@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/api/services/sources"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/sources"
 )
 
 func TestList(t *testing.T) {
