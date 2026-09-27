@@ -188,3 +188,30 @@ func TestDeleteExpiredSessions(t *testing.T) {
 		t.Errorf("valid session should survive cleanup: %v", err)
 	}
 }
+
+func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
+	st := newStore(t)
+	ctx := context.Background()
+
+	tx, err := st.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	if _, err := st.CreateUserTx(ctx, tx, "frank", "hash", ""); err != nil {
+		t.Fatalf("CreateUserTx: %v", err)
+	}
+
+	_, err = tx.Exec(ctx, `INSERT INTO application_statuses (user_id, name, colour) VALUES ($1, 'Draft', '#64748b')`,
+		"00000000-0000-0000-0000-000000000000")
+	if err == nil {
+		t.Fatal("want seeding insert to fail")
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound after rollback", err)
+	}
+}
