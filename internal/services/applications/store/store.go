@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -14,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
+	"github.com/ollymarsters/job-scraper/internal/services/applications/store/sqlc"
 )
 
 var (
@@ -41,7 +40,7 @@ func parseUUID(s string) (pgtype.UUID, error) {
 	return id, nil
 }
 
-func toOptionalDate(s fp.Option[string]) (pgtype.Date, error) {
+func parseOptionalDate(s fp.Option[string]) (pgtype.Date, error) {
 	if s.IsNone() {
 		return pgtype.Date{}, nil
 	}
@@ -50,78 +49,6 @@ func toOptionalDate(s fp.Option[string]) (pgtype.Date, error) {
 		return pgtype.Date{}, fmt.Errorf("invalid applied date: %w", err)
 	}
 	return d, nil
-}
-
-func fromOptionalDate(d pgtype.Date) *time.Time {
-	if !d.Valid {
-		return nil
-	}
-	t := d.Time
-	return &t
-}
-
-func fromApplication(a sqlc.Application) dto.Application {
-	return dto.Application{
-		ID:         a.ID.String(),
-		UserID:     a.UserID.String(),
-		JobID:      a.JobID.String(),
-		StatusID:   a.StatusID.String(),
-		Notes:      a.Notes.String,
-		AppliedAt:  fromOptionalDate(a.AppliedAt),
-		SalaryInfo: a.SalaryInfo.String,
-		CreatedAt:  a.CreatedAt.Time,
-		UpdatedAt:  a.UpdatedAt.Time,
-	}
-}
-
-func fromApplicationListRow(r sqlc.ListApplicationsByUserRow) dto.ApplicationWithDetails {
-	return dto.ApplicationWithDetails{
-		ID:             r.ID.String(),
-		UserID:         r.UserID.String(),
-		JobID:          r.JobID.String(),
-		JobTitle:       r.JobTitle,
-		JobCompanySlug: r.JobCompanySlug,
-		JobLocation:    r.JobLocation,
-		JobURL:         r.JobUrl,
-		StatusID:       r.StatusID.String(),
-		StatusName:     r.StatusName.String,
-		StatusColour:   r.StatusColour.String,
-		Notes:          r.Notes.String,
-		AppliedAt:      fromOptionalDate(r.AppliedAt),
-		SalaryInfo:     r.SalaryInfo.String,
-		CreatedAt:      r.CreatedAt.Time,
-		UpdatedAt:      r.UpdatedAt.Time,
-	}
-}
-
-func fromApplicationListStatusRow(r sqlc.ListApplicationsByUserAndStatusRow) dto.ApplicationWithDetails {
-	return dto.ApplicationWithDetails{
-		ID:             r.ID.String(),
-		UserID:         r.UserID.String(),
-		JobID:          r.JobID.String(),
-		JobTitle:       r.JobTitle,
-		JobCompanySlug: r.JobCompanySlug,
-		JobLocation:    r.JobLocation,
-		JobURL:         r.JobUrl,
-		StatusID:       r.StatusID.String(),
-		StatusName:     r.StatusName.String,
-		StatusColour:   r.StatusColour.String,
-		Notes:          r.Notes.String,
-		AppliedAt:      fromOptionalDate(r.AppliedAt),
-		SalaryInfo:     r.SalaryInfo.String,
-		CreatedAt:      r.CreatedAt.Time,
-		UpdatedAt:      r.UpdatedAt.Time,
-	}
-}
-
-func fromApplicationStatus(s sqlc.ApplicationStatus) dto.ApplicationStatus {
-	return dto.ApplicationStatus{
-		ID:        s.ID.String(),
-		UserID:    s.UserID.String(),
-		Name:      s.Name,
-		Colour:    s.Colour,
-		CreatedAt: s.CreatedAt.Time,
-	}
 }
 
 func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.CreateApplicationInput) (dto.Application, error) {
@@ -140,7 +67,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			return dto.Application{}, err
 		}
 	}
-	appliedAt, err := toOptionalDate(input.AppliedAt)
+	appliedAt, err := parseOptionalDate(input.AppliedAt)
 	if err != nil {
 		return dto.Application{}, err
 	}
@@ -159,7 +86,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 		}
 		return dto.Application{}, fmt.Errorf("store.CreateApplication: %w", err)
 	}
-	return fromApplication(a), nil
+	return toApplicationDTO(a), nil
 }
 
 func (s *Store) ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error) {
@@ -173,7 +100,7 @@ func (s *Store) ListApplicationsByUser(ctx context.Context, userID string) ([]dt
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
-		out[i] = fromApplicationListRow(row)
+		out[i] = toApplicationWithDetailsDTO(row)
 	}
 	return out, nil
 }
@@ -196,7 +123,7 @@ func (s *Store) ListApplicationsByUserAndStatus(ctx context.Context, userID, sta
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
-		out[i] = fromApplicationListStatusRow(row)
+		out[i] = toApplicationWithDetailsDTO(sqlc.ListApplicationsByUserRow(row))
 	}
 	return out, nil
 }
@@ -217,7 +144,7 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 			return dto.Application{}, err
 		}
 	}
-	appliedAt, err := toOptionalDate(input.AppliedAt)
+	appliedAt, err := parseOptionalDate(input.AppliedAt)
 	if err != nil {
 		return dto.Application{}, err
 	}
@@ -235,7 +162,7 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 		}
 		return dto.Application{}, fmt.Errorf("store.UpdateApplication: %w", err)
 	}
-	return fromApplication(a), nil
+	return toApplicationDTO(a), nil
 }
 
 func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error {
@@ -278,12 +205,7 @@ func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobID
 	}
 	out := make(map[string]dto.JobApplicationSummary, len(rows))
 	for _, row := range rows {
-		out[row.JobID.String()] = dto.JobApplicationSummary{
-			ApplicationID: row.ID.String(),
-			StatusID:      row.StatusID.String(),
-			StatusName:    row.StatusName.String,
-			StatusColour:  row.StatusColour.String,
-		}
+		out[row.JobID.String()] = toJobApplicationSummaryDTO(row)
 	}
 	return out, nil
 }
@@ -312,7 +234,7 @@ func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colou
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.CreateApplicationStatus: %w", err)
 	}
-	return fromApplicationStatus(st), nil
+	return toApplicationStatusDTO(st), nil
 }
 
 func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error) {
@@ -326,7 +248,7 @@ func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string
 	}
 	out := make([]dto.ApplicationStatus, len(rows))
 	for i, row := range rows {
-		out[i] = fromApplicationStatus(row)
+		out[i] = toApplicationStatusDTO(row)
 	}
 	return out, nil
 }
@@ -349,7 +271,7 @@ func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, c
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.UpdateApplicationStatus: %w", err)
 	}
-	return fromApplicationStatus(st), nil
+	return toApplicationStatusDTO(st), nil
 }
 
 func (s *Store) DeleteApplicationStatus(ctx context.Context, id, userID string) error {

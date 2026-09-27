@@ -1,4 +1,4 @@
-package application_test
+package applications_test
 
 import (
 	"context"
@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/application"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
 type fakeStore struct {
@@ -141,7 +141,7 @@ func TestCreate(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			svc := application.New(store)
+			svc := applications.NewService(store)
 			_, err := svc.Create(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
@@ -151,7 +151,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestCreateSucceeds(t *testing.T) {
-	svc := application.New(newFakeStore())
+	svc := applications.NewService(newFakeStore())
 	app, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{
 		JobID:     "job-1",
 		AppliedAt: fp.Some("2026-01-02"),
@@ -185,7 +185,7 @@ func TestUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := application.New(newFakeStore())
+			svc := applications.NewService(newFakeStore())
 			tt.in.ID = tt.id
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
@@ -201,7 +201,7 @@ func TestUpdateSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := application.New(store)
+	svc := applications.NewService(store)
 	app, err := svc.Update(context.Background(), "user-1", dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestUpdateSucceeds(t *testing.T) {
 }
 
 func TestForJobsNoIDsReturnsEmptyMap(t *testing.T) {
-	svc := application.New(newFakeStore())
+	svc := applications.NewService(newFakeStore())
 	got, err := svc.ForJobs(context.Background(), "user-1", dto.ApplicationsForJobsQuery{})
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +227,7 @@ func TestListFiltersByStatusWhenGiven(t *testing.T) {
 	if _, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1"}); err != nil {
 		t.Fatal(err)
 	}
-	svc := application.New(store)
+	svc := applications.NewService(store)
 	got, err := svc.List(context.Background(), "user-1", dto.ApplicationsQuery{StatusID: "missing"})
 	if err != nil {
 		t.Fatal(err)

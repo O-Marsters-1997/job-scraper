@@ -19,10 +19,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/services/sources"
 	"github.com/ollymarsters/job-scraper/internal/api/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
-	"github.com/ollymarsters/job-scraper/internal/applications"
 	"github.com/ollymarsters/job-scraper/internal/candidates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
 type services struct {

@@ -9,10 +9,10 @@ sql:
         out: "internal/data/db/pgsqlc"
         sql_package: "pgx/v5"
   - engine: "postgresql"
-    queries: "internal/applications/internal/store/queries"
+    queries: "internal/services/applications/store/queries"
     schema: "internal/data/sqlc/schema.sql"
     gen:
       go:
         package: "sqlc"
-        out: "internal/applications/internal/store/sqlc"
+        out: "internal/services/applications/store/sqlc"
         sql_package: "pgx/v5"

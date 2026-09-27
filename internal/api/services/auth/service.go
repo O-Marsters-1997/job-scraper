@@ -22,9 +22,7 @@ type Store interface {
 	providers.SessionProvider
 }
 
-// StatusSeeder seeds a new user's default application Statuses. Signup
-// calls it through this local interface rather than importing
-// internal/applications directly (ADR 0011).
+// StatusSeeder seeds a new user's default application Statuses.
 type StatusSeeder interface {
 	SeedDefaults(ctx context.Context, userID string) error
 }

@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/store"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {

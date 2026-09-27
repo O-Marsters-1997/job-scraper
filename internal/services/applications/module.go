@@ -7,14 +7,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/application"
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/applicationstatuses"
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/store"
+	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
+	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses"
 )
 
 type Module struct {
 	store        *store.Store
-	applications *application.Service
+	applications *Service
 	statuses     *applicationstatuses.Service
 }
 
@@ -22,7 +21,7 @@ func New(pool *pgxpool.Pool) *Module {
 	st := store.New(pool)
 	return &Module{
 		store:        st,
-		applications: application.New(st),
+		applications: NewService(st),
 		statuses:     applicationstatuses.New(st),
 	}
 }

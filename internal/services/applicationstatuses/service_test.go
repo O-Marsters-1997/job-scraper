@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/applications/internal/applicationstatuses"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses"
 )
 
 type fakeStore struct {

@@ -1,6 +1,4 @@
-// Package application validates and orchestrates CRUD on a user's
-// Applications.
-package application
+package applications
 
 import (
 	"context"
@@ -25,7 +23,7 @@ type Service struct {
 	store Store
 }
 
-func New(store Store) *Service {
+func NewService(store Store) *Service {
 	return &Service{store: store}
 }
 
