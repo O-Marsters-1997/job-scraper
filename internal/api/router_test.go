@@ -28,8 +28,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -89,7 +91,14 @@ func TestMain(m *testing.M) {
 	testCreds = newFakeCredStore()
 	testSuitability = suitability.New(testDB, testDB, testDB, jev.NewClient(), testCreds, noAlerts{}, testDB)
 	testApps = applications.New(testDB.Pool())
-	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps)
+	testGoogleClient := igoogle.NewClient(
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+		os.Getenv("GOOGLE_REDIRECT_URL"),
+		db.NewGoogleTokenStore(testDB),
+	)
+	testCVTemplates := cvtemplates.New(testDB.Pool(), testGoogleClient)
+	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps, testCVTemplates)
 
 	code := m.Run()
 
