@@ -35,7 +35,6 @@ func New(store providers.SuitabilityProvider, options providers.ScoringOptionsPr
 }
 
 // Run ticks every two seconds, draining the answer-effect queue.
-// Blocks until ctx is cancelled.
 func (s *Service) Run(ctx context.Context) error {
 	ticker := time.NewTicker(answerEffectTickInterval)
 	defer ticker.Stop()
