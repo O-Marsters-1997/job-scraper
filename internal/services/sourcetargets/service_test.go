@@ -271,7 +271,7 @@ func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := sourcetargets.New(store, fakeSearchConfigGetter{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
+	svc := sourcetargets.New(store, fakeSearchConfigReader{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if status, ok := apperr.StatusFor(err); !ok || status != 503 {
