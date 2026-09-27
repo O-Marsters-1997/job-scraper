@@ -67,6 +67,7 @@ func main() {
 	}
 	candidateService := candidates.New(db, q)
 	scoringModule := scoring.New(db.Pool(), cs, db, candidateService, os.Getenv("RESEND_API_KEY"), notifyFrom)
+	db.WithScoring(scoringModule)
 	go func() {
 		if err := scoringModule.Run(ctx); err != nil {
 			slog.Error("answer effect loop failed", slog.Any("err", err))

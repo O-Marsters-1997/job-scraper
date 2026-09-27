@@ -15,7 +15,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func normalizeJobURL(raw string) (string, error) {
@@ -128,13 +127,6 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 		if err != nil {
 			return dto.Job{}, "", fmt.Errorf("update canonical job: %w", err)
 		}
-		if status == "changed" {
-			if err := queries.DeleteStaleOptionAnswers(ctx, pgsqlc.DeleteStaleOptionAnswersParams{
-				JobID: jobID, Fingerprint: job.ContentFingerprint,
-			}); err != nil {
-				return dto.Job{}, "", fmt.Errorf("prune stale option answers: %w", err)
-			}
-		}
 		job.URL = previous.Url
 	}
 
@@ -152,10 +144,8 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", providers.ErrCanonicalConflict)
 	}
 	if status != "unchanged" {
-		role, _ := sourcespec.SourceRole(job.Source)
-		discovery := role == sourcespec.RoleDiscovery
-		if err := queueAnswerEffect(ctx, queries, jobID, job.ContentFingerprint, discovery, status == "new"); err != nil {
-			return dto.Job{}, "", fmt.Errorf("queue answer effect: %w", err)
+		if err := db.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
+			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

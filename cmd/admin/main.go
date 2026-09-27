@@ -126,6 +126,7 @@ func runOptions(args []string) {
 	db := connectDB(ctx)
 	defer db.Close()
 	scoringModule := scoring.NewFacade(db.Pool())
+	db.WithScoring(scoringModule)
 
 	switch args[0] {
 	case "add":
