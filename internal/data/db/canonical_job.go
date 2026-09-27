@@ -128,6 +128,13 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 		if err != nil {
 			return dto.Job{}, "", fmt.Errorf("update canonical job: %w", err)
 		}
+		if status == "changed" {
+			if err := queries.DeleteStaleOptionAnswers(ctx, pgsqlc.DeleteStaleOptionAnswersParams{
+				JobID: jobID, Fingerprint: job.ContentFingerprint,
+			}); err != nil {
+				return dto.Job{}, "", fmt.Errorf("prune stale option answers: %w", err)
+			}
+		}
 		job.URL = previous.Url
 	}
 

@@ -79,9 +79,13 @@ WHERE id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND l
   AND closed_at IS NOT NULL;
 
 -- name: CloseMissingBoardJobs :exec
-UPDATE jobs SET closed_at = NOW()
-WHERE primary_board_id = $1 AND closed_at IS NULL
-  AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2);
+WITH closed AS (
+    UPDATE jobs SET closed_at = NOW()
+    WHERE primary_board_id = $1 AND closed_at IS NULL
+      AND id IN (SELECT job_id FROM board_job_observations WHERE board_id = $1 AND last_snapshot_version < $2)
+    RETURNING id
+)
+DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed);
 
 -- name: CompletePollState :execrows
 UPDATE board_poll_state

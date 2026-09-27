@@ -89,11 +89,13 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err := ch.QueueUnbind("source.wis", "wis", workExchange, nil); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
+				t.Fatal(err)
+			}
+		})
 		if err := broker.Publish(ctx, detail); err == nil {
 			t.Fatal("unroutable publish confirmed as success")
-		}
-		if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
-			t.Fatal(err)
 		}
 	})
 
@@ -246,16 +248,23 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err != nil || len(letters) != 1 || letters[0].Task.ID != task.ID {
 			t.Fatalf("letters=%v err=%v", letters, err)
 		}
-		if count, err := broker.DeadLetterCount(); err != nil || count != 1 {
+		if count, err := waitForDeadLetterCount(broker, 1); err != nil || count != 1 {
 			t.Fatalf("non-destructive inspect count=%d err=%v", count, err)
 		}
 		if err := ch.QueueUnbind("source.wis", "wis", workExchange, nil); err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() {
+			if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
+				t.Fatal(err)
+			}
+		})
 		if err := broker.ReplayDead(ctx, task.ID); err == nil {
 			t.Fatal("unroutable replay succeeded")
 		}
-		if count, err := broker.DeadLetterCount(); err != nil || count != 1 {
+		// Reject(requeue=true) is fire-and-forget; the dead queue is a quorum
+		// queue, so the message's reappearance is only eventually visible.
+		if count, err := waitForDeadLetterCount(broker, 1); err != nil || count != 1 {
 			t.Fatalf("failed replay count=%d err=%v", count, err)
 		}
 		if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
@@ -264,7 +273,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err := broker.ReplayDead(ctx, task.ID); err != nil {
 			t.Fatal(err)
 		}
-		if count, err := broker.DeadLetterCount(); err != nil || count != 0 {
+		if count, err := waitForDeadLetterCount(broker, 0); err != nil || count != 0 {
 			t.Fatalf("successful replay count=%d err=%v", count, err)
 		}
 		replayed, ok, err := ch.Get("source.wis", false)
@@ -462,6 +471,17 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			time.Sleep(250 * time.Millisecond)
 		}
 	})
+}
+
+func waitForDeadLetterCount(broker *Broker, want int) (int, error) {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		count, err := broker.DeadLetterCount()
+		if err != nil || count == want || time.Now().After(deadline) {
+			return count, err
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 func captureTaskDoneLogs(t *testing.T) *bytes.Buffer {

@@ -36,6 +36,9 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
     scraped_at = NOW()
 WHERE id = sqlc.arg(id)::uuid;
 
+-- name: DeleteStaleOptionAnswers :exec
+DELETE FROM option_answers WHERE job_id = sqlc.arg(job_id)::uuid AND fingerprint != sqlc.arg(fingerprint)::text;
+
 -- name: UpdateUnchangedCanonicalJob :exec
 UPDATE jobs SET company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id),
     primary_board_id = COALESCE(sqlc.narg(board_id)::uuid, primary_board_id),
