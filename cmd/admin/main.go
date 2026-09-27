@@ -15,15 +15,54 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
+func usage() {
+	fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
+	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
+	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
+	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
+	os.Exit(1)
+}
+
 func main() {
 	slog.SetDefault(logger.New())
 
-	if len(os.Args) < 3 || os.Args[1] != "create-user" {
-		fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
-		os.Exit(1)
+	if len(os.Args) < 2 {
+		usage()
 	}
 
-	username := os.Args[2]
+	switch os.Args[1] {
+	case "create-user":
+		runCreateUser(os.Args[2:])
+	case "options":
+		runOptions(os.Args[2:])
+	default:
+		usage()
+	}
+}
+
+func connectDB(ctx context.Context) *jobsdb.DB {
+	connStr, err := jobsdb.ConnString()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "db config invalid: %v\n", err)
+		os.Exit(1)
+	}
+	db, err := jobsdb.New(ctx, connStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
+		os.Exit(1)
+	}
+	if err := data.RunMigrations(ctx, db.Pool()); err != nil {
+		fmt.Fprintf(os.Stderr, "run migrations: %v\n", err)
+		os.Exit(1)
+	}
+	return db
+}
+
+func runCreateUser(args []string) {
+	if len(args) != 1 {
+		usage()
+	}
+	username := args[0]
 
 	fmt.Fprint(os.Stderr, "Password: ")
 	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -44,22 +83,8 @@ func main() {
 	}
 
 	ctx := context.Background()
-	connStr, err := jobsdb.ConnString()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "db config invalid: %v\n", err)
-		os.Exit(1)
-	}
-	db, err := jobsdb.New(ctx, connStr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
-		os.Exit(1)
-	}
+	db := connectDB(ctx)
 	defer db.Close()
-
-	if err := data.RunMigrations(ctx, db.Pool()); err != nil {
-		fmt.Fprintf(os.Stderr, "run migrations: %v\n", err)
-		os.Exit(1)
-	}
 
 	user, err := db.CreateUser(ctx, username, string(hash), "")
 	if err != nil {
@@ -68,4 +93,54 @@ func main() {
 	}
 
 	fmt.Printf("User %q created (id: %s)\n", user.Username, user.ID)
+}
+
+func runOptions(args []string) {
+	if len(args) < 1 {
+		usage()
+	}
+	switch args[0] {
+	case "add":
+		if len(args) != 5 {
+			usage()
+		}
+	case "reword":
+		if len(args) != 3 {
+			usage()
+		}
+	case "retire":
+		if len(args) != 2 {
+			usage()
+		}
+	default:
+		usage()
+	}
+
+	ctx := context.Background()
+	db := connectDB(ctx)
+	defer db.Close()
+
+	switch args[0] {
+	case "add":
+		id, dimension, label, question := args[1], args[2], args[3], args[4]
+		if err := db.AddScoringOption(ctx, id, dimension, label, question); err != nil {
+			fmt.Fprintf(os.Stderr, "add option: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Option %q added\n", id)
+	case "reword":
+		id, question := args[1], args[2]
+		if err := db.RewordScoringOption(ctx, id, question); err != nil {
+			fmt.Fprintf(os.Stderr, "reword option: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Option %q reworded\n", id)
+	case "retire":
+		id := args[1]
+		if err := db.RetireScoringOption(ctx, id); err != nil {
+			fmt.Fprintf(os.Stderr, "retire option: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Option %q retired\n", id)
+	}
 }

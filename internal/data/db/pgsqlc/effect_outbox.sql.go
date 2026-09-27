@@ -148,6 +148,19 @@ func (q *Queries) QueueAnswerEffect(ctx context.Context, arg QueueAnswerEffectPa
 	return err
 }
 
+const queueOptionBackfill = `-- name: QueueOptionBackfill :exec
+INSERT INTO effect_outbox (job_id, fingerprint)
+SELECT DISTINCT j.id, j.content_fingerprint
+FROM jobs j JOIN job_scores s ON s.job_id = j.id
+WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+`
+
+func (q *Queries) QueueOptionBackfill(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, queueOptionBackfill)
+	return err
+}
+
 const queueTrackingScores = `-- name: QueueTrackingScores :exec
 INSERT INTO effect_outbox (job_id, fingerprint)
 SELECT j.id, j.content_fingerprint
