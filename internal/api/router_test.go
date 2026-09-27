@@ -25,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
 	"github.com/ollymarsters/job-scraper/internal/api/jev"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
+	"github.com/ollymarsters/job-scraper/internal/applications"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -46,6 +47,7 @@ var (
 	testBroker      = &queue.Broker{}
 	testCreds       *fakeCredStore
 	testSuitability *suitability.Service
+	testApps        *applications.Module
 )
 
 func TestMain(m *testing.M) {
@@ -86,7 +88,8 @@ func TestMain(m *testing.M) {
 	}
 	testCreds = newFakeCredStore()
 	testSuitability = suitability.New(testDB, testDB, testDB, jev.NewClient(), testCreds, noAlerts{}, testDB)
-	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability)
+	testApps = applications.New(testDB.Pool())
+	router = api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps)
 
 	code := m.Run()
 
@@ -493,7 +496,7 @@ func (fakeModule) PublicRoutes(r chi.Router) {
 }
 
 func TestRouterMountsModules(t *testing.T) {
-	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, fakeModule{})
+	moduleRouter := api.NewRouter(testDB, testBroker, testCreds, testSuitability, testApps, fakeModule{})
 
 	w := httptest.NewRecorder()
 	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-private", nil))

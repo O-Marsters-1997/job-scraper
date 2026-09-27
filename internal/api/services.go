@@ -9,8 +9,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/ingest"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aicredentials"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aiprefs"
-	"github.com/ollymarsters/job-scraper/internal/api/services/applications"
-	"github.com/ollymarsters/job-scraper/internal/api/services/applicationstatuses"
 	authsvc "github.com/ollymarsters/job-scraper/internal/api/services/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/api/services/cvtemplates"
@@ -21,31 +19,30 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/services/sources"
 	"github.com/ollymarsters/job-scraper/internal/api/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
+	"github.com/ollymarsters/job-scraper/internal/applications"
 	"github.com/ollymarsters/job-scraper/internal/candidates"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 type services struct {
-	auth                *authsvc.Service
-	google              *googlesvc.Service
-	googleClient        *igoogle.Client
-	ingest              *ingest.Ingester
-	jobs                *jobs.Service
-	applicationStatuses *applicationstatuses.Service
-	applications        *applications.Service
-	sources             *sources.Service
-	profile             *profile.Service
-	scoringConfig       *scoringconfig.Service
-	suitability         *suitability.Service
-	aiPrefs             *aiprefs.Service
-	aiCredentials       *aicredentials.Service
-	sourceTargets       *sourcetargets.Service
-	companies           *companies.Service
-	cvTemplates         *cvtemplates.Service
+	auth          *authsvc.Service
+	google        *googlesvc.Service
+	googleClient  *igoogle.Client
+	ingest        *ingest.Ingester
+	jobs          *jobs.Service
+	sources       *sources.Service
+	profile       *profile.Service
+	scoringConfig *scoringconfig.Service
+	suitability   *suitability.Service
+	aiPrefs       *aiprefs.Service
+	aiCredentials *aicredentials.Service
+	sourceTargets *sourcetargets.Service
+	companies     *companies.Service
+	cvTemplates   *cvtemplates.Service
 }
 
-func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service) *services {
+func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, apps *applications.Module) *services {
 	candidateService := candidates.New(db, q)
 	tokenStore := jobsdb.NewGoogleTokenStore(db)
 	googleClient := igoogle.NewClient(
@@ -56,21 +53,19 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 	)
 
 	return &services{
-		auth:                authsvc.New(db),
-		google:              googlesvc.New(googleClient),
-		googleClient:        googleClient,
-		ingest:              ingest.New(db, db),
-		jobs:                jobs.New(db),
-		applicationStatuses: applicationstatuses.New(db),
-		applications:        applications.New(db),
-		sources:             sources.New(),
-		profile:             profile.New(db),
-		scoringConfig:       scoringconfig.New(db, candidateService, db, suitabilitySvc, extract.NewClient(), creds),
-		suitability:         suitabilitySvc,
-		aiPrefs:             aiprefs.New(creds),
-		aiCredentials:       aicredentials.New(creds),
-		sourceTargets:       sourcetargets.New(db, db, candidateService, q),
-		companies:           companies.New(db, db, q),
-		cvTemplates:         cvtemplates.NewService(googleClient, db),
+		auth:          authsvc.New(db, apps),
+		google:        googlesvc.New(googleClient),
+		googleClient:  googleClient,
+		ingest:        ingest.New(db, db),
+		jobs:          jobs.New(db),
+		sources:       sources.New(),
+		profile:       profile.New(db),
+		scoringConfig: scoringconfig.New(db, candidateService, db, suitabilitySvc, extract.NewClient(), creds),
+		suitability:   suitabilitySvc,
+		aiPrefs:       aiprefs.New(creds),
+		aiCredentials: aicredentials.New(creds),
+		sourceTargets: sourcetargets.New(db, db, candidateService, q),
+		companies:     companies.New(db, db, q),
+		cvTemplates:   cvtemplates.NewService(googleClient, db),
 	}
 }

@@ -20,15 +20,22 @@ var bcryptCost = bcrypt.DefaultCost
 type Store interface {
 	providers.UserProvider
 	providers.SessionProvider
-	SeedDefaultStatuses(ctx context.Context, userID string) error
+}
+
+// StatusSeeder seeds a new user's default application Statuses. Signup
+// calls it through this local interface rather than importing
+// internal/applications directly (ADR 0011).
+type StatusSeeder interface {
+	SeedDefaults(ctx context.Context, userID string) error
 }
 
 type Service struct {
-	store Store
+	store  Store
+	seeder StatusSeeder
 }
 
-func New(store Store) *Service {
-	return &Service{store: store}
+func New(store Store, seeder StatusSeeder) *Service {
+	return &Service{store: store, seeder: seeder}
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
@@ -60,7 +67,7 @@ func (s *Service) Signup(ctx context.Context, username, password, email string) 
 		}
 		return dto.Session{}, dto.User{}, err
 	}
-	if err := s.store.SeedDefaultStatuses(ctx, user.ID); err != nil {
+	if err := s.seeder.SeedDefaults(ctx, user.ID); err != nil {
 		slog.Error("seed default statuses failed", slog.Any("err", err))
 	}
 

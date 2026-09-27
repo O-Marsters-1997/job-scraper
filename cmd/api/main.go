@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/api/jev"
 	"github.com/ollymarsters/job-scraper/internal/api/notify"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
+	"github.com/ollymarsters/job-scraper/internal/applications"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -101,7 +102,9 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc)}
+	apps := applications.New(db.Pool())
+
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, apps)}
 
 	go func() {
 		<-ctx.Done()
