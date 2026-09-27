@@ -22,9 +22,7 @@ test.describe("Tweaks panel", () => {
 		await tweaksPanel.primaryColorTrigger().click();
 		await tweaksPanel.hexInput.fill("#ff0000");
 
-		await expect
-			.poll(() => tweaksPanel.primaryColor())
-			.not.toBe(savedPrimary);
+		await expect.poll(() => tweaksPanel.primaryColor()).not.toBe(savedPrimary);
 
 		await page.mouse.click(10, 10);
 
@@ -37,10 +35,7 @@ test.describe("Tweaks panel", () => {
 
 		await tweaksPanel.toggle.page().keyboard.press("Escape");
 
-		await expect(tweaksPanel.toggle).toHaveAttribute(
-			"aria-expanded",
-			"false",
-		);
+		await expect(tweaksPanel.toggle).toHaveAttribute("aria-expanded", "false");
 	});
 
 	test("Sidebar width tweak resizes the sidebar", async ({

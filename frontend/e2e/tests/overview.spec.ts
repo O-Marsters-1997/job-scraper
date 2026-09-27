@@ -10,8 +10,6 @@ test.describe("Overview", () => {
 
 		await overviewPage.goto();
 
-		await expect(overviewPage.totalJobsValue).toHaveText(
-			String(seededCount),
-		);
+		await expect(overviewPage.totalJobsValue).toHaveText(String(seededCount));
 	});
 });
