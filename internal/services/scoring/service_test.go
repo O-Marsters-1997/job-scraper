@@ -1,8 +1,12 @@
 package scoring
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"sync"
 	"testing"
@@ -10,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 var bank = []dto.ScoringOption{
@@ -283,6 +288,91 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 	if len(st.Completed) != 1 || len(st.Completed[0].Answers) != 3 {
 		t.Fatalf("completed effects = %+v, want 1 effect with 3 new answers", st.Completed)
 	}
+}
+
+func captureScoreCallLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return buf
+}
+
+func scoreCallLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
+	t.Helper()
+	var lines []map[string]any
+	scanner := bufio.NewScanner(buf)
+	for scanner.Scan() {
+		var line map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
+			t.Fatalf("unmarshal log line: %v", err)
+		}
+		if line["event"] == telemetry.EventScoreCall {
+			lines = append(lines, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan log buffer: %v", err)
+	}
+	return lines
+}
+
+func TestProcess_SuccessfulAnswerEmitsScoreCall(t *testing.T) {
+	buf := captureScoreCallLogs(t)
+
+	st := newFakeStore()
+	job := dto.Job{ID: "job-score-call", Title: "Backend Engineer", ContentFingerprint: "fp-score-call", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+	}}
+	st.SeedJob(job, []dto.SearchConfig{cfg})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	svc := NewService(st, &fakeAnswerer{t: t}, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+
+	lines := scoreCallLines(t, buf)
+	if len(lines) != 1 {
+		t.Fatalf("score.call lines = %d, want 1: %v", len(lines), lines)
+	}
+	if lines[0]["user_id"] != "user-1" || lines[0]["model"] != "typesafe/jev-1.13-test" || lines[0]["cost_usd"] != 0.0004 {
+		t.Fatalf("score.call line = %+v, want user_id=user-1 model=typesafe/jev-1.13-test cost_usd=0.0004", lines[0])
+	}
+}
+
+func TestProcess_FailedAnswerEmitsNoScoreCall(t *testing.T) {
+	buf := captureScoreCallLogs(t)
+
+	st := newFakeStore()
+	job := dto.Job{ID: "job-score-call-fail", Title: "Backend Engineer", ContentFingerprint: "fp-score-call-fail", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+	}}
+	st.SeedJob(job, []dto.SearchConfig{cfg})
+	st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call-fail", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	svc := NewService(st, &failingAnswerer{}, &fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+
+	if lines := scoreCallLines(t, buf); len(lines) != 0 {
+		t.Fatalf("score.call lines = %v, want none after a failed Answer call", lines)
+	}
+	if len(st.Failed) != 1 {
+		t.Fatalf("failed effects = %d, want 1", len(st.Failed))
+	}
+}
+
+type failingAnswerer struct{}
+
+func (f *failingAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
+	return nil, dto.Usage{}, errors.New("jev boom")
 }
 
 func TestProcess_OnlyPickedQuestionsSent(t *testing.T) {

@@ -344,6 +344,42 @@ rules:
           type: math
           expression: "$A > 20 && ($B / $A) > 0.05"
 
+  - uid: user-spend-high
+    title: User spend
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.user_id }} spent ${{ $values.A }} on scoring in the last 24h"
+    data:
+      - refId: A
+        queryType: range
+        relativeTimeRange:
+          from: 86400
+          to: 0
+        datasourceUid: __LOKI_DATASOURCE_UID__
+        model:
+          refId: A
+          queryType: range
+          expr: sum by (user_id) (sum_over_time({env="prod"} | json | event="score.call" | unwrap cost_usd [24h]))
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [5]
+
   - uid: api-slow
     title: API slow
     condition: C

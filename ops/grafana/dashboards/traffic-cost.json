@@ -58,6 +58,37 @@
           "legendFormat": "{{route}}"
         }
       ]
+    },
+    {
+      "id": 4,
+      "title": "Scoring spend per day",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(sum_over_time({env=\"$env\"} | json | event=\"score.call\" | unwrap cost_usd [1d]))",
+          "legendFormat": "spend"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Top users by 24h scoring cost",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "loki", "uid": "__LOKI_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (user_id) (sum_over_time({env=\"$env\"} | json | event=\"score.call\" | unwrap cost_usd [24h])))",
+          "legendFormat": "{{user_id}}",
+          "instant": true
+        }
+      ]
     }
   ]
 }
