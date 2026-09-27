@@ -4,7 +4,7 @@ export class MobileNavComponent {
 	readonly toggle: Locator;
 	readonly dialog: Locator;
 
-	constructor(private readonly page: Page) {
+	constructor(page: Page) {
 		this.toggle = page.getByRole("button", { name: "Open menu" });
 		this.dialog = page.getByRole("dialog");
 	}

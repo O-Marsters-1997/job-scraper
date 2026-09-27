@@ -6,7 +6,7 @@ type SortState = "ascending" | "descending" | "none";
 
 export function SortableTableHead(props: {
 	sorted: SortState | false;
-	onToggle?: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+	onToggle?: (e: MouseEvent) => void;
 	children: JSX.Element;
 }) {
 	return (
@@ -14,7 +14,7 @@ export function SortableTableHead(props: {
 			<Show when={props.sorted !== false} fallback={props.children}>
 				<button
 					type="button"
-					onClick={props.onToggle}
+					onClick={(e) => props.onToggle?.(e)}
 					class="flex items-center gap-1 select-none hover:text-foreground"
 				>
 					{props.children}

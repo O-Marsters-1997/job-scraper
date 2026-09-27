@@ -14,7 +14,9 @@ test.describe("Scoring combobox", () => {
 		await expect(combobox).toHaveAttribute("aria-expanded", "true");
 
 		await page.keyboard.press("ArrowDown");
-		const activeDescendant = await combobox.getAttribute("aria-activedescendant");
+		const activeDescendant = await combobox.getAttribute(
+			"aria-activedescendant",
+		);
 		expect(activeDescendant).toBeTruthy();
 
 		await page.keyboard.press("ArrowDown");

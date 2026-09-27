@@ -24,7 +24,9 @@ test.describe("Accessibility", () => {
 	for (const route of ROUTES) {
 		test(`${route} has no serious or critical violations`, async ({ page }) => {
 			await page.goto(route);
-			await page.getByRole("heading", { level: 1 }).waitFor({ state: "visible" });
+			await page
+				.getByRole("heading", { level: 1 })
+				.waitFor({ state: "visible" });
 
 			const results = await new AxeBuilder({ page })
 				.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -36,7 +38,10 @@ test.describe("Accessibility", () => {
 			expect(
 				serious,
 				serious
-					.map((v) => `${v.id}: ${v.help}\n${v.nodes.map((n) => n.html).join("\n")}`)
+					.map(
+						(v) =>
+							`${v.id}: ${v.help}\n${v.nodes.map((n) => n.html).join("\n")}`,
+					)
 					.join("\n\n"),
 			).toEqual([]);
 		});

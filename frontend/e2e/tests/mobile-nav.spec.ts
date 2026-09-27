@@ -29,7 +29,10 @@ test.describe("Mobile navigation", () => {
 		await expect(mobileNav.toggle).toBeFocused();
 	});
 
-	test("navigating to a link closes the dialog", async ({ page, mobileNav }) => {
+	test("navigating to a link closes the dialog", async ({
+		page,
+		mobileNav,
+	}) => {
 		await page.goto("/jobs");
 		await expect(page.getByRole("heading", { name: "Jobs" })).toBeVisible();
 
