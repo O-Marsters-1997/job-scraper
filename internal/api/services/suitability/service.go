@@ -102,6 +102,11 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	for _, o := range options {
 		questionByHash[questionHash(o.Question)] = o.Question
 	}
+	for _, cfg := range surviving {
+		for _, c := range cfg.Preferences.Customs {
+			questionByHash[questionHash(c.Question)] = c.Question
+		}
+	}
 
 	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
 	if err != nil {
@@ -146,6 +151,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
 		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, allAnswers)
+		picks = append(picks, evaluatedCustomsFor(cfg.Preferences.Customs, allAnswers)...)
 		score, rows, hidden := compute(picks, job.SalaryRaw, cfg.Preferences.SalaryFloor)
 		scores = append(scores, dto.JobScore{JobID: effect.JobID, UserID: cfg.UserID, Score: score, Rows: rows, Unknowns: countUnknown(rows), Cost: cost, Hidden: hidden})
 	}
@@ -207,6 +213,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 	scores := make([]dto.JobScore, len(inputs))
 	for i, in := range inputs {
 		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, in.Answers)
+		picks = append(picks, evaluatedCustomsFor(cfg.Preferences.Customs, in.Answers)...)
 		score, rows, hidden := compute(picks, in.Job.SalaryRaw, cfg.Preferences.SalaryFloor)
 		scores[i] = dto.JobScore{JobID: in.Job.ID, UserID: userID, Score: score, Rows: rows, Unknowns: countUnknown(rows), Hidden: hidden}
 	}
@@ -214,6 +221,12 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 	return dto.RecomputeResult{Recomputed: int64(len(scores))}, nil
+}
+
+// QueueUserBackfill queues an answer effect for each of userID's already-scored,
+// non-closed jobs. Called after Save adds a custom question with new text.
+func (s *Service) QueueUserBackfill(ctx context.Context, userID string) (int64, error) {
+	return s.store.QueueUserBackfill(ctx, userID)
 }
 
 func optionsByID(options []dto.ScoringOption) map[string]dto.ScoringOption {
@@ -238,6 +251,21 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 		out = append(out, evaluatedPick{
 			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
 			answer: answer, known: known,
+		})
+	}
+	return out
+}
+
+// evaluatedCustomsFor gives each custom question its own dimension key, so
+// it never merges with a bank pick or another custom.
+func evaluatedCustomsFor(customs []dto.CustomQuestion, answers map[string]dto.Answer) []evaluatedPick {
+	out := make([]evaluatedPick, 0, len(customs))
+	for _, c := range customs {
+		hash := questionHash(c.Question)
+		answer, known := answers[hash]
+		out = append(out, evaluatedPick{
+			dimension: dto.Dimension("custom:" + hash), key: "custom:" + hash, label: c.Question,
+			stance: c.Stance, answer: answer, known: known,
 		})
 	}
 	return out

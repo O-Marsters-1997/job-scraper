@@ -12,6 +12,13 @@ const base = {
 		picks: [{ optionId: "tech:go", stance: "nice", source: "manual" }],
 		salaryFloor: null,
 		blockedTech: ["kubernetes", "php"],
+		customs: [
+			{
+				question: "Does the team pair program?",
+				stance: "nice",
+				source: "manual",
+			},
+		],
 	},
 	updatedAt: "2026-09-27T00:00:00Z",
 };
@@ -21,6 +28,7 @@ ok(valid.notifyThreshold === 70, "valid config parses");
 ok(valid.excludedCompanies.length === 1, "exclusion lists parse");
 ok(valid.preferences.picks.length === 1, "picks parse");
 ok(valid.preferences.blockedTech.length === 2, "blocked tech parses");
+ok(valid.preferences.customs.length === 1, "customs parse");
 
 let threw = false;
 try {
@@ -58,7 +66,12 @@ threw = false;
 try {
 	scoringConfigSchema.parse({
 		...base,
-		preferences: { picks: [], salaryFloor: null, blockedTech: [1] },
+		preferences: {
+			picks: [],
+			salaryFloor: null,
+			blockedTech: [1],
+			customs: [],
+		},
 	});
 } catch {
 	threw = true;
@@ -69,7 +82,12 @@ threw = false;
 try {
 	scoringConfigSchema.parse({
 		...base,
-		preferences: { picks: [{ optionId: "tech:go", stance: "nice" }] },
+		preferences: {
+			picks: [{ optionId: "tech:go", stance: "nice" }],
+			salaryFloor: null,
+			blockedTech: [],
+			customs: [],
+		},
 	});
 } catch {
 	threw = true;
@@ -101,3 +119,41 @@ ok(
 	withFloor.preferences.salaryFloor?.amount === 55000,
 	"a salary floor parses",
 );
+
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		preferences: {
+			picks: [],
+			salaryFloor: null,
+			blockedTech: [],
+			customs: [
+				{ question: "a".repeat(201), stance: "nice", source: "manual" },
+			],
+		},
+	});
+} catch {
+	threw = true;
+}
+ok(threw, "a custom question over 200 characters is rejected");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		preferences: {
+			picks: [],
+			salaryFloor: null,
+			blockedTech: [],
+			customs: Array.from({ length: 11 }, () => ({
+				question: "Question?",
+				stance: "nice",
+				source: "manual",
+			})),
+		},
+	});
+} catch {
+	threw = true;
+}
+ok(threw, "an 11th custom question is rejected");

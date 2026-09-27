@@ -206,6 +206,7 @@ let scoringConfig: ScoringConfig = {
 		],
 		salaryFloor: null,
 		blockedTech: [],
+		customs: [],
 	},
 	updatedAt: new Date("2024-01-01").toISOString(),
 };

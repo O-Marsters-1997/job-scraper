@@ -179,6 +179,71 @@ func TestProcess_ExcludedLocationDoesNotAffectScoring(t *testing.T) {
 	}
 }
 
+func TestProcess_CustomQuestionAskedWhenBankIsCached(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	job := dto.Job{ID: "job-4", Title: "Backend Engineer", ContentFingerprint: "fp-4", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks:   []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+		Customs: []dto.CustomQuestion{{Question: "Does the team pair program?", Stance: "nice", Source: "manual"}},
+	}}
+	store.SeedJob(job, []dto.SearchConfig{cfg})
+	store.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
+		questionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+		questionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
+		questionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+	})
+	store.SeedEffect(dto.AnswerEffect{ID: "effect-4", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	answerer := &fakeAnswerer{t: t}
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(), answerer,
+		&fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(answerer.calls) != 1 {
+		t.Fatalf("Answer calls = %d, want 1", len(answerer.calls))
+	}
+	want := []string{"Does the team pair program?"}
+	if !slices.Equal(answerer.calls[0], want) {
+		t.Fatalf("questions sent = %v, want %v", answerer.calls[0], want)
+	}
+}
+
+func TestProcess_IdenticalCustomTextAcrossUsersSharesOneAnswer(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	job := dto.Job{ID: "job-5", Title: "Backend Engineer", ContentFingerprint: "fp-5", Source: "greenhouse"}
+	custom := dto.CustomQuestion{Question: "Does the team pair program?", Stance: "nice", Source: "manual"}
+	cfgA := dto.SearchConfig{UserID: "user-a", NotifyThreshold: 70, Preferences: dto.Preferences{Customs: []dto.CustomQuestion{custom}}}
+	cfgB := dto.SearchConfig{UserID: "user-b", NotifyThreshold: 70, Preferences: dto.Preferences{Customs: []dto.CustomQuestion{custom}}}
+	store.SeedJob(job, []dto.SearchConfig{cfgA, cfgB})
+	store.SeedEffect(dto.AnswerEffect{ID: "effect-5", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	answerer := &fakeAnswerer{t: t}
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(), answerer,
+		&fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(answerer.calls) != 1 {
+		t.Fatalf("Answer calls = %d, want 1 (the whole bank plus the one shared custom, asked once)", len(answerer.calls))
+	}
+	if got := len(store.Completed[0].Answers); got != len(bank)+1 {
+		t.Fatalf("new answer rows = %d, want %d (the shared custom text produces one row, not one per user)", got, len(bank)+1)
+	}
+	scores := store.Completed[0].Scores
+	if len(scores) != 2 {
+		t.Fatalf("scores = %d, want 2", len(scores))
+	}
+	customHash := questionHash(custom.Question)
+	for _, s := range scores {
+		if s.Rows[len(s.Rows)-1].Key != "custom:"+customHash {
+			t.Fatalf("user %s custom row key = %q, want the shared hash", s.UserID, s.Rows[len(s.Rows)-1].Key)
+		}
+	}
+}
+
 func TestProcess_AlertsOnlyOnFirstDiscoveryAboveThreshold(t *testing.T) {
 	store := providers.NewMockSuitabilityProvider()
 	job := dto.Job{ID: "job-3", Title: "Backend Engineer", ContentFingerprint: "fp-3", Source: "greenhouse"}
@@ -203,6 +268,24 @@ func TestProcess_AlertsOnlyOnFirstDiscoveryAboveThreshold(t *testing.T) {
 	}
 	if len(alerter.notified) != 1 || alerter.notified[0] != "user@example.com" {
 		t.Fatalf("notified = %v, want [user@example.com]", alerter.notified)
+	}
+}
+
+func TestQueueUserBackfill_DelegatesToStore(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	store.BackfillCount = 3
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(), &fakeAnswerer{t: t, forbidden: true},
+		&fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	n, err := svc.QueueUserBackfill(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("QueueUserBackfill: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("queued = %d, want 3", n)
+	}
+	if len(store.BackfillCalls) != 1 || store.BackfillCalls[0] != "user-1" {
+		t.Fatalf("store called with %v, want [user-1]", store.BackfillCalls)
 	}
 }
 

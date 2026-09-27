@@ -289,6 +289,18 @@ func (db *DB) GetScoringStatus(ctx context.Context, userID string) (dto.ScoringS
 	return dto.ScoringStatus{Pending: pending}, nil
 }
 
+func (db *DB) QueueUserBackfill(ctx context.Context, userID string) (int64, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return 0, providers.ErrInvalidID
+	}
+	n, err := db.queries.QueueUserBackfill(ctx, uid)
+	if err != nil {
+		return 0, fmt.Errorf("db.QueueUserBackfill: %w", err)
+	}
+	return n, nil
+}
+
 func uuidString(id pgtype.UUID) string {
 	if !id.Valid {
 		return ""

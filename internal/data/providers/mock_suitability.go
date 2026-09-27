@@ -30,6 +30,9 @@ type MockSuitabilityProvider struct {
 	Failed    []dto.ScoringFailure
 	Completed []CompletedEffect
 	Saved     []dto.JobScore
+
+	BackfillCalls []string
+	BackfillCount int64
 }
 
 func NewMockSuitabilityProvider() *MockSuitabilityProvider {
@@ -151,4 +154,11 @@ func (m *MockSuitabilityProvider) GetScoringStatus(_ context.Context, userID str
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.status[userID], nil
+}
+
+func (m *MockSuitabilityProvider) QueueUserBackfill(_ context.Context, userID string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.BackfillCalls = append(m.BackfillCalls, userID)
+	return m.BackfillCount, nil
 }

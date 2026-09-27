@@ -29,4 +29,9 @@ type SuitabilityProvider interface {
 	ListScoringInputs(ctx context.Context, userID string) ([]ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	GetScoringStatus(ctx context.Context, userID string) (dto.ScoringStatus, error)
+
+	// QueueUserBackfill inserts an answer effect for each of userID's
+	// non-closed, already-scored jobs, skipping any with an effect already
+	// pending or running. It returns how many were queued.
+	QueueUserBackfill(ctx context.Context, userID string) (int64, error)
 }

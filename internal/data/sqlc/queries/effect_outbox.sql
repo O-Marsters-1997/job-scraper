@@ -24,6 +24,14 @@ WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
     AND (j.company_id = c.id OR j.company_slug = c.slug)
 ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
 
+-- name: QueueUserBackfill :execrows
+INSERT INTO effect_outbox (job_id, fingerprint)
+SELECT j.id, j.content_fingerprint
+FROM job_scores s JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = sqlc.arg(user_id)::uuid
+    AND j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
+
 -- name: BackfillCompanyJobFingerprints :exec
 UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
     replace(replace(replace(replace(replace(to_json(ARRAY[

@@ -7,7 +7,7 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { ScoringConfig } from "../../../api/scoringConfig";
+import type { CustomQuestion, ScoringConfig } from "../../../api/scoringConfig";
 import type {
 	ScoringOption,
 	ScoringOptionsView,
@@ -266,6 +266,133 @@ function MultiSection(props: {
 	);
 }
 
+const MAX_CUSTOM_QUESTIONS = 10;
+const MAX_CUSTOM_QUESTION_LENGTH = 200;
+
+function StanceToggle(props: {
+	value: Stance;
+	onChange: (stance: Stance) => void;
+}) {
+	return (
+		<div class="flex gap-1">
+			<For each={["nice", "avoid"] as const}>
+				{(stance) => (
+					<button
+						type="button"
+						aria-pressed={props.value === stance}
+						onClick={() => props.onChange(stance)}
+						class={`rounded-md border px-2 py-1 text-xs transition-colors ${
+							props.value === stance
+								? `${STANCE_TONE[stance]} font-medium`
+								: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground"
+						}`}
+					>
+						{stance === "nice" ? "Enjoy" : "Avoid"}
+					</button>
+				)}
+			</For>
+		</div>
+	);
+}
+
+function CustomQuestionsSection(props: {
+	customs: CustomQuestion[];
+	setCustoms: (customs: CustomQuestion[]) => void;
+}) {
+	const [draft, setDraft] = createSignal("");
+	const [draftStance, setDraftStance] = createSignal<Stance>("nice");
+	const atLimit = () => props.customs.length >= MAX_CUSTOM_QUESTIONS;
+
+	const update = (i: number, patch: Partial<CustomQuestion>) =>
+		props.setCustoms(
+			props.customs.map((c, idx) => (idx === i ? { ...c, ...patch } : c)),
+		);
+	const remove = (i: number) =>
+		props.setCustoms(props.customs.filter((_, idx) => idx !== i));
+	const add = () => {
+		const question = draft().trim();
+		if (!question || question.length > MAX_CUSTOM_QUESTION_LENGTH || atLimit())
+			return;
+		props.setCustoms([
+			...props.customs,
+			{ question, stance: draftStance(), source: "manual" },
+		]);
+		setDraft("");
+	};
+
+	return (
+		<Card class="overflow-hidden">
+			<div class="border-b border-border px-5 py-4">
+				<p class="text-base font-semibold text-foreground">Custom questions</p>
+				<p class="mt-0.5 text-xs text-faint">
+					Ask your own atomic yes/no question about a job. Up to{" "}
+					{MAX_CUSTOM_QUESTIONS}, {MAX_CUSTOM_QUESTION_LENGTH} characters each.
+					A question stays unknown until it's answered.
+				</p>
+			</div>
+			<div class="divide-y divide-border">
+				<For each={props.customs}>
+					{(c, i) => (
+						<div class="flex items-center gap-2 px-5 py-3">
+							<Input
+								value={c.question}
+								maxlength={MAX_CUSTOM_QUESTION_LENGTH}
+								onInput={(e) =>
+									update(i(), { question: e.currentTarget.value })
+								}
+								class="flex-1"
+							/>
+							<StanceToggle
+								value={c.stance as Stance}
+								onChange={(stance) => update(i(), { stance })}
+							/>
+							<button
+								type="button"
+								aria-label="Remove question"
+								onClick={() => remove(i())}
+								class="px-1.5 text-muted opacity-70 hover:opacity-100"
+							>
+								×
+							</button>
+						</div>
+					)}
+				</For>
+				<div class="flex items-center gap-2 px-5 py-3">
+					<Input
+						value={draft()}
+						maxlength={MAX_CUSTOM_QUESTION_LENGTH}
+						placeholder="e.g. Does the team pair program?"
+						disabled={atLimit()}
+						onInput={(e) => setDraft(e.currentTarget.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								add();
+							}
+						}}
+						class="flex-1"
+					/>
+					<StanceToggle value={draftStance()} onChange={setDraftStance} />
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={!draft().trim() || atLimit()}
+						onClick={add}
+					>
+						Add
+					</Button>
+				</div>
+				<Show when={atLimit()}>
+					<p class="px-5 py-2 text-xs text-faint">
+						You've reached the {MAX_CUSTOM_QUESTIONS}-question limit.
+					</p>
+				</Show>
+			</div>
+		</Card>
+	);
+}
+
 function ScoringPage() {
 	const configQuery = useScoringConfig();
 	const optionsQuery = useScoringOptions();
@@ -307,6 +434,9 @@ function ScoringForm(props: {
 
 	const [salaryFloor, setSalaryFloor] = createSignal(
 		props.config.preferences.salaryFloor?.amount.toString() ?? "",
+	);
+	const [customs, setCustoms] = createSignal<CustomQuestion[]>(
+		props.config.preferences.customs,
 	);
 	const [threshold, setThreshold] = createSignal(props.config.notifyThreshold);
 	const [noGoTech, setNoGoTech] = createSignal(
@@ -350,6 +480,7 @@ function ScoringForm(props: {
 						? { amount: Number(salaryFloor()), currency: "GBP" }
 						: null,
 					blockedTech: splitList(noGoTech()),
+					customs: customs(),
 				},
 				updatedAt: props.config.updatedAt,
 			});
@@ -433,6 +564,8 @@ function ScoringForm(props: {
 						/>
 					</div>
 				</section>
+
+				<CustomQuestionsSection customs={customs()} setCustoms={setCustoms} />
 
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">

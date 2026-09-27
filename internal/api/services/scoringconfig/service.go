@@ -5,10 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+)
+
+const (
+	maxCustomQuestions       = 10
+	maxCustomQuestionRuneLen = 200
 )
 
 type Reconsiderer interface {
@@ -19,15 +25,22 @@ type Recomputer interface {
 	Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error)
 }
 
+// Backfiller queues answer effects for a user's already-scored, non-closed
+// jobs, used when Save adds a custom question with text not seen before.
+type Backfiller interface {
+	QueueUserBackfill(ctx context.Context, userID string) (int64, error)
+}
+
 type Service struct {
 	configs    providers.SearchConfigProvider
 	candidates Reconsiderer
 	options    providers.ScoringOptionsProvider
 	recompute  Recomputer
+	backfill   Backfiller
 }
 
-func New(configs providers.SearchConfigProvider, candidates Reconsiderer, options providers.ScoringOptionsProvider, recompute Recomputer) *Service {
-	return &Service{configs: configs, candidates: candidates, options: options, recompute: recompute}
+func New(configs providers.SearchConfigProvider, candidates Reconsiderer, options providers.ScoringOptionsProvider, recompute Recomputer, backfill Backfiller) *Service {
+	return &Service{configs: configs, candidates: candidates, options: options, recompute: recompute, backfill: backfill}
 }
 
 func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
@@ -50,6 +63,15 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
+	customs, err := validatedCustoms(in.Preferences.Customs)
+	if err != nil {
+		return dto.ScoringConfigView{}, err
+	}
+
+	existing, err := s.configs.GetSearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, providers.ErrNotFound) {
+		return dto.ScoringConfigView{}, err
+	}
 
 	cfg := dto.SearchConfig{
 		UserID:            userID,
@@ -60,6 +82,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 			Picks:       picks,
 			SalaryFloor: floor,
 			BlockedTech: cleanList(in.Preferences.BlockedTech),
+			Customs:     customs,
 		},
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
@@ -72,7 +95,45 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if _, err := s.recompute.Recompute(ctx, userID); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("recompute scores: %w", err)
 	}
+	if hasNewCustomText(existing.Preferences.Customs, customs) {
+		if _, err := s.backfill.QueueUserBackfill(ctx, userID); err != nil {
+			return dto.ScoringConfigView{}, fmt.Errorf("queue backfill: %w", err)
+		}
+	}
 	return toView(updated), nil
+}
+
+// validatedCustoms forces every surviving question's source to manual: only
+// extraction (not yet built) can write "text".
+func validatedCustoms(customs []dto.CustomQuestion) ([]dto.CustomQuestion, error) {
+	if len(customs) > maxCustomQuestions {
+		return nil, apperr.Invalid(fmt.Sprintf("at most %d custom questions allowed", maxCustomQuestions))
+	}
+	out := make([]dto.CustomQuestion, len(customs))
+	for i, c := range customs {
+		question := strings.TrimSpace(c.Question)
+		if question == "" || utf8.RuneCountInString(question) > maxCustomQuestionRuneLen {
+			return nil, apperr.Invalid(fmt.Sprintf("custom question must be 1-%d characters", maxCustomQuestionRuneLen))
+		}
+		if c.Stance != "nice" && c.Stance != "avoid" {
+			return nil, apperr.Invalid("stance not allowed for a custom question: " + c.Stance)
+		}
+		out[i] = dto.CustomQuestion{Question: question, Stance: c.Stance, Source: "manual"}
+	}
+	return out, nil
+}
+
+func hasNewCustomText(existing, updated []dto.CustomQuestion) bool {
+	seen := make(map[string]bool, len(existing))
+	for _, c := range existing {
+		seen[c.Question] = true
+	}
+	for _, c := range updated {
+		if !seen[c.Question] {
+			return true
+		}
+	}
+	return false
 }
 
 // validatedPicks rejects an unknown or retired option, or a stance the
@@ -136,6 +197,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 			Picks:       nonNilPicks(cfg.Preferences.Picks),
 			SalaryFloor: cfg.Preferences.SalaryFloor,
 			BlockedTech: nonNilStrings(cfg.Preferences.BlockedTech),
+			Customs:     nonNilCustoms(cfg.Preferences.Customs),
 		},
 		ExcludedCompanies: nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedLocations: nonNilStrings(cfg.ExcludedLocations),
@@ -149,6 +211,13 @@ func nonNilPicks(p []dto.Pick) []dto.Pick {
 		return []dto.Pick{}
 	}
 	return p
+}
+
+func nonNilCustoms(c []dto.CustomQuestion) []dto.CustomQuestion {
+	if c == nil {
+		return []dto.CustomQuestion{}
+	}
+	return c
 }
 
 func nonNilStrings(s []string) []string {
