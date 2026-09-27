@@ -7,7 +7,7 @@ import {
 } from "@kobalte/core/dialog";
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { cva } from "class-variance-authority";
-import { type Accessor, createSignal, Show } from "solid-js";
+import { type Accessor, createEffect, createSignal, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
 import { queryClient } from "@/lib/queryClient";
 import { signOut } from "@/lib/session";
@@ -71,6 +71,11 @@ export default function Sidebar(props: SidebarProps) {
 			navigate({ to: "/login" });
 		});
 
+	createEffect(() => {
+		location().pathname;
+		props.onMobileClose?.();
+	});
+
 	const links = {
 		isOverviewActive,
 		isJobsActive,
@@ -108,7 +113,7 @@ export default function Sidebar(props: SidebarProps) {
 				modal
 			>
 				<DialogPortal>
-					<DialogOverlay class="fixed inset-0 z-40 bg-black/40 md:hidden data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
+					<DialogOverlay class="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] md:hidden data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
 					<DialogContent
 						class="fixed inset-y-0 left-0 z-50 flex h-screen w-[var(--sidebar-w,13.75rem)] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar shadow-2xl md:hidden data-[expanded]:animate-in data-[closed]:animate-out data-[expanded]:slide-in-from-left-full data-[closed]:slide-out-to-left-full data-[expanded]:duration-300 data-[closed]:duration-200"
 						onCloseAutoFocus={() => props.restoreFocusTo?.()?.focus()}

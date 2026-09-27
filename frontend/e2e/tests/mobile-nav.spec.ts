@@ -5,22 +5,19 @@ test.describe("Mobile navigation", () => {
 
 	test("closed nav has no tab stops; opening traps focus; Escape restores it", async ({
 		page,
+		mobileNav,
 	}) => {
 		await page.goto("/jobs");
 		await expect(page.getByRole("heading", { name: "Jobs" })).toBeVisible();
 
-		const toggle = page.getByRole("button", { name: "Open menu" });
-		await expect(toggle).toBeVisible();
-
-		await expect(page.getByRole("dialog")).toBeHidden();
+		await expect(mobileNav.toggle).toBeVisible();
+		await expect(mobileNav.dialog).toBeHidden();
 		await expect(
 			page.getByRole("link", { name: "Overview", exact: true }),
 		).toBeHidden();
 
-		await toggle.click();
-		const dialog = page.getByRole("dialog");
-		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("link", { name: "Overview" })).toBeVisible();
+		await mobileNav.open();
+		await expect(mobileNav.link("Overview")).toBeVisible();
 
 		const focusInsideDialog = await page.evaluate(
 			() => document.activeElement?.closest('[role="dialog"]') !== null,
@@ -28,7 +25,18 @@ test.describe("Mobile navigation", () => {
 		expect(focusInsideDialog).toBe(true);
 
 		await page.keyboard.press("Escape");
-		await expect(dialog).toBeHidden();
-		await expect(toggle).toBeFocused();
+		await expect(mobileNav.dialog).toBeHidden();
+		await expect(mobileNav.toggle).toBeFocused();
+	});
+
+	test("navigating to a link closes the dialog", async ({ page, mobileNav }) => {
+		await page.goto("/jobs");
+		await expect(page.getByRole("heading", { name: "Jobs" })).toBeVisible();
+
+		await mobileNav.open();
+		await mobileNav.link("Companies").click();
+
+		await expect(page).toHaveURL(/\/companies$/);
+		await expect(mobileNav.dialog).toBeHidden();
 	});
 });

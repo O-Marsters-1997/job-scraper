@@ -1,11 +1,13 @@
 import { test as base } from "@playwright/test";
 import { AppShellComponent } from "../components/app-shell.component";
+import { MobileNavComponent } from "../components/mobile-nav.component";
 import { TweaksPanelComponent } from "../components/tweaks-panel.component";
 import { CompaniesPage } from "../pages/companies.page";
 import { InsightsPage } from "../pages/insights.page";
 import { JobsPage } from "../pages/jobs.page";
 import { LoginPage } from "../pages/login.page";
 import { OverviewPage } from "../pages/overview.page";
+import { ScoringPage } from "../pages/scoring.page";
 import { StatusesPage } from "../pages/statuses.page";
 
 type Fixtures = {
@@ -17,6 +19,8 @@ type Fixtures = {
 	statusesPage: StatusesPage;
 	appShell: AppShellComponent;
 	tweaksPanel: TweaksPanelComponent;
+	mobileNav: MobileNavComponent;
+	scoringPage: ScoringPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -43,6 +47,12 @@ export const test = base.extend<Fixtures>({
 	},
 	tweaksPanel: async ({ page }, use) => {
 		await use(new TweaksPanelComponent(page));
+	},
+	mobileNav: async ({ page }, use) => {
+		await use(new MobileNavComponent(page));
+	},
+	scoringPage: async ({ page }, use) => {
+		await use(new ScoringPage(page));
 	},
 });
 

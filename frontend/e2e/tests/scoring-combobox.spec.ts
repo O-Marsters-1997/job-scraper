@@ -1,13 +1,13 @@
 import { expect, test } from "../src/fixtures";
 
 test.describe("Scoring combobox", () => {
-	test("supports arrow keys and exposes aria-expanded", async ({ page }) => {
-		await page.goto("/settings/scoring/filters");
-		await expect(
-			page.getByRole("heading", { name: "Scoring", level: 1 }),
-		).toBeVisible();
+	test("supports arrow keys and exposes aria-expanded", async ({
+		page,
+		scoringPage,
+	}) => {
+		await scoringPage.gotoFilters();
 
-		const combobox = page.getByRole("combobox", { name: "Excluded companies" });
+		const combobox = scoringPage.excludedCompaniesCombobox;
 		await expect(combobox).toHaveAttribute("aria-expanded", "false");
 
 		await combobox.click();

@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { AddDocDialog } from "@/components/cv/AddDocDialog";
 import { PageHeading } from "@/components/PageHeading";
+import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,11 +58,7 @@ function CVTemplatesPage() {
 	const [showHidden, setShowHidden] = createSignal(false);
 	const [dialogOpen, setDialogOpen] = createSignal(false);
 
-	const { sortKey, sortDir, handleSort, sortIcon } =
-		useTableSort<SortKey>("Title");
-
-	const thClass = (key: SortKey) =>
-		`select-none transition-colors hover:text-foreground${sortKey() === key ? " text-foreground" : ""}`;
+	const { sortKey, sortDir, handleSort } = useTableSort<SortKey>("Title");
 
 	const ariaSort = (key: SortKey): "ascending" | "descending" | "none" => {
 		if (sortKey() !== key) return "none";
@@ -233,31 +230,19 @@ function CVTemplatesPage() {
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead aria-sort={ariaSort("Title")}>
-											<button
-												type="button"
-												onClick={() => handleSort("Title")}
-												class={thClass("Title")}
-											>
-												Title{" "}
-												<span class="font-mono text-2xs" aria-hidden="true">
-													{sortIcon("Title")}
-												</span>
-											</button>
-										</TableHead>
+										<SortableTableHead
+											sorted={ariaSort("Title")}
+											onToggle={() => handleSort("Title")}
+										>
+											Title
+										</SortableTableHead>
 										<TableHead>Source doc</TableHead>
-										<TableHead aria-sort={ariaSort("ModifiedAt")}>
-											<button
-												type="button"
-												onClick={() => handleSort("ModifiedAt")}
-												class={thClass("ModifiedAt")}
-											>
-												Last modified{" "}
-												<span class="font-mono text-2xs" aria-hidden="true">
-													{sortIcon("ModifiedAt")}
-												</span>
-											</button>
-										</TableHead>
+										<SortableTableHead
+											sorted={ariaSort("ModifiedAt")}
+											onToggle={() => handleSort("ModifiedAt")}
+										>
+											Last modified
+										</SortableTableHead>
 										<TableHead class="w-10" />
 									</TableRow>
 								</TableHeader>
