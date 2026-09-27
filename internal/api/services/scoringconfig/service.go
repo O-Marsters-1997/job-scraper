@@ -46,6 +46,10 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
+	floor, err := validatedSalaryFloor(in.Preferences.SalaryFloor)
+	if err != nil {
+		return dto.ScoringConfigView{}, err
+	}
 
 	cfg := dto.SearchConfig{
 		UserID:                userID,
@@ -53,7 +57,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
-		Preferences:           dto.Preferences{Picks: picks},
+		Preferences:           dto.Preferences{Picks: picks, SalaryFloor: floor},
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
 	if err != nil {
@@ -100,6 +104,20 @@ func (s *Service) validatedPicks(ctx context.Context, picks []dto.Pick) ([]dto.P
 	return out, nil
 }
 
+func validatedSalaryFloor(floor *dto.Money) (*dto.Money, error) {
+	if floor == nil {
+		return nil, nil
+	}
+	currency := strings.ToUpper(strings.TrimSpace(floor.Currency))
+	if floor.Amount < 0 {
+		return nil, apperr.Invalid("salary floor amount must not be negative")
+	}
+	if currency == "" {
+		return nil, apperr.Invalid("salary floor currency is required")
+	}
+	return &dto.Money{Amount: floor.Amount, Currency: currency}, nil
+}
+
 func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
 	for _, s := range spec.Stances {
 		if s == stance {
@@ -111,7 +129,10 @@ func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 	return dto.ScoringConfigView{
-		Preferences:           dto.Preferences{Picks: nonNilPicks(cfg.Preferences.Picks)},
+		Preferences: dto.Preferences{
+			Picks:       nonNilPicks(cfg.Preferences.Picks),
+			SalaryFloor: cfg.Preferences.SalaryFloor,
+		},
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),

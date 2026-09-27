@@ -146,7 +146,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
 		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, allAnswers)
-		score, rows := compute(picks)
+		score, rows := compute(picks, job.SalaryRaw, cfg.Preferences.SalaryFloor)
 		scores = append(scores, dto.JobScore{JobID: effect.JobID, UserID: cfg.UserID, Score: score, Rows: rows, Unknowns: countUnknown(rows), Cost: cost})
 	}
 
@@ -207,7 +207,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 	scores := make([]dto.JobScore, len(inputs))
 	for i, in := range inputs {
 		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, in.Answers)
-		score, rows := compute(picks)
+		score, rows := compute(picks, in.Job.SalaryRaw, cfg.Preferences.SalaryFloor)
 		scores[i] = dto.JobScore{JobID: in.Job.ID, UserID: userID, Score: score, Rows: rows, Unknowns: countUnknown(rows)}
 	}
 	if err := s.store.SaveScores(ctx, scores); err != nil {

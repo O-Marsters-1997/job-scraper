@@ -42,7 +42,10 @@ func resolveAnswer(a dto.Answer) string {
 // their dimension's weight once when any matches, avoid picks cost their
 // weight only when the job has them, and every dimension or pick with no
 // known answer is excluded from both sides of the ratio.
-func compute(picks []evaluatedPick) (int, []dto.ScoreRow) {
+func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []dto.ScoreRow) {
+	if floor != nil {
+		picks = append(picks, salaryPick(*floor, salaryRaw))
+	}
 	rows := make([]dto.ScoreRow, 0, len(picks))
 	type dimState struct{ known, matched bool }
 	dims := make(map[dto.Dimension]*dimState)

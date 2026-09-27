@@ -137,6 +137,16 @@ func TestUpdate(t *testing.T) {
 			in:         dto.ScoringConfigView{NotifyThreshold: 101},
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			name:       "rejects a negative salary floor amount",
+			in:         dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: -1, Currency: "GBP"}}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "rejects a salary floor with no currency",
+			in:         dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000}}},
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,10 +169,13 @@ func TestUpdateSucceeds(t *testing.T) {
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
-		Preferences: dto.Preferences{Picks: []dto.Pick{
-			{OptionID: "tech:go", Stance: "nice", Source: "text"},
-			{OptionID: "domain:gambling", Stance: "block"},
-		}},
+		Preferences: dto.Preferences{
+			Picks: []dto.Pick{
+				{OptionID: "tech:go", Stance: "nice", Source: "text"},
+				{OptionID: "domain:gambling", Stance: "block"},
+			},
+			SalaryFloor: &dto.Money{Amount: 55000, Currency: "gbp"},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -176,6 +189,10 @@ func TestUpdateSucceeds(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
 		t.Fatalf("picks = %+v, want %+v (source forced to manual)", got.Preferences.Picks, wantPicks)
+	}
+	wantFloor := &dto.Money{Amount: 55000, Currency: "GBP"}
+	if !reflect.DeepEqual(got.Preferences.SalaryFloor, wantFloor) {
+		t.Fatalf("salary floor = %+v, want %+v (currency uppercased)", got.Preferences.SalaryFloor, wantFloor)
 	}
 	if reconsiderer.calledWith.UserID != "user-1" {
 		t.Fatalf("reconsiderer called with %+v, want user-1", reconsiderer.calledWith)
