@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -128,6 +132,129 @@ func TestClient_Answer_MissingAnswerIsAnError(t *testing.T) {
 	_, _, err := client.Answer(context.Background(), "sk-or-test", dto.Job{}, []string{"tech:go"})
 	if err == nil {
 		t.Fatal("Answer: want error, got nil")
+	}
+}
+
+func TestClient_Answer_BatchesQuestionsUnderBudget(t *testing.T) {
+	questions := make([]string, 80)
+	for i := range questions {
+		questions[i] = fmt.Sprintf("tech:%d:%s", i, strings.Repeat("x", 1000))
+	}
+
+	var requests [][]byte
+	var mu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		mu.Lock()
+		requests = append(requests, body)
+		mu.Unlock()
+
+		var req choiceRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		resp := choiceResponse{Model: "typesafe/jev-1.13-20260917", Usage: choiceUsage{Cost: 0.001}}
+		resp.Answers = make(map[string]choiceAnswer, len(req.Questions))
+		for q := range req.Questions {
+			resp.Answers[q] = choiceAnswer{Probabilities: map[string]float64{"yes": 1}, Confidence: 1}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &Client{http: server.Client(), baseURL: server.URL}
+
+	answers, usage, err := client.Answer(context.Background(), "sk-or-test", dto.Job{}, questions)
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+
+	if len(requests) < 2 {
+		t.Fatalf("got %d requests, want at least 2 batches for a question list over budget", len(requests))
+	}
+	for i, body := range requests {
+		if len(body) >= maxBatchChars {
+			t.Errorf("request %d body = %d chars, want under budget %d", i, len(body), maxBatchChars)
+		}
+	}
+
+	if len(answers) != len(questions) {
+		t.Errorf("got %d answers, want %d (one per question across batches)", len(answers), len(questions))
+	}
+	for _, q := range questions {
+		if _, ok := answers[q]; !ok {
+			t.Errorf("answers missing question %q", q)
+		}
+	}
+
+	wantCost := 0.001 * float64(len(requests))
+	if usage.Cost < wantCost-1e-9 || usage.Cost > wantCost+1e-9 {
+		t.Errorf("usage.Cost = %v, want sum across batches %v", usage.Cost, wantCost)
+	}
+}
+
+func TestClient_Answer_SmallListMakesOneRequest(t *testing.T) {
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		resp := choiceResponse{Model: "typesafe/jev-1.13-20260917"}
+		resp.Answers = map[string]choiceAnswer{"tech:go": {Probabilities: map[string]float64{"yes": 1}}}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &Client{http: server.Client(), baseURL: server.URL}
+
+	if _, _, err := client.Answer(context.Background(), "sk-or-test", dto.Job{}, []string{"tech:go"}); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if requestCount != 1 {
+		t.Errorf("requestCount = %d, want 1", requestCount)
+	}
+}
+
+func TestClient_Answer_BatchErrorReturnsNoPartialAnswers(t *testing.T) {
+	questions := make([]string, 80)
+	for i := range questions {
+		questions[i] = fmt.Sprintf("tech:%d:%s", i, strings.Repeat("x", 1000))
+	}
+
+	var requestCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if requestCount == 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		var req choiceRequest
+		_ = json.Unmarshal(body, &req)
+		resp := choiceResponse{Model: "typesafe/jev-1.13-20260917"}
+		resp.Answers = make(map[string]choiceAnswer, len(req.Questions))
+		for q := range req.Questions {
+			resp.Answers[q] = choiceAnswer{Probabilities: map[string]float64{"yes": 1}}
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := &Client{http: server.Client(), baseURL: server.URL}
+
+	answers, usage, err := client.Answer(context.Background(), "sk-or-test", dto.Job{}, questions)
+	if err == nil {
+		t.Fatal("Answer: want error, got nil")
+	}
+	if answers != nil {
+		t.Errorf("answers = %+v, want nil on batch error", answers)
+	}
+	if usage != (dto.Usage{}) {
+		t.Errorf("usage = %+v, want zero value on batch error", usage)
+	}
+	if requestCount < 2 {
+		t.Fatalf("got %d requests, want at least 2 (failure on the 2nd batch)", requestCount)
 	}
 }
 
