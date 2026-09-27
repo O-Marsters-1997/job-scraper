@@ -23,6 +23,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -105,6 +106,7 @@ func main() {
 	}
 
 	apps := applications.New(db.Pool())
+	idm := identity.New(db.Pool(), apps)
 
 	googleClient := igoogle.NewClient(
 		os.Getenv("GOOGLE_CLIENT_ID"),
@@ -114,7 +116,7 @@ func main() {
 	)
 	cvTemplates := cvtemplates.New(db.Pool(), googleClient)
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, apps, cvTemplates)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, idm, apps, cvTemplates)}
 
 	go func() {
 		<-ctx.Done()

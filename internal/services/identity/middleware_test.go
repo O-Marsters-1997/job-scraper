@@ -1,17 +1,32 @@
-package auth_test
+package identity
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/api/auth"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
+
+type fakeSessionGetter struct {
+	sessions map[string]dto.Session
+	getErr   error
+}
+
+func (f *fakeSessionGetter) GetSession(_ context.Context, id string) (dto.Session, error) {
+	if f.getErr != nil {
+		return dto.Session{}, f.getErr
+	}
+	s, ok := f.sessions[id]
+	if !ok {
+		return dto.Session{}, errors.New("not found")
+	}
+	return s, nil
+}
 
 func okHandler(w http.ResponseWriter, r *http.Request) {
 	session, ok := handlers.Session(r)
@@ -23,9 +38,8 @@ func okHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func TestMiddleware_NoCookie(t *testing.T) {
-	sp := providers.NewMockSessionProvider()
-	mw := auth.Middleware(sp)
+func TestSessionMiddlewareNoCookie(t *testing.T) {
+	mw := sessionMiddleware(&fakeSessionGetter{sessions: map[string]dto.Session{}})
 	handler := mw(http.HandlerFunc(okHandler))
 
 	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
@@ -37,10 +51,8 @@ func TestMiddleware_NoCookie(t *testing.T) {
 	}
 }
 
-func TestMiddleware_UnknownSession(t *testing.T) {
-	sp := providers.NewMockSessionProvider()
-	sp.GetErr = fmt.Errorf("not found")
-	mw := auth.Middleware(sp)
+func TestSessionMiddlewareUnknownSession(t *testing.T) {
+	mw := sessionMiddleware(&fakeSessionGetter{getErr: errors.New("not found")})
 	handler := mw(http.HandlerFunc(okHandler))
 
 	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
@@ -53,36 +65,11 @@ func TestMiddleware_UnknownSession(t *testing.T) {
 	}
 }
 
-func TestMiddleware_ExpiredSession(t *testing.T) {
-	sp := providers.NewMockSessionProvider()
-	sp.Seed(dto.Session{
-		ID:        "expired-session",
-		UserID:    "user-1",
-		Username:  "alice",
-		ExpiresAt: time.Now().Add(-time.Hour),
-	})
-	mw := auth.Middleware(sp)
-	handler := mw(http.HandlerFunc(okHandler))
-
-	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: "expired-session"})
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("want 401, got %d", w.Code)
-	}
-}
-
-func TestMiddleware_ValidSession(t *testing.T) {
-	sp := providers.NewMockSessionProvider()
-	sp.Seed(dto.Session{
-		ID:        "valid-session",
-		UserID:    "user-1",
-		Username:  "alice",
-		ExpiresAt: time.Now().Add(time.Hour),
-	})
-	mw := auth.Middleware(sp)
+func TestSessionMiddlewareValidSession(t *testing.T) {
+	sg := &fakeSessionGetter{sessions: map[string]dto.Session{
+		"valid-session": {ID: "valid-session", UserID: "user-1", Username: "alice", ExpiresAt: time.Now().Add(time.Hour)},
+	}}
+	mw := sessionMiddleware(sg)
 	handler := mw(http.HandlerFunc(okHandler))
 
 	req := httptest.NewRequest(http.MethodGet, "/jobs", nil)

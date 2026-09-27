@@ -175,7 +175,7 @@ func TestListCompaniesForUser(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
 
-	user, err := testDB.CreateUser(ctx, "alice", "hash", "")
+	user, err := createTestUser(ctx, "alice")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -216,11 +216,11 @@ func TestListCompaniesForUser(t *testing.T) {
 func TestCompanyTrackingWithoutBoard(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
-	alice, err := testDB.CreateUser(ctx, "tracking-alice", "hash", "")
+	alice, err := createTestUser(ctx, "tracking-alice")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bob, err := testDB.CreateUser(ctx, "tracking-bob", "hash", "")
+	bob, err := createTestUser(ctx, "tracking-bob")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func TestListDueSourceTargets(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
 
-	user, err := testDB.CreateUser(ctx, "bob", "hash", "")
+	user, err := createTestUser(ctx, "bob")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
@@ -426,7 +426,7 @@ func TestListDueSourceTargets(t *testing.T) {
 func TestDiscoveryRunStatePersists(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
-	user, err := testDB.CreateUser(ctx, "discovery-run", "hash", "")
+	user, err := createTestUser(ctx, "discovery-run")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,11 +455,11 @@ func TestTouchSourceTargetsChecked(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
 
-	alice, err := testDB.CreateUser(ctx, "alice2", "hash", "")
+	alice, err := createTestUser(ctx, "alice2")
 	if err != nil {
 		t.Fatalf("CreateUser alice: %v", err)
 	}
-	bob, err := testDB.CreateUser(ctx, "bob2", "hash", "")
+	bob, err := createTestUser(ctx, "bob2")
 	if err != nil {
 		t.Fatalf("CreateUser bob: %v", err)
 	}
@@ -494,11 +494,11 @@ func TestListUserIDsForTarget(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
 
-	alice, err := testDB.CreateUser(ctx, "alice3", "hash", "")
+	alice, err := createTestUser(ctx, "alice3")
 	if err != nil {
 		t.Fatalf("CreateUser alice: %v", err)
 	}
-	bob, err := testDB.CreateUser(ctx, "bob3", "hash", "")
+	bob, err := createTestUser(ctx, "bob3")
 	if err != nil {
 		t.Fatalf("CreateUser bob: %v", err)
 	}
@@ -535,7 +535,7 @@ func TestUpsertSourceTargetForCompany(t *testing.T) {
 	ctx := context.Background()
 	truncateCompanies(t)
 
-	user, err := testDB.CreateUser(ctx, "carol", "hash", "")
+	user, err := createTestUser(ctx, "carol")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}

@@ -134,7 +134,7 @@ func TestAddScoringOption(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		user, err := testDB.CreateUser(ctx, "backfill-user", "hash", "")
+		user, err := createTestUser(ctx, "backfill-user")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,7 +218,7 @@ func TestRewordScoringOption(t *testing.T) {
 		truncate(t)
 		ctx := context.Background()
 
-		user, err := testDB.CreateUser(ctx, "reword-user", "hash", "")
+		user, err := createTestUser(ctx, "reword-user")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 )
 
@@ -20,6 +21,15 @@ func TestMain(m *testing.M) {
 	testDB = db.NewFromPool(pool)
 
 	os.Exit(m.Run())
+}
+
+func createTestUser(ctx context.Context, username string) (dto.User, error) {
+	var u dto.User
+	err := testDB.Pool().QueryRow(ctx,
+		"INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id, username, password_hash",
+		username,
+	).Scan(&u.ID, &u.Username, &u.PasswordHash)
+	return u, err
 }
 
 func truncate(t testing.TB) {

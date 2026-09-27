@@ -1,20 +1,27 @@
-package apihandlers
+package identity
 
 import (
 	"context"
 	"net/http"
 	"os"
 
-	"github.com/ollymarsters/job-scraper/internal/handlers"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-type authSvc interface {
-	Login(ctx context.Context, username, password string) (dto.Session, dto.User, error)
-	Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error)
-	Logout(ctx context.Context, sessionID string) error
+// PublicRoutes mounts login and signup outside the session-protected group.
+func (m *Module) PublicRoutes(r chi.Router) {
+	r.Post("/auth/login", loginHandler(m.service))
+	r.Post("/auth/signup", signupHandler(m.service))
+}
+
+// Routes mounts logout and me inside the session-protected group.
+func (m *Module) Routes(r chi.Router) {
+	r.Post("/auth/logout", logoutHandler(m.service))
+	r.Get("/auth/me", meHandler)
 }
 
 func newSessionCookie(id string, maxAge int) *http.Cookie {
@@ -46,8 +53,7 @@ func respondSession(status int) func(http.ResponseWriter, *http.Request, session
 	}
 }
 
-// Login authenticates a user by username/password and starts a session.
-func Login(svc authSvc) http.HandlerFunc {
+func loginHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		handlers.DecodeBody[dto.LoginInput],
 		func(ctx context.Context, in dto.LoginInput) (sessionUser, error) {
@@ -58,8 +64,7 @@ func Login(svc authSvc) http.HandlerFunc {
 	)
 }
 
-// Signup creates a user and starts a session.
-func Signup(svc authSvc) http.HandlerFunc {
+func signupHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		handlers.DecodeBody[dto.SignupInput],
 		func(ctx context.Context, in dto.SignupInput) (sessionUser, error) {
@@ -70,9 +75,7 @@ func Signup(svc authSvc) http.HandlerFunc {
 	)
 }
 
-// Logout clears the caller's session; the service error is swallowed so the
-// browser is always logged out even if the underlying session delete fails.
-func Logout(svc authSvc) http.HandlerFunc {
+func logoutHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (string, error) {
 			session, _ := handlers.Session(r)
@@ -91,8 +94,7 @@ func Logout(svc authSvc) http.HandlerFunc {
 	)
 }
 
-// Me returns the caller's session identity.
-var Me = handlers.Handle(
+var meHandler = handlers.Handle(
 	func(r *http.Request) (dto.MeView, error) {
 		session, ok := handlers.Session(r)
 		if !ok {
