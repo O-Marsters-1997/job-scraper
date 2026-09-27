@@ -19,8 +19,15 @@ import (
 )
 
 const (
-	decisionsURL        = "https://openrouter.ai/api/alpha/decisions"
-	jevModel            = "typesafe/jev-1.13"
+	decisionsURL = "https://openrouter.ai/api/alpha/decisions"
+
+	// Model is the model requested in every decisions call and the effect
+	// model prefix new answer effects are stamped with (schema default).
+	Model = "typesafe/jev-1.13"
+
+	// Provider is the user_ai_credentials provider key Jev bills against.
+	Provider = "openrouter"
+
 	maxDescriptionRunes = 4096 * 4
 )
 
@@ -83,7 +90,7 @@ func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questio
 	}
 
 	reqBody := choiceRequest{
-		Model: jevModel,
+		Model: Model,
 		State: choiceState{
 			Title:           job.Title,
 			Company:         job.CompanySlug,

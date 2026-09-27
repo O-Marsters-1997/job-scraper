@@ -3,7 +3,7 @@ import {
 	createQuery,
 	useQueryClient,
 } from "@tanstack/solid-query";
-import { fetchScoringStatus, queueRescore } from "../api/scores";
+import { fetchScoringStatus, recomputeScores } from "../api/scores";
 
 export function useScoringStatus() {
 	return createQuery(() => ({
@@ -12,11 +12,10 @@ export function useScoringStatus() {
 	}));
 }
 
-export function useQueueRescore() {
+export function useRecomputeScores() {
 	const client = useQueryClient();
 	return createMutation(() => ({
-		mutationFn: queueRescore,
-		onSuccess: () =>
-			client.invalidateQueries({ queryKey: ["scores", "status"] }),
+		mutationFn: recomputeScores,
+		onSuccess: () => client.invalidateQueries({ queryKey: ["jobs"] }),
 	}));
 }

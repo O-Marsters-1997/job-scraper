@@ -4,38 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/filter"
-	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 type Reconsiderer interface {
 	Reconsider(ctx context.Context, config dto.SearchConfig) error
 }
 
-type Rescorer interface {
-	QueueRescore(ctx context.Context, userID string) (int64, error)
+type Recomputer interface {
+	Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error)
 }
 
 type Service struct {
 	configs    providers.SearchConfigProvider
 	candidates Reconsiderer
-	rescore    Rescorer
 	options    providers.ScoringOptionsProvider
+	recompute  Recomputer
 }
 
-func New(configs providers.SearchConfigProvider, candidates Reconsiderer, rescore Rescorer, options providers.ScoringOptionsProvider) *Service {
-	return &Service{configs: configs, candidates: candidates, rescore: rescore, options: options}
-}
-
-func (s *Service) Rescore(ctx context.Context, userID string) (dto.RescoreResult, error) {
-	queued, err := s.rescore.QueueRescore(ctx, userID)
-	return dto.RescoreResult{Queued: queued}, err
+func New(configs providers.SearchConfigProvider, candidates Reconsiderer, options providers.ScoringOptionsProvider, recompute Recomputer) *Service {
+	return &Service{configs: configs, candidates: candidates, options: options, recompute: recompute}
 }
 
 func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
@@ -47,13 +39,11 @@ func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView
 }
 
 func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfigView) (dto.ScoringConfigView, error) {
-	seniority := cleanList(in.ExcludedSeniority)
-	for _, level := range seniority {
-		if !slices.Contains(filter.SeniorityLevels, level) {
-			return dto.ScoringConfigView{}, apperr.Invalid("unknown seniority level: " + level)
-		}
+	if in.NotifyThreshold < 0 || in.NotifyThreshold > 100 {
+		return dto.ScoringConfigView{}, apperr.Invalid("notify threshold must be between 0 and 100")
 	}
-	if err := validateScoringQuestions(in.ScoringQuestions); err != nil {
+	picks, err := s.validatedPicks(ctx, in.Preferences.Picks)
+	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
 
@@ -62,9 +52,8 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 		NotifyThreshold:       in.NotifyThreshold,
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
-		ExcludedSeniority:     seniority,
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
-		ScoringQuestions:      in.ScoringQuestions,
+		Preferences:           dto.Preferences{Picks: picks},
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
 	if err != nil {
@@ -73,49 +62,69 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if err := s.candidates.Reconsider(ctx, updated); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("reconsider candidates: %w", err)
 	}
+	if _, err := s.recompute.Recompute(ctx, userID); err != nil {
+		return dto.ScoringConfigView{}, fmt.Errorf("recompute scores: %w", err)
+	}
 	return toView(updated), nil
+}
+
+// validatedPicks rejects an unknown or retired option, or a stance the
+// option's dimension doesn't allow, and normalises every surviving pick's
+// source to manual: only extraction (not yet built) can write "text".
+func (s *Service) validatedPicks(ctx context.Context, picks []dto.Pick) ([]dto.Pick, error) {
+	options, err := s.options.ListScoringOptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]dto.ScoringOption, len(options))
+	for _, o := range options {
+		byID[o.ID] = o
+	}
+	dimensions := make(map[dto.Dimension]dto.DimensionSpec, len(Dimensions))
+	for _, d := range Dimensions {
+		dimensions[d.Key] = d
+	}
+
+	out := make([]dto.Pick, len(picks))
+	for i, p := range picks {
+		opt, ok := byID[p.OptionID]
+		if !ok || opt.RetiredAt != nil {
+			return nil, apperr.Invalid("unknown or retired option: " + p.OptionID)
+		}
+		spec := dimensions[opt.Dimension]
+		if !stanceAllowed(spec, p.Stance) {
+			return nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
+		}
+		out[i] = dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "manual"}
+	}
+	return out, nil
+}
+
+func stanceAllowed(spec dto.DimensionSpec, stance string) bool {
+	for _, s := range spec.Stances {
+		if s == stance {
+			return true
+		}
+	}
+	return false
 }
 
 func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 	return dto.ScoringConfigView{
-		NotifyThreshold:       cfg.NotifyThreshold,
+		Preferences:           dto.Preferences{Picks: nonNilPicks(cfg.Preferences.Picks)},
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
-		ExcludedSeniority:     nonNilStrings(cfg.ExcludedSeniority),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
-		ScoringQuestions: dto.ScoringQuestions{
-			Profile:  cfg.ScoringQuestions.Profile,
-			Criteria: nonNilCriteria(cfg.ScoringQuestions.Criteria),
-			Scale:    nonNilStrings(cfg.ScoringQuestions.Scale),
-		},
+		NotifyThreshold:       cfg.NotifyThreshold,
+		UpdatedAt:             cfg.UpdatedAt,
 	}
 }
 
-func nonNilCriteria(c []dto.ScoringCriterion) []dto.ScoringCriterion {
-	if c == nil {
-		return []dto.ScoringCriterion{}
+func nonNilPicks(p []dto.Pick) []dto.Pick {
+	if p == nil {
+		return []dto.Pick{}
 	}
-	return c
-}
-
-func validateScoringQuestions(q dto.ScoringQuestions) error {
-	if len(q.Scale) < 2 {
-		return apperr.Invalid("scale must have at least 2 levels")
-	}
-	if strings.TrimSpace(q.Profile) == "" && len(q.Criteria) == 0 {
-		return apperr.Invalid("profile or at least one criterion is required")
-	}
-	seen := make(map[string]bool, len(q.Criteria))
-	for _, c := range q.Criteria {
-		if c.Key == score.OverallQuestionKey {
-			return apperr.Invalid("criterion key is reserved: " + c.Key)
-		}
-		if seen[c.Key] {
-			return apperr.Invalid("duplicate criterion key: " + c.Key)
-		}
-		seen[c.Key] = true
-	}
-	return nil
+	return p
 }
 
 func nonNilStrings(s []string) []string {

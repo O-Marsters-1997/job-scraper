@@ -2,12 +2,12 @@ package dto
 
 import "time"
 
-type ScoringEffect struct {
+// AnswerEffect is one queued job that needs its bank questions answered and
+// scored, one row per job rather than per (job, user).
+type AnswerEffect struct {
 	ID             string
 	JobID          string
-	UserID         string
 	Fingerprint    string
-	ConfigVersion  time.Time
 	Model          string
 	Attempts       int
 	FirstDiscovery bool

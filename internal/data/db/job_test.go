@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -11,8 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/score"
 )
 
 var baseJob = dto.Job{
@@ -208,7 +209,16 @@ func TestSaveCanonical_AliasesAndReplay(t *testing.T) {
 	}
 }
 
-func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
+func effectCountForJob(t testing.TB, ctx context.Context, jobID string) int {
+	t.Helper()
+	var count int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	return count
+}
+
+func TestSaveCanonical_QueuesOneAnswerEffectPerContentVersion(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 	user, err := testDB.CreateUser(ctx, "outbox-user", "hash", "")
@@ -222,370 +232,77 @@ func TestSaveCanonical_QueuesInterestedUserOncePerContentVersion(t *testing.T) {
 	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
 	job := baseJob
 	job.URL = "https://example.com/jobs/outbox"
 	job.CompanySlug = company.Slug
 	job.CompanyID = company.ID
+	var jobID string
 	for _, title := range []string{"Engineer", "Engineer", "Senior Engineer"} {
 		job.Title = title
-		if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		saved, _, err := testDB.SaveCanonical(ctx, job)
+		if err != nil {
 			t.Fatal(err)
 		}
+		jobID = saved.ID
 	}
-	var count int
-	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 2 {
-		t.Fatalf("queued scoring effects = %d, want 2", count)
+	if count := effectCountForJob(t, ctx, jobID); count != 2 {
+		t.Fatalf("queued answer effects = %d, want 2", count)
 	}
 }
 
-func effectCount(t testing.TB, ctx context.Context, userID string) int {
-	t.Helper()
-	var count int
-	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE user_id = $1", userID).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	return count
-}
-
-func TestSaveCanonical_RejectFiltersSkipOnlyMatchingUser(t *testing.T) {
-	cases := []struct {
-		name     string
-		urlPath  string
-		title    string
-		location string
-		cfg      dto.SearchConfig
-	}{
-		{
-			name:    "excluded company",
-			urlPath: "reject-company",
-			title:   "Engineer",
-			cfg:     dto.SearchConfig{ExcludedCompanies: []string{"reject-co"}},
-		},
-		{
-			name:    "excluded title keyword",
-			urlPath: "reject-keyword",
-			title:   "Blockchain Engineer",
-			cfg:     dto.SearchConfig{ExcludedTitleKeywords: []string{"blockchain"}},
-		},
-		{
-			name:    "excluded seniority",
-			urlPath: "reject-seniority",
-			title:   "Senior Engineer",
-			cfg:     dto.SearchConfig{ExcludedSeniority: []string{"senior"}},
-		},
-		{
-			name:     "excluded location",
-			urlPath:  "reject-location",
-			title:    "Engineer",
-			location: "Berlin",
-			cfg:      dto.SearchConfig{ExcludedLocations: []string{"Berlin"}},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			truncate(t)
-			ctx := context.Background()
-
-			company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "reject-co", Name: "Reject Co"})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			filteredUser, err := testDB.CreateUser(ctx, "filtered-user-"+tc.urlPath, "hash", "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			cfg := tc.cfg
-			cfg.UserID = filteredUser.ID
-			if _, err := testDB.UpsertSearchConfig(ctx, cfg); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := testDB.SetCompanyTracking(ctx, filteredUser.ID, company.ID, true, 360); err != nil {
-				t.Fatal(err)
-			}
-			if err := testDB.UpsertUserAICredential(ctx, filteredUser.ID, "openrouter", "enc-key"); err != nil {
-				t.Fatal(err)
-			}
-
-			controlUser, err := testDB.CreateUser(ctx, "control-user-"+tc.urlPath, "hash", "")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := testDB.SetCompanyTracking(ctx, controlUser.ID, company.ID, true, 360); err != nil {
-				t.Fatal(err)
-			}
-			if err := testDB.UpsertUserAICredential(ctx, controlUser.ID, "openrouter", "enc-key"); err != nil {
-				t.Fatal(err)
-			}
-
-			job := baseJob
-			job.URL = "https://example.com/jobs/" + tc.urlPath
-			job.CompanySlug = company.Slug
-			job.CompanyID = company.ID
-			job.Title = tc.title
-			if tc.location != "" {
-				job.Location = tc.location
-			}
-			if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-				t.Fatal(err)
-			}
-
-			if count := effectCount(t, ctx, filteredUser.ID); count != 0 {
-				t.Errorf("filtered user queued effects = %d, want 0", count)
-			}
-			if count := effectCount(t, ctx, controlUser.ID); count != 1 {
-				t.Errorf("control user queued effects = %d, want 1", count)
-			}
-		})
-	}
-}
-
-func TestSaveCanonical_NoCredentialQueuesNoEffect(t *testing.T) {
+func TestSaveCanonical_NoInterestedUserQueuesNoEffect(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 
-	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "cred-co", Name: "Cred Co"})
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untracked-co", Name: "Untracked Co"})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	noCredUser, err := testDB.CreateUser(ctx, "no-cred-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.SetCompanyTracking(ctx, noCredUser.ID, company.ID, true, 360); err != nil {
-		t.Fatal(err)
-	}
-
-	credUser, err := testDB.CreateUser(ctx, "cred-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.SetCompanyTracking(ctx, credUser.ID, company.ID, true, 360); err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.UpsertUserAICredential(ctx, credUser.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
-
 	job := baseJob
-	job.URL = "https://example.com/jobs/cred-check"
+	job.URL = "https://example.com/jobs/untracked"
 	job.CompanySlug = company.Slug
 	job.CompanyID = company.ID
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-
-	if count := effectCount(t, ctx, noCredUser.ID); count != 0 {
-		t.Errorf("user with no credential queued effects = %d, want 0", count)
-	}
-	if count := effectCount(t, ctx, credUser.ID); count != 1 {
-		t.Errorf("user with credential queued effects = %d, want 1", count)
-	}
-}
-
-func TestScoringEffect_LeaseAndRetry(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
+	saved, _, err := testDB.SaveCanonical(ctx, job)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
+	if count := effectCountForJob(t, ctx, saved.ID); count != 0 {
+		t.Fatalf("queued answer effects for an untracked company = %d, want 0", count)
+	}
+}
+
+func TestSaveCanonical_QueuesRegardlessOfExclusionFilters(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "filtered-co", Name: "Filtered Co"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
+	user, err := testDB.CreateUser(ctx, "filtered-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, ExcludedCompanies: []string{"filtered-co"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.SetCompanyTracking(ctx, user.ID, company.ID, true, 360); err != nil {
 		t.Fatal(err)
 	}
 	job := baseJob
-	job.URL = "https://example.com/jobs/lease"
-	job.CompanySlug = "lease-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+	job.URL = "https://example.com/jobs/filtered"
+	job.CompanySlug = company.Slug
+	job.CompanyID = company.ID
+	saved, _, err := testDB.SaveCanonical(ctx, job)
+	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil || first.UserID != user.ID {
-		t.Fatalf("first claim = %+v, %v", first, err)
-	}
-	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
-		t.Fatal("leased effect claimed twice")
-	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "temporary failure"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.ClaimScoringEffect(ctx); err == nil {
-		t.Fatal("future retry claimed early")
-	}
-	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {
-		t.Fatal(err)
-	}
-	second, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil || second.ID != first.ID {
-		t.Fatalf("retry claim = %+v, %v", second, err)
+	if count := effectCountForJob(t, ctx, saved.ID); count != 1 {
+		t.Fatalf("queued answer effects = %d, want 1 (filters apply later, not at ingest)", count)
 	}
 }
 
-func TestScoringEffect_TerminalFailureFailsAtOnce(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "terminal-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/terminal"
-	job.CompanySlug = "terminal-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	first, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "invalid api key", Terminal: true}); err != nil {
-		t.Fatal(err)
-	}
-	var status, lastError string
-	if err := testDB.Pool().QueryRow(ctx, "SELECT status, last_error FROM effect_outbox WHERE id = $1", first.ID).Scan(&status, &lastError); err != nil {
-		t.Fatal(err)
-	}
-	if status != "failed" || lastError != "invalid api key" {
-		t.Fatalf("status = %q last_error = %q, want failed / invalid api key", status, lastError)
-	}
-}
-
-func TestScoringEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/ratelimit"
-	job.CompanySlug = "ratelimit-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	first, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.FailScoringEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "rate limited", RetryAfter: 120 * time.Second}); err != nil {
-		t.Fatal(err)
-	}
-	var status string
-	var dueInSecs float64
-	query := "SELECT status, EXTRACT(EPOCH FROM due_at - NOW())::float8 FROM effect_outbox WHERE id = $1"
-	if err := testDB.Pool().QueryRow(ctx, query, first.ID).Scan(&status, &dueInSecs); err != nil {
-		t.Fatal(err)
-	}
-	if status != "pending" {
-		t.Fatalf("status = %q, want pending", status)
-	}
-	if dueInSecs < 110 || dueInSecs > 130 {
-		t.Fatalf("due_at - NOW() = %.1fs, want ~120s", dueInSecs)
-	}
-}
-
-func TestScoringEffect_RescoreAfterConfigChange(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "rescore-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "rescore-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/rescore"
-	job.CompanySlug = "rescore-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	effect, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := score.SuitabilityResult{Score: 80, Model: score.JevModel + "-snapshot"}
-	if saved, err := testDB.CompleteScoringEffect(ctx, effect, result); err != nil || !saved {
-		t.Fatal(err)
-	}
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, NotifyThreshold: 90}); err != nil {
-		t.Fatal(err)
-	}
-	status, err := testDB.GetScoringStatus(ctx, user.ID)
-	if err != nil || status.Stale != 1 {
-		t.Fatalf("status after config edit = %+v, %v", status, err)
-	}
-	queued, err := testDB.QueueRescore(ctx, user.ID)
-	if err != nil || queued != 1 {
-		t.Fatalf("rescore queued = %d, %v", queued, err)
-	}
-	queued, err = testDB.QueueRescore(ctx, user.ID)
-	if err != nil || queued != 0 {
-		t.Fatalf("duplicate rescore queued = %d, %v", queued, err)
-	}
-}
-
-func TestScoringEffect_StaleCompletionDoesNotSaveScore(t *testing.T) {
-	truncate(t)
-	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "stale-effect-user", "hash", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := testDB.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-key"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "stale-effect-company", true, nil); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/stale-effect"
-	job.CompanySlug = "stale-effect-company"
-	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	effect, err := testDB.ClaimScoringEffect(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, NotifyThreshold: 90}); err != nil {
-		t.Fatal(err)
-	}
-	if saved, err := testDB.CompleteScoringEffect(ctx, effect, score.SuitabilityResult{Score: 90}); err != nil || saved {
-		t.Fatalf("stale score persisted=%v err=%v", saved, err)
-	}
-	if queued, err := testDB.QueueRescore(ctx, user.ID); err != nil || queued != 1 {
-		t.Fatalf("rescore after stale completion queued=%d err=%v", queued, err)
-	}
-}
-
-func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
+func TestQueueTrackingScores_QueuesCachedOpenJobs(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
 	company, err := testDB.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "cached-company", Name: "Cached Company"})
@@ -614,7 +331,7 @@ func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
 	}
 	var count int
 	var eligible bool
-	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*), COALESCE(bool_or(first_discovery), false) FROM effect_outbox WHERE user_id = $1", user.ID).Scan(&count, &eligible); err != nil {
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*), COALESCE(bool_or(first_discovery), false) FROM effect_outbox").Scan(&count, &eligible); err != nil {
 		t.Fatal(err)
 	}
 	if count != 2 || eligible {
@@ -627,6 +344,114 @@ func TestScoringEffect_NewTrackingQueuesCachedOpenJob(t *testing.T) {
 	}
 	if want := fmt.Sprintf("%x", sha256.Sum256(content)); fingerprint != want {
 		t.Fatalf("legacy fingerprint = %q, want %q", fingerprint, want)
+	}
+}
+
+func TestAnswerEffect_LeaseAndRetry(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "lease-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "lease-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/lease"
+	job.CompanySlug = "lease-company"
+	saved, _, err := testDB.SaveCanonical(ctx, job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimAnswerEffect(ctx)
+	if err != nil || first.JobID != saved.ID {
+		t.Fatalf("first claim = %+v, %v", first, err)
+	}
+	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, providers.ErrNotFound) {
+		t.Fatalf("leased effect claimed twice: %v", err)
+	}
+	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "temporary failure"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, providers.ErrNotFound) {
+		t.Fatalf("future retry claimed early: %v", err)
+	}
+	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := testDB.ClaimAnswerEffect(ctx)
+	if err != nil || second.ID != first.ID {
+		t.Fatalf("retry claim = %+v, %v", second, err)
+	}
+}
+
+func TestAnswerEffect_TerminalFailureFailsAtOnce(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "terminal-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "terminal-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/terminal"
+	job.CompanySlug = "terminal-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimAnswerEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "invalid api key", Terminal: true}); err != nil {
+		t.Fatal(err)
+	}
+	var status, lastError string
+	if err := testDB.Pool().QueryRow(ctx, "SELECT status, last_error FROM effect_outbox WHERE id = $1", first.ID).Scan(&status, &lastError); err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" || lastError != "invalid api key" {
+		t.Fatalf("status = %q last_error = %q, want failed / invalid api key", status, lastError)
+	}
+}
+
+func TestAnswerEffect_RateLimitedFailureHonoursRetryAfter(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+	user, err := testDB.CreateUser(ctx, "ratelimit-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "ratelimit-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/ratelimit"
+	job.CompanySlug = "ratelimit-company"
+	if _, _, err := testDB.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	first, err := testDB.ClaimAnswerEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "rate limited", RetryAfter: 120 * time.Second}); err != nil {
+		t.Fatal(err)
+	}
+	var status string
+	var dueInSecs float64
+	query := "SELECT status, EXTRACT(EPOCH FROM due_at - NOW())::float8 FROM effect_outbox WHERE id = $1"
+	if err := testDB.Pool().QueryRow(ctx, query, first.ID).Scan(&status, &dueInSecs); err != nil {
+		t.Fatal(err)
+	}
+	if status != "pending" {
+		t.Fatalf("status = %q, want pending", status)
+	}
+	if dueInSecs < 110 || dueInSecs > 130 {
+		t.Fatalf("due_at - NOW() = %.1fs, want ~120s", dueInSecs)
 	}
 }
 

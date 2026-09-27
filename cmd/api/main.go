@@ -14,14 +14,20 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
+	"github.com/ollymarsters/job-scraper/internal/api/jev"
 	"github.com/ollymarsters/job-scraper/internal/api/notify"
+	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/score"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
+
+// noAlerts is the Alerter used when no RESEND_API_KEY is configured (dev).
+type noAlerts struct{}
+
+func (noAlerts) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 func main() {
 	slog.SetDefault(logger.New())
@@ -59,7 +65,7 @@ func main() {
 		slog.Error("credstore init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	var sendAlert func(context.Context, dto.Job, string) error
+	var alerter suitability.Alerter = noAlerts{}
 	if apiKey := os.Getenv("RESEND_API_KEY"); apiKey != "" {
 		renderer, err := notify.NewRenderer()
 		if err != nil {
@@ -69,16 +75,10 @@ func main() {
 			if from == "" {
 				from = "onboarding@resend.dev"
 			}
-			sendAlert = notify.NewNotificationService(notify.NewResendNotifier(apiKey, from), renderer).NotifyNewJob
+			alerter = notify.NewNotificationService(notify.NewResendNotifier(apiKey, from), renderer)
 		}
 	}
-	outbox := score.NewOutboxWorker(db,
-		func(ctx context.Context, userID string) (string, error) { return cs.Get(ctx, userID, score.Provider) },
-		func(apiKey string) score.SuitabilityScorer {
-			return score.NewJevScorer(apiKey)
-		},
-		sendAlert,
-	)
+	suitabilitySvc := suitability.New(db, db, db, jev.NewClient(), cs, alerter, db)
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
@@ -87,8 +87,8 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := outbox.RunTick(ctx); err != nil && ctx.Err() == nil {
-					slog.Error("scoring tick failed", slog.Any("err", err))
+				if err := suitabilitySvc.RunTick(ctx); err != nil && ctx.Err() == nil {
+					slog.Error("answer effect tick failed", slog.Any("err", err))
 				}
 			}
 		}
@@ -111,7 +111,7 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc)}
 
 	go func() {
 		<-ctx.Done()

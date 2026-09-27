@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -13,8 +14,16 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+func optionalTime(t pgtype.Timestamptz) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	v := t.Time
+	return &v
+}
+
 func fromCompany(row pgsqlc.Company) dto.Company {
-	c := dto.Company{
+	return dto.Company{
 		ID:                row.ID.String(),
 		Slug:              row.Slug,
 		Name:              row.Name,
@@ -23,12 +32,8 @@ func fromCompany(row pgsqlc.Company) dto.Company {
 		Domain:            row.Domain.String,
 		LinkedInCompanyID: row.LinkedinCompanyID.String,
 		FirstSeenAt:       row.FirstSeenAt.Time,
+		LastCrawledAt:     optionalTime(row.LastCrawledAt),
 	}
-	if row.LastCrawledAt.Valid {
-		t := row.LastCrawledAt.Time
-		c.LastCrawledAt = &t
-	}
-	return c
 }
 
 func (db *DB) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
@@ -72,7 +77,7 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 	}
 	out := make([]dto.Company, len(rows))
 	for i, r := range rows {
-		c := dto.Company{
+		out[i] = dto.Company{
 			ID:                   r.ID.String(),
 			Slug:                 r.Slug,
 			Name:                 r.Name,
@@ -84,16 +89,9 @@ func (db *DB) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Co
 			JobCount:             int(r.JobCount),
 			Tracked:              r.Tracked,
 			CheckIntervalMinutes: int(r.CheckIntervalMinutes.Int32),
+			LastCheckedAt:        optionalTime(r.LastCheckedAt),
+			LastCrawledAt:        optionalTime(r.LastCrawledAt),
 		}
-		if r.LastCheckedAt.Valid {
-			t := r.LastCheckedAt.Time
-			c.LastCheckedAt = &t
-		}
-		if r.LastCrawledAt.Valid {
-			t := r.LastCrawledAt.Time
-			c.LastCrawledAt = &t
-		}
-		out[i] = c
 	}
 	return out, nil
 }
@@ -123,7 +121,7 @@ func (db *DB) SetCompanyTracking(ctx context.Context, userID, companyID string, 
 		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
 		}
-		if err := queries.QueueTrackingScores(ctx, pgsqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid}); err != nil {
+		if err := queries.QueueTrackingScores(ctx, cid); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("queue tracked company scores: %w", err)
 		}
 	}

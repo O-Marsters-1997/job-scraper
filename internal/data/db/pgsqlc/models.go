@@ -142,9 +142,7 @@ type CompanyBoard struct {
 type EffectOutbox struct {
 	ID             pgtype.UUID
 	JobID          pgtype.UUID
-	UserID         pgtype.UUID
 	Fingerprint    string
-	ConfigVersion  pgtype.Timestamptz
 	Model          string
 	FirstDiscovery bool
 	Status         string
@@ -195,18 +193,16 @@ type JobCandidate struct {
 }
 
 type JobScore struct {
-	ID                 pgtype.UUID
-	JobID              pgtype.UUID
-	UserID             pgtype.UUID
-	SuitabilityScore   pgtype.Int4
-	Criteria           []byte
-	Confidence         pgtype.Float4
-	Cost               pgtype.Numeric
-	ScoreFingerprint   pgtype.Text
-	ScoreConfigVersion pgtype.Timestamptz
-	ScoreModel         pgtype.Text
-	CreatedAt          pgtype.Timestamptz
-	UpdatedAt          pgtype.Timestamptz
+	ID               pgtype.UUID
+	JobID            pgtype.UUID
+	UserID           pgtype.UUID
+	SuitabilityScore pgtype.Int4
+	Breakdown        []byte
+	Cost             pgtype.Numeric
+	ScoreFingerprint pgtype.Text
+	ScoreModel       pgtype.Text
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
 }
 
 type JobUrl struct {
@@ -223,6 +219,18 @@ type NotificationDigest struct {
 	JobCount int32
 }
 
+type OptionAnswer struct {
+	JobID        pgtype.UUID
+	Fingerprint  string
+	QuestionHash string
+	Model        string
+	PYes         float32
+	PNo          float32
+	PNotStated   float32
+	Confidence   float32
+	AnsweredAt   pgtype.Timestamptz
+}
+
 type ScoringOption struct {
 	ID        string
 	Dimension ScoringDimension
@@ -236,10 +244,9 @@ type SearchConfig struct {
 	UserID                pgtype.UUID
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
-	ExcludedSeniority     []string
 	ExcludedLocations     []string
 	NotifyThreshold       int32
-	ScoringQuestions      []byte
+	Preferences           []byte
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
 }

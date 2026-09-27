@@ -1,5 +1,5 @@
 import type { Job } from "@/types/job";
-import { CriteriaBreakdown } from "./CriteriaBreakdown";
+import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 interface Props {
@@ -11,10 +11,10 @@ export function JobRowExpander(props: Props) {
 		<div class="flex flex-col gap-2.5 px-4 py-3 bg-surface-muted border-t border-border">
 			<SuitabilityScoreValue
 				score={props.job.SuitabilityScore}
-				confidence={props.job.Confidence}
+				breakdown={props.job.Breakdown}
 				size="sm"
 			/>
-			<CriteriaBreakdown job={props.job} />
+			<ScoreBreakdown job={props.job} />
 		</div>
 	);
 }

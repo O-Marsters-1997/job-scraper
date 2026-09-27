@@ -8,21 +8,20 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func TestUpsertSearchConfig_ScoringQuestionsRoundTrip(t *testing.T) {
+func TestUpsertSearchConfig_PreferencesRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	user, err := testDB.CreateUser(ctx, "scoring-questions-user", "hash", "")
+	user, err := testDB.CreateUser(ctx, "preferences-user", "hash", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	questions := dto.ScoringQuestions{
-		Profile: "Senior Go engineer",
-		Criteria: []dto.ScoringCriterion{
-			{Key: "go_backend", Instructions: "Does the job use Go?", True: "yes", False: "no", Required: true},
+	prefs := dto.Preferences{
+		Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+			{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
 		},
-		Scale: []string{"Not relevant", "Weak", "Possible", "Strong", "Apply today"},
 	}
 
-	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, ScoringQuestions: questions}); err != nil {
+	if _, err := testDB.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user.ID, Preferences: prefs}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -30,7 +29,7 @@ func TestUpsertSearchConfig_ScoringQuestionsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got.ScoringQuestions, questions) {
-		t.Fatalf("scoring questions = %+v, want %+v", got.ScoringQuestions, questions)
+	if !reflect.DeepEqual(got.Preferences, prefs) {
+		t.Fatalf("preferences = %+v, want %+v", got.Preferences, prefs)
 	}
 }

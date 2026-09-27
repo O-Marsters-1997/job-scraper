@@ -2,31 +2,27 @@ import { z } from "zod";
 import { apiFetch } from "./client";
 import { useMocks } from "./config";
 
-export const scoringCriterionSchema = z.object({
-	key: z.string(),
-	instructions: z.string(),
-	true: z.string(),
-	false: z.string(),
-	required: z.boolean(),
+export const pickSchema = z.object({
+	optionId: z.string(),
+	stance: z.string(),
+	source: z.string(),
 });
 
-export const scoringQuestionsSchema = z.object({
-	profile: z.string(),
-	criteria: z.array(scoringCriterionSchema),
-	scale: z.array(z.string()),
+export const preferencesSchema = z.object({
+	picks: z.array(pickSchema),
 });
 
 export const scoringConfigSchema = z.object({
-	notifyThreshold: z.number().int().min(0).max(100),
+	preferences: preferencesSchema,
 	excludedTitleKeywords: z.array(z.string()),
 	excludedCompanies: z.array(z.string()),
-	excludedSeniority: z.array(z.string()),
 	excludedLocations: z.array(z.string()),
-	scoringQuestions: scoringQuestionsSchema,
+	notifyThreshold: z.number().int().min(0).max(100),
+	updatedAt: z.string(),
 });
 
-export type ScoringCriterion = z.infer<typeof scoringCriterionSchema>;
-export type ScoringQuestions = z.infer<typeof scoringQuestionsSchema>;
+export type Pick = z.infer<typeof pickSchema>;
+export type Preferences = z.infer<typeof preferencesSchema>;
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
 
 export async function fetchScoringConfig(): Promise<ScoringConfig> {

@@ -2,8 +2,9 @@ import { faker } from "@faker-js/faker";
 import type { Application, ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
-import type { Job } from "@/types/job";
+import type { Job, ScoreRow } from "@/types/job";
 import type { SourceTarget } from "@/types/sourceTarget";
+import type { RecomputeResult, ScoringStatus } from "../api/scores";
 import type { ScoringConfig } from "../api/scoringConfig";
 import type {
 	DimensionSpec,
@@ -193,42 +194,19 @@ const JOB_TITLES = [
 	"Software Development Engineer in Test",
 ];
 
-const MOCK_CRITERIA = [
-	{
-		key: "go_backend",
-		instructions: "Does the job involve significant backend work in Go?",
-		true: "Go is a primary language for the role",
-		false: "Go isn't used",
-		required: false,
-	},
-	{
-		key: "remote_friendly",
-		instructions: "Is the role remote or hybrid-friendly?",
-		true: "Remote or hybrid is supported",
-		false: "The role is on-site only",
-		required: false,
-	},
-	{
-		key: "early_stage",
-		instructions: "Is the company early-stage (seed to Series B)?",
-		true: "The company is seed to Series B",
-		false: "The company is later-stage or public",
-		required: false,
-	},
-];
-
 let scoringConfig: ScoringConfig = {
 	notifyThreshold: 70,
 	excludedTitleKeywords: [],
 	excludedCompanies: [],
-	excludedSeniority: [],
 	excludedLocations: [],
-	scoringQuestions: {
-		profile:
-			"I am a software engineer with 3+ years of experience in backend development, looking for Go or Python roles at remote-friendly, early-stage companies.",
-		criteria: MOCK_CRITERIA,
-		scale: ["Not relevant", "Weak", "Possible", "Strong", "Apply today"],
+	preferences: {
+		picks: [
+			{ optionId: "tech:go", stance: "nice", source: "manual" },
+			{ optionId: "role:backend", stance: "nice", source: "manual" },
+			{ optionId: "domain:fintech", stance: "avoid", source: "manual" },
+		],
 	},
+	updatedAt: new Date("2024-01-01").toISOString(),
 };
 
 const scoringDimensions: DimensionSpec[] = [
@@ -249,6 +227,53 @@ const scoringOptions: ScoringOption[] = [
 	{ id: "work:remote", dimension: "work", label: "Remote" },
 	{ id: "stage:seed", dimension: "stage", label: "Seed" },
 ];
+
+const BREAKDOWN_PICKS: {
+	key: string;
+	label: string;
+	stance: "nice" | "avoid";
+}[] = [
+	{ key: "tech:go", label: "Go", stance: "nice" },
+	{ key: "tech:python", label: "Python", stance: "nice" },
+	{ key: "role:backend", label: "Backend", stance: "nice" },
+	{ key: "domain:fintech", label: "fintech", stance: "avoid" },
+];
+
+function mockBreakdown(i: number): ScoreRow[] {
+	return BREAKDOWN_PICKS.map((p, j) => {
+		const roll = (i + j) % 3;
+		if (roll === 0) {
+			return {
+				key: p.key,
+				label: p.label,
+				stance: p.stance,
+				resolved: "unknown",
+				effect: "unknown",
+				overridden: false,
+			} satisfies ScoreRow;
+		}
+		if (p.stance === "nice") {
+			const matched = roll === 1;
+			return {
+				key: p.key,
+				label: p.label,
+				stance: p.stance,
+				resolved: matched ? "yes" : "no",
+				effect: matched ? "meets" : "misses",
+				overridden: false,
+			} satisfies ScoreRow;
+		}
+		const hit = roll === 1;
+		return {
+			key: p.key,
+			label: p.label,
+			stance: p.stance,
+			resolved: hit ? "yes" : "no",
+			effect: hit ? "misses" : "neutral",
+			overridden: false,
+		} satisfies ScoreRow;
+	});
+}
 
 function slugify(name: string): string {
 	return name
@@ -280,17 +305,7 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		ScrapedAt: scrapedAt,
 		DaysInOffice: daysInOffice,
 		SuitabilityScore: scored ? faker.number.int({ min: 30, max: 100 }) : null,
-		Criteria: scored
-			? Object.fromEntries(
-					MOCK_CRITERIA.map((c) => [
-						c.key,
-						faker.number.float({ min: 0, max: 1, fractionDigits: 2 }),
-					]),
-				)
-			: null,
-		Confidence: scored
-			? faker.number.float({ min: 0, max: 1, fractionDigits: 2 })
-			: null,
+		Breakdown: scored ? mockBreakdown(i) : null,
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
 		Skills: SKILL_SETS[i % SKILL_SETS.length]!,
 		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length]!,
@@ -453,6 +468,14 @@ export function getScoringConfig(): ScoringConfig {
 
 export function getScoringOptions(): ScoringOptionsView {
 	return { dimensions: scoringDimensions, options: scoringOptions };
+}
+
+export function getScoringStatus(): ScoringStatus {
+	return { pending: 0 };
+}
+
+export function recomputeScores(): RecomputeResult {
+	return { recomputed: jobs.filter((j) => j.SuitabilityScore != null).length };
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────

@@ -76,26 +76,6 @@ func TestReject(t *testing.T) {
 			wantRejected: false,
 		},
 		{
-			name:         "excluded seniority rejects a detected level",
-			job:          dto.Job{Title: "Senior Engineer"},
-			cfg:          dto.SearchConfig{ExcludedSeniority: []string{"senior"}},
-			wantRejected: true,
-			wantReason:   "seniority: senior",
-		},
-		{
-			name:         "ambiguous title with no seniority signal passes",
-			job:          dto.Job{Title: "Software Engineer"},
-			cfg:          dto.SearchConfig{ExcludedSeniority: []string{"senior"}},
-			wantRejected: false,
-		},
-		{
-			name:         "title signalling multiple levels rejects on any excluded one",
-			job:          dto.Job{Title: "Senior Staff Engineer"},
-			cfg:          dto.SearchConfig{ExcludedSeniority: []string{"staff"}},
-			wantRejected: true,
-			wantReason:   "seniority: staff",
-		},
-		{
 			name:         "excluded location matches a term in the location string",
 			job:          dto.Job{Title: "Engineer", Location: "New York, United States"},
 			cfg:          dto.SearchConfig{ExcludedLocations: []string{"united states"}},

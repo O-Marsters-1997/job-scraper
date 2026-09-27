@@ -1,3 +1,12 @@
+export interface ScoreRow {
+	key: string;
+	label: string;
+	stance: string;
+	resolved: "yes" | "no" | "unknown";
+	effect: "meets" | "misses" | "unknown" | "neutral";
+	overridden: boolean;
+}
+
 export interface Job {
 	ID: string;
 	Title: string;
@@ -12,8 +21,7 @@ export interface Job {
 	WorkArrangement?: string;
 	SalaryRaw?: string;
 	SuitabilityScore: number | null;
-	Criteria?: Record<string, number> | null;
-	Confidence?: number | null;
+	Breakdown?: ScoreRow[] | null;
 	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description?: string;
 	Skills?: string[];

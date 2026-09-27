@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { FormFeedback } from "@/components/FormFeedback";
 import { PageHeading } from "@/components/PageHeading";
@@ -7,159 +7,310 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-	Switch,
-	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
-} from "@/components/ui/switch";
+import type { ScoringConfig } from "../../../api/scoringConfig";
 import type {
-	ScoringConfig,
-	ScoringCriterion,
-} from "../../../api/scoringConfig";
-import { useQueueRescore, useScoringStatus } from "../../../hooks/useScores";
+	ScoringOption,
+	ScoringOptionsView,
+} from "../../../api/scoringOptions";
+import { useRecomputeScores, useScoringStatus } from "../../../hooks/useScores";
 import {
 	useScoringConfig,
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
+import { useScoringOptions } from "../../../hooks/useScoringOptions";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
 });
 
-const STARTER_PROFILE =
-	"I am a software engineer with 3+ years of experience in backend development. I am looking for roles that involve: Go or Python, distributed systems or APIs, remote or hybrid work. I prefer companies with fewer than 500 employees. I am not interested in roles focused primarily on JavaScript frontend or mobile development.";
+type Stance = "nice" | "avoid";
+type StanceMap = Record<string, Stance | undefined>;
 
-const DEFAULT_SCALE = [
-	"Not relevant",
-	"Weak",
-	"Possible",
-	"Strong",
-	"Apply today",
-];
-
-const EMPTY_CRITERION: ScoringCriterion = {
-	key: "",
-	instructions: "",
-	true: "",
-	false: "",
-	required: false,
+const PAIR_COPY: Record<
+	string,
+	{ title: string; like: string; avoid: string; help: string }
+> = {
+	role: {
+		title: "Roles",
+		like: "What kinds of role would you enjoy?",
+		avoid: "What kinds of role would you avoid?",
+		help: "A job matching any one role you'd enjoy gets the boost.",
+	},
+	tech: {
+		title: "Technologies",
+		like: "What technologies would you enjoy working with?",
+		avoid: "What technologies would you avoid?",
+		help: "Type to search all of them.",
+	},
+	domain: {
+		title: "Industries",
+		like: "Which industries would you enjoy working in?",
+		avoid: "Which industries would you avoid?",
+		help: "Type to search.",
+	},
 };
 
-// Mirrors score.SeniorityLevels in internal/score/filter.go — kept in sync manually.
-const SENIORITY_LEVELS = [
-	"intern",
-	"junior",
-	"mid",
-	"senior",
-	"staff",
-	"principal",
-	"lead",
-	"manager",
-	"director",
-];
+const MULTI_COPY: Record<string, { title: string; help: string }> = {
+	seniority: {
+		title: "Which levels are you looking at?",
+		help: "Most postings don't state a level. That never counts against a job.",
+	},
+	work: {
+		title: "Which working arrangements suit you?",
+		help: "Pick every arrangement you'd take.",
+	},
+	stage: {
+		title: "Which company stages interest you?",
+		help: "Pick every stage you'd consider.",
+	},
+};
 
-const PlusIcon = () => (
-	<svg
-		aria-hidden="true"
-		width="12"
-		height="12"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2.5"
-		stroke-linecap="round"
-	>
-		<line x1="12" y1="5" x2="12" y2="19" />
-		<line x1="5" y1="12" x2="19" y2="12" />
-	</svg>
-);
+const STANCE_TONE: Record<Stance, string> = {
+	nice: "border-accent-border bg-accent-subtle text-accent-text",
+	avoid: "border-destructive/40 bg-destructive-subtle text-destructive-strong",
+};
+
+function StancePicker(props: {
+	dim: string;
+	stance: Stance;
+	label: string;
+	options: ScoringOption[];
+	stances: StanceMap;
+	pick: (id: string, stance: Stance) => void;
+	unpick: (id: string) => void;
+}) {
+	const [query, setQuery] = createSignal("");
+	const inputId = () => `scoring-${props.dim}-${props.stance}`;
+	const picked = createMemo(() =>
+		props.options.filter((o) => props.stances[o.id] === props.stance),
+	);
+	const results = createMemo(() => {
+		const q = query().trim().toLowerCase();
+		if (!q) return [];
+		return props.options
+			.filter((o) => !props.stances[o.id] && o.label.toLowerCase().includes(q))
+			.slice(0, 8);
+	});
+
+	return (
+		<div>
+			<label for={inputId()} class="block text-sm font-medium text-foreground">
+				{props.label}
+			</label>
+			<div class="relative mt-1.5">
+				<div class="field flex min-h-10 flex-wrap items-center gap-1.5 py-1.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
+					<For each={picked()}>
+						{(o) => (
+							<span
+								class={`inline-flex items-center rounded-full border text-sm ${STANCE_TONE[props.stance]}`}
+							>
+								<span class="py-0.5 pl-2.5">{o.label}</span>
+								<button
+									type="button"
+									aria-label={`Remove ${o.label}`}
+									onClick={() => props.unpick(o.id)}
+									class="px-2 py-0.5 opacity-70 hover:opacity-100"
+								>
+									×
+								</button>
+							</span>
+						)}
+					</For>
+					<input
+						id={inputId()}
+						type="text"
+						autocomplete="off"
+						class="h-7 min-w-40 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
+						placeholder={picked().length ? "Add another…" : "Search…"}
+						value={query()}
+						onInput={(e) => setQuery(e.currentTarget.value)}
+						onKeyDown={(e) => {
+							const first = results()[0];
+							if (e.key === "Enter" && first) {
+								e.preventDefault();
+								props.pick(first.id, props.stance);
+								setQuery("");
+							}
+							if (e.key === "Escape") setQuery("");
+						}}
+					/>
+				</div>
+				<Show when={query().trim()}>
+					<ul class="absolute z-30 mt-1 w-full max-w-md divide-y divide-border rounded-lg border border-border bg-surface shadow-xl">
+						<For
+							each={results()}
+							fallback={
+								<li class="px-3 py-2 text-xs text-faint">No matches.</li>
+							}
+						>
+							{(o) => (
+								<li>
+									<button
+										type="button"
+										onClick={() => {
+											props.pick(o.id, props.stance);
+											setQuery("");
+										}}
+										class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-muted"
+									>
+										{o.label}
+									</button>
+								</li>
+							)}
+						</For>
+					</ul>
+				</Show>
+			</div>
+		</div>
+	);
+}
+
+function PairSection(props: {
+	dim: string;
+	options: ScoringOption[];
+	stances: StanceMap;
+	pick: (id: string, stance: Stance) => void;
+	unpick: (id: string) => void;
+}) {
+	const copy = PAIR_COPY[props.dim];
+	if (!copy) return null;
+	return (
+		<div class="px-5 py-4">
+			<p class="text-xs text-faint">{copy.help}</p>
+			<div class="mt-3 space-y-4">
+				<StancePicker
+					dim={props.dim}
+					stance="nice"
+					label={copy.like}
+					options={props.options}
+					stances={props.stances}
+					pick={props.pick}
+					unpick={props.unpick}
+				/>
+				<StancePicker
+					dim={props.dim}
+					stance="avoid"
+					label={copy.avoid}
+					options={props.options}
+					stances={props.stances}
+					pick={props.pick}
+					unpick={props.unpick}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function MultiSection(props: {
+	dim: string;
+	options: ScoringOption[];
+	stances: StanceMap;
+	pick: (id: string, stance: Stance) => void;
+	unpick: (id: string) => void;
+}) {
+	const copy = MULTI_COPY[props.dim];
+	if (!copy) return null;
+	return (
+		<div class="px-5 py-4">
+			<p class="text-sm font-medium text-foreground">{copy.title}</p>
+			<p class="mt-0.5 text-xs text-faint">{copy.help}</p>
+			<div class="mt-2.5 flex flex-wrap gap-2">
+				<For each={props.options}>
+					{(o) => {
+						const active = () => props.stances[o.id] === "nice";
+						return (
+							<button
+								type="button"
+								aria-pressed={active()}
+								onClick={() =>
+									active() ? props.unpick(o.id) : props.pick(o.id, "nice")
+								}
+								class={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+									active()
+										? `${STANCE_TONE.nice} font-medium`
+										: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground"
+								}`}
+							>
+								<span
+									aria-hidden="true"
+									class={`grid size-3.5 place-items-center rounded-sm border text-2xs leading-none ${
+										active()
+											? "border-accent-text bg-accent-text text-primary-foreground"
+											: "border-border-strong bg-surface"
+									}`}
+								>
+									{active() ? "✓" : ""}
+								</span>
+								{o.label}
+							</button>
+						);
+					}}
+				</For>
+			</div>
+		</div>
+	);
+}
 
 function ScoringPage() {
-	const query = useScoringConfig();
+	const configQuery = useScoringConfig();
+	const optionsQuery = useScoringOptions();
 	return (
 		<div class="max-w-2xl px-7 py-6">
 			<PageHeading
 				title="Scoring settings"
-				subtitle="Filter out obvious non-fits, then describe what a good match looks like."
+				subtitle="Pick what you'd enjoy or avoid. Every posting is asked the same fixed questions, so changing a pick re-ranks every job for free."
 			/>
-			<QueryBoundary query={query} fallbackRows={4}>
-				{(data) => <ScoringForm data={data} />}
+			<QueryBoundary query={optionsQuery} fallbackRows={4}>
+				{(options) => (
+					<QueryBoundary query={configQuery} fallbackRows={4}>
+						{(config) => <ScoringForm config={config} options={options} />}
+					</QueryBoundary>
+				)}
 			</QueryBoundary>
 		</div>
 	);
 }
 
-// Extracted so signals initialize from resolved data once — background
-// refetches don't clobber values the user is actively editing.
-function ScoringForm(props: { data: ScoringConfig }) {
+function ScoringForm(props: {
+	config: ScoringConfig;
+	options: ScoringOptionsView;
+}) {
 	const mutation = useUpdateScoringConfig();
+	const recompute = useRecomputeScores();
 	const scoringStatus = useScoringStatus();
-	const rescore = useQueueRescore();
-	const [profile, setProfile] = createSignal(
-		props.data.scoringQuestions.profile ?? "",
+
+	const [stances, setStances] = createStore<StanceMap>(
+		Object.fromEntries(
+			props.config.preferences.picks.map((p) => [
+				p.optionId,
+				p.stance as Stance,
+			]),
+		),
 	);
-	const [criteria, setCriteria] = createStore<ScoringCriterion[]>(
-		props.data.scoringQuestions.criteria,
-	);
-	const [scale, setScale] = createStore<string[]>(
-		props.data.scoringQuestions.scale.length > 0
-			? props.data.scoringQuestions.scale
-			: DEFAULT_SCALE,
-	);
-	const [threshold, setThreshold] = createSignal(
-		props.data.notifyThreshold ?? 70,
-	);
+	const pick = (id: string, stance: Stance) => setStances(id, stance);
+	const unpick = (id: string) => setStances(id, undefined);
+
+	const [threshold, setThreshold] = createSignal(props.config.notifyThreshold);
 	const [titleKeywords, setTitleKeywords] = createSignal(
-		props.data.excludedTitleKeywords.join(", "),
+		props.config.excludedTitleKeywords.join(", "),
 	);
 	const [companies, setCompanies] = createSignal(
-		props.data.excludedCompanies.join(", "),
+		props.config.excludedCompanies.join(", "),
 	);
 	const [locations, setLocations] = createSignal(
-		props.data.excludedLocations.join(", "),
-	);
-	const [seniority, setSeniority] = createSignal<string[]>(
-		props.data.excludedSeniority,
+		props.config.excludedLocations.join(", "),
 	);
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
 
-	const toggleSeniority = (level: string) => {
-		setSeniority((current) =>
-			current.includes(level)
-				? current.filter((l) => l !== level)
-				: [...current, level],
-		);
-	};
+	const optionsFor = (dim: string) =>
+		props.options.options.filter((o) => o.dimension === dim);
 
 	const splitList = (value: string) =>
 		value
 			.split(",")
 			.map((v) => v.trim())
 			.filter((v) => v.length > 0);
-
-	const addCriterion = () =>
-		setCriteria(criteria.length, { ...EMPTY_CRITERION });
-	const removeCriterion = (index: number) =>
-		setCriteria((current) => current.filter((_, i) => i !== index));
-
-	const addScaleLevel = () => setScale(scale.length, "");
-	const removeScaleLevel = (index: number) =>
-		setScale((current) => current.filter((_, i) => i !== index));
-	const moveScaleLevel = (index: number, delta: number) => {
-		const target = index + delta;
-		if (target < 0 || target >= scale.length) return;
-		setScale((current) => {
-			const next = [...current];
-			const moved = next[index];
-			const displaced = next[target];
-			if (moved === undefined || displaced === undefined) return current;
-			next[index] = displaced;
-			next[target] = moved;
-			return next;
-		});
-	};
 
 	const handleSave = async () => {
 		setSaved(false);
@@ -169,13 +320,17 @@ function ScoringForm(props: { data: ScoringConfig }) {
 				notifyThreshold: threshold(),
 				excludedTitleKeywords: splitList(titleKeywords()),
 				excludedCompanies: splitList(companies()),
-				excludedSeniority: seniority(),
 				excludedLocations: splitList(locations()),
-				scoringQuestions: {
-					profile: profile(),
-					criteria: [...criteria],
-					scale: [...scale],
+				preferences: {
+					picks: Object.entries(stances)
+						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
+						.map(([optionId, stance]) => ({
+							optionId,
+							stance,
+							source: "manual",
+						})),
 				},
+				updatedAt: props.config.updatedAt,
 			});
 			setSaved(true);
 			setTimeout(() => setSaved(false), 3000);
@@ -184,205 +339,79 @@ function ScoringForm(props: { data: ScoringConfig }) {
 		}
 	};
 
-	const handleUseTemplate = () => {
-		setProfile(STARTER_PROFILE);
-	};
-
 	return (
 		<>
 			<FormFeedback success={saved()} error={saveError()} />
 
 			<div class="flex flex-col gap-5">
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<label
-							for="profile"
-							class="text-base font-semibold text-foreground"
-						>
-							Candidate profile
-						</label>
-						<p class="mt-0.5 text-xs text-faint">
-							Describe your ideal role. Used alongside your criteria and scale
-							when scoring each job.
-						</p>
-					</div>
-					<div class="px-5 py-4">
-						<Show when={!profile()}>
-							<div class="mb-4 rounded-lg border border-border bg-surface-muted px-4 py-3 text-sm text-muted">
-								<p class="font-medium text-foreground">No profile set yet</p>
-								<p class="mt-1 text-xs text-faint">
-									Without a profile, jobs have no baseline to score against. Add
-									one so jobs are ranked against your actual goals and
-									experience.
-								</p>
-							</div>
-						</Show>
-						<textarea
-							id="profile"
-							rows={7}
-							value={profile()}
-							onInput={(e) => setProfile(e.currentTarget.value)}
-							placeholder="Describe your background, preferred stack, work style, company size, location preferences…"
-							class="w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+				<section aria-labelledby="scoring-role">
+					<h2 id="scoring-role" class="text-base font-semibold text-foreground">
+						Role &amp; working
+					</h2>
+					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
+						<PairSection
+							dim="role"
+							options={optionsFor("role")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
 						/>
-						<Show when={!profile()}>
-							<button
-								type="button"
-								onClick={handleUseTemplate}
-								class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted transition hover:border-border-strong hover:text-foreground"
-							>
-								Use starter template
-							</button>
-						</Show>
+						<MultiSection
+							dim="seniority"
+							options={optionsFor("seniority")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
+						/>
+						<MultiSection
+							dim="work"
+							options={optionsFor("work")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
+						/>
 					</div>
-				</Card>
+				</section>
 
-				<Card class="overflow-hidden">
-					<div class="flex items-center justify-between border-b border-border px-5 py-4">
-						<div>
-							<p class="text-base font-semibold text-foreground">Criteria</p>
-							<p class="mt-0.5 text-xs text-faint">
-								Specific yes/no questions the scorer checks per job. Mark one
-								required to sink the score on a clear miss.
-							</p>
-						</div>
+				<section aria-labelledby="scoring-tech">
+					<h2 id="scoring-tech" class="text-base font-semibold text-foreground">
+						Technology
+					</h2>
+					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
+						<PairSection
+							dim="tech"
+							options={optionsFor("tech")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
+						/>
 					</div>
-					<div class="divide-y divide-border">
-						<For each={criteria}>
-							{(criterion, index) => (
-								<div class="flex flex-col gap-2 px-5 py-4">
-									<div class="flex items-center justify-between gap-2">
-										<Input
-											value={criterion.key}
-											onInput={(e) =>
-												setCriteria(index(), "key", e.currentTarget.value)
-											}
-											placeholder="key (e.g. go_backend)"
-											aria-label="Criterion key"
-											class="max-w-[240px] font-mono text-xs"
-										/>
-										<button
-											type="button"
-											onClick={() => removeCriterion(index())}
-											class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
-										>
-											Delete
-										</button>
-									</div>
-									<Input
-										value={criterion.instructions}
-										onInput={(e) =>
-											setCriteria(
-												index(),
-												"instructions",
-												e.currentTarget.value,
-											)
-										}
-										placeholder="What should the scorer check? e.g. Does the role use Go?"
-										aria-label="Criterion instructions"
-									/>
-									<div class="flex gap-2">
-										<Input
-											value={criterion.true}
-											onInput={(e) =>
-												setCriteria(index(), "true", e.currentTarget.value)
-											}
-											placeholder="What a 'true' answer looks like"
-											aria-label="Criterion true wording"
-											class="flex-1"
-										/>
-										<Input
-											value={criterion.false}
-											onInput={(e) =>
-												setCriteria(index(), "false", e.currentTarget.value)
-											}
-											placeholder="What a 'false' answer looks like"
-											aria-label="Criterion false wording"
-											class="flex-1"
-										/>
-									</div>
-									<Switch
-										checked={criterion.required}
-										onChange={(checked: boolean) =>
-											setCriteria(index(), "required", checked)
-										}
-									>
-										<SwitchLabel class="inline-flex items-center gap-2">
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-											Required
-										</SwitchLabel>
-									</Switch>
-								</div>
-							)}
-						</For>
-					</div>
-					<div class="px-5 py-4">
-						<Button variant="outline" size="sm" onClick={addCriterion}>
-							<PlusIcon />
-							Add criterion
-						</Button>
-					</div>
-				</Card>
+				</section>
 
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">Scale</p>
-						<p class="mt-0.5 text-xs text-faint">
-							Ordered from worst to best fit. At least 2 levels are required.
-						</p>
+				<section aria-labelledby="scoring-company">
+					<h2
+						id="scoring-company"
+						class="text-base font-semibold text-foreground"
+					>
+						Company
+					</h2>
+					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
+						<MultiSection
+							dim="stage"
+							options={optionsFor("stage")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
+						/>
+						<PairSection
+							dim="domain"
+							options={optionsFor("domain")}
+							stances={stances}
+							pick={pick}
+							unpick={unpick}
+						/>
 					</div>
-					<div class="divide-y divide-border">
-						<For each={scale}>
-							{(level, index) => (
-								<div class="flex items-center gap-2 px-5 py-3">
-									<span class="w-5 font-mono text-2xs text-faint">
-										{index() + 1}
-									</span>
-									<Input
-										value={level}
-										onInput={(e) => setScale(index(), e.currentTarget.value)}
-										aria-label={`Scale level ${index() + 1}`}
-										class="flex-1"
-									/>
-									<button
-										type="button"
-										onClick={() => moveScaleLevel(index(), -1)}
-										disabled={index() === 0}
-										class="rounded px-1.5 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground disabled:opacity-30"
-										aria-label="Move level up"
-									>
-										↑
-									</button>
-									<button
-										type="button"
-										onClick={() => moveScaleLevel(index(), 1)}
-										disabled={index() === scale.length - 1}
-										class="rounded px-1.5 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground disabled:opacity-30"
-										aria-label="Move level down"
-									>
-										↓
-									</button>
-									<button
-										type="button"
-										onClick={() => removeScaleLevel(index())}
-										disabled={scale.length <= 2}
-										class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-30"
-									>
-										Delete
-									</button>
-								</div>
-							)}
-						</For>
-					</div>
-					<div class="px-5 py-4">
-						<Button variant="outline" size="sm" onClick={addScaleLevel}>
-							<PlusIcon />
-							Add level
-						</Button>
-					</div>
-				</Card>
+				</section>
 
 				<Card class="overflow-hidden">
 					<div class="border-b border-border px-5 py-4">
@@ -390,8 +419,8 @@ function ScoringForm(props: { data: ScoringConfig }) {
 							Exclusion filters
 						</p>
 						<p class="mt-0.5 text-xs text-faint">
-							Jobs matching any of these are dropped before AI scoring runs.
-							Leave a field blank to exclude nothing on that axis.
+							Jobs matching any of these are dropped before scoring runs. Leave
+							a field blank to exclude nothing on that axis.
 						</p>
 					</div>
 					<div class="divide-y divide-border">
@@ -448,32 +477,6 @@ function ScoringForm(props: { data: ScoringConfig }) {
 								class="mt-2"
 							/>
 						</div>
-
-						<div class="px-5 py-4">
-							<p class="text-xs font-medium text-foreground">
-								Excluded seniority levels
-							</p>
-							<p class="mt-0.5 text-xs text-faint">
-								Only rejects titles that clearly signal one of these levels —
-								ambiguous titles pass.
-							</p>
-							<div class="mt-2 flex flex-wrap gap-2">
-								<For each={SENIORITY_LEVELS}>
-									{(level) => (
-										<Button
-											type="button"
-											variant={
-												seniority().includes(level) ? "secondary" : "outline"
-											}
-											size="sm"
-											onClick={() => toggleSeniority(level)}
-										>
-											{level}
-										</Button>
-									)}
-								</For>
-							</div>
-						</div>
 					</div>
 				</Card>
 
@@ -481,7 +484,7 @@ function ScoringForm(props: { data: ScoringConfig }) {
 					<div class="border-b border-border px-5 py-4">
 						<p class="text-base font-semibold text-foreground">Notifications</p>
 						<p class="mt-0.5 text-xs text-faint">
-							Tune when you're notified after AI scoring.
+							Tune when you're notified after a job is scored.
 						</p>
 					</div>
 					<div class="px-5 py-4">
@@ -515,7 +518,7 @@ function ScoringForm(props: { data: ScoringConfig }) {
 
 				<Card>
 					<CardHeader>
-						<CardTitle>Existing assessments</CardTitle>
+						<CardTitle>Recompute scores</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<Show
@@ -523,33 +526,25 @@ function ScoringForm(props: { data: ScoringConfig }) {
 							fallback={
 								<p>
 									{scoringStatus.isError
-										? "Could not load assessment status."
-										: "Loading assessment status…"}
+										? "Could not load scoring status."
+										: "Loading scoring status…"}
 								</p>
 							}
 						>
-							{(status) => (
-								<p>
-									{status().stale} stale · {status().pending} pending ·{" "}
-									{status().failed} failed
-								</p>
-							)}
+							{(status) => <p>{status().pending} answer effects pending.</p>}
 						</Show>
 						<Button
 							variant="outline"
-							disabled={rescore.isPending}
-							onClick={() => rescore.mutate()}
+							disabled={recompute.isPending}
+							onClick={() => recompute.mutate()}
 						>
-							{rescore.isPending ? "Queueing…" : "Rescore existing jobs"}
+							{recompute.isPending ? "Recomputing…" : "Recompute scores"}
 						</Button>
-						<Show when={rescore.data}>
-							<p>
-								{rescore.data?.queued} jobs queued. Run again to queue the next
-								batch.
-							</p>
+						<Show when={recompute.data}>
+							<p>{recompute.data?.recomputed} jobs re-ranked.</p>
 						</Show>
-						<Show when={rescore.isError}>
-							<p>Could not queue a rescore. Try again.</p>
+						<Show when={recompute.isError}>
+							<p>Could not recompute scores. Try again.</p>
 						</Show>
 					</CardContent>
 				</Card>

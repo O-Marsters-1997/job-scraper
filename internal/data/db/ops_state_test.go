@@ -18,12 +18,12 @@ func insertJobForOpsState(t *testing.T, url string) string {
 	return jobID
 }
 
-func insertEffectOutbox(t *testing.T, jobID, userID, status string, createdAt time.Time) {
+func insertEffectOutbox(t *testing.T, jobID, status string, createdAt time.Time) {
 	t.Helper()
 	if _, err := testDB.Pool().Exec(context.Background(),
-		`INSERT INTO effect_outbox (job_id, user_id, fingerprint, config_version, model, status, created_at)
-		 VALUES ($1, $2, 'fp', 'epoch', 'jev', $3, $4)`,
-		jobID, userID, status, createdAt); err != nil {
+		`INSERT INTO effect_outbox (job_id, fingerprint, status, created_at)
+		 VALUES ($1, 'fp', $2, $3)`,
+		jobID, status, createdAt); err != nil {
 		t.Fatalf("insert effect_outbox (%s): %v", status, err)
 	}
 }
@@ -32,17 +32,12 @@ func TestOpsState(t *testing.T) {
 	ctx := context.Background()
 	truncate(t)
 
-	user, err := testDB.CreateUser(ctx, "ops-state-user", "hash", "")
-	if err != nil {
-		t.Fatalf("CreateUser: %v", err)
-	}
-
 	now := time.Now()
-	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/1"), user.ID, "pending", now.Add(-2*time.Hour))
-	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/2"), user.ID, "running", now.Add(-10*time.Minute))
-	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/3"), user.ID, "failed", now)
-	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/4"), user.ID, "failed", now)
-	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/5"), user.ID, "done", now)
+	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/1"), "pending", now.Add(-2*time.Hour))
+	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/2"), "running", now.Add(-10*time.Minute))
+	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/3"), "failed", now)
+	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/4"), "failed", now)
+	insertEffectOutbox(t, insertJobForOpsState(t, "https://example.com/ops-state/5"), "done", now)
 
 	state, err := testDB.OpsState(ctx)
 	if err != nil {

@@ -146,12 +146,9 @@ func (db *DB) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, 
 	}
 	if status != "unchanged" {
 		role, _ := sourcespec.SourceRole(job.Source)
-		in := scoringEffectsInput{
-			Job: job, JobID: jobID, CompanyID: companyID,
-			Discovery: role == sourcespec.RoleDiscovery, FirstDiscovery: status == "new",
-		}
-		if err := queueScoringEffects(ctx, queries, in); err != nil {
-			return dto.Job{}, "", fmt.Errorf("queue scoring effects: %w", err)
+		discovery := role == sourcespec.RoleDiscovery
+		if err := queueAnswerEffect(ctx, queries, jobID, job.ContentFingerprint, discovery, status == "new"); err != nil {
+			return dto.Job{}, "", fmt.Errorf("queue answer effect: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
