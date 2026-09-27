@@ -161,3 +161,20 @@ func (q *Queries) QueueTrackingScores(ctx context.Context, companyID pgtype.UUID
 	_, err := q.db.Exec(ctx, queueTrackingScores, companyID)
 	return err
 }
+
+const queueUserBackfill = `-- name: QueueUserBackfill :execrows
+INSERT INTO effect_outbox (job_id, fingerprint)
+SELECT j.id, j.content_fingerprint
+FROM job_scores s JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = $1::uuid
+    AND j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+`
+
+func (q *Queries) QueueUserBackfill(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, queueUserBackfill, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

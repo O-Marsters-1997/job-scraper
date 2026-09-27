@@ -13,10 +13,17 @@ export const moneySchema = z.object({
 	currency: z.string().min(1),
 });
 
+export const customQuestionSchema = z.object({
+	question: z.string().min(1).max(200),
+	stance: z.string(),
+	source: z.string(),
+});
+
 export const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
 	blockedTech: z.array(z.string()),
+	customs: z.array(customQuestionSchema).max(10),
 });
 
 export const scoringConfigSchema = z.object({
@@ -29,6 +36,7 @@ export const scoringConfigSchema = z.object({
 
 export type Pick = z.infer<typeof pickSchema>;
 export type Money = z.infer<typeof moneySchema>;
+export type CustomQuestion = z.infer<typeof customQuestionSchema>;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
 

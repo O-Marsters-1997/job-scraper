@@ -118,6 +118,75 @@ func TestCompleteAnswerEffect_PersistsHidden(t *testing.T) {
 	}
 }
 
+func TestQueueUserBackfill_QueuesScoredOpenJobsOnlyOnce(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	user, err := testDB.CreateUser(ctx, "backfill-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	open := baseJob
+	open.URL = "https://example.com/jobs/backfill-open"
+	savedOpen, _, err := testDB.SaveCanonical(ctx, open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := baseJob
+	closed.URL = "https://example.com/jobs/backfill-closed"
+	savedClosed, _, err := testDB.SaveCanonical(ctx, closed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.Pool().Exec(ctx, "UPDATE jobs SET closed_at = NOW() WHERE id = $1", savedClosed.ID); err != nil {
+		t.Fatal(err)
+	}
+	unscored := baseJob
+	unscored.URL = "https://example.com/jobs/backfill-unscored"
+	if _, _, err := testDB.SaveCanonical(ctx, unscored); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, jobID := range []string{savedOpen.ID, savedClosed.ID} {
+		if _, err := testDB.Pool().Exec(ctx,
+			"INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, user.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	queued, err := testDB.QueueUserBackfill(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("QueueUserBackfill: %v", err)
+	}
+	if queued != 1 {
+		t.Fatalf("queued = %d, want 1 (only the open, scored job)", queued)
+	}
+
+	var openCount int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", savedOpen.ID).Scan(&openCount); err != nil {
+		t.Fatal(err)
+	}
+	if openCount != 1 {
+		t.Fatalf("effects for open job = %d, want 1", openCount)
+	}
+	var closedCount int
+	if err := testDB.Pool().QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", savedClosed.ID).Scan(&closedCount); err != nil {
+		t.Fatal(err)
+	}
+	if closedCount != 0 {
+		t.Fatalf("effects for closed job = %d, want 0", closedCount)
+	}
+
+	queuedAgain, err := testDB.QueueUserBackfill(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("QueueUserBackfill (again): %v", err)
+	}
+	if queuedAgain != 0 {
+		t.Fatalf("queued on second call = %d, want 0 (already pending)", queuedAgain)
+	}
+}
+
 func TestCompleteAnswerEffect_FingerprintChangeWritesNothing(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
