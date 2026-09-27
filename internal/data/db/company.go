@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -59,7 +59,7 @@ func (db *DB) GetCompany(ctx context.Context, id string) (dto.Company, error) {
 	row, err := db.queries.GetCompany(ctx, cid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.Company{}, providers.ErrNotFound
+			return dto.Company{}, data.ErrNotFound
 		}
 		return dto.Company{}, fmt.Errorf("db.GetCompany: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -41,7 +42,7 @@ func (m *MockSearchConfigProvider) GetSearchConfig(_ context.Context, userID str
 	defer m.mu.Unlock()
 	cfg, ok := m.configs[userID]
 	if !ok {
-		return dto.SearchConfig{}, ErrNotFound
+		return dto.SearchConfig{}, data.ErrNotFound
 	}
 	return cfg, nil
 }

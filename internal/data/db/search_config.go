@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -56,7 +56,7 @@ func (db *DB) GetSearchConfig(ctx context.Context, userID string) (dto.SearchCon
 	row, err := db.queries.GetSearchConfig(ctx, uid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.SearchConfig{}, providers.ErrNotFound
+			return dto.SearchConfig{}, data.ErrNotFound
 		}
 		return dto.SearchConfig{}, fmt.Errorf("db.GetSearchConfig: %w", err)
 	}

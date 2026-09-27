@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -368,13 +368,13 @@ func TestAnswerEffect_LeaseAndRetry(t *testing.T) {
 	if err != nil || first.JobID != saved.ID {
 		t.Fatalf("first claim = %+v, %v", first, err)
 	}
-	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, providers.ErrNotFound) {
+	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("leased effect claimed twice: %v", err)
 	}
 	if err := testDB.FailAnswerEffect(ctx, first.ID, first.Attempts, dto.ScoringFailure{Reason: "temporary failure"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, providers.ErrNotFound) {
+	if _, err := testDB.ClaimAnswerEffect(ctx); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("future retry claimed early: %v", err)
 	}
 	if _, err := testDB.Pool().Exec(ctx, "UPDATE effect_outbox SET due_at = NOW() - interval '1 second' WHERE id = $1", first.ID); err != nil {

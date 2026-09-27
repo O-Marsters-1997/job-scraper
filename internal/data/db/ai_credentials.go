@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 )
 
 func (db *DB) UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error {
@@ -37,7 +37,7 @@ func (db *DB) GetUserAICredential(ctx context.Context, userID, provider string) 
 		Provider: provider,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", providers.ErrNotFound
+		return "", data.ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("db.GetUserAICredential: %w", err)

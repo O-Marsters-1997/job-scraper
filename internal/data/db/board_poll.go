@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -42,7 +43,7 @@ func (db *DB) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 func (db *DB) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
 	id, err := db.queries.GetVerifiedBoardID(ctx, pgsqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: token})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", providers.ErrNotFound
+		return "", data.ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("get verified board: %w", err)

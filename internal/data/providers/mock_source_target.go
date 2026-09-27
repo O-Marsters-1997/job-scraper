@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -140,7 +141,7 @@ func (m *MockSourceTargetProvider) SetSourceTargetRunState(_ context.Context, id
 		}
 		return m.targets[i], nil
 	}
-	return dto.SourceTarget{}, ErrNotFound
+	return dto.SourceTarget{}, data.ErrNotFound
 }
 
 func (m *MockSourceTargetProvider) StartSourceTargetRun(_ context.Context, id string) (dto.SourceTarget, error) {
@@ -154,7 +155,7 @@ func (m *MockSourceTargetProvider) StartSourceTargetRun(_ context.Context, id st
 			return m.targets[i], nil
 		}
 	}
-	return dto.SourceTarget{}, ErrNotFound
+	return dto.SourceTarget{}, data.ErrNotFound
 }
 
 func (m *MockSourceTargetProvider) GetVerifiedBoardID(context.Context, string, string) (string, error) {
@@ -178,7 +179,7 @@ func (m *MockSourceTargetProvider) UpdateSourceTarget(_ context.Context, id, use
 			return m.targets[i], nil
 		}
 	}
-	return dto.SourceTarget{}, ErrNotFound
+	return dto.SourceTarget{}, data.ErrNotFound
 }
 
 func (m *MockSourceTargetProvider) DeleteSourceTarget(_ context.Context, id, userID string) error {
@@ -193,5 +194,5 @@ func (m *MockSourceTargetProvider) DeleteSourceTarget(_ context.Context, id, use
 			return nil
 		}
 	}
-	return ErrNotFound
+	return data.ErrNotFound
 }

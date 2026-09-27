@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -126,7 +127,7 @@ func (m *MockJobProvider) GetJob(_ context.Context, jobID, _ string) (dto.Job, e
 			return j, nil
 		}
 	}
-	return dto.Job{}, ErrNotFound
+	return dto.Job{}, data.ErrNotFound
 }
 
 func (m *MockJobProvider) ListSince(_ context.Context, since time.Time) ([]dto.Job, error) {

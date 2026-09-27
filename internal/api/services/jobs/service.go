@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -72,7 +73,7 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (pro
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	job, err := s.jobs.GetJob(ctx, id, userID)
 	switch {
-	case errors.Is(err, providers.ErrNotFound):
+	case errors.Is(err, data.ErrNotFound):
 		return dto.Job{}, apperr.NotFound("job not found")
 	case errors.Is(err, providers.ErrInvalidID):
 		return dto.Job{}, apperr.Invalid("invalid job ID")

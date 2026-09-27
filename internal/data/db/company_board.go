@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -89,7 +90,7 @@ func (db *DB) VerifyCompanyBoard(ctx context.Context, companyID, source, token, 
 		VerificationMethod: pgtype.Text{String: method, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.CompanyBoard{}, providers.ErrNotFound
+		return dto.CompanyBoard{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.CompanyBoard{}, fmt.Errorf("db.VerifyCompanyBoard: %w", err)

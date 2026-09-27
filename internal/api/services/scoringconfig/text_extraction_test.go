@@ -8,6 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api/services/scoringconfig"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -110,7 +111,7 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 
 func TestUpdate_NoCredentialReturnsUnprocessable(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
-	svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{err: providers.ErrNotFound})
+	svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{err: data.ErrNotFound})
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{PreferenceText: "I like Go"},
