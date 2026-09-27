@@ -3,7 +3,7 @@ package suitability
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
@@ -16,8 +16,6 @@ var bank = []dto.ScoringOption{
 	{ID: "role:backend", Dimension: dto.DimensionRole, Label: "Backend", Question: "Is this primarily a backend role?"},
 }
 
-// fakeAnswerer records every call; it fails the test if Answer is called
-// when the caller expected everything to be cached.
 type fakeAnswerer struct {
 	t         *testing.T
 	forbidden bool
@@ -105,7 +103,6 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
 	}}
 	store.SeedJob(job, []dto.SearchConfig{cfg})
-	// No cached answers at all: all three bank questions are missing.
 	store.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 	answerer := &fakeAnswerer{t: t}
@@ -118,17 +115,12 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 	if len(answerer.calls) != 1 {
 		t.Fatalf("Answer calls = %d, want 1", len(answerer.calls))
 	}
-	got := append([]string{}, answerer.calls[0]...)
-	sort.Strings(got)
+	got := slices.Clone(answerer.calls[0])
+	slices.Sort(got)
 	want := []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"}
-	sort.Strings(want)
-	if len(got) != len(want) {
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
 		t.Fatalf("questions sent = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("questions sent = %v, want %v", got, want)
-		}
 	}
 	if len(store.Completed) != 1 || len(store.Completed[0].Answers) != 3 {
 		t.Fatalf("completed effects = %+v, want 1 effect with 3 new answers", store.Completed)

@@ -23,9 +23,7 @@ type SuitabilityProvider interface {
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 
 	// CompleteAnswerEffect writes new answers and every surviving user's
-	// score, then marks the effect done, all in one transaction. It returns
-	// the user IDs actually saved (nil if the job's fingerprint moved on
-	// since the effect was claimed).
+	// score, then marks the effect done, all in one transaction.
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
 
 	ListScoringInputs(ctx context.Context, userID string) ([]ScoringInput, error)

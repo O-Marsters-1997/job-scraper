@@ -24,8 +24,6 @@ type evaluatedPick struct {
 	known     bool
 }
 
-// resolveAnswer returns the most likely value of a, or "unknown" when its top
-// probability is below the confidence threshold or is not_stated itself.
 func resolveAnswer(a dto.Answer) string {
 	top, value := a.PYes, "yes"
 	if a.PNo > top {
@@ -114,7 +112,6 @@ func countUnknown(rows []dto.ScoreRow) int {
 	return n
 }
 
-// questionHash is the cache key for an option or custom question's exact text.
 func questionHash(question string) string {
 	sum := sha256.Sum256([]byte(question))
 	return hex.EncodeToString(sum[:])

@@ -44,12 +44,8 @@ func fromRow(row pgsqlc.Job) dto.Job {
 		SalaryRaw:       row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement,
 	}
-	if row.CompanyID.Valid {
-		j.CompanyID = row.CompanyID.String()
-	}
-	if row.PrimaryBoardID.Valid {
-		j.BoardID = row.PrimaryBoardID.String()
-	}
+	j.CompanyID = uuidString(row.CompanyID)
+	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j
@@ -71,19 +67,20 @@ func fromListRow(row pgsqlc.ListJobsRow) (dto.Job, error) {
 	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
 		return dto.Job{}, err
 	}
-	if row.SuitabilityScore.Valid {
-		v := int(row.SuitabilityScore.Int32)
-		j.SuitabilityScore = &v
-	}
-	if row.CompanyID.Valid {
-		j.CompanyID = row.CompanyID.String()
-	}
-	if row.PrimaryBoardID.Valid {
-		j.BoardID = row.PrimaryBoardID.String()
-	}
+	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.CompanyID = uuidString(row.CompanyID)
+	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j, nil
+}
+
+func optionalInt32(v pgtype.Int4) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int32)
+	return &n
 }
 
 func unmarshalBreakdown(raw []byte, out *[]dto.ScoreRow) error {
@@ -183,25 +180,37 @@ func (db *DB) Page(ctx context.Context, userID string, options providers.JobPage
 	}
 	page := providers.JobPage{Items: make([]dto.Job, len(rows))}
 	for i, row := range rows {
-		job := dto.Job{ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url, CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time, ScrapedAt: row.ScrapedAt.Time, SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement}
-		if err := unmarshalBreakdown(row.Breakdown, &job.Breakdown); err != nil {
+		job, err := fromPageRow(row)
+		if err != nil {
 			return providers.JobPage{}, fmt.Errorf("db.Page: %w", err)
-		}
-		if row.CompanyID.Valid {
-			job.CompanyID = row.CompanyID.String()
-		}
-		if row.PrimaryBoardID.Valid {
-			job.BoardID = row.PrimaryBoardID.String()
-		}
-		job.ProviderPostingID = row.ProviderPostingID.String
-		job.ContentFingerprint = row.ContentFingerprint.String
-		if row.SuitabilityScore.Valid {
-			v := int(row.SuitabilityScore.Int32)
-			job.SuitabilityScore = &v
 		}
 		page.Items[i] = job
 	}
 	return page, nil
+}
+
+func fromPageRow(row pgsqlc.PageJobsRow) (dto.Job, error) {
+	j := dto.Job{
+		ID:              row.ID.String(),
+		Title:           row.Title,
+		Location:        row.Location,
+		URL:             row.Url,
+		CompanySlug:     row.CompanySlug,
+		Source:          row.Source,
+		UpdatedAt:       row.UpdatedAt.Time,
+		ScrapedAt:       row.ScrapedAt.Time,
+		SalaryRaw:       row.SalaryRaw,
+		WorkArrangement: row.WorkArrangement,
+	}
+	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
+		return dto.Job{}, err
+	}
+	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.CompanyID = uuidString(row.CompanyID)
+	j.BoardID = uuidString(row.PrimaryBoardID)
+	j.ProviderPostingID = row.ProviderPostingID.String
+	j.ContentFingerprint = row.ContentFingerprint.String
+	return j, nil
 }
 
 func fromGetJobRow(row pgsqlc.GetJobRow) (dto.Job, error) {
@@ -221,16 +230,9 @@ func fromGetJobRow(row pgsqlc.GetJobRow) (dto.Job, error) {
 	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
 		return dto.Job{}, err
 	}
-	if row.SuitabilityScore.Valid {
-		v := int(row.SuitabilityScore.Int32)
-		j.SuitabilityScore = &v
-	}
-	if row.CompanyID.Valid {
-		j.CompanyID = row.CompanyID.String()
-	}
-	if row.PrimaryBoardID.Valid {
-		j.BoardID = row.PrimaryBoardID.String()
-	}
+	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.CompanyID = uuidString(row.CompanyID)
+	j.BoardID = uuidString(row.PrimaryBoardID)
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j, nil

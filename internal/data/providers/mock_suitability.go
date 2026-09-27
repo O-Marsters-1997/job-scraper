@@ -20,10 +20,10 @@ type MockSuitabilityProvider struct {
 
 	effects []dto.AnswerEffect
 	jobs    map[string]dto.Job
-	configs map[string][]dto.SearchConfig    // jobID -> interested configs
-	answers map[string]map[string]dto.Answer // "jobID|fingerprint|model" -> hash -> Answer
-	inputs  map[string][]ScoringInput        // userID -> Recompute inputs
-	status  map[string]dto.ScoringStatus     // userID -> status
+	configs map[string][]dto.SearchConfig
+	answers map[string]map[string]dto.Answer
+	inputs  map[string][]ScoringInput
+	status  map[string]dto.ScoringStatus
 
 	ClaimErr error
 
@@ -115,8 +115,9 @@ func (m *MockSuitabilityProvider) ListInterestedConfigs(_ context.Context, jobID
 func (m *MockSuitabilityProvider) ListAnswers(_ context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make(map[string]dto.Answer, len(m.answers[answerKey(jobID, fingerprint, model)]))
-	for h, a := range m.answers[answerKey(jobID, fingerprint, model)] {
+	key := answerKey(jobID, fingerprint, model)
+	out := make(map[string]dto.Answer, len(m.answers[key]))
+	for h, a := range m.answers[key] {
 		out[h] = a
 	}
 	return out, nil

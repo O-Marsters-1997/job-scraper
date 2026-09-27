@@ -17,8 +17,6 @@ import (
 
 var _ providers.SuitabilityProvider = (*DB)(nil)
 
-// queueAnswerEffect inserts one pending answer effect for jobID if any user
-// is interested in it, in plain SQL with no Go-side filter check.
 func queueAnswerEffect(ctx context.Context, queries *pgsqlc.Queries, jobID pgtype.UUID, fingerprint string, discovery, firstDiscovery bool) error {
 	return queries.QueueAnswerEffect(ctx, pgsqlc.QueueAnswerEffectParams{
 		JobID: jobID, Fingerprint: fingerprint, Discovery: discovery, FirstDiscovery: firstDiscovery,
@@ -137,10 +135,8 @@ func (db *DB) ListAnswers(ctx context.Context, jobID, fingerprint, model string)
 	return answers, nil
 }
 
-// CompleteAnswerEffect writes the effect's newly answered questions and every
-// surviving user's score, then marks it done, in one transaction. If the
-// job's content fingerprint moved on since the effect was claimed, nothing
-// is written and no user ID is returned.
+// CompleteAnswerEffect writes the effect's answers and every surviving
+// user's score, then marks it done, in one transaction.
 func (db *DB) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	effectID, err := parseUUID(effect.ID)
 	if err != nil {

@@ -245,8 +245,6 @@ func TestSaveCanonical_QueuesOneAnswerEffectPerContentVersion(t *testing.T) {
 		}
 		jobID = saved.ID
 	}
-	// Two distinct fingerprints (repeating "Engineer" changes nothing), one
-	// effect per job per fingerprint.
 	if count := effectCountForJob(t, ctx, jobID); count != 2 {
 		t.Fatalf("queued answer effects = %d, want 2", count)
 	}
@@ -273,8 +271,6 @@ func TestSaveCanonical_NoInterestedUserQueuesNoEffect(t *testing.T) {
 	}
 }
 
-// Hard filters (excluded company, title keyword, location) no longer gate
-// queuing: they're checked when the answer effect runs, not at ingest.
 func TestSaveCanonical_QueuesRegardlessOfExclusionFilters(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

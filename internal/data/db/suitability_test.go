@@ -104,7 +104,6 @@ func TestCompleteAnswerEffect_FingerprintChangeWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The job's content changes after the effect was claimed.
 	changed := job
 	changed.Title = "Staff Engineer"
 	if _, _, err := testDB.SaveCanonical(ctx, changed); err != nil {

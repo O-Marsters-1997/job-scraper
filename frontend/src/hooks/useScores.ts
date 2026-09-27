@@ -16,9 +16,6 @@ export function useRecomputeScores() {
 	const client = useQueryClient();
 	return createMutation(() => ({
 		mutationFn: recomputeScores,
-		onSuccess: () => {
-			client.invalidateQueries({ queryKey: ["scores", "status"] });
-			client.invalidateQueries({ queryKey: ["jobs"] });
-		},
+		onSuccess: () => client.invalidateQueries({ queryKey: ["jobs"] }),
 	}));
 }
