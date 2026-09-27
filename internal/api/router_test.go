@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +15,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,10 +22,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
-	"github.com/ollymarsters/job-scraper/internal/api/credstore"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
-	igoogle "github.com/ollymarsters/job-scraper/internal/google"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/candidates"
@@ -44,7 +42,6 @@ var (
 	router        http.Handler
 	testDB        *db.DB
 	testBroker    = &queue.Broker{}
-	testCreds     *fakeCredStore
 	testScoring   *scoring.Module
 	testApps      *applications.Module
 	testIdentity  *identity.Module
@@ -87,20 +84,22 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("INGEST_SERVICE_TOKEN", ingestTestToken); err != nil {
 		log.Fatalf("set INGEST_SERVICE_TOKEN: %v", err)
 	}
-	testCreds = newFakeCredStore()
-	candidateService := candidates.New(testDB, testBroker)
-	testScoring = scoring.New(testDB.Pool(), testCreds, testDB, candidateService, "", "")
+	if err := os.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32))); err != nil {
+		log.Fatalf("set AI_CREDENTIAL_ENC_KEY: %v", err)
+	}
+
 	testApps = applications.New(testDB.Pool())
-	testIdentity = identity.New(testDB.Pool(), testApps)
-	testGoogleClient := igoogle.NewClient(
-		os.Getenv("GOOGLE_CLIENT_ID"),
-		os.Getenv("GOOGLE_CLIENT_SECRET"),
-		os.Getenv("GOOGLE_REDIRECT_URL"),
-		db.NewGoogleTokenStore(testDB),
-	)
-	testCVTemplates := cvtemplates.New(testDB.Pool(), testGoogleClient)
+	testIdentity, err = identity.New(testDB.Pool(), testApps,
+		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
+	if err != nil {
+		log.Fatalf("identity.New: %v", err)
+	}
+
+	candidateService := candidates.New(testDB, testBroker)
+	testScoring = scoring.New(testDB.Pool(), testIdentity, testIdentity, candidateService, "", "")
+	testCVTemplates := cvtemplates.New(testDB.Pool(), testIdentity.DocsClient())
 	testJobsearch = jobsearch.New(testDB.Pool(), testBroker, testScoring)
-	router = api.NewRouter(testDB, testCreds, testIdentity, testJobsearch, testApps, testCVTemplates, testScoring)
+	router = api.NewRouter(testIdentity, testJobsearch, testApps, testCVTemplates, testScoring)
 
 	code := m.Run()
 
@@ -109,49 +108,6 @@ func TestMain(m *testing.M) {
 		log.Printf("terminate container: %v", err)
 	}
 	os.Exit(code)
-}
-
-type fakeCredStore struct {
-	mu sync.Mutex
-	m  map[[2]string]string
-}
-
-func newFakeCredStore() *fakeCredStore { return &fakeCredStore{m: map[[2]string]string{}} }
-
-func (f *fakeCredStore) Save(_ context.Context, userID, provider, plainKey string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.m[[2]string{userID, provider}] = plainKey
-	return nil
-}
-
-func (f *fakeCredStore) Get(_ context.Context, userID, provider string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key, ok := f.m[[2]string{userID, provider}]
-	if !ok {
-		return "", credstore.ErrNotFound
-	}
-	return key, nil
-}
-
-func (f *fakeCredStore) Delete(_ context.Context, userID, provider string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.m, [2]string{userID, provider})
-	return nil
-}
-
-func (f *fakeCredStore) ListProviders(_ context.Context, userID string) ([]string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []string
-	for k := range f.m {
-		if k[0] == userID {
-			out = append(out, k[1])
-		}
-	}
-	return out, nil
 }
 
 func do(req *http.Request) *httptest.ResponseRecorder {
@@ -238,6 +194,9 @@ func TestRouterRequiresAuth(t *testing.T) {
 		{http.MethodPost, "/scores/recompute"},
 		{http.MethodGet, "/ai-prefs"},
 		{http.MethodPut, "/ai-credentials"},
+		{http.MethodGet, "/google/oauth/callback"},
+		{http.MethodGet, "/google/status"},
+		{http.MethodDelete, "/google/link"},
 		{http.MethodGet, "/source-targets/"},
 		{http.MethodPost, "/source-targets/"},
 		{http.MethodPatch, "/source-targets/x"},
@@ -437,6 +396,39 @@ func TestRouterRoutes(t *testing.T) {
 		}
 	})
 
+	t.Run("google link", func(t *testing.T) {
+		w := do(httptest.NewRequest(http.MethodGet, "/google/oauth/start", nil))
+		if w.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("GET /google/oauth/start = %d, want 307", w.Code)
+		}
+		if loc := w.Header().Get("Location"); !strings.Contains(loc, "accounts.google.com") {
+			t.Errorf("Location = %q, want a Google auth URL", loc)
+		}
+		var stateCookie *http.Cookie
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "oauth_state" {
+				stateCookie = c
+			}
+		}
+		if stateCookie == nil {
+			t.Fatal("expected oauth_state cookie to be set")
+		}
+
+		w = do(authed(http.MethodGet, "/google/status", nil, cookie))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET /google/status = %d (body: %s)", w.Code, w.Body.String())
+		}
+		status := decode[map[string]any](t, w)
+		if status["connected"] != false {
+			t.Errorf("connected = %v, want false (no token stored)", status["connected"])
+		}
+
+		w = do(authed(http.MethodDelete, "/google/link", nil, cookie))
+		if w.Code != http.StatusNoContent {
+			t.Errorf("DELETE /google/link = %d (body: %s)", w.Code, w.Body.String())
+		}
+	})
+
 	t.Run("scoring-config", func(t *testing.T) {
 		w := do(authed(http.MethodGet, "/scoring-config", nil, cookie))
 		if w.Code != http.StatusOK {
@@ -544,7 +536,7 @@ func (fakeModule) PublicRoutes(r chi.Router) {
 }
 
 func TestRouterMountsModules(t *testing.T) {
-	moduleRouter := api.NewRouter(testDB, testCreds, testIdentity, testJobsearch, testApps, testScoring, fakeModule{})
+	moduleRouter := api.NewRouter(testIdentity, testJobsearch, testApps, testScoring, fakeModule{})
 
 	w := httptest.NewRecorder()
 	moduleRouter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/fake-private", nil))

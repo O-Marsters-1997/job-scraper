@@ -411,6 +411,147 @@ func TestListScoringInputsThenSaveScores(t *testing.T) {
 	}
 }
 
+func insertTrackedCompany(t *testing.T, pool *pgxpool.Pool, slug string) (companyID, userID string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := pool.QueryRow(ctx, `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+	userID = insertUser(t, pool)
+	if _, err := pool.Exec(ctx, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, true)`, userID, companyID); err != nil {
+		t.Fatalf("insert tracked company: %v", err)
+	}
+	return companyID, userID
+}
+
+func TestJobsChanged_DropsStaleAnswersAndQueuesEffect(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-new")
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-old', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
+		t.Fatalf("seed stale answer: %v", err)
+	}
+	insertTrackedCompany(t, pool, "acme")
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.JobsChanged(ctx, tx, []string{jobID}, true); err != nil {
+		t.Fatalf("JobsChanged: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var staleCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM option_answers WHERE job_id = $1`, jobID).Scan(&staleCount); err != nil {
+		t.Fatal(err)
+	}
+	if staleCount != 0 {
+		t.Fatalf("stale answers remaining = %d, want 0", staleCount)
+	}
+
+	var firstDiscovery bool
+	if err := pool.QueryRow(ctx, `SELECT first_discovery FROM effect_outbox WHERE job_id = $1`, jobID).Scan(&firstDiscovery); err != nil {
+		t.Fatalf("queued effect: %v", err)
+	}
+	if !firstDiscovery {
+		t.Fatal("first_discovery = false, want true")
+	}
+}
+
+func TestJobsChanged_RollbackAlsoRollsBackQueuedEffect(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-1")
+	insertTrackedCompany(t, pool, "acme")
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.JobsChanged(ctx, tx, []string{jobID}, true); err != nil {
+		t.Fatalf("JobsChanged: %v", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM effect_outbox WHERE job_id = $1`, jobID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("queued effects after rollback = %d, want 0: JobsChanged must run in the caller's own tx", count)
+	}
+}
+
+func TestJobsClosed_DropsAnswers(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-1")
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-1', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
+		t.Fatalf("seed answer: %v", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.JobsClosed(ctx, tx, []string{jobID}); err != nil {
+		t.Fatalf("JobsClosed: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM option_answers WHERE job_id = $1`, jobID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("answers remaining = %d, want 0", count)
+	}
+}
+
+func TestCompanyTracked_QueuesScoresWithoutAlert(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	companyID, userID := insertTrackedCompany(t, pool, "tracked-co")
+	var jobID string
+	err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
+		 VALUES ('Engineer', 'Remote', 'https://example.com/tracked-co/1', 'tracked-co', $1, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
+		companyID).Scan(&jobID)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+		t.Fatalf("CompanyTracked: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var firstDiscovery bool
+	if err := pool.QueryRow(ctx, `SELECT first_discovery FROM effect_outbox WHERE job_id = $1`, jobID).Scan(&firstDiscovery); err != nil {
+		t.Fatalf("queued effect: %v", err)
+	}
+	if firstDiscovery {
+		t.Fatal("first_discovery = true, want false: tracking must not alert")
+	}
+}
+
 func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, createdAt time.Time) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),

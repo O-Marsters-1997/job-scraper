@@ -11,7 +11,12 @@ import (
 
 	"golang.org/x/oauth2"
 	googleoauth "golang.org/x/oauth2/google"
+
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
+
+const driveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
 
 type Tab struct {
 	ID    string
@@ -23,23 +28,19 @@ type FileMeta struct {
 	ModifiedAt time.Time
 }
 
-type TokenStore interface {
-	GetToken(ctx context.Context, userID string) (*oauth2.Token, error)
-	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
-	DeleteToken(ctx context.Context, userID string) error
-}
-
+// Client is the OAuth2 and Docs/Drive API surface, backed by a Store that
+// persists encrypted tokens.
 type Client struct {
 	cfg   *oauth2.Config
-	store TokenStore
+	store Store
 }
 
-func NewClient(clientID, clientSecret, redirectURL string, store TokenStore) *Client {
+func NewClient(clientID, clientSecret, redirectURL string, store Store) *Client {
 	cfg := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		RedirectURL:  redirectURL,
-		Scopes:       []string{"https://www.googleapis.com/auth/drive.readonly"},
+		Scopes:       []string{driveReadonlyScope},
 		Endpoint:     googleoauth.Endpoint,
 	}
 	return &Client{cfg: cfg, store: store}
@@ -53,26 +54,71 @@ func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, erro
 	return c.cfg.Exchange(ctx, code)
 }
 
+// SaveToken encrypts and persists the OAuth token for the given user.
 func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error {
-	return c.store.SaveToken(ctx, userID, tok)
+	accessEnc, err := tokencrypt.Encrypt(tok.AccessToken)
+	if err != nil {
+		return fmt.Errorf("google.SaveToken encrypt access: %w", err)
+	}
+	refreshEnc, err := tokencrypt.Encrypt(tok.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("google.SaveToken encrypt refresh: %w", err)
+	}
+
+	var expiry time.Time
+	if !tok.Expiry.IsZero() {
+		expiry = tok.Expiry
+	}
+
+	return c.store.UpsertGoogleToken(ctx, dto.UpsertGoogleTokenInput{
+		UserID:          userID,
+		AccessTokenEnc:  accessEnc,
+		RefreshTokenEnc: refreshEnc,
+		TokenType:       tok.TokenType,
+		Expiry:          expiry,
+		Scope:           driveReadonlyScope,
+	})
 }
 
 func (c *Client) DeleteToken(ctx context.Context, userID string) error {
-	return c.store.DeleteToken(ctx, userID)
+	return c.store.DeleteGoogleToken(ctx, userID)
+}
+
+func (c *Client) getToken(ctx context.Context, userID string) (*oauth2.Token, error) {
+	row, err := c.store.GetGoogleToken(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	access, err := tokencrypt.Decrypt(row.AccessTokenEnc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: decrypt access: %v", ErrTokenUnusable, err)
+	}
+	refresh, err := tokencrypt.Decrypt(row.RefreshTokenEnc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: decrypt refresh: %v", ErrTokenUnusable, err)
+	}
+
+	return &oauth2.Token{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		TokenType:    row.TokenType,
+		Expiry:       row.Expiry,
+	}, nil
 }
 
 // HTTPClientForUser returns an *http.Client that automatically refreshes the
 // stored OAuth token for the given user ID.
 func (c *Client) HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error) {
-	tok, err := c.store.GetToken(ctx, userID)
+	tok, err := c.getToken(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("google.HTTPClientForUser: %w", err)
 	}
 
 	ts := &savingSource{
 		ctx:    ctx,
 		userID: userID,
-		store:  c.store,
+		client: c,
 		src:    c.cfg.TokenSource(ctx, tok),
 	}
 
@@ -84,8 +130,17 @@ func (c *Client) HTTPClientForUser(ctx context.Context, userID string) (*http.Cl
 type savingSource struct {
 	ctx    context.Context
 	userID string
-	store  TokenStore
+	client *Client
 	src    oauth2.TokenSource
+}
+
+func (s *savingSource) Token() (*oauth2.Token, error) {
+	tok, err := s.src.Token()
+	if err != nil {
+		return nil, err
+	}
+	_ = s.client.SaveToken(s.ctx, s.userID, tok)
+	return tok, nil
 }
 
 func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, error) {
@@ -185,13 +240,4 @@ func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io
 	}
 
 	return resp.Body, nil
-}
-
-func (s *savingSource) Token() (*oauth2.Token, error) {
-	tok, err := s.src.Token()
-	if err != nil {
-		return nil, err
-	}
-	_ = s.store.SaveToken(s.ctx, s.userID, tok)
-	return tok, nil
 }

@@ -10,15 +10,34 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 )
 
+// ScoringPort is scoring's tx-scoped facade, called from within this
+// package's own transactions instead of writing scoring's tables directly
+// (ADR 0011).
+type ScoringPort interface {
+	JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error
+	JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error
+	CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error
+}
+
 type DB struct {
 	pool    *pgxpool.Pool
 	queries *pgsqlc.Queries
+	scoring ScoringPort
+}
+
+// WithScoring sets the scoring facade DB writes cross-context effects
+// through, set after New since scoring's pool dependency isn't built yet
+// at that point (mirrors scraper.Orchestrator.WithRejectFilter).
+func (db *DB) WithScoring(s ScoringPort) *DB {
+	db.scoring = s
+	return db
 }
 
 func New(ctx context.Context, connString string) (*DB, error) {

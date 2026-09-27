@@ -10,8 +10,7 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/ollymarsters/job-scraper/internal/api/services/google"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -52,7 +51,7 @@ func (f *fakeClient) DeleteToken(_ context.Context, userID string) error {
 }
 
 func TestStatusNotConnected(t *testing.T) {
-	svc := google.New(&fakeClient{httpErr: providers.ErrGoogleTokenNotFound})
+	svc := google.NewService(&fakeClient{httpErr: google.ErrTokenNotFound})
 	got, err := svc.Status(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +62,7 @@ func TestStatusNotConnected(t *testing.T) {
 }
 
 func TestStatusUnusableTokenTreatedAsDisconnected(t *testing.T) {
-	svc := google.New(&fakeClient{httpErr: providers.ErrGoogleTokenUnusable})
+	svc := google.NewService(&fakeClient{httpErr: google.ErrTokenUnusable})
 	got, err := svc.Status(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +79,7 @@ func TestStatusConnectedFetchesEmail(t *testing.T) {
 			Body:       io.NopCloser(bytes.NewBufferString(`{"email":"alice@example.com"}`)),
 		}, nil
 	})}
-	svc := google.New(&fakeClient{httpClient: hc})
+	svc := google.NewService(&fakeClient{httpClient: hc})
 	got, err := svc.Status(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +91,7 @@ func TestStatusConnectedFetchesEmail(t *testing.T) {
 
 func TestConnectSavesTheExchangedToken(t *testing.T) {
 	client := &fakeClient{}
-	svc := google.New(client)
+	svc := google.NewService(client)
 	if err := svc.Connect(context.Background(), "user-1", "code"); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +102,7 @@ func TestConnectSavesTheExchangedToken(t *testing.T) {
 
 func TestConnectPropagatesExchangeError(t *testing.T) {
 	want := errors.New("exchange failed")
-	svc := google.New(&fakeClient{exchangeErr: want})
+	svc := google.NewService(&fakeClient{exchangeErr: want})
 	if err := svc.Connect(context.Background(), "user-1", "code"); !errors.Is(err, want) {
 		t.Fatalf("err = %v, want %v", err, want)
 	}
@@ -111,7 +110,7 @@ func TestConnectPropagatesExchangeError(t *testing.T) {
 
 func TestDisconnect(t *testing.T) {
 	client := &fakeClient{}
-	svc := google.New(client)
+	svc := google.NewService(client)
 	if err := svc.Disconnect(context.Background(), "user-1", ""); err != nil {
 		t.Fatal(err)
 	}

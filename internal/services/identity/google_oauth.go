@@ -1,4 +1,4 @@
-package apihandlers
+package identity
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 
 const oauthStateCookie = "oauth_state"
 
-type googleSvc interface {
+type googleAuthConnector interface {
 	AuthURL(state string) string
 	Connect(ctx context.Context, userID, code string) error
 }
@@ -27,16 +27,17 @@ type oauthRedirect struct {
 	state, authURL string
 }
 
-// OAuthStart is public so the OAuth redirect URL stays clean; it redirects,
-// so it goes through Handle directly rather than a CRUD generic.
-func OAuthStart(svc googleSvc) http.HandlerFunc {
+// oauthStartHandler is public so the OAuth redirect URL stays clean; it
+// redirects, so it goes through handlers.Handle directly rather than a CRUD
+// generic.
+func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (string, error) { return generateState() },
 		func(_ context.Context, state string) (oauthRedirect, error) {
 			return oauthRedirect{state: state, authURL: svc.AuthURL(state)}, nil
 		},
 		func(w http.ResponseWriter, r *http.Request, out oauthRedirect) {
-			setStateCookie(w, out.state)
+			setOAuthStateCookie(w, out.state)
 			http.Redirect(w, r, out.authURL, http.StatusTemporaryRedirect)
 		},
 	)
@@ -46,13 +47,14 @@ type oauthConnect struct {
 	userID, code string
 }
 
-// OAuthCallback redirects, so it goes through Handle directly rather than a
-// CRUD generic. The state cookie is cleared only on success; on failure it
-// simply expires (10 minutes) and the next /oauth/start overwrites it.
-func OAuthCallback(svc googleSvc) http.HandlerFunc {
+// oauthCallbackHandler redirects, so it goes through handlers.Handle
+// directly rather than a CRUD generic. The state cookie is cleared only on
+// success; on failure it simply expires (10 minutes) and the next
+// /google/oauth/start overwrites it.
+func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthConnect, error) {
-			if !validateStateCookie(r, r.URL.Query().Get("state")) {
+			if !validOAuthStateCookie(r, r.URL.Query().Get("state")) {
 				return oauthConnect{}, apperr.Invalid("invalid oauth state")
 			}
 			code := r.URL.Query().Get("code")
@@ -83,8 +85,8 @@ func generateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func setStateCookie(w http.ResponseWriter, state string) {
-	signed := signState(state)
+func setOAuthStateCookie(w http.ResponseWriter, state string) {
+	signed := signOAuthState(state)
 	secure := os.Getenv("COOKIE_SECURE") == "true"
 	sameSite := http.SameSiteLaxMode
 	if secure {
@@ -101,15 +103,15 @@ func setStateCookie(w http.ResponseWriter, state string) {
 	})
 }
 
-func validateStateCookie(r *http.Request, state string) bool {
+func validOAuthStateCookie(r *http.Request, state string) bool {
 	cookie, err := r.Cookie(oauthStateCookie)
 	if err != nil || cookie.Value == "" {
 		return false
 	}
-	return hmac.Equal([]byte(cookie.Value), []byte(signState(state)))
+	return hmac.Equal([]byte(cookie.Value), []byte(signOAuthState(state)))
 }
 
-func signState(state string) string {
+func signOAuthState(state string) string {
 	secret := os.Getenv("SESSION_SECRET")
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(state))

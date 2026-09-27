@@ -5,11 +5,8 @@ import {
 	useQueryClient,
 } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
-import {
-	fetchScoringConfig,
-	type ScoringConfig,
-	updateScoringConfig,
-} from "../api/scoringConfig";
+import { fetchScoringConfig, updateScoringConfig } from "../api/scoringConfig";
+import type { ScoringConfig } from "../types/scoringConfig";
 
 export const scoringConfigQueryOptions = queryOptions({
 	queryKey: keys.scoringConfig,

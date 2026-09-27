@@ -1,9 +1,13 @@
-export type CV = {
-	DocID: string;
-	TabID: string;
-	Title: string;
-	SourceDoc: string;
-	ModifiedAt: string;
-	DocURL: string;
-	Visible: boolean;
-};
+import { z } from "zod";
+
+export const cvSchema = z.object({
+	DocID: z.string(),
+	TabID: z.string(),
+	Title: z.string(),
+	SourceDoc: z.string(),
+	ModifiedAt: z.string(),
+	DocURL: z.string(),
+	Visible: z.boolean(),
+});
+
+export type CV = z.infer<typeof cvSchema>;

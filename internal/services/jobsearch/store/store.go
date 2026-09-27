@@ -22,7 +22,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
-	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 var (
@@ -33,13 +32,23 @@ var (
 	ErrSourceTargetExists = apperr.Conflict("source target already exists")
 )
 
+// ScoringWriter is scoring's tx-scoped facade, called from within
+// jobsearch's own transactions instead of writing scoring's tables
+// directly (ADR 0011).
+type ScoringWriter interface {
+	JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error
+	JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error
+	CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error
+}
+
 type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
+	scoring ScoringWriter
 }
 
-func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool)}
+func New(pool *pgxpool.Pool, scoring ScoringWriter) *Store {
+	return &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring}
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {
@@ -164,9 +173,6 @@ func jobFingerprint(job dto.Job) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
 
-// SaveCanonical inserts or updates a job by its canonical identity. Its
-// transaction also writes scoring's option_answers/effect_outbox tables
-// directly: a documented exception (ADR 0011, issue #264) pending #267.
 func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error) {
 	normalizedURL, err := normalizeJobURL(job.URL)
 	if err != nil {
@@ -255,13 +261,6 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		if err != nil {
 			return dto.Job{}, "", fmt.Errorf("update canonical job: %w", err)
 		}
-		if status == "changed" {
-			if err := queries.DeleteStaleOptionAnswers(ctx, sqlc.DeleteStaleOptionAnswersParams{
-				JobID: jobID, Fingerprint: job.ContentFingerprint,
-			}); err != nil {
-				return dto.Job{}, "", fmt.Errorf("prune stale option answers: %w", err)
-			}
-		}
 		job.URL = previous.Url
 	}
 
@@ -279,12 +278,8 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", ErrCanonicalConflict)
 	}
 	if status != "unchanged" {
-		role, _ := sourcespec.SourceRole(job.Source)
-		discovery := role == sourcespec.RoleDiscovery
-		if err := queries.QueueAnswerEffect(ctx, sqlc.QueueAnswerEffectParams{
-			JobID: jobID, Fingerprint: job.ContentFingerprint, FirstDiscovery: status == "new", Discovery: discovery,
-		}); err != nil {
-			return dto.Job{}, "", fmt.Errorf("queue answer effect: %w", err)
+		if err := s.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
+			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -340,9 +335,6 @@ func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.
 	return out, nil
 }
 
-// SetCompanyTracking stores tracking and, when enabling, backfills
-// fingerprints and queues scoring via effect_outbox directly: a documented
-// exception (ADR 0011, issue #264) pending #267.
 func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, interval int) (dto.CompanyTracking, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
@@ -368,8 +360,8 @@ func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string
 		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
 		}
-		if err := queries.QueueTrackingScores(ctx, cid); err != nil {
-			return dto.CompanyTracking{}, fmt.Errorf("queue tracked company scores: %w", err)
+		if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("scoring.CompanyTracked: %w", err)
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

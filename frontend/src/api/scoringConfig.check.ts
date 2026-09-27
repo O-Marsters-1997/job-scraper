@@ -1,4 +1,4 @@
-import { scoringConfigSchema } from "./scoringConfig";
+import { scoringConfigSchema } from "../types/scoringConfig";
 
 function ok(cond: boolean, msg: string) {
 	if (!cond) throw new Error(`FAIL: ${msg}`);

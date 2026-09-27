@@ -5,6 +5,32 @@ FROM jobs j JOIN job_scores s ON s.job_id = j.id
 WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
 ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
 
+-- name: QueueAnswerEffect :exec
+INSERT INTO effect_outbox (job_id, fingerprint, first_discovery)
+SELECT sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(first_discovery)::boolean
+FROM jobs j
+WHERE j.id = sqlc.arg(job_id)::uuid
+    AND (
+        EXISTS (
+            SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+            WHERE tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
+        )
+        OR EXISTS (
+            SELECT 1 FROM source_targets st
+            WHERE st.enabled AND st.source = j.source
+                AND (sqlc.arg(discovery)::boolean OR st.value = j.company_slug)
+        )
+    )
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
+
+-- name: QueueTrackingScores :exec
+INSERT INTO effect_outbox (job_id, fingerprint)
+SELECT j.id, j.content_fingerprint
+FROM jobs j JOIN companies c ON c.id = sqlc.arg(company_id)::uuid
+WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
+    AND (j.company_id = c.id OR j.company_slug = c.slug)
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
+
 -- name: ClaimAnswerEffect :one
 WITH next AS (
     SELECT id FROM effect_outbox

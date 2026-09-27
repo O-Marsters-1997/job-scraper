@@ -24,16 +24,22 @@ type Module struct {
 	ingest        *Ingester
 }
 
-// New builds the jobsearch context. configs is scoring's search config
-// reader (ADR 0011 migration order).
-func New(pool *pgxpool.Pool, q *queue.Broker, configs sourcetargets.SearchConfigReader) *Module {
-	st := store.New(pool)
+// ScoringPort is scoring's facade as jobsearch needs it: Search Config
+// reads for source-target filtering, plus the tx-scoped write ports jobsearch
+// calls instead of writing scoring's tables directly (ADR 0011).
+type ScoringPort interface {
+	sourcetargets.SearchConfigReader
+	store.ScoringWriter
+}
+
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+	st := store.New(pool, scoring)
 	cand := candidates.New(st, q)
 	return &Module{
 		store:         st,
 		jobs:          NewService(st),
 		companies:     companies.New(st, st, q),
-		sourceTargets: sourcetargets.New(st, configs, cand, q),
+		sourceTargets: sourcetargets.New(st, scoring, cand, q),
 		sources:       sources.New(),
 		candidates:    cand,
 		ingest:        newIngester(st, st),

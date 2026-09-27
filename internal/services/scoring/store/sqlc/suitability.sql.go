@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteAnswersForJobs = `-- name: DeleteAnswersForJobs :exec
+DELETE FROM option_answers WHERE job_id = ANY($1::uuid[])
+`
+
+func (q *Queries) DeleteAnswersForJobs(ctx context.Context, jobIds []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAnswersForJobs, jobIds)
+	return err
+}
+
+const dropStaleAnswers = `-- name: DropStaleAnswers :exec
+DELETE FROM option_answers
+USING jobs j
+WHERE option_answers.job_id = j.id
+    AND option_answers.job_id = ANY($1::uuid[])
+    AND option_answers.fingerprint != j.content_fingerprint
+`
+
+func (q *Queries) DropStaleAnswers(ctx context.Context, jobIds []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, dropStaleAnswers, jobIds)
+	return err
+}
+
 const getJobForScoring = `-- name: GetJobForScoring :one
 SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint

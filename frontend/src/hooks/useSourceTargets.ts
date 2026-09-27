@@ -6,14 +6,16 @@ import {
 } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
-	type CreateSourceTargetPayload,
 	createSourceTarget,
 	deleteSourceTarget,
 	fetchSourceTargets,
 	rerunSourceTarget,
-	type UpdateSourceTargetPayload,
 	updateSourceTarget,
 } from "../api/sourceTargets";
+import type {
+	CreateSourceTargetPayload,
+	UpdateSourceTargetPayload,
+} from "../types/sourceTarget";
 
 export const sourceTargetsQueryOptions = queryOptions({
 	queryKey: keys.sourceTargets,

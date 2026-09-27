@@ -7,11 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
-	"github.com/ollymarsters/job-scraper/internal/api/apihandlers"
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
-	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -28,7 +24,7 @@ type Module interface {
 // rule keeps internal/api out of internal/services/**, so jobsearch itself
 // can't apply that middleware (ADR 0011). Every other moved context goes
 // through modules alone.
-func NewRouter(db *jobsdb.DB, creds credstore.CredentialStore, idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
+func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -43,8 +39,6 @@ func NewRouter(db *jobsdb.DB, creds credstore.CredentialStore, idm *identity.Mod
 		AllowCredentials: true,
 	}))
 
-	svc := newServices(db, creds)
-
 	allModules := append([]Module{idm}, modules...)
 	for _, m := range allModules {
 		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
@@ -57,25 +51,8 @@ func NewRouter(db *jobsdb.DB, creds credstore.CredentialStore, idm *identity.Mod
 		js.PublicRoutes(r)
 	})
 
-	r.Route("/google", func(r chi.Router) {
-		r.Get("/oauth/start", apihandlers.OAuthStart(svc.google))
-		r.Group(func(r chi.Router) {
-			r.Use(idm.Middleware())
-			r.Get("/oauth/callback", apihandlers.OAuthCallback(svc.google))
-			r.Get("/status", handlers.GetAll(svc.google.Status))
-			r.Delete("/link", handlers.Delete(svc.google.Disconnect))
-		})
-	})
-
 	r.Group(func(r chi.Router) {
 		r.Use(idm.Middleware())
-
-		r.Get("/profile", handlers.GetAll(svc.profile.Get))
-		r.Put("/profile", handlers.Update(svc.profile.Update))
-
-		r.Get("/ai-prefs", handlers.GetAll(svc.aiPrefs.Get))
-
-		r.Put("/ai-credentials", handlers.Update(svc.aiCredentials.Update))
 
 		js.Routes(r)
 		for _, m := range allModules {

@@ -11,22 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteStaleOptionAnswers = `-- name: DeleteStaleOptionAnswers :exec
-DELETE FROM option_answers WHERE job_id = $1::uuid AND fingerprint != $2::text
-`
-
-type DeleteStaleOptionAnswersParams struct {
-	JobID       pgtype.UUID
-	Fingerprint string
-}
-
-// Writes scoring's option_answers table directly; documented exception
-// (ADR 0011, issue #264) pending #267.
-func (q *Queries) DeleteStaleOptionAnswers(ctx context.Context, arg DeleteStaleOptionAnswersParams) error {
-	_, err := q.db.Exec(ctx, deleteStaleOptionAnswers, arg.JobID, arg.Fingerprint)
-	return err
-}
-
 const findCanonicalJob = `-- name: FindCanonicalJob :one
 SELECT j.id::text AS id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
     j.title, j.description, j.location, j.salary_raw, j.work_arrangement,
