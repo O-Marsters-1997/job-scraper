@@ -334,7 +334,7 @@ function CVTemplatesPage() {
 															title="Hide tab"
 															onClick={() => handleHide(cv)}
 															disabled={hideMutation.isPending}
-															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive disabled:opacity-50"
+															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive-strong disabled:opacity-50"
 														>
 															<svg
 																aria-hidden="true"

@@ -43,7 +43,7 @@ type Dim = ScoringOption["dimension"];
 
 const STANCE_TONE: Record<Stance, string> = {
 	nice: "border-accent-border bg-accent-subtle text-accent-text",
-	avoid: "border-destructive/40 bg-destructive-subtle text-destructive-strong",
+	avoid: "border-destructive/40 bg-surface text-destructive-strong",
 };
 
 function ScoringPage() {

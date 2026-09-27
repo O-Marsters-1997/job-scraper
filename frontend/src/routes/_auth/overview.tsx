@@ -192,9 +192,9 @@ function OverviewPage() {
 			<div class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
 				<Card>
 					<div class="flex items-center justify-between border-b border-border px-5 py-4">
-						<h3 class="text-base font-semibold leading-snug text-foreground">
+						<h2 class="text-base font-semibold leading-snug text-foreground">
 							Recent jobs
-						</h3>
+						</h2>
 						<Link
 							to="/jobs"
 							class="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
@@ -246,9 +246,9 @@ function OverviewPage() {
 
 				<Card>
 					<div class="flex items-center justify-between border-b border-border px-5 py-4">
-						<h3 class="text-base font-semibold leading-snug text-foreground">
+						<h2 class="text-base font-semibold leading-snug text-foreground">
 							Recent applications
-						</h3>
+						</h2>
 						<Link
 							to="/applications"
 							search={{ status: undefined }}
@@ -313,7 +313,7 @@ function FeatureStat(props: FeatureStatProps) {
 				<p
 					class={cn(
 						"mt-auto pt-2 text-xs",
-						props.deltaUp ? "text-primary" : "text-faint",
+						props.deltaUp ? "text-primary" : "text-muted",
 					)}
 				>
 					{props.delta}

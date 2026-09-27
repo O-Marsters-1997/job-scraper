@@ -260,7 +260,7 @@ function SearchesPage() {
 										type="button"
 										onClick={() => handleDelete(t.ID)}
 										disabled={deleteMutation.isPending}
-										class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle disabled:opacity-50"
+										class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle disabled:opacity-50"
 									>
 										Delete
 									</button>

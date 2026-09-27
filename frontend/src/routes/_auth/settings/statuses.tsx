@@ -127,7 +127,7 @@ function StatusesPage() {
 													<button
 														type="button"
 														onClick={() => handleDelete(status.ID)}
-														class="rounded px-2 py-1 text-xs font-medium text-destructive transition hover:bg-destructive-subtle"
+														class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
 													>
 														Delete
 													</button>

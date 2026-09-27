@@ -179,11 +179,9 @@ function CompanyDetailPage() {
 								Company not found
 							</p>
 						</div>
-						<Link to="/companies">
-							<Button variant="outline" size="sm">
-								← Back to Companies
-							</Button>
-						</Link>
+						<Button as={Link} to="/companies" variant="outline" size="sm">
+							← Back to Companies
+						</Button>
 					</div>
 				}
 			>
