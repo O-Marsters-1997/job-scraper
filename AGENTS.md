@@ -43,7 +43,7 @@ The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular
 
 ### Migration status
 
-Moved to the context layout: **applications**. Remaining order: `identity` → `cvtemplates` →
+Moved to the context layout: **applications, cvtemplates**. Remaining order: `identity` →
 `scoring` → `jobsearch`. A feature whose context hasn't moved still uses the legacy layout:
 `internal/api/services/<feature>`, `internal/api/router.go` + `services.go`, `providers.X` interfaces and
 `*jobsdb.DB` in `internal/data/db`. Don't add new `providers` interfaces or `*jobsdb.DB` methods for a
