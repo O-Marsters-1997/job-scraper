@@ -5,13 +5,13 @@ import {
 	useQueryClient,
 } from "@tanstack/solid-query";
 import {
-	type AddCompanyPayload,
 	addCompany,
 	addCompanyBoard,
 	fetchCompanies,
 	fetchCompanyBoards,
 	setCompanyTracking,
 } from "../api/companies";
+import type { AddCompanyPayload } from "../types/company";
 
 export const companiesQueryOptions = queryOptions({
 	queryKey: ["companies"],

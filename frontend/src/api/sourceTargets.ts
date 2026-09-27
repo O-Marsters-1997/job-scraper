@@ -1,14 +1,11 @@
-import type { SourceTarget } from "../types/sourceTarget";
+import type {
+	CreateSourceTargetPayload,
+	SourceTarget,
+	UpdateSourceTargetPayload,
+} from "../types/sourceTarget";
+import { sourceTargetSchema } from "../types/sourceTarget";
 import { apiFetch, apiFetchVoid } from "./client";
 import { API_BASE, mockDelay, useMocks } from "./config";
-
-export interface CreateSourceTargetPayload {
-	source: string;
-	value: string;
-	enabled?: boolean;
-	filters?: Record<string, string>;
-	scrape_now?: boolean;
-}
 
 export class ConflictError extends Error {
 	constructor() {
@@ -17,26 +14,34 @@ export class ConflictError extends Error {
 }
 
 export async function fetchSourceTargets(): Promise<SourceTarget[]> {
-	return apiFetch<SourceTarget[]>("/source-targets");
+	if (useMocks()) {
+		const { getSourceTargets } = await import("../mocks/db");
+		await mockDelay();
+		return getSourceTargets();
+	}
+	return apiFetch("/source-targets", undefined, sourceTargetSchema.array());
 }
 
 export async function createSourceTarget(
 	payload: CreateSourceTargetPayload,
 ): Promise<SourceTarget> {
-	const res = await fetch(`${API_BASE}/source-targets`, {
+	if (useMocks()) {
+		const { createSourceTarget: mockCreate } = await import("../mocks/db");
+		await mockDelay(80);
+		const target = mockCreate(payload);
+		if (!target) throw new ConflictError();
+		return target;
+	}
+	const response = await fetch(`${API_BASE}/source-targets`, {
 		method: "POST",
 		credentials: "include",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload),
 	});
-	if (res.status === 409) throw new ConflictError();
-	if (!res.ok) throw new Error(`Failed to create source target: ${res.status}`);
-	return res.json();
-}
-
-export interface UpdateSourceTargetPayload {
-	enabled?: boolean;
-	check_interval_minutes?: number;
+	if (response.status === 409) throw new ConflictError();
+	if (!response.ok)
+		throw new Error(`Failed to create source target: ${response.status}`);
+	return sourceTargetSchema.parse(await response.json());
 }
 
 export async function updateSourceTarget(
@@ -48,19 +53,36 @@ export async function updateSourceTarget(
 		await mockDelay(80);
 		return mockUpdate(id, patch);
 	}
-	return apiFetch<SourceTarget>(`/source-targets/${id}`, {
-		method: "PATCH",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(patch),
-	});
+	return apiFetch(
+		`/source-targets/${id}`,
+		{
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(patch),
+		},
+		sourceTargetSchema,
+	);
 }
 
 export async function deleteSourceTarget(id: string): Promise<void> {
+	if (useMocks()) {
+		const { deleteSourceTarget: mockDelete } = await import("../mocks/db");
+		await mockDelay(80);
+		mockDelete(id);
+		return;
+	}
 	return apiFetchVoid(`/source-targets/${id}`, { method: "DELETE" });
 }
 
 export async function rerunSourceTarget(id: string): Promise<SourceTarget> {
-	return apiFetch<SourceTarget>(`/source-targets/${id}/scrape`, {
-		method: "POST",
-	});
+	if (useMocks()) {
+		const { rerunSourceTarget: mockRerun } = await import("../mocks/db");
+		await mockDelay(80);
+		return mockRerun(id);
+	}
+	return apiFetch(
+		`/source-targets/${id}/scrape`,
+		{ method: "POST" },
+		sourceTargetSchema,
+	);
 }

@@ -5,14 +5,16 @@ import {
 	useQueryClient,
 } from "@tanstack/solid-query";
 import {
-	type CreateSourceTargetPayload,
 	createSourceTarget,
 	deleteSourceTarget,
 	fetchSourceTargets,
 	rerunSourceTarget,
-	type UpdateSourceTargetPayload,
 	updateSourceTarget,
 } from "../api/sourceTargets";
+import type {
+	CreateSourceTargetPayload,
+	UpdateSourceTargetPayload,
+} from "../types/sourceTarget";
 
 export const sourceTargetsQueryOptions = queryOptions({
 	queryKey: ["source-targets"],

@@ -1,16 +1,30 @@
 import { faker } from "@faker-js/faker";
-import type { Application, ApplicationWithDetails } from "@/types/application";
+import type {
+	Application,
+	ApplicationWithDetails,
+	CreateApplicationPayload,
+	UpdateApplicationPayload,
+} from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
-import type { Company, CompanyBoard } from "@/types/company";
+import type { Company, CompanyBoard, CompanyTracking } from "@/types/company";
+import type { CV } from "@/types/cv";
 import type { Job, ScoreRow } from "@/types/job";
-import type { SourceTarget } from "@/types/sourceTarget";
-import type { RecomputeResult, ScoringStatus } from "../api/scores";
-import type { ScoringConfig } from "../api/scoringConfig";
+import type { ResolvedBoard, SourceInfo } from "@/types/source";
+import type {
+	CreateSourceTargetPayload,
+	SourceTarget,
+	UpdateSourceTargetPayload,
+} from "@/types/sourceTarget";
+import type { AiPrefs } from "../types/aiPrefs";
+import type { GoogleStatus } from "../types/google";
+import type { Profile } from "../types/profile";
+import type { RecomputeResult, ScoringStatus } from "../types/scores";
+import type { ScoringConfig } from "../types/scoringConfig";
 import type {
 	DimensionSpec,
 	ScoringOption,
 	ScoringOptionsView,
-} from "../api/scoringOptions";
+} from "../types/scoringOptions";
 
 faker.seed(1234);
 
@@ -419,6 +433,10 @@ const ATS_HOSTS: Record<string, string> = {
 	"personio.de": "personio",
 };
 
+function hostMatches(hostname: string, host: string): boolean {
+	return hostname === host || hostname.endsWith(`.${host}`);
+}
+
 function humanizeSlug(slug: string): string {
 	return slug
 		.split(/[-_]/)
@@ -462,6 +480,376 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			UpdatedAt: faker.date.recent({ days: 10 }).toISOString(),
 		});
 	}
+}
+
+const SOURCE_INFOS: SourceInfo[] = [
+	{
+		name: "greenhouse",
+		label: "Greenhouse",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://boards.greenhouse.io",
+		filters: [],
+	},
+	{
+		name: "lever",
+		label: "Lever",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://jobs.lever.co",
+		filters: [],
+	},
+	{
+		name: "ashby",
+		label: "Ashby",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://jobs.ashbyhq.com",
+		filters: [],
+	},
+	{
+		name: "workable",
+		label: "Workable",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://apply.workable.com",
+		filters: [],
+	},
+	{
+		name: "recruitee",
+		label: "Recruitee",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://recruitee.com",
+		filters: [],
+	},
+	{
+		name: "personio",
+		label: "Personio",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://personio.de",
+		filters: [],
+	},
+	{
+		name: "wis",
+		label: "Work in Startups",
+		kind: "filter",
+		role: "discovery",
+		url_prefix: "https://workinstartups.com",
+		filters: [{ name: "region", label: "Region", required: false }],
+	},
+	{
+		name: "linkedin",
+		label: "LinkedIn",
+		kind: "filter",
+		role: "discovery",
+		url_prefix: "https://www.linkedin.com/jobs",
+		filters: [{ name: "location", label: "Location", required: false }],
+	},
+	{
+		name: "indeed",
+		label: "Indeed",
+		kind: "url",
+		role: "discovery",
+		url_prefix: "https://www.indeed.com",
+		filters: [],
+	},
+	{
+		name: "remoteok",
+		label: "RemoteOK",
+		kind: "filter",
+		role: "discovery",
+		url_prefix: "https://remoteok.com",
+		filters: [],
+	},
+	{
+		name: "remotive",
+		label: "Remotive",
+		kind: "filter",
+		role: "discovery",
+		url_prefix: "https://remotive.com",
+		filters: [],
+	},
+];
+
+export function getSources(): SourceInfo[] {
+	return SOURCE_INFOS;
+}
+
+export function resolveBoard(url: string): ResolvedBoard | null {
+	let hostname: string;
+	try {
+		hostname = new URL(url).hostname;
+	} catch {
+		return null;
+	}
+	const match = SOURCE_INFOS.find(
+		(s) =>
+			s.kind === "board" &&
+			hostMatches(hostname, new URL(s.url_prefix).hostname),
+	);
+	if (!match) return null;
+	const value = url.replace(/\/$/, "").split("/").pop() ?? hostname;
+	return { source: match.name, value };
+}
+
+let discoverySourceTargets: SourceTarget[] = [
+	{
+		ID: "target-wis-1",
+		UserID: "user-1",
+		Source: "wis",
+		Value: "engineer",
+		Enabled: true,
+		Filters: { region: "uk" },
+		RunStatus: "succeeded",
+		LastRunAt: faker.date.recent({ days: 1 }).toISOString(),
+		LastRunError: "",
+	},
+	{
+		ID: "target-linkedin-1",
+		UserID: "user-1",
+		Source: "linkedin",
+		Value: "software engineer",
+		Enabled: true,
+		Filters: { location: "London" },
+		RunStatus: "idle",
+		LastRunAt: null,
+		LastRunError: "",
+	},
+];
+
+function companyToSourceTarget(company: Company): SourceTarget {
+	return {
+		ID: company.TargetID,
+		UserID: "user-1",
+		Source: company.ATSSource,
+		Value: company.ATSToken,
+		Enabled: company.Tracked,
+		Filters: {},
+		RunStatus: "idle",
+		LastRunAt: company.LastCheckedAt,
+		LastRunError: "",
+	};
+}
+
+export function getSourceTargets(): SourceTarget[] {
+	const atsTargets = companies
+		.filter((c) => c.TargetID)
+		.map(companyToSourceTarget);
+	return [...atsTargets, ...discoverySourceTargets];
+}
+
+export function createSourceTarget(
+	payload: CreateSourceTargetPayload,
+): SourceTarget | null {
+	const exists = getSourceTargets().some(
+		(t) => t.Source === payload.source && t.Value === payload.value,
+	);
+	if (exists) return null;
+	const target: SourceTarget = {
+		ID: faker.string.uuid(),
+		UserID: "user-1",
+		Source: payload.source,
+		Value: payload.value,
+		Enabled: payload.enabled ?? true,
+		Filters: payload.filters ?? {},
+		RunStatus: "succeeded",
+		LastRunAt: new Date().toISOString(),
+		LastRunError: "",
+	};
+	discoverySourceTargets = [...discoverySourceTargets, target];
+	return target;
+}
+
+export function updateSourceTarget(
+	id: string,
+	patch: UpdateSourceTargetPayload,
+): SourceTarget {
+	const companyIdx = companies.findIndex((c) => c.TargetID === id);
+	if (companyIdx !== -1) {
+		const company = companies[companyIdx]!;
+		const updated: Company = {
+			...company,
+			Tracked: patch.enabled ?? company.Tracked,
+			CheckIntervalMinutes:
+				patch.check_interval_minutes ?? company.CheckIntervalMinutes,
+		};
+		companies = [
+			...companies.slice(0, companyIdx),
+			updated,
+			...companies.slice(companyIdx + 1),
+		];
+		return companyToSourceTarget(updated);
+	}
+	const idx = discoverySourceTargets.findIndex((t) => t.ID === id);
+	if (idx === -1) throw new Error("Source target not found");
+	const updated: SourceTarget = {
+		...discoverySourceTargets[idx]!,
+		Enabled: patch.enabled ?? discoverySourceTargets[idx]!.Enabled,
+	};
+	discoverySourceTargets = [
+		...discoverySourceTargets.slice(0, idx),
+		updated,
+		...discoverySourceTargets.slice(idx + 1),
+	];
+	return updated;
+}
+
+export function deleteSourceTarget(id: string): void {
+	discoverySourceTargets = discoverySourceTargets.filter((t) => t.ID !== id);
+}
+
+export function rerunSourceTarget(id: string): SourceTarget {
+	const idx = discoverySourceTargets.findIndex((t) => t.ID === id);
+	if (idx === -1) {
+		const existing = getSourceTargets().find((t) => t.ID === id);
+		if (!existing) throw new Error("Source target not found");
+		return {
+			...existing,
+			RunStatus: "succeeded",
+			LastRunAt: new Date().toISOString(),
+		};
+	}
+	const updated: SourceTarget = {
+		...discoverySourceTargets[idx]!,
+		RunStatus: "succeeded",
+		LastRunAt: new Date().toISOString(),
+	};
+	discoverySourceTargets = [
+		...discoverySourceTargets.slice(0, idx),
+		updated,
+		...discoverySourceTargets.slice(idx + 1),
+	];
+	return updated;
+}
+
+let cvs: CV[] = [
+	{
+		DocID: "doc-1",
+		TabID: "t.0",
+		Title: "Senior Backend Engineer CV",
+		SourceDoc: "Master CV",
+		ModifiedAt: faker.date.recent({ days: 5 }).toISOString(),
+		DocURL: "https://docs.google.com/document/d/doc-1/edit",
+		Visible: true,
+	},
+	{
+		DocID: "doc-1",
+		TabID: "t.1",
+		Title: "Platform Engineer CV",
+		SourceDoc: "Master CV",
+		ModifiedAt: faker.date.recent({ days: 10 }).toISOString(),
+		DocURL: "https://docs.google.com/document/d/doc-1/edit",
+		Visible: true,
+	},
+	{
+		DocID: "doc-2",
+		TabID: "t.0",
+		Title: "Cover Letter Template",
+		SourceDoc: "Cover Letters",
+		ModifiedAt: faker.date.recent({ days: 20 }).toISOString(),
+		DocURL: "https://docs.google.com/document/d/doc-2/edit",
+		Visible: false,
+	},
+];
+
+export function getCVs(): CV[] {
+	return cvs;
+}
+
+export function addTrackedDoc(url: string): void {
+	const docId = `doc-${faker.string.uuid().slice(0, 8)}`;
+	cvs = [
+		...cvs,
+		{
+			DocID: docId,
+			TabID: "t.0",
+			Title: "New Tracked Doc",
+			SourceDoc: "New Tracked Doc",
+			ModifiedAt: new Date().toISOString(),
+			DocURL: url,
+			Visible: true,
+		},
+	];
+}
+
+export function removeTrackedDoc(docId: string): void {
+	cvs = cvs.filter((cv) => cv.DocID !== docId);
+}
+
+export function setTabVisibility(
+	docId: string,
+	tabId: string,
+	visible: boolean,
+): void {
+	cvs = cvs.map((cv) =>
+		cv.DocID === docId && cv.TabID === tabId ? { ...cv, Visible: visible } : cv,
+	);
+}
+
+const MOCK_PDF = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 58 >>
+stream
+BT /F1 24 Tf 72 700 Td (Demo CV preview) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+trailer
+<< /Size 6 /Root 1 0 R >>
+%%EOF
+`;
+
+export function getMockPdfBytes(): ArrayBuffer {
+	return new TextEncoder().encode(MOCK_PDF).buffer;
+}
+
+let aiPrefs: AiPrefs = {
+	configuredProviders: ["openrouter"],
+	scoringEnabled: true,
+};
+
+export function getAiPrefs(): AiPrefs {
+	return structuredClone(aiPrefs);
+}
+
+export function setAiCredential(provider: string, apiKey: string | null): void {
+	const providers = new Set(aiPrefs.configuredProviders);
+	if (apiKey) providers.add(provider);
+	else providers.delete(provider);
+	aiPrefs = { ...aiPrefs, configuredProviders: [...providers] };
+}
+
+let googleStatus: GoogleStatus = { connected: false };
+
+export function getGoogleStatus(): GoogleStatus {
+	return structuredClone(googleStatus);
+}
+
+export function disconnectGoogle(): void {
+	googleStatus = { connected: false };
+}
+
+let profile: Profile = { username: "demo", email: "demo@example.com" };
+
+export function getProfile(): Profile {
+	return structuredClone(profile);
+}
+
+export function updateProfile(payload: { email: string }): void {
+	profile = { ...profile, email: payload.email };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -524,13 +912,7 @@ export function recomputeScores(): RecomputeResult {
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
 
-export function createApplication(data: {
-	job_id: string;
-	status_id?: string | undefined;
-	notes?: string | undefined;
-	applied_at?: string | null | undefined;
-	salary_info?: string | undefined;
-}): Application {
+export function createApplication(data: CreateApplicationPayload): Application {
 	const status = data.status_id
 		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0]!)
 		: statuses[0]!;
@@ -551,12 +933,7 @@ export function createApplication(data: {
 
 export function updateApplication(
 	id: string,
-	data: {
-		status_id?: string | undefined;
-		notes?: string | undefined;
-		applied_at?: string | null | undefined;
-		salary_info?: string | undefined;
-	},
+	data: UpdateApplicationPayload,
 ): Application {
 	const idx = applications.findIndex((a) => a.ID === id);
 	if (idx === -1) throw new Error("Application not found");
@@ -620,7 +997,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		return null;
 	}
 	const atsSource = Object.entries(ATS_HOSTS).find(([host]) =>
-		hostname.endsWith(host),
+		hostMatches(hostname, host),
 	)?.[1];
 	if (!atsSource) return null;
 
@@ -660,7 +1037,7 @@ export function addCompanyBoard(
 		return null;
 	}
 	const source = Object.entries(ATS_HOSTS).find(([host]) =>
-		hostname.endsWith(host),
+		hostMatches(hostname, host),
 	)?.[1];
 	if (!source) return null;
 	const token = url.replace(/\/$/, "").split("/").pop() ?? hostname;
@@ -695,7 +1072,7 @@ export function setCompanyTracking(
 	id: string,
 	enabled: boolean,
 	checkIntervalMinutes?: number,
-): import("../types/company").CompanyTracking {
+): CompanyTracking {
 	const idx = companies.findIndex((c) => c.ID === id);
 	if (idx === -1) throw new Error("Company not found");
 	const company = companies[idx]!;
@@ -715,37 +1092,6 @@ export function setCompanyTracking(
 		UserID: mockUser.id,
 		Enabled: enabled,
 		CheckIntervalMinutes: updated.CheckIntervalMinutes,
-	};
-}
-
-export function updateSourceTarget(
-	id: string,
-	patch: { enabled?: boolean; check_interval_minutes?: number },
-): SourceTarget {
-	const idx = companies.findIndex((c) => c.TargetID === id);
-	if (idx === -1) throw new Error("Source target not found");
-	const company = companies[idx]!;
-	const updated: Company = {
-		...company,
-		Tracked: patch.enabled ?? company.Tracked,
-		CheckIntervalMinutes:
-			patch.check_interval_minutes ?? company.CheckIntervalMinutes,
-	};
-	companies = [
-		...companies.slice(0, idx),
-		updated,
-		...companies.slice(idx + 1),
-	];
-	return {
-		ID: id,
-		UserID: mockUser.id,
-		Source: company.ATSSource,
-		Value: company.ATSToken,
-		Enabled: updated.Tracked,
-		Filters: {},
-		RunStatus: "idle",
-		LastRunAt: null,
-		LastRunError: "",
 	};
 }
 
