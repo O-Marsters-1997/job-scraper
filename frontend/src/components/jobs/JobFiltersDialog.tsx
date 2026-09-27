@@ -43,7 +43,7 @@ function FilterChip(props: {
 	return (
 		<button
 			type="button"
-			onClick={props.onClick}
+			onClick={() => props.onClick()}
 			class={cn(
 				"rounded-full border px-3 py-1 text-xs font-medium transition-colors",
 				props.active

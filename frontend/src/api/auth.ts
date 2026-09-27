@@ -1,15 +1,19 @@
-import { API_BASE, MOCK_BUILD } from "./config";
+import { type Me, meSchema } from "../types/me";
+import { apiFetch } from "./client";
+import { API_BASE, MOCK_BUILD, mockDelay } from "./config";
 
-export function login(username: string, password: string) {
+export async function login(
+	username: string,
+	password: string,
+): Promise<Response> {
 	if (MOCK_BUILD) {
-		void username;
 		void password;
-		return Promise.resolve(
-			new Response(JSON.stringify({ ok: true }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		const { switchMockUser } = await import("../mocks/db");
+		switchMockUser(username);
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 	return fetch(`${API_BASE}/auth/login`, {
 		method: "POST",
@@ -19,16 +23,18 @@ export function login(username: string, password: string) {
 	});
 }
 
-export function signup(username: string, password: string) {
+export async function signup(
+	username: string,
+	password: string,
+): Promise<Response> {
 	if (MOCK_BUILD) {
-		void username;
 		void password;
-		return Promise.resolve(
-			new Response(JSON.stringify({ ok: true }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		const { switchMockUser } = await import("../mocks/db");
+		switchMockUser(username);
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
 	}
 	return fetch(`${API_BASE}/auth/signup`, {
 		method: "POST",
@@ -38,7 +44,7 @@ export function signup(username: string, password: string) {
 	});
 }
 
-export function logout() {
+export function logout(): Promise<Response> {
 	if (MOCK_BUILD) {
 		return Promise.resolve(new Response(null, { status: 200 }));
 	}
@@ -48,16 +54,11 @@ export function logout() {
 	});
 }
 
-export function getMe() {
+export async function fetchMe(): Promise<Me> {
 	if (MOCK_BUILD) {
-		return Promise.resolve(
-			new Response(JSON.stringify({ id: "user-1", username: "demo" }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" },
-			}),
-		);
+		const { mockUser } = await import("../mocks/db");
+		await mockDelay();
+		return mockUser;
 	}
-	return fetch(`${API_BASE}/auth/me`, {
-		credentials: "include",
-	});
+	return apiFetch("/auth/me", undefined, meSchema);
 }

@@ -2,6 +2,8 @@ import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { cva } from "class-variance-authority";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
+import { queryClient } from "@/lib/queryClient";
+import { signOut } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
@@ -68,10 +70,11 @@ export default function Sidebar(props: SidebarProps) {
 	const appsQuery = useApplications();
 	const googleStatus = useGoogleStatus();
 
-	const handleLogout = async () => {
-		await logout();
-		navigate({ to: "/login" });
-	};
+	const handleLogout = () =>
+		signOut(logout, () => {
+			queryClient.clear();
+			navigate({ to: "/login" });
+		});
 
 	return (
 		<>

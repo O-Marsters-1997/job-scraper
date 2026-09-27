@@ -4,6 +4,7 @@ import {
 	queryOptions,
 	useQueryClient,
 } from "@tanstack/solid-query";
+import { keys } from "../api/keys";
 import {
 	createSourceTarget,
 	deleteSourceTarget,
@@ -17,7 +18,7 @@ import type {
 } from "../types/sourceTarget";
 
 export const sourceTargetsQueryOptions = queryOptions({
-	queryKey: ["source-targets"],
+	queryKey: keys.sourceTargets,
 	queryFn: fetchSourceTargets,
 	refetchInterval: 5000,
 });
@@ -31,7 +32,7 @@ export function useRerunSourceTarget() {
 	return createMutation(() => ({
 		mutationFn: rerunSourceTarget,
 		onSettled: () =>
-			queryClient.invalidateQueries({ queryKey: ["source-targets"] }),
+			queryClient.invalidateQueries({ queryKey: keys.sourceTargets }),
 	}));
 }
 
@@ -40,8 +41,10 @@ export function useCreateSourceTarget() {
 	return createMutation(() => ({
 		mutationFn: (payload: CreateSourceTargetPayload) =>
 			createSourceTarget(payload),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["source-targets"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
+			queryClient.invalidateQueries({ queryKey: keys.companies.all });
+		},
 	}));
 }
 
@@ -54,8 +57,8 @@ export function useUpdateSourceTarget() {
 		}: { id: string } & UpdateSourceTargetPayload) =>
 			updateSourceTarget(id, patch),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["source-targets"] });
-			queryClient.invalidateQueries({ queryKey: ["companies"] });
+			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
+			queryClient.invalidateQueries({ queryKey: keys.companies.all });
 		},
 	}));
 }
@@ -64,7 +67,9 @@ export function useDeleteSourceTarget() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
 		mutationFn: (id: string) => deleteSourceTarget(id),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["source-targets"] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
+			queryClient.invalidateQueries({ queryKey: keys.companies.all });
+		},
 	}));
 }

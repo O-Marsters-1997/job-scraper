@@ -340,7 +340,7 @@ function slugify(name: string): string {
 		.replace(/[^a-z0-9-]/g, "");
 }
 
-const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
+let jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 	const company = faker.helpers.arrayElement(COMPANIES);
 	const location = faker.helpers.arrayElement(LOCATIONS);
 	const scrapedAt = faker.date.recent({ days: 30 }).toISOString();
@@ -907,7 +907,16 @@ export function getScoringStatus(): ScoringStatus {
 }
 
 export function recomputeScores(): RecomputeResult {
-	return { recomputed: jobs.filter((j) => j.SuitabilityScore != null).length };
+	let recomputed = 0;
+	jobs = jobs.map((job) => {
+		if (job.SuitabilityScore == null) return job;
+		recomputed++;
+		return {
+			...job,
+			SuitabilityScore: Math.min(100, job.SuitabilityScore + 1),
+		};
+	});
+	return { recomputed };
 }
 
 // ─── Mutation helpers ─────────────────────────────────────────────────────────
@@ -1101,3 +1110,10 @@ export function updateScoringConfig(payload: ScoringConfig): ScoringConfig {
 }
 
 export const mockUser = { id: "user-1", username: "demo" };
+
+export function switchMockUser(username: string): void {
+	if (username === mockUser.username) return;
+	mockUser.id = `user-${username}`;
+	mockUser.username = username;
+	applications = [];
+}

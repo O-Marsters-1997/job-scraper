@@ -1,8 +1,9 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { keys } from "../api/keys";
 import { fetchScoringOptions } from "../api/scoringOptions";
 
 export const scoringOptionsQueryOptions = queryOptions({
-	queryKey: ["scoring-options"],
+	queryKey: keys.scoringOptions,
 	queryFn: fetchScoringOptions,
 });
 

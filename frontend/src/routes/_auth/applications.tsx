@@ -136,7 +136,7 @@ function ApplicationsPage() {
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
 					<Show
-						when={data.length > 0}
+						when={data().length > 0}
 						fallback={
 							<Card class="p-10 text-center">
 								<p class="text-sm text-muted">
@@ -146,7 +146,7 @@ function ApplicationsPage() {
 						}
 					>
 						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-							<For each={data}>
+							<For each={data()}>
 								{(app) => (
 									<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
 										<div class="min-w-0 flex-1">

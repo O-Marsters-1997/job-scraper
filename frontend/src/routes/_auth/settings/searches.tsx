@@ -512,7 +512,7 @@ function SearchesPage() {
 								</Show>
 							</div>
 						</Show>
-						<Show when={data.some((t) => sourceRole(t.Source) === "ats")}>
+						<Show when={data().some((t) => sourceRole(t.Source) === "ats")}>
 							<div class="mb-2 mt-1">
 								<h2 class="text-sm font-semibold text-foreground">
 									Tracked companies
@@ -522,11 +522,11 @@ function SearchesPage() {
 								</p>
 							</div>
 							<TargetsCard
-								list={data.filter((t) => sourceRole(t.Source) === "ats")}
+								list={data().filter((t) => sourceRole(t.Source) === "ats")}
 							/>
 						</Show>
 
-						<Show when={data.some((t) => sourceRole(t.Source) !== "ats")}>
+						<Show when={data().some((t) => sourceRole(t.Source) !== "ats")}>
 							<div class="mb-2 mt-1">
 								<h2 class="text-sm font-semibold text-foreground">
 									Discovery searches
@@ -536,7 +536,7 @@ function SearchesPage() {
 								</p>
 							</div>
 							<TargetsCard
-								list={data.filter((t) => sourceRole(t.Source) !== "ats")}
+								list={data().filter((t) => sourceRole(t.Source) !== "ats")}
 							/>
 						</Show>
 

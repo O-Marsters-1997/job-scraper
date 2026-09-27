@@ -7,6 +7,7 @@ import {
 	onCleanup,
 	type ResourceFetcherInfo,
 	Show,
+	untrack,
 } from "solid-js";
 import { fetchCVPdf } from "../../api/cvTemplates";
 
@@ -158,7 +159,7 @@ function CVDetailPage() {
 function PDFCanvas(props: { page: PDFPageProxy }) {
 	let canvasRef: HTMLCanvasElement | undefined;
 
-	const viewport = props.page.getViewport({ scale: 1.5 });
+	const viewport = untrack(() => props.page.getViewport({ scale: 1.5 }));
 
 	const render = () => {
 		if (!canvasRef) return;

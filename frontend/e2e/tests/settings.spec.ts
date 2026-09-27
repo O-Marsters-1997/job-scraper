@@ -25,7 +25,9 @@ test("should redirect to the first section and switch sections from the nav", as
 
 	await page.keyboard.press("]");
 	await page.keyboard.press("]");
-	await expect(nav.getByRole("link", { name: "Tech & industry" })).toBeFocused();
+	await expect(
+		nav.getByRole("link", { name: "Tech & industry" }),
+	).toBeFocused();
 	await page.keyboard.press("Enter");
 	await expect(page).toHaveURL(/\/settings\/scoring\/stack$/);
 

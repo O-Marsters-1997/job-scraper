@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/solid-router";
+import type { Accessor } from "solid-js";
 import { createSignal, Show } from "solid-js";
 import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
@@ -21,7 +22,7 @@ function AiPage() {
 	);
 }
 
-function AiForm(props: { data: AiPrefs }) {
+function AiForm(props: { data: Accessor<AiPrefs> }) {
 	const mutation = useUpdateAiCredentials();
 	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
@@ -51,7 +52,7 @@ function AiForm(props: { data: AiPrefs }) {
 				hint="Used to score how well each job fits you."
 			>
 				<Show
-					when={props.data.configuredProviders.includes("openrouter")}
+					when={props.data().configuredProviders.includes("openrouter")}
 					fallback={
 						<form
 							class="flex max-w-lg items-center gap-2"

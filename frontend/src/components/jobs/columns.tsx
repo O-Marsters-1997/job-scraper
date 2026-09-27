@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
+import { Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRelative } from "@/lib/datetime";
@@ -57,34 +58,38 @@ export function createJobColumns(
 		{
 			accessorKey: "Location",
 			header: "Location",
-			cell: (info) => {
-				const val = info.getValue() as string | null | undefined;
-				return val ? (
-					<span class="block max-w-[160px] truncate text-muted" title={val}>
-						{val}
-					</span>
-				) : (
-					<span class="text-faint">—</span>
-				);
-			},
+			cell: (info) => (
+				<Show
+					when={info.getValue() as string | null | undefined}
+					fallback={<span class="text-faint">—</span>}
+				>
+					{(val) => (
+						<span class="block max-w-[160px] truncate text-muted" title={val()}>
+							{val()}
+						</span>
+					)}
+				</Show>
+			),
 		},
 		{
 			accessorKey: "DaysInOffice",
 			header: "Office",
 			enableSorting: false,
 			enableGlobalFilter: false,
-			cell: (info) => {
-				const val = info.getValue() as number | null | undefined;
-				if (val === null || val === undefined) {
-					return <span class="text-faint">—</span>;
-				}
-				if (val === 0) return <span class="text-muted">Remote</span>;
-				return (
-					<span class="font-mono text-xs tabular-nums text-muted">
-						{val}d/wk
-					</span>
-				);
-			},
+			cell: (info) => (
+				<Switch fallback={<span class="text-faint">—</span>}>
+					<Match when={info.getValue() === 0}>
+						<span class="text-muted">Remote</span>
+					</Match>
+					<Match when={info.getValue() as number | null | undefined}>
+						{(val) => (
+							<span class="font-mono text-xs tabular-nums text-muted">
+								{val()}d/wk
+							</span>
+						)}
+					</Match>
+				</Switch>
+			),
 		},
 		{
 			accessorKey: "SuitabilityScore",
@@ -138,17 +143,24 @@ export function createJobColumns(
 			header: "Status",
 			enableSorting: false,
 			enableGlobalFilter: false,
-			cell: (info) => {
-				const summary = ctx.appsForJobs()?.[info.row.original.ID];
-				return summary?.StatusName ? (
-					<StatusBadge
-						name={summary.StatusName}
-						colour={summary.StatusColour || STATUS_FALLBACK_COLOUR}
-					/>
-				) : (
-					<span class="text-faint">—</span>
-				);
-			},
+			cell: (info) => (
+				<Show
+					when={ctx.appsForJobs()?.[info.row.original.ID]}
+					fallback={<span class="text-faint">—</span>}
+				>
+					{(summary) => (
+						<Show
+							when={summary().StatusName}
+							fallback={<span class="text-faint">—</span>}
+						>
+							<StatusBadge
+								name={summary().StatusName}
+								colour={summary().StatusColour || STATUS_FALLBACK_COLOUR}
+							/>
+						</Show>
+					)}
+				</Show>
+			),
 		},
 		{
 			id: "actions",

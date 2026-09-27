@@ -103,7 +103,7 @@ function StatusesPage() {
 				{(data) => (
 					<>
 						<Card class="overflow-hidden divide-y divide-border">
-							<For each={data}>
+							<For each={data()}>
 								{(status) => (
 									<div class="flex items-center gap-3 px-4 py-3">
 										<Show

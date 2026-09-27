@@ -10,9 +10,11 @@
 		"includes": [
 			"src/**",
 			"scripts/**",
+			"e2e/**",
 			".vscode/**",
 			"index.html",
 			"vite.config.ts",
+			"playwright.config.ts",
 			"!src/routeTree.gen.ts"
 		]
 	},

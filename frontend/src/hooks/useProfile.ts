@@ -4,10 +4,11 @@ import {
 	queryOptions,
 	useQueryClient,
 } from "@tanstack/solid-query";
+import { keys } from "../api/keys";
 import { fetchProfile, updateProfile } from "../api/profile";
 
 export const profileQueryOptions = queryOptions({
-	queryKey: ["profile"],
+	queryKey: keys.profile,
 	queryFn: fetchProfile,
 });
 
@@ -19,6 +20,6 @@ export function useUpdateProfile() {
 	const queryClient = useQueryClient();
 	return createMutation(() => ({
 		mutationFn: (payload: { email: string }) => updateProfile(payload),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profile"] }),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.profile }),
 	}));
 }
