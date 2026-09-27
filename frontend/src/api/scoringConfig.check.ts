@@ -97,3 +97,15 @@ ok(
 	withFloor.preferences.salaryFloor?.amount === 55000,
 	"a salary floor parses",
 );
+
+const withoutBackfillQueued = scoringConfigSchema.parse(base);
+ok(
+	withoutBackfillQueued.backfillQueued === 0,
+	"backfillQueued defaults to 0 when absent",
+);
+
+const withBackfillQueued = scoringConfigSchema.parse({
+	...base,
+	backfillQueued: 3,
+});
+ok(withBackfillQueued.backfillQueued === 3, "backfillQueued parses");

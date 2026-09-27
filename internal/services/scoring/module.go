@@ -49,7 +49,7 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	}
 
 	mainService := NewService(st, jev.NewClient(), credentials, alerter, profiles)
-	scoringConfig := scoringconfig.New(st, candidates, mainService, extract.NewClient(), credentials)
+	scoringConfig := scoringconfig.New(st, candidates, mainService, extract.NewClient(), credentials, mainService)
 
 	return &Module{store: st, scoring: mainService, scoringConfig: scoringConfig}
 }

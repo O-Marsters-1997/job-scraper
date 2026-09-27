@@ -130,6 +130,39 @@ func (q *Queries) QueueAnswerEffect(ctx context.Context, arg QueueAnswerEffectPa
 	return err
 }
 
+const queueMissingAnswers = `-- name: QueueMissingAnswers :execrows
+INSERT INTO effect_outbox (job_id, fingerprint, model, first_discovery)
+SELECT DISTINCT j.id, j.content_fingerprint, $1::text, FALSE
+FROM job_scores s
+JOIN jobs j ON j.id = s.job_id
+WHERE s.user_id = $2::uuid
+    AND j.closed_at IS NULL
+    AND j.content_fingerprint IS NOT NULL
+    AND EXISTS (
+        SELECT 1 FROM unnest($3::text[]) AS missing(hash)
+        WHERE NOT EXISTS (
+            SELECT 1 FROM option_answers a
+            WHERE a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+                AND a.model = $1::text AND a.question_hash = missing.hash
+        )
+    )
+ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+`
+
+type QueueMissingAnswersParams struct {
+	Model          string
+	UserID         pgtype.UUID
+	QuestionHashes []string
+}
+
+func (q *Queries) QueueMissingAnswers(ctx context.Context, arg QueueMissingAnswersParams) (int64, error) {
+	result, err := q.db.Exec(ctx, queueMissingAnswers, arg.Model, arg.UserID, arg.QuestionHashes)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const queueOptionBackfill = `-- name: QueueOptionBackfill :exec
 INSERT INTO effect_outbox (job_id, fingerprint)
 SELECT DISTINCT j.id, j.content_fingerprint

@@ -235,6 +235,7 @@ let scoringConfig: ScoringConfig = {
 		preferenceText: "",
 	},
 	updatedAt: new Date("2024-01-01").toISOString(),
+	backfillQueued: 0,
 };
 
 const scoringDimensions: DimensionSpec[] = [

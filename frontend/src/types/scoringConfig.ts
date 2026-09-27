@@ -31,6 +31,8 @@ export const scoringConfigSchema = z.object({
 	excludedLocations: z.array(z.string()),
 	notifyThreshold: z.number().int().min(0).max(100),
 	updatedAt: z.string(),
+	backfillQueued: z.number().int().nonnegative().default(0),
 });
 
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
+export type ScoringConfigInput = z.input<typeof scoringConfigSchema>;

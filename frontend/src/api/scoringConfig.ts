@@ -1,5 +1,6 @@
 import {
 	type ScoringConfig,
+	type ScoringConfigInput,
 	scoringConfigSchema,
 } from "../types/scoringConfig";
 import { apiFetch } from "./client";
@@ -14,7 +15,7 @@ export async function fetchScoringConfig(): Promise<ScoringConfig> {
 }
 
 export async function updateScoringConfig(
-	payload: ScoringConfig,
+	payload: ScoringConfigInput,
 ): Promise<ScoringConfig> {
 	// Validates 0-100 range client-side before send (HTML min/max can be bypassed)
 	const validated = scoringConfigSchema.parse(payload);

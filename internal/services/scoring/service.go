@@ -33,6 +33,7 @@ type Store interface {
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
+	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
 }
 
 type Service struct {
@@ -249,6 +250,35 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 	return dto.RecomputeResult{Recomputed: int64(len(scores))}, nil
+}
+
+// FillMissingAnswers queues an answer effect, without alerting, for each of
+// userID's already-scored jobs missing an answer to a currently picked question.
+func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64, error) {
+	cfg, err := s.store.GetSearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return 0, err
+	}
+	if len(cfg.Preferences.Picks) == 0 {
+		return 0, nil
+	}
+
+	options, err := s.store.ListScoringOptions(ctx)
+	if err != nil {
+		return 0, err
+	}
+	byID := optionsByID(options)
+
+	picked := pickedQuestionHashes(cfg.Preferences.Picks, byID)
+	if len(picked) == 0 {
+		return 0, nil
+	}
+	hashes := make([]string, 0, len(picked))
+	for hash := range picked {
+		hashes = append(hashes, hash)
+	}
+
+	return s.store.QueueMissingAnswers(ctx, userID, hashes, jev.Model)
 }
 
 func optionsByID(options []dto.ScoringOption) map[string]dto.ScoringOption {

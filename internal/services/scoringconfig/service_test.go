@@ -100,6 +100,19 @@ func (f *fakeExtractor) Extract(_ context.Context, _ string, text string, option
 	return f.picks, f.err
 }
 
+type fakeBackfiller struct {
+	queued     int64
+	err        error
+	calledWith string
+	calls      int
+}
+
+func (f *fakeBackfiller) FillMissingAnswers(_ context.Context, userID string) (int64, error) {
+	f.calledWith = userID
+	f.calls++
+	return f.queued, f.err
+}
+
 type fakeCredentials struct {
 	key string
 	err error
@@ -160,7 +173,7 @@ func TestGet(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 			got, err := svc.Get(context.Background(), "user-1")
 			if tt.wantErr {
 				if err == nil {
@@ -217,7 +230,7 @@ func TestUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
+			svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
@@ -229,7 +242,8 @@ func TestUpdate(t *testing.T) {
 func TestUpdateSucceeds(t *testing.T) {
 	reconsiderer := &fakeReconsiderer{}
 	recomputer := &fakeRecomputer{}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), reconsiderer, recomputer, &fakeExtractor{}, &fakeCredentials{})
+	backfiller := &fakeBackfiller{queued: 3}
+	svc := scoringconfig.New(newFakeStore().seedOptions(), reconsiderer, recomputer, &fakeExtractor{}, &fakeCredentials{}, backfiller)
 
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
@@ -265,11 +279,26 @@ func TestUpdateSucceeds(t *testing.T) {
 	if recomputer.calledWith != "user-1" || recomputer.calls != 1 {
 		t.Fatalf("recomputer called %d times with %q, want once with user-1", recomputer.calls, recomputer.calledWith)
 	}
+	if backfiller.calledWith != "user-1" || backfiller.calls != 1 {
+		t.Fatalf("backfiller called %d times with %q, want once with user-1", backfiller.calls, backfiller.calledWith)
+	}
+	if got.BackfillQueued != 3 {
+		t.Fatalf("backfillQueued = %d, want 3", got.BackfillQueued)
+	}
+}
+
+func TestUpdateBackfillFails(t *testing.T) {
+	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{err: errors.New("backfill blew up")})
+
+	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
+	if err == nil {
+		t.Fatal("want error, got nil")
+	}
 }
 
 func TestUpdateReconsiderFails(t *testing.T) {
 	reconsiderer := &fakeReconsiderer{err: errors.New("reconsideration blew up")}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), reconsiderer, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
+	svc := scoringconfig.New(newFakeStore().seedOptions(), reconsiderer, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {
@@ -281,7 +310,7 @@ func TestUpdateReconsiderFails(t *testing.T) {
 }
 
 func TestUpdateRecomputeFails(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{err: errors.New("recompute blew up")}, &fakeExtractor{}, &fakeCredentials{})
+	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{err: errors.New("recompute blew up")}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {

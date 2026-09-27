@@ -135,7 +135,7 @@ function ScoringForm(props: {
 		setNotice(null);
 		setError(null);
 		try {
-			await mutation.mutateAsync({
+			const result = await mutation.mutateAsync({
 				notifyThreshold: threshold(),
 				excludedTitleKeywords: titleKeywords(),
 				excludedCompanies: uniqueCapitalised(companies()),
@@ -156,7 +156,11 @@ function ScoringForm(props: {
 				},
 				updatedAt: props.config().updatedAt,
 			});
-			flash("Saved.");
+			flash(
+				result.backfillQueued > 0
+					? `Saved – answering new picks for ${result.backfillQueued} jobs.`
+					: "Saved.",
+			);
 		} catch {
 			setError("Failed to save. Please try again.");
 		}
