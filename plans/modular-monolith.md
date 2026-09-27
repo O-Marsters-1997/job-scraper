@@ -27,12 +27,12 @@
   `notification_digests` is unreferenced. Leave it alone and don't assign it.
 
 - **Module shape.**
-  - `internal/<ctx>/module.go`: `New(deps...) *Module` and the facade.
-  - `internal/<ctx>/routes.go`:
+  - `internal/services/<ctx>/module.go`: `New(deps...) *Module` and the facade.
+  - `internal/services/<ctx>/routes.go`:
     - `Routes(chi.Router)` is mounted inside the session-protected group.
     - `PublicRoutes(chi.Router)` is optional and mounted outside it (identity's login, signup and OAuth start; jobsearch's ingest behind the service token).
-  - `internal/<ctx>/internal/<feature>/` holds services.
-  - `internal/<ctx>/internal/store/` holds the store, `queries/` and generated `sqlc/`.
+  - `internal/services/<ctx>/service.go` holds the main feature service; other features get `internal/services/<feature>/`.
+  - `internal/services/<ctx>/store/` holds `store.go`, `transform.go` (`to<Name>DTO`), `queries/` and generated `sqlc/`.
 - **Shared kernel.** `internal/handlers` owns `Handle`, the CRUD generics and the session context key:
   - `WithSession(ctx, dto.Session) context.Context`
   - `UserID(*http.Request) (string, error)`
@@ -116,7 +116,7 @@ The application list keeps its read-join onto `jobs`. Legacy signup calls `SeedD
 
 - [ ] `sqlc generate && git diff --exit-code` is clean with two sql blocks.
 - [ ] Store tests run on `pgtest`, and service tests use hand fakes. No `providers.Mock*` is referenced.
-- [ ] `internal/applications` imports no `providers`, `data/db` or `internal/api` (depguard).
+- [ ] `internal/services` imports no `providers`, `data/db` or `internal/api`, and only `internal/services/applications` imports its store (depguard).
 - [ ] Manual check: signing up shows the default Statuses, and application CRUD works in the UI.
 - [ ] The ADR, skills and `AGENTS.md` reflect the retro.
 

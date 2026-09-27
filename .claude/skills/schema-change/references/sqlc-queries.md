@@ -45,8 +45,8 @@ Each context's store declares its own sentinels in its own package:
 - Services in the same context match with `errors.Is(err, store.ErrNotFound)`.
 - The context's root package re-exports a sentinel only when another context or the worker must
   match it.
-- Legacy contexts use the single `providers.ErrNotFound`, declared in
-  `internal/data/providers/application.go`.
+- Legacy contexts use the single `data.ErrNotFound`, declared in
+  `internal/data/errors.go`.
 
 **Unique violations (23505)** are checked in the store at the call site, with
 `errors.As(err, &pgErr) && pgErr.Code == "23505"`, and mapped to a sentinel that fits that call:
