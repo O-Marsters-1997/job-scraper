@@ -3,11 +3,11 @@ import { Line } from "solid-chartjs";
 import { createSignal, For, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
-	chartCanvasRef,
+	createThemedMemo,
 	hexAlpha,
 	lineChartOptions,
 	primaryHex,
-	themedMemo,
+	useChartCanvasRef,
 } from "@/lib/charts";
 import { dayKey } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 		chart?.resetZoom();
 	}
 
-	const data = themedMemo(() => {
+	const data = createThemedMemo(() => {
 		const allJobs = props.jobs;
 		if (allJobs.length === 0) return { datasets: [] };
 
@@ -88,10 +88,10 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 		};
 	});
 
-	const options = themedMemo(lineChartOptions);
+	const options = createThemedMemo(lineChartOptions);
 
 	const hasJobs = () => props.jobs.length > 0;
-	const setCanvas = chartCanvasRef(
+	const setCanvas = useChartCanvasRef(
 		() =>
 			`Line chart of jobs discovered per day, ${props.jobs.length} job${props.jobs.length === 1 ? "" : "s"} total`,
 	);

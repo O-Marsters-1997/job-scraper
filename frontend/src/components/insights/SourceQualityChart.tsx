@@ -2,16 +2,16 @@ import { Bar } from "solid-chartjs";
 import { Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
-	chartCanvasRef,
+	createThemedMemo,
 	hexAlpha,
 	horizontalBarOptions,
 	sourceHex,
-	themedMemo,
+	useChartCanvasRef,
 } from "@/lib/charts";
 import type { Job } from "@/types/job";
 
 export function SourceQualityChart(props: { jobs: Job[] }) {
-	const data = themedMemo(() => {
+	const data = createThemedMemo(() => {
 		const scoreSum: Record<string, number> = {};
 		const scoreCount: Record<string, number> = {};
 		for (const job of props.jobs) {
@@ -42,10 +42,10 @@ export function SourceQualityChart(props: { jobs: Job[] }) {
 		};
 	});
 
-	const options = themedMemo(horizontalBarOptions);
+	const options = createThemedMemo(horizontalBarOptions);
 
 	const hasScores = () => data().labels.length > 0;
-	const setCanvas = chartCanvasRef(
+	const setCanvas = useChartCanvasRef(
 		() =>
 			`Horizontal bar chart of average suitability score by source, ${data().labels.length} source${data().labels.length === 1 ? "" : "s"}`,
 	);

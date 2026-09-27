@@ -2,10 +2,10 @@ import { Bar } from "solid-chartjs";
 import { createMemo, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
-	chartCanvasRef,
+	createThemedMemo,
 	hexAlpha,
 	primaryHex,
-	themedMemo,
+	useChartCanvasRef,
 	verticalBarOptions,
 } from "@/lib/charts";
 import type { Job } from "@/types/job";
@@ -25,7 +25,7 @@ export function ScoreAndGateChart(props: { jobs: Job[] }) {
 
 	const hasScores = () => gateStats().scored > 0;
 
-	const scoreDistData = themedMemo(() => {
+	const scoreDistData = createThemedMemo(() => {
 		const bands = [0, 0, 0, 0, 0];
 		for (const job of props.jobs) {
 			if (job.SuitabilityScore != null) {
@@ -48,9 +48,9 @@ export function ScoreAndGateChart(props: { jobs: Job[] }) {
 		};
 	});
 
-	const options = themedMemo(verticalBarOptions);
+	const options = createThemedMemo(verticalBarOptions);
 
-	const setCanvas = chartCanvasRef(
+	const setCanvas = useChartCanvasRef(
 		() =>
 			`Bar chart of suitability score distribution, ${gateStats().scored} scored job${gateStats().scored === 1 ? "" : "s"}`,
 	);

@@ -264,7 +264,7 @@ export function hexAlpha(hex: string, alpha: string): string {
 // Canvas can't read CSS variables live, so chart colours are baked into
 // plain values at build time; wrap any such builder in this so it recomputes
 // when the applied theme changes.
-export function themedMemo<T>(build: () => T): () => T {
+export function createThemedMemo<T>(build: () => T): () => T {
 	return createMemo(() => {
 		themeVersion();
 		return build();
@@ -273,7 +273,7 @@ export function themedMemo<T>(build: () => T): () => T {
 
 // Chart.js canvases carry their own role/aria-label since solid-chartjs
 // doesn't forward arbitrary props to the underlying <canvas>.
-export function chartCanvasRef(
+export function useChartCanvasRef(
 	label: () => string,
 ): (c: HTMLCanvasElement | null) => void {
 	let canvas: HTMLCanvasElement | null = null;

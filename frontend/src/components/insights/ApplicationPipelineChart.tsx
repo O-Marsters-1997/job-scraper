@@ -2,10 +2,10 @@ import { Bar } from "solid-chartjs";
 import { createMemo, createSignal, For, Show, untrack } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
-	chartCanvasRef,
+	createThemedMemo,
 	hexAlpha,
 	stackedBarOptions,
-	themedMemo,
+	useChartCanvasRef,
 } from "@/lib/charts";
 import { cn } from "@/lib/utils";
 import type { ApplicationWithDetails } from "@/types/application";
@@ -50,10 +50,10 @@ export function ApplicationPipelineChart(props: {
 			})),
 	}));
 
-	const options = themedMemo(stackedBarOptions);
+	const options = createThemedMemo(stackedBarOptions);
 
 	const totalApps = () => props.applications.length;
-	const setCanvas = chartCanvasRef(
+	const setCanvas = useChartCanvasRef(
 		() =>
 			`Stacked bar chart of application pipeline, ${totalApps()} application${totalApps() === 1 ? "" : "s"} across ${selectedStatuses().size} selected stage${selectedStatuses().size === 1 ? "" : "s"}`,
 	);

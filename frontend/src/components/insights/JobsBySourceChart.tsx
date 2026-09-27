@@ -2,16 +2,16 @@ import { Doughnut } from "solid-chartjs";
 import { Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
-	chartCanvasRef,
+	createThemedMemo,
 	donutChartOptions,
 	hexAlpha,
 	sourceHex,
-	themedMemo,
+	useChartCanvasRef,
 } from "@/lib/charts";
 import type { Job } from "@/types/job";
 
 export function JobsBySourceChart(props: { jobs: Job[] }) {
-	const data = themedMemo(() => {
+	const data = createThemedMemo(() => {
 		const counts: Record<string, number> = {};
 		for (const job of props.jobs) {
 			counts[job.Source] = (counts[job.Source] ?? 0) + 1;
@@ -31,12 +31,12 @@ export function JobsBySourceChart(props: { jobs: Job[] }) {
 		};
 	});
 
-	const options = themedMemo(donutChartOptions);
+	const options = createThemedMemo(donutChartOptions);
 
 	const count = () => props.jobs.length;
 	const hasJobs = () => count() > 0;
 	const sourceCount = () => new Set(props.jobs.map((j) => j.Source)).size;
-	const setCanvas = chartCanvasRef(
+	const setCanvas = useChartCanvasRef(
 		() =>
 			`Doughnut chart of jobs by source, ${count()} job${count() === 1 ? "" : "s"} across ${sourceCount()} source${sourceCount() === 1 ? "" : "s"}`,
 	);
