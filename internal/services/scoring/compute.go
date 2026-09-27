@@ -22,6 +22,7 @@ type evaluatedPick struct {
 	stance    string
 	answer    dto.Answer
 	known     bool
+	retired   bool
 }
 
 func resolveAnswer(a dto.Answer) string {
@@ -48,6 +49,11 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 	var met, evaluable float64
 
 	for _, p := range picks {
+		if p.retired {
+			rows = append(rows, dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: "retired", Effect: "retired"})
+			continue
+		}
+
 		resolved := "unknown"
 		if p.known {
 			resolved = resolveAnswer(p.answer)

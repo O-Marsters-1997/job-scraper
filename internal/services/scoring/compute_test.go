@@ -16,6 +16,11 @@ func avoidPick(key string, pYes, pNo, pNotStated float64) evaluatedPick {
 		answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
+func retiredPick(dim dto.Dimension, key string) evaluatedPick {
+	return evaluatedPick{dimension: dim, key: key, label: key, stance: "nice", known: true, retired: true,
+		answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}
+}
+
 func TestCompute(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -106,6 +111,24 @@ func TestCompute(t *testing.T) {
 			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "unknown", Effect: "unknown"}},
 		},
 		{
+			name:      "a retired pick scores as if omitted",
+			picks:     []evaluatedPick{retiredPick(dto.DimensionTech, "tech:cobol")},
+			wantScore: 50,
+			wantRows:  []dto.ScoreRow{{Resolved: "retired", Effect: "retired"}},
+		},
+		{
+			name: "a retired pick alongside a matched nice pick doesn't affect the score",
+			picks: []evaluatedPick{
+				nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
+				retiredPick(dto.DimensionRole, "role:backend"),
+			},
+			wantScore: 63,
+			wantRows: []dto.ScoreRow{
+				{Resolved: "yes", Effect: "meets"},
+				{Resolved: "retired", Effect: "retired"},
+			},
+		},
+		{
 			name:      "unparseable salary is unknown",
 			salaryRaw: "Competitive",
 			floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
@@ -130,6 +153,17 @@ func TestCompute(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCountUnknownExcludesRetired(t *testing.T) {
+	rows := []dto.ScoreRow{
+		{Effect: "unknown"},
+		{Effect: "retired"},
+		{Effect: "meets"},
+	}
+	if n := countUnknown(rows); n != 1 {
+		t.Errorf("countUnknown = %d, want 1", n)
 	}
 }
 

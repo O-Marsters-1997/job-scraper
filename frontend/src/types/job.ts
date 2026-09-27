@@ -4,8 +4,8 @@ export const scoreRowSchema = z.object({
 	key: z.string(),
 	label: z.string(),
 	stance: z.string(),
-	resolved: z.enum(["yes", "no", "unknown"]),
-	effect: z.enum(["meets", "misses", "unknown", "neutral"]),
+	resolved: z.enum(["yes", "no", "unknown", "retired"]),
+	effect: z.enum(["meets", "misses", "unknown", "neutral", "retired"]),
 	overridden: z.boolean(),
 });
 
