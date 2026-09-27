@@ -101,6 +101,45 @@ func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
+const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies
+WHERE domain IS NOT NULL AND ats_source IS NULL
+  AND (last_crawled_at IS NULL OR last_crawled_at < NOW() - make_interval(days => 30))
+ORDER BY last_crawled_at NULLS FIRST LIMIT $1
+`
+
+func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Company, error) {
+	rows, err := q.db.Query(ctx, listCompaniesToCrawl, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Company
+	for rows.Next() {
+		var i Company
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.AtsSource,
+			&i.AtsToken,
+			&i.Domain,
+			&i.LinkedinCompanyID,
+			&i.LastCrawledAt,
+			&i.FirstSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setCompanyTracking = `-- name: SetCompanyTracking :one
 INSERT INTO tracked_companies (user_id, company_id, enabled, check_interval_minutes)
 VALUES ($1, $2, $3, COALESCE(NULLIF($4::int, 0), 360))
@@ -140,6 +179,15 @@ func (q *Queries) SetCompanyTracking(ctx context.Context, arg SetCompanyTracking
 		&i.CheckIntervalMinutes,
 	)
 	return i, err
+}
+
+const touchCompanyCrawled = `-- name: TouchCompanyCrawled :exec
+UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) TouchCompanyCrawled(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, touchCompanyCrawled, id)
+	return err
 }
 
 const upsertCompany = `-- name: UpsertCompany :one

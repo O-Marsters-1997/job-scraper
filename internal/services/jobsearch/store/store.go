@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -25,11 +26,12 @@ import (
 )
 
 var (
-	ErrNotFound           = apperr.NotFound("not found")
-	ErrInvalidID          = errors.New("invalid ID")
-	ErrCanonicalConflict  = errors.New("canonical job identity conflict")
-	ErrBoardConflict      = apperr.Conflict("board belongs to another company")
-	ErrSourceTargetExists = apperr.Conflict("source target already exists")
+	ErrNotFound              = apperr.NotFound("not found")
+	ErrInvalidID             = errors.New("invalid ID")
+	ErrCanonicalConflict     = errors.New("canonical job identity conflict")
+	ErrBoardConflict         = apperr.Conflict("board belongs to another company")
+	ErrSourceTargetExists    = apperr.Conflict("source target already exists")
+	ErrBoardClaimUnavailable = errors.New("board claim unavailable")
 )
 
 // ScoringWriter is scoring's tx-scoped facade, called from within
@@ -597,6 +599,73 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string) (dto.Source
 	return toSourceTargetDTO(row), nil
 }
 
+func (s *Store) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := s.queries.GetSourceTarget(ctx, tid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("store.GetSourceTarget: %w", err)
+	}
+	return toSourceTargetDTO(row), nil
+}
+
+func (s *Store) TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	rid, err := parseUUID(runID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := s.queries.TransitionSourceTargetRun(ctx, sqlc.TransitionSourceTargetRunParams{
+		ID: tid, RunID: rid, RunStatus: status, LastRunError: runError,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("store.TransitionSourceTargetRun: %w", err)
+	}
+	return toSourceTargetDTO(row), nil
+}
+
+func (s *Store) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {
+	rows, err := s.queries.ListRecoverableSourceTargets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListRecoverableSourceTargets: %w", err)
+	}
+	out := make([]dto.SourceTarget, len(rows))
+	for i, r := range rows {
+		out[i] = toSourceTargetDTO(r)
+	}
+	return out, nil
+}
+
+func (s *Store) ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error) {
+	tid, err := parseUUID(id)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	rid, err := parseUUID(runID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	row, err := s.queries.ClaimRecoverableSourceTarget(ctx, sqlc.ClaimRecoverableSourceTargetParams{ID: tid, RunID: rid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.SourceTarget{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.SourceTarget{}, fmt.Errorf("store.ClaimRecoverableSourceTarget: %w", err)
+	}
+	return toSourceTargetDTO(row), nil
+}
+
 func normalizedCandidateURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -709,4 +778,242 @@ func (s *Store) MarkDetailPending(ctx context.Context, candidateID string) error
 		return err
 	}
 	return s.queries.MarkCandidateDetailPending(ctx, cid)
+}
+
+func (s *Store) DeleteExpiredCandidates(ctx context.Context) error {
+	return s.queries.DeleteExpiredCandidates(ctx)
+}
+
+func (s *Store) GetLastScraped(ctx context.Context, source string) (time.Time, bool, error) {
+	last, err := s.queries.GetHarvestRun(ctx, source)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("store.GetLastScraped: %w", err)
+	}
+	return last.Time, true, nil
+}
+
+func (s *Store) SetLastScraped(ctx context.Context, source string) error {
+	if err := s.queries.SetHarvestRun(ctx, source); err != nil {
+		return fmt.Errorf("store.SetLastScraped: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) NewURLs(ctx context.Context, urls []string) ([]string, error) {
+	existing, err := s.queries.ExistingURLs(ctx, urls)
+	if err != nil {
+		return nil, fmt.Errorf("store.NewURLs: %w", err)
+	}
+	known := make(map[string]struct{}, len(existing))
+	for _, u := range existing {
+		known[u] = struct{}{}
+	}
+	out := make([]string, 0, len(urls))
+	for _, u := range urls {
+		if _, ok := known[u]; !ok {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error) {
+	rows, err := s.queries.ListCompaniesToCrawl(ctx, int32(limit))
+	if err != nil {
+		return nil, fmt.Errorf("store.ListCompaniesToCrawl: %w", err)
+	}
+	out := make([]dto.Company, len(rows))
+	for i, r := range rows {
+		out[i] = toCompanyDTO(r)
+	}
+	return out, nil
+}
+
+func (s *Store) TouchCompanyCrawled(ctx context.Context, id string) error {
+	cid, err := parseUUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.TouchCompanyCrawled(ctx, cid); err != nil {
+		return fmt.Errorf("store.TouchCompanyCrawled: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+	id, err := parseUUID(companyID)
+	if err != nil {
+		return dto.CompanyBoard{}, err
+	}
+	row, err := s.queries.VerifyCompanyBoard(ctx, sqlc.VerifyCompanyBoardParams{
+		CompanyID: id, Source: source, BoardToken: token,
+		VerificationMethod: pgtype.Text{String: method, Valid: true},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.CompanyBoard{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.CompanyBoard{}, fmt.Errorf("store.VerifyCompanyBoard: %w", err)
+	}
+	return toCompanyBoardDTO(row), nil
+}
+
+func toBoardPollDTO(id, companyID pgtype.UUID, companySlug, source, token string, intervalMinutes int32) dto.BoardPoll {
+	return dto.BoardPoll{
+		ID: id.String(), CompanyID: companyID.String(), CompanySlug: companySlug,
+		Source: source, Token: token, IntervalMinutes: int(intervalMinutes),
+	}
+}
+
+func (s *Store) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	rows, err := s.queries.ListDueBoards(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListDueBoards: %w", err)
+	}
+	boards := make([]dto.BoardPoll, len(rows))
+	for i, row := range rows {
+		boards[i] = toBoardPollDTO(row.ID, row.CompanyID, row.CompanySlug, row.Source, row.BoardToken, row.IntervalMinutes)
+	}
+	return boards, nil
+}
+
+func (s *Store) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	rows, err := s.queries.ListActiveBoards(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListActiveBoards: %w", err)
+	}
+	boards := make([]dto.BoardPoll, len(rows))
+	for i, row := range rows {
+		boards[i] = toBoardPollDTO(row.ID, row.CompanyID, row.CompanySlug, row.Source, row.BoardToken, row.IntervalMinutes)
+	}
+	return boards, nil
+}
+
+func (s *Store) ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error) {
+	boardID, err := parseUUID(id)
+	if err != nil {
+		return dto.BoardPoll{}, err
+	}
+	board, err := s.queries.GetPollBoard(ctx, boardID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.BoardPoll{}, ErrBoardClaimUnavailable
+	}
+	if err != nil {
+		return dto.BoardPoll{}, fmt.Errorf("store.ClaimBoard: get poll board: %w", err)
+	}
+	if !manual && board.LastScheduledAt.Valid && time.Since(board.LastScheduledAt.Time) < time.Duration(board.IntervalMinutes)*time.Minute {
+		return dto.BoardPoll{}, ErrBoardClaimUnavailable
+	}
+	if err := s.queries.EnsureBoardPollState(ctx, boardID); err != nil {
+		return dto.BoardPoll{}, fmt.Errorf("store.ClaimBoard: ensure poll state: %w", err)
+	}
+	owner := uuid.NewString()
+	claim, err := s.queries.ClaimPollState(ctx, sqlc.ClaimPollStateParams{BoardID: boardID, LeaseOwner: pgtype.Text{String: owner, Valid: true}, Manual: manual})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.BoardPoll{}, ErrBoardClaimUnavailable
+	}
+	if err != nil {
+		return dto.BoardPoll{}, fmt.Errorf("store.ClaimBoard: claim poll state: %w", err)
+	}
+	poll := toBoardPollDTO(boardID, board.CompanyID, board.CompanySlug, board.Source, board.BoardToken, board.IntervalMinutes)
+	poll.LeaseOwner, poll.Version, poll.StartedAt, poll.Manual = owner, claim.LastSnapshotVersion, claim.LastStartedAt.Time, manual
+	return poll, nil
+}
+
+func (s *Store) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
+	id, err := parseUUID(poll.ID)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.FailPollState(ctx, sqlc.FailPollStateParams{BoardID: id, LeaseOwner: pgtype.Text{String: poll.LeaseOwner, Valid: true}, LastSnapshotVersion: poll.Version})
+	if err != nil {
+		return fmt.Errorf("store.FailBoard: %w", err)
+	}
+	if n != 1 {
+		return ErrBoardClaimUnavailable
+	}
+	return nil
+}
+
+func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
+	if !snapshot.Complete {
+		return errors.New("incomplete board snapshot")
+	}
+	poll := snapshot.Poll
+	id, err := parseUUID(poll.ID)
+	if err != nil {
+		return err
+	}
+	urls := make([]string, 0, len(snapshot.Jobs))
+	seenURLs := make(map[string]bool, len(snapshot.Jobs))
+	for _, job := range snapshot.Jobs {
+		url, err := normalizeJobURL(job.URL)
+		if err != nil {
+			return err
+		}
+		if !seenURLs[url] {
+			urls = append(urls, url)
+			seenURLs[url] = true
+		}
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin board completion: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.queries.WithTx(tx)
+	state, err := q.LockPollState(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrBoardClaimUnavailable
+	}
+	if err != nil {
+		return fmt.Errorf("lock board state: %w", err)
+	}
+	if state.LastSnapshotVersion != poll.Version || !state.LeaseOwner.Valid || state.LeaseOwner.String != poll.LeaseOwner || !state.LeaseUntil.Valid || !state.LeaseUntil.Time.After(time.Now()) {
+		return ErrBoardClaimUnavailable
+	}
+	aliases, err := q.FindBoardJobAliases(ctx, urls)
+	if err != nil {
+		return fmt.Errorf("resolve board jobs: %w", err)
+	}
+	if len(aliases) != len(urls) {
+		return errors.New("board ingest incomplete: job URL missing")
+	}
+	seenJobs := make(map[pgtype.UUID]bool, len(aliases))
+	for _, alias := range aliases {
+		if seenJobs[alias.JobID] {
+			continue
+		}
+		seenJobs[alias.JobID] = true
+		if err := q.ObserveBoardJob(ctx, sqlc.ObserveBoardJobParams{BoardID: id, JobID: alias.JobID, LastSnapshotVersion: poll.Version}); err != nil {
+			return fmt.Errorf("observe board job: %w", err)
+		}
+	}
+	if err := q.ReopenObservedBoardJobs(ctx, sqlc.ReopenObservedBoardJobsParams{BoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
+		return fmt.Errorf("reopen board jobs: %w", err)
+	}
+	if len(urls) > 0 || state.ConsecutiveCompleteEmpty >= 1 {
+		if err := q.CloseMissingBoardJobs(ctx, sqlc.CloseMissingBoardJobsParams{PrimaryBoardID: id, LastSnapshotVersion: poll.Version}); err != nil {
+			return fmt.Errorf("close missing board jobs: %w", err)
+		}
+	}
+	if len(urls) == 0 && state.ConsecutiveCompleteEmpty >= 1 {
+		if err := q.RetireSupersededBoard(ctx, id); err != nil {
+			return fmt.Errorf("retire board: %w", err)
+		}
+	}
+	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: int32(poll.IntervalMinutes), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
+	if err != nil {
+		return fmt.Errorf("complete board state: %w", err)
+	}
+	if n != 1 {
+		return ErrBoardClaimUnavailable
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit board completion: %w", err)
+	}
+	return nil
 }

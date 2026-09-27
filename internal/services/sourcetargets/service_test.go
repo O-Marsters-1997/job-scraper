@@ -117,6 +117,42 @@ func (f *fakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.Sour
 	return target, nil
 }
 
+func (f *fakeStore) GetSourceTarget(_ context.Context, id string) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target, ok := f.targets[id]
+	if !ok {
+		return dto.SourceTarget{}, apperr.NotFound("not found")
+	}
+	return target, nil
+}
+
+func (f *fakeStore) TransitionSourceTargetRun(_ context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target, ok := f.targets[id]
+	if !ok || target.RunID != runID {
+		return dto.SourceTarget{}, apperr.NotFound("not found")
+	}
+	target.RunStatus, target.LastRunError = status, runError
+	f.targets[id] = target
+	return target, nil
+}
+
+func (f *fakeStore) ListRecoverableSourceTargets(context.Context) ([]dto.SourceTarget, error) {
+	return nil, nil
+}
+
+func (f *fakeStore) ClaimRecoverableSourceTarget(_ context.Context, id, runID string) (dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	target, ok := f.targets[id]
+	if !ok || target.RunID != runID {
+		return dto.SourceTarget{}, apperr.NotFound("not found")
+	}
+	return target, nil
+}
+
 func (f *fakeStore) forceRunState(id, status, runError string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

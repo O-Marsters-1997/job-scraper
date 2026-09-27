@@ -21,3 +21,6 @@ FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 WHERE j.id = $1
 LIMIT 1;
+
+-- name: ExistingURLs :many
+SELECT url FROM jobs WHERE url = ANY($1::text[]);

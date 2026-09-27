@@ -14,6 +14,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
+// ErrNotFound and ErrBoardClaimUnavailable are the jobsearch store's
+// sentinels, re-exported for the worker to match (ADR 0011).
+var (
+	ErrNotFound              = store.ErrNotFound
+	ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
+)
+
 type Module struct {
 	store         *store.Store
 	jobs          *Service
@@ -53,14 +60,23 @@ func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 	return m.candidates.Reconsider(ctx, cfg)
 }
 
-// Boards exposes company and board management to other contexts and
-// cmd/admin (ADR 0011 Phase 9; the worker doesn't consume this yet — #268).
+// Boards exposes company and board management to other contexts, the
+// worker's board poller and crawler, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Boards() *companies.Service { return m.companies }
 
-// Targets exposes source-target management to other contexts and cmd/admin
-// (ADR 0011 Phase 9; the worker doesn't consume this yet — #268).
+// Targets exposes source-target management to other contexts, the worker's
+// run recovery, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
 
-// Catalog exposes job lookups to other contexts and cmd/admin (ADR 0011
-// Phase 9; the worker doesn't consume this yet — #268).
+// Catalog exposes job lookups to other contexts, the worker's new-URL
+// check, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Catalog() *Service { return m.jobs }
+
+// Candidates exposes candidate capture to the worker's scrape orchestrator
+// (ADR 0011 Phase 9).
+func (m *Module) Candidates() *candidates.Service { return m.candidates }
+
+// DeleteExpiredCandidates is called by the worker's daily cleanup.
+func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
+	return m.candidates.DeleteExpired(ctx)
+}

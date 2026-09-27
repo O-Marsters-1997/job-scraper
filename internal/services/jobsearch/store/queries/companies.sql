@@ -36,3 +36,12 @@ ON CONFLICT (user_id, company_id) DO UPDATE SET
     check_interval_minutes = COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), tracked_companies.check_interval_minutes),
     updated_at = NOW()
 RETURNING user_id, company_id, enabled, check_interval_minutes;
+
+-- name: ListCompaniesToCrawl :many
+SELECT * FROM companies
+WHERE domain IS NOT NULL AND ats_source IS NULL
+  AND (last_crawled_at IS NULL OR last_crawled_at < NOW() - make_interval(days => 30))
+ORDER BY last_crawled_at NULLS FIRST LIMIT $1;
+
+-- name: TouchCompanyCrawled :exec
+UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1;

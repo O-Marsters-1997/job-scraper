@@ -11,6 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimRecoverableSourceTarget = `-- name: ClaimRecoverableSourceTarget :one
+UPDATE source_targets SET updated_at = NOW()
+WHERE id = $1 AND run_id = $2 AND enabled = TRUE
+  AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
+       OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
+RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_run_error, created_at, updated_at
+`
+
+type ClaimRecoverableSourceTargetParams struct {
+	ID    pgtype.UUID
+	RunID pgtype.UUID
+}
+
+func (q *Queries) ClaimRecoverableSourceTarget(ctx context.Context, arg ClaimRecoverableSourceTargetParams) (SourceTarget, error) {
+	row := q.db.QueryRow(ctx, claimRecoverableSourceTarget, arg.ID, arg.RunID)
+	var i SourceTarget
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Value,
+		&i.Enabled,
+		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
+		&i.RunStatus,
+		&i.RunID,
+		&i.LastRunAt,
+		&i.LastRunError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createSourceTarget = `-- name: CreateSourceTarget :one
 INSERT INTO source_targets (user_id, source, value, enabled, filters)
 VALUES ($1, $2, $3, $4, $5)
@@ -111,6 +147,77 @@ func (q *Queries) DeleteSourceTarget(ctx context.Context, arg DeleteSourceTarget
 	return err
 }
 
+const getSourceTarget = `-- name: GetSourceTarget :one
+SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_run_error, created_at, updated_at FROM source_targets WHERE id = $1
+`
+
+func (q *Queries) GetSourceTarget(ctx context.Context, id pgtype.UUID) (SourceTarget, error) {
+	row := q.db.QueryRow(ctx, getSourceTarget, id)
+	var i SourceTarget
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Value,
+		&i.Enabled,
+		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
+		&i.RunStatus,
+		&i.RunID,
+		&i.LastRunAt,
+		&i.LastRunError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listRecoverableSourceTargets = `-- name: ListRecoverableSourceTargets :many
+SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_run_error, created_at, updated_at FROM source_targets
+WHERE run_id IS NOT NULL AND enabled = TRUE
+  AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
+       OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
+ORDER BY updated_at
+`
+
+func (q *Queries) ListRecoverableSourceTargets(ctx context.Context) ([]SourceTarget, error) {
+	rows, err := q.db.Query(ctx, listRecoverableSourceTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SourceTarget
+	for rows.Next() {
+		var i SourceTarget
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Source,
+			&i.Value,
+			&i.Enabled,
+			&i.Filters,
+			&i.CompanyID,
+			&i.CheckIntervalMinutes,
+			&i.LastCheckedAt,
+			&i.RunStatus,
+			&i.RunID,
+			&i.LastRunAt,
+			&i.LastRunError,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSourceTargetsByUser = `-- name: ListSourceTargetsByUser :many
 SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_run_error, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
 `
@@ -160,6 +267,49 @@ RETURNING id, user_id, source, value, enabled, filters, company_id, check_interv
 
 func (q *Queries) StartSourceTargetRun(ctx context.Context, id pgtype.UUID) (SourceTarget, error) {
 	row := q.db.QueryRow(ctx, startSourceTargetRun, id)
+	var i SourceTarget
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Source,
+		&i.Value,
+		&i.Enabled,
+		&i.Filters,
+		&i.CompanyID,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
+		&i.RunStatus,
+		&i.RunID,
+		&i.LastRunAt,
+		&i.LastRunError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const transitionSourceTargetRun = `-- name: TransitionSourceTargetRun :one
+UPDATE source_targets SET run_status = $3, last_run_error = $4,
+    last_run_at = CASE WHEN $3 IN ('succeeded', 'failed') THEN NOW() ELSE last_run_at END,
+    updated_at = NOW()
+WHERE id = $1 AND run_id = $2
+RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_run_error, created_at, updated_at
+`
+
+type TransitionSourceTargetRunParams struct {
+	ID           pgtype.UUID
+	RunID        pgtype.UUID
+	RunStatus    string
+	LastRunError string
+}
+
+func (q *Queries) TransitionSourceTargetRun(ctx context.Context, arg TransitionSourceTargetRunParams) (SourceTarget, error) {
+	row := q.db.QueryRow(ctx, transitionSourceTargetRun,
+		arg.ID,
+		arg.RunID,
+		arg.RunStatus,
+		arg.LastRunError,
+	)
 	var i SourceTarget
 	err := row.Scan(
 		&i.ID,
