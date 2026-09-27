@@ -15,3 +15,9 @@ SELECT id FROM company_boards WHERE source = $1 AND board_token = $2 AND status 
 SELECT b.id, s.last_completed_at FROM company_boards b
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.company_id = $1;
+
+-- name: VerifyCompanyBoard :one
+UPDATE company_boards
+SET status = 'verified', verification_method = $4, verified_at = NOW()
+WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
+RETURNING *;

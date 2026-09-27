@@ -46,3 +46,6 @@ SELECT EXISTS (SELECT 1 FROM claimed);
 
 -- name: MarkCandidateDetailPending :exec
 UPDATE job_candidates SET detail_state = 'pending' WHERE id = $1;
+
+-- name: DeleteExpiredCandidates :exec
+DELETE FROM job_candidates WHERE expires_at <= NOW();

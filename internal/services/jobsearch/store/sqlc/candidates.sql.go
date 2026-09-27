@@ -48,6 +48,15 @@ func (q *Queries) AssessCandidate(ctx context.Context, arg AssessCandidateParams
 	return exists, err
 }
 
+const deleteExpiredCandidates = `-- name: DeleteExpiredCandidates :exec
+DELETE FROM job_candidates WHERE expires_at <= NOW()
+`
+
+func (q *Queries) DeleteExpiredCandidates(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredCandidates)
+	return err
+}
+
 const listCandidatesForUser = `-- name: ListCandidatesForUser :many
 SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.source
 FROM job_candidates c

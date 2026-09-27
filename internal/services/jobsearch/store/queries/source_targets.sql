@@ -37,3 +37,27 @@ UPDATE source_targets SET run_id = gen_random_uuid(), run_status = 'queued',
     enabled = TRUE, last_run_error = '', updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetSourceTarget :one
+SELECT * FROM source_targets WHERE id = $1;
+
+-- name: TransitionSourceTargetRun :one
+UPDATE source_targets SET run_status = $3, last_run_error = $4,
+    last_run_at = CASE WHEN $3 IN ('succeeded', 'failed') THEN NOW() ELSE last_run_at END,
+    updated_at = NOW()
+WHERE id = $1 AND run_id = $2
+RETURNING *;
+
+-- name: ListRecoverableSourceTargets :many
+SELECT * FROM source_targets
+WHERE run_id IS NOT NULL AND enabled = TRUE
+  AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
+       OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
+ORDER BY updated_at;
+
+-- name: ClaimRecoverableSourceTarget :one
+UPDATE source_targets SET updated_at = NOW()
+WHERE id = $1 AND run_id = $2 AND enabled = TRUE
+  AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
+       OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
+RETURNING *;
