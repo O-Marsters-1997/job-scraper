@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -80,17 +79,8 @@ func main() {
 	}
 	suitabilitySvc := suitability.New(db, db, db, jev.NewClient(), cs, alerter, db)
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := suitabilitySvc.RunTick(ctx); err != nil && ctx.Err() == nil {
-					slog.Error("answer effect tick failed", slog.Any("err", err))
-				}
-			}
+		if err := suitabilitySvc.Run(ctx); err != nil {
+			slog.Error("answer effect loop failed", slog.Any("err", err))
 		}
 	}()
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -16,6 +17,8 @@ import (
 )
 
 const maxConcurrentEffects = 4
+
+var answerEffectTickInterval = 2 * time.Second
 
 type Service struct {
 	store       providers.SuitabilityProvider
@@ -29,6 +32,23 @@ type Service struct {
 
 func New(store providers.SuitabilityProvider, options providers.ScoringOptionsProvider, configs providers.SearchConfigProvider, answerer Answerer, credentials Credentials, alerter Alerter, profiles ProfileReader) *Service {
 	return &Service{store: store, options: options, configs: configs, answerer: answerer, credentials: credentials, alerter: alerter, profiles: profiles}
+}
+
+// Run ticks every two seconds, draining the answer-effect queue.
+// Blocks until ctx is cancelled.
+func (s *Service) Run(ctx context.Context) error {
+	ticker := time.NewTicker(answerEffectTickInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if err := s.RunTick(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("answer effect tick failed", slog.Any("err", err))
+			}
+		}
+	}
 }
 
 // RunTick drains the answer-effect queue, running up to maxConcurrentEffects at once.
