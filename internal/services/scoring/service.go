@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 const maxConcurrentEffects = 4
@@ -166,6 +167,14 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 				fresh[questionHash(question)] = a
 			}
 			cost = usage.Cost
+			for _, sc := range surviving {
+				slog.Info("score call",
+					slog.String("event", telemetry.EventScoreCall),
+					slog.String("user_id", sc.UserID),
+					slog.String("model", usage.Model),
+					slog.Float64("cost_usd", usage.Cost),
+				)
+			}
 			break
 		}
 	}
