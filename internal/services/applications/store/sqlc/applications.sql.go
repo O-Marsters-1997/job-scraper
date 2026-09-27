@@ -3,7 +3,7 @@
 //   sqlc v1.31.1
 // source: applications.sql
 
-package pgsqlc
+package sqlc
 
 import (
 	"context"

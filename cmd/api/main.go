@@ -20,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -101,7 +102,9 @@ func main() {
 		port = ":8080"
 	}
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc)}
+	apps := applications.New(db.Pool())
+
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(db, q, cs, suitabilitySvc, apps)}
 
 	go func() {
 		<-ctx.Done()

@@ -16,8 +16,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -135,7 +135,7 @@ func main() {
 		}
 		for _, target := range targets {
 			target, err = db.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
-			if errors.Is(err, providers.ErrNotFound) {
+			if errors.Is(err, data.ErrNotFound) {
 				continue
 			}
 			if err != nil {
@@ -193,7 +193,7 @@ func (p *taskProcessor) failRun(ctx context.Context, task queue.Task) error {
 		return nil
 	}
 	_, err := p.db.TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
-	if errors.Is(err, providers.ErrNotFound) {
+	if errors.Is(err, data.ErrNotFound) {
 		return nil
 	}
 	return err
@@ -245,7 +245,7 @@ func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error 
 
 func (p *taskProcessor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
 	target, err := p.db.GetSourceTarget(ctx, task.TargetID)
-	if errors.Is(err, providers.ErrNotFound) {
+	if errors.Is(err, data.ErrNotFound) {
 		return dto.SourceTarget{}, false, nil
 	}
 	if err != nil {

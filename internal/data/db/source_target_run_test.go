@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/data"
 )
 
 func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
@@ -32,7 +32,7 @@ func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
 	if first.RunID == second.RunID || first.RunID == "" {
 		t.Fatalf("run IDs = %q, %q", first.RunID, second.RunID)
 	}
-	if _, err := testDB.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); err != providers.ErrNotFound {
+	if _, err := testDB.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); err != data.ErrNotFound {
 		t.Fatalf("stale completion error = %v", err)
 	}
 	current, err := testDB.TransitionSourceTargetRun(ctx, target.ID, second.RunID, "succeeded", "")
@@ -61,7 +61,7 @@ func TestCreateSourceTargetWithRunIsQueuedInSameInsert(t *testing.T) {
 	if _, err := testDB.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testDB.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); err != providers.ErrNotFound {
+	if _, err := testDB.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); err != data.ErrNotFound {
 		t.Fatalf("second recovery claim error = %v", err)
 	}
 }

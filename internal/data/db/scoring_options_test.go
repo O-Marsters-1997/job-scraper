@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -257,8 +257,8 @@ func TestRewordScoringOption(t *testing.T) {
 		ctx := context.Background()
 
 		err := testDB.RewordScoringOption(ctx, "tech:missing", "Does this exist?")
-		if !errors.Is(err, providers.ErrNotFound) {
-			t.Fatalf("err = %v, want providers.ErrNotFound", err)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want data.ErrNotFound", err)
 		}
 	})
 }
@@ -293,8 +293,8 @@ func TestRetireScoringOption(t *testing.T) {
 		ctx := context.Background()
 
 		err := testDB.RetireScoringOption(ctx, "tech:missing")
-		if !errors.Is(err, providers.ErrNotFound) {
-			t.Fatalf("err = %v, want providers.ErrNotFound", err)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want data.ErrNotFound", err)
 		}
 	})
 
@@ -308,8 +308,8 @@ func TestRetireScoringOption(t *testing.T) {
 		if err := testDB.RetireScoringOption(ctx, "tech:zig"); err != nil {
 			t.Fatal(err)
 		}
-		if err := testDB.RetireScoringOption(ctx, "tech:zig"); !errors.Is(err, providers.ErrNotFound) {
-			t.Fatalf("err = %v, want providers.ErrNotFound", err)
+		if err := testDB.RetireScoringOption(ctx, "tech:zig"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want data.ErrNotFound", err)
 		}
 	})
 }

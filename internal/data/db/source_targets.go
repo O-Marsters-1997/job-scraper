@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -59,7 +60,7 @@ func (db *DB) SetSourceTargetRunState(ctx context.Context, id, status, runError 
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.SourceTarget{}, providers.ErrNotFound
+			return dto.SourceTarget{}, data.ErrNotFound
 		}
 		return dto.SourceTarget{}, fmt.Errorf("db.SetSourceTargetRunState: %w", err)
 	}
@@ -73,7 +74,7 @@ func (db *DB) StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTa
 	}
 	row, err := db.queries.StartSourceTargetRun(ctx, tid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, providers.ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("start source target run: %w", err)
@@ -94,7 +95,7 @@ func (db *DB) TransitionSourceTargetRun(ctx context.Context, id, runID, status, 
 		ID: tid, RunID: rid, RunStatus: status, LastRunError: runError,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, providers.ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("transition source target run: %w", err)
@@ -109,7 +110,7 @@ func (db *DB) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget,
 	}
 	row, err := db.queries.GetSourceTarget(ctx, tid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, providers.ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -136,7 +137,7 @@ func (db *DB) ClaimRecoverableSourceTarget(ctx context.Context, id, runID string
 	}
 	row, err := db.queries.ClaimRecoverableSourceTarget(ctx, pgsqlc.ClaimRecoverableSourceTargetParams{ID: tid, RunID: rid})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, providers.ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("claim recoverable source target: %w", err)
@@ -239,7 +240,7 @@ func (db *DB) UpdateSourceTarget(ctx context.Context, id, userID string, enabled
 	row, err := db.queries.UpdateSourceTarget(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.SourceTarget{}, providers.ErrNotFound
+			return dto.SourceTarget{}, data.ErrNotFound
 		}
 		return dto.SourceTarget{}, fmt.Errorf("db.UpdateSourceTarget: %w", err)
 	}

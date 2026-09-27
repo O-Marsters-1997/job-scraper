@@ -10,6 +10,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api/jev"
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -37,7 +38,7 @@ func New(configs providers.SearchConfigProvider, candidates Reconsiderer, option
 
 func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
 	cfg, err := s.configs.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, providers.ErrNotFound) {
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return dto.ScoringConfigView{}, err
 	}
 	return toView(cfg), nil
@@ -63,7 +64,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	}
 
 	existing, err := s.configs.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, providers.ErrNotFound) {
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return dto.ScoringConfigView{}, err
 	}
 

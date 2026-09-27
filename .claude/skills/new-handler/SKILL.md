@@ -1,7 +1,7 @@
 ---
 name: new-handler
 description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, module route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
-paths: ["internal/*/module.go", "internal/*/routes.go", "internal/*/internal/**", "internal/handlers/**", "internal/api/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
+paths: ["internal/services/**", "internal/handlers/**", "internal/api/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
 ---
 
 # New Handler
@@ -38,7 +38,10 @@ from the chi URL param after decoding the body, so a request body can never set 
 
 ### 2. Service
 
-Package `internal/<ctx>/internal/<feature>`. All constructor args are required:
+The context's main feature lives in the context root, `internal/services/<ctx>/service.go`, with
+constructor `NewService`. Any other feature gets its own package, `internal/services/<feature>/`
+(e.g. `applicationstatuses` in `applications`). A feature package never imports the store; the
+module's `New` passes the store in. All constructor args are required:
 
 - a `store` interface declared in this package, listing only the store methods it calls
 - small local interfaces for anything else: queue publisher, verifier, or another context's
@@ -68,10 +71,10 @@ generated mocks.
 
 ### 3. Wire and route
 
-Construct the service in the context's `New` (`internal/<ctx>/module.go`), next to its
+Construct the service in the context's `New` (`internal/services/<ctx>/module.go`), next to its
 siblings. That is the only place it's built. `cmd/api/main.go` builds modules, never services.
 
-Add the route in the module's `Routes` (`internal/<ctx>/routes.go`), binding it to a generic
+Add the route in the module's `Routes` (`internal/services/<ctx>/routes.go`), binding it to a generic
 wrapper from `internal/handlers/generic.go`:
 
 | Wrapper | Your method's shape | Status |
@@ -94,7 +97,7 @@ The route line is exactly `r.<Method>("path", handlers.<Wrapper>(m.svc.Method))`
 literal, no status argument, no inline validation. If the route sets cookies, redirects, streams
 or uses service-token auth, use `references/non-adapter-routes.md` instead of the table above.
 
-A brand-new context also needs one line in `internal/api/router.go` mounting its `Routes`. An
+A brand-new context also needs building in `cmd/api/main.go` and passing to `api.NewRouter`. An
 existing context is already mounted.
 
 ## Frontend
@@ -124,7 +127,7 @@ Copy `frontend/src/hooks/useProfile.ts`: `queryOptions` + `createQuery` for read
 ## Verify
 
 ```
-go test ./internal/<ctx>/... ./internal/handlers/...
+go test ./internal/services/... ./internal/handlers/...
 cd frontend && bun run typecheck && bun run test && bunx playwright test
 ```
 

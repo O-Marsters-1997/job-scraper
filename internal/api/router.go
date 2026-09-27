@@ -15,6 +15,7 @@ import (
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -23,7 +24,10 @@ type Module interface {
 	Routes(chi.Router)
 }
 
-func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, modules ...Module) http.Handler {
+// NewRouter takes apps separately from modules because legacy signup also
+// wires it in as a StatusSeeder (ADR 0011); every other moved context can
+// go through modules alone.
+func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, suitabilitySvc *suitability.Service, apps *applications.Module, modules ...Module) http.Handler {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -38,9 +42,10 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 		AllowCredentials: true,
 	}))
 
-	svc := newServices(db, q, creds, suitabilitySvc)
+	svc := newServices(db, q, creds, suitabilitySvc, apps)
 
-	for _, m := range modules {
+	allModules := append([]Module{apps}, modules...)
+	for _, m := range allModules {
 		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
 			pm.PublicRoutes(r)
 		}
@@ -72,21 +77,6 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 		r.Get("/jobs", handlers.Query(svc.jobs.List))
 		r.Get("/jobs/all", handlers.GetAll(db.List))
 		r.Get("/jobs/{id}", handlers.GetByID(svc.jobs.Get))
-
-		r.Route("/application-statuses", func(r chi.Router) {
-			r.Get("/", handlers.GetAll(db.ListApplicationStatusesByUser))
-			r.Post("/", handlers.Create(svc.applicationStatuses.Create))
-			r.Patch("/{id}", handlers.Update(svc.applicationStatuses.Update))
-			r.Delete("/{id}", handlers.Delete(svc.applicationStatuses.Delete))
-		})
-
-		r.Route("/applications", func(r chi.Router) {
-			r.Get("/", handlers.Query(svc.applications.List))
-			r.Post("/", handlers.Create(svc.applications.Create))
-			r.Patch("/{id}", handlers.Update(svc.applications.Update))
-			r.Delete("/{id}", handlers.Delete(svc.applications.Delete))
-			r.Get("/for-jobs", handlers.Query(svc.applications.ForJobs))
-		})
 
 		r.Get("/sources", handlers.GetAll(svc.sources.List))
 		r.Get("/sources/resolve", handlers.Query(svc.sources.Resolve))
@@ -132,7 +122,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 			r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(svc.cvTemplates.ShowTab))
 		})
 
-		for _, m := range modules {
+		for _, m := range allModules {
 			m.Routes(r)
 		}
 	})

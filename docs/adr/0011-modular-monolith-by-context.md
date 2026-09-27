@@ -8,12 +8,12 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - `applications`: applications and statuses.
   - `cvtemplates`: tracked docs and tabs.
   - `identity`: users, sessions, profile, AI credentials, and the Google Link. The Google Link covers OAuth, tokens and the Docs client, which identity exposes to cvtemplates.
-- **Layout.**
-  - `internal/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
+- **Layout.** Every context lives under `internal/services/`.
+  - `internal/services/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
   - `Module` has a narrow facade: exported methods for what other contexts, the worker or `cmd/admin` need, taking and returning `dto` types.
-  - `m.Routes(r chi.Router)`, in `internal/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
-  - `internal/<ctx>/internal/<feature>/` holds services.
-  - `internal/<ctx>/internal/store/` holds the store, its queries and its generated sqlc.
+  - `m.Routes(r chi.Router)`, in `internal/services/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
+  - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). Each other feature gets a sibling package, `internal/services/<feature>/`: `applicationstatuses` belongs to `applications`. A feature package declares its own store interface and never imports the store; `New` passes the store in.
+  - `internal/services/<ctx>/store/` holds the store (`store.go`), its sqlc-to-`dto` converters (`transform.go`, named `to<Name>DTO`), its queries and its generated sqlc.
   - `cmd/api/main.go` is the only composition root. `internal/api` shrinks to the HTTP shell: middleware, CORS, and mounting each module's routes.
   - `handlers.Handle` and the CRUD generics move to `internal/handlers`, so every context can import them.
 - **Shared kernel.** Packages stay flat under `internal/`: `dto`, `apperr`, `queue`, `telemetry`, `handlers`, `pgtest`, plus existing helpers such as `sourcespec` and `slug`. `dto` keeps only HTTP shapes and types that cross a facade. DB input structs move into their context (amends ADR 0001). The kernel never imports a context: `telemetry.StateCollector` takes an interface that scoring satisfies.
@@ -22,15 +22,15 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` serves signup.
 - **Enforcement.**
   - `sqlc.yaml` has one `sql:` block per context. All of them read the shared `internal/data/sqlc/schema.sql`.
-  - Queries live in `internal/<ctx>/internal/store/queries/` and generate into `internal/<ctx>/internal/store/sqlc/`, so a context cannot call another context's write queries.
-  - Go's `internal/` rule hides services and stores from other contexts.
+  - Queries live in `internal/services/<ctx>/store/queries/` and generate into `internal/services/<ctx>/store/sqlc/`, so a context cannot call another context's write queries.
+  - `depguard` keeps each store private. A `<ctx>-store` rule per context denies `internal/services/<ctx>/store` outside `internal/services/<ctx>/`, and the `services` rule denies the legacy `providers` and `data/db` to every context. This is enforced by lint, not by the compiler.
   - The worker and `cmd/admin` import context roots only and never call `Routes`. ADR 0009's rule stands, and `depguard` keeps enforcing it.
 - **Tests.**
   - `providers` and `providers.Mock*` are removed. Each service declares its own store interface and is tested with small hand fakes.
   - Stores are tested against Postgres through the shared `internal/pgtest` helper (amends ADR 0008's tests bullet).
 - **Errors.**
   - A store returns sentinels declared in its own package, kinded with `apperr` when they map to an HTTP status, and maps `pgx.ErrNoRows` to its own `ErrNotFound`.
-  - The root package re-exports only the sentinels that other contexts or the worker must match. The root can't declare them itself, because it imports the store.
+  - The context root (`internal/services/<ctx>`) re-exports only the sentinels that other contexts or the worker must match. The root can't declare them itself, because it imports the store.
 - **Migration order.** `applications` is the pilot, followed by `identity`, `cvtemplates` and `scoring`. `jobsearch` goes last, taking whatever remains of `internal/data/db`. Until a context moves, `*jobsdb.DB` keeps serving it.
 
 Rejected alternatives:
@@ -42,5 +42,6 @@ Rejected alternatives:
 - Per-context Postgres schemas and roles: more than a locality goal needs.
 - One shared `pgsqlc`: ownership would be enforced only by review.
 - Per-context mock packages: a wide store interface would come back.
+- `internal/<ctx>/internal/<feature>` and `internal/<ctx>/internal/store`, so Go's `internal/` rule enforces store privacy: the applications pilot found the doubled `internal` hard to read, and depguard covers the same boundary.
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.

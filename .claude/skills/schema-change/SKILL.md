@@ -1,7 +1,7 @@
 ---
 name: schema-change
 description: Change the Postgres schema: create, alter or drop tables, columns, indexes or constraints, backfill data, and update the sqlc queries and generated code to match. Use for "write a migration", "change the schema", "add a column", "new index", "rename a field", "backfill".
-paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/data/db/**", "internal/*/internal/store/**", "sqlc.yaml"]
+paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/data/db/**", "internal/services/*/store/**", "sqlc.yaml"]
 ---
 
 # Schema change
@@ -45,7 +45,7 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    what the migration produces after Up.
 
 6. **Update the queries.** Edit or add to the owning context's
-   `internal/<ctx>/internal/store/queries/<table>.sql` (legacy:
+   `internal/services/<ctx>/store/queries/<table>.sql` (legacy:
    `internal/data/sqlc/queries/<table>.sql`). A query that writes a table
    belongs in that table's owner; a read-join may live in any context's
    store. See
@@ -56,19 +56,23 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
 7. **Regenerate.** Confirm your local `sqlc version` matches the version
    pinned in `.github/workflows/ci.yml` (`sqlc-dev/sqlc/cmd/sqlc@v1.31.1` as
    of writing — check the file, it drifts), then run `just generate`. This
-   rewrites every generated tree (`internal/<ctx>/internal/store/sqlc/**`,
+   rewrites every generated tree (`internal/services/<ctx>/store/sqlc/**`,
    legacy `internal/data/db/pgsqlc/**`); never hand-edit them
    (`AGENTS.md` "Boundaries"). A context's first query also needs its own
-   `sql:` block in `sqlc.yaml` pointing at the shared `schema.sql`.
+   `sql:` block in `sqlc.yaml` pointing at the shared `schema.sql`, and a
+   `<ctx>-store` depguard rule in `.golangci.yml` (copy `applications-store`)
+   so only `internal/services/<ctx>/` can import the store.
 
-8. **Update the store.** In `internal/<ctx>/internal/store/*.go`, wrap
+8. **Update the store.** In `internal/services/<ctx>/store/store.go`, wrap
    generated calls. Map `pgx.ErrNoRows` to the store's own `ErrNotFound`,
    and wrap other errors as `fmt.Errorf("store.Method: %w", err)`. Return
-   `dto` or store-local types, never generated sqlc structs. Wherever a
+   `dto` or store-local types, never generated sqlc structs. Every sqlc row
+   → `dto` converter lives in `store/transform.go`, named `to<Name>DTO` after
+   the dto it builds (`toApplicationDTO`, `toApplicationStatusDTO`). Wherever a
    signature changed, update the consuming service's own `store`
    interface and its hand fake. There is no shared mock package.
    Legacy contexts do the same in `internal/data/db/*.go` with
-   `providers.ErrNotFound` and `providers.Mock*`. Error-mapping detail is
+   `data.ErrNotFound` and `providers.Mock*`. Error-mapping detail is
    in `references/sqlc-queries.md`.
 
    If the change adds a side effect in another context's tables inside the
@@ -77,7 +81,7 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
 
 9. **Verify.** Needs Docker (`just up`):
    ```
-   sqlc generate && git diff --exit-code && go test ./internal/<ctx>/...
+   sqlc generate && git diff --exit-code && go test ./internal/services/...
    ```
    Store tests use a real Postgres testcontainer via `internal/pgtest`. Legacy
    tests use `testDB` in `internal/data/db/db_test.go`; don't start a second

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -78,7 +78,7 @@ func (db *DB) RewordScoringOption(ctx context.Context, id, question string) erro
 		return fmt.Errorf("db.RewordScoringOption: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("db.RewordScoringOption: option %q: %w", id, providers.ErrNotFound)
+		return fmt.Errorf("db.RewordScoringOption: option %q: %w", id, data.ErrNotFound)
 	}
 	if err := queries.QueueOptionBackfill(ctx); err != nil {
 		return fmt.Errorf("db.RewordScoringOption: queue backfill: %w", err)
@@ -97,7 +97,7 @@ func (db *DB) RetireScoringOption(ctx context.Context, id string) error {
 		return fmt.Errorf("db.RetireScoringOption: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("db.RetireScoringOption: option %q: %w", id, providers.ErrNotFound)
+		return fmt.Errorf("db.RetireScoringOption: option %q: %w", id, data.ErrNotFound)
 	}
 	return nil
 }

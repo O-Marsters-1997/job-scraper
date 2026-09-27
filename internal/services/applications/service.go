@@ -6,17 +6,25 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
-type Service struct {
-	applications providers.ApplicationProvider
+type Store interface {
+	CreateApplication(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error)
+	ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error)
+	ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
+	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
+	DeleteApplication(ctx context.Context, userID, id string) error
+	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 }
 
-func New(applications providers.ApplicationProvider) *Service {
-	return &Service{applications: applications}
+type Service struct {
+	store Store
+}
+
+func NewService(store Store) *Service {
+	return &Service{store: store}
 }
 
 func (s *Service) Create(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error) {
@@ -26,26 +34,26 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateApplic
 	if !validAppliedAt(in.AppliedAt) {
 		return dto.Application{}, apperr.Invalid("invalid applied_at date")
 	}
-	return s.applications.CreateApplication(ctx, userID, in)
+	return s.store.CreateApplication(ctx, userID, in)
 }
 
 func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplicationInput) (dto.Application, error) {
 	if !validAppliedAt(in.AppliedAt) {
 		return dto.Application{}, apperr.Invalid("invalid applied_at date")
 	}
-	return s.applications.UpdateApplication(ctx, userID, in.ID, in)
+	return s.store.UpdateApplication(ctx, userID, in.ID, in)
 }
 
 func (s *Service) Delete(ctx context.Context, userID, id string) error {
-	return s.applications.DeleteApplication(ctx, userID, id)
+	return s.store.DeleteApplication(ctx, userID, id)
 }
 
 // List returns the caller's applications, optionally filtered to one status.
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	if q.StatusID != "" {
-		return s.applications.ListApplicationsByUserAndStatus(ctx, userID, q.StatusID)
+		return s.store.ListApplicationsByUserAndStatus(ctx, userID, q.StatusID)
 	}
-	return s.applications.ListApplicationsByUser(ctx, userID)
+	return s.store.ListApplicationsByUser(ctx, userID)
 }
 
 // ForJobs returns each of q.JobIDs's application summary, keyed by job ID.
@@ -53,7 +61,7 @@ func (s *Service) ForJobs(ctx context.Context, userID string, q dto.Applications
 	if q.JobIDs == "" {
 		return map[string]dto.JobApplicationSummary{}, nil
 	}
-	return s.applications.GetApplicationsForJobs(ctx, userID, strings.Split(q.JobIDs, ","))
+	return s.store.GetApplicationsForJobs(ctx, userID, strings.Split(q.JobIDs, ","))
 }
 
 func validAppliedAt(date fp.Option[string]) bool {

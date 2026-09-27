@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -27,7 +27,7 @@ func (db *DB) GetProfile(ctx context.Context, userID string) (dto.Profile, error
 	}
 	row, err := db.queries.GetUserProfile(ctx, uid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, providers.ErrNotFound
+		return dto.Profile{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Profile{}, fmt.Errorf("db.GetProfile: %w", err)
@@ -45,7 +45,7 @@ func (db *DB) UpdateEmail(ctx context.Context, userID, email string) (dto.Profil
 		Email: pgtype.Text{String: email, Valid: email != ""},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, providers.ErrNotFound
+		return dto.Profile{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Profile{}, fmt.Errorf("db.UpdateEmail: %w", err)

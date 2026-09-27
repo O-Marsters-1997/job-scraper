@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -82,7 +83,7 @@ func (m *MockSuitabilityProvider) ClaimAnswerEffect(_ context.Context) (dto.Answ
 		return dto.AnswerEffect{}, m.ClaimErr
 	}
 	if len(m.effects) == 0 {
-		return dto.AnswerEffect{}, ErrNotFound
+		return dto.AnswerEffect{}, data.ErrNotFound
 	}
 	e := m.effects[0]
 	m.effects = m.effects[1:]
@@ -101,7 +102,7 @@ func (m *MockSuitabilityProvider) GetJobForScoring(_ context.Context, jobID stri
 	defer m.mu.Unlock()
 	job, ok := m.jobs[jobID]
 	if !ok {
-		return dto.Job{}, ErrNotFound
+		return dto.Job{}, data.ErrNotFound
 	}
 	return job, nil
 }

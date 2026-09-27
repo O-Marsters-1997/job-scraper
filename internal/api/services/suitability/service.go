@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/api/jev"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
@@ -56,7 +57,7 @@ func (s *Service) RunTick(ctx context.Context) error {
 	g.SetLimit(maxConcurrentEffects)
 	for {
 		effect, err := s.store.ClaimAnswerEffect(ctx)
-		if errors.Is(err, providers.ErrNotFound) {
+		if errors.Is(err, data.ErrNotFound) {
 			break
 		}
 		if err != nil {
@@ -208,7 +209,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 // current preferences and each job's cached answers. It never calls Answerer.
 func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error) {
 	cfg, err := s.configs.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, providers.ErrNotFound) {
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return dto.RecomputeResult{}, err
 	}
 

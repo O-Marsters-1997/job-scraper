@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -37,7 +38,7 @@ func (db *DB) QueueTrackingScores(ctx context.Context, companyID string) error {
 func (db *DB) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
 	row, err := db.queries.ClaimAnswerEffect(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.AnswerEffect{}, providers.ErrNotFound
+		return dto.AnswerEffect{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.AnswerEffect{}, fmt.Errorf("db.ClaimAnswerEffect: %w", err)
@@ -74,7 +75,7 @@ func (db *DB) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, erro
 	}
 	row, err := db.queries.GetJobForScoring(ctx, jid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Job{}, providers.ErrNotFound
+		return dto.Job{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Job{}, fmt.Errorf("db.GetJobForScoring: %w", err)

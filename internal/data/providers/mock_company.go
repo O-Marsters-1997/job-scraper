@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
@@ -60,7 +61,7 @@ func (m *MockCompanyProvider) VerifyCompanyBoard(_ context.Context, companyID, s
 			return board, nil
 		}
 	}
-	return dto.CompanyBoard{}, ErrNotFound
+	return dto.CompanyBoard{}, data.ErrNotFound
 }
 
 func NewMockCompanyProvider() *MockCompanyProvider {
@@ -112,7 +113,7 @@ func (m *MockCompanyProvider) GetCompany(_ context.Context, id string) (dto.Comp
 			return c, nil
 		}
 	}
-	return dto.Company{}, ErrNotFound
+	return dto.Company{}, data.ErrNotFound
 }
 
 func (m *MockCompanyProvider) ListCompaniesForUser(_ context.Context, userID string) ([]dto.Company, error) {
@@ -147,5 +148,5 @@ func (m *MockCompanyProvider) SetCompanyTracking(_ context.Context, userID, comp
 			return tracking, nil
 		}
 	}
-	return dto.CompanyTracking{}, ErrNotFound
+	return dto.CompanyTracking{}, data.ErrNotFound
 }
