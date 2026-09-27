@@ -5,6 +5,7 @@ export interface SettingsSection {
 	label: string;
 	description: string;
 	icon: () => JSX.Element;
+	children?: { to: string; label: string }[];
 }
 
 export interface SettingsGroup {
@@ -134,19 +135,25 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 			{
 				to: "/settings/profile",
 				label: "Profile",
-				description: "Your job-seeking preferences and CV context",
+				description: "Username and email",
 				icon: ProfileIcon,
 			},
 			{
 				to: "/settings/scoring",
 				label: "Scoring",
-				description: "Profile, criteria and scale for job suitability scores",
+				description: "What makes a job a good fit",
 				icon: ScoringIcon,
+				children: [
+					{ to: "/settings/scoring/role", label: "Role" },
+					{ to: "/settings/scoring/stack", label: "Tech & industry" },
+					{ to: "/settings/scoring/filters", label: "Filters & alerts" },
+					{ to: "/settings/scoring/other", label: "Other details" },
+				],
 			},
 			{
 				to: "/settings/ai",
 				label: "AI",
-				description: "OpenRouter API key used to score jobs",
+				description: "OpenRouter API key",
 				icon: AiIcon,
 			},
 		],
@@ -157,13 +164,13 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 			{
 				to: "/settings/statuses",
 				label: "Statuses",
-				description: "Custom stages for your application pipeline",
+				description: "Stages in your pipeline",
 				icon: StatusesIcon,
 			},
 			{
 				to: "/settings/searches",
 				label: "Searches",
-				description: "Discovery searches run automatically or on demand",
+				description: "Boards and searches to scrape",
 				icon: SearchesIcon,
 			},
 		],
@@ -174,7 +181,7 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 			{
 				to: "/settings/integrations",
 				label: "Integrations",
-				description: "Connect external accounts like Google",
+				description: "Google and other accounts",
 				icon: IntegrationsIcon,
 			},
 		],
@@ -185,8 +192,15 @@ const ALL_SETTINGS_SECTIONS: SettingsSection[] = SETTINGS_SECTIONS.flatMap(
 	(group) => group.sections,
 );
 
+export const SETTINGS_PAGES: string[] = ALL_SETTINGS_SECTIONS.flatMap(
+	(section) => section.children?.map((child) => child.to) ?? [section.to],
+);
+
 export function findSettingsSection(
 	pathname: string,
 ): SettingsSection | undefined {
-	return ALL_SETTINGS_SECTIONS.find((section) => section.to === pathname);
+	return ALL_SETTINGS_SECTIONS.find(
+		(section) =>
+			pathname === section.to || pathname.startsWith(`${section.to}/`),
+	);
 }

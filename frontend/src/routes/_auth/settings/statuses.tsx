@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
-import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,11 +76,27 @@ function StatusesPage() {
 	};
 
 	return (
-		<div class="max-w-2xl px-7 py-6">
-			<PageHeading
-				title="Application statuses"
-				subtitle="Custom stages for your pipeline, each with its own colour"
-			/>
+		<>
+			<SettingsActions>
+				<Show when={!showAdd()}>
+					<Button size="sm" onClick={() => setShowAdd(true)}>
+						<svg
+							aria-hidden="true"
+							width="12"
+							height="12"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+						>
+							<line x1="12" y1="5" x2="12" y2="19" />
+							<line x1="5" y1="12" x2="19" y2="12" />
+						</svg>
+						Add status
+					</Button>
+				</Show>
+			</SettingsActions>
 			<FormFeedback error={deleteError()} />
 
 			<QueryBoundary query={query} fallbackRows={5}>
@@ -216,31 +232,12 @@ function StatusesPage() {
 							</Show>
 						</Card>
 
-						<Show when={!showAdd()}>
-							<Button class="mt-4" onClick={() => setShowAdd(true)}>
-								<svg
-									aria-hidden="true"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.5"
-									stroke-linecap="round"
-								>
-									<line x1="12" y1="5" x2="12" y2="19" />
-									<line x1="5" y1="12" x2="19" y2="12" />
-								</svg>
-								Add status
-							</Button>
-						</Show>
 						<p class="mt-3 text-xs text-faint">
-							Changes take effect immediately. Deleting a status does not remove
-							it from existing applications.
+							Changes take effect immediately.
 						</p>
 					</>
 				)}
 			</QueryBoundary>
-		</div>
+		</>
 	);
 }

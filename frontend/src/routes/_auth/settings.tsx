@@ -1,5 +1,6 @@
-import { createFileRoute, Outlet } from "@tanstack/solid-router";
+import { createFileRoute } from "@tanstack/solid-router";
+import { SettingsLayout } from "@/components/SettingsLayout";
 
 export const Route = createFileRoute("/_auth/settings")({
-	component: () => <Outlet />,
+	component: SettingsLayout,
 });

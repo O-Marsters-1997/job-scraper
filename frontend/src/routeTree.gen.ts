@@ -29,6 +29,8 @@ import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/set
 import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
 import { Route as AuthCompaniesIdRouteImport } from './routes/_auth/companies_.$id'
+import { Route as AuthSettingsScoringIndexRouteImport } from './routes/_auth/settings/scoring/index'
+import { Route as AuthSettingsScoringSectionRouteImport } from './routes/_auth/settings/scoring/$section'
 import { Route as AuthCvTemplatesDocIdTabIdRouteImport } from './routes/_auth/cv-templates_.$docId.$tabId'
 
 const SignupRoute = SignupRouteImport.update({
@@ -131,6 +133,18 @@ const AuthCompaniesIdRoute = AuthCompaniesIdRouteImport.update({
   path: '/companies/$id',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthSettingsScoringIndexRoute =
+  AuthSettingsScoringIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthSettingsScoringRoute,
+  } as any)
+const AuthSettingsScoringSectionRoute =
+  AuthSettingsScoringSectionRouteImport.update({
+    id: '/$section',
+    path: '/$section',
+    getParentRoute: () => AuthSettingsScoringRoute,
+  } as any)
 const AuthCvTemplatesDocIdTabIdRoute =
   AuthCvTemplatesDocIdTabIdRouteImport.update({
     id: '/cv-templates_/$docId/$tabId',
@@ -154,11 +168,13 @@ export interface FileRoutesByFullPath {
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/profile': typeof AuthSettingsProfileRoute
-  '/settings/scoring': typeof AuthSettingsScoringRoute
+  '/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
+  '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
+  '/settings/scoring/': typeof AuthSettingsScoringIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -175,11 +191,12 @@ export interface FileRoutesByTo {
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/settings/profile': typeof AuthSettingsProfileRoute
-  '/settings/scoring': typeof AuthSettingsScoringRoute
   '/settings/searches': typeof AuthSettingsSearchesRoute
   '/settings/statuses': typeof AuthSettingsStatusesRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/cv-templates/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
+  '/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
+  '/settings/scoring': typeof AuthSettingsScoringIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -199,11 +216,13 @@ export interface FileRoutesById {
   '/_auth/settings/ai': typeof AuthSettingsAiRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
   '/_auth/settings/profile': typeof AuthSettingsProfileRoute
-  '/_auth/settings/scoring': typeof AuthSettingsScoringRoute
+  '/_auth/settings/scoring': typeof AuthSettingsScoringRouteWithChildren
   '/_auth/settings/searches': typeof AuthSettingsSearchesRoute
   '/_auth/settings/statuses': typeof AuthSettingsStatusesRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/cv-templates_/$docId/$tabId': typeof AuthCvTemplatesDocIdTabIdRoute
+  '/_auth/settings/scoring/$section': typeof AuthSettingsScoringSectionRoute
+  '/_auth/settings/scoring/': typeof AuthSettingsScoringIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -228,6 +247,8 @@ export interface FileRouteTypes {
     | '/settings/statuses'
     | '/settings/'
     | '/cv-templates/$docId/$tabId'
+    | '/settings/scoring/$section'
+    | '/settings/scoring/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -244,11 +265,12 @@ export interface FileRouteTypes {
     | '/settings/ai'
     | '/settings/integrations'
     | '/settings/profile'
-    | '/settings/scoring'
     | '/settings/searches'
     | '/settings/statuses'
     | '/settings'
     | '/cv-templates/$docId/$tabId'
+    | '/settings/scoring/$section'
+    | '/settings/scoring'
   id:
     | '__root__'
     | '/'
@@ -272,6 +294,8 @@ export interface FileRouteTypes {
     | '/_auth/settings/statuses'
     | '/_auth/settings/'
     | '/_auth/cv-templates_/$docId/$tabId'
+    | '/_auth/settings/scoring/$section'
+    | '/_auth/settings/scoring/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -423,6 +447,20 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthCompaniesIdRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/settings/scoring/': {
+      id: '/_auth/settings/scoring/'
+      path: '/'
+      fullPath: '/settings/scoring/'
+      preLoaderRoute: typeof AuthSettingsScoringIndexRouteImport
+      parentRoute: typeof AuthSettingsScoringRoute
+    }
+    '/_auth/settings/scoring/$section': {
+      id: '/_auth/settings/scoring/$section'
+      path: '/$section'
+      fullPath: '/settings/scoring/$section'
+      preLoaderRoute: typeof AuthSettingsScoringSectionRouteImport
+      parentRoute: typeof AuthSettingsScoringRoute
+    }
     '/_auth/cv-templates_/$docId/$tabId': {
       id: '/_auth/cv-templates_/$docId/$tabId'
       path: '/cv-templates/$docId/$tabId'
@@ -433,11 +471,24 @@ declare module '@tanstack/solid-router' {
   }
 }
 
+interface AuthSettingsScoringRouteChildren {
+  AuthSettingsScoringSectionRoute: typeof AuthSettingsScoringSectionRoute
+  AuthSettingsScoringIndexRoute: typeof AuthSettingsScoringIndexRoute
+}
+
+const AuthSettingsScoringRouteChildren: AuthSettingsScoringRouteChildren = {
+  AuthSettingsScoringSectionRoute: AuthSettingsScoringSectionRoute,
+  AuthSettingsScoringIndexRoute: AuthSettingsScoringIndexRoute,
+}
+
+const AuthSettingsScoringRouteWithChildren =
+  AuthSettingsScoringRoute._addFileChildren(AuthSettingsScoringRouteChildren)
+
 interface AuthSettingsRouteChildren {
   AuthSettingsAiRoute: typeof AuthSettingsAiRoute
   AuthSettingsIntegrationsRoute: typeof AuthSettingsIntegrationsRoute
   AuthSettingsProfileRoute: typeof AuthSettingsProfileRoute
-  AuthSettingsScoringRoute: typeof AuthSettingsScoringRoute
+  AuthSettingsScoringRoute: typeof AuthSettingsScoringRouteWithChildren
   AuthSettingsSearchesRoute: typeof AuthSettingsSearchesRoute
   AuthSettingsStatusesRoute: typeof AuthSettingsStatusesRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
@@ -447,7 +498,7 @@ const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsAiRoute: AuthSettingsAiRoute,
   AuthSettingsIntegrationsRoute: AuthSettingsIntegrationsRoute,
   AuthSettingsProfileRoute: AuthSettingsProfileRoute,
-  AuthSettingsScoringRoute: AuthSettingsScoringRoute,
+  AuthSettingsScoringRoute: AuthSettingsScoringRouteWithChildren,
   AuthSettingsSearchesRoute: AuthSettingsSearchesRoute,
   AuthSettingsStatusesRoute: AuthSettingsStatusesRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,

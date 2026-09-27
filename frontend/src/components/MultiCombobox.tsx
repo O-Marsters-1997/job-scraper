@@ -36,6 +36,7 @@ export function MultiCombobox(props: {
 	options: ComboOption[];
 	value: string[];
 	onChange: (ids: string[]) => void;
+	hint?: string;
 	placeholder?: string;
 	chipClass?: string;
 	creatable?: boolean;
@@ -113,6 +114,11 @@ export function MultiCombobox(props: {
 			<Combobox.Label class="block text-sm font-medium text-foreground">
 				{props.label}
 			</Combobox.Label>
+			<Show when={props.hint}>
+				<Combobox.Description class="mt-0.5 text-xs text-faint">
+					{props.hint}
+				</Combobox.Description>
+			</Show>
 			<Combobox.Control<ComboOption> class="field mt-2 flex min-h-9 flex-wrap items-center gap-1.5 py-1 pr-1 pl-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
 				{(state) => (
 					<>

@@ -152,6 +152,13 @@ the **Applications tracker**, and **Settings → Statuses**. Tables are full-wid
 hairline row borders, a muted header band, uppercase faint heads, and hover-row
 tinting. Slim 6px scrollbars.
 
+**Settings** is a two-column shell (`SettingsLayout`): a sticky full-width header (section title
+left, that section's page actions right via `SettingsActions`), a section nav on the left
+(`md:w-60`, sticky, grouped, title plus a one-line summary; a horizontal row on mobile), and one
+bordered surface panel filling the rest of the viewport. Each section is its own route;
+`/settings` redirects to the first. `[` / `]` move focus through the nav and Enter opens the focused item; a section's sub-pages show, and join the cycle, only while that section is open. Page actions (Save, Add, Recompute)
+live in the header, never at the bottom of a form.
+
 ## 6. Components
 
 - **Button** (`rounded-md`, `h-9`, `text-sm` medium): `default` solid violet → violet-hover; `destructive` red; `outline` (border + surface, hover strengthens border/text); `secondary` "soft violet" (accent-subtle bg + accent-border + accent-text); `ghost`; `link`. Sizes `sm` / `default` / `lg` plus square icon variants; `focus-visible` violet ring with offset.
@@ -161,6 +168,7 @@ tinting. Slim 6px scrollbars.
 - **Table**: wrapper scrolls x; `text-sm`; muted header band; `th` = `h-11` uppercase `text-xs` faint tracked; `td` = `px-4 py-4`, `whitespace-nowrap`; rows hairline-bordered, hover `surface-muted`, last row borderless. Text-heavy columns are width-capped (`max-w-[Npx] truncate`) with full text exposed via `title`.
 - **Dropdown menu**: `rounded-lg` surface card, `min-w-[10rem]`, `shadow-xl`, animated in/out; items with leading 14px icons.
 - **Field** (`.field` in `styles.css` / `Input` primitive): canonical style — bordered surface input, violet focus border + soft violet ring (`focus:ring-primary/10`); `Input` component references `.field` directly. Small muted medium label above (via `Label` cva).
+- **Settings field** (`Field` / `ChoiceGroup` in `components/Field.tsx`): `text-sm` medium label, optional one-line `text-xs text-faint` hint (only when it prevents a mistake), then `mt-2` control. Small fixed option sets use toggle chips (`ChoiceGroup`); large sets and free-text lists use `MultiCombobox` (`creatable` for free text).
 - **Icons**: inline stroke SVGs (Lucide-style, `stroke-width:2`), 14–16px, `currentColor` — never emoji.
 
 ## 7. Motion & Interaction
