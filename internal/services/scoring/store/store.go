@@ -384,7 +384,7 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID string) ([]Scoring
 
 	inputs := make([]ScoringInput, len(jobRows))
 	for i, row := range jobRows {
-		job := toScoringInputJobDTO(row)
+		job := toJobDTO(sqlc.GetJobForScoringRow(row))
 		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID]}
 	}
 	return inputs, nil

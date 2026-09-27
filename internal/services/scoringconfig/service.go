@@ -6,8 +6,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -16,8 +16,8 @@ import (
 )
 
 func notFound(err error) bool {
-	status, ok := apperr.StatusFor(err)
-	return ok && status == http.StatusNotFound
+	ae, ok := errors.AsType[*apperr.Error](err)
+	return ok && ae.Kind() == apperr.KindNotFound
 }
 
 type Store interface {

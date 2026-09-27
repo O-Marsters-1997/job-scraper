@@ -21,12 +21,6 @@ var _ telemetry.StateReader = (*Module)(nil)
 // contexts that must match it (ADR 0011).
 var ErrNotFound = store.ErrNotFound
 
-// Reconsiderer re-evaluates a user's discovered-job candidates against an
-// updated Search Config.
-type Reconsiderer interface {
-	Reconsider(ctx context.Context, config dto.SearchConfig) error
-}
-
 type noopAlerter struct{}
 
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
@@ -40,7 +34,7 @@ type Module struct {
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates scoringconfig.Reconsiderer, notifyAPIKey, notifyFrom string) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}

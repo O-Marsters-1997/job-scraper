@@ -58,17 +58,6 @@ func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 	}
 }
 
-func toScoringInputJobDTO(row sqlc.ListScoringInputJobsRow) dto.Job {
-	return dto.Job{
-		ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url,
-		CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time,
-		ScrapedAt: row.ScrapedAt.Time, Description: row.Description, SalaryRaw: row.SalaryRaw,
-		WorkArrangement: row.WorkArrangement, CompanyID: uuidString(row.CompanyID),
-		BoardID: uuidString(row.PrimaryBoardID), ProviderPostingID: row.ProviderPostingID.String,
-		ContentFingerprint: row.ContentFingerprint.String,
-	}
-}
-
 func uuidString(id pgtype.UUID) string {
 	if !id.Valid {
 		return ""
