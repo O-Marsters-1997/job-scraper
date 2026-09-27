@@ -98,6 +98,7 @@ SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at,
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 WHERE j.closed_at IS NULL
+  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
 ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC
 `
 
@@ -164,6 +165,7 @@ LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
   AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
   AND ($5::text = 'all' OR ($5::text = 'open' AND j.closed_at IS NULL) OR ($5::text = 'closed' AND j.closed_at IS NOT NULL))
+  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
 ORDER BY j.scraped_at DESC, j.id DESC
 LIMIT $6::int
 `

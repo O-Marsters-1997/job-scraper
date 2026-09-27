@@ -47,6 +47,7 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 	type dimState struct{ known, matched bool }
 	dims := make(map[dto.Dimension]*dimState)
 	var met, evaluable float64
+	var blocked bool
 
 	for _, p := range picks {
 		if p.retired {
@@ -87,6 +88,16 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 			default:
 				row.Effect = "unknown"
 			}
+		case "block":
+			switch resolved {
+			case "yes":
+				row.Effect = "blocked"
+				blocked = true
+			case "no":
+				row.Effect = "neutral"
+			default:
+				row.Effect = "unknown"
+			}
 		default:
 			row.Effect = "unknown"
 		}
@@ -104,6 +115,9 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 	}
 
 	score := int(math.Round(100 * (met + 0.5*priorK) / (evaluable + priorK)))
+	if blocked {
+		score = 0
+	}
 	return score, rows
 }
 

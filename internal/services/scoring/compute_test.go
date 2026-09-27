@@ -21,6 +21,12 @@ func retiredPick(dim dto.Dimension, key string) evaluatedPick {
 		answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}
 }
 
+func blockPick(key string, pYes, pNo, pNotStated float64) evaluatedPick {
+	return evaluatedPick{dimension: dto.DimensionDomain, key: key, label: key, stance: "block", known: true,
+		answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
+}
+
+
 func TestCompute(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -88,6 +94,24 @@ func TestCompute(t *testing.T) {
 			picks:     []evaluatedPick{nicePick(dto.DimensionTech, "tech:go", 0.55, 0.35, 0.1)},
 			wantScore: 50,
 			wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+		},
+		{
+			name: "a block that resolves yes zeroes the score even with nice matches",
+			picks: []evaluatedPick{
+				nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
+				blockPick("domain:gambling", 0.9, 0.05, 0.05),
+			},
+			wantScore: 0,
+			wantRows: []dto.ScoreRow{
+				{Resolved: "yes", Effect: "meets"},
+				{Resolved: "yes", Effect: "blocked"},
+			},
+		},
+		{
+			name:      "a block the job lacks is neutral",
+			picks:     []evaluatedPick{blockPick("domain:gambling", 0.05, 0.9, 0.05)},
+			wantScore: 50,
+			wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 		},
 		{
 			name:      "salary below floor in the same currency is an avoid hit",

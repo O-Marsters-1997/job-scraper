@@ -99,6 +99,57 @@ func TestPageJobsKeepsPositionUnderInsert(t *testing.T) {
 	}
 }
 
+func TestListingsHideBlockedJob(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	company := "10000000-0000-0000-0000-000000000002"
+	if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,'blocked-job-test-acme','Acme')`, company); err != nil {
+		t.Fatal(err)
+	}
+	blockedID := "30000000-0000-0000-0000-000000000001"
+	openID := "30000000-0000-0000-0000-000000000002"
+	insert := func(id string) {
+		t.Helper()
+		_, err := pool.Exec(ctx, `INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id) VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'acme','test',NOW(),NOW(),'full description',$2)`,
+			id, company)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert(blockedID)
+	insert(openID)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid, $2::uuid, 0, $3::jsonb)`,
+		blockedID, userID, `[{"key":"domain:gambling","label":"Gambling","stance":"block","resolved":"yes","effect":"blocked"}]`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: company})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range page.Items {
+		if job.ID == blockedID {
+			t.Fatalf("Page returned blocked job %s", blockedID)
+		}
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != openID {
+		t.Fatalf("Page items = %+v, want only %s", page.Items, openID)
+	}
+
+	all, err := st.ListJobs(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, job := range all {
+		if job.ID == blockedID {
+			t.Fatalf("ListJobs returned blocked job %s", blockedID)
+		}
+	}
+}
+
 func TestGetJobNotFound(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
