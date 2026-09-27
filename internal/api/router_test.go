@@ -299,6 +299,9 @@ func TestRouterRoutes(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("GET / = %d", w.Code)
 		}
+		if seeded := decode[[]struct{ ID string }](t, w); len(seeded) != 5 {
+			t.Fatalf("default statuses from signup = %d, want 5", len(seeded))
+		}
 		w = do(authed(http.MethodPost, "/application-statuses/", jsonBody(t, map[string]string{"name": "Offer", "colour": "#00ff00"}), cookie))
 		if w.Code != http.StatusCreated {
 			t.Fatalf("POST / = %d (body: %s)", w.Code, w.Body.String())
@@ -310,6 +313,40 @@ func TestRouterRoutes(t *testing.T) {
 			t.Errorf("PATCH /{id} = %d (body: %s)", w.Code, w.Body.String())
 		}
 		w = do(authed(http.MethodDelete, "/application-statuses/"+id, nil, cookie))
+		if w.Code != http.StatusNoContent {
+			t.Errorf("DELETE /{id} = %d (body: %s)", w.Code, w.Body.String())
+		}
+	})
+
+	t.Run("applications", func(t *testing.T) {
+		var jobID string
+		err := testDB.Pool().QueryRow(context.Background(),
+			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at)
+			 VALUES ('Engineer', 'Remote', 'https://example.com/router-test-applications', 'acme', 'greenhouse', NOW())
+			 RETURNING id`).Scan(&jobID)
+		if err != nil {
+			t.Fatalf("insert job: %v", err)
+		}
+
+		w := do(authed(http.MethodGet, "/applications/", nil, cookie))
+		if w.Code != http.StatusOK {
+			t.Fatalf("GET / = %d", w.Code)
+		}
+		w = do(authed(http.MethodPost, "/applications/", jsonBody(t, map[string]string{"job_id": jobID}), cookie))
+		if w.Code != http.StatusCreated {
+			t.Fatalf("POST / = %d (body: %s)", w.Code, w.Body.String())
+		}
+		id := decode[struct{ ID string }](t, w).ID
+
+		w = do(authed(http.MethodPatch, "/applications/"+id, jsonBody(t, map[string]string{"notes": "applied"}), cookie))
+		if w.Code != http.StatusOK {
+			t.Errorf("PATCH /{id} = %d (body: %s)", w.Code, w.Body.String())
+		}
+		w = do(authed(http.MethodGet, "/applications/for-jobs?job_ids="+jobID, nil, cookie))
+		if w.Code != http.StatusOK {
+			t.Errorf("GET /for-jobs = %d (body: %s)", w.Code, w.Body.String())
+		}
+		w = do(authed(http.MethodDelete, "/applications/"+id, nil, cookie))
 		if w.Code != http.StatusNoContent {
 			t.Errorf("DELETE /{id} = %d (body: %s)", w.Code, w.Body.String())
 		}
