@@ -3,7 +3,7 @@ import { ColorSlider } from "@kobalte/core/color-slider";
 import type { Color } from "@kobalte/core/colors";
 import { parseColor } from "@kobalte/core/colors";
 import { Popover } from "@kobalte/core/popover";
-import { createSignal } from "solid-js";
+import { createSignal, untrack } from "solid-js";
 import { cn } from "@/lib/utils";
 
 interface ColorPickerProps {
@@ -22,7 +22,7 @@ function safeParseColor(v: string): Color {
 
 export function ColorPicker(props: ColorPickerProps) {
 	const [color, setColor] = createSignal<Color>(
-		safeParseColor(props.value).toFormat("hsba"),
+		untrack(() => safeParseColor(props.value).toFormat("hsba")),
 	);
 
 	function emitColor(c: Color) {

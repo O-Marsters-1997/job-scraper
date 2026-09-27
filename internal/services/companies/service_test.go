@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -97,6 +98,49 @@ func (f *fakeCompanyStore) TrackingFor(userID, companyID string) (dto.CompanyTra
 	tracking, ok := f.tracking[userID+":"+companyID]
 	return tracking, ok
 }
+
+func (f *fakeCompanyStore) VerifyCompanyBoard(_ context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, b := range f.boards[companyID] {
+		if b.Source == source && b.BoardToken == token {
+			f.boards[companyID][i].Status = dto.BoardVerified
+			f.boards[companyID][i].VerificationMethod = method
+			return f.boards[companyID][i], nil
+		}
+	}
+	return dto.CompanyBoard{}, apperr.NotFound("board not found")
+}
+
+func (f *fakeCompanyStore) ListCompaniesToCrawl(context.Context, int) ([]dto.Company, error) {
+	return nil, nil
+}
+
+func (f *fakeCompanyStore) TouchCompanyCrawled(context.Context, string) error { return nil }
+
+func (f *fakeCompanyStore) ListDueBoards(context.Context) ([]dto.BoardPoll, error) { return nil, nil }
+
+func (f *fakeCompanyStore) ListActiveBoards(context.Context) ([]dto.BoardPoll, error) {
+	return nil, nil
+}
+
+func (f *fakeCompanyStore) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
+	return dto.BoardPoll{}, apperr.NotFound("board not found")
+}
+
+func (f *fakeCompanyStore) CompleteBoard(context.Context, dto.BoardSnapshot) error { return nil }
+
+func (f *fakeCompanyStore) FailBoard(context.Context, dto.BoardPoll) error { return nil }
+
+func (f *fakeCompanyStore) GetVerifiedBoardID(context.Context, string, string) (string, error) {
+	return "", apperr.NotFound("board not verified")
+}
+
+func (f *fakeCompanyStore) GetLastScraped(context.Context, string) (time.Time, bool, error) {
+	return time.Time{}, false, nil
+}
+
+func (f *fakeCompanyStore) SetLastScraped(context.Context, string) error { return nil }
 
 type fakeSourceTargets struct {
 	mu      sync.Mutex

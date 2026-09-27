@@ -12,17 +12,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
-	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -50,20 +51,25 @@ func main() {
 		slog.Error("Web Unlocker config invalid", slog.Any("err", err))
 		os.Exit(1)
 	}
-	connStr, err := jobsdb.ConnString()
+	connStr, err := data.ConnString()
 	if err != nil {
 		slog.Error("db config invalid", slog.Any("err", err))
 		os.Exit(1)
 	}
-	db, err := jobsdb.New(ctx, connStr)
+	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
 		slog.Error("db init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer db.Close()
+	if err := pool.Ping(ctx); err != nil {
+		slog.Error("db ping failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+	defer pool.Close()
 
-	apps := applications.New(db.Pool())
-	idm := identity.New(db.Pool(), apps)
+	apps := applications.New(pool)
+	idm := identity.NewFacade(pool, apps)
+	scoringModule := scoring.NewFacade(pool)
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
@@ -87,21 +93,24 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = q.Close() }()
+
+	js := jobsearch.New(pool, q, scoringModule)
+
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {
 		slog.Error("API_BASE_URL is required")
 		os.Exit(1)
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
-	boardPoller := scraper.NewBoardPoller(db, scraper.SourceBoardFetcher{}, exporter)
-	orch := scraper.New(db, q).WithSourceBuilder(
+	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
+	orch := scraper.New(js.Catalog()).WithSourceBuilder(
 		func(target dto.SourceTarget) []sources.Source {
 			return builder.BuildSources([]dto.SourceTarget{target})
 		})
-	orch.WithRejectFilter(scoring.NewFacade(db.Pool()))
-	orch.WithCandidates(db)
+	orch.WithRejectFilter(scoringModule)
+	orch.WithCandidates(js.Candidates())
 	processor := &taskProcessor{
-		db: db, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
+		js: js, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
 		detailers: map[string]sources.DetailFetcher{
 			"wis": wis.New(wis.Config{}), "linkedin": linkedin.New(linkedin.Config{}), "indeed": indeed.New(indeed.Config{}),
 		},
@@ -112,9 +121,9 @@ func main() {
 			var boards []dto.BoardPoll
 			var err error
 			if *forceBoards {
-				boards, err = db.ListActiveBoards(ctx)
+				boards, err = js.Boards().ListActiveBoards(ctx)
 			} else {
-				boards, err = db.ListDueBoards(ctx)
+				boards, err = js.Boards().ListDueBoards(ctx)
 			}
 			if err != nil {
 				slog.Error("list Boards failed", slog.Any("err", err))
@@ -134,14 +143,14 @@ func main() {
 		}
 	}
 	reconcile := func() {
-		targets, err := db.ListRecoverableSourceTargets(ctx)
+		targets, err := js.Targets().ListRecoverableSourceTargets(ctx)
 		if err != nil {
 			slog.Error("list recoverable runs failed", slog.Any("err", err))
 			return
 		}
 		for _, target := range targets {
-			target, err = db.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
-			if errors.Is(err, data.ErrNotFound) {
+			target, err = js.Targets().ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
+			if errors.Is(err, jobsearch.ErrNotFound) {
 				continue
 			}
 			if err != nil {
@@ -150,7 +159,7 @@ func main() {
 			}
 			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: target.Source, TargetID: target.ID, RunID: target.RunID, Recovery: true}
 			if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
-				boardID, err := db.GetVerifiedBoardID(ctx, target.Source, target.Value)
+				boardID, err := js.Boards().GetVerifiedBoardID(ctx, target.Source, target.Value)
 				if err != nil {
 					slog.Error("recover Board run failed", slog.String("target_id", target.ID), slog.Any("err", err))
 					continue
@@ -176,7 +185,7 @@ func main() {
 		if err := idm.DeleteExpiredSessions(ctx); err != nil {
 			slog.Error("session cleanup failed", slog.Any("err", err))
 		}
-		if err := db.DeleteExpiredCandidates(ctx); err != nil {
+		if err := js.DeleteExpiredCandidates(ctx); err != nil {
 			slog.Error("candidate cleanup failed", slog.Any("err", err))
 		}
 	}); err != nil {
@@ -186,8 +195,8 @@ func main() {
 	cr.Start()
 	defer cr.Stop()
 
-	go discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, db, db).Run(ctx)
-	go crawl.New(db).Run(ctx)
+	go discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards()).Run(ctx)
+	go crawl.New(js.Boards()).Run(ctx)
 	slog.Info("RabbitMQ source workers starting")
 	if err := q.Consume(ctx, processor.process, processor.failRun); err != nil && ctx.Err() == nil {
 		slog.Error("worker failed", slog.Any("err", err))
@@ -198,15 +207,15 @@ func (p *taskProcessor) failRun(ctx context.Context, task queue.Task) error {
 	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
 		return nil
 	}
-	_, err := p.db.TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
-	if errors.Is(err, data.ErrNotFound) {
+	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
+	if errors.Is(err, jobsearch.ErrNotFound) {
 		return nil
 	}
 	return err
 }
 
 type taskProcessor struct {
-	db           *jobsdb.DB
+	js           *jobsearch.Module
 	broker       *queue.Broker
 	orchestrator *scraper.Orchestrator
 	boards       *scraper.BoardPoller
@@ -245,13 +254,13 @@ func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error 
 		slog.Warn("board verification failed", slog.String("company_id", task.CompanyID), slog.String("source", task.Source), slog.String("token", task.BoardToken), slog.Any("err", err))
 		return nil
 	}
-	_, err := p.db.VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
+	_, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
 	return err
 }
 
 func (p *taskProcessor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
-	target, err := p.db.GetSourceTarget(ctx, task.TargetID)
-	if errors.Is(err, data.ErrNotFound) {
+	target, err := p.js.Targets().GetSourceTarget(ctx, task.TargetID)
+	if errors.Is(err, jobsearch.ErrNotFound) {
 		return dto.SourceTarget{}, false, nil
 	}
 	if err != nil {
@@ -272,7 +281,7 @@ func (p *taskProcessor) processPage(ctx context.Context, task queue.Task) error 
 		return err
 	}
 	if target.RunStatus == "queued" || task.Cursor == "" {
-		if _, err := p.db.TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
+		if _, err := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
 			return err
 		}
 	}
@@ -285,10 +294,10 @@ func (p *taskProcessor) processPage(ctx context.Context, task queue.Task) error 
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return err
 		}
-		_, err = p.db.TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
+		_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
 		return err
 	}
-	_, err = p.db.TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
+	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
 	return err
 }
 
@@ -298,7 +307,7 @@ func (p *taskProcessor) processBoard(ctx context.Context, task queue.Task) error
 		if err != nil || !active {
 			return err
 		}
-		if _, err := p.db.TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
+		if _, err := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
 			return err
 		}
 	}
@@ -306,7 +315,7 @@ func (p *taskProcessor) processBoard(ctx context.Context, task queue.Task) error
 		return err
 	}
 	if task.TargetID != "" {
-		_, err := p.db.TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
+		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
 		return err
 	}
 	return nil

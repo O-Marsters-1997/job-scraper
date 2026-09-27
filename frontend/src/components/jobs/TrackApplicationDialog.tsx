@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, untrack } from "solid-js";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -64,15 +64,12 @@ function TrackApplicationForm(props: {
 	const createMutation = useCreateApplication();
 	const updateMutation = useUpdateApplication();
 
-	const isEdit = !!props.existingApp;
-	const [statusId, setStatusId] = createSignal(
-		props.existingApp?.statusId ?? "",
-	);
-	const [notes, setNotes] = createSignal(props.existingApp?.notes ?? "");
-	const [appliedAt, setAppliedAt] = createSignal(
-		props.existingApp?.appliedAt ?? "",
-	);
-	const [salary, setSalary] = createSignal(props.existingApp?.salaryInfo ?? "");
+	const existingApp = untrack(() => props.existingApp);
+	const isEdit = !!existingApp;
+	const [statusId, setStatusId] = createSignal(existingApp?.statusId ?? "");
+	const [notes, setNotes] = createSignal(existingApp?.notes ?? "");
+	const [appliedAt, setAppliedAt] = createSignal(existingApp?.appliedAt ?? "");
+	const [salary, setSalary] = createSignal(existingApp?.salaryInfo ?? "");
 
 	const handleSubmit = async () => {
 		const jobId = props.job?.ID;
@@ -86,7 +83,7 @@ function TrackApplicationForm(props: {
 				salary_info: salary(),
 			});
 		} else {
-			const appId = props.existingApp?.id;
+			const appId = existingApp?.id;
 			if (!appId) return;
 			await updateMutation.mutateAsync({
 				id: appId,

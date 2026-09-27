@@ -28,11 +28,12 @@ test.describe("Companies", () => {
 		companiesPage,
 	}) => {
 		const nameText = await companiesPage.firstCompanyNameLink().textContent();
+		if (!nameText) throw new Error("Could not read first company name");
 		await companiesPage.openFirstCompany();
 
 		await expect(page).toHaveURL(/\/companies\/.+/);
 		await expect(
-			page.getByRole("heading", { name: nameText?.trim(), level: 1 }),
+			page.getByRole("heading", { name: nameText.trim(), level: 1 }),
 		).toBeVisible();
 	});
 
@@ -42,7 +43,9 @@ test.describe("Companies", () => {
 		const toggle = companiesPage.rows.first().getByRole("group");
 		await expect(toggle).toBeVisible();
 
-		const wasChecked = await toggle.evaluate((el) => el.hasAttribute("data-checked"));
+		const wasChecked = await toggle.evaluate((el) =>
+			el.hasAttribute("data-checked"),
+		);
 		await toggle.click();
 		await expect
 			.poll(() => toggle.evaluate((el) => el.hasAttribute("data-checked")))

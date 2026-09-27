@@ -47,7 +47,9 @@ export function JobsDataTable<TData extends Job>(
 		get data() {
 			return props.data;
 		},
-		columns: props.columns,
+		get columns() {
+			return props.columns;
+		},
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),

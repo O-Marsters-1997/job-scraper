@@ -175,17 +175,50 @@ func TestGetApplicationsForJobs(t *testing.T) {
 func TestSeedDefaultStatuses(t *testing.T) {
 	st, pool := newStore(t)
 	userID := insertUser(t, pool)
+	ctx := context.Background()
 
-	if err := st.SeedDefaultStatuses(context.Background(), userID); err != nil {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if err := st.SeedDefaultStatuses(ctx, tx, userID); err != nil {
 		t.Fatal(err)
 	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
 
-	got, err := st.ListApplicationStatusesByUser(context.Background(), userID)
+	got, err := st.ListApplicationStatusesByUser(ctx, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 5 {
 		t.Fatalf("got %d default statuses, want 5", len(got))
+	}
+}
+
+func TestSeedDefaultStatusesRollsBackWithItsTx(t *testing.T) {
+	st, pool := newStore(t)
+	userID := insertUser(t, pool)
+	ctx := context.Background()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if err := st.SeedDefaultStatuses(ctx, tx, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	got, err := st.ListApplicationStatusesByUser(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("got %d default statuses after rollback, want 0", len(got))
 	}
 }
 

@@ -1,5 +1,5 @@
 import { Bar } from "solid-chartjs";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show, untrack } from "solid-js";
 import { Card } from "@/components/ui/card";
 import {
 	chartCanvasRef,
@@ -16,7 +16,7 @@ export function ApplicationPipelineChart(props: {
 	statuses: ApplicationStatus[];
 }) {
 	const [selectedStatuses, setSelectedStatuses] = createSignal(
-		new Set(props.statuses.map((s) => s.ID)),
+		untrack(() => new Set(props.statuses.map((s) => s.ID))),
 	);
 
 	function toggleStatus(id: string) {

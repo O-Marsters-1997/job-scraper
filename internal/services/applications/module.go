@@ -5,6 +5,7 @@ package applications
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
@@ -26,8 +27,8 @@ func New(pool *pgxpool.Pool) *Module {
 	}
 }
 
-// SeedDefaults seeds userID's default Statuses; legacy signup calls this
-// through its own local StatusSeeder interface (ADR 0011).
-func (m *Module) SeedDefaults(ctx context.Context, userID string) error {
-	return m.store.SeedDefaultStatuses(ctx, userID)
+// SeedDefaults seeds userID's default Statuses inside tx; identity's signup
+// calls this through its own local StatusSeeder interface (ADR 0011).
+func (m *Module) SeedDefaults(ctx context.Context, tx pgx.Tx, userID string) error {
+	return m.store.SeedDefaultStatuses(ctx, tx, userID)
 }

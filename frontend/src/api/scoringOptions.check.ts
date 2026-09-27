@@ -1,4 +1,4 @@
-import { scoringOptionsSchema } from "./scoringOptions";
+import { scoringOptionsSchema } from "../types/scoringOptions";
 
 function ok(cond: boolean, msg: string) {
 	if (!cond) throw new Error(`FAIL: ${msg}`);

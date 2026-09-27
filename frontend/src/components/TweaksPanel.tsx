@@ -159,9 +159,10 @@ export default function TweaksPanel() {
 	const t = () => tweaks();
 
 	const customSwatch = () => {
-		const c = t().customColors ?? CUSTOM_DEFAULTS;
-		const hex = (key: string, fallback: string) =>
-			c[key] ? oklchToHex(c[key]) : fallback;
+		const hex = (key: string, fallback: string) => {
+			const c = t().customColors ?? CUSTOM_DEFAULTS;
+			return c[key] ? oklchToHex(c[key]) : fallback;
+		};
 		return {
 			sb: hex("--color-sidebar", "oklch(0.23 0.055 285)"),
 			cv: hex("--color-background", "oklch(0.98 0.006 285)"),

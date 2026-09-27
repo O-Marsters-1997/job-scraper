@@ -4,21 +4,36 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/url"
-	"os"
-	"sort"
-	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db/pgsqlc"
 )
+
+// ScoringPort is scoring's tx-scoped facade, called from within this
+// package's own transactions instead of writing scoring's tables directly
+// (ADR 0011).
+type ScoringPort interface {
+	JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error
+	JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error
+	CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error
+}
 
 type DB struct {
 	pool    *pgxpool.Pool
 	queries *pgsqlc.Queries
+	scoring ScoringPort
+}
+
+// WithScoring sets the scoring facade DB writes cross-context effects
+// through, set after New since scoring's pool dependency isn't built yet
+// at that point (mirrors scraper.Orchestrator.WithRejectFilter).
+func (db *DB) WithScoring(s ScoringPort) *DB {
+	db.scoring = s
+	return db
 }
 
 func New(ctx context.Context, connString string) (*DB, error) {
@@ -64,35 +79,7 @@ func uuidString(id pgtype.UUID) string {
 	return id.String()
 }
 
+// ConnString re-exports data.ConnString.
 func ConnString() (string, error) {
-	vars := map[string]string{
-		"POSTGRES_USER":     os.Getenv("POSTGRES_USER"),
-		"POSTGRES_PASSWORD": os.Getenv("POSTGRES_PASSWORD"),
-		"POSTGRES_HOST":     os.Getenv("POSTGRES_HOST"),
-		"POSTGRES_PORT":     os.Getenv("POSTGRES_PORT"),
-		"POSTGRES_DB":       os.Getenv("POSTGRES_DB"),
-	}
-	var missing []string
-	for k, v := range vars {
-		if v == "" {
-			missing = append(missing, k)
-		}
-	}
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		return "", fmt.Errorf("missing required env vars: %s", strings.Join(missing, ", "))
-	}
-	sslmode := os.Getenv("POSTGRES_SSLMODE")
-	if sslmode == "" {
-		sslmode = "disable"
-	}
-	dbName := vars["POSTGRES_DB"]
-	return (&url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword(vars["POSTGRES_USER"], vars["POSTGRES_PASSWORD"]),
-		Host:     net.JoinHostPort(vars["POSTGRES_HOST"], vars["POSTGRES_PORT"]),
-		Path:     "/" + dbName,
-		RawPath:  "/" + url.PathEscape(dbName),
-		RawQuery: url.Values{"sslmode": {sslmode}}.Encode(),
-	}).String(), nil
+	return data.ConnString()
 }

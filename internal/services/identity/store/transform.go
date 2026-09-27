@@ -1,6 +1,8 @@
 package store
 
 import (
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store/sqlc"
 )
@@ -28,5 +30,19 @@ func toSessionRowDTO(r sqlc.GetSessionRow) dto.Session {
 		UserID:    r.UserID.String(),
 		Username:  r.Username,
 		ExpiresAt: r.ExpiresAt.Time,
+	}
+}
+
+func toProfileDTO(username string, email pgtype.Text) dto.Profile {
+	return dto.Profile{Username: username, Email: email.String}
+}
+
+func toGoogleTokenDTO(r sqlc.GetGoogleOAuthTokenRow) dto.GoogleToken {
+	return dto.GoogleToken{
+		AccessTokenEnc:  r.AccessTokenEnc,
+		RefreshTokenEnc: r.RefreshTokenEnc,
+		TokenType:       r.TokenType,
+		Expiry:          r.Expiry.Time,
+		Scope:           r.Scope,
 	}
 }

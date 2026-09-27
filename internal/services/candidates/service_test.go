@@ -66,6 +66,8 @@ func (m *memoryStore) MarkDetailPending(_ context.Context, candidateID string) e
 	return nil
 }
 
+func (m *memoryStore) DeleteExpiredCandidates(context.Context) error { return nil }
+
 type memoryQueue struct {
 	jobs []dto.QueuedJob
 	err  error

@@ -126,3 +126,41 @@ func (q *Queries) UpsertCandidateBoard(ctx context.Context, arg UpsertCandidateB
 	)
 	return i, err
 }
+
+const verifyCompanyBoard = `-- name: VerifyCompanyBoard :one
+UPDATE company_boards
+SET status = 'verified', verification_method = $4, verified_at = NOW()
+WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at
+`
+
+type VerifyCompanyBoardParams struct {
+	CompanyID          pgtype.UUID
+	Source             string
+	BoardToken         string
+	VerificationMethod pgtype.Text
+}
+
+func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoardParams) (CompanyBoard, error) {
+	row := q.db.QueryRow(ctx, verifyCompanyBoard,
+		arg.CompanyID,
+		arg.Source,
+		arg.BoardToken,
+		arg.VerificationMethod,
+	)
+	var i CompanyBoard
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.Source,
+		&i.BoardToken,
+		&i.Status,
+		&i.VerificationMethod,
+		&i.VerifiedAt,
+		&i.LastLinkedAt,
+		&i.RetiredAt,
+		&i.SupersededAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}

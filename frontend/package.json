@@ -13,6 +13,7 @@
     "e2e:report": "playwright show-report .playwright/report",
     "format": "biome format",
     "lint": "biome lint",
+    "lint:solid": "eslint src",
     "check": "biome check",
     "add-component": "bun run scripts/add-component.ts",
     "typecheck": "tsgo --noEmit"
@@ -21,8 +22,8 @@
     "@kobalte/core": "^0.13.11",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/solid-query": "^5.95.2",
-    "@tanstack/solid-router": "latest",
-    "@tanstack/solid-router-devtools": "latest",
+    "@tanstack/solid-router": "^1.168.3",
+    "@tanstack/solid-router-devtools": "^1.166.11",
     "@tanstack/solid-table": "^8.21.3",
     "chart.js": "^4.5.1",
     "chartjs-adapter-date-fns": "^3.0.0",
@@ -41,12 +42,16 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260613.1",
     "@biomejs/biome": "2.4.5",
     "@faker-js/faker": "^10.4.0",
     "@playwright/test": "^1.52.0",
-    "@tanstack/devtools-vite": "latest",
-    "@tanstack/router-plugin": "latest",
+    "@tanstack/devtools-vite": "^0.6.0",
+    "@tanstack/router-plugin": "^1.167.4",
+    "@types/node": "^26.6.3",
+    "@typescript-eslint/parser": "^8.70.1",
+    "@typescript/native-preview": "7.0.0-dev.20260613.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-solid": "^0.18.0",
     "typescript": "^5.7.2",
     "vite": "^7.3.1",
     "vite-plugin-solid": "^2.11.10"

@@ -14,6 +14,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
+// ErrNotFound and ErrBoardClaimUnavailable are the jobsearch store's
+// sentinels, re-exported for the worker to match (ADR 0011).
+var (
+	ErrNotFound              = store.ErrNotFound
+	ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
+)
+
 type Module struct {
 	store         *store.Store
 	jobs          *Service
@@ -24,16 +31,22 @@ type Module struct {
 	ingest        *Ingester
 }
 
-// New builds the jobsearch context. configs is scoring's search config
-// reader (ADR 0011 migration order).
-func New(pool *pgxpool.Pool, q *queue.Broker, configs sourcetargets.SearchConfigReader) *Module {
-	st := store.New(pool)
+// ScoringPort is scoring's facade as jobsearch needs it: Search Config
+// reads for source-target filtering, plus the tx-scoped write ports jobsearch
+// calls instead of writing scoring's tables directly (ADR 0011).
+type ScoringPort interface {
+	sourcetargets.SearchConfigReader
+	store.ScoringWriter
+}
+
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+	st := store.New(pool, scoring)
 	cand := candidates.New(st, q)
 	return &Module{
 		store:         st,
 		jobs:          NewService(st),
 		companies:     companies.New(st, st, q),
-		sourceTargets: sourcetargets.New(st, configs, cand, q),
+		sourceTargets: sourcetargets.New(st, scoring, cand, q),
 		sources:       sources.New(),
 		candidates:    cand,
 		ingest:        newIngester(st, st),
@@ -47,14 +60,23 @@ func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 	return m.candidates.Reconsider(ctx, cfg)
 }
 
-// Boards exposes company and board management to other contexts and
-// cmd/admin (ADR 0011 Phase 9; the worker doesn't consume this yet — #268).
+// Boards exposes company and board management to other contexts, the
+// worker's board poller and crawler, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Boards() *companies.Service { return m.companies }
 
-// Targets exposes source-target management to other contexts and cmd/admin
-// (ADR 0011 Phase 9; the worker doesn't consume this yet — #268).
+// Targets exposes source-target management to other contexts, the worker's
+// run recovery, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
 
-// Catalog exposes job lookups to other contexts and cmd/admin (ADR 0011
-// Phase 9; the worker doesn't consume this yet — #268).
+// Catalog exposes job lookups to other contexts, the worker's new-URL
+// check, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Catalog() *Service { return m.jobs }
+
+// Candidates exposes candidate capture to the worker's scrape orchestrator
+// (ADR 0011 Phase 9).
+func (m *Module) Candidates() *candidates.Service { return m.candidates }
+
+// DeleteExpiredCandidates is called by the worker's daily cleanup.
+func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
+	return m.candidates.DeleteExpired(ctx)
+}

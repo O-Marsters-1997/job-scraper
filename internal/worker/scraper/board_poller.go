@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
@@ -61,7 +61,7 @@ func (p *BoardPoller) poll(ctx context.Context, boards []dto.BoardPoll, manual b
 
 func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) error {
 	claim, err := p.store.ClaimBoard(ctx, id, manual)
-	if errors.Is(err, providers.ErrBoardClaimUnavailable) && !manual {
+	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) && !manual {
 		return nil
 	}
 	if err != nil {

@@ -29,6 +29,10 @@ type Store interface {
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
 	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
+	GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error)
+	TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error)
+	ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error)
+	ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error)
 }
 
 // SearchConfigReader reads a user's Search Config from the scoring context.
@@ -219,6 +223,22 @@ func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.
 		return dto.SourceTarget{}, err
 	}
 	return s.publishRun(ctx, queued)
+}
+
+func (s *Service) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
+	return s.targets.GetSourceTarget(ctx, id)
+}
+
+func (s *Service) TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
+	return s.targets.TransitionSourceTargetRun(ctx, id, runID, status, runError)
+}
+
+func (s *Service) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {
+	return s.targets.ListRecoverableSourceTargets(ctx)
+}
+
+func (s *Service) ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error) {
+	return s.targets.ClaimRecoverableSourceTarget(ctx, id, runID)
 }
 
 func (s *Service) publishRun(ctx context.Context, queued dto.SourceTarget) (dto.SourceTarget, error) {

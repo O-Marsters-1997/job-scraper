@@ -153,6 +153,18 @@ type EffectOutbox struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type GoogleOauthToken struct {
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	AccessTokenEnc  string
+	RefreshTokenEnc string
+	TokenType       string
+	Expiry          pgtype.Timestamptz
+	Scope           string
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
 type HarvestRun struct {
 	Harvester       string
 	LastSucceededAt pgtype.Timestamptz

@@ -230,17 +230,29 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 	return items, nil
 }
 
-const markJobsClosed = `-- name: MarkJobsClosed :exec
-WITH closed AS (
-    UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
-    RETURNING id
-)
-DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
+const markJobsClosed = `-- name: MarkJobsClosed :many
+UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
+RETURNING id
 `
 
-func (q *Queries) MarkJobsClosed(ctx context.Context, dollar_1 []string) error {
-	_, err := q.db.Exec(ctx, markJobsClosed, dollar_1)
-	return err
+func (q *Queries) MarkJobsClosed(ctx context.Context, dollar_1 []string) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, markJobsClosed, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var id pgtype.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const openJobURLsForBoard = `-- name: OpenJobURLsForBoard :many

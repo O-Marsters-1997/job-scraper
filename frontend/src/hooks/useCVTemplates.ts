@@ -11,9 +11,10 @@ import {
 	removeTrackedDoc,
 	showTab,
 } from "../api/cvTemplates";
+import { keys } from "../api/keys";
 
 export const cvTemplatesQueryOptions = queryOptions({
-	queryKey: ["cv-templates"],
+	queryKey: keys.cvTemplates,
 	queryFn: fetchCVTemplates,
 });
 
@@ -26,7 +27,7 @@ export function useAddTrackedDoc() {
 	return createMutation(() => ({
 		mutationFn: (url: string) => addTrackedDoc(url),
 		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["cv-templates"] }),
+			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
 	}));
 }
 
@@ -35,7 +36,7 @@ export function useRemoveTrackedDoc() {
 	return createMutation(() => ({
 		mutationFn: (docId: string) => removeTrackedDoc(docId),
 		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["cv-templates"] }),
+			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
 	}));
 }
 
@@ -45,7 +46,7 @@ export function useHideTab() {
 		mutationFn: ({ docId, tabId }: { docId: string; tabId: string }) =>
 			hideTab(docId, tabId),
 		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["cv-templates"] }),
+			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
 	}));
 }
 
@@ -55,6 +56,6 @@ export function useShowTab() {
 		mutationFn: ({ docId, tabId }: { docId: string; tabId: string }) =>
 			showTab(docId, tabId),
 		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["cv-templates"] }),
+			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
 	}));
 }

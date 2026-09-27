@@ -5,6 +5,7 @@ package companies
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -26,6 +27,17 @@ type Store interface {
 	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
+	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error)
+	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
+	TouchCompanyCrawled(ctx context.Context, id string) error
+	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
+	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
+	FailBoard(ctx context.Context, poll dto.BoardPoll) error
+	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
+	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
+	SetLastScraped(ctx context.Context, source string) error
 }
 
 // SourceTargets keeps a legacy source target in sync when a tracked
@@ -132,6 +144,54 @@ func (s *Service) AddBoard(ctx context.Context, _ string, in dto.AddCompanyBoard
 		}
 	}
 	return board, nil
+}
+
+func (s *Service) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
+	return s.companies.UpsertCompany(ctx, c)
+}
+
+func (s *Service) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error) {
+	return s.companies.ListCompaniesToCrawl(ctx, limit)
+}
+
+func (s *Service) TouchCompanyCrawled(ctx context.Context, id string) error {
+	return s.companies.TouchCompanyCrawled(ctx, id)
+}
+
+func (s *Service) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+	return s.companies.VerifyCompanyBoard(ctx, companyID, source, token, method)
+}
+
+func (s *Service) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	return s.companies.ListDueBoards(ctx)
+}
+
+func (s *Service) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	return s.companies.ListActiveBoards(ctx)
+}
+
+func (s *Service) ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error) {
+	return s.companies.ClaimBoard(ctx, id, manual)
+}
+
+func (s *Service) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
+	return s.companies.CompleteBoard(ctx, snapshot)
+}
+
+func (s *Service) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
+	return s.companies.FailBoard(ctx, poll)
+}
+
+func (s *Service) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
+	return s.companies.GetVerifiedBoardID(ctx, source, token)
+}
+
+func (s *Service) GetLastScraped(ctx context.Context, source string) (time.Time, bool, error) {
+	return s.companies.GetLastScraped(ctx, source)
+}
+
+func (s *Service) SetLastScraped(ctx context.Context, source string) error {
+	return s.companies.SetLastScraped(ctx, source)
 }
 
 func humanizeToken(token string) string {

@@ -25,6 +25,7 @@ type jobCursor struct {
 type jobStore interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
+	NewURLs(ctx context.Context, urls []string) ([]string, error)
 }
 
 // Service is the jobs feature: the score-sorted, cursor-paginated job page
@@ -76,6 +77,10 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		page.Items = []dto.Job{}
 	}
 	return page, nil
+}
+
+func (s *Service) NewURLs(ctx context.Context, urls []string) ([]string, error) {
+	return s.store.NewURLs(ctx, urls)
 }
 
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {

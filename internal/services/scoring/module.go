@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -75,6 +76,26 @@ func (m *Module) SearchConfig(ctx context.Context, userID string) (dto.SearchCon
 // OpsState satisfies telemetry.StateReader.
 func (m *Module) OpsState(ctx context.Context) (dto.OpsState, error) {
 	return m.store.OpsState(ctx)
+}
+
+// JobsChanged is scoring's tx-scoped port for a job's content changing:
+// it drops stale cached answers and queues a fresh answer effect, within
+// the caller's own transaction (ADR 0011).
+func (m *Module) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error {
+	return m.store.JobsChanged(ctx, tx, jobIDs, firstDiscovery)
+}
+
+// JobsClosed is scoring's tx-scoped port for jobs closing: it drops their
+// cached answers within the caller's own transaction (ADR 0011).
+func (m *Module) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error {
+	return m.store.JobsClosed(ctx, tx, jobIDs)
+}
+
+// CompanyTracked is scoring's tx-scoped port for a user tracking a company:
+// it queues scores for the company's known open Jobs within the caller's
+// own transaction, without alerting (ADR 0011).
+func (m *Module) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	return m.store.CompanyTracked(ctx, tx, userID, companyID)
 }
 
 func (m *Module) AddOption(ctx context.Context, id, dimension, label, question string) error {

@@ -29,4 +29,25 @@ export class JobsPage {
 	firstJobTitleLink() {
 		return this.rows.first().getByRole("link").first();
 	}
+
+	async sortByCompany() {
+		await this.page.getByRole("columnheader", { name: "Company" }).click();
+	}
+
+	firstRowCompanyText() {
+		return this.rows.first().locator("td").nth(1);
+	}
+
+	async trackFirstJob(statusName: string) {
+		await this.rows
+			.first()
+			.getByRole("button", { name: "Job actions" })
+			.click();
+		await this.page
+			.getByRole("menuitem", { name: "Track application" })
+			.click();
+		const dialog = this.page.getByRole("dialog");
+		await dialog.getByLabel("Status").selectOption({ label: statusName });
+		await dialog.getByRole("button", { name: "Save" }).click();
+	}
 }

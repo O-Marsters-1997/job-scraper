@@ -12,16 +12,29 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-// PublicRoutes mounts login and signup outside the session-protected group.
+// PublicRoutes mounts login, signup and the Google OAuth start redirect
+// outside the session-protected group.
 func (m *Module) PublicRoutes(r chi.Router) {
 	r.Post("/auth/login", loginHandler(m.service))
 	r.Post("/auth/signup", signupHandler(m.service))
+	r.Get("/google/oauth/start", oauthStartHandler(m.google))
 }
 
-// Routes mounts logout and me inside the session-protected group.
+// Routes mounts logout, me, profile, AI credentials/prefs and the rest of
+// the Google Link inside the session-protected group.
 func (m *Module) Routes(r chi.Router) {
 	r.Post("/auth/logout", logoutHandler(m.service))
 	r.Get("/auth/me", meHandler)
+
+	r.Get("/profile", handlers.GetAll(m.profile.Get))
+	r.Put("/profile", handlers.Update(m.profile.Update))
+
+	r.Get("/ai-prefs", handlers.GetAll(m.aiPrefs.Get))
+	r.Put("/ai-credentials", handlers.Update(m.aiCredentials.Update))
+
+	r.Get("/google/oauth/callback", oauthCallbackHandler(m.google))
+	r.Get("/google/status", handlers.GetAll(m.google.Status))
+	r.Delete("/google/link", handlers.Delete(m.google.Disconnect))
 }
 
 func newSessionCookie(id string, maxAge int) *http.Cookie {

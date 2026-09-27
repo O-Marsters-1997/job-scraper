@@ -1,5 +1,5 @@
-// Package store is the identity context's Postgres store: users and
-// sessions.
+// Package store is the identity context's Postgres store: users, sessions,
+// profile, AI credentials and the Google Link's OAuth tokens.
 package store
 
 import (
@@ -15,6 +15,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store/sqlc"
 )
 
@@ -52,7 +53,17 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (dto.Use
 }
 
 func (s *Store) CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error) {
-	u, err := s.queries.CreateUser(ctx, sqlc.CreateUserParams{
+	return createUser(ctx, s.queries, username, passwordHash, email)
+}
+
+// CreateUserTx runs CreateUser inside tx, so signup can roll it back
+// alongside applications.SeedDefaults on seeding failure (ADR 0011).
+func (s *Store) CreateUserTx(ctx context.Context, tx pgx.Tx, username, passwordHash, email string) (dto.User, error) {
+	return createUser(ctx, s.queries.WithTx(tx), username, passwordHash, email)
+}
+
+func createUser(ctx context.Context, q *sqlc.Queries, username, passwordHash, email string) (dto.User, error) {
+	u, err := q.CreateUser(ctx, sqlc.CreateUserParams{
 		Username:     username,
 		PasswordHash: passwordHash,
 		Email:        pgtype.Text{String: email, Valid: email != ""},
@@ -65,6 +76,12 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash, email st
 		return dto.User{}, fmt.Errorf("store.CreateUser: %w", err)
 	}
 	return toUserDTO(u), nil
+}
+
+// Begin starts a transaction for signup, which must create the user and
+// seed their default Statuses atomically (ADR 0011).
+func (s *Store) Begin(ctx context.Context) (pgx.Tx, error) {
+	return s.pool.Begin(ctx)
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error) {
@@ -111,6 +128,146 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
 	if err := s.queries.DeleteExpiredSessions(ctx); err != nil {
 		return fmt.Errorf("store.DeleteExpiredSessions: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetProfile(ctx context.Context, userID string) (dto.Profile, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.Profile{}, err
+	}
+	row, err := s.queries.GetUserProfile(ctx, uid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.Profile{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.Profile{}, fmt.Errorf("store.GetProfile: %w", err)
+	}
+	return toProfileDTO(row.Username, row.Email), nil
+}
+
+func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.Profile{}, err
+	}
+	row, err := s.queries.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
+		ID:    uid,
+		Email: pgtype.Text{String: email, Valid: email != ""},
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.Profile{}, ErrNotFound
+	}
+	if err != nil {
+		return dto.Profile{}, fmt.Errorf("store.UpdateEmail: %w", err)
+	}
+	return toProfileDTO(row.Username, row.Email), nil
+}
+
+func (s *Store) UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.queries.UpsertUserAICredential(ctx, sqlc.UpsertUserAICredentialParams{
+		UserID:    uid,
+		Provider:  provider,
+		ApiKeyEnc: encKey,
+	}); err != nil {
+		return fmt.Errorf("store.UpsertUserAICredential: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string) (string, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return "", err
+	}
+	row, err := s.queries.GetUserAICredential(ctx, sqlc.GetUserAICredentialParams{
+		UserID:   uid,
+		Provider: provider,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("store.GetUserAICredential: %w", err)
+	}
+	return row.ApiKeyEnc, nil
+}
+
+func (s *Store) DeleteUserAICredential(ctx context.Context, userID, provider string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteUserAICredential(ctx, sqlc.DeleteUserAICredentialParams{
+		UserID:   uid,
+		Provider: provider,
+	}); err != nil {
+		return fmt.Errorf("store.DeleteUserAICredential: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListUserAICredentialProviders(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListUserAICredentialProviders: %w", err)
+	}
+	return rows, nil
+}
+
+func (s *Store) GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return dto.GoogleToken{}, err
+	}
+	row, err := s.queries.GetGoogleOAuthToken(ctx, uid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.GoogleToken{}, google.ErrTokenNotFound
+	}
+	if err != nil {
+		return dto.GoogleToken{}, fmt.Errorf("store.GetGoogleToken: %w", err)
+	}
+	return toGoogleTokenDTO(row), nil
+}
+
+func (s *Store) UpsertGoogleToken(ctx context.Context, input dto.UpsertGoogleTokenInput) error {
+	uid, err := parseUUID(input.UserID)
+	if err != nil {
+		return err
+	}
+	var expiry pgtype.Timestamptz
+	if !input.Expiry.IsZero() {
+		expiry = pgtype.Timestamptz{Time: input.Expiry, Valid: true}
+	}
+	if err := s.queries.UpsertGoogleOAuthToken(ctx, sqlc.UpsertGoogleOAuthTokenParams{
+		UserID:          uid,
+		AccessTokenEnc:  input.AccessTokenEnc,
+		RefreshTokenEnc: input.RefreshTokenEnc,
+		TokenType:       input.TokenType,
+		Expiry:          expiry,
+		Scope:           input.Scope,
+	}); err != nil {
+		return fmt.Errorf("store.UpsertGoogleToken: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteGoogleToken(ctx context.Context, userID string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteGoogleOAuthToken(ctx, uid); err != nil {
+		return fmt.Errorf("store.DeleteGoogleToken: %w", err)
 	}
 	return nil
 }

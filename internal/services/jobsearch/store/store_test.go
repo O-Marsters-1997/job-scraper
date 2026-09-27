@@ -11,12 +11,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	t.Helper()
 	pool := pgtest.New(t)
-	return store.New(pool), pool
+	return store.New(pool, scoring.NewFacade(pool)), pool
 }
 
 func insertUser(t *testing.T, pool *pgxpool.Pool) string {
@@ -302,5 +303,207 @@ func TestCandidateSaveListAndAssess(t *testing.T) {
 	}
 	if err := st.MarkDetailPending(ctx, saved[0].ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDeleteExpiredCandidates(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "expiry-search", true, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := st.SaveCards(ctx, target, []dto.Job{{URL: "https://example.com/candidate/expiring", Title: "Engineer", CompanySlug: "acme"}})
+	if err != nil || len(saved) != 1 {
+		t.Fatalf("save cards: %+v, %v", saved, err)
+	}
+	if _, err := pool.Exec(ctx, "UPDATE job_candidates SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1::uuid", saved[0].ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.DeleteExpiredCandidates(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	listed, err := st.ListForUser(ctx, userID, "", 10)
+	if err != nil || len(listed) != 0 {
+		t.Fatalf("list after expiry = %+v, err = %v", listed, err)
+	}
+}
+
+func TestNewURLs(t *testing.T) {
+	st, _ := newStore(t)
+	ctx := context.Background()
+	job := baseJob
+	job.URL = "https://example.com/jobs/new-urls"
+	if _, _, err := st.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+
+	newURLs, err := st.NewURLs(ctx, []string{job.URL, "https://example.com/jobs/never-seen"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(newURLs) != 1 || newURLs[0] != "https://example.com/jobs/never-seen" {
+		t.Fatalf("new URLs = %v", newURLs)
+	}
+}
+
+func TestListCompaniesToCrawlAndTouch(t *testing.T) {
+	st, _ := newStore(t)
+	ctx := context.Background()
+	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "crawl-co", Name: "Crawl Co", Domain: "crawl-co.example"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	due, err := st.ListCompaniesToCrawl(ctx, 10)
+	if err != nil || len(due) != 1 || due[0].ID != company.ID {
+		t.Fatalf("due for crawl = %+v, err = %v", due, err)
+	}
+
+	if err := st.TouchCompanyCrawled(ctx, company.ID); err != nil {
+		t.Fatal(err)
+	}
+	due, err = st.ListCompaniesToCrawl(ctx, 10)
+	if err != nil || len(due) != 0 {
+		t.Fatalf("after touch = %+v, err = %v", due, err)
+	}
+}
+
+func TestSourceTargetRunRecovery(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, map[string]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := st.GetSourceTarget(ctx, target.ID)
+	if err != nil || got.ID != target.ID {
+		t.Fatalf("get target = %+v, err = %v", got, err)
+	}
+	if _, err := st.GetSourceTarget(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("missing target: err = %v, want ErrNotFound", err)
+	}
+
+	running, err := st.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "running", "")
+	if err != nil || running.RunStatus != "running" {
+		t.Fatalf("transition to running = %+v, err = %v", running, err)
+	}
+
+	if _, err := pool.Exec(ctx, "UPDATE source_targets SET updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1::uuid", target.ID); err != nil {
+		t.Fatal(err)
+	}
+	recoverable, err := st.ListRecoverableSourceTargets(ctx)
+	if err != nil || len(recoverable) != 1 || recoverable[0].ID != target.ID {
+		t.Fatalf("recoverable = %+v, err = %v", recoverable, err)
+	}
+
+	claimed, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
+	if err != nil || claimed.ID != target.ID {
+		t.Fatalf("claim recoverable = %+v, err = %v", claimed, err)
+	}
+	if _, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("re-claim before stale again: err = %v, want ErrNotFound", err)
+	}
+
+	succeeded, err := st.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "succeeded", "")
+	if err != nil || succeeded.RunStatus != "succeeded" {
+		t.Fatalf("transition to succeeded = %+v, err = %v", succeeded, err)
+	}
+}
+
+func boardFixture(t *testing.T, st *store.Store, pool *pgxpool.Pool) (context.Context, dto.CompanyBoard, string) {
+	t.Helper()
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "poll-co", Name: "Poll Co"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "poll-co")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 60); err != nil {
+		t.Fatal(err)
+	}
+	return ctx, board, company.ID
+}
+
+func TestBoardPollDueClaimAndEmptyClosure(t *testing.T) {
+	st, pool := newStore(t)
+	ctx, board, companyID := boardFixture(t, st, pool)
+
+	if due, err := st.ListDueBoards(ctx); err != nil || len(due) != 0 {
+		t.Fatalf("candidate due = %v, err = %v", due, err)
+	}
+	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
+		t.Fatal(err)
+	}
+	due, err := st.ListDueBoards(ctx)
+	if err != nil || len(due) != 1 || due[0].ID != board.ID {
+		t.Fatalf("verified due = %v, err = %v", due, err)
+	}
+
+	claim, err := st.ClaimBoard(ctx, board.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ClaimBoard(ctx, board.ID, false); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+		t.Fatalf("second claim = %v, want ErrBoardClaimUnavailable", err)
+	}
+
+	job := dto.Job{Title: "Engineer", URL: "https://boards.greenhouse.io/poll-co/jobs/1", Source: "greenhouse", CompanySlug: "poll-co", CompanyID: companyID, BoardID: board.ID, UpdatedAt: time.Now()}
+	if _, _, err := st.SaveCanonical(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+		t.Fatalf("replay = %v, want ErrBoardClaimUnavailable", err)
+	}
+	if due, err := st.ListDueBoards(ctx); err != nil || len(due) != 0 {
+		t.Fatalf("completed due = %v, err = %v", due, err)
+	}
+
+	for n := 1; n <= 2; n++ {
+		empty, err := st.ClaimBoard(ctx, board.ID, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: empty, Complete: true}); err != nil {
+			t.Fatal(err)
+		}
+		var closed bool
+		if err := pool.QueryRow(ctx, "SELECT closed_at IS NOT NULL FROM jobs WHERE url = $1", job.URL).Scan(&closed); err != nil {
+			t.Fatal(err)
+		}
+		if closed != (n == 2) {
+			t.Fatalf("after %d empty snapshots closed = %t", n, closed)
+		}
+	}
+}
+
+func TestFailBoardRequiresActiveLease(t *testing.T) {
+	st, pool := newStore(t)
+	ctx, board, companyID := boardFixture(t, st, pool)
+	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
+		t.Fatal(err)
+	}
+	claim, err := st.ClaimBoard(ctx, board.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.FailBoard(ctx, claim); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.FailBoard(ctx, claim); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+		t.Fatalf("stale fail = %v, want ErrBoardClaimUnavailable", err)
 	}
 }

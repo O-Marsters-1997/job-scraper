@@ -17,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 var ErrNotFound = apperr.NotFound("not found")
@@ -35,6 +36,73 @@ type Store struct {
 
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
+}
+
+func parseUUIDs(ids []string) ([]pgtype.UUID, error) {
+	out := make([]pgtype.UUID, len(ids))
+	for i, id := range ids {
+		uid, err := parseUUID(id)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = uid
+	}
+	return out, nil
+}
+
+// JobsChanged drops jobIDs' stale cached answers and queues a fresh answer
+// effect for each within tx (ADR 0011); firstDiscovery controls whether
+// scoring's Run loop alerts once the effect completes.
+func (s *Store) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error {
+	ids, err := parseUUIDs(jobIDs)
+	if err != nil {
+		return err
+	}
+	queries := s.queries.WithTx(tx)
+	if err := queries.DropStaleAnswers(ctx, ids); err != nil {
+		return fmt.Errorf("store.JobsChanged: drop stale answers: %w", err)
+	}
+	for _, jobID := range ids {
+		job, err := queries.GetJobForScoring(ctx, jobID)
+		if err != nil {
+			return fmt.Errorf("store.JobsChanged: load job: %w", err)
+		}
+		role, _ := sourcespec.SourceRole(job.Source)
+		err = queries.QueueAnswerEffect(ctx, sqlc.QueueAnswerEffectParams{
+			JobID: jobID, Fingerprint: job.ContentFingerprint.String,
+			FirstDiscovery: firstDiscovery, Discovery: role == sourcespec.RoleDiscovery,
+		})
+		if err != nil {
+			return fmt.Errorf("store.JobsChanged: queue answer effect: %w", err)
+		}
+	}
+	return nil
+}
+
+// JobsClosed drops jobIDs' cached answers within tx (ADR 0011).
+func (s *Store) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error {
+	ids, err := parseUUIDs(jobIDs)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).DeleteAnswersForJobs(ctx, ids); err != nil {
+		return fmt.Errorf("store.JobsClosed: %w", err)
+	}
+	return nil
+}
+
+// CompanyTracked queues an answer effect for companyID's open, fingerprinted
+// Jobs within tx, with first_discovery left false so scoring's Run loop
+// doesn't alert (ADR 0011).
+func (s *Store) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	cid, err := parseUUID(companyID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).QueueTrackingScores(ctx, cid); err != nil {
+		return fmt.Errorf("store.CompanyTracked: %w", err)
+	}
+	return nil
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {

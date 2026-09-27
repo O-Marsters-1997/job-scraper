@@ -9,6 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
 var testDB *db.DB
@@ -19,6 +20,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("pgtest: %v", err)
 	}
 	testDB = db.NewFromPool(pool)
+	testDB.WithScoring(scoring.NewFacade(pool))
 
 	os.Exit(m.Run())
 }
