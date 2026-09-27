@@ -10,9 +10,10 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
-	"github.com/ollymarsters/job-scraper/internal/api/handlers"
+	apihandlers "github.com/ollymarsters/job-scraper/internal/api/handlers"
 	"github.com/ollymarsters/job-scraper/internal/api/services/suitability"
 	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
@@ -35,20 +36,20 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 	svc := newServices(db, q, creds, suitabilitySvc)
 
 	r.Route("/auth", func(r chi.Router) {
-		r.Post("/login", handlers.Login(svc.auth))
-		r.Post("/signup", handlers.Signup(svc.auth))
+		r.Post("/login", apihandlers.Login(svc.auth))
+		r.Post("/signup", apihandlers.Signup(svc.auth))
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(db))
-			r.Post("/logout", handlers.Logout(svc.auth))
-			r.Get("/me", handlers.Me)
+			r.Post("/logout", apihandlers.Logout(svc.auth))
+			r.Get("/me", apihandlers.Me)
 		})
 	})
 
 	r.Route("/google", func(r chi.Router) {
-		r.Get("/oauth/start", handlers.OAuthStart(svc.google))
+		r.Get("/oauth/start", apihandlers.OAuthStart(svc.google))
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(db))
-			r.Get("/oauth/callback", handlers.OAuthCallback(svc.google))
+			r.Get("/oauth/callback", apihandlers.OAuthCallback(svc.google))
 			r.Get("/status", handlers.GetAll(svc.google.Status))
 			r.Delete("/link", handlers.Delete(svc.google.Disconnect))
 		})
@@ -110,7 +111,7 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 
 		r.Route("/cv-templates", func(r chi.Router) {
 			r.Get("/", handlers.GetAll(svc.cvTemplates.List))
-			r.Get("/{docId}/{tabId}/pdf", handlers.ExportCV(svc.cvTemplates))
+			r.Get("/{docId}/{tabId}/pdf", apihandlers.ExportCV(svc.cvTemplates))
 		})
 
 		r.Route("/tracked-docs", func(r chi.Router) {
@@ -123,8 +124,8 @@ func NewRouter(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore, 
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
-		r.Post("/ingest", handlers.Ingest(svc.ingest))
-		r.With(middleware.RequestSize(2<<20)).Post("/ingest/batch", handlers.IngestBatch(svc.ingest))
+		r.Post("/ingest", apihandlers.Ingest(svc.ingest))
+		r.With(middleware.RequestSize(2<<20)).Post("/ingest/batch", apihandlers.IngestBatch(svc.ingest))
 	})
 
 	return r

@@ -6,12 +6,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 func withSession(r *http.Request, userID string) *http.Request {
-	ctx := auth.WithSession(r.Context(), dto.Session{UserID: userID})
+	ctx := WithSession(r.Context(), dto.Session{UserID: userID})
 	return r.WithContext(ctx)
 }
 

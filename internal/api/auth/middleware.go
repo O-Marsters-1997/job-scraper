@@ -1,25 +1,11 @@
 package auth
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
-	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
-
-type contextKey struct{}
-
-var ctxKeySession = contextKey{}
-
-func SessionFromContext(ctx context.Context) (dto.Session, bool) {
-	s, ok := ctx.Value(ctxKeySession).(dto.Session)
-	return s, ok
-}
-
-func WithSession(ctx context.Context, s dto.Session) context.Context {
-	return context.WithValue(ctx, ctxKeySession, s)
-}
 
 // Middleware authenticates requests using the session_id cookie.
 func Middleware(sp providers.SessionProvider) func(http.Handler) http.Handler {
@@ -35,7 +21,7 @@ func Middleware(sp providers.SessionProvider) func(http.Handler) http.Handler {
 				WriteUnauthorized(w)
 				return
 			}
-			ctx := context.WithValue(r.Context(), ctxKeySession, session)
+			ctx := handlers.WithSession(r.Context(), session)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
