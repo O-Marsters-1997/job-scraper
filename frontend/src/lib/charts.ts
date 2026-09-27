@@ -15,7 +15,9 @@ import {
 	Tooltip,
 } from "chart.js";
 import zoomPlugin from "chartjs-plugin-zoom";
+import { createEffect, createMemo } from "solid-js";
 import { cssVarHex } from "./color";
+import { themeVersion } from "./tweaks";
 
 export function registerCharts() {
 	Chart.register(
@@ -257,4 +259,29 @@ export const destructiveHex = () => cssVarHex("--color-destructive");
 
 export function hexAlpha(hex: string, alpha: string): string {
 	return `${hex}${alpha}`;
+}
+
+// Canvas can't read CSS variables live, so chart colours are baked into
+// plain values at build time; wrap any such builder in this so it recomputes
+// when the applied theme changes.
+export function createThemedMemo<T>(build: () => T): () => T {
+	return createMemo(() => {
+		themeVersion();
+		return build();
+	});
+}
+
+// Chart.js canvases carry their own role/aria-label since solid-chartjs
+// doesn't forward arbitrary props to the underlying <canvas>.
+export function useChartCanvasRef(
+	label: () => string,
+): (c: HTMLCanvasElement | null) => void {
+	let canvas: HTMLCanvasElement | null = null;
+	createEffect(() => {
+		canvas?.setAttribute("aria-label", label());
+	});
+	return (c) => {
+		canvas = c;
+		c?.setAttribute("role", "img");
+	};
 }

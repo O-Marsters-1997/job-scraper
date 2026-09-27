@@ -1,14 +1,17 @@
 import { Doughnut } from "solid-chartjs";
-import { createMemo, Show } from "solid-js";
+import { Show } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { donutChartOptions, hexAlpha, sourceHex } from "@/lib/charts";
+import {
+	createThemedMemo,
+	donutChartOptions,
+	hexAlpha,
+	sourceHex,
+	useChartCanvasRef,
+} from "@/lib/charts";
 import type { Job } from "@/types/job";
 
-export function JobsBySourceChart(props: {
-	jobs: Job[];
-	chartsReady: boolean;
-}) {
-	const data = createMemo(() => {
+export function JobsBySourceChart(props: { jobs: Job[] }) {
+	const data = createThemedMemo(() => {
 		const counts: Record<string, number> = {};
 		for (const job of props.jobs) {
 			counts[job.Source] = (counts[job.Source] ?? 0) + 1;
@@ -28,8 +31,15 @@ export function JobsBySourceChart(props: {
 		};
 	});
 
+	const options = createThemedMemo(donutChartOptions);
+
 	const count = () => props.jobs.length;
 	const hasJobs = () => count() > 0;
+	const sourceCount = () => new Set(props.jobs.map((j) => j.Source)).size;
+	const setCanvas = useChartCanvasRef(
+		() =>
+			`Doughnut chart of jobs by source, ${count()} job${count() === 1 ? "" : "s"} across ${sourceCount()} source${sourceCount() === 1 ? "" : "s"}`,
+	);
 
 	return (
 		<Card>
@@ -41,10 +51,10 @@ export function JobsBySourceChart(props: {
 			</div>
 			<div class="relative px-5 py-4" style={{ height: "220px" }}>
 				<Show
-					when={hasJobs() && props.chartsReady}
+					when={hasJobs()}
 					fallback={<p class="text-sm text-faint">No jobs scraped yet.</p>}
 				>
-					<Doughnut data={data()} options={donutChartOptions()} />
+					<Doughnut ref={setCanvas} data={data()} options={options()} />
 				</Show>
 			</div>
 		</Card>

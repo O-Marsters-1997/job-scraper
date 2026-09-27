@@ -1,14 +1,17 @@
 import { Bar } from "solid-chartjs";
-import { createMemo, Show } from "solid-js";
+import { Show } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { hexAlpha, horizontalBarOptions, sourceHex } from "@/lib/charts";
+import {
+	createThemedMemo,
+	hexAlpha,
+	horizontalBarOptions,
+	sourceHex,
+	useChartCanvasRef,
+} from "@/lib/charts";
 import type { Job } from "@/types/job";
 
-export function SourceQualityChart(props: {
-	jobs: Job[];
-	chartsReady: boolean;
-}) {
-	const data = createMemo(() => {
+export function SourceQualityChart(props: { jobs: Job[] }) {
+	const data = createThemedMemo(() => {
 		const scoreSum: Record<string, number> = {};
 		const scoreCount: Record<string, number> = {};
 		for (const job of props.jobs) {
@@ -39,7 +42,13 @@ export function SourceQualityChart(props: {
 		};
 	});
 
+	const options = createThemedMemo(horizontalBarOptions);
+
 	const hasScores = () => data().labels.length > 0;
+	const setCanvas = useChartCanvasRef(
+		() =>
+			`Horizontal bar chart of average suitability score by source, ${data().labels.length} source${data().labels.length === 1 ? "" : "s"}`,
+	);
 
 	return (
 		<Card class="mb-3">
@@ -51,7 +60,7 @@ export function SourceQualityChart(props: {
 			</div>
 			<div class="px-5 py-4">
 				<Show
-					when={hasScores() && props.chartsReady}
+					when={hasScores()}
 					fallback={<p class="text-sm text-faint">No scored jobs yet.</p>}
 				>
 					<div
@@ -60,7 +69,7 @@ export function SourceQualityChart(props: {
 							height: `${Math.max(80, data().labels.length * 40)}px`,
 						}}
 					>
-						<Bar data={data()} options={horizontalBarOptions()} />
+						<Bar ref={setCanvas} data={data()} options={options()} />
 					</div>
 				</Show>
 			</div>

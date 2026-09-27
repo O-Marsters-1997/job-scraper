@@ -1,16 +1,22 @@
 import { test as base } from "@playwright/test";
 import { AppShellComponent } from "../components/app-shell.component";
+import { TweaksPanelComponent } from "../components/tweaks-panel.component";
 import { CompaniesPage } from "../pages/companies.page";
+import { InsightsPage } from "../pages/insights.page";
 import { JobsPage } from "../pages/jobs.page";
 import { LoginPage } from "../pages/login.page";
+import { OverviewPage } from "../pages/overview.page";
 import { StatusesPage } from "../pages/statuses.page";
 
 type Fixtures = {
 	loginPage: LoginPage;
 	jobsPage: JobsPage;
 	companiesPage: CompaniesPage;
+	overviewPage: OverviewPage;
+	insightsPage: InsightsPage;
 	statusesPage: StatusesPage;
 	appShell: AppShellComponent;
+	tweaksPanel: TweaksPanelComponent;
 };
 
 export const test = base.extend<Fixtures>({
@@ -23,11 +29,20 @@ export const test = base.extend<Fixtures>({
 	companiesPage: async ({ page }, use) => {
 		await use(new CompaniesPage(page));
 	},
+	overviewPage: async ({ page }, use) => {
+		await use(new OverviewPage(page));
+	},
+	insightsPage: async ({ page }, use) => {
+		await use(new InsightsPage(page));
+	},
 	statusesPage: async ({ page }, use) => {
 		await use(new StatusesPage(page));
 	},
 	appShell: async ({ page }, use) => {
 		await use(new AppShellComponent(page, page.locator("aside")));
+	},
+	tweaksPanel: async ({ page }, use) => {
+		await use(new TweaksPanelComponent(page));
 	},
 });
 

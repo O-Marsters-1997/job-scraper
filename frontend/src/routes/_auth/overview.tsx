@@ -9,7 +9,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/datetime";
+import { dayKey, formatDate } from "@/lib/datetime";
 import { cn, titleCase } from "@/lib/utils";
 import { SourceBadge } from "../../components/SourceBadge";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -21,13 +21,13 @@ import {
 	applicationsQueryOptions,
 	useApplications,
 } from "../../hooks/useApplications";
-import { jobsQueryOptions, useJobs } from "../../hooks/useJobs";
+import { allJobsQueryOptions, useAllJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 
 export const Route = createFileRoute("/_auth/overview")({
 	loader: () =>
 		Promise.all([
-			queryClient.ensureQueryData(jobsQueryOptions),
+			queryClient.ensureQueryData(allJobsQueryOptions),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
 		]),
@@ -35,17 +35,11 @@ export const Route = createFileRoute("/_auth/overview")({
 });
 
 function isToday(iso: string): boolean {
-	const d = new Date(iso);
-	const now = new Date();
-	return (
-		d.getFullYear() === now.getFullYear() &&
-		d.getMonth() === now.getMonth() &&
-		d.getDate() === now.getDate()
-	);
+	return dayKey(iso) === dayKey(new Date());
 }
 
 function OverviewPage() {
-	const jobsQuery = useJobs();
+	const jobsQuery = useAllJobs();
 	const appsQuery = useApplications();
 	const statusesQuery = useApplicationStatuses();
 
@@ -82,7 +76,13 @@ function OverviewPage() {
 	const pipeline = () =>
 		statuses().map((s) => ({ ...s, count: appsByStatus()[s.ID] ?? 0 }));
 
-	const recentJobs = () => jobs().slice(0, 5);
+	const recentJobs = () =>
+		[...jobs()]
+			.sort(
+				(a, b) =>
+					new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
+			)
+			.slice(0, 5);
 	const recentApps = () => applications().slice(0, 5);
 
 	return (
@@ -96,7 +96,7 @@ function OverviewPage() {
 
 			<div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1.4fr_1.4fr_1.2fr]">
 				<FeatureStat
-					label="New today (recent 100)"
+					label="New today"
 					value={newToday().toString()}
 					delta={
 						todaySources() > 0
@@ -134,7 +134,7 @@ function OverviewPage() {
 				<Card class="sm:col-span-2 lg:col-span-1">
 					<div class="grid h-full grid-rows-2 divide-y divide-border">
 						<MiniStat
-							label="Recent jobs"
+							label="Total jobs"
 							value={totalJobs().toString()}
 							hint={`from ${sourceCount()} ${sourceCount() === 1 ? "source" : "sources"}`}
 						/>

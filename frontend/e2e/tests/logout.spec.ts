@@ -10,7 +10,11 @@ test("should redirect to /login after signing out", async ({
 	await expect(page).toHaveURL(/\/login/);
 });
 
-test("clears cached data between users", async ({ page, appShell, loginPage }) => {
+test("clears cached data between users", async ({
+	page,
+	appShell,
+	loginPage,
+}) => {
 	await page.goto("/overview");
 	await appShell.navigateTo(appShell.applicationsLink);
 	await expect(

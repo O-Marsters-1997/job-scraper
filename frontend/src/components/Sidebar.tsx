@@ -88,10 +88,10 @@ export default function Sidebar(props: SidebarProps) {
 			</Show>
 			<aside
 				class={cn(
-					"fixed inset-y-0 left-0 z-50 flex h-screen w-[13.75rem] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
+					"fixed inset-y-0 left-0 z-50 flex h-screen w-[var(--sidebar-w,13.75rem)] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
 					"transition-transform duration-300 md:relative md:z-auto md:translate-x-0 md:shrink-0 md:transition-[width]",
 					props.mobileOpen ? "translate-x-0" : "-translate-x-full",
-					expanded() ? "md:w-[13.75rem]" : "md:w-14",
+					expanded() ? "md:w-[var(--sidebar-w,13.75rem)]" : "md:w-14",
 				)}
 			>
 				<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
