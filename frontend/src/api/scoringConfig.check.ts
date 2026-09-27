@@ -11,6 +11,7 @@ const base = {
 	excludedLocations: ["united states"],
 	preferences: {
 		picks: [{ optionId: "tech:go", stance: "nice", source: "manual" }],
+		salaryFloor: null,
 	},
 	updatedAt: "2026-09-27T00:00:00Z",
 };
@@ -62,3 +63,29 @@ try {
 	threw = true;
 }
 ok(threw, "a pick missing source is rejected");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		preferences: {
+			...base.preferences,
+			salaryFloor: { amount: -1, currency: "GBP" },
+		},
+	});
+} catch {
+	threw = true;
+}
+ok(threw, "a negative salary floor amount is rejected");
+
+const withFloor = scoringConfigSchema.parse({
+	...base,
+	preferences: {
+		...base.preferences,
+		salaryFloor: { amount: 55000, currency: "GBP" },
+	},
+});
+ok(
+	withFloor.preferences.salaryFloor?.amount === 55000,
+	"a salary floor parses",
+);

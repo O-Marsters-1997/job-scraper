@@ -187,3 +187,31 @@ func TestRecompute_NeverCallsAnswererOrAlerter(t *testing.T) {
 		t.Fatalf("alerter called on recompute: %v", alerter.notified)
 	}
 }
+
+func TestRecompute_SalaryFloorReRanksWithoutAnswerer(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	configs := providers.NewMockSearchConfigProvider()
+	if _, err := configs.UpsertSearchConfig(context.Background(), dto.SearchConfig{
+		UserID: "user-1", NotifyThreshold: 70,
+		Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000, Currency: "GBP"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	store.SeedScoringInputs("user-1", []providers.ScoringInput{
+		{Job: dto.Job{ID: "job-1", SalaryRaw: "£40k"}, Answers: map[string]dto.Answer{}},
+	})
+
+	svc := New(store, newOptions(), configs, &fakeAnswerer{t: t, forbidden: true},
+		&fakeCredentials{}, &fakeAlerter{}, &fakeProfiles{})
+
+	result, err := svc.Recompute(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("Recompute: %v", err)
+	}
+	if result.Recomputed != 1 {
+		t.Fatalf("recomputed = %d, want 1", result.Recomputed)
+	}
+	if len(store.Saved) != 1 || store.Saved[0].Score != 30 {
+		t.Fatalf("saved scores = %+v, want one score of 30 (salary below floor)", store.Saved)
+	}
+}

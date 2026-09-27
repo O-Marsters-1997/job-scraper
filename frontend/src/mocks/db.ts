@@ -205,6 +205,7 @@ let scoringConfig: ScoringConfig = {
 			{ optionId: "role:backend", stance: "nice", source: "manual" },
 			{ optionId: "domain:fintech", stance: "avoid", source: "manual" },
 		],
+		salaryFloor: null,
 	},
 	updatedAt: new Date("2024-01-01").toISOString(),
 };

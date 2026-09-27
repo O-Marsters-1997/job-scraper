@@ -20,6 +20,8 @@ func TestCompute(t *testing.T) {
 	tests := []struct {
 		name      string
 		picks     []evaluatedPick
+		salaryRaw string
+		floor     *dto.Money
 		wantScore int
 		wantRows  []dto.ScoreRow // Resolved/Effect only, matched by index
 	}{
@@ -82,11 +84,39 @@ func TestCompute(t *testing.T) {
 			wantScore: 50,
 			wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 		},
+		{
+			name:      "salary below floor in the same currency is an avoid hit",
+			salaryRaw: "£40k",
+			floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
+			wantScore: 30,
+			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "yes", Effect: "misses"}},
+		},
+		{
+			name:      "salary above floor in the same currency is neutral",
+			salaryRaw: "£70k",
+			floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
+			wantScore: 50,
+			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "no", Effect: "neutral"}},
+		},
+		{
+			name:      "salary in a different currency is unknown",
+			salaryRaw: "$70k",
+			floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
+			wantScore: 50,
+			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "unknown", Effect: "unknown"}},
+		},
+		{
+			name:      "unparseable salary is unknown",
+			salaryRaw: "Competitive",
+			floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
+			wantScore: 50,
+			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "unknown", Effect: "unknown"}},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			score, rows := compute(tt.picks)
+			score, rows := compute(tt.picks, tt.salaryRaw, tt.floor)
 			if score != tt.wantScore {
 				t.Errorf("score = %d, want %d", score, tt.wantScore)
 			}

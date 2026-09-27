@@ -8,8 +8,14 @@ export const pickSchema = z.object({
 	source: z.string(),
 });
 
+export const moneySchema = z.object({
+	amount: z.number().int().min(0),
+	currency: z.string().min(1),
+});
+
 export const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
+	salaryFloor: moneySchema.nullable(),
 });
 
 export const scoringConfigSchema = z.object({
@@ -22,6 +28,7 @@ export const scoringConfigSchema = z.object({
 });
 
 export type Pick = z.infer<typeof pickSchema>;
+export type Money = z.infer<typeof moneySchema>;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type ScoringConfig = z.infer<typeof scoringConfigSchema>;
 

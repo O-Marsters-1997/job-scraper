@@ -290,6 +290,9 @@ function ScoringForm(props: {
 	const pick = (id: string, stance: Stance) => setStances(id, stance);
 	const unpick = (id: string) => setStances(id, undefined);
 
+	const [salaryFloor, setSalaryFloor] = createSignal(
+		props.config.preferences.salaryFloor?.amount.toString() ?? "",
+	);
 	const [threshold, setThreshold] = createSignal(props.config.notifyThreshold);
 	const [titleKeywords, setTitleKeywords] = createSignal(
 		props.config.excludedTitleKeywords.join(", "),
@@ -329,6 +332,9 @@ function ScoringForm(props: {
 							stance,
 							source: "manual",
 						})),
+					salaryFloor: salaryFloor()
+						? { amount: Number(salaryFloor()), currency: "GBP" }
+						: null,
 				},
 				updatedAt: props.config.updatedAt,
 			});
@@ -476,6 +482,38 @@ function ScoringForm(props: {
 								placeholder="United States"
 								class="mt-2"
 							/>
+						</div>
+					</div>
+				</Card>
+
+				<Card class="overflow-hidden">
+					<div class="border-b border-border px-5 py-4">
+						<p class="text-base font-semibold text-foreground">Salary floor</p>
+						<p class="mt-0.5 text-xs text-faint">
+							A job below this costs points, but a job that doesn't state a
+							salary is never penalised.
+						</p>
+					</div>
+					<div class="px-5 py-4">
+						<label
+							for="salary-floor"
+							class="text-xs font-medium text-foreground"
+						>
+							Minimum salary
+						</label>
+						<div class="mt-2 flex items-center gap-2">
+							<span class="text-sm text-faint">£</span>
+							<Input
+								id="salary-floor"
+								type="number"
+								step="5000"
+								min="0"
+								value={salaryFloor()}
+								onInput={(e) => setSalaryFloor(e.currentTarget.value)}
+								placeholder="No floor"
+								class="w-32 font-mono tabular-nums"
+							/>
+							<span class="text-xs text-faint">a year</span>
 						</div>
 					</div>
 				</Card>
