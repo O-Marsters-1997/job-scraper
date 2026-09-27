@@ -62,4 +62,8 @@ SELECT * FROM jobs WHERE scraped_at > $1 ORDER BY scraped_at DESC;
 SELECT url FROM jobs WHERE source = $1 AND company_slug = $2 AND closed_at IS NULL;
 
 -- name: MarkJobsClosed :exec
-UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL;
+WITH closed AS (
+    UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
+    RETURNING id
+)
+DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed);

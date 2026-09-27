@@ -485,6 +485,87 @@ func TestSaveCanonical_ContentChangeAndDistinctBoard(t *testing.T) {
 	}
 }
 
+func TestSaveCanonical_PrunesStaleOptionAnswersOnFingerprintChange(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	jobA := baseJob
+	jobA.URL = "https://example.com/jobs/prune"
+	saved, _, err := testDB.SaveCanonical(ctx, jobA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fpA := saved.ContentFingerprint
+
+	jobB := jobA
+	jobB.Title = "Staff Engineer"
+	updatedB, status, err := testDB.SaveCanonical(ctx, jobB)
+	if err != nil || status != "changed" {
+		t.Fatalf("changed to B: status=%q err=%v", status, err)
+	}
+	fpB := updatedB.ContentFingerprint
+
+	insertOptionAnswer(t, saved.ID, fpA, "q-fpA")
+	insertOptionAnswer(t, saved.ID, fpB, "q-fpB")
+
+	updatedA, status, err := testDB.SaveCanonical(ctx, jobA)
+	if err != nil || status != "changed" || updatedA.ContentFingerprint != fpA {
+		t.Fatalf("reverted to A: status=%q fingerprint=%q err=%v", status, updatedA.ContentFingerprint, err)
+	}
+
+	user, err := testDB.CreateUser(ctx, "prune-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.Pool().Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", saved.ID, user.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining := optionAnswerFingerprints(t, saved.ID)
+	if len(remaining) != 1 || remaining[fpA] != 1 {
+		t.Fatalf("option_answers after prune = %v, want only {%q: 1}", remaining, fpA)
+	}
+
+	inputs, err := testDB.ListScoringInputs(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListScoringInputs after prune: %v", err)
+	}
+	if len(inputs) != 1 || inputs[0].Job.ID != saved.ID {
+		t.Fatalf("ListScoringInputs = %+v, want the pruned job", inputs)
+	}
+	if _, ok := inputs[0].Answers["q-fpB"]; ok {
+		t.Fatalf("pruned answer q-fpB still visible to scoring, want treated as unknown")
+	}
+}
+
+func insertOptionAnswer(t *testing.T, jobID, fingerprint, questionHash string) {
+	t.Helper()
+	_, err := testDB.Pool().Exec(context.Background(),
+		"INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence) VALUES ($1, $2, $3, 'test-model', 0.5, 0.3, 0.2, 0.9)",
+		jobID, fingerprint, questionHash)
+	if err != nil {
+		t.Fatalf("insert option_answer: %v", err)
+	}
+}
+
+func optionAnswerFingerprints(t *testing.T, jobID string) map[string]int {
+	t.Helper()
+	rows, err := testDB.Pool().Query(context.Background(), "SELECT fingerprint FROM option_answers WHERE job_id = $1", jobID)
+	if err != nil {
+		t.Fatalf("query option_answers: %v", err)
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var fp string
+		if err := rows.Scan(&fp); err != nil {
+			t.Fatalf("scan fingerprint: %v", err)
+		}
+		counts[fp]++
+	}
+	return counts
+}
+
 func TestSaveCanonical_ConflictingBoardCannotClaimURL(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()
@@ -619,6 +700,32 @@ func TestOpenJobURLsForBoard_MarkJobsClosed(t *testing.T) {
 	}
 	if len(open) != 3 {
 		t.Fatalf("want 3 open urls after re-saving job 3, got %v", open)
+	}
+}
+
+func TestMarkJobsClosed_PrunesOptionAnswers(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	saved, err := testDB.Save(ctx, []dto.Job{{
+		Title: "Closed Job", URL: "https://example.com/jobs/closes", CompanySlug: "acme",
+		Source: "greenhouse", UpdatedAt: time.Now(),
+	}})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	jobID := saved[0].ID
+
+	insertOptionAnswer(t, jobID, "fp-1", "q1")
+	insertOptionAnswer(t, jobID, "fp-2", "q2")
+
+	if err := testDB.MarkJobsClosed(ctx, []string{saved[0].URL}); err != nil {
+		t.Fatalf("MarkJobsClosed: %v", err)
+	}
+
+	remaining := optionAnswerFingerprints(t, jobID)
+	if len(remaining) != 0 {
+		t.Fatalf("option_answers after close = %v, want none", remaining)
 	}
 }
 

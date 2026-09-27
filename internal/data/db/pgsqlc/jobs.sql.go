@@ -231,7 +231,11 @@ func (q *Queries) ListJobsSince(ctx context.Context, scrapedAt pgtype.Timestampt
 }
 
 const markJobsClosed = `-- name: MarkJobsClosed :exec
-UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
+WITH closed AS (
+    UPDATE jobs SET closed_at = NOW() WHERE url = ANY($1::text[]) AND closed_at IS NULL
+    RETURNING id
+)
+DELETE FROM option_answers WHERE job_id IN (SELECT id FROM closed)
 `
 
 func (q *Queries) MarkJobsClosed(ctx context.Context, dollar_1 []string) error {
