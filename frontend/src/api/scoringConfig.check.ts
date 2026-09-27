@@ -10,8 +10,16 @@ const base = {
 	excludedCompanies: ["acme corp"],
 	excludedLocations: ["united states"],
 	preferences: {
-		picks: [{ optionId: "tech:go", stance: "nice", source: "manual" }],
+		picks: [
+			{
+				optionId: "tech:go",
+				stance: "nice",
+				source: "manual",
+				overridden: false,
+			},
+		],
 		salaryFloor: null,
+		preferenceText: "",
 	},
 	updatedAt: "2026-09-27T00:00:00Z",
 };

@@ -39,10 +39,38 @@ func seededOptions() *providers.MockScoringOptionsProvider {
 	options := providers.NewMockScoringOptionsProvider()
 	options.Seed([]dto.ScoringOption{
 		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
+		{ID: "tech:kubernetes", Dimension: dto.DimensionTech, Label: "Kubernetes", Question: "Does the role use Kubernetes?"},
 		{ID: "domain:gambling", Dimension: dto.DimensionDomain, Label: "Gambling", Question: "Is the company's main business gambling?"},
 		{ID: "seniority:senior", Dimension: dto.DimensionSeniority, Label: "Senior", Question: "Seniority?"},
 	})
 	return options
+}
+
+type fakeExtractor struct {
+	calls      int
+	gotText    string
+	gotOptions []dto.ScoringOption
+	picks      []dto.Pick
+	err        error
+}
+
+func (f *fakeExtractor) Extract(_ context.Context, _ string, text string, options []dto.ScoringOption, _ []dto.DimensionSpec) ([]dto.Pick, error) {
+	f.calls++
+	f.gotText = text
+	f.gotOptions = options
+	return f.picks, f.err
+}
+
+type fakeCredentials struct {
+	key string
+	err error
+}
+
+func (f *fakeCredentials) Get(_ context.Context, _, _ string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.key, nil
 }
 
 func TestGet(t *testing.T) {
@@ -93,7 +121,7 @@ func TestGet(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(store)
 			}
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{})
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
 			got, err := svc.Get(context.Background(), "user-1")
 			if tt.wantErr {
 				if err == nil {
@@ -151,7 +179,7 @@ func TestUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := providers.NewMockSearchConfigProvider()
-			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{})
+			svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
@@ -164,7 +192,7 @@ func TestUpdateSucceeds(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{}
 	recomputer := &fakeRecomputer{}
-	svc := scoringconfig.New(store, reconsiderer, seededOptions(), recomputer)
+	svc := scoringconfig.New(store, reconsiderer, seededOptions(), recomputer, &fakeExtractor{}, &fakeCredentials{})
 
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
@@ -205,7 +233,7 @@ func TestUpdateSucceeds(t *testing.T) {
 func TestUpdateReconsiderFails(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
 	reconsiderer := &fakeReconsiderer{err: errors.New("reconsideration blew up")}
-	svc := scoringconfig.New(store, reconsiderer, seededOptions(), &fakeRecomputer{})
+	svc := scoringconfig.New(store, reconsiderer, seededOptions(), &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{})
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {
@@ -218,7 +246,7 @@ func TestUpdateReconsiderFails(t *testing.T) {
 
 func TestUpdateRecomputeFails(t *testing.T) {
 	store := providers.NewMockSearchConfigProvider()
-	svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{err: errors.New("recompute blew up")})
+	svc := scoringconfig.New(store, &fakeReconsiderer{}, seededOptions(), &fakeRecomputer{err: errors.New("recompute blew up")}, &fakeExtractor{}, &fakeCredentials{})
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {

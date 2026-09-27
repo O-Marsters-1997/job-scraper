@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/ollymarsters/job-scraper/internal/api/credstore"
+	"github.com/ollymarsters/job-scraper/internal/api/extract"
 	igoogle "github.com/ollymarsters/job-scraper/internal/api/google"
 	"github.com/ollymarsters/job-scraper/internal/api/ingest"
 	"github.com/ollymarsters/job-scraper/internal/api/services/aicredentials"
@@ -64,7 +65,7 @@ func newServices(db *jobsdb.DB, q *queue.Broker, creds credstore.CredentialStore
 		applications:        applications.New(db),
 		sources:             sources.New(),
 		profile:             profile.New(db),
-		scoringConfig:       scoringconfig.New(db, candidateService, db, suitabilitySvc),
+		scoringConfig:       scoringconfig.New(db, candidateService, db, suitabilitySvc, extract.NewClient(), creds),
 		suitability:         suitabilitySvc,
 		aiPrefs:             aiprefs.New(creds),
 		aiCredentials:       aicredentials.New(creds),

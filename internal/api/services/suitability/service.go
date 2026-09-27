@@ -228,6 +228,7 @@ func optionsByID(options []dto.ScoringOption) map[string]dto.ScoringOption {
 // the job's cached answers (for the resolved value). A pick on an unknown
 // option id is skipped: it cannot be scored or shown.
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer) []evaluatedPick {
+	picks = dedupeBySource(picks)
 	out := make([]evaluatedPick, 0, len(picks))
 	for _, p := range picks {
 		opt, ok := byID[p.OptionID]
@@ -239,6 +240,27 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
 			answer: answer, known: known,
 		})
+	}
+	return out
+}
+
+func dedupeBySource(picks []dto.Pick) []dto.Pick {
+	winners := make(map[string]dto.Pick, len(picks))
+	order := make([]string, 0, len(picks))
+	for _, p := range picks {
+		existing, ok := winners[p.OptionID]
+		if !ok {
+			winners[p.OptionID] = p
+			order = append(order, p.OptionID)
+			continue
+		}
+		if existing.Source != "manual" && p.Source == "manual" {
+			winners[p.OptionID] = p
+		}
+	}
+	out := make([]dto.Pick, len(order))
+	for i, id := range order {
+		out[i] = winners[id]
 	}
 	return out
 }
