@@ -3,12 +3,9 @@ package scraper
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -24,18 +21,11 @@ func (s pageSourceStub) FetchPage(context.Context, string) ([]dto.Job, string, e
 	return []dto.Job{{URL: s.url}}, "2:5", nil
 }
 
-type emptyCandidateStore struct{}
+type emptyCandidateCapturer struct{}
 
-func (emptyCandidateStore) SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]candidates.Candidate, error) {
-	return nil, nil
+func (emptyCandidateCapturer) CapturePage(context.Context, dto.SourceTarget, []dto.Job, dto.SearchConfig) error {
+	return nil
 }
-func (emptyCandidateStore) ListForUser(context.Context, string, string, int) ([]candidates.Candidate, error) {
-	return nil, nil
-}
-func (emptyCandidateStore) Assess(context.Context, string, string, time.Time, bool) (bool, error) {
-	return false, nil
-}
-func (emptyCandidateStore) MarkDetailPending(context.Context, string) error { return nil }
 
 func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	ctx := context.Background()
@@ -44,9 +34,9 @@ func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	if _, err := db.Save(ctx, []dto.Job{{URL: url}}); err != nil {
 		t.Fatal(err)
 	}
-	orch := New(db, queue.NewMockQueue()).
+	orch := New(db).
 		WithSourceBuilder(func(dto.SourceTarget) []sources.Source { return []sources.Source{pageSourceStub{url: url}} }).
-		WithCandidates(emptyCandidateStore{})
+		WithCandidates(emptyCandidateCapturer{})
 	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")
 	if err != nil || next != "" {
 		t.Fatalf("next=%q err=%v", next, err)

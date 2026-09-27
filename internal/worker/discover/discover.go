@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
@@ -31,6 +30,12 @@ type ScrapeGate interface {
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 }
 
+// CompanyUpserter is the narrow subset of jobsearch's Boards() the harvest
+// loop needs to write catalog candidates.
+type CompanyUpserter interface {
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
+}
+
 const (
 	harvestInterval = 24 * time.Hour
 	tickInterval    = time.Hour
@@ -40,11 +45,11 @@ const (
 // Runner drains harvesters into the companies catalog on a fixed cadence.
 type Runner struct {
 	harvesters []Harvester
-	companies  providers.CompanyProvider
+	companies  CompanyUpserter
 	gate       ScrapeGate
 }
 
-func NewRunner(hs []Harvester, companies providers.CompanyProvider, gate ScrapeGate) *Runner {
+func NewRunner(hs []Harvester, companies CompanyUpserter, gate ScrapeGate) *Runner {
 	return &Runner{harvesters: hs, companies: companies, gate: gate}
 }
 
