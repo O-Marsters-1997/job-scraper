@@ -72,9 +72,24 @@ const jobs = [
 		WorkArrangement: "",
 		SalaryRaw: "",
 	},
+	{
+		...base,
+		ID: "4",
+		Title: "Gambling Platform Engineer",
+		Source: "Lever",
+		SuitabilityScore: 30,
+		WorkArrangement: "",
+		SalaryRaw: "",
+		Hidden: true,
+	},
 ] as never[];
 
 ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
+
+{
+	const r = applyJobFilters(jobs, { ...DEFAULT_FILTERS, showHidden: true });
+	ok(r.length === 4);
+}
 
 {
 	const r = applyJobFilters(jobs, { ...DEFAULT_FILTERS, suit: 75 });
@@ -118,6 +133,7 @@ ok(
 		sal: true,
 	}) === 3,
 );
+ok(activeFilterCount({ ...DEFAULT_FILTERS, showHidden: true }) === 1);
 
 eq(
 	filterCompanyJobs(

@@ -52,12 +52,15 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	}
 
 	cfg := dto.SearchConfig{
-		UserID:                userID,
-		NotifyThreshold:       in.NotifyThreshold,
-		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
-		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
-		ExcludedLocations:     cleanList(in.ExcludedLocations),
-		Preferences:           dto.Preferences{Picks: picks, SalaryFloor: floor},
+		UserID:            userID,
+		NotifyThreshold:   in.NotifyThreshold,
+		ExcludedCompanies: cleanList(in.ExcludedCompanies),
+		ExcludedLocations: cleanList(in.ExcludedLocations),
+		Preferences: dto.Preferences{
+			Picks:       picks,
+			SalaryFloor: floor,
+			BlockedTech: cleanList(in.Preferences.BlockedTech),
+		},
 	}
 	updated, err := s.configs.UpsertSearchConfig(ctx, cfg)
 	if err != nil {
@@ -132,12 +135,12 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		Preferences: dto.Preferences{
 			Picks:       nonNilPicks(cfg.Preferences.Picks),
 			SalaryFloor: cfg.Preferences.SalaryFloor,
+			BlockedTech: nonNilStrings(cfg.Preferences.BlockedTech),
 		},
-		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
-		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
-		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
-		NotifyThreshold:       cfg.NotifyThreshold,
-		UpdatedAt:             cfg.UpdatedAt,
+		ExcludedCompanies: nonNilStrings(cfg.ExcludedCompanies),
+		ExcludedLocations: nonNilStrings(cfg.ExcludedLocations),
+		NotifyThreshold:   cfg.NotifyThreshold,
+		UpdatedAt:         cfg.UpdatedAt,
 	}
 }
 

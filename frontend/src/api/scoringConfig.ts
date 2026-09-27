@@ -16,11 +16,11 @@ export const moneySchema = z.object({
 export const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
+	blockedTech: z.array(z.string()),
 });
 
 export const scoringConfigSchema = z.object({
 	preferences: preferencesSchema,
-	excludedTitleKeywords: z.array(z.string()),
 	excludedCompanies: z.array(z.string()),
 	excludedLocations: z.array(z.string()),
 	notifyThreshold: z.number().int().min(0).max(100),

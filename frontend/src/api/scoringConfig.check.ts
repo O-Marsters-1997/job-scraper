@@ -6,20 +6,21 @@ function ok(cond: boolean, msg: string) {
 
 const base = {
 	notifyThreshold: 70,
-	excludedTitleKeywords: ["java", "sales"],
 	excludedCompanies: ["acme corp"],
 	excludedLocations: ["united states"],
 	preferences: {
 		picks: [{ optionId: "tech:go", stance: "nice", source: "manual" }],
 		salaryFloor: null,
+		blockedTech: ["kubernetes", "php"],
 	},
 	updatedAt: "2026-09-27T00:00:00Z",
 };
 
 const valid = scoringConfigSchema.parse(base);
 ok(valid.notifyThreshold === 70, "valid config parses");
-ok(valid.excludedTitleKeywords.length === 2, "exclusion lists parse");
+ok(valid.excludedCompanies.length === 1, "exclusion lists parse");
 ok(valid.preferences.picks.length === 1, "picks parse");
+ok(valid.preferences.blockedTech.length === 2, "blocked tech parses");
 
 let threw = false;
 try {
@@ -47,11 +48,22 @@ ok(threw, "float threshold rejected");
 
 threw = false;
 try {
-	scoringConfigSchema.parse({ ...base, excludedTitleKeywords: [1] });
+	scoringConfigSchema.parse({ ...base, excludedCompanies: [1] });
 } catch {
 	threw = true;
 }
 ok(threw, "non-string exclusion entry rejected");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({
+		...base,
+		preferences: { picks: [], salaryFloor: null, blockedTech: [1] },
+	});
+} catch {
+	threw = true;
+}
+ok(threw, "non-string blocked tech entry rejected");
 
 threw = false;
 try {

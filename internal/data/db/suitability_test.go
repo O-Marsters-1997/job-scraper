@@ -81,6 +81,43 @@ func TestCompleteAnswerEffect_CommitsAnswersAndBothUsersScoresTogether(t *testin
 	}
 }
 
+func TestCompleteAnswerEffect_PersistsHidden(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	user, err := testDB.CreateUser(ctx, "hidden-user", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testDB.CreateSourceTarget(ctx, user.ID, "greenhouse", "hidden-company", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	job := baseJob
+	job.URL = "https://example.com/jobs/hidden"
+	job.CompanySlug = "hidden-company"
+	saved, _, err := testDB.SaveCanonical(ctx, job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect, err := testDB.ClaimAnswerEffect(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scores := []dto.JobScore{{JobID: saved.ID, UserID: user.ID, Score: 30, Hidden: true}}
+	if _, err := testDB.CompleteAnswerEffect(ctx, effect, nil, scores); err != nil {
+		t.Fatalf("CompleteAnswerEffect: %v", err)
+	}
+
+	var hidden bool
+	if err := testDB.Pool().QueryRow(ctx, "SELECT hidden FROM job_scores WHERE job_id = $1 AND user_id = $2", saved.ID, user.ID).Scan(&hidden); err != nil {
+		t.Fatal(err)
+	}
+	if !hidden {
+		t.Fatal("hidden = false, want true")
+	}
+}
+
 func TestCompleteAnswerEffect_FingerprintChangeWritesNothing(t *testing.T) {
 	truncate(t)
 	ctx := context.Background()

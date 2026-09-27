@@ -22,6 +22,7 @@ export interface Job {
 	SalaryRaw?: string;
 	SuitabilityScore: number | null;
 	Breakdown?: ScoreRow[] | null;
+	Hidden?: boolean;
 	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description?: string;
 	Skills?: string[];

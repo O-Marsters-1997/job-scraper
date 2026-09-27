@@ -8,6 +8,7 @@ export interface JobFilters {
 	sal: boolean;
 	salMin?: number | undefined;
 	salMax?: number | undefined;
+	showHidden: boolean;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -18,6 +19,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	suit: undefined,
 	salMin: undefined,
 	salMax: undefined,
+	showHidden: false,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -39,6 +41,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		sal: raw.sal === true || raw.sal === "true",
 		salMin: coerceNum(raw.salMin),
 		salMax: coerceNum(raw.salMax),
+		showHidden: raw.showHidden === true || raw.showHidden === "true",
 	};
 }
 
@@ -77,6 +80,7 @@ export function normalizeArrangement(job: Job): Arrangement {
 export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 	const q = f.q.toLowerCase();
 	return jobs.filter((j) => {
+		if (!f.showHidden && j.Hidden) return false;
 		if (q) {
 			const hay =
 				`${j.Title} ${j.CompanySlug} ${j.Location} ${j.Source}`.toLowerCase();
@@ -105,6 +109,7 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.src.length > 0) n++;
 	if (f.work.length > 0) n++;
 	if (f.sal) n++;
+	if (f.showHidden) n++;
 	return n;
 }
 

@@ -5,7 +5,6 @@ FROM jobs WHERE id = $1;
 
 -- name: ListInterestedConfigs :many
 SELECT u.id AS user_id,
-    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
     COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
     COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
     COALESCE(sc.notify_threshold, 70) AS notify_threshold,
@@ -33,15 +32,17 @@ VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(question_h
 ON CONFLICT (job_id, fingerprint, question_hash, model) DO NOTHING;
 
 -- name: UpsertJobScore :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, cost, score_fingerprint, score_model)
+INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, hidden, cost, score_fingerprint, score_model)
 VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(user_id)::uuid, sqlc.arg(score)::int, sqlc.arg(breakdown)::jsonb,
-    sqlc.narg(cost)::numeric, sqlc.arg(fingerprint)::text, sqlc.arg(model)::text)
+    sqlc.arg(hidden)::boolean, sqlc.narg(cost)::numeric, sqlc.arg(fingerprint)::text, sqlc.arg(model)::text)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
-    score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model, updated_at = NOW();
+    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, hidden = EXCLUDED.hidden,
+    cost = EXCLUDED.cost, score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model,
+    updated_at = NOW();
 
 -- name: UpdateJobScoreBreakdown :exec
-UPDATE job_scores SET suitability_score = sqlc.arg(score)::int, breakdown = sqlc.arg(breakdown)::jsonb, updated_at = NOW()
+UPDATE job_scores SET suitability_score = sqlc.arg(score)::int, breakdown = sqlc.arg(breakdown)::jsonb,
+    hidden = sqlc.arg(hidden)::boolean, updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 
 -- name: ListScoringInputJobs :many

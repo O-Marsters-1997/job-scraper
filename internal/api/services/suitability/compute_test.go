@@ -16,14 +16,20 @@ func avoidPick(key string, pYes, pNo, pNotStated float64) evaluatedPick {
 		answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
+func blockPick(key string, pYes, pNo, pNotStated float64) evaluatedPick {
+	return evaluatedPick{dimension: dto.DimensionDomain, key: key, label: key, stance: "block", known: true,
+		answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
+}
+
 func TestCompute(t *testing.T) {
 	tests := []struct {
-		name      string
-		picks     []evaluatedPick
-		salaryRaw string
-		floor     *dto.Money
-		wantScore int
-		wantRows  []dto.ScoreRow // Resolved/Effect only, matched by index
+		name       string
+		picks      []evaluatedPick
+		salaryRaw  string
+		floor      *dto.Money
+		wantScore  int
+		wantRows   []dto.ScoreRow // Resolved/Effect only, matched by index
+		wantHidden bool
 	}{
 		{
 			name:      "nothing known scores 50",
@@ -112,13 +118,37 @@ func TestCompute(t *testing.T) {
 			wantScore: 50,
 			wantRows:  []dto.ScoreRow{{Key: "salary", Resolved: "unknown", Effect: "unknown"}},
 		},
+		{
+			name:       "a blocked domain resolving yes hides the job",
+			picks:      []evaluatedPick{blockPick("domain:gambling", 0.9, 0.05, 0.05)},
+			wantScore:  30,
+			wantRows:   []dto.ScoreRow{{Resolved: "yes", Effect: "misses"}},
+			wantHidden: true,
+		},
+		{
+			name:       "a blocked domain resolving not_stated never hides",
+			picks:      []evaluatedPick{blockPick("domain:gambling", 0.1, 0.1, 0.8)},
+			wantScore:  50,
+			wantRows:   []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+			wantHidden: false,
+		},
+		{
+			name:       "a blocked domain resolving no is neutral and not hidden",
+			picks:      []evaluatedPick{blockPick("domain:gambling", 0.05, 0.9, 0.05)},
+			wantScore:  50,
+			wantRows:   []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
+			wantHidden: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			score, rows := compute(tt.picks, tt.salaryRaw, tt.floor)
+			score, rows, hidden := compute(tt.picks, tt.salaryRaw, tt.floor)
 			if score != tt.wantScore {
 				t.Errorf("score = %d, want %d", score, tt.wantScore)
+			}
+			if hidden != tt.wantHidden {
+				t.Errorf("hidden = %v, want %v", hidden, tt.wantHidden)
 			}
 			for i, want := range tt.wantRows {
 				if i >= len(rows) {

@@ -198,6 +198,7 @@ type JobScore struct {
 	UserID           pgtype.UUID
 	SuitabilityScore pgtype.Int4
 	Breakdown        []byte
+	Hidden           bool
 	Cost             pgtype.Numeric
 	ScoreFingerprint pgtype.Text
 	ScoreModel       pgtype.Text
@@ -240,15 +241,14 @@ type ScoringOption struct {
 }
 
 type SearchConfig struct {
-	ID                    pgtype.UUID
-	UserID                pgtype.UUID
-	ExcludedTitleKeywords []string
-	ExcludedCompanies     []string
-	ExcludedLocations     []string
-	NotifyThreshold       int32
-	Preferences           []byte
-	CreatedAt             pgtype.Timestamptz
-	UpdatedAt             pgtype.Timestamptz
+	ID                pgtype.UUID
+	UserID            pgtype.UUID
+	ExcludedCompanies []string
+	ExcludedLocations []string
+	NotifyThreshold   int32
+	Preferences       []byte
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type Session struct {

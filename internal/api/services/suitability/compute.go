@@ -38,11 +38,7 @@ func resolveAnswer(a dto.Answer) string {
 	return value
 }
 
-// compute scores picks against the job's cached answers: nice picks earn
-// their dimension's weight once when any matches, avoid picks cost their
-// weight only when the job has them, and every dimension or pick with no
-// known answer is excluded from both sides of the ratio.
-func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []dto.ScoreRow) {
+func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []dto.ScoreRow, bool) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
@@ -50,6 +46,7 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 	type dimState struct{ known, matched bool }
 	dims := make(map[dto.Dimension]*dimState)
 	var met, evaluable float64
+	var hidden bool
 
 	for _, p := range picks {
 		resolved := "unknown"
@@ -75,11 +72,14 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 			default:
 				row.Effect = "unknown"
 			}
-		case "avoid":
+		case "avoid", "block":
 			switch resolved {
 			case "yes":
 				evaluable += avoidWeight
 				row.Effect = "misses"
+				if p.stance == "block" {
+					hidden = true
+				}
 			case "no":
 				row.Effect = "neutral"
 			default:
@@ -102,7 +102,7 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 	}
 
 	score := int(math.Round(100 * (met + 0.5*priorK) / (evaluable + priorK)))
-	return score, rows
+	return score, rows, hidden
 }
 
 func countUnknown(rows []dto.ScoreRow) int {

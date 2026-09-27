@@ -127,6 +127,58 @@ func TestProcess_MissingQuestionsSendsExactlyThose(t *testing.T) {
 	}
 }
 
+func TestProcess_BlockedTechRejectsAndSkipsAnswerer(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	job := dto.Job{
+		ID: "job-kube", Title: "Platform Engineer", ContentFingerprint: "fp-kube", Source: "greenhouse",
+		Description: "You'll run everything on Kubernetes.",
+	}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
+		Picks:       []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+		BlockedTech: []string{"kubernetes"},
+	}}
+	store.SeedJob(job, []dto.SearchConfig{cfg})
+	store.SeedEffect(dto.AnswerEffect{ID: "effect-kube", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(), &fakeAnswerer{t: t, forbidden: true},
+		&fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(store.Completed) != 1 {
+		t.Fatalf("completed effects = %d, want 1", len(store.Completed))
+	}
+	if len(store.Completed[0].Scores) != 0 {
+		t.Fatalf("scores saved = %+v, want none (every interested user blocked kubernetes)", store.Completed[0].Scores)
+	}
+}
+
+func TestProcess_ExcludedLocationDoesNotAffectScoring(t *testing.T) {
+	store := providers.NewMockSuitabilityProvider()
+	job := dto.Job{ID: "job-loc", Title: "Backend Engineer", Location: "United States", ContentFingerprint: "fp-loc", Source: "greenhouse"}
+	cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, ExcludedLocations: []string{"united states"}, Preferences: dto.Preferences{
+		Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+	}}
+	store.SeedJob(job, []dto.SearchConfig{cfg})
+	store.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
+		questionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+		questionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
+		questionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+	})
+	store.SeedEffect(dto.AnswerEffect{ID: "effect-loc", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+
+	svc := New(store, newOptions(), providers.NewMockSearchConfigProvider(), &fakeAnswerer{t: t, forbidden: true},
+		&fakeCredentials{key: "sk-or-test"}, &fakeAlerter{}, &fakeProfiles{})
+
+	if err := svc.RunTick(context.Background()); err != nil {
+		t.Fatalf("RunTick: %v", err)
+	}
+	if len(store.Completed) != 1 || len(store.Completed[0].Scores) != 1 {
+		t.Fatalf("completed effects = %+v, want 1 effect with 1 score (location never gates scoring)", store.Completed)
+	}
+}
+
 func TestProcess_AlertsOnlyOnFirstDiscoveryAboveThreshold(t *testing.T) {
 	store := providers.NewMockSuitabilityProvider()
 	job := dto.Job{ID: "job-3", Title: "Backend Engineer", ContentFingerprint: "fp-3", Source: "greenhouse"}

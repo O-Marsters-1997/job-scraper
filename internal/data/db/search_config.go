@@ -21,14 +21,13 @@ func fromSearchConfig(row pgsqlc.SearchConfig) (dto.SearchConfig, error) {
 		}
 	}
 	return dto.SearchConfig{
-		ID:                    row.ID.String(),
-		UserID:                row.UserID.String(),
-		ExcludedTitleKeywords: row.ExcludedTitleKeywords,
-		ExcludedCompanies:     row.ExcludedCompanies,
-		ExcludedLocations:     row.ExcludedLocations,
-		NotifyThreshold:       int(row.NotifyThreshold),
-		Preferences:           prefs,
-		UpdatedAt:             row.UpdatedAt.Time,
+		ID:                row.ID.String(),
+		UserID:            row.UserID.String(),
+		ExcludedCompanies: row.ExcludedCompanies,
+		ExcludedLocations: row.ExcludedLocations,
+		NotifyThreshold:   int(row.NotifyThreshold),
+		Preferences:       prefs,
+		UpdatedAt:         row.UpdatedAt.Time,
 	}, nil
 }
 
@@ -77,12 +76,11 @@ func (db *DB) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: marshal preferences: %w", err)
 	}
 	row, err := db.queries.UpsertSearchConfig(ctx, pgsqlc.UpsertSearchConfigParams{
-		UserID:                uid,
-		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
-		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
-		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
-		NotifyThreshold:       int32(cfg.NotifyThreshold),
-		Preferences:           prefs,
+		UserID:            uid,
+		ExcludedCompanies: nonNilStrings(cfg.ExcludedCompanies),
+		ExcludedLocations: nonNilStrings(cfg.ExcludedLocations),
+		NotifyThreshold:   int32(cfg.NotifyThreshold),
+		Preferences:       prefs,
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("db.UpsertSearchConfig: %w", err)

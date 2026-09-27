@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
     user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     suitability_score    INT,
     breakdown            JSONB       NOT NULL DEFAULT '[]',
+    hidden               BOOLEAN     NOT NULL DEFAULT false,
     cost                 NUMERIC,
     score_fingerprint    TEXT,
     score_model          TEXT,
@@ -128,7 +129,6 @@ CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 CREATE TABLE IF NOT EXISTS search_config (
     id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id                 UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    excluded_title_keywords TEXT[]      NOT NULL DEFAULT '{}',
     excluded_companies      TEXT[]      NOT NULL DEFAULT '{}',
     excluded_locations      TEXT[]      NOT NULL DEFAULT '{}',
     notify_threshold        INT         NOT NULL DEFAULT 70,

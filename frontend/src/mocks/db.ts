@@ -196,7 +196,6 @@ const JOB_TITLES = [
 
 let scoringConfig: ScoringConfig = {
 	notifyThreshold: 70,
-	excludedTitleKeywords: [],
 	excludedCompanies: [],
 	excludedLocations: [],
 	preferences: {
@@ -206,6 +205,7 @@ let scoringConfig: ScoringConfig = {
 			{ optionId: "domain:fintech", stance: "avoid", source: "manual" },
 		],
 		salaryFloor: null,
+		blockedTech: [],
 	},
 	updatedAt: new Date("2024-01-01").toISOString(),
 };

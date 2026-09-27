@@ -36,7 +36,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown, COALESCE(js.hidden, false) AS hidden
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 WHERE j.id = $1
@@ -66,6 +66,7 @@ type GetJobRow struct {
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
 	Breakdown          []byte
+	Hidden             bool
 }
 
 func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, error) {
@@ -89,6 +90,7 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.ContentFingerprint,
 		&i.SuitabilityScore,
 		&i.Breakdown,
+		&i.Hidden,
 	)
 	return i, err
 }
@@ -124,7 +126,7 @@ func (q *Queries) GetJobByURL(ctx context.Context, url string) (Job, error) {
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown, COALESCE(js.hidden, false) AS hidden
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 WHERE j.closed_at IS NULL
@@ -148,6 +150,7 @@ type ListJobsRow struct {
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
 	Breakdown          []byte
+	Hidden             bool
 }
 
 func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsRow, error) {
@@ -176,6 +179,7 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 			&i.ContentFingerprint,
 			&i.SuitabilityScore,
 			&i.Breakdown,
+			&i.Hidden,
 		); err != nil {
 			return nil, err
 		}
@@ -269,7 +273,7 @@ func (q *Queries) OpenJobURLsForBoard(ctx context.Context, arg OpenJobURLsForBoa
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown, COALESCE(js.hidden, false) AS hidden
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
@@ -305,6 +309,7 @@ type PageJobsRow struct {
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
 	Breakdown          []byte
+	Hidden             bool
 }
 
 func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
@@ -340,6 +345,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.ContentFingerprint,
 			&i.SuitabilityScore,
 			&i.Breakdown,
+			&i.Hidden,
 		); err != nil {
 			return nil, err
 		}

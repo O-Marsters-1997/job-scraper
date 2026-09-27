@@ -105,12 +105,11 @@ func (db *DB) ListInterestedConfigs(ctx context.Context, jobID string, discovery
 			return nil, fmt.Errorf("db.ListInterestedConfigs: unmarshal preferences: %w", err)
 		}
 		configs[i] = dto.SearchConfig{
-			UserID:                row.UserID.String(),
-			ExcludedTitleKeywords: row.ExcludedTitleKeywords,
-			ExcludedCompanies:     row.ExcludedCompanies,
-			ExcludedLocations:     row.ExcludedLocations,
-			NotifyThreshold:       int(row.NotifyThreshold),
-			Preferences:           prefs,
+			UserID:            row.UserID.String(),
+			ExcludedCompanies: row.ExcludedCompanies,
+			ExcludedLocations: row.ExcludedLocations,
+			NotifyThreshold:   int(row.NotifyThreshold),
+			Preferences:       prefs,
 		}
 	}
 	return configs, nil
@@ -211,7 +210,7 @@ func upsertJobScore(ctx context.Context, queries *pgsqlc.Queries, s dto.JobScore
 		return fmt.Errorf("cost: %w", err)
 	}
 	return queries.UpsertJobScore(ctx, pgsqlc.UpsertJobScoreParams{
-		JobID: jobID, UserID: userID, Score: int32(s.Score), Breakdown: breakdown, Cost: cost,
+		JobID: jobID, UserID: userID, Score: int32(s.Score), Breakdown: breakdown, Hidden: s.Hidden, Cost: cost,
 		Fingerprint: fingerprint, Model: model,
 	})
 }
@@ -270,7 +269,7 @@ func (db *DB) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 			return fmt.Errorf("db.SaveScores: marshal breakdown: %w", err)
 		}
 		if err := db.queries.UpdateJobScoreBreakdown(ctx, pgsqlc.UpdateJobScoreBreakdownParams{
-			Score: int32(s.Score), Breakdown: breakdown, JobID: jobID, UserID: userID,
+			Score: int32(s.Score), Breakdown: breakdown, Hidden: s.Hidden, JobID: jobID, UserID: userID,
 		}); err != nil {
 			return fmt.Errorf("db.SaveScores: %w", err)
 		}
