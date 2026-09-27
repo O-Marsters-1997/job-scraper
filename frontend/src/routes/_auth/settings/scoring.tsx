@@ -1,18 +1,30 @@
+import { Tabs } from "@kobalte/core/tabs";
 import { createFileRoute } from "@tanstack/solid-router";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	For,
+	type JSX,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import { createStore } from "solid-js/store";
 import { FormFeedback } from "@/components/FormFeedback";
-import { PageHeading } from "@/components/PageHeading";
+import { MultiCombobox } from "@/components/MultiCombobox";
+import { PageLayout } from "@/components/PageLayout";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { uniqueCapitalised } from "@/lib/capitalise";
+import { cn } from "@/lib/utils";
 import type { ScoringConfig } from "../../../api/scoringConfig";
 import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../../../api/scoringOptions";
+import { useCompanies } from "../../../hooks/useCompanies";
 import { useRecomputeScores, useScoringStatus } from "../../../hooks/useScores";
 import {
 	useScoringConfig,
@@ -24,251 +36,140 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
 });
 
+const TITLE = "Scoring settings";
+
 type Stance = "nice" | "avoid";
 type StanceMap = Record<string, Stance | undefined>;
+type Dim = ScoringOption["dimension"];
 
-const PAIR_COPY: Record<
-	string,
-	{ title: string; like: string; avoid: string; help: string }
-> = {
-	role: {
-		title: "Roles",
-		like: "What kinds of role would you enjoy?",
-		avoid: "What kinds of role would you avoid?",
-		help: "A job matching any one role you'd enjoy gets the boost.",
+const SECTIONS = [
+	{
+		id: "role",
+		title: "Role",
+		summary: "Role type, salary, level, setup",
 	},
-	tech: {
-		title: "Technologies",
-		like: "What technologies would you enjoy working with?",
-		avoid: "What technologies would you avoid?",
-		help: "Type to search all of them.",
+	{
+		id: "stack",
+		title: "Tech & industry",
+		summary: "Stack, industries, company stage",
 	},
-	domain: {
-		title: "Industries",
-		like: "Which industries would you enjoy working in?",
-		avoid: "Which industries would you avoid?",
-		help: "Type to search.",
+	{
+		id: "filters",
+		title: "Filters & alerts",
+		summary: "Exclusions, notify threshold",
 	},
-};
+	{
+		id: "other",
+		title: "Other details",
+		summary: "Anything else, in your own words",
+	},
+] as const;
 
-const MULTI_COPY: Record<string, { title: string; help: string }> = {
-	seniority: {
-		title: "Which levels are you looking at?",
-		help: "Most postings don't state a level. That never counts against a job.",
-	},
-	work: {
-		title: "Which working arrangements suit you?",
-		help: "Pick every arrangement you'd take.",
-	},
-	stage: {
-		title: "Which company stages interest you?",
-		help: "Pick every stage you'd consider.",
-	},
-};
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+const isTyping = (target: EventTarget | null) =>
+	target instanceof HTMLElement &&
+	(target.isContentEditable ||
+		["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
 
 const STANCE_TONE: Record<Stance, string> = {
 	nice: "border-accent-border bg-accent-subtle text-accent-text",
 	avoid: "border-destructive/40 bg-destructive-subtle text-destructive-strong",
 };
 
-function StancePicker(props: {
-	dim: string;
-	stance: Stance;
-	label: string;
-	options: ScoringOption[];
-	stances: StanceMap;
-	pick: (id: string, stance: Stance) => void;
-	unpick: (id: string) => void;
-}) {
-	const [query, setQuery] = createSignal("");
-	const inputId = () => `scoring-${props.dim}-${props.stance}`;
-	const picked = createMemo(() =>
-		props.options.filter((o) => props.stances[o.id] === props.stance),
-	);
-	const results = createMemo(() => {
-		const q = query().trim().toLowerCase();
-		if (!q) return [];
-		return props.options
-			.filter((o) => !props.stances[o.id] && o.label.toLowerCase().includes(q))
-			.slice(0, 8);
-	});
-
-	return (
-		<div>
-			<label for={inputId()} class="block text-sm font-medium text-foreground">
-				{props.label}
-			</label>
-			<div class="relative mt-1.5">
-				<div class="field flex min-h-10 flex-wrap items-center gap-1.5 py-1.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
-					<For each={picked()}>
-						{(o) => (
-							<span
-								class={`inline-flex items-center rounded-full border text-sm ${STANCE_TONE[props.stance]}`}
-							>
-								<span class="py-0.5 pl-2.5">{o.label}</span>
-								<button
-									type="button"
-									aria-label={`Remove ${o.label}`}
-									onClick={() => props.unpick(o.id)}
-									class="px-2 py-0.5 opacity-70 hover:opacity-100"
-								>
-									×
-								</button>
-							</span>
-						)}
-					</For>
-					<input
-						id={inputId()}
-						type="text"
-						autocomplete="off"
-						class="h-7 min-w-40 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
-						placeholder={picked().length ? "Add another…" : "Search…"}
-						value={query()}
-						onInput={(e) => setQuery(e.currentTarget.value)}
-						onKeyDown={(e) => {
-							const first = results()[0];
-							if (e.key === "Enter" && first) {
-								e.preventDefault();
-								props.pick(first.id, props.stance);
-								setQuery("");
-							}
-							if (e.key === "Escape") setQuery("");
-						}}
-					/>
-				</div>
-				<Show when={query().trim()}>
-					<ul class="absolute z-30 mt-1 w-full max-w-md divide-y divide-border rounded-lg border border-border bg-surface shadow-xl">
-						<For
-							each={results()}
-							fallback={
-								<li class="px-3 py-2 text-xs text-faint">No matches.</li>
-							}
-						>
-							{(o) => (
-								<li>
-									<button
-										type="button"
-										onClick={() => {
-											props.pick(o.id, props.stance);
-											setQuery("");
-										}}
-										class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-muted"
-									>
-										{o.label}
-									</button>
-								</li>
-							)}
-						</For>
-					</ul>
-				</Show>
-			</div>
-		</div>
-	);
-}
-
-function PairSection(props: {
-	dim: string;
-	options: ScoringOption[];
-	stances: StanceMap;
-	pick: (id: string, stance: Stance) => void;
-	unpick: (id: string) => void;
-}) {
-	const copy = PAIR_COPY[props.dim];
-	if (!copy) return null;
-	return (
-		<div class="px-5 py-4">
-			<p class="text-xs text-faint">{copy.help}</p>
-			<div class="mt-3 space-y-4">
-				<StancePicker
-					dim={props.dim}
-					stance="nice"
-					label={copy.like}
-					options={props.options}
-					stances={props.stances}
-					pick={props.pick}
-					unpick={props.unpick}
-				/>
-				<StancePicker
-					dim={props.dim}
-					stance="avoid"
-					label={copy.avoid}
-					options={props.options}
-					stances={props.stances}
-					pick={props.pick}
-					unpick={props.unpick}
-				/>
-			</div>
-		</div>
-	);
-}
-
-function MultiSection(props: {
-	dim: string;
-	options: ScoringOption[];
-	stances: StanceMap;
-	pick: (id: string, stance: Stance) => void;
-	unpick: (id: string) => void;
-}) {
-	const copy = MULTI_COPY[props.dim];
-	if (!copy) return null;
-	return (
-		<div class="px-5 py-4">
-			<p class="text-sm font-medium text-foreground">{copy.title}</p>
-			<p class="mt-0.5 text-xs text-faint">{copy.help}</p>
-			<div class="mt-2.5 flex flex-wrap gap-2">
-				<For each={props.options}>
-					{(o) => {
-						const active = () => props.stances[o.id] === "nice";
-						return (
-							<button
-								type="button"
-								aria-pressed={active()}
-								onClick={() =>
-									active() ? props.unpick(o.id) : props.pick(o.id, "nice")
-								}
-								class={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors ${
-									active()
-										? `${STANCE_TONE.nice} font-medium`
-										: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground"
-								}`}
-							>
-								<span
-									aria-hidden="true"
-									class={`grid size-3.5 place-items-center rounded-sm border text-2xs leading-none ${
-										active()
-											? "border-accent-text bg-accent-text text-primary-foreground"
-											: "border-border-strong bg-surface"
-									}`}
-								>
-									{active() ? "✓" : ""}
-								</span>
-								{o.label}
-							</button>
-						);
-					}}
-				</For>
-			</div>
-		</div>
-	);
-}
-
 function ScoringPage() {
 	const configQuery = useScoringConfig();
 	const optionsQuery = useScoringOptions();
 	return (
-		<div class="max-w-2xl px-7 py-6">
-			<PageHeading
-				title="Scoring settings"
-				subtitle="Pick what you'd enjoy or avoid. Every posting is asked the same fixed questions, so changing a pick re-ranks every job for free."
-			/>
-			<QueryBoundary query={optionsQuery} fallbackRows={4}>
-				{(options) => (
-					<QueryBoundary query={configQuery} fallbackRows={4}>
-						{(config) => <ScoringForm config={config} options={options} />}
-					</QueryBoundary>
-				)}
-			</QueryBoundary>
+		<QueryBoundary query={optionsQuery} fallbackRows={4}>
+			{(options) => (
+				<QueryBoundary query={configQuery} fallbackRows={4}>
+					{(config) => <ScoringForm config={config} options={options} />}
+				</QueryBoundary>
+			)}
+		</QueryBoundary>
+	);
+}
+
+function Field(props: {
+	label: string;
+	for: string;
+	hint?: string;
+	children: JSX.Element;
+}) {
+	return (
+		<div>
+			<label for={props.for} class="block text-sm font-medium text-foreground">
+				{props.label}
+			</label>
+			<Show when={props.hint}>
+				<p class="mt-0.5 text-xs text-faint">{props.hint}</p>
+			</Show>
+			<div class="mt-2">{props.children}</div>
 		</div>
+	);
+}
+
+function ChoiceGroup(props: {
+	legend: string;
+	hint?: string;
+	options: ScoringOption[];
+	isOn: (id: string) => boolean;
+	toggle: (id: string) => void;
+}) {
+	return (
+		<fieldset>
+			<legend class="text-sm font-medium text-foreground">
+				{props.legend}
+			</legend>
+			<Show when={props.hint}>
+				<p class="mt-0.5 text-xs text-faint">{props.hint}</p>
+			</Show>
+			<div class="mt-2 flex flex-wrap gap-2">
+				<For each={props.options}>
+					{(o) => (
+						<button
+							type="button"
+							aria-pressed={props.isOn(o.id)}
+							onClick={() => props.toggle(o.id)}
+							class={cn(
+								"inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+								props.isOn(o.id)
+									? cn(STANCE_TONE.nice, "font-medium")
+									: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
+							)}
+						>
+							<span
+								aria-hidden="true"
+								class={cn(
+									"grid size-3.5 place-items-center rounded-sm border",
+									props.isOn(o.id)
+										? "border-accent-text bg-accent-text text-primary-foreground"
+										: "border-border-strong bg-surface",
+								)}
+							>
+								<Show when={props.isOn(o.id)}>
+									<svg
+										aria-hidden="true"
+										width="10"
+										height="10"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="3.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<polyline points="20 6 9 17 4 12" />
+									</svg>
+								</Show>
+							</span>
+							{o.label}
+						</button>
+					)}
+				</For>
+			</div>
+		</fieldset>
 	);
 }
 
@@ -287,8 +188,22 @@ function ScoringForm(props: {
 				.map((p) => [p.optionId, p.stance as Stance]),
 		),
 	);
-	const pick = (id: string, stance: Stance) => setStances(id, stance);
-	const unpick = (id: string) => setStances(id, undefined);
+
+	const optionsFor = (dim: Dim) =>
+		props.options.options.filter((o) => o.dimension === dim);
+	const idsWith = (dim: Dim, stance: Stance) =>
+		optionsFor(dim)
+			.filter((o) => stances[o.id] === stance)
+			.map((o) => o.id);
+	const setStance = (dim: Dim, stance: Stance, ids: string[]) => {
+		for (const o of optionsFor(dim)) {
+			if (ids.includes(o.id)) setStances(o.id, stance);
+			else if (stances[o.id] === stance) setStances(o.id, undefined);
+		}
+	};
+	const isNice = (id: string) => stances[id] === "nice";
+	const toggleNice = (id: string) =>
+		setStances(id, isNice(id) ? undefined : "nice");
 
 	const textPicks = createMemo(() =>
 		props.config.preferences.picks.filter((p) => p.source === "text"),
@@ -299,7 +214,6 @@ function ScoringForm(props: {
 	const [preferenceText, setPreferenceText] = createSignal(
 		props.config.preferences.preferenceText,
 	);
-
 	const [salaryFloor, setSalaryFloor] = createSignal(
 		props.config.preferences.salaryFloor?.amount.toString() ?? "",
 	);
@@ -308,16 +222,41 @@ function ScoringForm(props: {
 		props.config.excludedTitleKeywords.join(", "),
 	);
 	const [companies, setCompanies] = createSignal(
-		props.config.excludedCompanies.join(", "),
+		props.config.excludedCompanies,
 	);
 	const [locations, setLocations] = createSignal(
-		props.config.excludedLocations.join(", "),
+		props.config.excludedLocations,
 	);
-	const [saved, setSaved] = createSignal(false);
-	const [saveError, setSaveError] = createSignal<string | null>(null);
+	const companiesQuery = useCompanies();
+	const companyOptions = createMemo(() =>
+		(companiesQuery.data ?? []).map((c) => ({ id: c.Name, label: c.Name })),
+	);
 
-	const optionsFor = (dim: string) =>
-		props.options.options.filter((o) => o.dimension === dim);
+	const [section, setSection] = createSignal<SectionId>("role");
+	const triggers: Partial<Record<SectionId, HTMLButtonElement>> = {};
+	onMount(() => {
+		const cycle = (e: KeyboardEvent) => {
+			if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+			const step = e.key === "]" ? 1 : e.key === "[" ? -1 : 0;
+			if (!step) return;
+			e.preventDefault();
+			const i = SECTIONS.findIndex((s) => s.id === section());
+			const next = SECTIONS[(i + step + SECTIONS.length) % SECTIONS.length];
+			if (!next) return;
+			setSection(next.id);
+			triggers[next.id]?.focus();
+		};
+		document.addEventListener("keydown", cycle);
+		onCleanup(() => document.removeEventListener("keydown", cycle));
+	});
+	const [notice, setNotice] = createSignal<string | null>(null);
+	const [error, setError] = createSignal<string | null>(null);
+
+	const flash = (message: string) => {
+		setError(null);
+		setNotice(message);
+		setTimeout(() => setNotice(null), 3000);
+	};
 
 	const splitList = (value: string) =>
 		value
@@ -326,14 +265,14 @@ function ScoringForm(props: {
 			.filter((v) => v.length > 0);
 
 	const handleSave = async () => {
-		setSaved(false);
-		setSaveError(null);
+		setNotice(null);
+		setError(null);
 		try {
 			await mutation.mutateAsync({
 				notifyThreshold: threshold(),
 				excludedTitleKeywords: splitList(titleKeywords()),
-				excludedCompanies: splitList(companies()),
-				excludedLocations: splitList(locations()),
+				excludedCompanies: uniqueCapitalised(companies()),
+				excludedLocations: uniqueCapitalised(locations()),
 				preferences: {
 					picks: Object.entries(stances)
 						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
@@ -350,123 +289,241 @@ function ScoringForm(props: {
 				},
 				updatedAt: props.config.updatedAt,
 			});
-			setSaved(true);
-			setTimeout(() => setSaved(false), 3000);
+			flash("Saved.");
 		} catch {
-			setSaveError("Failed to save. Please try again.");
+			setError("Failed to save. Please try again.");
 		}
 	};
 
-	return (
+	const handleRecompute = async () => {
+		setNotice(null);
+		setError(null);
+		try {
+			const result = await recompute.mutateAsync();
+			flash(`${result.recomputed} jobs re-ranked.`);
+		} catch {
+			setError("Could not recompute scores. Try again.");
+		}
+	};
+
+	const pairPickers = (dim: Dim, like: string, avoid: string) => (
 		<>
-			<FormFeedback success={saved()} error={saveError()} />
+			<MultiCombobox
+				label={like}
+				options={optionsFor(dim).filter((o) => stances[o.id] !== "avoid")}
+				value={idsWith(dim, "nice")}
+				onChange={(ids) => setStance(dim, "nice", ids)}
+				chipClass={STANCE_TONE.nice}
+			/>
+			<MultiCombobox
+				label={avoid}
+				options={optionsFor(dim).filter((o) => stances[o.id] !== "nice")}
+				value={idsWith(dim, "avoid")}
+				onChange={(ids) => setStance(dim, "avoid", ids)}
+				chipClass={STANCE_TONE.avoid}
+			/>
+		</>
+	);
 
-			<div class="flex flex-col gap-5">
-				<section aria-labelledby="scoring-role">
-					<h2 id="scoring-role" class="text-base font-semibold text-foreground">
-						Role &amp; working
-					</h2>
-					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
-						<PairSection
-							dim="role"
-							options={optionsFor("role")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-						<MultiSection
-							dim="seniority"
-							options={optionsFor("seniority")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-						<MultiSection
-							dim="work"
-							options={optionsFor("work")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-					</div>
-				</section>
-
-				<section aria-labelledby="scoring-tech">
-					<h2 id="scoring-tech" class="text-base font-semibold text-foreground">
-						Technology
-					</h2>
-					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
-						<PairSection
-							dim="tech"
-							options={optionsFor("tech")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-					</div>
-				</section>
-
-				<section aria-labelledby="scoring-company">
-					<h2
-						id="scoring-company"
-						class="text-base font-semibold text-foreground"
+	return (
+		<PageLayout
+			title={TITLE}
+			actions={
+				<>
+					<Show when={scoringStatus.data?.pending}>
+						{(pending) => (
+							<span class="hidden text-xs text-faint tabular-nums sm:inline">
+								{pending()} pending
+							</span>
+						)}
+					</Show>
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={recompute.isPending}
+						onClick={handleRecompute}
 					>
-						Company
-					</h2>
-					<div class="mt-3 divide-y divide-border rounded-xl border border-border bg-surface">
-						<MultiSection
-							dim="stage"
-							options={optionsFor("stage")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-						<PairSection
-							dim="domain"
-							options={optionsFor("domain")}
-							stances={stances}
-							pick={pick}
-							unpick={unpick}
-						/>
-					</div>
-				</section>
+						{recompute.isPending ? "Recomputing…" : "Recompute scores"}
+					</Button>
+					<Button size="sm" disabled={mutation.isPending} onClick={handleSave}>
+						{mutation.isPending ? "Saving…" : "Save"}
+					</Button>
+				</>
+			}
+		>
+			<FormFeedback success={notice() ?? false} error={error()} />
 
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">
-							Describe what you want
-						</p>
-						<p class="mt-0.5 text-xs text-faint">
-							Write a sentence or two in your own words. We'll turn anything
-							that matches a pick above into one, without touching your manual
-							choices.
-						</p>
-					</div>
-					<div class="px-5 py-4">
-						<label
-							for="preference-text"
-							class="text-xs font-medium text-foreground"
-						>
-							In your own words
-						</label>
-						<Textarea
-							id="preference-text"
-							value={preferenceText()}
-							onInput={(e) => setPreferenceText(e.currentTarget.value)}
-							placeholder="e.g. I want to work with people more senior than me, and avoid on-call rotations."
-							class="mt-2 min-h-24"
+			<Tabs
+				orientation="vertical"
+				value={section()}
+				onChange={(v) => setSection(v as SectionId)}
+				class="flex flex-col gap-6 md:flex-row md:items-start"
+			>
+				<Tabs.List class="scroll-slim flex gap-1 overflow-x-auto md:sticky md:top-20 md:w-60 md:shrink-0 md:flex-col md:overflow-visible">
+					<For each={SECTIONS}>
+						{(s) => (
+							<Tabs.Trigger
+								value={s.id}
+								ref={(el: HTMLButtonElement) => {
+									triggers[s.id] = el;
+								}}
+								class="min-w-40 shrink-0 rounded-lg border border-transparent px-3 py-2.5 text-left transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary data-[selected]:border-border data-[selected]:bg-surface md:min-w-0"
+							>
+								<span class="block text-sm font-medium text-foreground">
+									{s.title}
+								</span>
+								<span class="mt-0.5 block truncate text-xs text-faint">
+									{s.summary}
+								</span>
+							</Tabs.Trigger>
+						)}
+					</For>
+					<p class="mt-2 hidden px-3 text-xs text-faint md:block">
+						Press <kbd class="font-mono">[</kbd> or{" "}
+						<kbd class="font-mono">]</kbd> to switch sections
+					</p>
+				</Tabs.List>
+
+				<div class="min-w-0 flex-1 self-stretch rounded-xl border border-border bg-surface md:min-h-[calc(100dvh-10rem-1px)]">
+					<Tabs.Content value="role" class="flex flex-col gap-6 p-6">
+						<ChoiceGroup
+							legend="Which roles are you looking for?"
+							options={optionsFor("role")}
+							isOn={isNice}
+							toggle={toggleNice}
 						/>
+						<Field
+							label="Minimum salary"
+							for="salary-floor"
+							hint="Jobs that don't state a salary are never penalised."
+						>
+							<div class="relative w-44">
+								<span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-faint">
+									£
+								</span>
+								<Input
+									id="salary-floor"
+									type="number"
+									step="5000"
+									min="0"
+									value={salaryFloor()}
+									onInput={(e) => setSalaryFloor(e.currentTarget.value)}
+									placeholder="No minimum"
+									class="pl-7 font-mono tabular-nums"
+								/>
+							</div>
+						</Field>
+						<ChoiceGroup
+							legend="Seniority"
+							hint="Postings that don't state a level are never penalised."
+							options={optionsFor("seniority")}
+							isOn={isNice}
+							toggle={toggleNice}
+						/>
+						<ChoiceGroup
+							legend="Working arrangement"
+							options={optionsFor("work")}
+							isOn={isNice}
+							toggle={toggleNice}
+						/>
+					</Tabs.Content>
+
+					<Tabs.Content value="stack" class="flex flex-col gap-6 p-6">
+						{pairPickers(
+							"tech",
+							"Technologies you'd enjoy",
+							"Technologies to avoid",
+						)}
+						{pairPickers(
+							"domain",
+							"Industries you'd enjoy",
+							"Industries to avoid",
+						)}
+						<ChoiceGroup
+							legend="Company stage"
+							options={optionsFor("stage")}
+							isOn={isNice}
+							toggle={toggleNice}
+						/>
+					</Tabs.Content>
+
+					<Tabs.Content value="filters" class="flex flex-col gap-6 p-6">
+						<p class="text-xs text-faint">
+							Jobs matching any exclusion are dropped before scoring.
+						</p>
+						<Field
+							label="Excluded title keywords"
+							for="excluded-titles"
+							hint={`Comma-separated, whole words only: "java" won't exclude "JavaScript".`}
+						>
+							<Input
+								id="excluded-titles"
+								value={titleKeywords()}
+								onInput={(e) => setTitleKeywords(e.currentTarget.value)}
+								placeholder="recruiter, sales, .net"
+							/>
+						</Field>
+						<MultiCombobox
+							label="Excluded companies"
+							options={companyOptions()}
+							value={companies()}
+							onChange={(names) => setCompanies(uniqueCapitalised(names))}
+							placeholder="Search or type a company…"
+							chipClass={STANCE_TONE.avoid}
+							creatable
+						/>
+						<MultiCombobox
+							label="Excluded locations"
+							options={[]}
+							value={locations()}
+							onChange={(names) => setLocations(uniqueCapitalised(names))}
+							placeholder="Type a location, then Enter"
+							chipClass={STANCE_TONE.avoid}
+							creatable
+						/>
+						<Field
+							label="Notify me at a score of"
+							for="threshold"
+							hint="Out of 100."
+						>
+							<Input
+								id="threshold"
+								type="number"
+								min="0"
+								max="100"
+								value={threshold()}
+								onInput={(e) => setThreshold(Number(e.currentTarget.value))}
+								class="w-24 font-mono tabular-nums"
+							/>
+						</Field>
+					</Tabs.Content>
+
+					<Tabs.Content value="other" class="flex flex-col gap-6 p-6">
+						<Field
+							label="Anything else worth mentioning?"
+							for="preference-text"
+							hint="Whatever matches an option elsewhere becomes a pick. Your own picks always win."
+						>
+							<Textarea
+								id="preference-text"
+								value={preferenceText()}
+								onInput={(e) => setPreferenceText(e.currentTarget.value)}
+								placeholder="e.g. I'd like to work with people more senior than me, and avoid on-call rotations."
+								class="min-h-32"
+							/>
+						</Field>
 						<Show when={textPicks().length > 0}>
-							<div class="mt-3 flex flex-wrap gap-1.5">
+							<div class="flex flex-wrap gap-1.5">
 								<For each={textPicks()}>
 									{(p) => (
 										<span
-											class={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${
+											class={cn(
+												"inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium",
 												p.overridden
 													? "border-border text-faint line-through"
 													: (STANCE_TONE[p.stance as Stance] ??
-														"border-border-strong bg-surface-muted text-muted")
-											}`}
+															"border-border-strong bg-surface-muted text-muted"),
+											)}
 										>
 											{labelFor(p.optionId)}
 											{p.overridden && " (overridden)"}
@@ -475,177 +532,9 @@ function ScoringForm(props: {
 								</For>
 							</div>
 						</Show>
-					</div>
-				</Card>
-
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">
-							Exclusion filters
-						</p>
-						<p class="mt-0.5 text-xs text-faint">
-							Jobs matching any of these are dropped before scoring runs. Leave
-							a field blank to exclude nothing on that axis.
-						</p>
-					</div>
-					<div class="divide-y divide-border">
-						<div class="px-5 py-4">
-							<label
-								for="excluded-titles"
-								class="text-xs font-medium text-foreground"
-							>
-								Excluded title keywords
-							</label>
-							<p class="mt-0.5 text-xs text-faint">
-								Comma-separated. Matches whole words in the title only (e.g.
-								"java" won't reject "JavaScript").
-							</p>
-							<Input
-								id="excluded-titles"
-								value={titleKeywords()}
-								onInput={(e) => setTitleKeywords(e.currentTarget.value)}
-								placeholder="recruiter, sales, .net"
-								class="mt-2"
-							/>
-						</div>
-
-						<div class="px-5 py-4">
-							<label
-								for="excluded-companies"
-								class="text-xs font-medium text-foreground"
-							>
-								Excluded companies
-							</label>
-							<p class="mt-0.5 text-xs text-faint">Comma-separated.</p>
-							<Input
-								id="excluded-companies"
-								value={companies()}
-								onInput={(e) => setCompanies(e.currentTarget.value)}
-								placeholder="Acme Corp"
-								class="mt-2"
-							/>
-						</div>
-
-						<div class="px-5 py-4">
-							<label
-								for="excluded-locations"
-								class="text-xs font-medium text-foreground"
-							>
-								Excluded locations
-							</label>
-							<p class="mt-0.5 text-xs text-faint">Comma-separated.</p>
-							<Input
-								id="excluded-locations"
-								value={locations()}
-								onInput={(e) => setLocations(e.currentTarget.value)}
-								placeholder="United States"
-								class="mt-2"
-							/>
-						</div>
-					</div>
-				</Card>
-
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">Salary floor</p>
-						<p class="mt-0.5 text-xs text-faint">
-							A job below this costs points, but a job that doesn't state a
-							salary is never penalised.
-						</p>
-					</div>
-					<div class="px-5 py-4">
-						<label
-							for="salary-floor"
-							class="text-xs font-medium text-foreground"
-						>
-							Minimum salary
-						</label>
-						<div class="mt-2 flex items-center gap-2">
-							<span class="text-sm text-faint">£</span>
-							<Input
-								id="salary-floor"
-								type="number"
-								step="5000"
-								min="0"
-								value={salaryFloor()}
-								onInput={(e) => setSalaryFloor(e.currentTarget.value)}
-								placeholder="No floor"
-								class="w-32 font-mono tabular-nums"
-							/>
-							<span class="text-xs text-faint">a year</span>
-						</div>
-					</div>
-				</Card>
-
-				<Card class="overflow-hidden">
-					<div class="border-b border-border px-5 py-4">
-						<p class="text-base font-semibold text-foreground">Notifications</p>
-						<p class="mt-0.5 text-xs text-faint">
-							Tune when you're notified after a job is scored.
-						</p>
-					</div>
-					<div class="px-5 py-4">
-						<label for="threshold" class="text-xs font-medium text-foreground">
-							Notify threshold
-						</label>
-						<p class="mt-0.5 text-xs text-faint">
-							You only receive notifications for jobs scoring at or above this
-							suitability score.
-						</p>
-						<div class="mt-2 flex items-center gap-2">
-							<Input
-								id="threshold"
-								type="number"
-								min="0"
-								max="100"
-								value={threshold()}
-								onInput={(e) => setThreshold(Number(e.currentTarget.value))}
-								class="w-20"
-							/>
-							<span class="text-xs text-faint">out of 100</span>
-						</div>
-					</div>
-				</Card>
-
-				<div class="flex items-center gap-3">
-					<Button onClick={handleSave} disabled={mutation.isPending}>
-						{mutation.isPending ? "Saving…" : "Save"}
-					</Button>
+					</Tabs.Content>
 				</div>
-
-				<Card>
-					<CardHeader>
-						<CardTitle>Recompute scores</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<Show
-							when={scoringStatus.data}
-							fallback={
-								<p>
-									{scoringStatus.isError
-										? "Could not load scoring status."
-										: "Loading scoring status…"}
-								</p>
-							}
-						>
-							{(status) => <p>{status().pending} answer effects pending.</p>}
-						</Show>
-						<Button
-							variant="outline"
-							disabled={recompute.isPending}
-							onClick={() => recompute.mutate()}
-						>
-							{recompute.isPending ? "Recomputing…" : "Recompute scores"}
-						</Button>
-						<Show when={recompute.data}>
-							<p>{recompute.data?.recomputed} jobs re-ranked.</p>
-						</Show>
-						<Show when={recompute.isError}>
-							<p>Could not recompute scores. Try again.</p>
-						</Show>
-					</CardContent>
-				</Card>
-			</div>
-		</>
+			</Tabs>
+		</PageLayout>
 	);
 }
