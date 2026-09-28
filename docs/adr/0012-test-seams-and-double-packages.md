@@ -21,4 +21,4 @@ Rejected alternatives:
 
 Trade-off: each context gains up to two exported test packages and each module a second constructor. Contract suites must be kept in step with store interfaces by hand.
 
-Status: accepted (2026-09-28). Pilot in `applications`; other contexts migrate when next touched.
+Status: rolled out (2026-09-28). Every context, the worker and the shared kernel follow it.

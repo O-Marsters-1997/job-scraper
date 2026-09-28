@@ -1,4 +1,4 @@
-package telemetry
+package telemetry_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 type fakeStateReader struct {
@@ -61,7 +62,7 @@ func TestStateCollector(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			collector := NewStateCollector(tt.reader)
+			collector := telemetry.NewStateCollector(tt.reader)
 			if err := testutil.CollectAndCompare(collector, strings.NewReader(tt.want)); err != nil {
 				t.Fatal(err)
 			}

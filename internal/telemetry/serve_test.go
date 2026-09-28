@@ -1,4 +1,4 @@
-package telemetry
+package telemetry_test
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
 func TestServeStopsOnContextCancel(t *testing.T) {
@@ -17,7 +19,7 @@ func TestServeStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 
 	done := make(chan error, 1)
-	go func() { done <- Serve(ctx, addr, reg) }()
+	go func() { done <- telemetry.Serve(ctx, addr, reg) }()
 
 	waitForServing(t, addr)
 	cancel()
@@ -41,7 +43,7 @@ func TestServeExposesMetrics(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go func() { _ = Serve(ctx, addr, reg) }()
+	go func() { _ = telemetry.Serve(ctx, addr, reg) }()
 
 	body := waitForServing(t, addr)
 	if !strings.Contains(body, "test_metric_total 1") {

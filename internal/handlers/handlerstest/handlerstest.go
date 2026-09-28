@@ -34,7 +34,12 @@ func authedRequest(method, path string, body *strings.Reader) *http.Request {
 	if body != nil {
 		r = body
 	}
-	req := httptest.NewRequest(method, path, r)
+	return Authed(httptest.NewRequest(method, path, r))
+}
+
+const UserID = testUserID
+
+func Authed(req *http.Request) *http.Request {
 	return req.WithContext(handlers.WithSession(req.Context(), dto.Session{UserID: testUserID}))
 }
 
