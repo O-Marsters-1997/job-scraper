@@ -58,38 +58,57 @@ func createCompany(t *testing.T, in dto.CreateCompanyInput) (dto.Company, *jobse
 	return company, st, err
 }
 
-func assertCreated(t *testing.T, in dto.CreateCompanyInput, wantSlug string, wantTracked bool) {
-	t.Helper()
-	company, st, err := createCompany(t, in)
-	if err != nil {
-		t.Fatalf("CreateCompany(%+v) err = %v", in, err)
+func TestCreate_Rejects(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       dto.CreateCompanyInput
+		wantKind apperr.Kind
+	}{
+		{name: "missing url", in: dto.CreateCompanyInput{}, wantKind: apperr.KindInvalid},
+		{name: "unresolvable url", in: dto.CreateCompanyInput{URL: "https://example.com/careers"}, wantKind: apperr.KindUnprocessable},
 	}
-	if company.Slug != wantSlug {
-		t.Errorf("CreateCompany(%+v).Slug = %q, want %q", in, company.Slug, wantSlug)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := createCompany(t, tt.in)
+			assertKind(t, err, tt.wantKind)
+		})
 	}
-	tracked, ok := trackingFor(t, st, "user-1", company.ID)
-	if got := ok && tracked.Tracked; got != wantTracked {
-		t.Errorf("tracked = %v, want %v", got, wantTracked)
+}
+
+func TestCreate_Resolves(t *testing.T) {
+	tests := []struct {
+		name        string
+		in          dto.CreateCompanyInput
+		wantSlug    string
+		wantTracked bool
+	}{
+		{
+			name:        "tracks a valid board url by default",
+			in:          dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"},
+			wantSlug:    "acmecorp",
+			wantTracked: true,
+		},
+		{
+			name:     "does not track when track is false",
+			in:       dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)},
+			wantSlug: "acmecorp",
+		},
 	}
-}
-
-func TestCreate_RejectsMissingURL(t *testing.T) {
-	_, _, err := createCompany(t, dto.CreateCompanyInput{})
-	assertKind(t, err, apperr.KindInvalid)
-}
-
-func TestCreate_RejectsUnresolvableURL(t *testing.T) {
-	_, _, err := createCompany(t, dto.CreateCompanyInput{URL: "https://example.com/careers"})
-	assertKind(t, err, apperr.KindUnprocessable)
-}
-
-func TestCreate_TracksValidBoardURLByDefault(t *testing.T) {
-	assertCreated(t, dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"}, "acmecorp", true)
-}
-
-func TestCreate_DoesNotTrackWhenTrackIsFalse(t *testing.T) {
-	in := dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)}
-	assertCreated(t, in, "acmecorp", false)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			company, st, err := createCompany(t, tt.in)
+			if err != nil {
+				t.Fatalf("CreateCompany(%+v) err = %v", tt.in, err)
+			}
+			if company.Slug != tt.wantSlug {
+				t.Errorf("CreateCompany(%+v).Slug = %q, want %q", tt.in, company.Slug, tt.wantSlug)
+			}
+			tracked, ok := trackingFor(t, st, "user-1", company.ID)
+			if got := ok && tracked.Tracked; got != tt.wantTracked {
+				t.Errorf("tracked = %v, want %v", got, tt.wantTracked)
+			}
+		})
+	}
 }
 
 func TestSetTracking(t *testing.T) {
