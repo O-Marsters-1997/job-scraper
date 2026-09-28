@@ -25,6 +25,11 @@ func NewAPIExporter(baseURL, token string) *APIExporter {
 	return &APIExporter{baseURL: baseURL, token: token, client: client, initialBackoff: time.Second}
 }
 
+func (p *APIExporter) WithInitialBackoff(d time.Duration) *APIExporter {
+	p.initialBackoff = d
+	return p
+}
+
 func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
 	for len(jobs) > 0 {
 		count := min(len(jobs), 100)

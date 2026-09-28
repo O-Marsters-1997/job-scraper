@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
+	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/crawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/getro"
@@ -103,12 +102,12 @@ func main() {
 	orch := scraper.New(js.Catalog()).WithSourceBuilder(builder.BuildSource)
 	orch.WithRejectFilter(scoringModule)
 	orch.WithCandidates(js.Targets())
-	processor := &taskProcessor{
-		js: js, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
-		detailers: map[string]sources.DetailFetcher{
+	processor := worker.NewProcessor(worker.Deps{
+		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter,
+		Detailers: map[string]sources.DetailFetcher{
 			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New(linkedin.Search{}), "indeed": indeed.New(""),
 		},
-	}
+	})
 	cr := cron.New()
 	if !*noScrape {
 		publishBoards := func() {
@@ -192,125 +191,7 @@ func main() {
 	go discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards()).Run(ctx)
 	go crawl.New(js.Boards()).Run(ctx)
 	slog.InfoContext(ctx, "RabbitMQ source workers starting")
-	if err := q.Consume(ctx, processor.process, processor.failRun); err != nil && ctx.Err() == nil {
+	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
 	}
-}
-
-func (p *taskProcessor) failRun(ctx context.Context, task queue.Task) error {
-	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
-		return nil
-	}
-	_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "failed", "Work failed after retries. Try running it again.")
-	if errors.Is(err, data.ErrNotFound) {
-		return nil
-	}
-	return err
-}
-
-type taskProcessor struct {
-	js           *jobsearch.Module
-	broker       *queue.Broker
-	orchestrator *scraper.Orchestrator
-	boards       *scraper.BoardPoller
-	detailers    map[string]sources.DetailFetcher
-	exporter     *scraper.APIExporter
-}
-
-func (p *taskProcessor) process(ctx context.Context, task queue.Task) error {
-	switch task.Kind {
-	case queue.DetailTask:
-		if task.Source == "remoteok" || task.Source == "remotive" {
-			return p.exporter.Export(ctx, task.Card)
-		}
-		fetcher := p.detailers[task.Source]
-		if fetcher == nil {
-			return fmt.Errorf("source %s cannot fetch details", task.Source)
-		}
-		job, err := fetcher.GetDetails(ctx, task.URL)
-		if err != nil {
-			return err
-		}
-		return p.exporter.Export(ctx, job)
-	case queue.ListingPageTask:
-		return p.processPage(ctx, task)
-	case queue.BoardCheckTask:
-		return p.processBoard(ctx, task)
-	case queue.BoardVerifyTask:
-		return p.verifyBoard(ctx, task)
-	default:
-		return fmt.Errorf("unsupported task kind %s", task.Kind)
-	}
-}
-
-func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error {
-	if err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken); err != nil {
-		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
-		return nil
-	}
-	_, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
-	return err
-}
-
-func (p *taskProcessor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
-	target, err := p.js.Targets().GetSourceTarget(ctx, task.TargetID)
-	if errors.Is(err, data.ErrNotFound) {
-		return dto.SourceTarget{}, false, nil
-	}
-	if err != nil {
-		return dto.SourceTarget{}, false, err
-	}
-	if !target.Enabled || target.RunID != task.RunID || target.Source != task.Source || target.RunStatus == "succeeded" || target.RunStatus == "failed" {
-		return target, false, nil
-	}
-	if task.Cursor == "" && !task.Redelivered && !task.Recovery && target.RunStatus == "running" && time.Since(target.UpdatedAt) < 30*time.Minute {
-		return target, false, nil
-	}
-	return target, true, nil
-}
-
-func (p *taskProcessor) processPage(ctx context.Context, task queue.Task) error {
-	target, active, err := p.currentTarget(ctx, task)
-	if err != nil || !active {
-		return err
-	}
-	if target.RunStatus == "queued" || task.Cursor == "" {
-		if _, err := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
-			return err
-		}
-	}
-	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
-	if err != nil {
-		return err
-	}
-	if next != "" {
-		task.ID, task.Cursor = uuid.NewString(), next
-		if err := p.broker.Publish(ctx, task); err != nil {
-			return err
-		}
-		_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", "")
-		return err
-	}
-	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
-	return err
-}
-
-func (p *taskProcessor) processBoard(ctx context.Context, task queue.Task) error {
-	if task.TargetID != "" {
-		target, active, err := p.currentTarget(ctx, task)
-		if err != nil || !active {
-			return err
-		}
-		if _, err := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", ""); err != nil {
-			return err
-		}
-	}
-	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual); err != nil {
-		return err
-	}
-	if task.TargetID != "" {
-		_, err := p.js.Targets().TransitionSourceTargetRun(ctx, task.TargetID, task.RunID, "succeeded", "")
-		return err
-	}
-	return nil
 }

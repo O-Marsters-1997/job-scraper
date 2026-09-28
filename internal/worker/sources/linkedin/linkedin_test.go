@@ -1,115 +1,128 @@
-package linkedin
+package linkedin_test
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, New(Search{}))
+	sourcetest.RunSnapshotTests(t, linkedin.New(linkedin.Search{}))
 }
 
-func TestPageURL(t *testing.T) {
+func FuzzParse(f *testing.F) {
+	sourcetest.FuzzSnapshots(f, linkedin.New(linkedin.Search{}))
+}
+
+func TestFetchPage_SearchQuery(t *testing.T) {
 	tests := []struct {
 		name   string
-		search Search
+		search linkedin.Search
 		want   map[string]string
 	}{
 		{
 			name:   "keywords only, no filters set",
-			search: Search{Keywords: "engineer"},
+			search: linkedin.Search{Keywords: "engineer"},
 			want:   map[string]string{"keywords": "engineer"},
 		},
 		{
 			name:   "location set",
-			search: Search{Keywords: "engineer", Location: "London"},
+			search: linkedin.Search{Keywords: "engineer", Location: "London"},
 			want:   map[string]string{"keywords": "engineer", "location": "London"},
 		},
 		{
 			name:   "valid company_id",
-			search: Search{CompanyID: "12345"},
+			search: linkedin.Search{CompanyID: "12345"},
 			want:   map[string]string{"f_C": "12345"},
 		},
 		{
 			name:   "invalid company_id dropped",
-			search: Search{CompanyID: "not-a-number"},
+			search: linkedin.Search{CompanyID: "not-a-number"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid recency",
-			search: Search{Recency: "r86400"},
+			search: linkedin.Search{Recency: "r86400"},
 			want:   map[string]string{"f_TPR": "r86400"},
 		},
 		{
 			name:   "invalid recency dropped",
-			search: Search{Recency: "r1"},
+			search: linkedin.Search{Recency: "r1"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid arrangement",
-			search: Search{Arrangement: "2"},
+			search: linkedin.Search{Arrangement: "2"},
 			want:   map[string]string{"f_WT": "2"},
 		},
 		{
 			name:   "invalid arrangement dropped",
-			search: Search{Arrangement: "9"},
+			search: linkedin.Search{Arrangement: "9"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid experience",
-			search: Search{Experience: "3"},
+			search: linkedin.Search{Experience: "3"},
 			want:   map[string]string{"f_E": "3"},
 		},
 		{
 			name:   "invalid experience dropped",
-			search: Search{Experience: "7"},
+			search: linkedin.Search{Experience: "7"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid job_type",
-			search: Search{JobType: "F"},
+			search: linkedin.Search{JobType: "F"},
 			want:   map[string]string{"f_JT": "F"},
 		},
 		{
 			name:   "invalid job_type dropped",
-			search: Search{JobType: "X"},
+			search: linkedin.Search{JobType: "X"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid geo_id",
-			search: Search{GeoID: "103644278"},
+			search: linkedin.Search{GeoID: "103644278"},
 			want:   map[string]string{"geoId": "103644278"},
 		},
 		{
 			name:   "invalid geo_id dropped",
-			search: Search{GeoID: "abc"},
+			search: linkedin.Search{GeoID: "abc"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid distance",
-			search: Search{Distance: "25"},
+			search: linkedin.Search{Distance: "25"},
 			want:   map[string]string{"f_D": "25"},
 		},
 		{
 			name:   "invalid distance dropped",
-			search: Search{Distance: "far"},
+			search: linkedin.Search{Distance: "far"},
 			want:   map[string]string{},
 		},
 		{
 			name:   "valid salary_band",
-			search: Search{SalaryBand: "5"},
+			search: linkedin.Search{SalaryBand: "5"},
 			want:   map[string]string{"f_SB2": "5"},
 		},
 		{
 			name:   "invalid salary_band dropped",
-			search: Search{SalaryBand: "0"},
+			search: linkedin.Search{SalaryBand: "0"},
 			want:   map[string]string{},
 		},
 		{
 			name: "all filters set together",
-			search: Search{
+			search: linkedin.Search{
 				Keywords:    "engineer",
 				Location:    "London",
 				CompanyID:   "12345",
@@ -138,12 +151,18 @@ func TestPageURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw := tt.search.pageURL(0)
-			u, err := url.Parse(raw)
-			if err != nil {
-				t.Fatalf("pageURL produced invalid URL: %v", err)
+			t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
+			t.Setenv("BRIGHTDATA_CA_CERT", "")
+			var requested *url.URL
+			src := linkedin.New(tt.search)
+			src.Client().Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				requested = r.URL
+				return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader("<html></html>"))}, nil
+			})
+			if _, _, err := src.FetchPage(context.Background(), ""); err != nil {
+				t.Fatal(err)
 			}
-			query := u.Query()
+			query := requested.Query()
 
 			for param, want := range tt.want {
 				got := query.Get(param)

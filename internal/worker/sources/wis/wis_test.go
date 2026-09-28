@@ -10,3 +10,7 @@ import (
 func TestSnapshots(t *testing.T) {
 	sourcetest.RunSnapshotTests(t, wis.New(wis.Search{}))
 }
+
+func FuzzParse(f *testing.F) {
+	sourcetest.FuzzSnapshots(f, wis.New(wis.Search{}))
+}

@@ -1,4 +1,4 @@
-package scraper
+package scraper_test
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 )
 
 func TestAPIExporter_CorrectRequestShape(t *testing.T) {
@@ -29,7 +30,7 @@ func TestAPIExporter_CorrectRequestShape(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIExporter(srv.URL, "test-token")
+	pub := scraper.NewAPIExporter(srv.URL, "test-token")
 	job := dto.Job{Title: "Engineer", URL: "https://example.com/job/1"}
 
 	if err := pub.BulkExport(context.Background(), []dto.Job{job}); err != nil {
@@ -60,7 +61,7 @@ func TestAPIExporter_2xx_ReturnsNil(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIExporter(srv.URL, "tok")
+	pub := scraper.NewAPIExporter(srv.URL, "tok")
 	if err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err != nil {
 		t.Errorf("expected nil error on 201, got %v", err)
 	}
@@ -74,7 +75,7 @@ func TestAPIExporter_4xx_ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIExporter(srv.URL, "tok")
+	pub := scraper.NewAPIExporter(srv.URL, "tok")
 	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
 	if err == nil {
 		t.Error("expected error on 400, got nil")
@@ -92,8 +93,7 @@ func TestAPIExporter_5xx_RetriesAndReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	pub := NewAPIExporter(srv.URL, "tok")
-	pub.initialBackoff = 0
+	pub := scraper.NewAPIExporter(srv.URL, "tok").WithInitialBackoff(0)
 
 	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
 	if err == nil {
@@ -124,8 +124,7 @@ func TestAPIExporter_RetriesAmbiguousBatchWithSameIdentity(t *testing.T) {
 		_, _ = w.Write([]byte(`{"results":[{"status":"unchanged","job_id":"job-1"}]}`))
 	}))
 	defer srv.Close()
-	exporter := NewAPIExporter(srv.URL, "tok")
-	exporter.initialBackoff = 0
+	exporter := scraper.NewAPIExporter(srv.URL, "tok").WithInitialBackoff(0)
 	job := dto.Job{Title: "Engineer", URL: "https://example.com/1", BoardID: "11111111-1111-1111-1111-111111111111", ProviderPostingID: "posting-1"}
 	if err := exporter.BulkExport(context.Background(), []dto.Job{job}); err != nil {
 		t.Fatal(err)
@@ -140,7 +139,7 @@ func TestAPIExporter_RequiresAcceptedOutcome(t *testing.T) {
 		_, _ = w.Write([]byte(`{"results":[{"status":"pending"}]}`))
 	}))
 	defer srv.Close()
-	exporter := NewAPIExporter(srv.URL, "tok")
+	exporter := scraper.NewAPIExporter(srv.URL, "tok")
 	if err := exporter.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err == nil {
 		t.Fatal("expected unknown outcome to fail")
 	}
@@ -166,7 +165,7 @@ func TestAPIExporter_SplitsBatchAtPayloadLimit(t *testing.T) {
 		{Title: "A", URL: "https://example.com/a", Description: strings.Repeat("x", 1100000)},
 		{Title: "B", URL: "https://example.com/b", Description: strings.Repeat("x", 1100000)},
 	}
-	if err := NewAPIExporter(srv.URL, "tok").BulkExport(context.Background(), jobs); err != nil {
+	if err := scraper.NewAPIExporter(srv.URL, "tok").BulkExport(context.Background(), jobs); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 2 {

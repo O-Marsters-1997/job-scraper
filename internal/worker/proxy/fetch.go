@@ -25,7 +25,7 @@ func IsZonePaused(err error) bool {
 	return errors.Is(err, errZoneExhausted) || errors.Is(err, errZonePaused)
 }
 
-var sharedZone = &zoneGate{}
+var sharedZone = &ZoneGate{}
 var allSlots = make(chan struct{}, 16)
 var hostSlots sync.Map
 
@@ -46,22 +46,22 @@ func acquire(ctx context.Context, host string) (func(), error) {
 	}
 }
 
-type zoneGate struct {
+type ZoneGate struct {
 	mu        sync.Mutex
 	paused    bool
 	lastProbe time.Time
-	now       func() time.Time
+	Now       func() time.Time
 }
 
-func (z *zoneGate) enter() (bool, error) {
+func (z *ZoneGate) enter() (bool, error) {
 	z.mu.Lock()
 	defer z.mu.Unlock()
 	if !z.paused {
 		return false, nil
 	}
 	now := time.Now().UTC()
-	if z.now != nil {
-		now = z.now()
+	if z.Now != nil {
+		now = z.Now()
 	}
 	if now.Year() == z.lastProbe.Year() && now.YearDay() == z.lastProbe.YearDay() {
 		return false, errZonePaused
@@ -70,14 +70,14 @@ func (z *zoneGate) enter() (bool, error) {
 	return true, nil
 }
 
-func (z *zoneGate) result(exhausted, success, probe bool) {
+func (z *ZoneGate) result(exhausted, success, probe bool) {
 	z.mu.Lock()
 	defer z.mu.Unlock()
 	if exhausted {
 		z.paused = true
 		z.lastProbe = time.Now().UTC()
-		if z.now != nil {
-			z.lastProbe = z.now()
+		if z.Now != nil {
+			z.lastProbe = z.Now()
 		}
 	} else if success && probe {
 		z.paused = false
@@ -86,7 +86,7 @@ func (z *zoneGate) result(exhausted, success, probe bool) {
 
 type fetchTransport struct {
 	base http.RoundTripper
-	zone *zoneGate
+	zone *ZoneGate
 }
 
 func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -288,4 +288,8 @@ func Probe(ctx context.Context) error {
 		return fmt.Errorf("web unlocker probe status %s", resp.Status)
 	}
 	return nil
+}
+
+func NewFetchTransport(base http.RoundTripper, zone *ZoneGate) http.RoundTripper {
+	return &fetchTransport{base: base, zone: zone}
 }

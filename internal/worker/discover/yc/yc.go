@@ -31,6 +31,11 @@ func New() *Harvester {
 	return &Harvester{client: &http.Client{Timeout: 15 * time.Second, Transport: logger.FetchTransport(nil)}, baseURL: baseURL}
 }
 
+func (h *Harvester) WithBaseURL(u string) *Harvester {
+	h.baseURL = u
+	return h
+}
+
 func (h *Harvester) Name() string { return "yc" }
 
 func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {

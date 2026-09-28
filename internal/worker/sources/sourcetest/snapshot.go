@@ -2,6 +2,7 @@
 package sourcetest
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -67,4 +68,24 @@ func RunSnapshotTests(t *testing.T, src sources.SnapshotSource) {
 			}
 		})
 	}
+}
+
+// FuzzSnapshots fuzzes src's list and detail parsers, seeded from snapshots/*.html. The
+// invariant is that neither parser panics.
+func FuzzSnapshots(f *testing.F, src sources.SnapshotSource) {
+	f.Helper()
+
+	files, _ := filepath.Glob("snapshots/*.html")
+	for _, path := range files {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			f.Fatalf("read seed %s: %v", path, err)
+		}
+		f.Add(body)
+	}
+
+	f.Fuzz(func(t *testing.T, body []byte) {
+		_, _ = src.ParseURLs(bytes.NewReader(body))
+		_, _ = src.ParseJobDetail(bytes.NewReader(body), "https://example.com/job")
+	})
 }

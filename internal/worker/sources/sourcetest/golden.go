@@ -1,8 +1,12 @@
 package sourcetest
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,13 +16,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files from parser output")
 
-// RunGolden parses snapshots/<fixture> with token and compares the jobs to
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// RunGolden serves snapshots/<fixture> as src's API response and compares the fetched jobs to
 // snapshots/<fixture minus extension>.golden.json. Run with -update to rewrite it.
-func RunGolden(t *testing.T, fixture, token string, parse func(body []byte, token string) ([]dto.Job, error)) {
+func RunGolden(t *testing.T, fixture string, src *sources.BoardSource) {
 	t.Helper()
 
 	body, err := os.ReadFile(filepath.Join("snapshots", fixture))
@@ -26,10 +35,14 @@ func RunGolden(t *testing.T, fixture, token string, parse func(body []byte, toke
 		t.Fatalf("read fixture: %v", err)
 	}
 
+	src.Client().Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(bytes.NewReader(body))}, nil
+	})
+
 	start := time.Now()
-	got, err := parse(body, token)
+	got, _, err := src.FetchPage(context.Background(), "")
 	if err != nil {
-		t.Fatalf("parse(%s) error: %v", fixture, err)
+		t.Fatalf("FetchPage(%s) error: %v", fixture, err)
 	}
 	clearTimeNowFallbacks(got, start)
 
@@ -54,7 +67,7 @@ func RunGolden(t *testing.T, fixture, token string, parse func(body []byte, toke
 	}
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("parse(%s) mismatch (-want +got):\n%s", fixture, diff)
+		t.Errorf("FetchPage(%s) mismatch (-want +got):\n%s", fixture, diff)
 	}
 }
 
