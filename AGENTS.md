@@ -3,7 +3,7 @@
 ## Approach
 
 - Think before acting; read existing files before writing code. Prefer editing over rewriting.
-- Test your code before declaring done. Only add comments if the code isn't self-descriptive.
+- Test your code before declaring done. Comments follow `~/.claude/rules/comments.md`.
 - No sycophantic openers or closing fluff. Be concise in output, thorough in reasoning.
 - Before a structural/architectural decision (new package boundary, naming ambiguity), check
   `CONTEXT.md` (domain glossary) and `docs/adr/` (past decisions) — not needed for routine work.
