@@ -1,6 +1,10 @@
-package detect
+package detect_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/ollymarsters/job-scraper/internal/detect"
+)
 
 func TestSniffATS(t *testing.T) {
 	tests := []struct {
@@ -49,7 +53,7 @@ func TestSniffATS(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotSource, gotToken, gotOK := SniffATS([]byte(tt.body))
+			gotSource, gotToken, gotOK := detect.SniffATS([]byte(tt.body))
 			if gotSource != tt.wantSource || gotToken != tt.wantToken || gotOK != tt.wantOK {
 				t.Errorf("SniffATS(%q) = (%q, %q, %v), want (%q, %q, %v)",
 					tt.body, gotSource, gotToken, gotOK, tt.wantSource, tt.wantToken, tt.wantOK)

@@ -1,4 +1,4 @@
-package queue
+package queue_test
 
 import (
 	"bufio"
@@ -18,7 +18,14 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
+)
+
+const (
+	workExchange = "source.work"
+	deadExchange = "source.dead.exchange"
+	deadQueue    = "source.dead"
 )
 
 func TestRabbitMQWorkQueue(t *testing.T) {
@@ -49,7 +56,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	}
 	t.Setenv("RABBITMQ_MANAGEMENT_URL", fmt.Sprintf("http://%s:%s", host, managementPort.Port()))
 	url := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, port.Port())
-	broker, err := NewBroker(url)
+	broker, err := queue.NewBroker(url)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +73,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	defer func() { _ = ch.Close() }()
 
 	t.Run("priority and mandatory return", func(t *testing.T) {
-		detail := Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}
-		listing := Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+		detail := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}
+		listing := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
 		if err := broker.Publish(ctx, detail); err != nil {
 			t.Fatal(err)
 		}
@@ -101,7 +108,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 
 	t.Run("publish stamps timestamp", func(t *testing.T) {
-		task := Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: DetailTask, URL: "https://workinstartups.com/job/timestamp", Card: dto.Job{Source: "wis"}}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/timestamp", Card: dto.Job{Source: "wis"}}
 		before := time.Now()
 		if err := broker.Publish(ctx, task); err != nil {
 			t.Fatal(err)
@@ -241,7 +248,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 
 	t.Run("inspect and replay keeps failed replay", func(t *testing.T) {
-		task := Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: DetailTask, URL: "https://workinstartups.com/job/replay", Card: dto.Job{Source: "wis"}}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/replay", Card: dto.Job{Source: "wis"}}
 		body, err := json.Marshal(task)
 		if err != nil {
 			t.Fatal(err)
@@ -290,7 +297,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 
 	t.Run("one delivery per source with cross-source progress", func(t *testing.T) {
 		for _, source := range []string{"wis", "wis", "linkedin"} {
-			task := Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: DetailTask, URL: "https://example.com/job/" + uuid.NewString(), Card: dto.Job{Source: source}}
+			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.DetailTask, URL: "https://example.com/job/" + uuid.NewString(), Card: dto.Job{Source: source}}
 			if err := broker.Publish(ctx, task); err != nil {
 				t.Fatal(err)
 			}
@@ -302,7 +309,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			_ = broker.Consume(consumeCtx, func(ctx context.Context, task Task) error {
+			_ = broker.Consume(consumeCtx, func(ctx context.Context, task queue.Task) error {
 				entered <- task.Source
 				if task.Source == "wis" {
 					select {
@@ -344,7 +351,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 
 	t.Run("task.done logs one line per delivery", func(t *testing.T) {
-		runOne := func(t *testing.T, task Task, handler func(context.Context, Task) error) map[string]any {
+		runOne := func(t *testing.T, task queue.Task, handler func(context.Context, queue.Task) error) map[string]any {
 			t.Helper()
 			buf := captureTaskDoneLogs(t)
 			consumeCtx, cancel := context.WithCancel(ctx)
@@ -352,7 +359,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				_ = broker.Consume(consumeCtx, func(ctx context.Context, got Task) error {
+				_ = broker.Consume(consumeCtx, func(ctx context.Context, got queue.Task) error {
 					defer close(entered)
 					return handler(ctx, got)
 				}, nil)
@@ -385,11 +392,11 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 
 		t.Run("ok outcome carries wait_ms", func(t *testing.T) {
-			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
 			if err := broker.Publish(ctx, task); err != nil {
 				t.Fatal(err)
 			}
-			line := runOne(t, task, func(context.Context, Task) error { return nil })
+			line := runOne(t, task, func(context.Context, queue.Task) error { return nil })
 			if line["outcome"] != "ok" {
 				t.Fatalf("outcome = %v, want ok", line["outcome"])
 			}
@@ -400,18 +407,18 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		})
 
 		t.Run("error outcome", func(t *testing.T) {
-			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
 			if err := broker.Publish(ctx, task); err != nil {
 				t.Fatal(err)
 			}
-			line := runOne(t, task, func(context.Context, Task) error { return errors.New("handler boom") })
+			line := runOne(t, task, func(context.Context, queue.Task) error { return errors.New("handler boom") })
 			if line["outcome"] != "error" {
 				t.Fatalf("outcome = %v, want error", line["outcome"])
 			}
 		})
 
 		t.Run("zero Timestamp omits wait_ms", func(t *testing.T) {
-			task := Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
 			body, err := json.Marshal(task)
 			if err != nil {
 				t.Fatal(err)
@@ -419,7 +426,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			if err := ch.PublishWithContext(ctx, workExchange, "indeed", true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, MessageId: task.ID, Body: body}); err != nil {
 				t.Fatal(err)
 			}
-			line := runOne(t, task, func(context.Context, Task) error { return nil })
+			line := runOne(t, task, func(context.Context, queue.Task) error { return nil })
 			if _, ok := line["wait_ms"]; ok {
 				t.Fatalf("wait_ms present for zero-Timestamp delivery: %v", line)
 			}
@@ -427,7 +434,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 
 	t.Run("confirmed message survives restart", func(t *testing.T) {
-		task := Task{Version: 1, ID: uuid.NewString(), Source: "linkedin", Kind: DetailTask, URL: "https://www.linkedin.com/jobs/view/1", Card: dto.Job{Source: "linkedin"}}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "linkedin", Kind: queue.DetailTask, URL: "https://www.linkedin.com/jobs/view/1", Card: dto.Job{Source: "linkedin"}}
 		if err := broker.Publish(ctx, task); err != nil {
 			t.Fatal(err)
 		}
@@ -480,7 +487,12 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 }
 
-func waitForDeadLetterCount(broker *Broker, want int) (int, error) {
+func deliveryCount(value any) int64 {
+	count, _ := value.(int64)
+	return count
+}
+
+func waitForDeadLetterCount(broker *queue.Broker, want int) (int, error) {
 	deadline := time.Now().Add(2 * time.Second)
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()

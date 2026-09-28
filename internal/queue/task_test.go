@@ -1,4 +1,4 @@
-package queue
+package queue_test
 
 import (
 	"testing"
@@ -6,26 +6,27 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 func TestTaskValidate(t *testing.T) {
 	id := uuid.NewString()
 	tests := []struct {
 		name  string
-		task  Task
+		task  queue.Task
 		valid bool
 	}{
-		{"detail", Task{Version: 1, ID: id, Source: "wis", Kind: DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}, true},
-		{"missing source", Task{Version: 1, ID: id, Kind: DetailTask, URL: "https://example.com"}, false},
-		{"unknown source", Task{Version: 1, ID: id, Source: "other", Kind: DetailTask, URL: "https://example.com"}, false},
-		{"listing", Task{Version: 1, ID: id, Source: "linkedin", Kind: ListingPageTask, TargetID: id, RunID: id}, true},
-		{"listing without run", Task{Version: 1, ID: id, Source: "linkedin", Kind: ListingPageTask, TargetID: id}, false},
-		{"board", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardCheckTask, BoardID: id}, true},
-		{"wrong board source", Task{Version: 1, ID: id, Source: "wis", Kind: BoardCheckTask, BoardID: id}, false},
-		{"board verify", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, true},
-		{"board verify without company", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, BoardToken: "acme"}, false},
-		{"board verify with bad token", Task{Version: 1, ID: id, Source: "greenhouse", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "a/b"}, false},
-		{"board verify on discovery source", Task{Version: 1, ID: id, Source: "wis", Kind: BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, false},
+		{"detail", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}, true},
+		{"missing source", queue.Task{Version: 1, ID: id, Kind: queue.DetailTask, URL: "https://example.com"}, false},
+		{"unknown source", queue.Task{Version: 1, ID: id, Source: "other", Kind: queue.DetailTask, URL: "https://example.com"}, false},
+		{"listing", queue.Task{Version: 1, ID: id, Source: "linkedin", Kind: queue.ListingPageTask, TargetID: id, RunID: id}, true},
+		{"listing without run", queue.Task{Version: 1, ID: id, Source: "linkedin", Kind: queue.ListingPageTask, TargetID: id}, false},
+		{"board", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: id}, true},
+		{"wrong board source", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.BoardCheckTask, BoardID: id}, false},
+		{"board verify", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, true},
+		{"board verify without company", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, BoardToken: "acme"}, false},
+		{"board verify with bad token", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "a/b"}, false},
+		{"board verify on discovery source", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

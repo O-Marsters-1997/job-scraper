@@ -22,6 +22,19 @@ func newIngestRouter(t *testing.T, st *jobsearchtest.FakeStore) http.Handler {
 	return r
 }
 
+func TestRoutesRequireAuth(t *testing.T) {
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
+	handlerstest.RequiresAuth(t, r,
+		"GET /jobs", "GET /jobs/all", "GET /jobs/{id}",
+		"GET /sources", "GET /sources/resolve",
+		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
+		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
+		"GET /companies", "POST /companies", "PUT /companies/{id}/tracking",
+		"GET /companies/{id}/boards", "POST /companies/{id}/boards",
+	)
+}
+
 func TestIngestHandlerRejectsMalformedBody(t *testing.T) {
 	handlerstest.RejectsMalformedBody(t, newIngestRouter(t, jobsearchtest.NewFakeStore()), "POST /ingest")
 }
