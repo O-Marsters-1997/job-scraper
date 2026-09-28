@@ -12,7 +12,7 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - `internal/services/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
   - `Module` has a narrow facade: exported methods for what other contexts, the worker or `cmd/admin` need, taking and returning `dto` types.
   - `m.Routes(r chi.Router)`, in `internal/services/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
-  - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). Each other feature gets a sibling package, `internal/services/<feature>/`: `applicationstatuses` belongs to `applications`. A feature package declares its own store interface and never imports the store; `New` passes the store in.
+  - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). Other features are files in the same package (see the 2026-09-28 amendment below); the store is passed in through `Build(Deps)`.
   - `internal/services/<ctx>/store/` holds the store (`store.go`), its sqlc-to-`dto` converters (`transform.go`, named `to<Name>DTO`), its queries and its generated sqlc.
   - `cmd/api/main.go` is the only composition root. `internal/api` shrinks to the HTTP shell: middleware, CORS, and mounting each module's routes.
   - `handlers.Handle` and the CRUD generics move to `internal/handlers`, so every context can import them.
@@ -50,5 +50,15 @@ Rejected alternatives:
 - `internal/<ctx>/internal/<feature>` and `internal/<ctx>/internal/store`, so Go's `internal/` rule enforces store privacy: the applications pilot found the doubled `internal` hard to read, and depguard covers the same boundary.
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
+
+Amendment (2026-09-28): the sibling feature packages (`applicationstatuses`, `trackeddocs`,
+`aicredentials`, `aiprefs`, `profile`, `scoringconfig`, `companies`, `sources`, `candidates`) are folded
+into their context root. Each was consumed only by its own context and joined to its siblings through
+ports (`Reconsiderer`, `Recomputer`, `CredentialLister`, ...) that existed only to connect them, so a
+context now has one `Service`, one `Store` interface and one fake. `Deps` keeps one field per genuine
+boundary: the store, external clients, other contexts' ports. A feature keeps its own package only when
+the store imports its types and folding would be an import cycle: `sourcetargets` stays (it owns
+`Candidate`), as does the shared `google` client. External-client packages (`jev`, `extract`, `notify`)
+are unaffected.
 
 Status: complete (2026-09-28, PR #305) — `internal/data/db`, `internal/data/providers` and the legacy sqlc block removed.

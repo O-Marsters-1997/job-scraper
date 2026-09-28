@@ -12,11 +12,8 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/aicredentials"
-	"github.com/ollymarsters/job-scraper/internal/services/aiprefs"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
-	"github.com/ollymarsters/job-scraper/internal/services/profile"
 )
 
 type googleClient interface {
@@ -33,36 +30,28 @@ type googleClient interface {
 // Deps are Build's collaborators; New builds the real ones and calls Build.
 // Tests call Build directly with fakes (ADR 0012).
 type Deps struct {
-	Store         Store
-	Seeder        StatusSeeder
-	AICredentials aicredentials.Store
-	Profile       profile.Store
-	GoogleClient  googleClient
+	Store        Store
+	Seeder       StatusSeeder
+	GoogleClient googleClient
 }
 
 type Module struct {
-	store         Store
-	service       *Service
-	aiCredentials *aicredentials.Service
-	aiPrefs       *aiprefs.Service
-	profile       *profile.Service
-	google        *google.Service
-	googleClient  googleClient
+	store        Store
+	service      *Service
+	google       *google.Service
+	googleClient googleClient
 }
 
 func Build(deps Deps) (*Module, error) {
-	aiCreds, err := aicredentials.New(deps.AICredentials)
+	credKey, err := credentialKeyFromEnv()
 	if err != nil {
 		return nil, fmt.Errorf("identity.Build: %w", err)
 	}
 	return &Module{
-		store:         deps.Store,
-		service:       NewService(deps.Store, deps.Seeder),
-		aiCredentials: aiCreds,
-		aiPrefs:       aiprefs.New(aiCreds),
-		profile:       profile.New(deps.Profile),
-		google:        google.NewService(deps.GoogleClient),
-		googleClient:  deps.GoogleClient,
+		store:        deps.Store,
+		service:      NewService(deps.Store, deps.Seeder, credKey),
+		google:       google.NewService(deps.GoogleClient),
+		googleClient: deps.GoogleClient,
 	}, nil
 }
 
@@ -72,11 +61,9 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 	st := store.New(pool)
 	googleClient := google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st)
 	return Build(Deps{
-		Store:         st,
-		Seeder:        seeder,
-		AICredentials: st,
-		Profile:       st,
-		GoogleClient:  googleClient,
+		Store:        st,
+		Seeder:       seeder,
+		GoogleClient: googleClient,
 	})
 }
 
@@ -85,7 +72,7 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 // facade methods panic on a Module built this way.
 func NewFacade(pool *pgxpool.Pool, seeder StatusSeeder) *Module {
 	st := store.New(pool)
-	return &Module{store: st, service: NewService(st, seeder)}
+	return &Module{store: st, service: NewService(st, seeder, nil)}
 }
 
 // Middleware authenticates requests using the session_id cookie.
@@ -107,7 +94,7 @@ func (m *Module) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.Us
 // Get returns userID's decrypted AI provider key, satisfying scoring's
 // Credentials port.
 func (m *Module) Get(ctx context.Context, userID, provider string) (string, error) {
-	return m.aiCredentials.Get(ctx, userID, provider)
+	return m.service.GetCredential(ctx, userID, provider)
 }
 
 // GetProfile satisfies scoring's ProfileReader port.
@@ -115,8 +102,6 @@ func (m *Module) GetProfile(ctx context.Context, userID string) (dto.Profile, er
 	return m.store.GetProfile(ctx, userID)
 }
 
-// DocsClient is identity's Google Docs/Drive surface, satisfying
-// cvtemplates' and trackeddocs' own DocsClient interfaces.
 func (m *Module) DocsClient() googleClient {
 	return m.googleClient
 }

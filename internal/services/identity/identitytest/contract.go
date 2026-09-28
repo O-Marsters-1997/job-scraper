@@ -3,6 +3,7 @@ package identitytest
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -159,6 +160,89 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		st := newStore(t)
 		if _, err := st.GetProfile(context.Background(), missingID); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("update email changes the profile", func(t *testing.T) {
+		st := newStore(t)
+		ctx := context.Background()
+		user, err := st.CreateUser(ctx, "ivy", "hash", "ivy@example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated, err := st.UpdateEmail(ctx, user.ID, "new@example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.Email != "new@example.com" {
+			t.Errorf("UpdateEmail(...).Email = %q, want new@example.com", updated.Email)
+		}
+		got, err := st.GetProfile(ctx, user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Email != "new@example.com" {
+			t.Errorf("GetProfile(...).Email = %q, want new@example.com", got.Email)
+		}
+	})
+
+	t.Run("update email returns not found when missing", func(t *testing.T) {
+		st := newStore(t)
+		if _, err := st.UpdateEmail(context.Background(), missingID, "a@example.com"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("ai credentials upsert, list and delete", func(t *testing.T) {
+		st := newStore(t)
+		ctx := context.Background()
+		user, err := st.CreateUser(ctx, "judy", "hash", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound before any credential saved", err)
+		}
+
+		if err := st.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-1"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetUserAICredential(ctx, user.ID, "anthropic")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "enc-1" {
+			t.Errorf("GetUserAICredential(...) = %q, want enc-1", got)
+		}
+
+		if err := st.UpsertUserAICredential(ctx, user.ID, "anthropic", "enc-2"); err != nil {
+			t.Fatal(err)
+		}
+		got, err = st.GetUserAICredential(ctx, user.ID, "anthropic")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "enc-2" {
+			t.Errorf("GetUserAICredential(...) after update = %q, want enc-2", got)
+		}
+
+		if err := st.UpsertUserAICredential(ctx, user.ID, "openrouter", "enc-3"); err != nil {
+			t.Fatal(err)
+		}
+		providers, err := st.ListUserAICredentialProviders(ctx, user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := []string{"anthropic", "openrouter"}; !slices.Equal(providers, want) {
+			t.Errorf("ListUserAICredentialProviders(...) = %v, want %v", providers, want)
+		}
+
+		if err := st.DeleteUserAICredential(ctx, user.ID, "anthropic"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound after delete", err)
 		}
 	})
 }

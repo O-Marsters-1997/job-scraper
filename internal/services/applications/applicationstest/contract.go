@@ -17,9 +17,6 @@ import (
 // fake and a real store that parses ids as UUIDs.
 const missingID = "00000000-0000-0000-0000-000000000000"
 
-// Fixture is what RunStoreContract needs: a store, plus a user and job it
-// can create applications against. The fake accepts any strings for these;
-// a real store needs rows those foreign keys resolve to.
 type Fixture struct {
 	Store  applications.Store
 	UserID string
@@ -27,8 +24,8 @@ type Fixture struct {
 }
 
 // RunStoreContract proves newStore's applications.Store behaves the same
-// whether it's the fake or the real store (ADR 0012). A case needing a real
-// foreign key stays in store_test.go instead.
+// whether it's the fake or the real store (ADR 0012). SeedDefaultStatuses is
+// a tx-scoped port, covered in store/store_test.go.
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 
@@ -116,6 +113,98 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		want := map[string]dto.JobApplicationSummary{f.JobID: {ApplicationID: created.ID}}
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Fatalf("GetApplicationsForJobs(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("create returns the status", func(t *testing.T) {
+		f := newStore(t)
+		got, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ID == "" || got.Name != "Offer" || got.Colour != "#22c55e" {
+			t.Fatalf("CreateApplicationStatus(...) = %+v", got)
+		}
+	})
+
+	t.Run("update changes name and colour", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Store.UpdateApplicationStatus(context.Background(), created.ID, f.UserID, "Offer!", "#22c55e")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Offer!" {
+			t.Fatalf("UpdateApplicationStatus(...) name = %q, want %q", got.Name, "Offer!")
+		}
+	})
+
+	t.Run("list returns the created status", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Store.ListApplicationStatusesByUser(context.Background(), f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 1 || got[0].ID != created.ID {
+			t.Fatalf("ListApplicationStatusesByUser(...) = %+v, want [%+v]", got, created)
+		}
+	})
+
+	t.Run("delete removes the status", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.DeleteApplicationStatus(context.Background(), created.ID, f.UserID); err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Store.ListApplicationStatusesByUser(context.Background(), f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("ListApplicationStatusesByUser after delete = %+v, want empty", got)
+		}
+	})
+
+	t.Run("count for unused status is zero", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		count, err := f.Store.CountApplicationsUsingStatus(context.Background(), created.ID, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("CountApplicationsUsingStatus(unused) = %d, want 0", count)
+		}
+	})
+
+	t.Run("count for a status in use is the number of applications", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID, StatusID: created.ID}); err != nil {
+			t.Fatal(err)
+		}
+		count, err := f.Store.CountApplicationsUsingStatus(context.Background(), created.ID, f.UserID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != 1 {
+			t.Fatalf("CountApplicationsUsingStatus(in use) = %d, want 1", count)
 		}
 	})
 }

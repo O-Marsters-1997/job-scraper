@@ -5,6 +5,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
@@ -12,6 +13,7 @@ import (
 type Recorder struct {
 	mu    sync.Mutex
 	tasks []queue.Task
+	jobs  []dto.QueuedJob
 }
 
 func NewRecorder() *Recorder { return &Recorder{} }
@@ -27,4 +29,17 @@ func (r *Recorder) Tasks() []queue.Task {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]queue.Task(nil), r.tasks...)
+}
+
+func (r *Recorder) EnqueueJobs(_ context.Context, jobs []dto.QueuedJob) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.jobs = append(r.jobs, jobs...)
+	return nil
+}
+
+func (r *Recorder) Jobs() []dto.QueuedJob {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]dto.QueuedJob(nil), r.jobs...)
 }

@@ -8,26 +8,20 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
-	"github.com/ollymarsters/job-scraper/internal/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
 type Store interface {
-	jobsearch.JobStore
-	candidates.Store
-	companies.Store
-	companies.SourceTargets
+	jobsearch.Store
+	jobsearch.SourceTargets
 	sourcetargets.Store
 }
 
 func NewDeps(st Store) jobsearch.Deps {
 	return jobsearch.Deps{
-		Jobs:           st,
-		Candidates:     st,
-		Companies:      st,
+		Store:          st,
 		CompanyTargets: st,
 		SourceTargets:  st,
 		Scoring:        NewNoopScoring(),
@@ -126,6 +120,22 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		companies, err := st.ListCompaniesForUser(ctx, userID)
 		if err != nil || len(companies) != 1 || !companies[0].Tracked || companies[0].CheckIntervalMinutes != 180 {
 			t.Fatalf("ListCompaniesForUser(...) = %+v, %v, want one tracked company", companies, err)
+		}
+	})
+
+	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "keep-co", Name: "Keep Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		got, err := st.SetCompanyTracking(ctx, userID, c.ID, false, 0)
+		if err != nil || got.Enabled || got.CheckIntervalMinutes != 180 {
+			t.Fatalf("SetCompanyTracking(..., false, 0) = %+v, %v, want disabled at 180", got, err)
 		}
 	})
 

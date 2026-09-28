@@ -1,4 +1,4 @@
-package sources
+package jobsearch
 
 import (
 	"context"
@@ -9,17 +9,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
-type Service struct{}
-
-func New() *Service {
-	return &Service{}
-}
-
-func (s *Service) List(context.Context, string) ([]sourcespec.SourceInfo, error) {
+func (s *Service) ListSources(context.Context, string) ([]sourcespec.SourceInfo, error) {
 	return sourcespec.Sources(), nil
 }
 
-func (s *Service) Resolve(_ context.Context, _ string, q dto.ResolveBoardQuery) (dto.ResolvedBoard, error) {
+func (s *Service) ResolveBoard(_ context.Context, _ string, q dto.ResolveBoardQuery) (dto.ResolvedBoard, error) {
 	if q.URL == "" {
 		return dto.ResolvedBoard{}, apperr.Invalid("missing url")
 	}

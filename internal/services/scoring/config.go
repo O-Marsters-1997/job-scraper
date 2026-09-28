@@ -1,6 +1,4 @@
-// Package scoringconfig validates and orchestrates a user's Search Config:
-// picks, salary floor, excluded terms and free-text preference extraction.
-package scoringconfig
+package scoring
 
 import (
 	"context"
@@ -20,26 +18,7 @@ func notFound(err error) bool {
 	return ok && ae.Kind() == apperr.KindNotFound
 }
 
-type Store interface {
-	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
-	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
-	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
-}
-
-type Service struct {
-	store       Store
-	candidates  Reconsiderer
-	recompute   Recomputer
-	extractor   Extractor
-	credentials Credentials
-	backfill    Backfiller
-}
-
-func New(store Store, candidates Reconsiderer, recompute Recomputer, extractor Extractor, credentials Credentials, backfill Backfiller) *Service {
-	return &Service{store: store, candidates: candidates, recompute: recompute, extractor: extractor, credentials: credentials, backfill: backfill}
-}
-
-func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
+func (s *Service) GetConfig(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
 	cfg, err := s.store.GetSearchConfig(ctx, userID)
 	if err != nil && !notFound(err) {
 		return dto.ScoringConfigView{}, err
@@ -47,7 +26,7 @@ func (s *Service) Get(ctx context.Context, userID string) (dto.ScoringConfigView
 	return toView(cfg), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfigView) (dto.ScoringConfigView, error) {
+func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.ScoringConfigView) (dto.ScoringConfigView, error) {
 	if in.NotifyThreshold < 0 || in.NotifyThreshold > 100 {
 		return dto.ScoringConfigView{}, apperr.Invalid("notify threshold must be between 0 and 100")
 	}
@@ -97,10 +76,10 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.ScoringConfi
 	if err := s.candidates.Reconsider(ctx, updated); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("reconsider candidates: %w", err)
 	}
-	if _, err := s.recompute.Recompute(ctx, userID); err != nil {
+	if _, err := s.Recompute(ctx, userID); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("recompute scores: %w", err)
 	}
-	queued, err := s.backfill.FillMissingAnswers(ctx, userID)
+	queued, err := s.FillMissingAnswers(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("fill missing answers: %w", err)
 	}

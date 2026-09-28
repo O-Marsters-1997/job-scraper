@@ -29,8 +29,8 @@ A **unit** is the behaviour a package's exported surface offers, not a function 
 
 | Code | File | Size | Doubles | Asserts |
 |---|---|---|---|---|
-| Feature service | `service_test.go` | small | `<feature>test.NewFakeStore()`; `<ctx>test` stubs for other contexts | returned `dto` + `apperr` kind |
-| Store | `store/store_test.go` | medium (pgtest) | real Postgres; runs `<feature>test.RunStoreContract` | only what the DB proves (below) |
+| Service | `service_test.go` | small | `<ctx>test.NewFakeStore()`; `<ctx>test` stubs for other contexts | returned `dto` + `apperr` kind |
+| Store | `store/store_test.go` | medium (pgtest) | real Postgres; runs `<ctx>test.RunStoreContract` | only what the DB proves (below) |
 | Store fake | none: covered by the contract suite | | | |
 | Module facade | `facade_test.go` in `<ctx>_test` | small | `<ctx>.Build(Deps{…fakes})` | promises to callers, re-exported sentinels |
 | Tx-scoped port (`JobsChanged(ctx, tx, …)`) | `store/store_test.go` | medium | real tx | effect lands on commit, vanishes on rollback |
@@ -51,7 +51,7 @@ whose only behaviour is calling something else.
 Fidelity order: real > fake > stub. No generated mocks, no testify.
 
 - **Store the service owns → stateful fake.** A map plus the sentinels the real store returns,
-  exported from `internal/services/<feature>/<feature>test`. It must pass `RunStoreContract`,
+  exported from `internal/services/<ctx>/<ctx>test`, one fake and one contract for the whole context `Store`. It must pass `RunStoreContract`,
   the same suite the real store runs in `store_test.go`:
 
   ```go

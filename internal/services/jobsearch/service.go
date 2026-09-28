@@ -23,20 +23,14 @@ type jobCursor struct {
 	ID   string    `json:"id"`
 }
 
-type jobStore interface {
-	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
-	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
-	NewURLs(ctx context.Context, urls []string) ([]string, error)
-}
-
-// Service is the jobs feature: the score-sorted, cursor-paginated job page
-// and single-job reads.
 type Service struct {
-	store jobStore
+	store   Store
+	targets SourceTargets
+	queue   QueuePublisher
 }
 
-func NewService(store jobStore) *Service {
-	return &Service{store: store}
+func NewService(store Store, targets SourceTargets, q QueuePublisher) *Service {
+	return &Service{store: store, targets: targets, queue: q}
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {

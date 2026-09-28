@@ -34,10 +34,11 @@ from the chi URL param after decoding the body, so a request body can never set 
 
 ### 2. Service
 
-The context's main feature lives in the context root, `internal/services/<ctx>/service.go`, with
-constructor `NewService`. Any other feature gets its own package, `internal/services/<feature>/`
-(e.g. `applicationstatuses` in `applications`). A feature package never imports the store; the
-module's `New` passes the store in. All constructor args are required:
+The context's feature service lives in the context root, `internal/services/<ctx>/service.go`, with
+constructor `NewService`. Another feature is a new file with methods on that same `Service` (prefix on
+a name collision: `CreateStatus`), not a new package. A feature gets its own package only when the store
+imports its types and folding would be an import cycle (`sourcetargets`). The service never imports the
+store; `New` passes it in through `Build(Deps)`. All constructor args are required:
 
 - a `store` interface declared in this package, listing only the store methods it calls
 - small local interfaces for anything else: queue publisher, verifier, or another context's

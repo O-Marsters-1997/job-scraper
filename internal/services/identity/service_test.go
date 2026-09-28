@@ -2,14 +2,17 @@ package identity_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
@@ -35,6 +38,19 @@ func (s *seeder) SeedDefaults(_ context.Context, _ pgx.Tx, userID string) error 
 	return s.err
 }
 
+func newService(st identity.Store, sd identity.StatusSeeder) *identity.Service {
+	return identity.NewService(st, sd, make([]byte, 32))
+}
+
+type failingList struct {
+	identity.Store
+	err error
+}
+
+func (f failingList) ListUserAICredentialProviders(context.Context, string) ([]string, error) {
+	return nil, f.err
+}
+
 func seedUser(t *testing.T, st identity.Store, username, password string) {
 	t.Helper()
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
@@ -50,7 +66,7 @@ func TestLoginValidCredentials(t *testing.T) {
 	st := identitytest.NewFakeStore()
 	seedUser(t, st, "alice", "secret")
 
-	session, user, err := identity.NewService(st, &seeder{}).Login(context.Background(), "alice", "secret")
+	session, user, err := newService(st, &seeder{}).Login(context.Background(), "alice", "secret")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,21 +79,21 @@ func TestLoginWrongPassword(t *testing.T) {
 	st := identitytest.NewFakeStore()
 	seedUser(t, st, "alice", "secret")
 
-	_, _, err := identity.NewService(st, &seeder{}).Login(context.Background(), "alice", "wrong")
+	_, _, err := newService(st, &seeder{}).Login(context.Background(), "alice", "wrong")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnauthorized.Status() {
 		t.Fatalf("status = %v, ok = %v, want 401", status, ok)
 	}
 }
 
 func TestLoginUnknownUser(t *testing.T) {
-	_, _, err := identity.NewService(identitytest.NewFakeStore(), &seeder{}).Login(context.Background(), "nobody", "secret")
+	_, _, err := newService(identitytest.NewFakeStore(), &seeder{}).Login(context.Background(), "nobody", "secret")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnauthorized.Status() {
 		t.Fatalf("status = %v, ok = %v, want 401", status, ok)
 	}
 }
 
 func TestSignupSucceeds(t *testing.T) {
-	session, user, err := identity.NewService(identitytest.NewFakeStore(), &seeder{}).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
+	session, user, err := newService(identitytest.NewFakeStore(), &seeder{}).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +104,7 @@ func TestSignupSucceeds(t *testing.T) {
 
 func TestSignupSeedsDefaultStatusesForTheNewUser(t *testing.T) {
 	sd := &seeder{}
-	_, user, err := identity.NewService(identitytest.NewFakeStore(), sd).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
+	_, user, err := newService(identitytest.NewFakeStore(), sd).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +117,7 @@ func TestSignupFailsWhenSeedingFails(t *testing.T) {
 	st := identitytest.NewFakeStore()
 	seedErr := errors.New("seed boom")
 
-	session, _, err := identity.NewService(st, &seeder{err: seedErr}).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
+	session, _, err := newService(st, &seeder{err: seedErr}).Signup(context.Background(), "bob", "hunter2", "bob@example.com")
 	if !errors.Is(err, seedErr) {
 		t.Fatalf("err = %v, want %v", err, seedErr)
 	}
@@ -111,14 +127,14 @@ func TestSignupFailsWhenSeedingFails(t *testing.T) {
 }
 
 func TestSignupRejectsMissingCredentials(t *testing.T) {
-	_, _, err := identity.NewService(identitytest.NewFakeStore(), &seeder{}).Signup(context.Background(), "", "", "")
+	_, _, err := newService(identitytest.NewFakeStore(), &seeder{}).Signup(context.Background(), "", "", "")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
 	}
 }
 
 func TestSignupDuplicateUsername(t *testing.T) {
-	svc := identity.NewService(failingCreateUserTx{Store: identitytest.NewFakeStore(), err: store.ErrUsernameTaken}, &seeder{})
+	svc := newService(failingCreateUserTx{Store: identitytest.NewFakeStore(), err: store.ErrUsernameTaken}, &seeder{})
 
 	_, _, err := svc.Signup(context.Background(), "alice", "pass", "")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
@@ -137,10 +153,131 @@ func TestLogoutDeletesTheSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := identity.NewService(st, &seeder{}).Logout(context.Background(), session.ID); err != nil {
+	if err := newService(st, &seeder{}).Logout(context.Background(), session.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.GetSession(context.Background(), session.ID); err == nil {
 		t.Fatal("want session gone after logout")
+	}
+}
+
+func TestUpdateCredentialRequiresProvider(t *testing.T) {
+	_, err := newService(identitytest.NewFakeStore(), &seeder{}).UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{})
+	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
+	}
+}
+
+func TestUpdateCredentialSavesAQuotedKeyTrimmedAndGetCredentialDecrypts(t *testing.T) {
+	svc := newService(identitytest.NewFakeStore(), &seeder{})
+	key := `"sk-test"`
+	if _, err := svc.UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetCredential(context.Background(), "user-1", "anthropic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "sk-test" {
+		t.Fatalf("GetCredential(...) = %q, want sk-test", got)
+	}
+}
+
+func TestUpdateCredentialDeletesWhenKeyIsNil(t *testing.T) {
+	svc := newService(identitytest.NewFakeStore(), &seeder{})
+	key := `"sk-test"`
+	if _, err := svc.UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.GetAIPrefs(context.Background(), "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.ConfiguredProviders) != 0 {
+		t.Fatalf("ConfiguredProviders after delete = %v, want none", got.ConfiguredProviders)
+	}
+}
+
+func TestGetCredentialNotFound(t *testing.T) {
+	_, err := newService(identitytest.NewFakeStore(), &seeder{}).GetCredential(context.Background(), "user-1", "anthropic")
+	if !errors.Is(err, data.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestGetAIPrefs(t *testing.T) {
+	t.Run("no configured providers", func(t *testing.T) {
+		got, err := newService(identitytest.NewFakeStore(), &seeder{}).GetAIPrefs(context.Background(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := dto.AIPrefsView{ConfiguredProviders: []string{}, ScoringEnabled: false}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetAIPrefs(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("configured provider enables scoring", func(t *testing.T) {
+		svc := newService(identitytest.NewFakeStore(), &seeder{})
+		key := "sk-test"
+		if _, err := svc.UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "openrouter", APIKey: &key}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := svc.GetAIPrefs(context.Background(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := dto.AIPrefsView{ConfiguredProviders: []string{"openrouter"}, ScoringEnabled: true}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetAIPrefs(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("credential list error propagates", func(t *testing.T) {
+		listErr := errors.New("creds down")
+		svc := newService(failingList{Store: identitytest.NewFakeStore(), err: listErr}, &seeder{})
+		if _, err := svc.GetAIPrefs(context.Background(), "user-1"); !errors.Is(err, listErr) {
+			t.Fatalf("err = %v, want %v", err, listErr)
+		}
+	})
+}
+
+func TestProfile(t *testing.T) {
+	st := identitytest.NewFakeStore()
+	svc := newService(st, &seeder{})
+	user, err := st.CreateUser(context.Background(), "alice", "hash", "old@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := svc.UpdateProfile(context.Background(), user.ID, dto.UpdateProfileInput{Email: "new@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetProfile(context.Background(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := dto.ProfileView{Username: "alice", Email: "new@example.com"}
+	if got != want {
+		t.Fatalf("GetProfile(...) = %+v, want %+v", got, want)
+	}
+}
+
+func TestBuildRejectsABadCredentialKey(t *testing.T) {
+	tests := []struct{ name, key string }{
+		{"missing", ""},
+		{"wrong length", base64.StdEncoding.EncodeToString(make([]byte, 16))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("AI_CREDENTIAL_ENC_KEY", tt.key)
+			if _, err := identity.Build(identity.Deps{Store: identitytest.NewFakeStore(), Seeder: &seeder{}, GoogleClient: newFakeGoogleClient()}); err == nil {
+				t.Fatal("Build(...) err = nil, want error")
+			}
+		})
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/notify"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
-	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -25,36 +24,33 @@ type noopAlerter struct{}
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 type Module struct {
-	store         Store
-	scoring       *Service
-	scoringConfig *scoringconfig.Service
+	store Store
+	svc   *Service
 }
 
 // Deps are the stores and collaborators Build wires into the Module; New
 // builds the real ones and calls Build. Tests call Build directly with
 // fakes (ADR 0012).
 type Deps struct {
-	Store              Store
-	ScoringConfigStore scoringconfig.Store
-	Answerer           Answerer
-	Credentials        Credentials
-	Alerter            Alerter
-	Profiles           ProfileReader
-	Candidates         scoringconfig.Reconsiderer
-	Extractor          scoringconfig.Extractor
-	TickInterval       time.Duration
+	Store        Store
+	Answerer     Answerer
+	Credentials  Credentials
+	Alerter      Alerter
+	Profiles     ProfileReader
+	Candidates   Reconsiderer
+	Extractor    Extractor
+	TickInterval time.Duration
 }
 
 func Build(deps Deps) *Module {
-	mainService := NewService(deps.Store, deps.Answerer, deps.Credentials, deps.Alerter, deps.Profiles, deps.TickInterval)
-	scoringConfig := scoringconfig.New(deps.ScoringConfigStore, deps.Candidates, mainService, deps.Extractor, deps.Credentials, mainService)
-	return &Module{store: deps.Store, scoring: mainService, scoringConfig: scoringConfig}
+	svc := NewService(deps)
+	return &Module{store: deps.Store, svc: svc}
 }
 
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates scoringconfig.Reconsiderer, notifyAPIKey, notifyFrom string) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}
@@ -68,21 +64,18 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	}
 
 	return Build(Deps{
-		Store: st, ScoringConfigStore: st, Answerer: jev.NewClient(), Credentials: credentials,
+		Store: st, Answerer: jev.NewClient(), Credentials: credentials,
 		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
 	})
 }
 
-// NewFacade wires only the scoring store, for cmd/admin's option commands
-// and the worker's reject filter (ADR 0011). Run and the scoringConfig
-// routes panic on a Module built this way.
 func NewFacade(pool *pgxpool.Pool) *Module {
 	return &Module{store: store.New(pool)}
 }
 
 // Run drains the answer-effect queue until ctx is cancelled.
 func (m *Module) Run(ctx context.Context) error {
-	return m.scoring.Run(ctx)
+	return m.svc.Run(ctx)
 }
 
 // SearchConfig returns userID's Search Config, satisfied by the scoring

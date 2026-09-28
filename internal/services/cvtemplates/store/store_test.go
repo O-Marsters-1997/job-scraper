@@ -13,7 +13,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/store"
-	"github.com/ollymarsters/job-scraper/internal/services/trackeddocs/trackeddocstest"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
@@ -57,20 +56,11 @@ func seedTrackedDoc(t *testing.T, st *store.Store, pool *pgxpool.Pool, docID str
 	return "", ""
 }
 
-func TestCVTemplatesStoreContract(t *testing.T) {
+func TestStoreContract(t *testing.T) {
 	cvtemplatestest.RunStoreContract(t, func(t *testing.T) cvtemplatestest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
-		userID, tdID := seedTrackedDoc(t, st, pool, "docA")
-		return cvtemplatestest.Fixture{Store: st, UserID: userID, TrackedDocID: tdID}
-	})
-}
-
-func TestTrackedDocsStoreContract(t *testing.T) {
-	trackeddocstest.RunStoreContract(t, func(t *testing.T) trackeddocstest.Fixture {
-		t.Helper()
-		st, pool := newStore(t)
-		return trackeddocstest.Fixture{Store: st, UserID: insertUser(t, pool)}
+		return cvtemplatestest.Fixture{Store: st, UserID: insertUser(t, pool)}
 	})
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 )
@@ -22,25 +23,37 @@ func NewFakeStore() *FakeStore {
 	return &FakeStore{docs: map[string]dto.TrackedDoc{}, tabs: map[string][]dto.Tab{}}
 }
 
-// SeedTrackedDoc registers a tracked doc directly, standing in for
-// trackeddocs.Store.AddTrackedDoc, which cvtemplates.Store doesn't expose.
-func (f *FakeStore) SeedTrackedDoc(userID, docID string) string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.seq++
-	id := fmt.Sprintf("doc-%d", f.seq)
-	f.docs[id] = dto.TrackedDoc{ID: id, UserID: userID, DocID: docID}
-	return id
+func (f *FakeStore) docFor(userID, docID string) (dto.TrackedDoc, bool) {
+	for _, d := range f.docs {
+		if d.UserID == userID && d.DocID == docID {
+			return d, true
+		}
+	}
+	return dto.TrackedDoc{}, false
 }
 
-// SeedTab registers a tab directly at the given visibility, standing in for
-// trackeddocs.Store.HideTab/ShowTab, which cvtemplates.Store doesn't expose.
-func (f *FakeStore) SeedTab(trackedDocID, tabID, title string, visible bool) {
+func (f *FakeStore) AddTrackedDoc(_ context.Context, in dto.AddTrackedDocInput) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.tabs[trackedDocID] = append(f.tabs[trackedDocID], dto.Tab{
-		TrackedDocID: trackedDocID, TabID: tabID, Title: title, Visible: visible,
-	})
+	if _, ok := f.docFor(in.UserID, in.DocID); ok {
+		return nil
+	}
+	f.seq++
+	id := fmt.Sprintf("doc-%d", f.seq)
+	f.docs[id] = dto.TrackedDoc{ID: id, UserID: in.UserID, DocID: in.DocID}
+	return nil
+}
+
+func (f *FakeStore) RemoveTrackedDoc(_ context.Context, userID, docID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.docFor(userID, docID)
+	if !ok {
+		return apperr.NotFound("tracked doc not found")
+	}
+	delete(f.docs, d.ID)
+	delete(f.tabs, d.ID)
+	return nil
 }
 
 func (f *FakeStore) ListTrackedDocs(_ context.Context, userID string) ([]dto.TrackedDoc, error) {
@@ -58,21 +71,18 @@ func (f *FakeStore) ListTrackedDocs(_ context.Context, userID string) ([]dto.Tra
 func (f *FakeStore) EnsureTabs(_ context.Context, trackedDocID string, tabIDs, titles []string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	existing := map[string]dto.Tab{}
-	for _, t := range f.tabs[trackedDocID] {
-		existing[t.TabID] = t
-	}
+	tabs := f.tabs[trackedDocID]
 	for i, id := range tabIDs {
-		if t, ok := existing[id]; ok {
-			t.Title = titles[i]
-			existing[id] = t
-			continue
+		found := false
+		for j := range tabs {
+			if tabs[j].TabID == id {
+				tabs[j].Title = titles[i]
+				found = true
+			}
 		}
-		existing[id] = dto.Tab{TrackedDocID: trackedDocID, TabID: id, Title: titles[i], Visible: true}
-	}
-	tabs := make([]dto.Tab, 0, len(existing))
-	for _, t := range existing {
-		tabs = append(tabs, t)
+		if !found {
+			tabs = append(tabs, dto.Tab{TrackedDocID: trackedDocID, TabID: id, Title: titles[i], Visible: true})
+		}
 	}
 	f.tabs[trackedDocID] = tabs
 	return nil
@@ -81,7 +91,32 @@ func (f *FakeStore) EnsureTabs(_ context.Context, trackedDocID string, tabIDs, t
 func (f *FakeStore) ListTabs(_ context.Context, trackedDocID string) ([]dto.Tab, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.tabs[trackedDocID], nil
+	return append([]dto.Tab(nil), f.tabs[trackedDocID]...), nil
+}
+
+func (f *FakeStore) HideTab(_ context.Context, userID, docID, tabID string) error {
+	return f.setVisible(userID, docID, tabID, false)
+}
+
+func (f *FakeStore) ShowTab(_ context.Context, userID, docID, tabID string) error {
+	return f.setVisible(userID, docID, tabID, true)
+}
+
+func (f *FakeStore) setVisible(userID, docID, tabID string, visible bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.docFor(userID, docID)
+	if !ok {
+		return apperr.NotFound("tab not found")
+	}
+	tabs := f.tabs[d.ID]
+	for i := range tabs {
+		if tabs[i].TabID == tabID {
+			tabs[i].Visible = visible
+			return nil
+		}
+	}
+	return apperr.NotFound("tab not found")
 }
 
 var _ cvtemplates.Store = (*FakeStore)(nil)

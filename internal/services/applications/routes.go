@@ -8,17 +8,17 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Route("/application-statuses", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.listStatuses))
-		r.Post("/", handlers.Create(m.statuses.Create))
-		r.Patch("/{id}", handlers.Update(m.statuses.Update))
-		r.Delete("/{id}", handlers.Delete(m.statuses.Delete))
+		r.Get("/", handlers.GetAll(m.store.ListApplicationStatusesByUser))
+		r.Post("/", handlers.Create(m.service.CreateStatus))
+		r.Patch("/{id}", handlers.Update(m.service.UpdateStatus))
+		r.Delete("/{id}", handlers.Delete(m.service.DeleteStatus))
 	})
 
 	r.Route("/applications", func(r chi.Router) {
-		r.Get("/", handlers.Query(m.applications.List))
-		r.Post("/", handlers.Create(m.applications.Create))
-		r.Patch("/{id}", handlers.Update(m.applications.Update))
-		r.Delete("/{id}", handlers.Delete(m.applications.Delete))
-		r.Get("/for-jobs", handlers.Query(m.applications.ForJobs))
+		r.Get("/", handlers.Query(m.service.List))
+		r.Post("/", handlers.Create(m.service.Create))
+		r.Patch("/{id}", handlers.Update(m.service.Update))
+		r.Delete("/{id}", handlers.Delete(m.service.Delete))
+		r.Get("/for-jobs", handlers.Query(m.service.ForJobs))
 	})
 }

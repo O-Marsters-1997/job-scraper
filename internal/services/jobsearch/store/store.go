@@ -22,8 +22,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
 var (
@@ -677,7 +677,7 @@ func normalizedCandidateURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
-func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]candidates.Candidate, error) {
+func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]sourcetargets.Candidate, error) {
 	targetID, err := parseUUID(target.ID)
 	if err != nil {
 		return nil, err
@@ -689,7 +689,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 	defer func() { _ = tx.Rollback(ctx) }()
 	queries := s.queries.WithTx(tx)
 
-	out := make([]candidates.Candidate, 0, len(cards))
+	out := make([]sourcetargets.Candidate, 0, len(cards))
 	for _, card := range cards {
 		if card.URL == "" {
 			continue
@@ -712,7 +712,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}
 		card.URL = normalized
 		card.Source = target.Source
-		out = append(out, candidates.Candidate{ID: id.String(), URL: normalized, Card: card})
+		out = append(out, sourcetargets.Candidate{ID: id.String(), URL: normalized, Card: card})
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit candidate save: %w", err)
@@ -720,7 +720,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 	return out, nil
 }
 
-func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit int) ([]candidates.Candidate, error) {
+func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit int) ([]sourcetargets.Candidate, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {
 		return nil, err
@@ -741,9 +741,9 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 	if err != nil {
 		return nil, fmt.Errorf("query candidates: %w", err)
 	}
-	out := make([]candidates.Candidate, 0, len(rows))
+	out := make([]sourcetargets.Candidate, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, candidates.Candidate{
+		out = append(out, sourcetargets.Candidate{
 			ID: row.ID.String(), URL: row.NormalizedUrl,
 			Card: dto.Job{URL: row.NormalizedUrl, Title: row.CardTitle, CompanySlug: row.CardCompany,
 				Location: row.CardLocation, Source: row.Source},

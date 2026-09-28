@@ -1,4 +1,4 @@
-package scoringconfig_test
+package scoring_test
 
 import (
 	"context"
@@ -10,22 +10,10 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
-	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
-
-var bank = []dto.ScoringOption{
-	{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
-	{ID: "tech:kubernetes", Dimension: dto.DimensionTech, Label: "Kubernetes", Question: "Does the role use Kubernetes?"},
-	{ID: "domain:gambling", Dimension: dto.DimensionDomain, Label: "Gambling", Question: "Is the company's main business gambling?"},
-	{ID: "seniority:senior", Dimension: dto.DimensionSeniority, Label: "Senior", Question: "Seniority?"},
-}
-
-func newFakeStore() *scoringtest.FakeStore {
-	st := scoringtest.NewFakeStore()
-	st.SeedOptions(bank)
-	return st
-}
 
 type erroringGetStore struct {
 	*scoringtest.FakeStore
@@ -47,27 +35,33 @@ func (f *fakeExtractor) Extract(context.Context, string, string, []dto.ScoringOp
 	return f.picks, f.err
 }
 
-type fakeCredentials struct {
-	key string
+type failingQueueStore struct {
+	*scoringtest.FakeStore
 	err error
 }
 
-func (f *fakeCredentials) Get(_ context.Context, _, _ string) (string, error) {
-	if f.err != nil {
-		return "", f.err
-	}
-	return f.key, nil
+func (s *failingQueueStore) QueueMissingAnswers(context.Context, string, []string, string) (int64, error) {
+	return 0, s.err
+}
+
+type failingInputsStore struct {
+	*scoringtest.FakeStore
+	err error
+}
+
+func (s *failingInputsStore) ListScoringInputs(context.Context, string, string) ([]store.ScoringInput, error) {
+	return nil, s.err
 }
 
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name     string
-		newStore func(t *testing.T) scoringconfig.Store
+		newStore func(t *testing.T) scoring.Store
 		check    func(t *testing.T, got dto.ScoringConfigView, err error)
 	}{
 		{
 			name:     "returns empty config when none saved",
-			newStore: func(*testing.T) scoringconfig.Store { return newFakeStore() },
+			newStore: func(*testing.T) scoring.Store { return newFakeStore() },
 			check: wantScoringConfig(dto.ScoringConfigView{
 				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
 				ExcludedTitleKeywords: []string{},
@@ -77,7 +71,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "returns saved config",
-			newStore: func(t *testing.T) scoringconfig.Store {
+			newStore: func(t *testing.T) scoring.Store {
 				t.Helper()
 				st := newFakeStore()
 				if _, err := st.UpsertSearchConfig(context.Background(), dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5}); err != nil {
@@ -95,7 +89,7 @@ func TestGet(t *testing.T) {
 		},
 		{
 			name: "surfaces store error",
-			newStore: func(*testing.T) scoringconfig.Store {
+			newStore: func(*testing.T) scoring.Store {
 				return &erroringGetStore{FakeStore: newFakeStore(), err: errors.New("db down")}
 			},
 			check: func(t *testing.T, _ dto.ScoringConfigView, err error) {
@@ -108,8 +102,8 @@ func TestGet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := scoringconfig.New(tt.newStore(t), scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
-			got, err := svc.Get(context.Background(), "user-1")
+			svc := scoring.NewService(scoring.Deps{Store: tt.newStore(t), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
+			got, err := svc.GetConfig(context.Background(), "user-1")
 			tt.check(t, got, err)
 		})
 	}
@@ -166,8 +160,8 @@ func TestUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
-			_, err := svc.Update(context.Background(), "user-1", tt.in)
+			svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
+			_, err := svc.UpdateConfig(context.Background(), "user-1", tt.in)
 			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
 				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
 			}
@@ -176,9 +170,9 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestUpdateSucceeds(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(3))
+	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
 
-	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
+	got, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
 		Preferences: dto.Preferences{
@@ -206,24 +200,24 @@ func TestUpdateSucceeds(t *testing.T) {
 	if diff := cmp.Diff(wantFloor, got.Preferences.SalaryFloor); diff != "" {
 		t.Errorf("salary floor mismatch, currency uppercased (-want +got):\n%s", diff)
 	}
-	if got.BackfillQueued != 3 {
-		t.Fatalf("backfillQueued = %d, want 3", got.BackfillQueued)
+	if got.BackfillQueued != 2 {
+		t.Fatalf("backfillQueued = %d, want 2", got.BackfillQueued)
 	}
 }
 
 func TestUpdateBackfillFails(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.BackfillFails(errors.New("backfill blew up")))
+	svc := scoring.NewService(scoring.Deps{Store: &failingQueueStore{FakeStore: newFakeStore(), err: errors.New("backfill blew up")}, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
 
-	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
+	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}})
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
 }
 
 func TestUpdateReconsiderFails(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore(), scoringtest.ReconsiderFails(errors.New("reconsideration blew up")), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
+	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.ReconsiderFails(errors.New("reconsideration blew up")), Extractor: &fakeExtractor{}})
 
-	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
+	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{})
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
@@ -233,9 +227,9 @@ func TestUpdateReconsiderFails(t *testing.T) {
 }
 
 func TestUpdateRecomputeFails(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.RecomputeFails(errors.New("recompute blew up")), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
+	svc := scoring.NewService(scoring.Deps{Store: &failingInputsStore{FakeStore: newFakeStore(), err: errors.New("recompute blew up")}, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
 
-	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{})
+	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}})
 	if err == nil {
 		t.Fatal("want error, got nil")
 	}
