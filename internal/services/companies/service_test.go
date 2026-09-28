@@ -172,53 +172,31 @@ func newService(q companies.QueuePublisher) (*companies.Service, *fakeCompanySto
 	return companies.New(companyStore, targetStore, q), companyStore, targetStore
 }
 
-func TestCreate_Rejects(t *testing.T) {
-	tests := []struct {
-		name     string
-		in       dto.CreateCompanyInput
-		wantKind apperr.Kind
-	}{
-		{
-			name:     "rejects missing url",
-			in:       dto.CreateCompanyInput{},
-			wantKind: apperr.KindInvalid,
-		},
-		{
-			name:     "rejects an unresolvable url",
-			in:       dto.CreateCompanyInput{URL: "https://example.com/careers"},
-			wantKind: apperr.KindUnprocessable,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc, _, _ := newService(queuetest.NewRecorder())
-
-			_, err := svc.Create(t.Context(), "user-1", tt.in)
-
-			assertKind(t, err, tt.wantKind)
-		})
-	}
-}
-
 func TestCreate(t *testing.T) {
 	tests := []struct {
-		name      string
-		in        dto.CreateCompanyInput
-		wantTrack bool
-		wantSlug  string
+		name  string
+		in    dto.CreateCompanyInput
+		check func(t *testing.T, company dto.Company, err error, companyStore *fakeCompanyStore)
 	}{
 		{
-			name:      "resolves and tracks a valid board url by default",
-			in:        dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"},
-			wantTrack: true,
-			wantSlug:  "acmecorp",
+			name:  "rejects missing url",
+			in:    dto.CreateCompanyInput{},
+			check: wantCreateErr(apperr.KindInvalid),
 		},
 		{
-			name:      "does not track when track is explicitly false",
-			in:        dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)},
-			wantTrack: false,
-			wantSlug:  "acmecorp",
+			name:  "rejects an unresolvable url",
+			in:    dto.CreateCompanyInput{URL: "https://example.com/careers"},
+			check: wantCreateErr(apperr.KindUnprocessable),
+		},
+		{
+			name:  "resolves and tracks a valid board url by default",
+			in:    dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"},
+			check: wantCreated("acmecorp", true),
+		},
+		{
+			name:  "does not track when track is explicitly false",
+			in:    dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)},
+			check: wantCreated("acmecorp", false),
 		},
 	}
 
@@ -227,20 +205,34 @@ func TestCreate(t *testing.T) {
 			svc, companyStore, _ := newService(queuetest.NewRecorder())
 
 			company, err := svc.Create(t.Context(), "user-1", tt.in)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if company.Slug != tt.wantSlug {
-				t.Errorf("slug = %q, want %q", company.Slug, tt.wantSlug)
-			}
-			tracking, ok := companyStore.TrackingFor("user-1", company.ID)
-			if tt.wantTrack && (!ok || !tracking.Enabled) {
-				t.Errorf("tracking = %+v, ok = %v, want enabled", tracking, ok)
-			}
-			if !tt.wantTrack && ok && tracking.Enabled {
-				t.Errorf("tracking = %+v, want not tracked", tracking)
-			}
+			tt.check(t, company, err, companyStore)
 		})
+	}
+}
+
+func wantCreateErr(wantKind apperr.Kind) func(t *testing.T, _ dto.Company, err error, _ *fakeCompanyStore) {
+	return func(t *testing.T, _ dto.Company, err error, _ *fakeCompanyStore) {
+		t.Helper()
+		assertKind(t, err, wantKind)
+	}
+}
+
+func wantCreated(wantSlug string, wantTrack bool) func(t *testing.T, company dto.Company, err error, companyStore *fakeCompanyStore) {
+	return func(t *testing.T, company dto.Company, err error, companyStore *fakeCompanyStore) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if company.Slug != wantSlug {
+			t.Errorf("slug = %q, want %q", company.Slug, wantSlug)
+		}
+		tracking, ok := companyStore.TrackingFor("user-1", company.ID)
+		if wantTrack && (!ok || !tracking.Enabled) {
+			t.Errorf("tracking = %+v, ok = %v, want enabled", tracking, ok)
+		}
+		if !wantTrack && ok && tracking.Enabled {
+			t.Errorf("tracking = %+v, want not tracked", tracking)
+		}
 	}
 }
 

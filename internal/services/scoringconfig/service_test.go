@@ -130,16 +130,16 @@ func TestGet(t *testing.T) {
 	tests := []struct {
 		name  string
 		setup func(store *fakeStore)
-		want  dto.ScoringConfigView
+		check func(t *testing.T, got dto.ScoringConfigView, err error)
 	}{
 		{
 			name: "returns empty config when none saved",
-			want: dto.ScoringConfigView{
+			check: wantScoringConfig(dto.ScoringConfigView{
 				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
 				ExcludedTitleKeywords: []string{},
 				ExcludedCompanies:     []string{},
 				ExcludedLocations:     []string{},
-			},
+			}),
 		},
 		{
 			name: "returns saved config",
@@ -151,12 +151,24 @@ func TestGet(t *testing.T) {
 					t.Fatal(err)
 				}
 			},
-			want: dto.ScoringConfigView{
+			check: wantScoringConfig(dto.ScoringConfigView{
 				NotifyThreshold:       5,
 				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
 				ExcludedTitleKeywords: []string{},
 				ExcludedCompanies:     []string{},
 				ExcludedLocations:     []string{},
+			}),
+		},
+		{
+			name: "surfaces store error",
+			setup: func(store *fakeStore) {
+				store.GetErr = errors.New("db down")
+			},
+			check: func(t *testing.T, _ dto.ScoringConfigView, err error) {
+				t.Helper()
+				if err == nil {
+					t.Fatal("want error, got nil")
+				}
 			},
 		},
 	}
@@ -168,24 +180,20 @@ func TestGet(t *testing.T) {
 			}
 			svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 			got, err := svc.Get(context.Background(), "user-1")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("Get() mismatch (-want +got):\n%s", diff)
-			}
+			tt.check(t, got, err)
 		})
 	}
 }
 
-func TestGet_SurfacesStoreError(t *testing.T) {
-	store := newFakeStore().seedOptions()
-	store.GetErr = errors.New("db down")
-	svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
-
-	_, err := svc.Get(context.Background(), "user-1")
-	if err == nil {
-		t.Fatal("want error, got nil")
+func wantScoringConfig(want dto.ScoringConfigView) func(t *testing.T, got dto.ScoringConfigView, err error) {
+	return func(t *testing.T, got dto.ScoringConfigView, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Get() mismatch (-want +got):\n%s", diff)
+		}
 	}
 }
 

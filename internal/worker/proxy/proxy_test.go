@@ -10,13 +10,18 @@ import (
 
 func TestTransport(t *testing.T) {
 	tests := []struct {
-		name        string
-		useProxy    bool
-		envVal      string
-		wantDefault bool
+		name     string
+		useProxy bool
+		envVal   string
+		check    func(t *testing.T, tr http.RoundTripper, err error)
 	}{
-		{name: "direct returns default transport", useProxy: false, wantDefault: true},
-		{name: "proxy on with valid URL uses proxy transport", useProxy: true, envVal: "http://user:pass@brd.superproxy.io:33335"},
+		{name: "direct returns default transport", useProxy: false, check: wantDefaultTransport},
+		{name: "proxy on with valid URL uses proxy transport", useProxy: true, envVal: "http://user:pass@brd.superproxy.io:33335", check: wantProxyTransport},
+		{name: "proxy on without env var fails closed", useProxy: true, envVal: "", check: wantTransportError},
+		{name: "proxy on with invalid URL returns error", useProxy: true, envVal: "://bad-url", check: wantTransportError},
+		{name: "proxy on without credentials returns error", useProxy: true, envVal: "http://brd.superproxy.io:33335", check: wantTransportError},
+		{name: "proxy on without port returns error", useProxy: true, envVal: "http://user:pass@brd.superproxy.io", check: wantTransportError},
+		{name: "proxy on with path returns error", useProxy: true, envVal: "http://user:pass@brd.superproxy.io:33335/path", check: wantTransportError},
 	}
 
 	for _, tt := range tests {
@@ -25,40 +30,35 @@ func TestTransport(t *testing.T) {
 			t.Setenv("BRIGHTDATA_CA_CERT", "")
 
 			tr, err := Transport(tt.useProxy)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.wantDefault && tr != http.DefaultTransport {
-				t.Fatal("expected http.DefaultTransport")
-			}
-			if !tt.wantDefault && tr == http.DefaultTransport {
-				t.Fatal("expected proxy transport, got DefaultTransport")
-			}
+			tt.check(t, tr, err)
 		})
 	}
 }
 
-func TestTransport_Rejects(t *testing.T) {
-	tests := []struct {
-		name   string
-		envVal string
-	}{
-		{name: "proxy on without env var fails closed", envVal: ""},
-		{name: "proxy on with invalid URL returns error", envVal: "://bad-url"},
-		{name: "proxy on without credentials returns error", envVal: "http://brd.superproxy.io:33335"},
-		{name: "proxy on without port returns error", envVal: "http://user:pass@brd.superproxy.io"},
-		{name: "proxy on with path returns error", envVal: "http://user:pass@brd.superproxy.io:33335/path"},
+func wantDefaultTransport(t *testing.T, tr http.RoundTripper, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
+	if tr != http.DefaultTransport {
+		t.Fatal("expected http.DefaultTransport")
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(envKey, tt.envVal)
-			t.Setenv("BRIGHTDATA_CA_CERT", "")
+func wantProxyTransport(t *testing.T, tr http.RoundTripper, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tr == http.DefaultTransport {
+		t.Fatal("expected proxy transport, got DefaultTransport")
+	}
+}
 
-			if _, err := Transport(true); err == nil {
-				t.Fatal("expected error, got nil")
-			}
-		})
+func wantTransportError(t *testing.T, tr http.RoundTripper, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }
 

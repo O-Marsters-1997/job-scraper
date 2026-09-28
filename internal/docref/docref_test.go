@@ -8,58 +8,63 @@ func TestParseDocID(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  string
+		check func(t *testing.T, got string, err error)
 	}{
 		{
 			name:  "full edit URL",
 			input: "https://docs.google.com/document/d/DOCID/edit",
-			want:  "DOCID",
+			check: wantDocID("DOCID"),
 		},
 		{
 			name:  "URL with tab param",
 			input: "https://docs.google.com/document/d/DOCID/edit?tab=t.0",
-			want:  "DOCID",
+			check: wantDocID("DOCID"),
 		},
 		{
 			name:  "path only",
 			input: "/document/d/DOCID/edit",
-			want:  "DOCID",
+			check: wantDocID("DOCID"),
 		},
 		{
 			name:  "bare ID",
 			input: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
-			want:  "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+			check: wantDocID("1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"),
+		},
+		{
+			name:  "garbage short string",
+			input: "not-a-url",
+			check: wantParseError,
+		},
+		{
+			name:  "empty string",
+			input: "",
+			check: wantParseError,
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := ParseDocID(tc.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tc.want {
-				t.Errorf("got %q, want %q", got, tc.want)
-			}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseDocID(tt.input)
+			tt.check(t, got, err)
 		})
 	}
 }
 
-func TestParseDocID_Rejects(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-	}{
-		{name: "garbage short string", input: "not-a-url"},
-		{name: "empty string", input: ""},
+func wantDocID(want string) func(t *testing.T, got string, err error) {
+	return func(t *testing.T, got string, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
 	}
+}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := ParseDocID(tc.input)
-			if err == nil {
-				t.Fatalf("expected error, got %q", got)
-			}
-		})
+func wantParseError(t *testing.T, got string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected error, got %q", got)
 	}
 }
