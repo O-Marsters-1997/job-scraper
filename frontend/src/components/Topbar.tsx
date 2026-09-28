@@ -1,6 +1,7 @@
 import { createQuery } from "@tanstack/solid-query";
 import { Link, useLocation } from "@tanstack/solid-router";
 import { Match, Switch } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { jobQueryOptions } from "../hooks/useJobs";
 import { findSettingsSection } from "../lib/settingsSections";
 import SettingsPanel from "./SettingsPanel";
@@ -56,21 +57,7 @@ export default function Topbar(props: TopbarProps) {
 					aria-label="Open menu"
 					class="-ml-1 mr-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground md:hidden"
 				>
-					<svg
-						aria-hidden="true"
-						width="18"
-						height="18"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<line x1="3" y1="6" x2="21" y2="6" />
-						<line x1="3" y1="12" x2="21" y2="12" />
-						<line x1="3" y1="18" x2="21" y2="18" />
-					</svg>
+					<Icon name="menu" size={18} />
 				</button>
 				<span class="text-faint">FastTrack</span>
 				<span class="text-border-strong">/</span>

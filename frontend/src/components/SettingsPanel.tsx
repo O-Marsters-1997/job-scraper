@@ -1,5 +1,6 @@
 import { Link, useLocation } from "@tanstack/solid-router";
 import { For, type JSX } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Label } from "@/components/ui/label";
 import {
 	Sheet,
@@ -31,20 +32,7 @@ export default function SettingsPanel() {
 				class="flex size-8 items-center justify-center rounded-full border border-accent-border bg-accent-subtle text-accent-text transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
 				aria-label="Open settings"
 			>
-				<svg
-					aria-hidden="true"
-					width="15"
-					height="15"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-				>
-					<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-					<circle cx="12" cy="7" r="4" />
-				</svg>
+				<Icon name="user" size={15} />
 			</SheetTrigger>
 
 			<SheetContent>
@@ -54,20 +42,7 @@ export default function SettingsPanel() {
 						class="flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						aria-label="Close settings"
 					>
-						<svg
-							aria-hidden="true"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<line x1="18" y1="6" x2="6" y2="18" />
-							<line x1="6" y1="6" x2="18" y2="18" />
-						</svg>
+						<Icon name="x" size={14} />
 					</SheetClose>
 				</SheetHeader>
 
@@ -130,26 +105,13 @@ function SettingsNavRow(props: { section: SettingsSection; current: boolean }) {
 			)}
 		>
 			<span class="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface-muted text-muted">
-				<props.section.icon />
+				<Icon name={props.section.icon} size={15} />
 			</span>
 			<div class="flex flex-col gap-0.5">
 				<span class="font-medium leading-none">{props.section.label}</span>
 				<span class="text-xs text-faint">{props.section.description}</span>
 			</div>
-			<svg
-				aria-hidden="true"
-				class="ml-auto shrink-0 text-faint"
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			>
-				<polyline points="9 18 15 12 9 6" />
-			</svg>
+			<Icon name="chevronRight" size={14} class="ml-auto shrink-0 text-faint" />
 		</SheetClose>
 	);
 }

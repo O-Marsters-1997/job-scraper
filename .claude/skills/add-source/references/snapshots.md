@@ -1,8 +1,7 @@
 # Capturing and rebasing HTML snapshots
 
 Snapshot fixtures live in `internal/worker/sources/<name>/snapshots/` as paired
-`<name>.html` / `<name>.json` files, consumed by `sources.RunSnapshotTests` /
-`RunSnapshotTestsURLs`. Never hand-edit the `.json` files — they're generated.
+`<name>.html` / `<name>.json` files, consumed by `sourcetest.RunSnapshotTests`. Never hand-edit the `.json` files — they're generated.
 
 ## Capture a page
 

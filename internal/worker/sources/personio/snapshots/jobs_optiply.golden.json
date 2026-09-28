@@ -1,0 +1,40 @@
+[
+  {
+    "ID": "",
+    "Title": "Account Executive",
+    "Location": "Amsterdam",
+    "URL": "https://optiply.jobs.personio.com/job/1953132",
+    "CompanySlug": "optiply",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "1953132",
+    "ContentFingerprint": "",
+    "Source": "personio",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003cp\u003eOptiply is the AI-native platform.\u003c/p\u003e\u003cp\u003eWe are hiring an Account Executive.\u003c/p\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  },
+  {
+    "ID": "",
+    "Title": "Commercial Lead -BeNeLux",
+    "Location": "Amsterdam",
+    "URL": "https://optiply.jobs.personio.com/job/2623060",
+    "CompanySlug": "optiply",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "2623060",
+    "ContentFingerprint": "",
+    "Source": "personio",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003cdiv\u003eJoin the commercial team.\u003c/div\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  }
+]

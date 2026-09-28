@@ -9,6 +9,7 @@ import {
 	Show,
 	untrack,
 } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { fetchCVPdf } from "../../api/cvTemplates";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -75,19 +76,7 @@ function CVDetailPage() {
 					to="/cv-templates"
 					class="flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-foreground"
 				>
-					<svg
-						aria-hidden="true"
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<polyline points="15 18 9 12 15 6" />
-					</svg>
+					<Icon name="chevronLeft" size={14} />
 					CVs
 				</Link>
 
@@ -97,21 +86,7 @@ function CVDetailPage() {
 					rel="noopener noreferrer"
 					class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-muted"
 				>
-					<svg
-						aria-hidden="true"
-						width="12"
-						height="12"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-						<polyline points="15 3 21 3 21 9" />
-						<line x1="10" y1="14" x2="21" y2="3" />
-					</svg>
+					<Icon name="externalLink" size={12} />
 					Open in Google Docs
 				</a>
 			</div>

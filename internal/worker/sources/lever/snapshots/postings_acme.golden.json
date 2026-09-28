@@ -1,0 +1,40 @@
+[
+  {
+    "ID": "",
+    "Title": "Senior Backend Engineer",
+    "Location": "London, UK",
+    "URL": "https://jobs.lever.co/acme/abc123",
+    "CompanySlug": "acme",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "abc123",
+    "ContentFingerprint": "",
+    "Source": "lever",
+    "UpdatedAt": "2024-06-01T08:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "We are looking for a Senior Backend Engineer to join our team.",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  },
+  {
+    "ID": "",
+    "Title": "Product Designer",
+    "Location": "Remote",
+    "URL": "https://jobs.lever.co/acme/def456",
+    "CompanySlug": "acme",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "def456",
+    "ContentFingerprint": "",
+    "Source": "lever",
+    "UpdatedAt": "2024-06-02T08:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "Join our design team as a Product Designer.",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  }
+]

@@ -4,11 +4,11 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
 func TestSnapshots(t *testing.T) {
-	sources.RunSnapshotTests(t, New(Config{}))
+	sourcetest.RunSnapshotTests(t, New(Config{}))
 }
 
 func TestPageURL(t *testing.T) {

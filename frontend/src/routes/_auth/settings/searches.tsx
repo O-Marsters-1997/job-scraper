@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
+import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { SettingsActions } from "@/components/SettingsLayout";
 import { Badge } from "@/components/ui/badge";
@@ -285,19 +286,7 @@ function SearchesPage() {
 							setShowAdd(true);
 						}}
 					>
-						<svg
-							aria-hidden="true"
-							width="12"
-							height="12"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-						>
-							<line x1="12" y1="5" x2="12" y2="19" />
-							<line x1="5" y1="12" x2="19" y2="12" />
-						</svg>
+						<Icon name="plus" size={12} strokeWidth={2.5} />
 						Add search
 					</Button>
 				</Show>

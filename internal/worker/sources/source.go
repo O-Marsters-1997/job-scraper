@@ -27,6 +27,14 @@ type Config struct {
 	UseProxy bool
 }
 
+// SnapshotSource is implemented by any source that has snapshot-testable parsers.
+// ParseURLs handles list pages; ParseJobDetail handles individual job pages.
+// Both return []dto.Job so all snapshot fixtures share a single JSON schema.
+type SnapshotSource interface {
+	ParseURLs(r io.Reader) ([]dto.Job, error)
+	ParseJobDetail(r io.Reader, url string) (dto.Job, error)
+}
+
 type Source interface {
 	Cfg() Config
 

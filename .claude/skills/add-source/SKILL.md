@@ -40,6 +40,10 @@ the pattern for the existing board/URL/filter sources there. This file has no
 compile-time safety net — skip this step and the source is registered but
 silently never runs.
 
+ATS sources: save a real API response to `snapshots/<name>.json` and test `parse` with
+`sourcetest.RunGolden(t, "<name>.json", "<token>", parse)`. Create or refresh the
+`<name>.golden.json` with `go test ./internal/worker/sources/<source> -update` and review the diff.
+
 ## 4. HTML sources only
 
 - Add the source to the `detailers` map in `cmd/worker/main.go` — detail fetching

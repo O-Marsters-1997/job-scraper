@@ -1,5 +1,6 @@
 import { Combobox, useComboboxContext } from "@kobalte/core/combobox";
 import { createMemo, createSignal, For, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 
 function SearchInput() {
@@ -94,19 +95,7 @@ export function MultiCombobox(props: {
 						</Show>
 					</Combobox.ItemLabel>
 					<Combobox.ItemIndicator class="text-accent-text">
-						<svg
-							aria-hidden="true"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<polyline points="20 6 9 17 4 12" />
-						</svg>
+						<Icon name="check" size={14} strokeWidth={2.5} />
 					</Combobox.ItemIndicator>
 				</Combobox.Item>
 			)}
@@ -122,21 +111,7 @@ export function MultiCombobox(props: {
 			<Combobox.Control<ComboOption> class="field mt-2 flex min-h-9 flex-wrap items-center gap-1.5 py-1 pr-1 pl-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
 				{(state) => (
 					<>
-						<svg
-							aria-hidden="true"
-							class="shrink-0 text-faint"
-							width="14"
-							height="14"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<circle cx="11" cy="11" r="7" />
-							<line x1="21" y1="21" x2="16.65" y2="16.65" />
-						</svg>
+						<Icon name="search" size={14} class="shrink-0 text-faint" />
 						<For each={state.selectedOptions()}>
 							{(o) => (
 								<span
@@ -153,19 +128,7 @@ export function MultiCombobox(props: {
 										onClick={() => state.remove(o)}
 										class="grid size-5 place-items-center rounded-full opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 									>
-										<svg
-											aria-hidden="true"
-											width="10"
-											height="10"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.5"
-											stroke-linecap="round"
-										>
-											<line x1="18" y1="6" x2="6" y2="18" />
-											<line x1="6" y1="6" x2="18" y2="18" />
-										</svg>
+										<Icon name="x" size={10} strokeWidth={2.5} />
 									</button>
 								</span>
 							)}
@@ -176,19 +139,7 @@ export function MultiCombobox(props: {
 							class="grid size-7 shrink-0 place-items-center rounded-md text-faint transition-colors hover:bg-surface-muted hover:text-foreground"
 						>
 							<Combobox.Icon>
-								<svg
-									aria-hidden="true"
-									width="12"
-									height="12"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2.5"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<polyline points="6 9 12 15 18 9" />
-								</svg>
+								<Icon name="chevronDown" size={12} strokeWidth={2.5} />
 							</Combobox.Icon>
 						</Combobox.Trigger>
 					</>

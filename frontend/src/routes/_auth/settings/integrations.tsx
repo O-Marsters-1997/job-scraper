@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
+import { Icon } from "@/components/Icon";
 import { API_BASE } from "../../../api/config";
 import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
@@ -17,20 +18,7 @@ function IntegrationsPage() {
 			<div>
 				<div class="flex items-center gap-4">
 					<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface-muted">
-						<svg
-							aria-hidden="true"
-							width="18"
-							height="18"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-							<polyline points="14 2 14 8 20 8" />
-						</svg>
+						<Icon name="file" size={18} />
 					</div>
 
 					<div class="flex-1 min-w-0">
