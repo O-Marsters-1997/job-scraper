@@ -88,17 +88,22 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
 		return
 	}
 
+	log.InfoContext(ctx, "harvest: running")
 	companies, err := h.Harvest(ctx)
 	if err != nil {
 		log.ErrorContext(ctx, "harvest failed", slog.Any(logger.KeyErr, err))
 		return
 	}
 
+	upserted := 0
 	for _, c := range companies {
 		if err := r.upsert(ctx, c); err != nil {
 			log.ErrorContext(ctx, "upsert failed", slog.String("name", c.Name), slog.Any(logger.KeyErr, err))
+			continue
 		}
+		upserted++
 	}
+	log.InfoContext(ctx, "harvest: completed", slog.Int(logger.KeyCount, len(companies)), slog.Int("upserted", upserted))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))

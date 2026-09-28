@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
@@ -27,7 +28,7 @@ type Harvester struct {
 }
 
 func New() *Harvester {
-	return &Harvester{client: &http.Client{Timeout: 15 * time.Second}, baseURL: baseURL}
+	return &Harvester{client: &http.Client{Timeout: 15 * time.Second, Transport: logger.FetchTransport(nil)}, baseURL: baseURL}
 }
 
 func (h *Harvester) Name() string { return "yc" }

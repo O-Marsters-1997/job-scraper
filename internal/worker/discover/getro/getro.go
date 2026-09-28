@@ -38,7 +38,7 @@ type Harvester struct {
 }
 
 func New() *Harvester {
-	return &Harvester{client: &http.Client{Timeout: 20 * time.Second}, boards: seedBoards}
+	return &Harvester{client: &http.Client{Timeout: 20 * time.Second, Transport: logger.FetchTransport(nil)}, boards: seedBoards}
 }
 
 func (h *Harvester) Name() string { return "getro" }

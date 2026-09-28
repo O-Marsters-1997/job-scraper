@@ -60,7 +60,7 @@ type Crawler struct {
 func New(store CompanyStore) *Crawler {
 	return &Crawler{
 		store:  store,
-		client: &http.Client{Timeout: fetchTimeout},
+		client: &http.Client{Timeout: fetchTimeout, Transport: logger.FetchTransport(nil)},
 	}
 }
 
@@ -87,14 +87,19 @@ func (c *Crawler) tick(ctx context.Context) {
 	}
 	slog.InfoContext(ctx, "crawl: batch fetched", slog.Int(logger.KeyCount, len(companies)), slog.Int("limit", batchSize))
 
+	resolved := 0
 	for _, company := range companies {
-		c.crawlCompany(ctx, company)
+		if c.crawlCompany(ctx, company) {
+			resolved++
+		}
 	}
+	slog.InfoContext(ctx, "crawl: batch completed", slog.Int(logger.KeyCount, len(companies)), slog.Int("resolved", resolved))
 }
 
-func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
+func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) bool {
 	log := slog.With(slog.String(logger.KeyCompanySlug, company.Slug), slog.String("domain", company.Domain))
 
+	resolved := false
 	if source, token, ok := c.resolve(ctx, log, company.Domain); ok {
 		_, err := c.store.UpsertCompany(ctx, dto.CompanyUpsert{
 			Slug:      company.Slug,
@@ -107,12 +112,14 @@ func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
 			log.ErrorContext(ctx, "crawl: writeback failed", slog.Any(logger.KeyErr, err))
 		} else {
 			log.InfoContext(ctx, "crawl: resolved ATS board", slog.String(logger.KeySource, source), slog.String("token", token))
+			resolved = true
 		}
 	}
 
 	if err := c.store.TouchCompanyCrawled(ctx, company.ID); err != nil {
 		log.ErrorContext(ctx, "crawl: touch last_crawled_at failed", slog.Any(logger.KeyErr, err))
 	}
+	return resolved
 }
 
 func (c *Crawler) resolve(ctx context.Context, log *slog.Logger, domain string) (source, token string, ok bool) {
