@@ -9,72 +9,55 @@ var validKey = base64.StdEncoding.EncodeToString([]byte("12345678901234567890123
 
 func TestEncryptDecrypt(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T)
-		input   string
-		wantErr bool
+		name  string
+		check func(t *testing.T, ciphertext string)
 	}{
 		{
-			name: "round-trip",
-			setup: func(t *testing.T) {
-				t.Setenv("GOOGLE_TOKEN_ENC_KEY", validKey)
-			},
-			input: "hello world",
-		},
-		{
-			name: "tampered ciphertext",
-			setup: func(t *testing.T) {
-				t.Setenv("GOOGLE_TOKEN_ENC_KEY", validKey)
-			},
-			input:   "hello world",
-			wantErr: true,
-		},
-		{
-			name: "wrong key",
-			setup: func(t *testing.T) {
-				t.Setenv("GOOGLE_TOKEN_ENC_KEY", validKey)
-			},
-			input:   "hello world",
-			wantErr: true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.setup(t)
-
-			ct, err := Encrypt(tc.input)
-			if err != nil {
-				t.Fatalf("Encrypt: %v", err)
-			}
-
-			switch tc.name {
-			case "round-trip":
-				got, err := Decrypt(ct)
+			name: "round trip",
+			check: func(t *testing.T, ciphertext string) {
+				t.Helper()
+				got, err := Decrypt(ciphertext)
 				if err != nil {
 					t.Fatalf("Decrypt: %v", err)
 				}
-				if got != tc.input {
-					t.Errorf("got %q, want %q", got, tc.input)
+				if got != "hello world" {
+					t.Errorf("Decrypt(Encrypt(%q)) = %q, want %q", "hello world", got, "hello world")
 				}
-
-			case "tampered ciphertext":
-				raw, _ := base64.StdEncoding.DecodeString(ct)
+			},
+		},
+		{
+			name: "rejects tampered ciphertext",
+			check: func(t *testing.T, ciphertext string) {
+				t.Helper()
+				raw, _ := base64.StdEncoding.DecodeString(ciphertext)
 				raw[len(raw)-1] ^= 0xFF
 				tampered := base64.StdEncoding.EncodeToString(raw)
-				_, err := Decrypt(tampered)
-				if err == nil {
-					t.Fatal("expected error for tampered ciphertext, got nil")
+				if _, err := Decrypt(tampered); err == nil {
+					t.Fatal("Decrypt(tampered) err = nil, want error")
 				}
-
-			case "wrong key":
+			},
+		},
+		{
+			name: "rejects wrong key",
+			check: func(t *testing.T, ciphertext string) {
+				t.Helper()
 				altKey := base64.StdEncoding.EncodeToString([]byte("99999999999999999999999999999999"))
 				t.Setenv("GOOGLE_TOKEN_ENC_KEY", altKey)
-				_, err := Decrypt(ct)
-				if err == nil {
-					t.Fatal("expected error for wrong key, got nil")
+				if _, err := Decrypt(ciphertext); err == nil {
+					t.Fatal("Decrypt(ct) err = nil, want error")
 				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GOOGLE_TOKEN_ENC_KEY", validKey)
+			ct, err := Encrypt("hello world")
+			if err != nil {
+				t.Fatalf("Encrypt: %v", err)
 			}
+			tt.check(t, ct)
 		})
 	}
 }

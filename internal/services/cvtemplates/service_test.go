@@ -94,8 +94,7 @@ func TestService_List(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(gc *fakeDocsClient, st *fakeStore)
-		wantN int
-		check func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore)
+		check func(t *testing.T, cvs []cvtemplates.CV, err error, st *fakeStore)
 	}{
 		{
 			name: "two docs two tabs each",
@@ -110,8 +109,7 @@ func TestService_List(t *testing.T) {
 					"docB": {Title: "Doc B", ModifiedAt: modTime},
 				}
 			},
-			wantN: 4,
-			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+			check: wantCVs(4, func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
 				t.Helper()
 				for _, cv := range cvs {
 					want := "https://docs.google.com/document/d/" + cv.DocID + "/edit?tab=t." + cv.TabID
@@ -119,7 +117,7 @@ func TestService_List(t *testing.T) {
 						t.Errorf("DocURL = %q, want %q", cv.DocURL, want)
 					}
 				}
-			},
+			}),
 		},
 		{
 			name: "DocURL does not double-prefix t. in tabId",
@@ -128,14 +126,13 @@ func TestService_List(t *testing.T) {
 				gc.tabs = map[string][]google.Tab{"docA": {{ID: "t.0", Title: "CV 1"}}}
 				gc.meta = map[string]google.FileMeta{"docA": {Title: "Doc A", ModifiedAt: modTime}}
 			},
-			wantN: 1,
-			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+			check: wantCVs(1, func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
 				t.Helper()
 				want := "https://docs.google.com/document/d/docA/edit?tab=t.0"
 				if cvs[0].DocURL != want {
 					t.Errorf("DocURL = %q, want %q", cvs[0].DocURL, want)
 				}
-			},
+			}),
 		},
 		{
 			name: "skips inaccessible doc",
@@ -145,13 +142,12 @@ func TestService_List(t *testing.T) {
 				gc.meta = map[string]google.FileMeta{"docB": {Title: "Doc B", ModifiedAt: modTime}}
 				gc.tabErr = map[string]error{"docA": errors.New("permission denied")}
 			},
-			wantN: 1,
-			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+			check: wantCVs(1, func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
 				t.Helper()
 				if cvs[0].DocID != "docB" {
 					t.Errorf("expected CV from docB, got %q", cvs[0].DocID)
 				}
-			},
+			}),
 		},
 		{
 			name: "reconcile does not un-hide a hidden tab",
@@ -161,8 +157,7 @@ func TestService_List(t *testing.T) {
 				gc.meta = map[string]google.FileMeta{"docA": {Title: "Doc A", ModifiedAt: modTime}}
 				st.tabs = map[string][]dto.Tab{"1": {{TrackedDocID: "1", TabID: "t1", Title: "CV 1", Visible: false}}}
 			},
-			wantN: 1,
-			check: func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore) {
+			check: wantCVs(1, func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore) {
 				t.Helper()
 				if cvs[0].Visible {
 					t.Error("returned CV should have Visible=false for a hidden tab")
@@ -171,6 +166,18 @@ func TestService_List(t *testing.T) {
 					if tab.TabID == "t1" && tab.Visible {
 						t.Error("reconcile must not un-hide a previously hidden tab")
 					}
+				}
+			}),
+		},
+		{
+			name: "not connected returns error",
+			setup: func(gc *fakeDocsClient, _ *fakeStore) {
+				gc.connectErr = apperr.Unauthorized("google account not connected")
+			},
+			check: func(t *testing.T, _ []cvtemplates.CV, err error, _ *fakeStore) {
+				t.Helper()
+				if err == nil {
+					t.Fatal("expected an error, got nil")
 				}
 			},
 		},
@@ -186,26 +193,21 @@ func TestService_List(t *testing.T) {
 
 			svc := cvtemplates.NewService(gc, st)
 			cvs, err := svc.List(context.Background(), "u1")
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if len(cvs) != tc.wantN {
-				t.Fatalf("expected %d CVs, got %d", tc.wantN, len(cvs))
-			}
-			if tc.check != nil {
-				tc.check(t, cvs, st)
-			}
+			tc.check(t, cvs, err, st)
 		})
 	}
 }
 
-func TestService_List_NotConnectedReturnsError(t *testing.T) {
-	gc := &fakeDocsClient{connectErr: apperr.Unauthorized("google account not connected")}
-	svc := cvtemplates.NewService(gc, &fakeStore{})
-
-	_, err := svc.List(context.Background(), "u1")
-	if err == nil {
-		t.Fatal("expected an error, got nil")
+func wantCVs(n int, extra func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore)) func(t *testing.T, cvs []cvtemplates.CV, err error, st *fakeStore) {
+	return func(t *testing.T, cvs []cvtemplates.CV, err error, st *fakeStore) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(cvs) != n {
+			t.Fatalf("expected %d CVs, got %d", n, len(cvs))
+		}
+		extra(t, cvs, st)
 	}
 }
 

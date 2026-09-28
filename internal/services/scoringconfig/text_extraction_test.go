@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -56,8 +57,8 @@ func TestUpdate_ReextractionReplacesTextPicksKeepsManual(t *testing.T) {
 		{OptionID: "seniority:senior", Stance: "nice", Source: "manual"},
 		{OptionID: "domain:gambling", Stance: "avoid", Source: "text"},
 	}
-	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
-		t.Fatalf("picks = %+v, want %+v (re-extraction replaces text picks, keeps manual)", got.Preferences.Picks, wantPicks)
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks mismatch, re-extraction replaces text picks, keeps manual (-want +got):\n%s", diff)
 	}
 }
 
@@ -79,8 +80,8 @@ func TestUpdate_ManualOverridesText(t *testing.T) {
 		{OptionID: "tech:kubernetes", Stance: "nice", Source: "manual"},
 		{OptionID: "tech:kubernetes", Stance: "avoid", Source: "text", Overridden: true},
 	}
-	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
-		t.Fatalf("picks = %+v, want %+v (manual wins, text pick shows overridden)", got.Preferences.Picks, wantPicks)
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks mismatch, manual wins, text pick shows overridden (-want +got):\n%s", diff)
 	}
 }
 
@@ -99,8 +100,8 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 	}
 
 	wantPicks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "text"}}
-	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
-		t.Fatalf("picks = %+v, want %+v (hallucinated id dropped, not rejected)", got.Preferences.Picks, wantPicks)
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks mismatch, hallucinated id dropped, not rejected (-want +got):\n%s", diff)
 	}
 }
 

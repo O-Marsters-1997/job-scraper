@@ -76,32 +76,35 @@ func (f *fakeStore) ShowTab(_ context.Context, userID, docID, tabID string) erro
 }
 
 func TestAddDoc(t *testing.T) {
-	gc := &fakeDocsClient{}
-	st := newFakeStore()
-	svc := trackeddocs.New(gc, st)
-
-	_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "https://docs.google.com/document/d/abc1234567890/edit"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !st.docs["u1/abc1234567890"] {
-		t.Errorf("expected doc abc1234567890 tracked for u1, got %+v", st.docs)
-	}
-}
-
-func TestAddDoc_Rejects(t *testing.T) {
 	cases := []struct {
 		name    string
 		url     string
 		metaErr map[string]error
-		wantErr error
+		check   func(t *testing.T, err error, st *fakeStore)
 	}{
-		{name: "garbage URL", url: "not-a-url", wantErr: trackeddocs.ErrInvalidDoc},
+		{
+			name: "tracks a valid doc",
+			url:  "https://docs.google.com/document/d/abc1234567890/edit",
+			check: func(t *testing.T, err error, st *fakeStore) {
+				t.Helper()
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !st.docs["u1/abc1234567890"] {
+					t.Errorf("expected doc abc1234567890 tracked for u1, got %+v", st.docs)
+				}
+			},
+		},
+		{
+			name:  "garbage URL",
+			url:   "not-a-url",
+			check: wantAddDocErr(trackeddocs.ErrInvalidDoc),
+		},
 		{
 			name:    "inaccessible doc",
 			url:     "https://docs.google.com/document/d/inaccessible123/edit",
 			metaErr: map[string]error{"inaccessible123": errors.New("permission denied")},
-			wantErr: trackeddocs.ErrInaccessibleDoc,
+			check:   wantAddDocErr(trackeddocs.ErrInaccessibleDoc),
 		},
 	}
 
@@ -113,13 +116,20 @@ func TestAddDoc_Rejects(t *testing.T) {
 
 			_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: tc.url})
 
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("expected %v, got %v", tc.wantErr, err)
-			}
-			if len(st.docs) != 0 {
-				t.Errorf("AddTrackedDoc should not have been called, got %+v", st.docs)
-			}
+			tc.check(t, err, st)
 		})
+	}
+}
+
+func wantAddDocErr(wantErr error) func(t *testing.T, err error, st *fakeStore) {
+	return func(t *testing.T, err error, st *fakeStore) {
+		t.Helper()
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("expected %v, got %v", wantErr, err)
+		}
+		if len(st.docs) != 0 {
+			t.Errorf("AddTrackedDoc should not have been called, got %+v", st.docs)
+		}
 	}
 }
 

@@ -8,12 +8,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -55,8 +56,8 @@ func TestClient_Answer_SendsChoiceQuestionsAndDecodesAnswers(t *testing.T) {
 		if question.Type != "choice" {
 			t.Errorf("question %q type = %q, want choice", q, question.Type)
 		}
-		if !reflect.DeepEqual(question.Options, wantOptions) {
-			t.Errorf("question %q options = %v, want %v", q, question.Options, wantOptions)
+		if diff := cmp.Diff(wantOptions, question.Options); diff != "" {
+			t.Errorf("question %q options mismatch (-want +got):\n%s", q, diff)
 		}
 		if question.Instructions != q {
 			t.Errorf("question %q instructions = %q, want %q", q, question.Instructions, q)
@@ -67,8 +68,8 @@ func TestClient_Answer_SendsChoiceQuestionsAndDecodesAnswers(t *testing.T) {
 		"tech:go":     {PYes: 0.9, PNo: 0.05, PNotStated: 0.05, Confidence: 0.9},
 		"tech:docker": {PYes: 0.1, PNo: 0.2, PNotStated: 0.7, Confidence: 0.4},
 	}
-	if !reflect.DeepEqual(answers, wantAnswers) {
-		t.Errorf("answers = %+v, want %+v", answers, wantAnswers)
+	if diff := cmp.Diff(wantAnswers, answers); diff != "" {
+		t.Errorf("answers mismatch (-want +got):\n%s", diff)
 	}
 
 	wantUsage := dto.Usage{Model: "typesafe/jev-1.13-20260917", Cost: 0.0004}

@@ -3,8 +3,9 @@ package aiprefs
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -22,25 +23,29 @@ func TestService_Get(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		creds   CredentialLister
-		want    dto.AIPrefsView
-		wantErr bool
+		name  string
+		creds CredentialLister
+		check func(t *testing.T, got dto.AIPrefsView, err error)
 	}{
 		{
 			name:  "no configured providers",
 			creds: stubCredLister{},
-			want:  dto.AIPrefsView{ConfiguredProviders: []string{}, ScoringEnabled: false},
+			check: wantAIPrefs(dto.AIPrefsView{ConfiguredProviders: []string{}, ScoringEnabled: false}),
 		},
 		{
 			name:  "configured provider enables scoring",
 			creds: stubCredLister{providers: []string{"openrouter"}},
-			want:  dto.AIPrefsView{ConfiguredProviders: []string{"openrouter"}, ScoringEnabled: true},
+			check: wantAIPrefs(dto.AIPrefsView{ConfiguredProviders: []string{"openrouter"}, ScoringEnabled: true}),
 		},
 		{
-			name:    "credential list error propagates",
-			creds:   stubCredLister{err: errors.New("creds down")},
-			wantErr: true,
+			name:  "credential list error propagates",
+			creds: stubCredLister{err: errors.New("creds down")},
+			check: func(t *testing.T, _ dto.AIPrefsView, err error) {
+				t.Helper()
+				if err == nil {
+					t.Fatal("Get() err = nil, want error")
+				}
+			},
 		},
 	}
 
@@ -50,18 +55,19 @@ func TestService_Get(t *testing.T) {
 
 			svc := New(tt.creds)
 			got, err := svc.Get(context.Background(), "user-1")
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("want error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Get: %v", err)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Get() = %+v; want %+v", got, tt.want)
-			}
+			tt.check(t, got, err)
 		})
+	}
+}
+
+func wantAIPrefs(want dto.AIPrefsView) func(t *testing.T, got dto.AIPrefsView, err error) {
+	return func(t *testing.T, got dto.AIPrefsView, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Get() mismatch (-want +got):\n%s", diff)
+		}
 	}
 }

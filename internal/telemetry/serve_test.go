@@ -65,6 +65,8 @@ func freeAddr(t *testing.T) string {
 func waitForServing(t *testing.T, addr string) string {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
 	for time.Now().Before(deadline) {
 		resp, err := http.Get("http://" + addr + "/metrics")
 		if err == nil {
@@ -73,7 +75,7 @@ func waitForServing(t *testing.T, addr string) string {
 			n, _ := resp.Body.Read(buf)
 			return string(buf[:n])
 		}
-		time.Sleep(10 * time.Millisecond)
+		<-ticker.C
 	}
 	t.Fatal("server never became reachable")
 	return ""
