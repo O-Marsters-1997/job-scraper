@@ -36,10 +36,10 @@ const COMPACT: Pill[] = [
 ];
 
 export function RoleCloud(props: { variant?: "full" | "compact" }) {
-	const compact = props.variant === "compact";
+	const compact = () => props.variant === "compact";
 	return (
-		<div class={compact ? "role-cloud role-cloud-compact" : "role-cloud"}>
-			<For each={compact ? COMPACT : FULL}>
+		<div class={compact() ? "role-cloud role-cloud-compact" : "role-cloud"}>
+			<For each={compact() ? COMPACT : FULL}>
 				{(pill, i) => (
 					<span
 						class="role-pill"
