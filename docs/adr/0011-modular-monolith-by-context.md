@@ -46,4 +46,4 @@ Rejected alternatives:
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
 
-Status: complete (2026-09-28, PR #TBD) — `internal/data/db`, `internal/data/providers` and the legacy sqlc block removed.
+Status: complete (2026-09-28, PR #305) — `internal/data/db`, `internal/data/providers` and the legacy sqlc block removed.
