@@ -1,11 +1,7 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import { fetchProfile, updateProfile } from "../api/profile";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const profileQueryOptions = queryOptions({
 	queryKey: keys.profile,
@@ -17,9 +13,8 @@ export function useProfile() {
 }
 
 export function useUpdateProfile() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (payload: { email: string }) => updateProfile(payload),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.profile }),
-	}));
+	return useInvalidatingMutation(
+		(payload: { email: string }) => updateProfile(payload),
+		[keys.profile],
+	);
 }

@@ -9,13 +9,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
-type Config struct {
-	// Boards is the list of Greenhouse board tokens to scrape (e.g. "acmecorp").
-	Boards []string
-}
-
-func New(cfg Config) *sources.BoardSource {
-	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
+// New builds a Greenhouse source for one board token (e.g. "acmecorp").
+func New(token string) *sources.BoardSource {
+	return sources.NewBoardSource(token, sources.BoardSpec{
 		Name: "greenhouse",
 		URL: func(token string) string {
 			return fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token)

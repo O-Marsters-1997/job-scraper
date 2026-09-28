@@ -16,7 +16,7 @@ it builds a `sources.BoardSpec` and calls `sources.NewBoardSource`, implementing
 `Source` only.
 
 **HTML source** — a listing page with no API. Copy `internal/worker/sources/wis/wis.go`:
-it embeds `sources.PaginatedBase` and implements `Iterate` plus `DetailFetcher`
+it embeds `sources.PaginatedBase` and implements `FetchPage` plus `DetailFetcher`
 (`CanHandle`/`GetDetails`). Load the `goquery-parsing` skill before writing any
 selectors — see `references/html-parsing.md` for when.
 
@@ -35,7 +35,7 @@ and worker both read; it must not import any adapter):
 
 ## 3. Wire instantiation
 
-Add the source to `BuildSources` in `internal/worker/sources/builder/build.go`, following
+Add the source to `BuildSource` in `internal/worker/sources/builder/build.go`, following
 the pattern for the existing board/URL/filter sources there. This file has no
 compile-time safety net — skip this step and the source is registered but
 silently never runs.
@@ -59,6 +59,6 @@ ATS sources: save a real API response to `snapshots/<name>.json` and test `parse
 go test ./internal/worker/sources/...
 ```
 
-`TestBuildSources_EveryRegisteredSourceInstantiates`
+`TestBuildSource_EveryRegisteredSourceInstantiates`
 (`internal/worker/sources/builder/build_test.go`) is what catches a missing step 3 —
-it fails if a registered source never gets built by `BuildSources`.
+it fails if a registered source never gets built by `BuildSource`.

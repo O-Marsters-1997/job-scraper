@@ -1,9 +1,4 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	createApplicationStatus,
 	deleteApplicationStatus,
@@ -11,6 +6,7 @@ import {
 	updateApplicationStatus,
 } from "../api/applicationStatuses";
 import { keys } from "../api/keys";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const applicationStatusesQueryOptions = queryOptions({
 	queryKey: keys.statuses,
@@ -22,43 +18,24 @@ export function useApplicationStatuses() {
 }
 
 export function useCreateApplicationStatus() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({ name, colour }: { name: string; colour: string }) =>
+	return useInvalidatingMutation(
+		({ name, colour }: { name: string; colour: string }) =>
 			createApplicationStatus(name, colour),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.statuses });
-			queryClient.invalidateQueries({ queryKey: keys.applications.all });
-		},
-	}));
+		[keys.statuses, keys.applications.all],
+	);
 }
 
 export function useUpdateApplicationStatus() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({
-			id,
-			name,
-			colour,
-		}: {
-			id: string;
-			name: string;
-			colour: string;
-		}) => updateApplicationStatus(id, name, colour),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.statuses });
-			queryClient.invalidateQueries({ queryKey: keys.applications.all });
-		},
-	}));
+	return useInvalidatingMutation(
+		({ id, name, colour }: { id: string; name: string; colour: string }) =>
+			updateApplicationStatus(id, name, colour),
+		[keys.statuses, keys.applications.all],
+	);
 }
 
 export function useDeleteApplicationStatus() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (id: string) => deleteApplicationStatus(id),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.statuses });
-			queryClient.invalidateQueries({ queryKey: keys.applications.all });
-		},
-	}));
+	return useInvalidatingMutation(
+		(id: string) => deleteApplicationStatus(id),
+		[keys.statuses, keys.applications.all],
+	);
 }

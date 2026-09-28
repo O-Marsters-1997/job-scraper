@@ -19,6 +19,8 @@ import { createEffect, createMemo } from "solid-js";
 import { cssVarHex } from "./color";
 import { themeVersion } from "./tweaks";
 
+const MONO = "'JetBrains Mono', monospace";
+
 export function registerCharts() {
 	Chart.register(
 		Title,
@@ -34,9 +36,19 @@ export function registerCharts() {
 		TimeScale,
 		zoomPlugin,
 	);
-}
 
-const MONO = "'JetBrains Mono', monospace";
+	Chart.defaults.maintainAspectRatio = false;
+	Chart.defaults.plugins.legend.display = false;
+	Chart.defaults.plugins.tooltip.padding = 8;
+	Chart.defaults.plugins.tooltip.titleFont = { family: MONO, size: 11 };
+	Chart.defaults.plugins.tooltip.bodyFont = { family: MONO, size: 11 };
+	Chart.defaults.scale.ticks.font = { family: MONO, size: 10 };
+	// Chart.defaults.scale's type is CoreChartOptions<"radar">["scale"], which has
+	// no `border` — but Chart.js merges this object into every cartesian scale too.
+	(Chart.defaults.scale as { border: { display: boolean } }).border = {
+		display: false,
+	};
+}
 
 // Canvas can't read CSS custom properties, so derive hex from live theme tokens
 // at call time. This makes charts react to TweaksPanel preset switches.
@@ -53,15 +65,8 @@ export function lineChartOptions(): ChartOptions<"line"> {
 	const grid = cssVarHex("--color-border");
 	const primary = primaryHex();
 	return {
-		maintainAspectRatio: false,
 		plugins: {
-			legend: { display: false },
-			tooltip: {
-				backgroundColor: fg,
-				padding: 8,
-				titleFont: { family: MONO, size: 11 },
-				bodyFont: { family: MONO, size: 11 },
-			},
+			tooltip: { backgroundColor: fg },
 			zoom: {
 				zoom: {
 					wheel: { enabled: true },
@@ -93,19 +98,15 @@ export function lineChartOptions(): ChartOptions<"line"> {
 					displayFormats: { day: "d MMM" },
 				},
 				grid: { display: false },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 					maxTicksLimit: 7,
 				},
 			},
 			y: {
 				grid: { color: grid },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 					precision: 0,
 				},
 				beginAtZero: true,
@@ -118,7 +119,6 @@ export function donutChartOptions(): ChartOptions<"doughnut"> {
 	const muted = cssVarHex("--color-muted");
 	const fg = cssVarHex("--color-foreground");
 	return {
-		maintainAspectRatio: false,
 		cutout: "70%",
 		plugins: {
 			legend: {
@@ -131,12 +131,7 @@ export function donutChartOptions(): ChartOptions<"doughnut"> {
 					padding: 12,
 				},
 			},
-			tooltip: {
-				backgroundColor: fg,
-				padding: 8,
-				titleFont: { family: MONO, size: 11 },
-				bodyFont: { family: MONO, size: 11 },
-			},
+			tooltip: { backgroundColor: fg },
 		},
 	};
 }
@@ -145,32 +140,22 @@ export function stackedBarOptions(): ChartOptions<"bar"> {
 	const faint = cssVarHex("--color-faint");
 	const fg = cssVarHex("--color-foreground");
 	return {
-		maintainAspectRatio: false,
 		indexAxis: "y",
 		plugins: {
-			legend: { display: false },
-			tooltip: {
-				backgroundColor: fg,
-				padding: 8,
-				titleFont: { family: MONO, size: 11 },
-				bodyFont: { family: MONO, size: 11 },
-			},
+			tooltip: { backgroundColor: fg },
 		},
 		scales: {
 			x: {
 				stacked: true,
 				grid: { display: false },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 					precision: 0,
 				},
 			},
 			y: {
 				stacked: true,
 				grid: { display: false },
-				border: { display: false },
 				ticks: { display: false },
 			},
 		},
@@ -183,34 +168,23 @@ export function horizontalBarOptions(): ChartOptions<"bar"> {
 	const fg = cssVarHex("--color-foreground");
 	const grid = cssVarHex("--color-border");
 	return {
-		maintainAspectRatio: false,
 		indexAxis: "y",
 		plugins: {
-			legend: { display: false },
-			tooltip: {
-				backgroundColor: fg,
-				padding: 8,
-				titleFont: { family: MONO, size: 11 },
-				bodyFont: { family: MONO, size: 11 },
-			},
+			tooltip: { backgroundColor: fg },
 		},
 		scales: {
 			x: {
 				grid: { color: grid },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 					precision: 0,
 				},
 				beginAtZero: true,
 			},
 			y: {
 				grid: { display: false },
-				border: { display: false },
 				ticks: {
 					color: muted,
-					font: { family: MONO, size: 10 },
 				},
 			},
 		},
@@ -222,31 +196,20 @@ export function verticalBarOptions(): ChartOptions<"bar"> {
 	const fg = cssVarHex("--color-foreground");
 	const grid = cssVarHex("--color-border");
 	return {
-		maintainAspectRatio: false,
 		plugins: {
-			legend: { display: false },
-			tooltip: {
-				backgroundColor: fg,
-				padding: 8,
-				titleFont: { family: MONO, size: 11 },
-				bodyFont: { family: MONO, size: 11 },
-			},
+			tooltip: { backgroundColor: fg },
 		},
 		scales: {
 			x: {
 				grid: { display: false },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 				},
 			},
 			y: {
 				grid: { color: grid },
-				border: { display: false },
 				ticks: {
 					color: faint,
-					font: { family: MONO, size: 10 },
 					precision: 0,
 				},
 				beginAtZero: true,

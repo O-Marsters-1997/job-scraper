@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math/rand/v2"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -29,9 +28,6 @@ const (
 	// LinkedIn also tends to start 429ing a given IP after ~page 10; the proxy
 	// (UseProxy below) mitigates that, and this cap bounds the damage if it doesn't.
 	maxStart = 1000
-
-	minWait = 2 * time.Second
-	maxWait = 7 * time.Second
 
 	selCard         = `div.base-search-card`
 	selCardLink     = `a.base-card__full-link`
@@ -114,71 +110,26 @@ func (s Search) pageURL(start int) string {
 	return searchURL + "?" + v.Encode()
 }
 
-type Config struct {
-	Searches []Search
-}
-
 type Scraper struct {
 	sources.PaginatedBase
-	searches []Search
+	search Search
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(cfg Config) *Scraper {
+func New(search Search) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:     "linkedin",
 			UseProxy: true,
 		}),
-		searches: cfg.Searches,
+		search: search,
 	}
-}
-
-// ponytail: not using PaginatedBase.IteratePages here — it needs a total result
-// count up front to compute page count, but seeMoreJobPostings never returns one.
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	log := slog.With(slog.String("source", "linkedin"))
-
-	for _, search := range s.searches {
-		for start := 0; start < maxStart; {
-			body, err := s.Get(ctx, search.pageURL(start))
-			if err != nil {
-				log.Error("page fetch failed", slog.Int("start", start), slog.Any("err", err))
-				break
-			}
-
-			jobs, err := ParseURLs(bytes.NewReader(body))
-			if err != nil {
-				return fmt.Errorf("linkedin: parse page (start=%d): %w", start, err)
-			}
-			if len(jobs) == 0 {
-				break
-			}
-
-			stop, err := fn(ctx, jobs)
-			if err != nil || stop {
-				return err
-			}
-			start += len(jobs)
-
-			wait := minWait + time.Duration(rand.Int64N(int64(maxWait-minWait)))
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(wait):
-			}
-		}
-	}
-	return nil
 }
 
 func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
-	if len(s.searches) != 1 {
-		return nil, "", fmt.Errorf("linkedin page fetch requires one search")
-	}
 	start := 0
 	if cursor != "" {
 		var err error
@@ -187,7 +138,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, s.searches[0].pageURL(start))
+	body, err := s.Get(ctx, s.search.pageURL(start))
 	if err != nil {
 		return nil, "", err
 	}
