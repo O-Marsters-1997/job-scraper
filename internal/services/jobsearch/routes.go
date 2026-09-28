@@ -15,14 +15,14 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
-	r.Get("/jobs/all", handlers.GetAll(m.store.ListJobs))
+	r.Get("/jobs/all", handlers.GetAll(m.jobStore.ListJobs))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
 	r.Get("/sources", handlers.GetAll(m.sources.List))
 	r.Get("/sources/resolve", handlers.Query(m.sources.Resolve))
 
 	r.Route("/source-targets", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.store.ListSourceTargetsByUser))
+		r.Get("/", handlers.GetAll(m.targetLister.ListSourceTargetsByUser))
 		r.Post("/", handlers.Create(m.sourceTargets.Create))
 		r.Patch("/{id}", handlers.Update(m.sourceTargets.Update))
 		r.Post("/{id}/scrape", handlers.GetByID(m.sourceTargets.Scrape))
@@ -30,7 +30,7 @@ func (m *Module) Routes(r chi.Router) {
 	})
 
 	r.Route("/companies", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.store.ListCompaniesForUser))
+		r.Get("/", handlers.GetAll(m.jobStore.ListCompaniesForUser))
 		r.Post("/", handlers.Create(m.companies.Create))
 		r.Put("/{id}/tracking", handlers.Update(m.companies.SetTracking))
 		r.Get("/{id}/boards", handlers.GetByID(m.companies.ListBoards))

@@ -17,7 +17,8 @@ import (
 var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
-	store         Store
+	jobStore      JobStore
+	targetLister  sourcetargets.Store
 	jobs          *Service
 	companies     *companies.Service
 	sourceTargets *sourcetargets.Service
@@ -36,12 +37,7 @@ type QueuePublisher interface {
 	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
 }
 
-type Store interface {
-	candidates.Store
-	companies.Store
-	companies.SourceTargets
-	sourcetargets.Store
-
+type JobStore interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
@@ -51,26 +47,40 @@ type Store interface {
 }
 
 type Deps struct {
-	Store   Store
-	Scoring ScoringPort
-	Queue   QueuePublisher
+	Jobs           JobStore
+	Candidates     candidates.Store
+	Companies      companies.Store
+	CompanyTargets companies.SourceTargets
+	SourceTargets  sourcetargets.Store
+	Scoring        ScoringPort
+	Queue          QueuePublisher
 }
 
 func Build(deps Deps) *Module {
-	cand := candidates.New(deps.Store, deps.Queue)
+	cand := candidates.New(deps.Candidates, deps.Queue)
 	return &Module{
-		store:         deps.Store,
-		jobs:          NewService(deps.Store),
-		companies:     companies.New(deps.Store, deps.Store, deps.Queue),
-		sourceTargets: sourcetargets.New(deps.Store, deps.Scoring, cand, deps.Queue),
+		jobStore:      deps.Jobs,
+		targetLister:  deps.SourceTargets,
+		jobs:          NewService(deps.Jobs),
+		companies:     companies.New(deps.Companies, deps.CompanyTargets, deps.Queue),
+		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, cand, deps.Queue),
 		sources:       sources.New(),
 		candidates:    cand,
-		ingest:        newIngester(deps.Store, deps.Store),
+		ingest:        newIngester(deps.Jobs, deps.Companies),
 	}
 }
 
 func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
-	return Build(Deps{Store: store.New(pool, scoring), Scoring: scoring, Queue: q})
+	st := store.New(pool, scoring)
+	return Build(Deps{
+		Jobs:           st,
+		Candidates:     st,
+		Companies:      st,
+		CompanyTargets: st,
+		SourceTargets:  st,
+		Scoring:        scoring,
+		Queue:          q,
+	})
 }
 
 func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {

@@ -8,11 +8,34 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/candidates"
+	"github.com/ollymarsters/job-scraper/internal/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-func RunStoreContract(t *testing.T, newStore func(t *testing.T) (jobsearch.Store, string)) {
+type Store interface {
+	jobsearch.JobStore
+	candidates.Store
+	companies.Store
+	companies.SourceTargets
+	sourcetargets.Store
+}
+
+func NewDeps(st Store) jobsearch.Deps {
+	return jobsearch.Deps{
+		Jobs:           st,
+		Candidates:     st,
+		Companies:      st,
+		CompanyTargets: st,
+		SourceTargets:  st,
+		Scoring:        NewNoopScoring(),
+		Queue:          NoopQueue{},
+	}
+}
+
+func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
 
 	t.Run("get an unknown job returns not found", func(t *testing.T) {

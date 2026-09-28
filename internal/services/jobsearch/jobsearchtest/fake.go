@@ -14,7 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/candidates"
-	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
@@ -678,4 +677,4 @@ func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 	return nil
 }
 
-var _ jobsearch.Store = (*FakeStore)(nil)
+var _ Store = (*FakeStore)(nil)
