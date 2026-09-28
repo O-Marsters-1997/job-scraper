@@ -5,15 +5,22 @@ package applicationstatuses
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+// Store is this feature's own contract, including the two methods the
+// applications Module binds routes to directly and forwards to identity's
+// signup as the SeedDefaults facade promise (ADR 0011, ADR 0012).
 type Store interface {
 	CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error)
 	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error)
 	DeleteApplicationStatus(ctx context.Context, id, userID string) error
 	CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error)
+	ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error)
+	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
 }
 
 type Service struct {
