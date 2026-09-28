@@ -3,8 +3,9 @@ package aiprefs
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -22,10 +23,9 @@ func TestService_Get(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		creds   CredentialLister
-		want    dto.AIPrefsView
-		wantErr bool
+		name  string
+		creds CredentialLister
+		want  dto.AIPrefsView
 	}{
 		{
 			name:  "no configured providers",
@@ -37,11 +37,6 @@ func TestService_Get(t *testing.T) {
 			creds: stubCredLister{providers: []string{"openrouter"}},
 			want:  dto.AIPrefsView{ConfiguredProviders: []string{"openrouter"}, ScoringEnabled: true},
 		},
-		{
-			name:    "credential list error propagates",
-			creds:   stubCredLister{err: errors.New("creds down")},
-			wantErr: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -50,18 +45,21 @@ func TestService_Get(t *testing.T) {
 
 			svc := New(tt.creds)
 			got, err := svc.Get(context.Background(), "user-1")
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("want error, got nil")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Get() = %+v; want %+v", got, tt.want)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Get() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestService_Get_CredentialListErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	svc := New(stubCredLister{err: errors.New("creds down")})
+	if _, err := svc.Get(context.Background(), "user-1"); err == nil {
+		t.Fatal("Get() err = nil, want error")
 	}
 }

@@ -6,10 +6,9 @@ import (
 
 func TestParseDocID(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
+		name  string
+		input string
+		want  string
 	}{
 		{
 			name:  "full edit URL",
@@ -31,32 +30,35 @@ func TestParseDocID(t *testing.T) {
 			input: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
 			want:  "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
 		},
-		{
-			name:    "garbage short string",
-			input:   "not-a-url",
-			wantErr: true,
-		},
-		{
-			name:    "empty string",
-			input:   "",
-			wantErr: true,
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ParseDocID(tc.input)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error, got %q", got)
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseDocID_Rejects(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "garbage short string", input: "not-a-url"},
+		{name: "empty string", input: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ParseDocID(tc.input)
+			if err == nil {
+				t.Fatalf("expected error, got %q", got)
 			}
 		})
 	}

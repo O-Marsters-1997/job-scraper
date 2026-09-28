@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 )
 
 type fakeIngestStore struct {
@@ -57,14 +58,7 @@ func newIngestRouter(store *fakeIngestStore) http.Handler {
 }
 
 func TestIngestHandlerRejectsMalformedBody(t *testing.T) {
-	handler := newIngestRouter(newFakeIngestStore())
-	req := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewBufferString(`{invalid`))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", w.Code)
-	}
+	handlerstest.RejectsMalformedBody(t, newIngestRouter(newFakeIngestStore()), "POST /ingest")
 }
 
 func TestIngestHandlerRepeatedDeliveryKeepsOneCanonicalJob(t *testing.T) {

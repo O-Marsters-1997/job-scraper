@@ -10,10 +10,35 @@ linters:
     - unused # unused code
     - misspell # spelling
     - exhaustive # exhaustive enum switches
-    - depguard # internal/api, internal/worker and shared package boundaries
+    - depguard # internal/api, internal/worker and shared package boundaries; test-double leakage
+    - forbidigo # bans reflect.DeepEqual and time.Sleep in tests (ADR 0012)
+    - thelper # test helpers call t.Helper()
+    - tparallel # correct t.Parallel() usage
+    - errorlint # error wrapping correctness
+    - usetesting # prefer testing package helpers over manual equivalents
   settings:
+    forbidigo:
+      forbid:
+        - pattern: '^reflect\.DeepEqual$'
+          msg: use cmp.Diff(want, got) instead (ADR 0012)
+        - pattern: '^time\.Sleep$'
+          msg: poll with a ticker and a deadline instead (ADR 0012)
     depguard:
       rules:
+        test-doubles:
+          # depguard matches exact import paths, not globs; list each *test double
+          # package here as it's added (ADR 0012).
+          files: ["$all", "!**/*_test.go"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/queue/queuetest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+            - pkg: github.com/ollymarsters/job-scraper/internal/handlers/handlerstest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+        no-testify:
+          files: ["**/*_test.go"]
+          deny:
+            - pkg: github.com/stretchr/testify
+              desc: no testify in this repo; use cmp.Diff and errors.Is/As (ADR 0012)
         api:
           files: ["**/internal/api/**", "**/cmd/api/**"]
           deny:
@@ -56,6 +81,13 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/scoring/store
               desc: only the scoring context uses its store; call the scoring Module facade (ADR 0011)
+  exclusions:
+    rules:
+      # forbidigo's reflect.DeepEqual/time.Sleep bans are a test-only policy (ADR 0012);
+      # production code may legitimately use either.
+      - path-except: _test\.go
+        linters:
+          - forbidigo
 
 formatters:
   enable:

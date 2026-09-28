@@ -138,6 +138,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			t.Fatal(err)
 		}
 		deadline := time.Now().Add(8 * time.Second)
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
 		attempts := 0
 		var counts []int64
 		for {
@@ -166,7 +168,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			if time.Now().After(deadline) {
 				t.Fatalf("task never reached DLQ after %d attempts", attempts)
 			}
-			time.Sleep(25 * time.Millisecond)
+			<-ticker.C
 		}
 	})
 
@@ -208,6 +210,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			t.Fatal("first publish rejected")
 		}
 		deadline := time.Now().Add(5 * time.Second)
+		ticker := time.NewTicker(25 * time.Millisecond)
+		defer ticker.Stop()
 		for range 2 {
 			for {
 				delivery, ok, err := channel.Get("blocked.work", false)
@@ -223,14 +227,14 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 				if time.Now().After(deadline) {
 					t.Fatal("blocked task not delivered")
 				}
-				time.Sleep(25 * time.Millisecond)
+				<-ticker.C
 			}
 		}
 		for time.Now().Before(deadline) {
 			if !publish("second") {
 				return
 			}
-			time.Sleep(25 * time.Millisecond)
+			<-ticker.C
 		}
 		t.Fatal("source queue accepted work despite unavailable DLQ route")
 	})
@@ -442,6 +446,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 		restartedURL := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, restartedPort.Port())
 		deadline := time.Now().Add(30 * time.Second)
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
 		var lastErr error
 		for {
 			fresh, err := amqp.Dial(restartedURL)
@@ -468,19 +474,21 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			if time.Now().After(deadline) {
 				t.Fatalf("confirmed message missing after restart: %v", lastErr)
 			}
-			time.Sleep(250 * time.Millisecond)
+			<-ticker.C
 		}
 	})
 }
 
 func waitForDeadLetterCount(broker *Broker, want int) (int, error) {
 	deadline := time.Now().Add(2 * time.Second)
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		count, err := broker.DeadLetterCount()
 		if err != nil || count == want || time.Now().After(deadline) {
 			return count, err
 		}
-		time.Sleep(25 * time.Millisecond)
+		<-ticker.C
 	}
 }
 

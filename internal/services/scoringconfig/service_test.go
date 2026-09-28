@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -127,10 +128,9 @@ func (f *fakeCredentials) Get(_ context.Context, _, _ string) (string, error) {
 
 func TestGet(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(store *fakeStore)
-		want    dto.ScoringConfigView
-		wantErr bool
+		name  string
+		setup func(store *fakeStore)
+		want  dto.ScoringConfigView
 	}{
 		{
 			name: "returns empty config when none saved",
@@ -159,13 +159,6 @@ func TestGet(t *testing.T) {
 				ExcludedLocations:     []string{},
 			},
 		},
-		{
-			name: "surfaces non-not-found error",
-			setup: func(store *fakeStore) {
-				store.GetErr = errors.New("db down")
-			},
-			wantErr: true,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -175,19 +168,24 @@ func TestGet(t *testing.T) {
 			}
 			svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
 			got, err := svc.Get(context.Background(), "user-1")
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("want error, got nil")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("got %+v, want %+v", got, tt.want)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Get() mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestGet_SurfacesStoreError(t *testing.T) {
+	store := newFakeStore().seedOptions()
+	store.GetErr = errors.New("db down")
+	svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
+
+	_, err := svc.Get(context.Background(), "user-1")
+	if err == nil {
+		t.Fatal("want error, got nil")
 	}
 }
 
@@ -266,12 +264,12 @@ func TestUpdateSucceeds(t *testing.T) {
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
 		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
 	}
-	if !reflect.DeepEqual(got.Preferences.Picks, wantPicks) {
-		t.Fatalf("picks = %+v, want %+v (source forced to manual)", got.Preferences.Picks, wantPicks)
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks mismatch, source forced to manual (-want +got):\n%s", diff)
 	}
 	wantFloor := &dto.Money{Amount: 55000, Currency: "GBP"}
-	if !reflect.DeepEqual(got.Preferences.SalaryFloor, wantFloor) {
-		t.Fatalf("salary floor = %+v, want %+v (currency uppercased)", got.Preferences.SalaryFloor, wantFloor)
+	if diff := cmp.Diff(wantFloor, got.Preferences.SalaryFloor); diff != "" {
+		t.Errorf("salary floor mismatch, currency uppercased (-want +got):\n%s", diff)
 	}
 	if reconsiderer.calledWith.UserID != "user-1" {
 		t.Fatalf("reconsiderer called with %+v, want user-1", reconsiderer.calledWith)

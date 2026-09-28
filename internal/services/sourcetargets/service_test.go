@@ -11,8 +11,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
+
+type failingPublisher struct{ err error }
+
+func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.err }
 
 var errSourceTargetExists = apperr.Conflict("source target already exists")
 
@@ -166,12 +171,12 @@ type fakeReconsiderer struct{ err error }
 
 func (f fakeReconsiderer) Reconsider(context.Context, dto.SearchConfig) error { return f.err }
 
-func newService(targets *fakeStore, q *queue.MockQueue) *sourcetargets.Service {
+func newService(targets *fakeStore, q sourcetargets.QueuePublisher) *sourcetargets.Service {
 	return sourcetargets.New(targets, fakeSearchConfigReader{}, fakeReconsiderer{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
-	svc := newService(newFakeStore(), queue.NewMockQueue())
+	svc := newService(newFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -179,7 +184,7 @@ func TestCreate_RequiresSourceAndValue(t *testing.T) {
 }
 
 func TestCreate_RejectsUnsupportedSource(t *testing.T) {
-	svc := newService(newFakeStore(), queue.NewMockQueue())
+	svc := newService(newFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "unknown-ats", Value: "x"})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -187,7 +192,7 @@ func TestCreate_RejectsUnsupportedSource(t *testing.T) {
 }
 
 func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
-	q := queue.NewMockQueue()
+	q := queuetest.NewRecorder()
 	svc := newService(newFakeStore(), q)
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
@@ -196,15 +201,13 @@ func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 	if target.RunStatus != "queued" {
 		t.Fatalf("run status = %q, want queued", target.RunStatus)
 	}
-	if got := q.ScrapeRequests(); len(got) != 1 || got[0].Target.Source != "wis" {
-		t.Fatalf("queued requests = %+v, want one WIS search", got)
+	if got := q.Tasks(); len(got) != 1 || got[0].Source != "wis" {
+		t.Fatalf("queued tasks = %+v, want one WIS search", got)
 	}
 }
 
 func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
-	q := queue.NewMockQueue()
-	q.EnqueueScrapeErr = errors.New("queue unavailable")
-	svc := newService(newFakeStore(), q)
+	svc := newService(newFakeStore(), failingPublisher{err: errors.New("queue unavailable")})
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -212,15 +215,12 @@ func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 	if target.RunStatus != "queued" || target.RunID == "" {
 		t.Fatalf("target = %+v, want a queued run", target)
 	}
-	if len(q.ScrapeRequests()) != 0 {
-		t.Fatalf("queued requests = %+v, want none", q.ScrapeRequests())
-	}
 }
 
 func TestCreate_PropagatesConflict(t *testing.T) {
 	store := newFakeStore()
 	store.CreateErr = errSourceTargetExists
-	svc := newService(store, queue.NewMockQueue())
+	svc := newService(store, queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})
 	if !errors.Is(err, errSourceTargetExists) {
 		t.Fatalf("err = %v, want ErrSourceTargetExists", err)
@@ -276,7 +276,7 @@ func TestUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := newFakeStore()
 			id := tt.targetID(store)
-			svc := newService(store, queue.NewMockQueue())
+			svc := newService(store, queuetest.NewRecorder())
 
 			tt.in.ID = id
 			_, err := svc.Update(context.Background(), "user-1", tt.in)
@@ -296,7 +296,7 @@ func TestUpdate(t *testing.T) {
 func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := newService(store, queue.NewMockQueue())
+	svc := newService(store, queuetest.NewRecorder())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if err != nil {
@@ -307,7 +307,7 @@ func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := sourcetargets.New(store, fakeSearchConfigReader{}, fakeReconsiderer{err: errors.New("boom")}, queue.NewMockQueue())
+	svc := sourcetargets.New(store, fakeSearchConfigReader{}, fakeReconsiderer{err: errors.New("boom")}, queuetest.NewRecorder())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if status, ok := apperr.StatusFor(err); !ok || status != 503 {
@@ -318,7 +318,7 @@ func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 func TestScrape(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
-	svc := newService(store, queue.NewMockQueue())
+	svc := newService(store, queuetest.NewRecorder())
 
 	if _, err := svc.Scrape(context.Background(), "user-2", created.ID); wantStatus(t, err) != 404 {
 		t.Fatalf("cross-user scrape err = %v, want 404", err)
@@ -350,7 +350,7 @@ func TestScrape_RetriesFailedRun(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
 	store.forceRunState(created.ID, "failed", "previous run failed")
-	q := queue.NewMockQueue()
+	q := queuetest.NewRecorder()
 	svc := newService(store, q)
 
 	target, err := svc.Scrape(context.Background(), "user-1", created.ID)
@@ -360,7 +360,7 @@ func TestScrape_RetriesFailedRun(t *testing.T) {
 	if target.RunStatus != "queued" || target.LastRunError != "" {
 		t.Fatalf("run state after retry = %+v", target)
 	}
-	if len(q.ScrapeRequests()) != 1 {
-		t.Fatalf("queued requests = %d, want 1", len(q.ScrapeRequests()))
+	if len(q.Tasks()) != 1 {
+		t.Fatalf("queued tasks = %d, want 1", len(q.Tasks()))
 	}
 }

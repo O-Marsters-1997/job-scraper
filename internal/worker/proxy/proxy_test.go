@@ -14,15 +14,9 @@ func TestTransport(t *testing.T) {
 		useProxy    bool
 		envVal      string
 		wantDefault bool
-		wantErr     bool
 	}{
 		{name: "direct returns default transport", useProxy: false, wantDefault: true},
 		{name: "proxy on with valid URL uses proxy transport", useProxy: true, envVal: "http://user:pass@brd.superproxy.io:33335"},
-		{name: "proxy on without env var fails closed", useProxy: true, envVal: "", wantErr: true},
-		{name: "proxy on with invalid URL returns error", useProxy: true, envVal: "://bad-url", wantErr: true},
-		{name: "proxy on without credentials returns error", useProxy: true, envVal: "http://brd.superproxy.io:33335", wantErr: true},
-		{name: "proxy on without port returns error", useProxy: true, envVal: "http://user:pass@brd.superproxy.io", wantErr: true},
-		{name: "proxy on with path returns error", useProxy: true, envVal: "http://user:pass@brd.superproxy.io:33335/path", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -31,13 +25,6 @@ func TestTransport(t *testing.T) {
 			t.Setenv("BRIGHTDATA_CA_CERT", "")
 
 			tr, err := Transport(tt.useProxy)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -46,6 +33,30 @@ func TestTransport(t *testing.T) {
 			}
 			if !tt.wantDefault && tr == http.DefaultTransport {
 				t.Fatal("expected proxy transport, got DefaultTransport")
+			}
+		})
+	}
+}
+
+func TestTransport_Rejects(t *testing.T) {
+	tests := []struct {
+		name   string
+		envVal string
+	}{
+		{name: "proxy on without env var fails closed", envVal: ""},
+		{name: "proxy on with invalid URL returns error", envVal: "://bad-url"},
+		{name: "proxy on without credentials returns error", envVal: "http://brd.superproxy.io:33335"},
+		{name: "proxy on without port returns error", envVal: "http://user:pass@brd.superproxy.io"},
+		{name: "proxy on with path returns error", envVal: "http://user:pass@brd.superproxy.io:33335/path"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(envKey, tt.envVal)
+			t.Setenv("BRIGHTDATA_CA_CERT", "")
+
+			if _, err := Transport(true); err == nil {
+				t.Fatal("expected error, got nil")
 			}
 		})
 	}
