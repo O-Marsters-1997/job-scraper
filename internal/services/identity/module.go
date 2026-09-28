@@ -5,9 +5,11 @@ package identity
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/oauth2"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/aicredentials"
@@ -17,37 +19,65 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/profile"
 )
 
+type googleClient interface {
+	AuthURL(state string) string
+	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
+	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
+	HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error)
+	DeleteToken(ctx context.Context, userID string) error
+	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
+	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
+	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
+}
+
+// Deps are Build's collaborators; New builds the real ones and calls Build.
+// Tests call Build directly with fakes (ADR 0012).
+type Deps struct {
+	Store         Store
+	Seeder        StatusSeeder
+	AICredentials aicredentials.Store
+	Profile       profile.Store
+	GoogleClient  googleClient
+}
+
 type Module struct {
-	store         *store.Store
+	store         Store
 	service       *Service
 	aiCredentials *aicredentials.Service
 	aiPrefs       *aiprefs.Service
 	profile       *profile.Service
 	google        *google.Service
-	googleClient  *google.Client
+	googleClient  googleClient
+}
+
+func Build(deps Deps) (*Module, error) {
+	aiCreds, err := aicredentials.New(deps.AICredentials)
+	if err != nil {
+		return nil, fmt.Errorf("identity.Build: %w", err)
+	}
+	return &Module{
+		store:         deps.Store,
+		service:       NewService(deps.Store, deps.Seeder),
+		aiCredentials: aiCreds,
+		aiPrefs:       aiprefs.New(aiCreds),
+		profile:       profile.New(deps.Profile),
+		google:        google.NewService(deps.GoogleClient),
+		googleClient:  deps.GoogleClient,
+	}, nil
 }
 
 // New wires the full identity context, including the Google Link and AI
 // credentials.
 func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
 	st := store.New(pool)
-
-	aiCreds, err := aicredentials.New(st)
-	if err != nil {
-		return nil, fmt.Errorf("identity.New: %w", err)
-	}
-
 	googleClient := google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st)
-
-	return &Module{
-		store:         st,
-		service:       NewService(st, seeder),
-		aiCredentials: aiCreds,
-		aiPrefs:       aiprefs.New(aiCreds),
-		profile:       profile.New(st),
-		google:        google.NewService(googleClient),
-		googleClient:  googleClient,
-	}, nil
+	return Build(Deps{
+		Store:         st,
+		Seeder:        seeder,
+		AICredentials: st,
+		Profile:       st,
+		GoogleClient:  googleClient,
+	})
 }
 
 // NewFacade wires only identity's user/session store, for cmd/admin and the
@@ -87,6 +117,6 @@ func (m *Module) GetProfile(ctx context.Context, userID string) (dto.Profile, er
 
 // DocsClient is identity's Google Docs/Drive surface, satisfying
 // cvtemplates' and trackeddocs' own DocsClient interfaces.
-func (m *Module) DocsClient() *google.Client {
+func (m *Module) DocsClient() googleClient {
 	return m.googleClient
 }

@@ -1,4 +1,4 @@
-package aiprefs
+package aiprefs_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/aiprefs"
 )
 
 type stubCredLister struct {
@@ -24,7 +25,7 @@ func TestService_Get(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		creds CredentialLister
+		creds aiprefs.CredentialLister
 		check func(t *testing.T, got dto.AIPrefsView, err error)
 	}{
 		{
@@ -53,7 +54,7 @@ func TestService_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := New(tt.creds)
+			svc := aiprefs.New(tt.creds)
 			got, err := svc.Get(context.Background(), "user-1")
 			tt.check(t, got, err)
 		})

@@ -14,8 +14,7 @@ import (
 var errNotFound = errors.New("not found")
 
 type fakeStore struct {
-	saved       map[string]string
-	deletedKeys []string
+	saved map[string]string
 }
 
 func newFakeStore() *fakeStore { return &fakeStore{saved: map[string]string{}} }
@@ -34,7 +33,6 @@ func (f *fakeStore) GetUserAICredential(_ context.Context, userID, provider stri
 }
 
 func (f *fakeStore) DeleteUserAICredential(_ context.Context, userID, provider string) error {
-	f.deletedKeys = append(f.deletedKeys, userID+"/"+provider)
 	delete(f.saved, userID+"/"+provider)
 	return nil
 }
@@ -99,13 +97,22 @@ func TestUpdateSavesAQuotedKeyTrimmedAndGetDecrypts(t *testing.T) {
 }
 
 func TestUpdateDeletesWhenKeyIsNil(t *testing.T) {
-	store := newFakeStore()
-	svc := testService(t, store)
+	svc := testService(t, newFakeStore())
+	key := `"sk-test"`
+	if _, err := svc.Update(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
+		t.Fatal(err)
+	}
+
 	if _, err := svc.Update(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic"}); err != nil {
 		t.Fatal(err)
 	}
-	if len(store.deletedKeys) != 1 || store.deletedKeys[0] != "user-1/anthropic" {
-		t.Fatalf("deletedKeys = %v", store.deletedKeys)
+
+	got, err := svc.ListProviders(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListProviders: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("ListProviders after delete = %v, want none", got)
 	}
 }
 

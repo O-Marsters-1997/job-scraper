@@ -17,12 +17,18 @@ const sessionTTL = 30 * 24 * time.Hour
 
 var bcryptCost = bcrypt.DefaultCost
 
+// Store is shared by Service and Module: authentication plus the reads
+// Module exposes to routes, the worker's cleanup and other contexts' ports.
 type Store interface {
 	GetUserByUsername(ctx context.Context, username string) (dto.User, error)
+	CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error)
 	CreateUserTx(ctx context.Context, tx pgx.Tx, username, passwordHash, email string) (dto.User, error)
 	Begin(ctx context.Context) (pgx.Tx, error)
 	CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error)
+	GetSession(ctx context.Context, id string) (dto.Session, error)
 	DeleteSession(ctx context.Context, id string) error
+	DeleteExpiredSessions(ctx context.Context) error
+	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 }
 
 // StatusSeeder seeds a new user's default application Statuses inside tx;
