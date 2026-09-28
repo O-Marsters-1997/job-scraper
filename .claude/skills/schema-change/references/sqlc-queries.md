@@ -1,8 +1,8 @@
 # sqlc queries and wrapper error handling
 
-Counted in the legacy `internal/data/sqlc/queries/*.sql` (18 files) before
-the context split (ADR 0011) — recount if this feels stale, sqlc will tell you immediately
-if an annotation is wrong:
+Counted across `internal/services/applications/store/queries/*.sql` (ADR 0011) —
+recount if this feels stale, sqlc will tell you immediately if an annotation
+is wrong:
 
 | Annotation    | Count | Use for |
 |---------------|-------|---------|
@@ -25,15 +25,15 @@ Use `narg` only for a column that's genuinely optional on write — reach for
 
 ## Store error mapping
 
-Every store method wraps its generated call like this (legacy: `internal/data/db/profile.go`):
+Every store method wraps its generated call like this (`internal/services/applications/store/store.go`):
 
 ```go
-row, err := s.q.GetUserProfile(ctx, uid)
+row, err := s.queries.GetApplication(ctx, sqlc.GetApplicationParams{UserID: uid, ID: aid})
 if errors.Is(err, pgx.ErrNoRows) {
-    return dto.Profile{}, ErrNotFound
+    return dto.Application{}, ErrNotFound
 }
 if err != nil {
-    return dto.Profile{}, fmt.Errorf("store.GetProfile: %w", err)
+    return dto.Application{}, fmt.Errorf("get application: %w", err)
 }
 ```
 
@@ -45,17 +45,15 @@ Each context's store declares its own sentinels in its own package:
 - Services in the same context match with `errors.Is(err, store.ErrNotFound)`.
 - The context's root package re-exports a sentinel only when another context or the worker must
   match it.
-- Legacy contexts use the single `data.ErrNotFound`, declared in
-  `internal/data/errors.go`.
 
 **Unique violations (23505)** are checked in the store at the call site, with
 `errors.As(err, &pgErr) && pgErr.Code == "23505"`, and mapped to a sentinel that fits that call:
 
-| Call site (legacy) | Sentinel |
+| Call site | Sentinel |
 |---|---|
-| `internal/data/db/auth.go` | `ErrUsernameTaken` |
-| `internal/data/db/application.go` | an application conflict |
-| `internal/data/db/source_targets.go` (two sites) | `ErrSourceTargetExists` |
+| `internal/services/identity/store/store.go` (`CreateUser`) | `ErrUsernameTaken` |
+| `internal/services/applications/store/store.go` (`CreateApplication`) | `ErrApplicationExists` |
+| `internal/services/jobsearch/store/store.go` (`CreateSourceTarget`, `CreateSourceTargetWithRun`) | `ErrSourceTargetExists` |
 
 If your new query can violate a `UNIQUE` constraint and the caller needs to tell that apart from
 other failures, follow the same per-site pattern. Don't add a shared conflict sentinel.

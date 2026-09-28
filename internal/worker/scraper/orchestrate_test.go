@@ -2,12 +2,24 @@ package scraper
 
 import (
 	"context"
+	"slices"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/data/providers"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
+
+type knownURLs []string
+
+func (k knownURLs) NewURLs(_ context.Context, urls []string) ([]string, error) {
+	var out []string
+	for _, u := range urls {
+		if !slices.Contains(k, u) {
+			out = append(out, u)
+		}
+	}
+	return out, nil
+}
 
 type pageSourceStub struct {
 	url string
@@ -30,11 +42,7 @@ func (emptyCandidateCapturer) CapturePage(context.Context, dto.SourceTarget, []d
 func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	ctx := context.Background()
 	url := "https://workinstartups.com/job/1"
-	db := providers.NewMockJobProvider()
-	if _, err := db.Save(ctx, []dto.Job{{URL: url}}); err != nil {
-		t.Fatal(err)
-	}
-	orch := New(db).
+	orch := New(knownURLs{url}).
 		WithSourceBuilder(func(dto.SourceTarget) []sources.Source { return []sources.Source{pageSourceStub{url: url}} }).
 		WithCandidates(emptyCandidateCapturer{})
 	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")

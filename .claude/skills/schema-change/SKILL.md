@@ -1,7 +1,7 @@
 ---
 name: schema-change
 description: Change the Postgres schema: create, alter or drop tables, columns, indexes or constraints, backfill data, and update the sqlc queries and generated code to match. Use for "write a migration", "change the schema", "add a column", "new index", "rename a field", "backfill".
-paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/data/db/**", "internal/services/*/store/**", "sqlc.yaml"]
+paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/services/*/store/**", "sqlc.yaml"]
 ---
 
 # Schema change
@@ -15,9 +15,6 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    ([ADR 0011](../../../docs/adr/0011-modular-monolith-by-context.md)). A new
    table goes to the context whose rules write it; if none fits, stop and ask.
    Only the owner's store writes the table. Other contexts may read-join it.
-   Check `AGENTS.md` § Migration status: an unmoved context still uses the
-   legacy paths (`internal/data/sqlc/queries/`, `internal/data/db/`), and
-   steps 6–8 give both.
 
 1. **Check state.** `just up` starts Postgres, then `just migrate-status`
    shows what's already applied.
@@ -45,9 +42,8 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    what the migration produces after Up.
 
 6. **Update the queries.** Edit or add to the owning context's
-   `internal/services/<ctx>/store/queries/<table>.sql` (legacy:
-   `internal/data/sqlc/queries/<table>.sql`). A query that writes a table
-   belongs in that table's owner; a read-join may live in any context's
+   `internal/services/<ctx>/store/queries/<table>.sql`. A query that writes a
+   table belongs in that table's owner; a read-join may live in any context's
    store. See
    `references/sqlc-queries.md` for which annotation
    (`:one`/`:many`/`:exec`/`:execrows`/`:batchexec`) fits, and
@@ -56,12 +52,12 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
 7. **Regenerate.** Confirm your local `sqlc version` matches the version
    pinned in `.github/workflows/ci.yml` (`sqlc-dev/sqlc/cmd/sqlc@v1.31.1` as
    of writing — check the file, it drifts), then run `just generate`. This
-   rewrites every generated tree (`internal/services/<ctx>/store/sqlc/**`,
-   legacy `internal/data/db/pgsqlc/**`); never hand-edit them
-   (`AGENTS.md` "Boundaries"). A context's first query also needs its own
-   `sql:` block in `sqlc.yaml` pointing at the shared `schema.sql`, and a
-   `<ctx>-store` depguard rule in `.golangci.yml` (copy `applications-store`)
-   so only `internal/services/<ctx>/` can import the store.
+   rewrites every generated tree (`internal/services/<ctx>/store/sqlc/**`);
+   never hand-edit them (`AGENTS.md` "Boundaries"). A context's first query
+   also needs its own `sql:` block in `sqlc.yaml` pointing at the shared
+   `schema.sql`, and a `<ctx>-store` depguard rule in `.golangci.yml` (copy
+   `applications-store`) so only `internal/services/<ctx>/` can import the
+   store.
 
 8. **Update the store.** In `internal/services/<ctx>/store/store.go`, wrap
    generated calls. Map `pgx.ErrNoRows` to the store's own `ErrNotFound`,
@@ -71,9 +67,7 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    the dto it builds (`toApplicationDTO`, `toApplicationStatusDTO`). Wherever a
    signature changed, update the consuming service's own `store`
    interface and its hand fake. There is no shared mock package.
-   Legacy contexts do the same in `internal/data/db/*.go` with
-   `data.ErrNotFound` and `providers.Mock*`. Error-mapping detail is
-   in `references/sqlc-queries.md`.
+   Error-mapping detail is in `references/sqlc-queries.md`.
 
    If the change adds a side effect in another context's tables inside the
    same transaction, don't write those tables. Call the owner's tx-scoped
@@ -83,10 +77,9 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    ```
    sqlc generate && git diff --exit-code && go test ./internal/services/...
    ```
-   Store tests use a real Postgres testcontainer via `internal/pgtest`. Legacy
-   tests use `testDB` in `internal/data/db/db_test.go`; don't start a second
-   container there. Run `go test` from the repo root, because migrations
-   resolve `scripts/migrations` relative to CWD.
+   Store tests use a real Postgres testcontainer via `internal/pgtest`. Run
+   `go test` from the repo root, because migrations resolve
+   `scripts/migrations` relative to CWD.
 
 ## References
 

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 
 	"log/slog"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
-	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
@@ -44,22 +44,17 @@ func main() {
 	}
 }
 
-func connectDB(ctx context.Context) *jobsdb.DB {
-	connStr, err := jobsdb.ConnString()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "db config invalid: %v\n", err)
-		os.Exit(1)
-	}
-	db, err := jobsdb.New(ctx, connStr)
+func connectDB(ctx context.Context) *pgxpool.Pool {
+	pool, err := data.Connect(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
 		os.Exit(1)
 	}
-	if err := data.RunMigrations(ctx, db.Pool()); err != nil {
+	if err := data.RunMigrations(ctx, pool); err != nil {
 		fmt.Fprintf(os.Stderr, "run migrations: %v\n", err)
 		os.Exit(1)
 	}
-	return db
+	return pool
 }
 
 func runCreateUser(args []string) {
@@ -87,11 +82,11 @@ func runCreateUser(args []string) {
 	}
 
 	ctx := context.Background()
-	db := connectDB(ctx)
-	defer db.Close()
+	pool := connectDB(ctx)
+	defer pool.Close()
 
-	apps := applications.New(db.Pool())
-	idm := identity.NewFacade(db.Pool(), apps)
+	apps := applications.New(pool)
+	idm := identity.NewFacade(pool, apps)
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
@@ -123,10 +118,9 @@ func runOptions(args []string) {
 	}
 
 	ctx := context.Background()
-	db := connectDB(ctx)
-	defer db.Close()
-	scoringModule := scoring.NewFacade(db.Pool())
-	db.WithScoring(scoringModule)
+	pool := connectDB(ctx)
+	defer pool.Close()
+	scoringModule := scoring.NewFacade(pool)
 
 	switch args[0] {
 	case "add":
