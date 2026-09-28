@@ -15,6 +15,10 @@ func TestSnapshots(t *testing.T) {
 	sourcetest.RunSnapshotTests(t, indeed.New(""))
 }
 
+func FuzzParse(f *testing.F) {
+	sourcetest.FuzzSnapshots(f, indeed.New(""))
+}
+
 // TestParseURLs_AntiBotBlock guards the semantic-200 check: BrightData's Web
 // Unlocker returns HTTP 200 even for anti-bot interstitials, so a page with
 // zero job cards and no recognizable "no results" marker must error rather

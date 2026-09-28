@@ -64,12 +64,12 @@ func (r *Runner) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			r.tick(ctx)
+			r.RunOnce(ctx)
 		}
 	}
 }
 
-func (r *Runner) tick(ctx context.Context) {
+func (r *Runner) RunOnce(ctx context.Context) {
 	for _, h := range r.harvesters {
 		r.runIfDue(ctx, h)
 	}

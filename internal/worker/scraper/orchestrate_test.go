@@ -1,4 +1,4 @@
-package scraper
+package scraper_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -39,7 +40,7 @@ func (emptyCandidateCapturer) CapturePage(context.Context, dto.SourceTarget, []d
 func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	ctx := context.Background()
 	url := "https://workinstartups.com/job/1"
-	orch := New(knownURLs{url}).
+	orch := scraper.New(knownURLs{url}).
 		WithSourceBuilder(func(dto.SourceTarget) (sources.Source, bool) { return pageSourceStub{url: url}, true }).
 		WithCandidates(emptyCandidateCapturer{})
 	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")

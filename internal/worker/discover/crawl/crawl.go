@@ -64,6 +64,11 @@ func New(store CompanyStore) *Crawler {
 	}
 }
 
+func (c *Crawler) WithClient(client *http.Client) *Crawler {
+	c.client = client
+	return c
+}
+
 // Run ticks every 6h, crawling a bounded batch of companies each time.
 // Blocks until ctx is cancelled.
 func (c *Crawler) Run(ctx context.Context) {
@@ -89,14 +94,14 @@ func (c *Crawler) tick(ctx context.Context) {
 
 	resolved := 0
 	for _, company := range companies {
-		if c.crawlCompany(ctx, company) {
+		if c.CrawlCompany(ctx, company) {
 			resolved++
 		}
 	}
 	slog.InfoContext(ctx, "crawl: batch completed", slog.Int(logger.KeyCount, len(companies)), slog.Int("resolved", resolved))
 }
 
-func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) bool {
+func (c *Crawler) CrawlCompany(ctx context.Context, company dto.Company) bool {
 	log := slog.With(slog.String(logger.KeyCompanySlug, company.Slug), slog.String("domain", company.Domain))
 
 	resolved := false

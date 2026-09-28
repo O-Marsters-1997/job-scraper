@@ -1,4 +1,4 @@
-package scraper
+package scraper_test
 
 import (
 	"context"
@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 )
 
 type boardStoreStub struct {
-	board     dto.BoardPoll
-	completed int
-	failed    int
+	board dto.BoardPoll
+	state string
 }
 
 func (s *boardStoreStub) ListDueBoards(context.Context) ([]dto.BoardPoll, error) {
@@ -24,10 +24,13 @@ func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPol
 	return s.board, nil
 }
 func (s *boardStoreStub) CompleteBoard(context.Context, dto.BoardSnapshot) error {
-	s.completed++
+	s.state = "completed"
 	return nil
 }
-func (s *boardStoreStub) FailBoard(context.Context, dto.BoardPoll) error { s.failed++; return nil }
+func (s *boardStoreStub) FailBoard(context.Context, dto.BoardPoll) error {
+	s.state = "failed"
+	return nil
+}
 
 type boardFetcherStub struct {
 	jobs []dto.Job
@@ -51,21 +54,21 @@ func (i *captureBoardIngester) BulkExport(_ context.Context, jobs []dto.Job) err
 
 func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		fetchErr         error
-		ingestErr        error
-		complete, failed int
+		name      string
+		fetchErr  error
+		ingestErr error
+		want      string
 	}{
-		{"fetch failed", errors.New("partial page"), nil, 0, 1},
-		{"ingest failed", nil, errors.New("persistence failed"), 0, 1},
-		{"complete", nil, nil, 1, 0},
+		{"fetch failed", errors.New("partial page"), nil, "failed"},
+		{"ingest failed", nil, errors.New("persistence failed"), "failed"},
+		{"complete", nil, nil, "completed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", Source: "greenhouse", Token: "acme"}}
-			poller := NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, err: tc.fetchErr}, boardIngesterStub{err: tc.ingestErr})
+			poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, err: tc.fetchErr}, boardIngesterStub{err: tc.ingestErr})
 			_ = poller.PollDue(context.Background())
-			if store.completed != tc.complete || store.failed != tc.failed {
-				t.Fatalf("completed=%d failed=%d, want %d/%d", store.completed, store.failed, tc.complete, tc.failed)
+			if store.state != tc.want {
+				t.Fatalf("board state = %q, want %q", store.state, tc.want)
 			}
 		})
 	}
@@ -74,7 +77,7 @@ func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", CompanySlug: "company-slug", Source: "greenhouse", Token: "regional-token"}}
 	ingester := &captureBoardIngester{}
-	poller := NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1", CompanySlug: "regional-token"}}}, ingester)
+	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1", CompanySlug: "regional-token"}}}, ingester)
 	if err := poller.PollDue(context.Background()); err != nil {
 		t.Fatal(err)
 	}

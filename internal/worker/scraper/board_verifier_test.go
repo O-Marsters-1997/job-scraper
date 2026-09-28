@@ -1,4 +1,4 @@
-package scraper
+package scraper_test
 
 import (
 	"net/http"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
@@ -65,7 +66,7 @@ func TestBuilderGreenhouseSource_FetchPageNotFound(t *testing.T) {
 
 func TestVerifyBoardRejectsUnsupportedBoards(t *testing.T) {
 	for _, pair := range [][2]string{{"missing", "acme"}, {"remoteok", "acme"}, {"greenhouse", ""}, {"greenhouse", "a/b"}} {
-		if err := VerifyBoard(t.Context(), pair[0], pair[1]); err == nil {
+		if err := scraper.VerifyBoard(t.Context(), pair[0], pair[1]); err == nil {
 			t.Errorf("accepted %q %q", pair[0], pair[1])
 		}
 	}

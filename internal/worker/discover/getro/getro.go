@@ -41,6 +41,11 @@ func New() *Harvester {
 	return &Harvester{client: &http.Client{Timeout: 20 * time.Second, Transport: logger.FetchTransport(nil)}, boards: seedBoards}
 }
 
+func (h *Harvester) WithBoards(boards []string) *Harvester {
+	h.boards = boards
+	return h
+}
+
 func (h *Harvester) Name() string { return "getro" }
 
 // Harvest fetches each seed board independently; a fetch or parse failure on

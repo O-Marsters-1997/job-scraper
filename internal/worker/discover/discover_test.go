@@ -1,4 +1,4 @@
-package discover
+package discover_test
 
 import (
 	"context"
@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
+
+const gateKeyPrefix = "harvest:"
 
 type fakeCompanyUpserter struct {
 	mu        sync.Mutex
@@ -59,14 +62,14 @@ func (g *fakeGate) GetLastScraped(_ context.Context, source string) (time.Time, 
 
 type fakeHarvester struct {
 	name      string
-	companies []Company
+	companies []discover.Company
 	err       error
 	calls     int
 }
 
 func (h *fakeHarvester) Name() string { return h.name }
 
-func (h *fakeHarvester) Harvest(_ context.Context) ([]Company, error) {
+func (h *fakeHarvester) Harvest(_ context.Context) ([]discover.Company, error) {
 	h.calls++
 	if h.err != nil {
 		return nil, h.err
@@ -75,15 +78,15 @@ func (h *fakeHarvester) Harvest(_ context.Context) ([]Company, error) {
 }
 
 func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
-	h := &fakeHarvester{name: "yc", companies: []Company{
+	h := &fakeHarvester{name: "yc", companies: []discover.Company{
 		{Name: "Acme Corp", Domain: "acme.com"},
 		{Domain: "onlydomain.io"},
 		{},
 	}}
 	companies := &fakeCompanyUpserter{}
-	r := NewRunner([]Harvester{h}, companies, newFakeGate())
+	r := discover.NewRunner([]discover.Harvester{h}, companies, newFakeGate())
 
-	r.tick(context.Background())
+	r.RunOnce(context.Background())
 
 	got := companies.upserted()
 	if len(got) != 2 {
@@ -103,12 +106,12 @@ func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
 
 func TestRunner_HarvesterErrorSkipsOnlyThatHarvester(t *testing.T) {
 	failing := &fakeHarvester{name: "broken", err: errors.New("boom")}
-	ok := &fakeHarvester{name: "yc", companies: []Company{{Name: "Good Co"}}}
+	ok := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Good Co"}}}
 	companies := &fakeCompanyUpserter{}
 	gate := newFakeGate()
-	r := NewRunner([]Harvester{failing, ok}, companies, gate)
+	r := discover.NewRunner([]discover.Harvester{failing, ok}, companies, gate)
 
-	r.tick(context.Background())
+	r.RunOnce(context.Background())
 
 	got := companies.upserted()
 	if len(got) != 1 || got[0].Name != "Good Co" {
@@ -123,13 +126,13 @@ func TestRunner_HarvesterErrorSkipsOnlyThatHarvester(t *testing.T) {
 }
 
 func TestRunner_RespectsGate(t *testing.T) {
-	h := &fakeHarvester{name: "yc", companies: []Company{{Name: "Acme"}}}
+	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
 	companies := &fakeCompanyUpserter{}
 	gate := newFakeGate()
 	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-time.Hour)
 
-	r := NewRunner([]Harvester{h}, companies, gate)
-	r.tick(context.Background())
+	r := discover.NewRunner([]discover.Harvester{h}, companies, gate)
+	r.RunOnce(context.Background())
 
 	if h.calls != 0 {
 		t.Errorf("want Harvest not called within gate window, got %d calls", h.calls)
@@ -141,13 +144,13 @@ func TestRunner_RespectsGate(t *testing.T) {
 }
 
 func TestRunner_HarvestsWhenGateExpired(t *testing.T) {
-	h := &fakeHarvester{name: "yc", companies: []Company{{Name: "Acme"}}}
+	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
 	companies := &fakeCompanyUpserter{}
 	gate := newFakeGate()
 	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-25 * time.Hour)
 
-	r := NewRunner([]Harvester{h}, companies, gate)
-	r.tick(context.Background())
+	r := discover.NewRunner([]discover.Harvester{h}, companies, gate)
+	r.RunOnce(context.Background())
 
 	if h.calls != 1 {
 		t.Errorf("want Harvest called once after gate expired, got %d calls", h.calls)
