@@ -19,7 +19,7 @@ import (
 var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
-	store         *store.Store
+	store         Store
 	jobs          *Service
 	companies     *companies.Service
 	sourceTargets *sourcetargets.Service
@@ -36,18 +36,56 @@ type ScoringPort interface {
 	store.ScoringWriter
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
-	st := store.New(pool, scoring)
-	cand := candidates.New(st, q)
+// QueuePublisher is the queue as jobsearch's sibling feature services need
+// it: companies and sourcetargets publish worker tasks, candidates enqueues
+// detail-fetch jobs.
+type QueuePublisher interface {
+	Publish(ctx context.Context, task queue.Task) error
+	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
+}
+
+// Store is the full surface jobsearch's own service, ingester and sibling
+// feature services (companies, sourcetargets, candidates) read and write.
+// store.Store satisfies it; jobsearchtest.FakeStore proves it via
+// RunStoreContract (ADR 0012).
+type Store interface {
+	candidates.Store
+	companies.Store
+	companies.SourceTargets
+	sourcetargets.Store
+
+	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
+	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
+	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	NewURLs(ctx context.Context, urls []string) ([]string, error)
+	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
+	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
+}
+
+// Deps are the store and collaborators Build wires into the Module; New
+// builds the real store and calls Build. Tests call Build directly with
+// fakes (ADR 0012).
+type Deps struct {
+	Store   Store
+	Scoring ScoringPort
+	Queue   QueuePublisher
+}
+
+func Build(deps Deps) *Module {
+	cand := candidates.New(deps.Store, deps.Queue)
 	return &Module{
-		store:         st,
-		jobs:          NewService(st),
-		companies:     companies.New(st, st, q),
-		sourceTargets: sourcetargets.New(st, scoring, cand, q),
+		store:         deps.Store,
+		jobs:          NewService(deps.Store),
+		companies:     companies.New(deps.Store, deps.Store, deps.Queue),
+		sourceTargets: sourcetargets.New(deps.Store, deps.Scoring, cand, deps.Queue),
 		sources:       sources.New(),
 		candidates:    cand,
-		ingest:        newIngester(st, st),
+		ingest:        newIngester(deps.Store, deps.Store),
 	}
+}
+
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+	return Build(Deps{Store: store.New(pool, scoring), Scoring: scoring, Queue: q})
 }
 
 // Reconsider re-evaluates the caller's saved candidates against cfg;
