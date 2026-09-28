@@ -12,10 +12,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
-// RunStoreContract proves newStore's jobsearch.Store behaves the same
-// whether it's the fake or the real store (ADR 0012). newStore also returns
-// a userID valid for that store: the real store's user_id columns carry a
-// foreign key, so store_test.go's newStore inserts a real user row.
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) (jobsearch.Store, string)) {
 	t.Helper()
 

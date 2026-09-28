@@ -1,6 +1,3 @@
-// Package jobsearchtest is the jobsearch context's test double: a map-backed
-// fake of jobsearch.Store, proven against the real store by RunStoreContract
-// (ADR 0012).
 package jobsearchtest
 
 import (

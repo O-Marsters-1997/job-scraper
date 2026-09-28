@@ -10,8 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 )
 
-// NoopScoring satisfies jobsearch.ScoringPort with no-op writes and a
-// primed Search Config, in place of a real scoring.Module.
 type NoopScoring struct {
 	configs map[string]dto.SearchConfig
 }
@@ -36,7 +34,6 @@ func (s *NoopScoring) CompanyTracked(context.Context, pgx.Tx, string, string) er
 
 var _ jobsearch.ScoringPort = (*NoopScoring)(nil)
 
-// NoopQueue satisfies jobsearch.QueuePublisher without a real broker.
 type NoopQueue struct{}
 
 func (NoopQueue) Publish(context.Context, queue.Task) error          { return nil }
