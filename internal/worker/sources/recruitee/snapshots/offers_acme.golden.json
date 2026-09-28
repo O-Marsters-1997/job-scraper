@@ -1,0 +1,40 @@
+[
+  {
+    "ID": "",
+    "Title": "Go Engineer",
+    "Location": "London, UK",
+    "URL": "https://acme.recruitee.com/o/go-engineer",
+    "CompanySlug": "acme",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "5001",
+    "ContentFingerprint": "",
+    "Source": "recruitee",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003cp\u003eWe are looking for a Go Engineer.\u003c/p\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  },
+  {
+    "ID": "",
+    "Title": "ML Engineer",
+    "Location": "Remote",
+    "URL": "https://acme.recruitee.com/o/ml-engineer",
+    "CompanySlug": "acme",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "5002",
+    "ContentFingerprint": "",
+    "Source": "recruitee",
+    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003cp\u003eJoin our ML team as an ML Engineer.\u003c/p\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  }
+]

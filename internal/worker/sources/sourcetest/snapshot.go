@@ -1,29 +1,23 @@
-package sources
+// Package sourcetest holds fixture-driven test helpers for source parsers.
+package sourcetest
 
 import (
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
-)
+	"github.com/google/go-cmp/cmp"
 
-// SnapshotSource is implemented by any source that has snapshot-testable parsers.
-// ParseURLs handles list pages; ParseJobDetail handles individual job pages.
-// Both return []dto.Job so all snapshot fixtures share a single JSON schema.
-type SnapshotSource interface {
-	ParseURLs(r io.Reader) ([]dto.Job, error)
-	ParseJobDetail(r io.Reader, url string) (dto.Job, error)
-}
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+)
 
 // RunSnapshotTests runs snapshot tests for every HTML file in snapshots/.
 // list_*.html fixtures parse with ParseURLs; detail_*.html fixtures parse
 // with ParseJobDetail, using the JSON fixture's first entry's URL.
-func RunSnapshotTests(t *testing.T, src SnapshotSource) {
+func RunSnapshotTests(t *testing.T, src sources.SnapshotSource) {
 	t.Helper()
 
 	files, _ := filepath.Glob("snapshots/*.html")
@@ -68,8 +62,8 @@ func RunSnapshotTests(t *testing.T, src SnapshotSource) {
 				}
 			}
 
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("parser output does not match snapshot\ngot  %+v\nwant %+v", got, want)
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("parser output does not match snapshot (-want +got):\n%s", diff)
 			}
 		})
 	}

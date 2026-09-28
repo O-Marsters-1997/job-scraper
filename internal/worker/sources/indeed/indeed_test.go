@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
 // TestSnapshots runs against the placeholder fixtures in snapshots/ — see
 // snapshots/README.md. They are NOT real Indeed captures.
 func TestSnapshots(t *testing.T) {
-	sources.RunSnapshotTests(t, indeed.New(indeed.Config{}))
+	sourcetest.RunSnapshotTests(t, indeed.New(indeed.Config{}))
 }
 
 // TestParseURLs_AntiBotBlock guards the semantic-200 check: BrightData's Web

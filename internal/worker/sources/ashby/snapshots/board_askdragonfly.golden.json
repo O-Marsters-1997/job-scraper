@@ -1,0 +1,40 @@
+[
+  {
+    "ID": "",
+    "Title": "Founding Sales Development Representative",
+    "Location": "London",
+    "URL": "https://jobs.ashbyhq.com/askdragonfly/2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+    "CompanySlug": "askdragonfly",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+    "ContentFingerprint": "",
+    "Source": "ashby",
+    "UpdatedAt": "2026-07-06T10:44:50.212Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003ch2\u003eThis isn't a traditional SDR role\u003c/h2\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  },
+  {
+    "ID": "",
+    "Title": "Senior Product Engineer",
+    "Location": "Tallinn",
+    "URL": "https://jobs.ashbyhq.com/askdragonfly/43376c66-9659-41bf-afba-f527caa2e4f1",
+    "CompanySlug": "askdragonfly",
+    "CompanyID": "",
+    "BoardID": "",
+    "ProviderPostingID": "43376c66-9659-41bf-afba-f527caa2e4f1",
+    "ContentFingerprint": "",
+    "Source": "ashby",
+    "UpdatedAt": "2026-06-24T14:36:34.183Z",
+    "ScrapedAt": "0001-01-01T00:00:00Z",
+    "Description": "\u003cp\u003e\u003cstrong\u003eAbout Us\u003c/strong\u003e\u003c/p\u003e",
+    "SalaryRaw": "",
+    "WorkArrangement": "",
+    "SuitabilityScore": null,
+    "Breakdown": null
+  }
+]
