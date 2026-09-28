@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
 
@@ -60,6 +63,14 @@ func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) s
 		t.Fatalf("insert effect: %v", err)
 	}
 	return id
+}
+
+func TestScoringStoreContract(t *testing.T) {
+	scoringtest.RunStoreContract(t, func(t *testing.T) scoring.Store {
+		t.Helper()
+		st, _ := newStore(t)
+		return st
+	})
 }
 
 func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
@@ -451,6 +462,20 @@ func insertTrackedCompany(t *testing.T, pool *pgxpool.Pool, slug string) (compan
 	return companyID, userID
 }
 
+func insertJobForCompany(t *testing.T, pool *pgxpool.Pool, companySlug, companyID string) string {
+	t.Helper()
+	var jobID string
+	url := fmt.Sprintf("https://example.com/%s/%d", t.Name(), seedCounter.Add(1))
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
+		 VALUES ('Engineer', 'Remote', $1, $2, $3, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
+		url, companySlug, companyID).Scan(&jobID)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	return jobID
+}
+
 func TestJobsChanged_DropsStaleAnswersAndQueuesEffect(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
@@ -546,18 +571,41 @@ func TestJobsClosed_DropsAnswers(t *testing.T) {
 	}
 }
 
+func TestJobsClosed_RollbackKeepsAnswers(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-1")
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, 'fp-1', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
+		t.Fatalf("seed answer: %v", err)
+	}
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.JobsClosed(ctx, tx, []string{jobID}); err != nil {
+		t.Fatalf("JobsClosed: %v", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM option_answers WHERE job_id = $1`, jobID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("answers remaining after rollback = %d, want 1: JobsClosed must run in the caller's own tx", count)
+	}
+}
+
 func TestCompanyTracked_QueuesScoresWithoutAlert(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
 	companyID, userID := insertTrackedCompany(t, pool, "tracked-co")
-	var jobID string
-	err := pool.QueryRow(ctx,
-		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
-		 VALUES ('Engineer', 'Remote', 'https://example.com/tracked-co/1', 'tracked-co', $1, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
-		companyID).Scan(&jobID)
-	if err != nil {
-		t.Fatalf("insert job: %v", err)
-	}
+	jobID := insertJobForCompany(t, pool, "tracked-co", companyID)
 
 	tx, err := pool.Begin(ctx)
 	if err != nil {
@@ -576,6 +624,32 @@ func TestCompanyTracked_QueuesScoresWithoutAlert(t *testing.T) {
 	}
 	if firstDiscovery {
 		t.Fatal("first_discovery = true, want false: tracking must not alert")
+	}
+}
+
+func TestCompanyTracked_RollbackQueuesNothing(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	companyID, userID := insertTrackedCompany(t, pool, "tracked-co")
+	jobID := insertJobForCompany(t, pool, "tracked-co", companyID)
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+		t.Fatalf("CompanyTracked: %v", err)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM effect_outbox WHERE job_id = $1`, jobID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("queued effects after rollback = %d, want 0: CompanyTracked must run in the caller's own tx", count)
 	}
 }
 
@@ -726,5 +800,40 @@ func TestQueueMissingAnswers_QuiescesWhenNoGapOrEffectPending(t *testing.T) {
 	}
 	if n != 0 {
 		t.Fatalf("queued with no gap = %d, want 0", n)
+	}
+}
+
+func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-1")
+	insertEffect(t, pool, jobID, "fp-1")
+
+	const claimers = 8
+	var wins atomic.Int64
+	var notFounds atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(claimers)
+	for range claimers {
+		go func() {
+			defer wg.Done()
+			_, err := st.ClaimAnswerEffect(ctx)
+			switch {
+			case err == nil:
+				wins.Add(1)
+			case errors.Is(err, data.ErrNotFound):
+				notFounds.Add(1)
+			default:
+				t.Errorf("ClaimAnswerEffect: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if wins.Load() != 1 {
+		t.Fatalf("winners = %d, want exactly 1", wins.Load())
+	}
+	if notFounds.Load() != claimers-1 {
+		t.Fatalf("losers = %d, want %d", notFounds.Load(), claimers-1)
 	}
 }

@@ -131,7 +131,9 @@ func countUnknown(rows []dto.ScoreRow) int {
 	return n
 }
 
-func questionHash(question string) string {
+// QuestionHash is the key option_answers caches a bank question's answer
+// under; tests use it to seed and assert against that same key.
+func QuestionHash(question string) string {
 	sum := sha256.Sum256([]byte(question))
 	return hex.EncodeToString(sum[:])
 }
@@ -143,7 +145,7 @@ func pickedQuestionHashes(picks []dto.Pick, byID map[string]dto.ScoringOption) m
 		if !ok || opt.RetiredAt != nil {
 			continue
 		}
-		hashes[questionHash(opt.Question)] = opt.Question
+		hashes[QuestionHash(opt.Question)] = opt.Question
 	}
 	return hashes
 }
