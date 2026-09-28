@@ -11,7 +11,9 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/store"
+	"github.com/ollymarsters/job-scraper/internal/services/trackeddocs/trackeddocstest"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
@@ -20,12 +22,12 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	return store.New(pool), pool
 }
 
-var userSeq atomic.Int64
+var seedCounter atomic.Int64
 
 func insertUser(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
 	var id string
-	username := fmt.Sprintf("user-%s-%d", t.Name(), userSeq.Add(1))
+	username := fmt.Sprintf("user-%s-%d", t.Name(), seedCounter.Add(1))
 	err := pool.QueryRow(context.Background(),
 		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`,
 		username).Scan(&id)
@@ -35,76 +37,7 @@ func insertUser(t *testing.T, pool *pgxpool.Pool) string {
 	return id
 }
 
-func TestAddTrackedDoc(t *testing.T) {
-	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-
-	if err := st.AddTrackedDoc(context.Background(), dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
-		t.Fatal(err)
-	}
-
-	docs, err := st.ListTrackedDocs(context.Background(), userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(docs) != 1 || docs[0].DocID != "docA" {
-		t.Fatalf("docs = %+v, want one doc with DocID=docA", docs)
-	}
-}
-
-func TestAddTrackedDoc_DuplicateIsNoOp(t *testing.T) {
-	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-
-	ctx := context.Background()
-	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
-		t.Fatal(err)
-	}
-
-	docs, err := st.ListTrackedDocs(ctx, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(docs) != 1 {
-		t.Fatalf("expected 1 doc after duplicate add, got %d", len(docs))
-	}
-}
-
-func TestRemoveTrackedDoc(t *testing.T) {
-	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-	ctx := context.Background()
-
-	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.RemoveTrackedDoc(ctx, userID, "docA"); err != nil {
-		t.Fatal(err)
-	}
-
-	docs, err := st.ListTrackedDocs(ctx, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(docs) != 0 {
-		t.Fatalf("expected 0 docs after remove, got %d", len(docs))
-	}
-}
-
-func TestRemoveTrackedDoc_MissingReturnsSentinel(t *testing.T) {
-	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-
-	err := st.RemoveTrackedDoc(context.Background(), userID, "no-such-doc")
-	if !errors.Is(err, store.ErrTrackedDocNotFound) {
-		t.Errorf("expected ErrTrackedDocNotFound, got %v", err)
-	}
-}
-
-func seedDoc(t *testing.T, st *store.Store, pool *pgxpool.Pool, docID string) (userID, trackedDocID string) {
+func seedTrackedDoc(t *testing.T, st *store.Store, pool *pgxpool.Pool, docID string) (userID, trackedDocID string) {
 	t.Helper()
 	ctx := context.Background()
 	userID = insertUser(t, pool)
@@ -124,100 +57,113 @@ func seedDoc(t *testing.T, st *store.Store, pool *pgxpool.Pool, docID string) (u
 	return "", ""
 }
 
-func TestEnsureTabs(t *testing.T) {
+func TestCVTemplatesStoreContract(t *testing.T) {
+	cvtemplatestest.RunStoreContract(t, func(t *testing.T) cvtemplatestest.Fixture {
+		t.Helper()
+		st, pool := newStore(t)
+		userID, tdID := seedTrackedDoc(t, st, pool, "docA")
+		return cvtemplatestest.Fixture{Store: st, UserID: userID, TrackedDocID: tdID}
+	})
+}
+
+func TestTrackedDocsStoreContract(t *testing.T) {
+	trackeddocstest.RunStoreContract(t, func(t *testing.T) trackeddocstest.Fixture {
+		t.Helper()
+		st, pool := newStore(t)
+		return trackeddocstest.Fixture{Store: st, UserID: insertUser(t, pool)}
+	})
+}
+
+func TestAddTrackedDoc_DuplicateIsNoOp(t *testing.T) {
+	st, pool := newStore(t)
+	userID := insertUser(t, pool)
 	ctx := context.Background()
 
-	t.Run("inserts default-visible rows", func(t *testing.T) {
-		st, pool := newStore(t)
-		_, tdID := seedDoc(t, st, pool, "docA")
+	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
+		t.Fatal(err)
+	}
 
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1", "t2"}, []string{"Tab 1", "Tab 2"}); err != nil {
+	docs, err := st.ListTrackedDocs(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 doc after duplicate add, got %d", len(docs))
+	}
+}
+
+func TestRemoveTrackedDoc(t *testing.T) {
+	t.Run("removes the doc", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := insertUser(t, pool)
+		ctx := context.Background()
+		if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
 			t.Fatal(err)
 		}
-		rows, err := st.ListTabs(ctx, tdID)
+
+		if err := st.RemoveTrackedDoc(ctx, userID, "docA"); err != nil {
+			t.Fatal(err)
+		}
+
+		docs, err := st.ListTrackedDocs(ctx, userID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(rows) != 2 {
-			t.Fatalf("expected 2 rows, got %d", len(rows))
-		}
-		for _, r := range rows {
-			if !r.Visible {
-				t.Errorf("tab %q should default to visible", r.TabID)
-			}
+		if len(docs) != 0 {
+			t.Fatalf("expected 0 docs after remove, got %d", len(docs))
 		}
 	})
 
-	t.Run("is idempotent", func(t *testing.T) {
+	t.Run("missing doc returns sentinel", func(t *testing.T) {
 		st, pool := newStore(t)
-		_, tdID := seedDoc(t, st, pool, "docA")
+		userID := insertUser(t, pool)
 
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1", "t2"}, []string{"Tab 1", "Tab 2"}); err != nil {
-			t.Fatal(err)
-		}
-		rows, err := st.ListTabs(ctx, tdID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(rows) != 2 {
-			t.Fatalf("expected 2 rows, got %d", len(rows))
-		}
-	})
-
-	t.Run("does not un-hide a previously hidden tab", func(t *testing.T) {
-		st, pool := newStore(t)
-		userID, tdID := seedDoc(t, st, pool, "docA")
-
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
-			t.Fatal(err)
-		}
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-		rows, err := st.ListTabs(ctx, tdID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, r := range rows {
-			if r.TabID == "t1" && r.Visible {
-				t.Error("EnsureTabs must not un-hide a hidden tab")
-			}
-		}
-	})
-
-	t.Run("no-op for empty tabIDs", func(t *testing.T) {
-		st, pool := newStore(t)
-		_, tdID := seedDoc(t, st, pool, "docA")
-
-		if err := st.EnsureTabs(ctx, tdID, nil, nil); err != nil {
-			t.Fatal(err)
-		}
-		rows, err := st.ListTabs(ctx, tdID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(rows) != 0 {
-			t.Fatalf("expected 0 rows, got %d", len(rows))
+		err := st.RemoveTrackedDoc(context.Background(), userID, "no-such-doc")
+		if !errors.Is(err, store.ErrTrackedDocNotFound) {
+			t.Errorf("expected ErrTrackedDocNotFound, got %v", err)
 		}
 	})
 }
 
-func TestHideTab(t *testing.T) {
+func TestEnsureTabsOnConflict_DoesNotUnhideAPreviouslyHiddenTab(t *testing.T) {
+	ctx := context.Background()
+	st, pool := newStore(t)
+	userID, tdID := seedTrackedDoc(t, st, pool, "docA")
+
+	if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := st.ListTabs(ctx, tdID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.TabID == "t1" && r.Visible {
+			t.Error("EnsureTabs must not un-hide a hidden tab")
+		}
+	}
+}
+
+func TestHideShowTab(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("sets visible to false", func(t *testing.T) {
+	t.Run("hide then show restores visibility", func(t *testing.T) {
 		st, pool := newStore(t)
-		userID, tdID := seedDoc(t, st, pool, "docA")
-
+		userID, tdID := seedTrackedDoc(t, st, pool, "docA")
 		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
 			t.Fatal(err)
 		}
+
 		if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
 			t.Fatal(err)
 		}
@@ -230,53 +176,11 @@ func TestHideTab(t *testing.T) {
 				t.Error("tab t1 should be hidden after HideTab")
 			}
 		}
-	})
 
-	t.Run("returns sentinel for missing tab", func(t *testing.T) {
-		st, pool := newStore(t)
-		userID, tdID := seedDoc(t, st, pool, "docA")
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-
-		err := st.HideTab(ctx, userID, "docA", "t-missing")
-		if !errors.Is(err, store.ErrTabNotFound) {
-			t.Errorf("expected ErrTabNotFound, got %v", err)
-		}
-	})
-
-	t.Run("ownership: user B cannot hide user A's tab", func(t *testing.T) {
-		st, pool := newStore(t)
-		_, tdID := seedDoc(t, st, pool, "docA")
-		userB := insertUser(t, pool)
-
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-		err := st.HideTab(ctx, userB, "docA", "t1")
-		if !errors.Is(err, store.ErrTabNotFound) {
-			t.Errorf("expected ErrTabNotFound, got %v", err)
-		}
-	})
-}
-
-func TestShowTab(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("restores a hidden tab", func(t *testing.T) {
-		st, pool := newStore(t)
-		userID, tdID := seedDoc(t, st, pool, "docA")
-
-		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
-			t.Fatal(err)
-		}
 		if err := st.ShowTab(ctx, userID, "docA", "t1"); err != nil {
 			t.Fatal(err)
 		}
-		rows, err := st.ListTabs(ctx, tdID)
+		rows, err = st.ListTabs(ctx, tdID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,16 +191,19 @@ func TestShowTab(t *testing.T) {
 		}
 	})
 
-	t.Run("returns sentinel for missing tab", func(t *testing.T) {
+	t.Run("ownership: user B cannot hide or show user A's tab", func(t *testing.T) {
 		st, pool := newStore(t)
-		userID, tdID := seedDoc(t, st, pool, "docA")
+		_, tdID := seedTrackedDoc(t, st, pool, "docA")
+		userB := insertUser(t, pool)
 		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
 			t.Fatal(err)
 		}
 
-		err := st.ShowTab(ctx, userID, "docA", "t-missing")
-		if !errors.Is(err, store.ErrTabNotFound) {
-			t.Errorf("expected ErrTabNotFound, got %v", err)
+		if err := st.HideTab(ctx, userB, "docA", "t1"); !errors.Is(err, store.ErrTabNotFound) {
+			t.Errorf("HideTab: expected ErrTabNotFound, got %v", err)
+		}
+		if err := st.ShowTab(ctx, userB, "docA", "t1"); !errors.Is(err, store.ErrTabNotFound) {
+			t.Errorf("ShowTab: expected ErrTabNotFound, got %v", err)
 		}
 	})
 }
