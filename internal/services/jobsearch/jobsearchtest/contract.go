@@ -163,6 +163,26 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("restarting a failed run clears its error", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+		started, err := st.StartSourceTargetRun(ctx, target.ID)
+		if err != nil {
+			t.Fatalf("StartSourceTargetRun(...) = %v", err)
+		}
+		if _, err := st.TransitionSourceTargetRun(ctx, target.ID, started.RunID, "failed", "boom"); err != nil {
+			t.Fatalf("TransitionSourceTargetRun(...) = %v", err)
+		}
+		restarted, err := st.StartSourceTargetRun(ctx, target.ID)
+		if err != nil || restarted.RunStatus != "queued" || restarted.LastRunError != "" {
+			t.Fatalf("StartSourceTargetRun(...) = %+v, %v, want queued with no error", restarted, err)
+		}
+	})
+
 	t.Run("update then delete a source target", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

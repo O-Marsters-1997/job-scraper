@@ -8,6 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
@@ -26,7 +27,7 @@ func (q *failingJobQueue) EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob)
 func TestCaptureRetriesAfterQueueFailure(t *testing.T) {
 	ctx := context.Background()
 	q := &failingJobQueue{Recorder: queuetest.NewRecorder(), err: errors.New("queue unavailable")}
-	svc := newService(newFakeStore(), q)
+	svc := newService(jobsearchtest.NewFakeStore(), q)
 	target := dto.SourceTarget{ID: "target-1", UserID: "user-1", Source: "wis"}
 	card := dto.Job{URL: "https://example.com/1", Title: "Engineer"}
 	config := dto.SearchConfig{UserID: target.UserID, UpdatedAt: time.Now().UTC()}
@@ -46,7 +47,7 @@ func TestCaptureRetriesAfterQueueFailure(t *testing.T) {
 func TestCaptureRetainsRejectedCardAndReconsiderationQueuesOnce(t *testing.T) {
 	ctx := context.Background()
 	q := queuetest.NewRecorder()
-	svc := newService(newFakeStore(), q)
+	svc := newService(jobsearchtest.NewFakeStore(), q)
 	target := dto.SourceTarget{ID: "target-1", UserID: "user-1", Source: "wis"}
 	card := dto.Job{URL: "https://example.com/1", Title: "Senior Engineer"}
 	first := dto.SearchConfig{UserID: target.UserID, ExcludedTitleKeywords: []string{"senior"}, UpdatedAt: time.Now().UTC()}

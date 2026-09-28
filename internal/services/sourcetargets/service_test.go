@@ -3,8 +3,6 @@ package sourcetargets_test
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -23,157 +21,14 @@ type failingPublisher struct {
 
 func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.err }
 
-var errSourceTargetExists = apperr.Conflict("source target already exists")
-
 type fakeSearchConfigReader struct{}
 
 func (fakeSearchConfigReader) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
 	return dto.SearchConfig{}, data.ErrNotFound
 }
 
-type fakeStore struct {
-	*jobsearchtest.FakeStore
-	mu        sync.Mutex
-	targets   map[string]dto.SourceTarget
-	CreateErr error
-}
-
-func newFakeStore() *fakeStore {
-	return &fakeStore{FakeStore: jobsearchtest.NewFakeStore(), targets: make(map[string]dto.SourceTarget)}
-}
-
-func (f *fakeStore) GetVerifiedBoardID(context.Context, string, string) (string, error) {
-	return "", apperr.NotFound("board not verified")
-}
-
-func (f *fakeStore) create(userID, source, value string, enabled bool, withRun bool) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.CreateErr != nil {
-		return dto.SourceTarget{}, f.CreateErr
-	}
-	for _, t := range f.targets {
-		if t.UserID == userID && t.Source == source && t.Value == value {
-			return dto.SourceTarget{}, errSourceTargetExists
-		}
-	}
-	target := dto.SourceTarget{
-		ID: fmt.Sprintf("target-%d", len(f.targets)+1), UserID: userID, Source: source, Value: value, Enabled: enabled,
-	}
-	if withRun {
-		target.RunID = "run-1"
-		target.RunStatus = "queued"
-	}
-	f.targets[target.ID] = target
-	return target, nil
-}
-
-func (f *fakeStore) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool, _ map[string]string) (dto.SourceTarget, error) {
-	return f.create(userID, source, value, enabled, false)
-}
-
-func (f *fakeStore) CreateSourceTargetWithRun(_ context.Context, userID, source, value string, enabled bool, _ map[string]string) (dto.SourceTarget, error) {
-	return f.create(userID, source, value, enabled, true)
-}
-
-func (f *fakeStore) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target, ok := f.targets[id]
-	if !ok || target.UserID != userID {
-		return dto.SourceTarget{}, apperr.NotFound("not found")
-	}
-	if enabled != nil {
-		target.Enabled = *enabled
-	}
-	if checkIntervalMinutes != nil {
-		target.CheckIntervalMinutes = *checkIntervalMinutes
-	}
-	f.targets[id] = target
-	return target, nil
-}
-
-func (f *fakeStore) DeleteSourceTarget(_ context.Context, id, userID string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.targets, id)
-	return nil
-}
-
-func (f *fakeStore) ListSourceTargetsByUser(_ context.Context, userID string) ([]dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []dto.SourceTarget
-	for _, t := range f.targets {
-		if t.UserID == userID {
-			out = append(out, t)
-		}
-	}
-	return out, nil
-}
-
-func (f *fakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target, ok := f.targets[id]
-	if !ok {
-		return dto.SourceTarget{}, apperr.NotFound("not found")
-	}
-	target.RunID = "run-" + id
-	target.RunStatus = "queued"
-	target.LastRunError = ""
-	target.Enabled = true
-	f.targets[id] = target
-	return target, nil
-}
-
-func (f *fakeStore) GetSourceTarget(_ context.Context, id string) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target, ok := f.targets[id]
-	if !ok {
-		return dto.SourceTarget{}, apperr.NotFound("not found")
-	}
-	return target, nil
-}
-
-func (f *fakeStore) TransitionSourceTargetRun(_ context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target, ok := f.targets[id]
-	if !ok || target.RunID != runID {
-		return dto.SourceTarget{}, apperr.NotFound("not found")
-	}
-	target.RunStatus, target.LastRunError = status, runError
-	f.targets[id] = target
-	return target, nil
-}
-
-func (f *fakeStore) ListRecoverableSourceTargets(context.Context) ([]dto.SourceTarget, error) {
-	return nil, nil
-}
-
-func (f *fakeStore) ClaimRecoverableSourceTarget(_ context.Context, id, runID string) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target, ok := f.targets[id]
-	if !ok || target.RunID != runID {
-		return dto.SourceTarget{}, apperr.NotFound("not found")
-	}
-	return target, nil
-}
-
-func (f *fakeStore) forceRunState(id, status, runError string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	target := f.targets[id]
-	target.RunStatus = status
-	target.LastRunError = runError
-	f.targets[id] = target
-}
-
 type failingCandidateList struct {
-	*fakeStore
+	*jobsearchtest.FakeStore
 	err error
 }
 
@@ -181,12 +36,12 @@ func (f failingCandidateList) ListForUser(context.Context, string, string, int) 
 	return nil, f.err
 }
 
-func newService(targets *fakeStore, q sourcetargets.QueuePublisher) *sourcetargets.Service {
+func newService(targets sourcetargets.Store, q sourcetargets.QueuePublisher) *sourcetargets.Service {
 	return sourcetargets.New(targets, fakeSearchConfigReader{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
-	svc := newService(newFakeStore(), queuetest.NewRecorder())
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -194,7 +49,7 @@ func TestCreate_RequiresSourceAndValue(t *testing.T) {
 }
 
 func TestCreate_RejectsUnsupportedSource(t *testing.T) {
-	svc := newService(newFakeStore(), queuetest.NewRecorder())
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "unknown-ats", Value: "x"})
 	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
 		t.Fatalf("err = %v, want 400 apperr", err)
@@ -203,7 +58,7 @@ func TestCreate_RejectsUnsupportedSource(t *testing.T) {
 
 func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 	q := queuetest.NewRecorder()
-	svc := newService(newFakeStore(), q)
+	svc := newService(jobsearchtest.NewFakeStore(), q)
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -217,7 +72,7 @@ func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 }
 
 func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
-	svc := newService(newFakeStore(), failingPublisher{Recorder: queuetest.NewRecorder(), err: errors.New("queue unavailable")})
+	svc := newService(jobsearchtest.NewFakeStore(), failingPublisher{Recorder: queuetest.NewRecorder(), err: errors.New("queue unavailable")})
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -228,16 +83,17 @@ func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 }
 
 func TestCreate_PropagatesConflict(t *testing.T) {
-	store := newFakeStore()
-	store.CreateErr = errSourceTargetExists
-	svc := newService(store, queuetest.NewRecorder())
-	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})
-	if !errors.Is(err, errSourceTargetExists) {
-		t.Fatalf("err = %v, want ErrSourceTargetExists", err)
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
+	in := dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme", Enabled: boolPtr(false)}
+	if _, err := svc.Create(context.Background(), "user-1", in); err != nil {
+		t.Fatalf("first Create() err = %v", err)
+	}
+	if _, err := svc.Create(context.Background(), "user-1", in); wantStatus(t, err) != 409 {
+		t.Fatalf("duplicate Create() err = %v, want 409", err)
 	}
 }
 
-func createGreenhouseTarget(s *fakeStore) string {
+func createGreenhouseTarget(s *jobsearchtest.FakeStore) string {
 	created, _ := s.CreateSourceTarget(context.Background(), "user-1", "greenhouse", "acme", true, nil)
 	return created.ID
 }
@@ -249,7 +105,7 @@ func TestUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
 		in         dto.UpdateSourceTargetInput
-		targetID   func(*fakeStore) string
+		targetID   func(*jobsearchtest.FakeStore) string
 		wantStatus int
 	}{
 		{
@@ -277,14 +133,14 @@ func TestUpdate(t *testing.T) {
 		{
 			name:       "not found",
 			in:         dto.UpdateSourceTargetInput{Enabled: boolPtr(false)},
-			targetID:   func(*fakeStore) string { return "missing-id" },
+			targetID:   func(*jobsearchtest.FakeStore) string { return "missing-id" },
 			wantStatus: 404,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := newFakeStore()
+			store := jobsearchtest.NewFakeStore()
 			id := tt.targetID(store)
 			svc := newService(store, queuetest.NewRecorder())
 
@@ -304,20 +160,28 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
-	store := newFakeStore()
+	store := jobsearchtest.NewFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := newService(store, queuetest.NewRecorder())
+	card := dto.Job{URL: "https://example.com/1", Title: "Engineer"}
+	if _, err := store.SaveCards(context.Background(), created, []dto.Job{card}); err != nil {
+		t.Fatalf("SaveCards() err = %v", err)
+	}
+	q := queuetest.NewRecorder()
+	svc := newService(store, q)
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if err != nil {
 		t.Fatalf("Update() err = %v", err)
 	}
+	if jobs := q.Jobs(); len(jobs) != 1 || jobs[0].URL != card.URL {
+		t.Fatalf("queued after enabling = %+v, want one job for %s", jobs, card.URL)
+	}
 }
 
 func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
-	store := newFakeStore()
+	store := jobsearchtest.NewFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := sourcetargets.New(failingCandidateList{fakeStore: store, err: errors.New("boom")}, fakeSearchConfigReader{}, queuetest.NewRecorder())
+	svc := sourcetargets.New(failingCandidateList{FakeStore: store, err: errors.New("boom")}, fakeSearchConfigReader{}, queuetest.NewRecorder())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if status, ok := apperr.StatusFor(err); !ok || status != 503 {
@@ -326,7 +190,7 @@ func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 }
 
 func TestScrape(t *testing.T) {
-	store := newFakeStore()
+	store := jobsearchtest.NewFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
 	svc := newService(store, queuetest.NewRecorder())
 
@@ -357,9 +221,12 @@ func wantStatus(t *testing.T, err error) int {
 }
 
 func TestScrape_RetriesFailedRun(t *testing.T) {
-	store := newFakeStore()
+	store := jobsearchtest.NewFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
-	store.forceRunState(created.ID, "failed", "previous run failed")
+	started, _ := store.StartSourceTargetRun(context.Background(), created.ID)
+	if _, err := store.TransitionSourceTargetRun(context.Background(), created.ID, started.RunID, "failed", "previous run failed"); err != nil {
+		t.Fatalf("TransitionSourceTargetRun() err = %v", err)
+	}
 	q := queuetest.NewRecorder()
 	svc := newService(store, q)
 
