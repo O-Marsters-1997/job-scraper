@@ -1,11 +1,7 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { disconnectGoogle, fetchGoogleStatus } from "../api/google";
 import { keys } from "../api/keys";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const googleStatusQueryOptions = queryOptions({
 	queryKey: keys.google,
@@ -18,9 +14,5 @@ export function useGoogleStatus() {
 }
 
 export function useDisconnectGoogle() {
-	const qc = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: disconnectGoogle,
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.google }),
-	}));
+	return useInvalidatingMutation(disconnectGoogle, [keys.google]);
 }

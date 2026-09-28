@@ -1,53 +1,65 @@
 package scraper
 
 import (
-	"context"
-	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
-type pageSourceFunc func(context.Context, string) (sources.Page, error)
-
-func (f pageSourceFunc) FetchPage(ctx context.Context, cursor string) (sources.Page, error) {
-	return f(ctx, cursor)
+type redirectTransport struct {
+	target *url.URL
 }
 
-func TestVerifyPagesEnumeratesSynchronously(t *testing.T) {
-	var cursors []string
-	err := verifyPages(t.Context(), pageSourceFunc(func(_ context.Context, cursor string) (sources.Page, error) {
-		cursors = append(cursors, cursor)
-		if cursor == "" {
-			return sources.Page{NextCursor: "second"}, nil
-		}
-		return sources.Page{}, nil
+func (t redirectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.URL.Scheme = t.target.Scheme
+	r.URL.Host = t.target.Host
+	return http.DefaultTransport.RoundTrip(r)
+}
+
+func TestBuilderGreenhouseSource_FetchPage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"jobs":[{"id":1,"title":"Engineer","absolute_url":"https://boards.greenhouse.io/acme/jobs/1"}]}`))
 	}))
-	if err != nil || len(cursors) != 2 || cursors[0] != "" || cursors[1] != "second" {
-		t.Fatalf("cursors = %v, err = %v", cursors, err)
+	t.Cleanup(server.Close)
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src, ok := builder.BuildSource(dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true})
+	if !ok {
+		t.Fatal("expected greenhouse to build")
+	}
+	src.(interface{ Client() *http.Client }).Client().Transport = redirectTransport{target: serverURL}
+
+	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
+		t.Fatalf("FetchPage() = %v, want nil", err)
 	}
 }
 
-func TestVerifyPagesStopsOnError(t *testing.T) {
-	want := errors.New("fetch failed")
-	err := verifyPages(t.Context(), pageSourceFunc(func(context.Context, string) (sources.Page, error) {
-		return sources.Page{}, want
+func TestBuilderGreenhouseSource_FetchPageNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
 	}))
-	if !errors.Is(err, want) {
-		t.Fatalf("error = %v", err)
+	t.Cleanup(server.Close)
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
 	}
-}
 
-func TestVerifyPagesStopsOnCancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	requests := 0
-	err := verifyPages(ctx, pageSourceFunc(func(context.Context, string) (sources.Page, error) {
-		requests++
-		cancel()
-		return sources.Page{NextCursor: "again"}, nil
-	}))
-	if !errors.Is(err, context.Canceled) || requests != 1 {
-		t.Fatalf("requests = %d, err = %v", requests, err)
+	src, ok := builder.BuildSource(dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true})
+	if !ok {
+		t.Fatal("expected greenhouse to build")
+	}
+	src.(interface{ Client() *http.Client }).Client().Transport = redirectTransport{target: serverURL}
+
+	if _, _, err := src.FetchPage(t.Context(), ""); err == nil {
+		t.Fatal("FetchPage() = nil, want error for 404")
 	}
 }
 

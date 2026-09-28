@@ -8,5 +8,5 @@ import (
 )
 
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, wis.New(wis.Config{}))
+	sourcetest.RunSnapshotTests(t, wis.New(wis.Search{}))
 }

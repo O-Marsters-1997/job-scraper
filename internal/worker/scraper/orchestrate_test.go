@@ -26,9 +26,6 @@ type pageSourceStub struct {
 }
 
 func (s pageSourceStub) Cfg() sources.Config { return sources.Config{Name: "wis"} }
-func (s pageSourceStub) Iterate(context.Context, func(context.Context, []dto.Job) (bool, error)) error {
-	return nil
-}
 func (s pageSourceStub) FetchPage(context.Context, string) ([]dto.Job, string, error) {
 	return []dto.Job{{URL: s.url}}, "2:5", nil
 }
@@ -43,7 +40,7 @@ func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	ctx := context.Background()
 	url := "https://workinstartups.com/job/1"
 	orch := New(knownURLs{url}).
-		WithSourceBuilder(func(dto.SourceTarget) []sources.Source { return []sources.Source{pageSourceStub{url: url}} }).
+		WithSourceBuilder(func(dto.SourceTarget) (sources.Source, bool) { return pageSourceStub{url: url}, true }).
 		WithCandidates(emptyCandidateCapturer{})
 	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")
 	if err != nil || next != "" {

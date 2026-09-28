@@ -19,9 +19,9 @@ import (
 )
 
 var parsers = map[string]sources.SnapshotSource{
-	"wis":      wis.New(wis.Config{}),
-	"linkedin": linkedin.New(linkedin.Config{}),
-	"indeed":   indeed.New(indeed.Config{}),
+	"wis":      wis.New(wis.Search{}),
+	"linkedin": linkedin.New(linkedin.Search{}),
+	"indeed":   indeed.New(""),
 }
 
 func main() {

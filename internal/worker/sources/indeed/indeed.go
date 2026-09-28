@@ -37,53 +37,45 @@ const (
 // (see package doc) — refine once a real empty-search fixture is captured.
 var noResultsRe = regexp.MustCompile(`(?i)did not match any jobs|no jobs found|couldn't find any jobs`)
 
-type Config struct {
-	// URLs are the full Indeed search-result URLs configured per source target
-	// (kindURL in the registry — each target's value is already a complete
-	// search URL, not a token to build one from).
-	URLs []string
-}
-
 type Scraper struct {
 	sources.PaginatedBase
-	urls []string
+	searchURL string
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(cfg Config) *Scraper {
+// New builds an Indeed source for one full search-result URL (each target's
+// value is already a complete search URL, not a token to build one from).
+func New(searchURL string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:     "indeed",
 			UseProxy: true,
 		}),
-		urls: cfg.URLs,
+		searchURL: searchURL,
 	}
 }
 
-// Iterate fetches each configured search URL once; it has no offset
-// pagination because Indeed's total-result-count selector is unverified
-// without a live fetch (see package doc).
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	for _, searchURL := range s.urls {
-		body, err := s.Get(ctx, searchURL)
-		if err != nil {
-			return fmt.Errorf("indeed: fetch %s: %w", searchURL, err)
-		}
-
-		jobs, err := ParseURLs(bytes.NewReader(body))
-		if err != nil {
-			return fmt.Errorf("indeed: parse %s: %w", searchURL, err)
-		}
-
-		stop, err := fn(ctx, jobs)
-		if err != nil || stop {
-			return err
-		}
+// FetchPage has no offset pagination because Indeed's total-result-count
+// selector is unverified without a live fetch (see package doc); it fetches
+// the one configured search URL and always returns next="".
+func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
+	if cursor != "" {
+		return nil, "", fmt.Errorf("indeed: unexpected cursor %q", cursor)
 	}
-	return nil
+	body, err := s.Get(ctx, s.searchURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("indeed: fetch %s: %w", s.searchURL, err)
+	}
+
+	jobs, err := ParseURLs(bytes.NewReader(body))
+	if err != nil {
+		return nil, "", fmt.Errorf("indeed: parse %s: %w", s.searchURL, err)
+	}
+
+	return jobs, "", nil
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {

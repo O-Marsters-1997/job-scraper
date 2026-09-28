@@ -1,10 +1,7 @@
-import {
-	createMutation,
-	createQuery,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import { fetchScoringStatus, recomputeScores } from "../api/scores";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export function useScoringStatus() {
 	return createQuery(() => ({
@@ -14,12 +11,8 @@ export function useScoringStatus() {
 }
 
 export function useRecomputeScores() {
-	const client = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: recomputeScores,
-		onSuccess: () => {
-			client.invalidateQueries({ queryKey: keys.jobs.all });
-			client.invalidateQueries({ queryKey: keys.scores.all });
-		},
-	}));
+	return useInvalidatingMutation(recomputeScores, [
+		keys.jobs.all,
+		keys.scores.all,
+	]);
 }

@@ -1,9 +1,4 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	addCompany,
 	addCompanyBoard,
@@ -13,6 +8,7 @@ import {
 } from "../api/companies";
 import { keys } from "../api/keys";
 import type { AddCompanyPayload } from "../types/company";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const companiesQueryOptions = queryOptions({
 	queryKey: keys.companies.all,
@@ -36,39 +32,23 @@ export function useCompanyBoards(
 }
 
 export function useAddCompanyBoard() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({
-			id,
-			url,
-			confirm,
-		}: {
-			id: string;
-			url: string;
-			confirm: boolean;
-		}) => addCompanyBoard(id, url, confirm),
-		onSuccess: (board) =>
-			queryClient.invalidateQueries({
-				queryKey: keys.companies.boards(board.CompanyID),
-			}),
-	}));
+	return useInvalidatingMutation(
+		({ id, url, confirm }: { id: string; url: string; confirm: boolean }) =>
+			addCompanyBoard(id, url, confirm),
+		(board) => [keys.companies.boards(board.CompanyID)],
+	);
 }
 
 export function useAddCompany() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (payload: AddCompanyPayload) => addCompany(payload),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.companies.all });
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
-		},
-	}));
+	return useInvalidatingMutation(
+		(payload: AddCompanyPayload) => addCompany(payload),
+		[keys.companies.all, keys.sourceTargets],
+	);
 }
 
 export function useSetCompanyTracking() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({
+	return useInvalidatingMutation(
+		({
 			id,
 			enabled,
 			checkIntervalMinutes,
@@ -77,9 +57,6 @@ export function useSetCompanyTracking() {
 			enabled: boolean;
 			checkIntervalMinutes?: number;
 		}) => setCompanyTracking(id, enabled, checkIntervalMinutes),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.companies.all });
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
-		},
-	}));
+		[keys.companies.all, keys.sourceTargets],
+	);
 }

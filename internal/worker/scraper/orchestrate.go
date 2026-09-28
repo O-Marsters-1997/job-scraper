@@ -30,7 +30,7 @@ type CandidateCapturer interface {
 type Orchestrator struct {
 	db          URLChecker
 	cfgDB       SearchConfigReader
-	buildTarget func(dto.SourceTarget) []sources.Source
+	buildTarget func(dto.SourceTarget) (sources.Source, bool)
 	candidates  CandidateCapturer
 }
 
@@ -38,7 +38,7 @@ func New(db URLChecker) *Orchestrator {
 	return &Orchestrator{db: db}
 }
 
-func (o *Orchestrator) WithSourceBuilder(build func(dto.SourceTarget) []sources.Source) *Orchestrator {
+func (o *Orchestrator) WithSourceBuilder(build func(dto.SourceTarget) (sources.Source, bool)) *Orchestrator {
 	o.buildTarget = build
 	return o
 }
@@ -80,26 +80,15 @@ func (o *Orchestrator) ScrapePage(ctx context.Context, target dto.SourceTarget, 
 	if o.buildTarget == nil || o.candidates == nil {
 		return "", fmt.Errorf("discovery page processor unavailable")
 	}
-	srcs := o.buildTarget(target)
-	if len(srcs) != 1 {
-		return "", fmt.Errorf("expected one source for target %s", target.ID)
+	src, ok := o.buildTarget(target)
+	if !ok {
+		return "", fmt.Errorf("unsupported source for target %s", target.ID)
 	}
 	config, err := o.searchConfig(ctx, target)
 	if err != nil {
 		return "", err
 	}
-	var cards []dto.Job
-	var next string
-	if fetcher, ok := srcs[0].(sources.PageFetcher); ok {
-		cards, next, err = fetcher.FetchPage(ctx, cursor)
-	} else if cursor == "" {
-		err = srcs[0].Iterate(ctx, func(_ context.Context, page []dto.Job) (bool, error) {
-			cards = append(cards, page...)
-			return false, nil
-		})
-	} else {
-		return "", fmt.Errorf("source %s has no page cursor", target.Source)
-	}
+	cards, next, err := src.FetchPage(ctx, cursor)
 	if err != nil {
 		return "", err
 	}

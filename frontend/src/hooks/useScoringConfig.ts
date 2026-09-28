@@ -1,12 +1,8 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import { fetchScoringConfig, updateScoringConfig } from "../api/scoringConfig";
 import type { ScoringConfigInput } from "../types/scoringConfig";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const scoringConfigQueryOptions = queryOptions({
 	queryKey: keys.scoringConfig,
@@ -18,12 +14,8 @@ export function useScoringConfig() {
 }
 
 export function useUpdateScoringConfig() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (payload: ScoringConfigInput) => updateScoringConfig(payload),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.scoringConfig });
-			queryClient.invalidateQueries({ queryKey: keys.scores.status() });
-		},
-	}));
+	return useInvalidatingMutation(
+		(payload: ScoringConfigInput) => updateScoringConfig(payload),
+		[keys.scoringConfig, keys.scores.status()],
+	);
 }

@@ -10,21 +10,23 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
-// Config holds the keywords to filter the Remotive feed by, one per enabled
-// remotive target's value.
-type Config struct {
-	Keywords []string
-}
-
-func New(cfg Config) *sources.BoardSource {
-	return sources.NewBoardSource([]string{""}, sources.BoardSpec{
+// New builds a Remotive source filtered to one keyword (empty means no filter).
+func New(keyword string) *sources.BoardSource {
+	return sources.NewBoardSource("", sources.BoardSpec{
 		Name: "remotive",
 		URL:  func(string) string { return "https://remotive.com/api/remote-jobs" },
 		Parse: func(body []byte, _ string) ([]dto.Job, error) {
 			jobs, err := parse(body)
-			return sources.FilterByKeywords(jobs, cfg.Keywords), err
+			return sources.FilterByKeywords(jobs, keywordList(keyword)), err
 		},
 	})
+}
+
+func keywordList(keyword string) []string {
+	if keyword == "" {
+		return nil
+	}
+	return []string{keyword}
 }
 
 // feedResponse mirrors the Remotive public jobs API response.

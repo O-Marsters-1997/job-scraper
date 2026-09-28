@@ -8,7 +8,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
-func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
+func TestBuildSource_EveryRegisteredSourceInstantiates(t *testing.T) {
 	for _, info := range sourcespec.Sources() {
 		target := dto.SourceTarget{Source: info.Name, Enabled: true}
 		switch info.Kind {
@@ -22,138 +22,55 @@ func TestBuildSources_EveryRegisteredSourceInstantiates(t *testing.T) {
 			t.Fatalf("source %q has unknown kind %q", info.Name, info.Kind)
 		}
 
-		found := false
-		for _, s := range builder.BuildSources([]dto.SourceTarget{target}) {
-			if s.Cfg().Name == info.Name {
-				found = true
-			}
-		}
-		if !found {
-			t.Errorf("source %q (kind %q) is registered but not wired into BuildSources", info.Name, info.Kind)
+		src, ok := builder.BuildSource(target)
+		if !ok || src.Cfg().Name != info.Name {
+			t.Errorf("source %q (kind %q) is registered but not wired into BuildSource", info.Name, info.Kind)
 		}
 	}
 }
 
-func TestBuildSources_WisIncludedWhenTargetPresent(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "wis", Value: "product engineer", Filters: map[string]string{"region": "uk"}, Enabled: true},
-	}
-	srcs := builder.BuildSources(targets)
-	found := false
-	for _, s := range srcs {
-		if s.Cfg().Name == "wis" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected wis source when wis target is present")
+func TestBuildSource_Wis(t *testing.T) {
+	target := dto.SourceTarget{Source: "wis", Value: "product engineer", Filters: map[string]string{"region": "uk"}, Enabled: true}
+	src, ok := builder.BuildSource(target)
+	if !ok || src.Cfg().Name != "wis" {
+		t.Error("expected a wis source")
 	}
 }
 
-func TestBuildSources_WisExcludedWhenNoTarget(t *testing.T) {
-	srcs := builder.BuildSources(nil)
-	for _, s := range srcs {
-		if s.Cfg().Name == "wis" {
-			t.Error("expected wis to be absent when no wis targets configured")
-		}
+func TestBuildSource_BoardSource(t *testing.T) {
+	target := dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true}
+	src, ok := builder.BuildSource(target)
+	if !ok || src.Cfg().Name != "greenhouse" {
+		t.Error("expected a greenhouse source")
 	}
 }
 
-func TestBuildSources_BoardSourcesGrouped(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "greenhouse", Value: "acme", Enabled: true},
-		{Source: "greenhouse", Value: "widgetco", Enabled: true},
-		{Source: "lever", Value: "startup", Enabled: true},
-	}
-	srcs := builder.BuildSources(targets)
-
-	sourceNames := make(map[string]bool)
-	for _, s := range srcs {
-		sourceNames[s.Cfg().Name] = true
-	}
-
-	if !sourceNames["greenhouse"] {
-		t.Error("expected greenhouse source")
-	}
-	if !sourceNames["lever"] {
-		t.Error("expected lever source")
-	}
-
-	count := 0
-	for _, s := range srcs {
-		if s.Cfg().Name == "greenhouse" {
-			count++
-		}
-	}
-	if count != 1 {
-		t.Errorf("want 1 greenhouse source, got %d", count)
+func TestBuildSource_DisabledTargetExcluded(t *testing.T) {
+	target := dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: false}
+	if _, ok := builder.BuildSource(target); ok {
+		t.Error("disabled target should not produce a source")
 	}
 }
 
-func TestBuildSources_DisabledTargetsExcluded(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "greenhouse", Value: "acme", Enabled: false},
-	}
-	srcs := builder.BuildSources(targets)
-
-	for _, s := range srcs {
-		if s.Cfg().Name == "greenhouse" {
-			t.Error("disabled greenhouse target should not produce a source")
-		}
+func TestBuildSource_URLSource(t *testing.T) {
+	target := dto.SourceTarget{Source: "indeed", Value: "https://www.indeed.com/jobs?q=engineer", Enabled: true}
+	src, ok := builder.BuildSource(target)
+	if !ok || src.Cfg().Name != "indeed" {
+		t.Error("expected an indeed source")
 	}
 }
 
-func TestBuildSources_URLSourcesIncludedWhenTargetPresent(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "indeed", Value: "https://www.indeed.com/jobs?q=engineer", Enabled: true},
-	}
-	srcs := builder.BuildSources(targets)
-
-	found := false
-	for _, s := range srcs {
-		if s.Cfg().Name == "indeed" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected indeed source when URL target is present")
+func TestBuildSource_LinkedIn(t *testing.T) {
+	target := dto.SourceTarget{Source: "linkedin", Value: "product engineer", Filters: map[string]string{"location": "London"}, Enabled: true}
+	src, ok := builder.BuildSource(target)
+	if !ok || src.Cfg().Name != "linkedin" {
+		t.Error("expected a linkedin source")
 	}
 }
 
-func TestBuildSources_URLSourcesExcludedWhenNoTarget(t *testing.T) {
-	srcs := builder.BuildSources(nil)
-	for _, s := range srcs {
-		if s.Cfg().Name == "linkedin" || s.Cfg().Name == "indeed" {
-			t.Errorf("expected %s to be absent when no URL target configured", s.Cfg().Name)
-		}
-	}
-}
-
-func TestBuildSources_LinkedInIncludedWhenTargetPresent(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "linkedin", Value: "product engineer", Filters: map[string]string{"location": "London"}, Enabled: true},
-	}
-	srcs := builder.BuildSources(targets)
-
-	found := false
-	for _, s := range srcs {
-		if s.Cfg().Name == "linkedin" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("expected linkedin source when linkedin target is present")
-	}
-}
-
-func TestBuildSources_UnknownSourceIgnored(t *testing.T) {
-	targets := []dto.SourceTarget{
-		{Source: "unknown-ats", Value: "sometoken", Enabled: true},
-	}
-	srcs := builder.BuildSources(targets)
-	for _, s := range srcs {
-		if s.Cfg().Name == "unknown-ats" {
-			t.Errorf("unexpected source for unknown-ats")
-		}
+func TestBuildSource_UnknownSourceIgnored(t *testing.T) {
+	target := dto.SourceTarget{Source: "unknown-ats", Value: "sometoken", Enabled: true}
+	if _, ok := builder.BuildSource(target); ok {
+		t.Error("unknown source should not produce a source")
 	}
 }

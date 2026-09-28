@@ -5,8 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
-	"math/rand/v2"
 	"net/http"
 	"time"
 
@@ -17,8 +15,6 @@ import (
 const (
 	DefaultSchedule = "0 * * * *"
 	DefaultTimeout  = 15 * time.Second
-	defaultMinWait  = 2 * time.Second
-	defaultMaxWait  = 7 * time.Second
 	userAgent       = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
@@ -35,33 +31,12 @@ type SnapshotSource interface {
 	ParseJobDetail(r io.Reader, url string) (dto.Job, error)
 }
 
+// Source fetches one page of jobs for a saved source target. cursor is empty
+// for the first page; a returned next of "" means the last page. Single-page
+// sources (every BoardSource, indeed) always return "".
 type Source interface {
 	Cfg() Config
-
-	// Iterate pages through all jobs, calling fn per page. ATS sources yield
-	// full dto.Job values; HTML sources yield partial dto.Job{URL: url}. fn
-	// returning stop=true ends iteration early; ctx cancellation is respected.
-	Iterate(ctx context.Context, fn func(ctx context.Context, jobs []dto.Job) (stop bool, err error)) error
-}
-
-// Page is one source response and the cursor for the next response.
-type Page struct {
-	Jobs       []dto.Job
-	NextCursor string
-}
-
-// PageSource fetches one page for a saved source target.
-type PageSource interface {
-	FetchPage(ctx context.Context, cursor string) (Page, error)
-}
-
-// PageDetailFetcher resolves a page card using its original fetch URL.
-type PageDetailFetcher interface {
-	GetDetails(ctx context.Context, fetchURL string) (dto.Job, error)
-}
-
-type PageFetcher interface {
-	FetchPage(context.Context, string) ([]dto.Job, string, error)
+	FetchPage(ctx context.Context, cursor string) (jobs []dto.Job, next string, err error)
 }
 
 type DetailFetcher interface {
@@ -135,53 +110,4 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte)
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 	return respBody, nil
-}
-
-func (b *PaginatedBase) IteratePages(
-	ctx context.Context,
-	fn func(context.Context, []string) (bool, error),
-	fetchPage func(context.Context, int) ([]string, int, error),
-	resultsPerPage int,
-) error {
-	page1, total, err := fetchPage(ctx, 1)
-	if err != nil {
-		return fmt.Errorf("%s page 1: %w", b.cfg.Name, err)
-	}
-
-	pages := (total + resultsPerPage - 1) / resultsPerPage
-	log := slog.With(slog.String("source", b.cfg.Name))
-	log.Info("iterating source", slog.Int("total", total), slog.Int("pages", pages))
-
-	stop, err := fn(ctx, page1)
-	if err != nil || stop {
-		return err
-	}
-
-	for p := 2; p <= pages; p++ {
-		wait := defaultMinWait + time.Duration(rand.Int64N(int64(defaultMaxWait-defaultMinWait)))
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(wait):
-		}
-
-		log.Debug("fetching page", slog.Int("page", p), slog.Int("of", pages))
-
-		pageURLs, _, err := fetchPage(ctx, p)
-		if err != nil {
-			log.Error("page failed", slog.Int("page", p), slog.Any("err", err))
-			continue
-		}
-
-		stop, err = fn(ctx, pageURLs)
-		if err != nil {
-			return err
-		}
-		if stop {
-			log.Info("early stop", slog.Int("page", p))
-			break
-		}
-	}
-
-	return nil
 }

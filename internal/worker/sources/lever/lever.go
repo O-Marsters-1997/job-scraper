@@ -9,13 +9,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
-type Config struct {
-	// Boards is the list of Lever company slugs to scrape (e.g. "acmecorp").
-	Boards []string
-}
-
-func New(cfg Config) *sources.BoardSource {
-	return sources.NewBoardSource(cfg.Boards, sources.BoardSpec{
+// New builds a Lever source for one company slug (e.g. "acmecorp").
+func New(token string) *sources.BoardSource {
+	return sources.NewBoardSource(token, sources.BoardSpec{
 		Name: "lever",
 		URL: func(token string) string {
 			return fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token)

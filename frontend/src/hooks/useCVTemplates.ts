@@ -1,9 +1,4 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	addTrackedDoc,
 	fetchCVTemplates,
@@ -12,6 +7,7 @@ import {
 	showTab,
 } from "../api/cvTemplates";
 import { keys } from "../api/keys";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const cvTemplatesQueryOptions = queryOptions({
 	queryKey: keys.cvTemplates,
@@ -23,39 +19,31 @@ export function useCVTemplates() {
 }
 
 export function useAddTrackedDoc() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (url: string) => addTrackedDoc(url),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
-	}));
+	return useInvalidatingMutation(
+		(url: string) => addTrackedDoc(url),
+		[keys.cvTemplates],
+	);
 }
 
 export function useRemoveTrackedDoc() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (docId: string) => removeTrackedDoc(docId),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
-	}));
+	return useInvalidatingMutation(
+		(docId: string) => removeTrackedDoc(docId),
+		[keys.cvTemplates],
+	);
 }
 
 export function useHideTab() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({ docId, tabId }: { docId: string; tabId: string }) =>
+	return useInvalidatingMutation(
+		({ docId, tabId }: { docId: string; tabId: string }) =>
 			hideTab(docId, tabId),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
-	}));
+		[keys.cvTemplates],
+	);
 }
 
 export function useShowTab() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({ docId, tabId }: { docId: string; tabId: string }) =>
+	return useInvalidatingMutation(
+		({ docId, tabId }: { docId: string; tabId: string }) =>
 			showTab(docId, tabId),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: keys.cvTemplates }),
-	}));
+		[keys.cvTemplates],
+	);
 }

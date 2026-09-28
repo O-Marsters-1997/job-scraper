@@ -94,16 +94,13 @@ func main() {
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
-	orch := scraper.New(js.Catalog()).WithSourceBuilder(
-		func(target dto.SourceTarget) []sources.Source {
-			return builder.BuildSources([]dto.SourceTarget{target})
-		})
+	orch := scraper.New(js.Catalog()).WithSourceBuilder(builder.BuildSource)
 	orch.WithRejectFilter(scoringModule)
 	orch.WithCandidates(js.Candidates())
 	processor := &taskProcessor{
 		js: js, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
 		detailers: map[string]sources.DetailFetcher{
-			"wis": wis.New(wis.Config{}), "linkedin": linkedin.New(linkedin.Config{}), "indeed": indeed.New(indeed.Config{}),
+			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New(linkedin.Search{}), "indeed": indeed.New(""),
 		},
 	}
 	cr := cron.New()

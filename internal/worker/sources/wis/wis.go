@@ -65,50 +65,21 @@ func pageURL(s Search, page int) string {
 	return fmt.Sprintf("%s&p=%d", s.startURL(), page)
 }
 
-type Config struct {
-	Searches []Search
-}
-
 type Scraper struct {
 	sources.PaginatedBase
-	searches []Search
+	search Search
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 
-func New(cfg Config) *Scraper {
+func New(search Search) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name: "wis",
 		}),
-		searches: cfg.Searches,
+		search: search,
 	}
-}
-
-func (s *Scraper) fetchPage(ctx context.Context, search Search, page int) (urls []string, totalCount int, err error) {
-	body, err := s.Get(ctx, pageURL(search, page))
-	if err != nil {
-		return nil, 0, err
-	}
-
-	jobs, err := ParseURLs(bytes.NewReader(body))
-	if err != nil {
-		return nil, 0, err
-	}
-	urls = make([]string, len(jobs))
-	for i, j := range jobs {
-		urls[i] = j.URL
-	}
-
-	if page == 1 {
-		totalCount, err = ParseTotalCount(bytes.NewReader(body))
-		if err != nil {
-			return nil, 0, err
-		}
-	}
-
-	return urls, totalCount, nil
 }
 
 func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
@@ -119,36 +90,14 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	return ParseJobDetail(r, url)
 }
 
-func (s *Scraper) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	for _, search := range s.searches {
-		fetch := func(ctx context.Context, page int) ([]string, int, error) {
-			return s.fetchPage(ctx, search, page)
-		}
-		err := s.IteratePages(ctx, func(ctx context.Context, urls []string) (bool, error) {
-			jobs := make([]dto.Job, len(urls))
-			for i, u := range urls {
-				jobs[i] = dto.Job{URL: u}
-			}
-			return fn(ctx, jobs)
-		}, fetch, pageSize)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
-	if len(s.searches) != 1 {
-		return nil, "", fmt.Errorf("wis page fetch requires one search")
-	}
 	page, totalPages := 1, 0
 	if cursor != "" {
 		if _, err := fmt.Sscanf(cursor, "%d:%d", &page, &totalPages); err != nil || page < 1 || totalPages < page {
 			return nil, "", fmt.Errorf("invalid wis cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, pageURL(s.searches[0], page))
+	body, err := s.Get(ctx, pageURL(s.search, page))
 	if err != nil {
 		return nil, "", err
 	}

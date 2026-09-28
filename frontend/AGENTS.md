@@ -6,9 +6,9 @@ Read `../DESIGN.md` before any UI change; it's the source of truth for colours, 
 ## Patterns
 
 - **API call + hook** — copy `src/api/applicationStatuses.ts` (fetch functions) and
-  `src/hooks/useProfile.ts` (`queryOptions`, `createQuery`, `createMutation` with
-  `invalidateQueries`).
-  - Every new api function gets a `useMocks()` branch backed by `src/mocks/db.ts`.
+  `src/hooks/useProfile.ts` (`queryOptions`, `createQuery`, `useInvalidatingMutation`
+  from `src/hooks/useInvalidatingMutation.ts`).
+  - Every new api function wraps its call in `mocked(...)` (`src/api/config.ts`), backed by `src/mocks/db.ts`.
   - Parse responses with a zod schema (see `scores.ts`, `scoringConfig.ts`); don't just cast.
   - Shared types live in `src/types/*.ts`, not declared inline in the api file.
 - **Unit check** — a `src/**/*.check.ts` file that throws at import time (copy

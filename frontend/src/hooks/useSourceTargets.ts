@@ -1,9 +1,4 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	createSourceTarget,
@@ -16,6 +11,7 @@ import type {
 	CreateSourceTargetPayload,
 	UpdateSourceTargetPayload,
 } from "../types/sourceTarget";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const sourceTargetsQueryOptions = queryOptions({
 	queryKey: keys.sourceTargets,
@@ -28,48 +24,29 @@ export function useSourceTargets() {
 }
 
 export function useRerunSourceTarget() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: rerunSourceTarget,
-		onSettled: () =>
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets }),
-	}));
+	return useInvalidatingMutation(rerunSourceTarget, [keys.sourceTargets], {
+		onSettled: true,
+	});
 }
 
 export function useCreateSourceTarget() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (payload: CreateSourceTargetPayload) =>
-			createSourceTarget(payload),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
-			queryClient.invalidateQueries({ queryKey: keys.companies.all });
-		},
-	}));
+	return useInvalidatingMutation(
+		(payload: CreateSourceTargetPayload) => createSourceTarget(payload),
+		[keys.sourceTargets, keys.companies.all],
+	);
 }
 
 export function useUpdateSourceTarget() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: ({
-			id,
-			...patch
-		}: { id: string } & UpdateSourceTargetPayload) =>
+	return useInvalidatingMutation(
+		({ id, ...patch }: { id: string } & UpdateSourceTargetPayload) =>
 			updateSourceTarget(id, patch),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
-			queryClient.invalidateQueries({ queryKey: keys.companies.all });
-		},
-	}));
+		[keys.sourceTargets, keys.companies.all],
+	);
 }
 
 export function useDeleteSourceTarget() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (id: string) => deleteSourceTarget(id),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
-			queryClient.invalidateQueries({ queryKey: keys.companies.all });
-		},
-	}));
+	return useInvalidatingMutation(
+		(id: string) => deleteSourceTarget(id),
+		[keys.sourceTargets, keys.companies.all],
+	);
 }

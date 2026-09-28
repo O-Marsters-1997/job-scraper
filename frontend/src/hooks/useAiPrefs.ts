@@ -1,12 +1,8 @@
-import {
-	createMutation,
-	createQuery,
-	queryOptions,
-	useQueryClient,
-} from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { updateAiCredentials } from "../api/aiCredentials";
 import { fetchAiPrefs } from "../api/aiPrefs";
 import { keys } from "../api/keys";
+import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const aiPrefsQueryOptions = queryOptions({
 	queryKey: keys.aiPrefs,
@@ -18,10 +14,9 @@ export function useAiPrefs() {
 }
 
 export function useUpdateAiCredentials() {
-	const queryClient = useQueryClient();
-	return createMutation(() => ({
-		mutationFn: (payload: { provider: string; apiKey: string | null }) =>
+	return useInvalidatingMutation(
+		(payload: { provider: string; apiKey: string | null }) =>
 			updateAiCredentials(payload),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.aiPrefs }),
-	}));
+		[keys.aiPrefs],
+	);
 }
