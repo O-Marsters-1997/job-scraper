@@ -2,9 +2,7 @@ package sources
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -27,68 +25,34 @@ type BoardSpec struct {
 // captured by BoardSpec.
 type BoardSource struct {
 	PaginatedBase
-	boards []string
-	spec   BoardSpec
+	board string
+	spec  BoardSpec
 }
 
 var _ Source = (*BoardSource)(nil)
 
-func NewBoardSource(boards []string, spec BoardSpec) *BoardSource {
+func NewBoardSource(board string, spec BoardSpec) *BoardSource {
 	return &BoardSource{
 		PaginatedBase: NewBase(Config{Name: spec.Name, UseProxy: spec.UseProxy}),
-		boards:        boards,
+		board:         board,
 		spec:          spec,
 	}
 }
 
-func (b *BoardSource) FetchPage(ctx context.Context, cursor string) (Page, error) {
-	if len(b.boards) != 1 {
-		return Page{}, fmt.Errorf("%s: expected one board, got %d", b.spec.Name, len(b.boards))
-	}
+func (b *BoardSource) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
 	if cursor != "" {
-		return Page{}, fmt.Errorf("%s: unexpected cursor %q", b.spec.Name, cursor)
+		return nil, "", fmt.Errorf("%s: unexpected cursor %q", b.spec.Name, cursor)
 	}
-	jobs, err := b.fetchBoard(ctx, b.boards[0])
-	return Page{Jobs: jobs}, err
-}
-
-func (b *BoardSource) fetchBoard(ctx context.Context, token string) ([]dto.Job, error) {
 	fetch := b.Get
 	if b.spec.Post {
 		fetch = b.PostEmptyJSON
 	}
-	body, err := fetch(ctx, b.spec.URL(token))
+	body, err := fetch(ctx, b.spec.URL(b.board))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return b.spec.Parse(body, token)
-}
-
-// Iterate fetches every configured board token, logging and continuing past
-// per-token failures so one dead board doesn't starve the rest of the ATS's
-// boards. Errors are joined and returned once all tokens have been attempted.
-func (b *BoardSource) Iterate(ctx context.Context, fn func(context.Context, []dto.Job) (bool, error)) error {
-	var errs []error
-	for _, token := range b.boards {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		jobs, err := b.fetchBoard(ctx, token)
-		if err != nil {
-			slog.Warn("board parse failed", slog.String("source", b.spec.Name), slog.String("board", token), slog.Any("err", err))
-			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
-			continue
-		}
-		stop, err := fn(ctx, jobs)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: board %s: %w", b.spec.Name, token, err))
-			continue
-		}
-		if stop {
-			break
-		}
-	}
-	return errors.Join(errs...)
+	jobs, err := b.spec.Parse(body, b.board)
+	return jobs, "", err
 }
 
 // RFC3339OrNow parses an RFC3339 timestamp, falling back to the current UTC time when

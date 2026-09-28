@@ -9,21 +9,23 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
-// Config holds the keywords to filter the RemoteOK feed by, one per enabled
-// remoteok target's value.
-type Config struct {
-	Keywords []string
-}
-
-func New(cfg Config) *sources.BoardSource {
-	return sources.NewBoardSource([]string{""}, sources.BoardSpec{
+// New builds a RemoteOK source filtered to one keyword (empty means no filter).
+func New(keyword string) *sources.BoardSource {
+	return sources.NewBoardSource("", sources.BoardSpec{
 		Name: "remoteok",
 		URL:  func(string) string { return "https://remoteok.com/api" },
 		Parse: func(body []byte, _ string) ([]dto.Job, error) {
 			jobs, err := parse(body)
-			return sources.FilterByKeywords(jobs, cfg.Keywords), err
+			return sources.FilterByKeywords(jobs, keywordList(keyword)), err
 		},
 	})
+}
+
+func keywordList(keyword string) []string {
+	if keyword == "" {
+		return nil
+	}
+	return []string{keyword}
 }
 
 // feedJob mirrors one entry of the RemoteOK API response. The feed's first

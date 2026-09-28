@@ -12,7 +12,7 @@ import (
 // TestSnapshots runs against the placeholder fixtures in snapshots/ — see
 // snapshots/README.md. They are NOT real Indeed captures.
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, indeed.New(indeed.Config{}))
+	sourcetest.RunSnapshotTests(t, indeed.New(""))
 }
 
 // TestParseURLs_AntiBotBlock guards the semantic-200 check: BrightData's Web

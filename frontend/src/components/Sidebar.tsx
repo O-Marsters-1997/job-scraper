@@ -7,9 +7,9 @@ import {
 } from "@kobalte/core/dialog";
 import { Link, useLocation, useNavigate } from "@tanstack/solid-router";
 import { cva } from "class-variance-authority";
-import { type Accessor, createEffect, createSignal, Show } from "solid-js";
+import { type Accessor, createEffect, createSignal, For, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { queryClient } from "@/lib/queryClient";
 import { signOut } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,41 @@ const sidebarBadgeVariants = cva(
 	},
 );
 
+interface NavItem {
+	to: string;
+	label: string;
+	icon: IconName;
+	exact?: boolean;
+	includeSearch?: boolean;
+	search?: Record<string, unknown>;
+	badge?: boolean;
+	when?: (ctx: { googleConnected: boolean }) => boolean;
+}
+
+const NAV: NavItem[] = [
+	{ to: "/overview", label: "Overview", icon: "dashboard", exact: true },
+	{ to: "/jobs", label: "Jobs", icon: "suitcase", exact: true },
+	{
+		to: "/applications",
+		label: "Applications",
+		icon: "fileText",
+		exact: true,
+		includeSearch: false,
+		search: { status: undefined },
+		badge: true,
+	},
+	{ to: "/companies", label: "Companies", icon: "building" },
+	{
+		to: "/cv-templates",
+		label: "CVs",
+		icon: "fileLines",
+		exact: true,
+		when: (ctx) => ctx.googleConnected,
+	},
+	{ to: "/insights", label: "Insights", icon: "barChart", exact: true },
+	{ to: "/settings", label: "Settings", icon: "settings" },
+];
+
 interface SidebarProps {
 	mobileOpen?: boolean;
 	onMobileClose?: () => void;
@@ -54,14 +89,6 @@ export default function Sidebar(props: SidebarProps) {
 	const [expanded, setExpanded] = createSignal(true);
 	const location = useLocation();
 	const navigate = useNavigate();
-
-	const isOverviewActive = () => location().pathname === "/overview";
-	const isJobsActive = () => location().pathname === "/jobs";
-	const isCompaniesActive = () => location().pathname.startsWith("/companies");
-	const isApplicationsActive = () => location()?.pathname === "/applications";
-	const isInsightsActive = () => location().pathname === "/insights";
-	const isSettingsActive = () => location().pathname.startsWith("/settings");
-	const isCVTemplatesActive = () => location().pathname === "/cv-templates";
 
 	const appsQuery = useApplications();
 	const googleStatus = useGoogleStatus();
@@ -77,18 +104,7 @@ export default function Sidebar(props: SidebarProps) {
 		props.onMobileClose?.();
 	});
 
-	const links = {
-		isOverviewActive,
-		isJobsActive,
-		isCompaniesActive,
-		isApplicationsActive,
-		isInsightsActive,
-		isSettingsActive,
-		isCVTemplatesActive,
-		appsQuery,
-		googleStatus,
-		handleLogout,
-	};
+	const links = { appsQuery, googleStatus, handleLogout };
 
 	return (
 		<>
@@ -132,13 +148,6 @@ interface SidebarBodyProps {
 	showLabels: Accessor<boolean>;
 	expanded?: Accessor<boolean>;
 	onCollapseToggle?: () => void;
-	isOverviewActive: () => boolean;
-	isJobsActive: () => boolean;
-	isCompaniesActive: () => boolean;
-	isApplicationsActive: () => boolean;
-	isInsightsActive: () => boolean;
-	isSettingsActive: () => boolean;
-	isCVTemplatesActive: () => boolean;
 	appsQuery: ReturnType<typeof useApplications>;
 	googleStatus: ReturnType<typeof useGoogleStatus>;
 	handleLogout: () => void;
@@ -165,93 +174,50 @@ function SidebarBody(props: SidebarBodyProps) {
 					</span>
 				</Show>
 
-				<Link
-					to="/overview"
-					title="Overview"
-					class={navLinkVariants({ active: props.isOverviewActive() })}
-				>
-					<Icon name="dashboard" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Overview</span>
-					</Show>
-				</Link>
-
-				<Link
-					to="/jobs"
-					title="Jobs"
-					class={navLinkVariants({ active: props.isJobsActive() })}
-				>
-					<Icon name="suitcase" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Jobs</span>
-					</Show>
-				</Link>
-
-				<Link
-					to="/applications"
-					search={{ status: undefined }}
-					title="Applications"
-					class={navLinkVariants({ active: props.isApplicationsActive() })}
-				>
-					<Icon name="fileText" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Applications</span>
-						<Show when={(props.appsQuery.data?.length ?? 0) > 0}>
-							<span
-								class={sidebarBadgeVariants({
-									active: props.isApplicationsActive(),
-								})}
+				<For each={NAV}>
+					{(item) => (
+						<Show
+							when={
+								!item.when ||
+								item.when({
+									googleConnected: props.googleStatus.data?.connected ?? false,
+								})
+							}
+						>
+							<Link
+								to={item.to}
+								search={item.search as never}
+								activeOptions={{
+									exact: item.exact ?? false,
+									...(item.includeSearch === false && {
+										includeSearch: false,
+									}),
+								}}
+								title={item.label}
 							>
-								{props.appsQuery.data?.length}
-							</span>
+								{({ isActive }) => (
+									<span class={navLinkVariants({ active: isActive })}>
+										<Icon name={item.icon} class="shrink-0" />
+										<Show when={props.showLabels()}>
+											<span class="whitespace-nowrap">{item.label}</span>
+											<Show
+												when={
+													item.badge && (props.appsQuery.data?.length ?? 0) > 0
+												}
+											>
+												<span
+													class={sidebarBadgeVariants({ active: isActive })}
+												>
+													{props.appsQuery.data?.length}
+												</span>
+											</Show>
+										</Show>
+									</span>
+								)}
+							</Link>
 						</Show>
-					</Show>
-				</Link>
-
-				<Link
-					to="/companies"
-					title="Companies"
-					class={navLinkVariants({ active: props.isCompaniesActive() })}
-				>
-					<Icon name="building" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Companies</span>
-					</Show>
-				</Link>
-
-				<Show when={props.googleStatus.data?.connected}>
-					<Link
-						to="/cv-templates"
-						title="CVs"
-						class={navLinkVariants({ active: props.isCVTemplatesActive() })}
-					>
-						<Icon name="fileLines" class="shrink-0" />
-						<Show when={props.showLabels()}>
-							<span class="whitespace-nowrap">CVs</span>
-						</Show>
-					</Link>
-				</Show>
-				<Link
-					to="/insights"
-					title="Insights"
-					class={navLinkVariants({ active: props.isInsightsActive() })}
-				>
-					<Icon name="barChart" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Insights</span>
-					</Show>
-				</Link>
-
-				<Link
-					to="/settings"
-					title="Settings"
-					class={navLinkVariants({ active: props.isSettingsActive() })}
-				>
-					<Icon name="settings" class="shrink-0" />
-					<Show when={props.showLabels()}>
-						<span class="whitespace-nowrap">Settings</span>
-					</Show>
-				</Link>
+					)}
+				</For>
 			</nav>
 
 			<div class="flex shrink-0 flex-col gap-0.5 border-t border-sidebar-border px-2 py-2">

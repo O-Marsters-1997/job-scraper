@@ -1,21 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import type { PDFDocumentLoadingTask, PDFPageProxy } from "pdfjs-dist";
-import * as pdfjsLib from "pdfjs-dist";
 import {
 	createResource,
-	For,
 	onCleanup,
 	type ResourceFetcherInfo,
 	Show,
-	untrack,
 } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { fetchCVPdf } from "../../api/cvTemplates";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-	"pdfjs-dist/build/pdf.worker.min.mjs",
-	import.meta.url,
-).href;
 
 export const Route = createFileRoute("/_auth/cv-templates_/$docId/$tabId")({
 	component: CVDetailPage,
@@ -27,31 +18,17 @@ function tabParam(tabId: string): string {
 	return tabId.startsWith("t.") ? tabId : `t.${tabId}`;
 }
 
-type CVPdf = { loadingTask: PDFDocumentLoadingTask; pages: PDFPageProxy[] };
 type CVPdfSource = { docId: string; tabId: string };
 
-// Guards against a fetch that resolves after a newer one has already started:
-// without this, that PDF's loadingTask never becomes the resource's `value`
-// (solid drops stale resolutions) and so never gets destroy()ed.
-let cvPdfRequestSeq = 0;
-
-async function loadCVPdf(
+// Revokes the previous object URL here too, not just in onCleanup, so a
+// doc/tab switch doesn't leak it before the component unmounts.
+async function loadCVPdfURL(
 	source: CVPdfSource,
-	{ value }: ResourceFetcherInfo<CVPdf>,
-): Promise<CVPdf> {
-	const seq = ++cvPdfRequestSeq;
-	await value?.loadingTask.destroy();
+	{ value }: ResourceFetcherInfo<string>,
+): Promise<string> {
+	if (value) URL.revokeObjectURL(value);
 	const data = await fetchCVPdf(source.docId, source.tabId);
-	const loadingTask = pdfjsLib.getDocument({ data });
-	const pdf = await loadingTask.promise;
-	const pages = await Promise.all(
-		Array.from({ length: pdf.numPages }, (_, i) => pdf.getPage(i + 1)),
-	);
-	if (seq !== cvPdfRequestSeq) {
-		await loadingTask.destroy();
-		throw new Error("superseded by a newer request");
-	}
-	return { loadingTask, pages };
+	return URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
 }
 
 function CVDetailPage() {
@@ -60,13 +37,13 @@ function CVDetailPage() {
 	const docsUrl = () =>
 		`https://docs.google.com/document/d/${params().docId}/edit?tab=${tabParam(params().tabId)}`;
 
-	const [pdfResource] = createResource(
+	const [pdfURL] = createResource(
 		(): CVPdfSource => ({ docId: params().docId, tabId: params().tabId }),
-		loadCVPdf,
+		loadCVPdfURL,
 	);
 
 	onCleanup(() => {
-		pdfResource.latest?.loadingTask.destroy();
+		if (pdfURL.latest) URL.revokeObjectURL(pdfURL.latest);
 	});
 
 	return (
@@ -80,29 +57,40 @@ function CVDetailPage() {
 					CVs
 				</Link>
 
-				<a
-					href={docsUrl()}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-muted"
-				>
-					<Icon name="externalLink" size={12} />
-					Open in Google Docs
-				</a>
+				<div class="flex items-center gap-2">
+					{/* iOS Safari renders only page 1 of a PDF in an iframe, so this link
+					gives it (and anyone else) a way to see every page. */}
+					<Show when={pdfURL()}>
+						{(url) => (
+							<a
+								href={url()}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-muted"
+							>
+								<Icon name="externalLink" size={12} />
+								Open PDF
+							</a>
+						)}
+					</Show>
+					<a
+						href={docsUrl()}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-muted"
+					>
+						<Icon name="externalLink" size={12} />
+						Open in Google Docs
+					</a>
+				</div>
 			</div>
 
 			<div class="flex flex-1 flex-col items-center px-7 py-8">
-				<Show when={pdfResource.loading}>
-					<div class="flex w-full max-w-3xl flex-col gap-4">
-						<For each={[1, 2, 3]}>
-							{() => (
-								<div class="h-[1120px] w-full animate-pulse rounded-xl bg-surface-muted" />
-							)}
-						</For>
-					</div>
+				<Show when={pdfURL.loading}>
+					<div class="h-[1120px] w-full max-w-3xl animate-pulse rounded-xl bg-surface-muted" />
 				</Show>
 
-				<Show when={pdfResource.error}>
+				<Show when={pdfURL.error}>
 					{(err) => (
 						<div class="w-full max-w-3xl rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
 							<p class="mb-1 text-sm font-semibold text-destructive-strong">
@@ -115,45 +103,16 @@ function CVDetailPage() {
 					)}
 				</Show>
 
-				<Show
-					when={!pdfResource.loading && !pdfResource.error && pdfResource()}
-				>
-					{(res) => (
-						<div class="flex w-full max-w-3xl flex-col gap-4">
-							<For each={res().pages}>
-								{(page) => <PDFCanvas page={page} />}
-							</For>
-						</div>
+				<Show when={!pdfURL.loading && !pdfURL.error && pdfURL()}>
+					{(url) => (
+						<iframe
+							src={url()}
+							title="CV PDF"
+							class="h-[1120px] w-full max-w-3xl rounded-xl border border-border bg-surface"
+						/>
 					)}
 				</Show>
 			</div>
-		</div>
-	);
-}
-
-function PDFCanvas(props: { page: PDFPageProxy }) {
-	let canvasRef: HTMLCanvasElement | undefined;
-
-	const viewport = untrack(() => props.page.getViewport({ scale: 1.5 }));
-
-	const render = () => {
-		if (!canvasRef) return;
-		canvasRef.width = viewport.width;
-		canvasRef.height = viewport.height;
-		props.page.render({ canvas: canvasRef, viewport });
-	};
-
-	return (
-		<div class="overflow-hidden rounded-xl border border-border bg-surface shadow-none">
-			<canvas
-				ref={(el) => {
-					canvasRef = el;
-					render();
-				}}
-				width={viewport.width}
-				height={viewport.height}
-				class="block w-full"
-			/>
 		</div>
 	);
 }

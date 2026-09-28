@@ -8,7 +8,7 @@ import (
 )
 
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, New(Config{}))
+	sourcetest.RunSnapshotTests(t, New(Search{}))
 }
 
 func TestPageURL(t *testing.T) {
