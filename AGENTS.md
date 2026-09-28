@@ -30,8 +30,12 @@ The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular
 - Everything else directly under `internal/` is the shared kernel (`dto`, `apperr`, `queue`, `handlers`,
   `pgtest`, `telemetry`, `sourcespec`, …). It imports no context, no `internal/api` and no `internal/worker`.
   `depguard` in `.golangci.yml` enforces the api/worker/shared/services rules.
-- `internal/data`: the shared schema (`sqlc/schema.sql`), `Connect` and `RunMigrations` — every context's
-  sqlc block reads the schema, and every binary connects through `Connect`.
+- `internal/data/db`: connecting to Postgres and running migrations — `db.go` (`Connect`),
+  `migrate.go` (`RunMigrations`) and `sqlc/schema.sql`, which every context's sqlc block
+  reads and every binary connects through.
+- `internal/data`: generic, reusable information with no database or context coupling —
+  currently empty above `db/`; add to it only when something genuinely reusable needs a
+  home (e.g. cross-context sentinel errors), not speculatively.
 
 ### Context rules
 
@@ -75,7 +79,7 @@ Use the `new-handler` skill for the end-to-end steps, backend and frontend.
 
 ## sqlc
 
-- Schema lives in `internal/data/sqlc/schema.sql`. sqlc never reads `scripts/migrations/`, so mirror
+- Schema lives in `internal/data/db/sqlc/schema.sql`. sqlc never reads `scripts/migrations/`, so mirror
   every migration there by hand.
 - Each context has one `sql:` block in `sqlc.yaml`: queries in `internal/services/<ctx>/store/queries/`,
   generated into `internal/services/<ctx>/store/sqlc/`.

@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/data/db"
 )
 
 var (
@@ -70,7 +70,7 @@ func start(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
 
-	if err := data.RunMigrations(ctx, pool); err != nil {
+	if err := db.RunMigrations(ctx, pool); err != nil {
 		return nil, fmt.Errorf("run migrations: %w", err)
 	}
 

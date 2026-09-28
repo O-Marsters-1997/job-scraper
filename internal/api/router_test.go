@@ -23,7 +23,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
-	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
@@ -79,7 +79,7 @@ func TestMain(m *testing.M) {
 	if err := testPool.Ping(ctx); err != nil {
 		log.Fatalf("db ping: %v", err)
 	}
-	if err := data.RunMigrations(ctx, testPool); err != nil {
+	if err := db.RunMigrations(ctx, testPool); err != nil {
 		log.Fatalf("run migrations: %v", err)
 	}
 

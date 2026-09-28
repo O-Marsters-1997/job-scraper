@@ -2,7 +2,7 @@
 
 Grounded in `scripts/migrations/20260923000004_create_company_boards.sql`
 (the `company_boards` / `board_backfill_issues` migration) and cross-checked
-against `internal/data/sqlc/schema.sql`.
+against `internal/data/db/sqlc/schema.sql`.
 
 ## Primary keys and timestamps
 

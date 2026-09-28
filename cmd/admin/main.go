@@ -11,7 +11,7 @@ import (
 
 	"log/slog"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
@@ -45,12 +45,12 @@ func main() {
 }
 
 func connectDB(ctx context.Context) *pgxpool.Pool {
-	pool, err := data.Connect(ctx)
+	pool, err := db.Connect(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
 		os.Exit(1)
 	}
-	if err := data.RunMigrations(ctx, pool); err != nil {
+	if err := db.RunMigrations(ctx, pool); err != nil {
 		fmt.Fprintf(os.Stderr, "run migrations: %v\n", err)
 		os.Exit(1)
 	}

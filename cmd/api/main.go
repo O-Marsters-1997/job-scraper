@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
-	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
@@ -29,7 +29,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	pool, err := data.Connect(ctx)
+	pool, err := db.Connect(ctx)
 	if err != nil {
 		slog.Error("db init failed", slog.Any("err", err))
 		os.Exit(1)

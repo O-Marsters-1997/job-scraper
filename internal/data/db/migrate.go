@@ -1,4 +1,4 @@
-package data
+package db
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 const migrationsDir = "scripts/migrations"
 
 func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
-	db := stdlib.OpenDBFromPool(pool)
-	defer func() { _ = db.Close() }()
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("goose dialect: %w", err)
 	}
 
-	if err := goose.UpContext(ctx, db, migrationsDir); err != nil {
+	if err := goose.UpContext(ctx, sqlDB, migrationsDir); err != nil {
 		return fmt.Errorf("goose up: %w", err)
 	}
 

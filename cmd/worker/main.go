@@ -16,7 +16,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -50,7 +50,7 @@ func main() {
 		slog.Error("Web Unlocker config invalid", slog.Any("err", err))
 		os.Exit(1)
 	}
-	pool, err := data.Connect(ctx)
+	pool, err := db.Connect(ctx)
 	if err != nil {
 		slog.Error("db init failed", slog.Any("err", err))
 		os.Exit(1)
