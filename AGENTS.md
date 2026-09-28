@@ -98,6 +98,18 @@ test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-pac
 See `justfile` (`just --list`) for build, lint, test, migration, and snapshot commands.
 DB-backed tests need Docker (`just up`).
 
+## Traces
+
+Run `just tracing-up`, set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, then `just run-api` /
+`just run` (ADR 0014). Query Tempo at `http://localhost:3200`:
+
+```
+curl -G localhost:3200/api/search --data-urlencode 'q={resource.service.name="worker" && status=error}'
+curl -G localhost:3200/api/search --data-urlencode 'q={span.http.response.status_code>=500}' --data-urlencode limit=20
+curl -G localhost:3200/api/search --data-urlencode 'q={duration>2s}'
+curl localhost:3200/api/traces/<trace_id>   # trace_id from a log line
+```
+
 ## Gotchas
 
 - Migrations resolve `scripts/migrations` relative to CWD. Don't run binaries or DB tests from

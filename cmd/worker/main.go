@@ -51,6 +51,12 @@ func main() {
 		slog.ErrorContext(ctx, "Web Unlocker config invalid", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
+	shutdownTracing, err := telemetry.InitTracing(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "tracing init failed", slog.Any(logger.KeyErr, err))
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
 	pool, err := db.Connect(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))

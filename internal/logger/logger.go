@@ -10,6 +10,9 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"slices"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // New builds the process's slog.Logger. An unrecognised, non-empty format
@@ -104,6 +107,13 @@ type ctxHandler struct {
 
 func (h ctxHandler) Handle(ctx context.Context, r slog.Record) error {
 	attrs := ctxAttrsExcept(ctx, r)
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		attrs = slices.DeleteFunc(attrs, func(a slog.Attr) bool { return a.Key == KeyTraceID })
+		attrs = append(attrs,
+			slog.String(KeyTraceID, sc.TraceID().String()),
+			slog.String(KeySpanID, sc.SpanID().String()),
+		)
+	}
 	if len(attrs) == 0 {
 		return h.Handler.Handle(ctx, r)
 	}
