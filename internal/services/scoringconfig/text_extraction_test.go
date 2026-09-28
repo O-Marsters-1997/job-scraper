@@ -10,12 +10,13 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
 )
 
 func TestUpdate_UnchangedTextSkipsExtraction(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "text"}}}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, extractor, &fakeCredentials{key: "sk-test"}, &fakeBackfiller{})
+	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), extractor, &fakeCredentials{key: "sk-test"}, scoringtest.Backfills(0))
 
 	in := dto.ScoringConfigView{Preferences: dto.Preferences{PreferenceText: "I want to work with Go"}}
 
@@ -36,7 +37,7 @@ func TestUpdate_UnchangedTextSkipsExtraction(t *testing.T) {
 
 func TestUpdate_ReextractionReplacesTextPicksKeepsManual(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "text"}}}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, extractor, &fakeCredentials{key: "sk-test"}, &fakeBackfiller{})
+	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), extractor, &fakeCredentials{key: "sk-test"}, scoringtest.Backfills(0))
 
 	manualPick := dto.Pick{OptionID: "seniority:senior", Stance: "nice"}
 	if _, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
@@ -64,7 +65,7 @@ func TestUpdate_ReextractionReplacesTextPicksKeepsManual(t *testing.T) {
 
 func TestUpdate_ManualOverridesText(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:kubernetes", Stance: "avoid", Source: "text"}}}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, extractor, &fakeCredentials{key: "sk-test"}, &fakeBackfiller{})
+	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), extractor, &fakeCredentials{key: "sk-test"}, scoringtest.Backfills(0))
 
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{
@@ -90,7 +91,7 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 		{OptionID: "tech:go", Stance: "nice", Source: "text"},
 		{OptionID: "tech:made-up", Stance: "nice", Source: "text"},
 	}}
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, extractor, &fakeCredentials{key: "sk-test"}, &fakeBackfiller{})
+	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), extractor, &fakeCredentials{key: "sk-test"}, scoringtest.Backfills(0))
 
 	got, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{PreferenceText: "I like Go, and made-up-thing"},
@@ -106,7 +107,7 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 }
 
 func TestUpdate_NoCredentialReturnsUnprocessable(t *testing.T) {
-	svc := scoringconfig.New(newFakeStore().seedOptions(), &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{err: errors.New("no credential")}, &fakeBackfiller{})
+	svc := scoringconfig.New(newFakeStore(), scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{err: errors.New("no credential")}, scoringtest.Backfills(0))
 
 	_, err := svc.Update(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{PreferenceText: "I like Go"},

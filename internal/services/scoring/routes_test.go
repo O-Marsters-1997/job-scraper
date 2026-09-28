@@ -61,6 +61,25 @@ func TestScoringConfigRoute(t *testing.T) {
 	}
 }
 
+func TestScoringConfigUpdateRoute(t *testing.T) {
+	r := newTestRouter(t, newFakeStore())
+
+	body := `{"notifyThreshold":80,"excludedTitleKeywords":[],"excludedCompanies":[],"excludedLocations":[],
+		"preferences":{"picks":[{"optionId":"tech:go","stance":"nice"}]}}`
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, authedRequest(http.MethodPut, "/scoring-config", body))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"notifyThreshold":80`) {
+		t.Fatalf("body = %s, want notifyThreshold 80", w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"optionId":"tech:go"`) {
+		t.Fatalf("body = %s, want the saved pick", w.Body)
+	}
+}
+
 func TestScoringOptionsRoute(t *testing.T) {
 	r := newTestRouter(t, newFakeStore())
 

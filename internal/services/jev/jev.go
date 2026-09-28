@@ -28,12 +28,17 @@ const (
 	// Provider is the user_ai_credentials provider key Jev bills against.
 	Provider = "openrouter"
 
-	maxDescriptionRunes = 4096 * 4
+	// MaxDescriptionRunes truncates job.Description before it counts against
+	// Jev's context budget.
+	MaxDescriptionRunes = 4096 * 4
 
 	// tokenBudget is under Jev's 32k context, leaving headroom for its reply.
 	tokenBudget   = 28000
 	charsPerToken = 4
-	maxBatchChars = tokenBudget * charsPerToken
+
+	// MaxBatchChars is the largest marshalled request body Answer sends in
+	// one call before splitting questions into another batch.
+	MaxBatchChars = tokenBudget * charsPerToken
 )
 
 var choiceOptions = []string{"yes", "no", "not_stated"}
@@ -45,7 +50,13 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	return &Client{http: &http.Client{Timeout: 60 * time.Second}, baseURL: decisionsURL}
+	return NewClientAt(decisionsURL, &http.Client{Timeout: 60 * time.Second})
+}
+
+// NewClientAt builds a Client against baseURL using httpClient, for tests to
+// point at an httptest.Server.
+func NewClientAt(baseURL string, httpClient *http.Client) *Client {
+	return &Client{http: httpClient, baseURL: baseURL}
 }
 
 type choiceQuestion struct {
@@ -88,7 +99,7 @@ type choiceResponse struct {
 // not_stated, against the given job's state, batching under Jev's context
 // budget. Any batch failure fails the whole call.
 func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
-	desc := truncateRunes(stripHTML(job.Description), maxDescriptionRunes)
+	desc := truncateRunes(stripHTML(job.Description), MaxDescriptionRunes)
 
 	state := choiceState{
 		Title:           job.Title,
@@ -111,7 +122,7 @@ func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questio
 
 	answers := make(map[string]dto.Answer, len(questions))
 	var usage dto.Usage
-	for _, batch := range batchQuestions(questions, qs, stateChars, maxBatchChars) {
+	for _, batch := range batchQuestions(questions, qs, stateChars, MaxBatchChars) {
 		batchAnswers, batchUsage, err := c.answerBatch(ctx, apiKey, state, qs, batch)
 		if err != nil {
 			return nil, dto.Usage{}, err
