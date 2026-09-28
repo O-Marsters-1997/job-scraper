@@ -28,7 +28,7 @@ func usage() {
 }
 
 func main() {
-	slog.SetDefault(logger.New())
+	slog.SetDefault(logger.MustFromEnv())
 
 	if len(os.Args) < 2 {
 		usage()

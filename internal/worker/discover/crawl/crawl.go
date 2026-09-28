@@ -19,6 +19,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 const (
@@ -81,10 +82,10 @@ func (c *Crawler) Run(ctx context.Context) {
 func (c *Crawler) tick(ctx context.Context) {
 	companies, err := c.store.ListCompaniesToCrawl(ctx, batchSize)
 	if err != nil {
-		slog.Error("crawl: list companies failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "crawl: list companies failed", slog.Any(logger.KeyErr, err))
 		return
 	}
-	slog.Info("crawl: batch fetched", slog.Int("count", len(companies)), slog.Int("limit", batchSize))
+	slog.InfoContext(ctx, "crawl: batch fetched", slog.Int(logger.KeyCount, len(companies)), slog.Int("limit", batchSize))
 
 	for _, company := range companies {
 		c.crawlCompany(ctx, company)
@@ -92,7 +93,7 @@ func (c *Crawler) tick(ctx context.Context) {
 }
 
 func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
-	log := slog.With(slog.String("company", company.Slug), slog.String("domain", company.Domain))
+	log := slog.With(slog.String(logger.KeyCompanySlug, company.Slug), slog.String("domain", company.Domain))
 
 	if source, token, ok := c.resolve(ctx, log, company.Domain); ok {
 		_, err := c.store.UpsertCompany(ctx, dto.CompanyUpsert{
@@ -103,14 +104,14 @@ func (c *Crawler) crawlCompany(ctx context.Context, company dto.Company) {
 			Domain:    company.Domain,
 		})
 		if err != nil {
-			log.Error("crawl: writeback failed", slog.Any("err", err))
+			log.ErrorContext(ctx, "crawl: writeback failed", slog.Any(logger.KeyErr, err))
 		} else {
-			log.Info("crawl: resolved ATS board", slog.String("source", source), slog.String("token", token))
+			log.InfoContext(ctx, "crawl: resolved ATS board", slog.String(logger.KeySource, source), slog.String("token", token))
 		}
 	}
 
 	if err := c.store.TouchCompanyCrawled(ctx, company.ID); err != nil {
-		log.Error("crawl: touch last_crawled_at failed", slog.Any("err", err))
+		log.ErrorContext(ctx, "crawl: touch last_crawled_at failed", slog.Any(logger.KeyErr, err))
 	}
 }
 
@@ -176,13 +177,13 @@ func (s *session) fetchRobots(ctx context.Context) {
 	body, err := s.fetchURL(ctx, u.String())
 	s.fetches++
 	if err != nil {
-		s.log.Info("crawl: robots.txt unreachable, treating as allow-all", slog.Any("err", err))
+		s.log.InfoContext(ctx, "crawl: robots.txt unreachable, treating as allow-all", slog.Any(logger.KeyErr, err))
 		s.polite = allowAllPoliteness()
 		return
 	}
 	polite, err := parseRobots(body)
 	if err != nil {
-		s.log.Warn("crawl: robots.txt parse failed, treating as allow-all", slog.Any("err", err))
+		s.log.WarnContext(ctx, "crawl: robots.txt parse failed, treating as allow-all", slog.Any(logger.KeyErr, err))
 		polite = allowAllPoliteness()
 	}
 	s.polite = polite
@@ -198,11 +199,11 @@ func (s *session) getAbsolute(ctx context.Context, u *neturl.URL) ([]byte, *netu
 
 func (s *session) fetchIfAllowed(ctx context.Context, u *neturl.URL) ([]byte, *neturl.URL, bool) {
 	if s.fetches >= maxFetchesPerCompany {
-		s.log.Info("crawl: fetch budget exhausted, skipping", slog.String("url", u.String()))
+		s.log.InfoContext(ctx, "crawl: fetch budget exhausted, skipping", slog.String(logger.KeyURL, u.String()))
 		return nil, nil, false
 	}
 	if !s.polite.allowed(u.Path) {
-		s.log.Info("crawl: path disallowed by robots.txt", slog.String("path", u.Path))
+		s.log.InfoContext(ctx, "crawl: path disallowed by robots.txt", slog.String("path", u.Path))
 		return nil, nil, false
 	}
 	if s.fetches > 0 {
@@ -212,7 +213,7 @@ func (s *session) fetchIfAllowed(ctx context.Context, u *neturl.URL) ([]byte, *n
 	body, err := s.fetchURL(ctx, u.String())
 	s.fetches++
 	if err != nil {
-		s.log.Warn("crawl: fetch failed", slog.String("url", u.String()), slog.Any("err", err))
+		s.log.WarnContext(ctx, "crawl: fetch failed", slog.String(logger.KeyURL, u.String()), slog.Any(logger.KeyErr, err))
 		return nil, nil, false
 	}
 	return body, u, true

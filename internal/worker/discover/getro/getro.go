@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
@@ -50,12 +51,12 @@ func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 	for _, board := range h.boards {
 		body, err := h.fetch(ctx, board)
 		if err != nil {
-			slog.Warn("getro: board fetch failed, skipping", slog.String("board", board), slog.Any("err", err))
+			slog.WarnContext(ctx, "getro: board fetch failed, skipping", slog.String(logger.KeyURL, board), slog.Any(logger.KeyErr, err))
 			continue
 		}
 		companies, err := parseGetro(body)
 		if err != nil {
-			slog.Warn("getro: board parse failed, skipping", slog.String("board", board), slog.Any("err", err))
+			slog.WarnContext(ctx, "getro: board parse failed, skipping", slog.String(logger.KeyURL, board), slog.Any(logger.KeyErr, err))
 			continue
 		}
 		all = append(all, companies...)

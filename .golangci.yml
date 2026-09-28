@@ -16,6 +16,7 @@ linters:
     - tparallel # correct t.Parallel() usage
     - errorlint # error wrapping correctness
     - usetesting # prefer testing package helpers over manual equivalents
+    - sloglint # consistent slog usage: *Context calls, attrs, snake_case keys (ADR 0013)
   settings:
     forbidigo:
       forbid:
@@ -23,6 +24,12 @@ linters:
           msg: use cmp.Diff(want, got) instead (ADR 0012)
         - pattern: '^time\.Sleep$'
           msg: poll with a ticker and a deadline instead (ADR 0012)
+    sloglint:
+      attr-only: true
+      context: scope
+      static-msg: true
+      key-naming-case: snake
+      forbidden-keys: ["time", "level", "msg"]
     depguard:
       rules:
         test-doubles:

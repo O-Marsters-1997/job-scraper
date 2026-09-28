@@ -13,6 +13,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
@@ -183,7 +184,7 @@ func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task
 func (b *Broker) consumeSource(ctx context.Context, source string, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) {
 	for ctx.Err() == nil {
 		if err := b.consumeSession(ctx, source, handler, terminal); err != nil && ctx.Err() == nil {
-			slog.Error("source consumer disconnected", slog.String("source", source), slog.Any("err", err))
+			slog.ErrorContext(ctx, "source consumer disconnected", slog.String(logger.KeySource, source), slog.Any(logger.KeyErr, err))
 		}
 		select {
 		case <-ctx.Done():
@@ -232,18 +233,30 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			if err == nil && task.Source != source {
 				err = fmt.Errorf("task source %s delivered to %s", task.Source, source)
 			}
+			taskCtx := logger.With(ctx,
+				slog.String(logger.KeySource, source),
+				slog.String(logger.KeyKind, string(task.Kind)),
+				slog.String(logger.KeyTaskID, task.ID),
+				slog.String(logger.KeyTargetID, task.TargetID),
+				slog.String(logger.KeyRunID, task.RunID),
+			)
+			slog.DebugContext(taskCtx, "queue delivery received", slog.Bool("redelivered", task.Redelivered))
 			if err == nil {
 				handlerStart := time.Now()
-				err = handler(ctx, task)
-				logTaskDone(source, task, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
+				err = handler(taskCtx, task)
+				logTaskDone(taskCtx, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
 			}
 			if ctx.Err() != nil {
 				return nil
 			}
 			if err != nil {
-				slog.Error("source task failed", slog.String("task_id", task.ID), slog.String("source", source), slog.String("kind", string(task.Kind)), slog.String("target_id", task.TargetID), slog.String("run_id", task.RunID), slog.Any("err", err), slog.Any("x-delivery-count", delivery.Headers["x-delivery-count"]))
-				if terminal != nil && deliveryCount(delivery.Headers["x-delivery-count"]) >= 5 {
-					if terminalErr := terminal(ctx, task); terminalErr != nil {
+				count := deliveryCount(delivery.Headers["x-delivery-count"])
+				slog.ErrorContext(taskCtx, "source task failed",
+					slog.Any(logger.KeyErr, err),
+					slog.Int64(logger.KeyDeliveryCount, count),
+				)
+				if terminal != nil && count >= 5 {
+					if terminalErr := terminal(taskCtx, task); terminalErr != nil {
 						return fmt.Errorf("record terminal task failure for %s: %w", task.ID, terminalErr)
 					}
 				}
@@ -252,6 +265,7 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 				}
 				continue
 			}
+			slog.DebugContext(taskCtx, "queue delivery acked")
 			if err := delivery.Ack(false); err != nil {
 				return err
 			}
@@ -259,24 +273,20 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 	}
 }
 
-func logTaskDone(source string, task Task, publishedAt, consumedAt time.Time, duration time.Duration, err error) {
+func logTaskDone(ctx context.Context, publishedAt, consumedAt time.Time, duration time.Duration, err error) {
 	outcome := "ok"
 	if err != nil {
 		outcome = "error"
 	}
 	attrs := []slog.Attr{
-		slog.String("event", telemetry.EventTaskDone),
-		slog.String("source", source),
-		slog.String("kind", string(task.Kind)),
-		slog.String("outcome", outcome),
-		slog.Int64("duration_ms", duration.Milliseconds()),
-		slog.String("task_id", task.ID),
-		slog.String("run_id", task.RunID),
+		slog.String(logger.KeyEvent, telemetry.EventTaskDone),
+		slog.String(logger.KeyOutcome, outcome),
+		slog.Int64(logger.KeyDurationMS, duration.Milliseconds()),
 	}
 	if !publishedAt.IsZero() {
-		attrs = append(attrs, slog.Int64("wait_ms", consumedAt.Sub(publishedAt).Milliseconds()))
+		attrs = append(attrs, slog.Int64(logger.KeyWaitMS, consumedAt.Sub(publishedAt).Milliseconds()))
 	}
-	slog.LogAttrs(context.Background(), slog.LevelInfo, "queue task done", attrs...)
+	slog.LogAttrs(ctx, slog.LevelInfo, "queue task done", attrs...)
 }
 
 func deliveryCount(value any) int64 {

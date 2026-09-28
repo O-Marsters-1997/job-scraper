@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
@@ -80,27 +81,27 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
 
 	last, ok, err := r.gate.GetLastScraped(ctx, key)
 	if err != nil {
-		log.Warn("could not read last harvested, proceeding", slog.Any("err", err))
+		log.WarnContext(ctx, "could not read last harvested, proceeding", slog.Any(logger.KeyErr, err))
 	}
 	if ok && time.Since(last) < harvestInterval {
-		log.Info("skipping harvest: ran recently", slog.Duration("ago", time.Since(last)))
+		log.InfoContext(ctx, "skipping harvest: ran recently", slog.Duration("ago", time.Since(last)))
 		return
 	}
 
 	companies, err := h.Harvest(ctx)
 	if err != nil {
-		log.Error("harvest failed", slog.Any("err", err))
+		log.ErrorContext(ctx, "harvest failed", slog.Any(logger.KeyErr, err))
 		return
 	}
 
 	for _, c := range companies {
 		if err := r.upsert(ctx, c); err != nil {
-			log.Error("upsert failed", slog.String("name", c.Name), slog.Any("err", err))
+			log.ErrorContext(ctx, "upsert failed", slog.String("name", c.Name), slog.Any(logger.KeyErr, err))
 		}
 	}
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
-		log.Error("could not set last harvested", slog.Any("err", err))
+		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
 	}
 }
 

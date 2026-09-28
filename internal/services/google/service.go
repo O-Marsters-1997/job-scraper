@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 const userInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
@@ -53,7 +54,7 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 		case errors.Is(err, ErrTokenNotFound):
 			return dto.GoogleStatus{Connected: false}, nil
 		case errors.Is(err, ErrTokenUnusable):
-			slog.Warn("google token unusable, treating as disconnected", slog.Any("err", err))
+			slog.WarnContext(ctx, "google token unusable, treating as disconnected", slog.Any(logger.KeyErr, err))
 			return dto.GoogleStatus{Connected: false}, nil
 		default:
 			return dto.GoogleStatus{}, err

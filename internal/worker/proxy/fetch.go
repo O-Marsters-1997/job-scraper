@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 const maxBodyBytes = 8 << 20
@@ -110,7 +113,9 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}()
 	for attempt := 0; attempt < 2; attempt++ {
+		start := time.Now()
 		resp, err := f.base.RoundTrip(req)
+		logFetch(req, resp, err, time.Since(start))
 		if err != nil {
 			if f.zone != nil && errors.Is(err, errZoneExhausted) {
 				f.zone.result(true, false, probe)
@@ -146,6 +151,26 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}
 	return nil, errors.New("unreachable")
+}
+
+func logFetch(req *http.Request, resp *http.Response, err error, duration time.Duration) {
+	ctx := req.Context()
+	if !slog.Default().Enabled(ctx, slog.LevelDebug) {
+		return
+	}
+	status := 0
+	if resp != nil {
+		status = resp.StatusCode
+	}
+	attrs := []any{
+		slog.String(logger.KeyURL, req.URL.String()),
+		slog.Int(logger.KeyStatus, status),
+		slog.Int64(logger.KeyDurationMS, duration.Milliseconds()),
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any(logger.KeyErr, err))
+	}
+	slog.DebugContext(ctx, "source fetch", attrs...)
 }
 
 func zoneExhausted(resp *http.Response) bool {

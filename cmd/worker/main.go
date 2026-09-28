@@ -44,16 +44,16 @@ func main() {
 	forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
 	noScrape := flag.Bool("no-scrape", false, "skip new scheduled Board checks")
 	flag.Parse()
-	slog.SetDefault(logger.New())
+	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := proxy.Validate(); err != nil {
-		slog.Error("Web Unlocker config invalid", slog.Any("err", err))
+		slog.ErrorContext(ctx, "Web Unlocker config invalid", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		slog.Error("db init failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	defer pool.Close()
@@ -70,7 +70,7 @@ func main() {
 	}
 	go func() {
 		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
-			slog.Error("metrics server failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "metrics server failed", slog.Any(logger.KeyErr, err))
 		}
 	}()
 
@@ -80,7 +80,7 @@ func main() {
 	}
 	q, err := queue.NewBroker(brokerURL)
 	if err != nil {
-		slog.Error("queue init failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "queue init failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	defer func() { _ = q.Close() }()
@@ -89,7 +89,7 @@ func main() {
 
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {
-		slog.Error("API_BASE_URL is required")
+		slog.ErrorContext(ctx, "API_BASE_URL is required")
 		os.Exit(1)
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
@@ -114,26 +114,26 @@ func main() {
 				boards, err = js.Boards().ListDueBoards(ctx)
 			}
 			if err != nil {
-				slog.Error("list Boards failed", slog.Any("err", err))
+				slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
 				return
 			}
 			for _, board := range boards {
 				task := queue.Task{Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: *forceBoards}
 				if err := q.Publish(ctx, task); err != nil {
-					slog.Error("publish Board check failed", slog.String("board_id", board.ID), slog.Any("err", err))
+					slog.ErrorContext(ctx, "publish Board check failed", slog.String(logger.KeyBoardID, board.ID), slog.Any(logger.KeyErr, err))
 				}
 			}
 		}
 		go publishBoards()
 		if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
-			slog.Error("Board schedule failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "Board schedule failed", slog.Any(logger.KeyErr, err))
 			os.Exit(1)
 		}
 	}
 	reconcile := func() {
 		targets, err := js.Targets().ListRecoverableSourceTargets(ctx)
 		if err != nil {
-			slog.Error("list recoverable runs failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "list recoverable runs failed", slog.Any(logger.KeyErr, err))
 			return
 		}
 		for _, target := range targets {
@@ -142,14 +142,14 @@ func main() {
 				continue
 			}
 			if err != nil {
-				slog.Error("claim recoverable run failed", slog.String("target_id", target.ID), slog.Any("err", err))
+				slog.ErrorContext(ctx, "claim recoverable run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
 				continue
 			}
 			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: target.Source, TargetID: target.ID, RunID: target.RunID, Recovery: true}
 			if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
 				boardID, err := js.Boards().GetVerifiedBoardID(ctx, target.Source, target.Value)
 				if err != nil {
-					slog.Error("recover Board run failed", slog.String("target_id", target.ID), slog.Any("err", err))
+					slog.ErrorContext(ctx, "recover Board run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
 					continue
 				}
 				task.Kind, task.BoardID, task.Manual = queue.BoardCheckTask, boardID, true
@@ -157,27 +157,27 @@ func main() {
 				task.Kind = queue.ListingPageTask
 			}
 			if err := q.Publish(ctx, task); err != nil {
-				slog.Error("recover run publish failed", slog.String("target_id", target.ID), slog.Any("err", err))
+				slog.ErrorContext(ctx, "recover run publish failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
 			}
 		}
 	}
 	go reconcile()
 	if _, err := cr.AddFunc("@every 1m", reconcile); err != nil {
-		slog.Error("reconcile schedule failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "reconcile schedule failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	if _, err := cr.AddFunc("@daily", func() {
 		if err := proxy.Probe(ctx); err != nil {
-			slog.Warn("Web Unlocker daily probe failed", slog.Any("err", err))
+			slog.WarnContext(ctx, "Web Unlocker daily probe failed", slog.Any(logger.KeyErr, err))
 		}
 		if err := idm.DeleteExpiredSessions(ctx); err != nil {
-			slog.Error("session cleanup failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "session cleanup failed", slog.Any(logger.KeyErr, err))
 		}
 		if err := js.DeleteExpiredCandidates(ctx); err != nil {
-			slog.Error("candidate cleanup failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "candidate cleanup failed", slog.Any(logger.KeyErr, err))
 		}
 	}); err != nil {
-		slog.Error("daily schedule failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "daily schedule failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	cr.Start()
@@ -185,9 +185,9 @@ func main() {
 
 	go discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards()).Run(ctx)
 	go crawl.New(js.Boards()).Run(ctx)
-	slog.Info("RabbitMQ source workers starting")
+	slog.InfoContext(ctx, "RabbitMQ source workers starting")
 	if err := q.Consume(ctx, processor.process, processor.failRun); err != nil && ctx.Err() == nil {
-		slog.Error("worker failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
 	}
 }
 
@@ -239,7 +239,7 @@ func (p *taskProcessor) process(ctx context.Context, task queue.Task) error {
 
 func (p *taskProcessor) verifyBoard(ctx context.Context, task queue.Task) error {
 	if err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken); err != nil {
-		slog.Warn("board verification failed", slog.String("company_id", task.CompanyID), slog.String("source", task.Source), slog.String("token", task.BoardToken), slog.Any("err", err))
+		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
 	_, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")

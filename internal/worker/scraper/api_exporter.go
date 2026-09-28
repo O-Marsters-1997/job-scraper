@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 type APIExporter struct {
@@ -20,7 +21,8 @@ type APIExporter struct {
 }
 
 func NewAPIExporter(baseURL, token string) *APIExporter {
-	return &APIExporter{baseURL: baseURL, token: token, client: &http.Client{Timeout: 30 * time.Second}, initialBackoff: time.Second}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: logger.Transport(nil)}
+	return &APIExporter{baseURL: baseURL, token: token, client: client, initialBackoff: time.Second}
 }
 
 func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {

@@ -37,7 +37,7 @@ func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 	next := h.baseURL
 	for page := 0; next != ""; page++ {
 		if page >= maxPages {
-			slog.Warn("yc harvester: page cap reached, stopping early", slog.Int("cap", maxPages))
+			slog.WarnContext(ctx, "yc harvester: page cap reached, stopping early", slog.Int("cap", maxPages))
 			break
 		}
 		body, err := h.fetch(ctx, next)

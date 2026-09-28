@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 // AccessLog emits an EventHTTPRequest log line per request, skipping OPTIONS.
@@ -21,12 +23,12 @@ func AccessLog(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(ww, r)
 
-		slog.Info("http request",
-			slog.String("event", EventHTTPRequest),
-			slog.String("method", r.Method),
-			slog.String("route", chi.RouteContext(r.Context()).RoutePattern()),
-			slog.Int("status", ww.Status()),
-			slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+		slog.InfoContext(r.Context(), "http request",
+			slog.String(logger.KeyEvent, EventHTTPRequest),
+			slog.String(logger.KeyMethod, r.Method),
+			slog.String(logger.KeyRoute, chi.RouteContext(r.Context()).RoutePattern()),
+			slog.Int(logger.KeyStatus, ww.Status()),
+			slog.Int64(logger.KeyDurationMS, time.Since(start).Milliseconds()),
 		)
 	})
 }
