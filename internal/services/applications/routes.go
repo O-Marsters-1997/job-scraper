@@ -8,7 +8,7 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Route("/application-statuses", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.store.ListApplicationStatusesByUser))
+		r.Get("/", handlers.GetAll(m.listStatuses))
 		r.Post("/", handlers.Create(m.statuses.Create))
 		r.Patch("/{id}", handlers.Update(m.statuses.Update))
 		r.Delete("/{id}", handlers.Delete(m.statuses.Delete))

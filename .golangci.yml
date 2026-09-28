@@ -34,6 +34,10 @@ linters:
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/handlers/handlerstest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/applicationstatuses/applicationstatusestest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
         no-testify:
           files: ["**/*_test.go"]
           deny:
