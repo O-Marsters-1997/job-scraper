@@ -3,6 +3,7 @@ package scoring
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,9 +24,30 @@ type noopAlerter struct{}
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
 type Module struct {
-	store         *store.Store
+	store         Store
 	scoring       *Service
 	scoringConfig *scoringconfig.Service
+}
+
+// Deps are the stores and collaborators Build wires into the Module; New
+// builds the real ones and calls Build. Tests call Build directly with
+// fakes (ADR 0012).
+type Deps struct {
+	Store              Store
+	ScoringConfigStore scoringconfig.Store
+	Answerer           Answerer
+	Credentials        Credentials
+	Alerter            Alerter
+	Profiles           ProfileReader
+	Candidates         scoringconfig.Reconsiderer
+	Extractor          scoringconfig.Extractor
+	TickInterval       time.Duration
+}
+
+func Build(deps Deps) *Module {
+	mainService := NewService(deps.Store, deps.Answerer, deps.Credentials, deps.Alerter, deps.Profiles, deps.TickInterval)
+	scoringConfig := scoringconfig.New(deps.ScoringConfigStore, deps.Candidates, mainService, deps.Extractor, deps.Credentials, mainService)
+	return &Module{store: deps.Store, scoring: mainService, scoringConfig: scoringConfig}
 }
 
 // New wires the scoring context: its own store, the answer-effect loop and
@@ -44,10 +66,10 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 		}
 	}
 
-	mainService := NewService(st, jev.NewClient(), credentials, alerter, profiles)
-	scoringConfig := scoringconfig.New(st, candidates, mainService, extract.NewClient(), credentials, mainService)
-
-	return &Module{store: st, scoring: mainService, scoringConfig: scoringConfig}
+	return Build(Deps{
+		Store: st, ScoringConfigStore: st, Answerer: jev.NewClient(), Credentials: credentials,
+		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+	})
 }
 
 // NewFacade wires only the scoring store, for cmd/admin's option commands

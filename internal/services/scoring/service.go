@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -20,10 +21,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
-const maxConcurrentEffects = 4
+const (
+	maxConcurrentEffects    = 4
+	defaultAnswerEffectTick = 2 * time.Second
+)
 
-var answerEffectTickInterval = 2 * time.Second
-
+// Store is the scoring context's full Postgres surface: what Service needs
+// to drain the answer-effect queue, and what Module binds routes and
+// tx-scoped ports to directly (ADR 0012).
 type Store interface {
 	ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
@@ -36,23 +41,38 @@ type Store interface {
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
+
+	OpsState(ctx context.Context) (dto.OpsState, error)
+	GetScoringStatus(ctx context.Context, userID string) (dto.ScoringStatus, error)
+	JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error
+	JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error
+	CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error
+	AddScoringOption(ctx context.Context, id, dimension, label, question string) error
+	RewordScoringOption(ctx context.Context, id, question string) error
+	RetireScoringOption(ctx context.Context, id string) error
 }
 
 type Service struct {
-	store       Store
-	answerer    Answerer
-	credentials Credentials
-	alerter     Alerter
-	profiles    ProfileReader
+	store        Store
+	answerer     Answerer
+	credentials  Credentials
+	alerter      Alerter
+	profiles     ProfileReader
+	tickInterval time.Duration
 }
 
-func NewService(store Store, answerer Answerer, credentials Credentials, alerter Alerter, profiles ProfileReader) *Service {
-	return &Service{store: store, answerer: answerer, credentials: credentials, alerter: alerter, profiles: profiles}
+// NewService wires the answer-effect loop. tickInterval <= 0 defaults to
+// two seconds; tests pass a short interval to drive Run without sleeping.
+func NewService(store Store, answerer Answerer, credentials Credentials, alerter Alerter, profiles ProfileReader, tickInterval time.Duration) *Service {
+	if tickInterval <= 0 {
+		tickInterval = defaultAnswerEffectTick
+	}
+	return &Service{store: store, answerer: answerer, credentials: credentials, alerter: alerter, profiles: profiles, tickInterval: tickInterval}
 }
 
-// Run ticks every two seconds, draining the answer-effect queue.
+// Run ticks at the configured interval, draining the answer-effect queue.
 func (s *Service) Run(ctx context.Context) error {
-	ticker := time.NewTicker(answerEffectTickInterval)
+	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -166,7 +186,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 				return fail(fmt.Errorf("answer questions: %w", err))
 			}
 			for question, a := range answers {
-				fresh[questionHash(question)] = a
+				fresh[QuestionHash(question)] = a
 			}
 			cost = usage.Cost
 			for _, sc := range surviving {
@@ -307,7 +327,7 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 		if !ok {
 			continue
 		}
-		answer, known := answers[questionHash(opt.Question)]
+		answer, known := answers[QuestionHash(opt.Question)]
 		out = append(out, evaluatedPick{
 			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
 			answer: answer, known: known, retired: opt.RetiredAt != nil,
