@@ -7,15 +7,27 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/trackeddocs"
 )
 
+// Deps are the stores and collaborators Build wires into the Module; New
+// builds the real ones and calls Build (ADR 0012).
+type Deps struct {
+	CV          Store
+	TrackedDocs trackeddocs.Store
+	DocsClient  DocsClient
+}
+
 type Module struct {
 	cv          *Service
 	trackedDocs *trackeddocs.Service
 }
 
+func Build(deps Deps) *Module {
+	return &Module{
+		cv:          NewService(deps.DocsClient, deps.CV),
+		trackedDocs: trackeddocs.New(deps.DocsClient, deps.TrackedDocs),
+	}
+}
+
 func New(pool *pgxpool.Pool, gc DocsClient) *Module {
 	st := store.New(pool)
-	return &Module{
-		cv:          NewService(gc, st),
-		trackedDocs: trackeddocs.New(gc, st),
-	}
+	return Build(Deps{CV: st, TrackedDocs: st, DocsClient: gc})
 }
