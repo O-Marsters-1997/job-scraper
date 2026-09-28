@@ -51,65 +51,45 @@ func trackingFor(t *testing.T, st *jobsearchtest.FakeStore, userID, companyID st
 	return dto.Company{}, false
 }
 
-func TestCreate(t *testing.T) {
-	tests := []struct {
-		name  string
-		in    dto.CreateCompanyInput
-		check func(t *testing.T, company dto.Company, err error, companyStore *jobsearchtest.FakeStore)
-	}{
-		{
-			name:  "rejects missing url",
-			in:    dto.CreateCompanyInput{},
-			check: wantCreateErr(apperr.KindInvalid),
-		},
-		{
-			name:  "rejects an unresolvable url",
-			in:    dto.CreateCompanyInput{URL: "https://example.com/careers"},
-			check: wantCreateErr(apperr.KindUnprocessable),
-		},
-		{
-			name:  "resolves and tracks a valid board url by default",
-			in:    dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"},
-			check: wantCreated("acmecorp", true),
-		},
-		{
-			name:  "does not track when track is explicitly false",
-			in:    dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)},
-			check: wantCreated("acmecorp", false),
-		},
+func createCompany(t *testing.T, in dto.CreateCompanyInput) (dto.Company, *jobsearchtest.FakeStore, error) {
+	t.Helper()
+	svc, st := newCompanyService(queuetest.NewRecorder())
+	company, err := svc.CreateCompany(t.Context(), "user-1", in)
+	return company, st, err
+}
+
+func assertCreated(t *testing.T, in dto.CreateCompanyInput, wantSlug string, wantTracked bool) {
+	t.Helper()
+	company, st, err := createCompany(t, in)
+	if err != nil {
+		t.Fatalf("CreateCompany(%+v) err = %v", in, err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc, companyStore := newCompanyService(queuetest.NewRecorder())
-
-			company, err := svc.CreateCompany(t.Context(), "user-1", tt.in)
-			tt.check(t, company, err, companyStore)
-		})
+	if company.Slug != wantSlug {
+		t.Errorf("CreateCompany(%+v).Slug = %q, want %q", in, company.Slug, wantSlug)
+	}
+	tracked, ok := trackingFor(t, st, "user-1", company.ID)
+	if got := ok && tracked.Tracked; got != wantTracked {
+		t.Errorf("tracked = %v, want %v", got, wantTracked)
 	}
 }
 
-func wantCreateErr(wantKind apperr.Kind) func(t *testing.T, _ dto.Company, err error, _ *jobsearchtest.FakeStore) {
-	return func(t *testing.T, _ dto.Company, err error, _ *jobsearchtest.FakeStore) {
-		t.Helper()
-		assertKind(t, err, wantKind)
-	}
+func TestCreate_RejectsMissingURL(t *testing.T) {
+	_, _, err := createCompany(t, dto.CreateCompanyInput{})
+	assertKind(t, err, apperr.KindInvalid)
 }
 
-func wantCreated(wantSlug string, wantTrack bool) func(t *testing.T, company dto.Company, err error, companyStore *jobsearchtest.FakeStore) {
-	return func(t *testing.T, company dto.Company, err error, companyStore *jobsearchtest.FakeStore) {
-		t.Helper()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if company.Slug != wantSlug {
-			t.Errorf("slug = %q, want %q", company.Slug, wantSlug)
-		}
-		tracked, ok := trackingFor(t, companyStore, "user-1", company.ID)
-		if got := ok && tracked.Tracked; got != wantTrack {
-			t.Errorf("tracked = %v, want %v", got, wantTrack)
-		}
-	}
+func TestCreate_RejectsUnresolvableURL(t *testing.T) {
+	_, _, err := createCompany(t, dto.CreateCompanyInput{URL: "https://example.com/careers"})
+	assertKind(t, err, apperr.KindUnprocessable)
+}
+
+func TestCreate_TracksValidBoardURLByDefault(t *testing.T) {
+	assertCreated(t, dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"}, "acmecorp", true)
+}
+
+func TestCreate_DoesNotTrackWhenTrackIsFalse(t *testing.T) {
+	in := dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)}
+	assertCreated(t, in, "acmecorp", false)
 }
 
 func TestSetTracking(t *testing.T) {

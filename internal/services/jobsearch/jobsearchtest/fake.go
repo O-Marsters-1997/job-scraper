@@ -556,7 +556,7 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.Sour
 		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	t.RunID = f.nextID("run")
-	t.RunStatus, t.Enabled = "queued", true
+	t.RunStatus, t.LastRunError, t.Enabled = "queued", "", true
 	f.sourceTargets[id] = t
 	return t, nil
 }
