@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
@@ -51,18 +50,9 @@ func main() {
 		slog.Error("Web Unlocker config invalid", slog.Any("err", err))
 		os.Exit(1)
 	}
-	connStr, err := data.ConnString()
-	if err != nil {
-		slog.Error("db config invalid", slog.Any("err", err))
-		os.Exit(1)
-	}
-	pool, err := pgxpool.New(ctx, connStr)
+	pool, err := data.Connect(ctx)
 	if err != nil {
 		slog.Error("db init failed", slog.Any("err", err))
-		os.Exit(1)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		slog.Error("db ping failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 	defer pool.Close()

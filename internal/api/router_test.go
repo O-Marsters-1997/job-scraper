@@ -19,14 +19,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/data"
-	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -40,7 +39,7 @@ const nilUUID = "00000000-0000-0000-0000-000000000000"
 
 var (
 	router        http.Handler
-	testDB        *db.DB
+	testPool      *pgxpool.Pool
 	testBroker    = &queue.Broker{}
 	testScoring   *scoring.Module
 	testApps      *applications.Module
@@ -73,11 +72,14 @@ func TestMain(m *testing.M) {
 		log.Fatalf("connection string: %v", err)
 	}
 
-	testDB, err = db.New(ctx, connStr)
+	testPool, err = pgxpool.New(ctx, connStr)
 	if err != nil {
-		log.Fatalf("db.New: %v", err)
+		log.Fatalf("pgxpool.New: %v", err)
 	}
-	if err := data.RunMigrations(ctx, testDB.Pool()); err != nil {
+	if err := testPool.Ping(ctx); err != nil {
+		log.Fatalf("db ping: %v", err)
+	}
+	if err := data.RunMigrations(ctx, testPool); err != nil {
 		log.Fatalf("run migrations: %v", err)
 	}
 
@@ -88,22 +90,21 @@ func TestMain(m *testing.M) {
 		log.Fatalf("set AI_CREDENTIAL_ENC_KEY: %v", err)
 	}
 
-	testApps = applications.New(testDB.Pool())
-	testIdentity, err = identity.New(testDB.Pool(), testApps,
+	testApps = applications.New(testPool)
+	testIdentity, err = identity.New(testPool, testApps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		log.Fatalf("identity.New: %v", err)
 	}
 
-	candidateService := candidates.New(testDB, testBroker)
-	testScoring = scoring.New(testDB.Pool(), testIdentity, testIdentity, candidateService, "", "")
-	testCVTemplates := cvtemplates.New(testDB.Pool(), testIdentity.DocsClient())
-	testJobsearch = jobsearch.New(testDB.Pool(), testBroker, testScoring)
+	testJobsearch = jobsearch.New(testPool, testBroker, scoring.NewFacade(testPool))
+	testScoring = scoring.New(testPool, testIdentity, testIdentity, testJobsearch, "", "")
+	testCVTemplates := cvtemplates.New(testPool, testIdentity.DocsClient())
 	router = api.NewRouter(testIdentity, testJobsearch, testApps, testCVTemplates, testScoring)
 
 	code := m.Run()
 
-	testDB.Close()
+	testPool.Close()
 	if err := pgCont.Terminate(ctx); err != nil {
 		log.Printf("terminate container: %v", err)
 	}
@@ -290,7 +291,7 @@ func TestRouterRoutes(t *testing.T) {
 
 	t.Run("applications", func(t *testing.T) {
 		var jobID string
-		err := testDB.Pool().QueryRow(context.Background(),
+		err := testPool.QueryRow(context.Background(),
 			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at)
 			 VALUES ('Engineer', 'Remote', 'https://example.com/router-test-applications', 'acme', 'greenhouse', NOW())
 			 RETURNING id`).Scan(&jobID)

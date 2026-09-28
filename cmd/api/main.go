@@ -12,11 +12,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
-	jobsdb "github.com/ollymarsters/job-scraper/internal/data/db"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -30,17 +29,12 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	connStr, err := jobsdb.ConnString()
-	if err != nil {
-		slog.Error("db config invalid", slog.Any("err", err))
-		os.Exit(1)
-	}
-	db, err := jobsdb.New(ctx, connStr)
+	pool, err := data.Connect(ctx)
 	if err != nil {
 		slog.Error("db init failed", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer pool.Close()
 
 	brokerURL := os.Getenv("RABBITMQ_URL")
 	if brokerURL == "" {
@@ -54,8 +48,8 @@ func main() {
 	slog.Info("queue client ready")
 	defer func() { _ = q.Close() }()
 
-	apps := applications.New(db.Pool())
-	idm, err := identity.New(db.Pool(), apps,
+	apps := applications.New(pool)
+	idm, err := identity.New(pool, apps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		slog.Error("identity init failed", slog.Any("err", err))
@@ -66,9 +60,8 @@ func main() {
 	if notifyFrom == "" {
 		notifyFrom = "onboarding@resend.dev"
 	}
-	candidateService := candidates.New(db, q)
-	scoringModule := scoring.New(db.Pool(), idm, idm, candidateService, os.Getenv("RESEND_API_KEY"), notifyFrom)
-	db.WithScoring(scoringModule)
+	js := jobsearch.New(pool, q, scoring.NewFacade(pool))
+	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom)
 	go func() {
 		if err := scoringModule.Run(ctx); err != nil {
 			slog.Error("answer effect loop failed", slog.Any("err", err))
@@ -93,9 +86,7 @@ func main() {
 		port = ":8080"
 	}
 
-	cvTemplates := cvtemplates.New(db.Pool(), idm.DocsClient())
-
-	js := jobsearch.New(db.Pool(), q, scoringModule)
+	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 
 	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule)}
 

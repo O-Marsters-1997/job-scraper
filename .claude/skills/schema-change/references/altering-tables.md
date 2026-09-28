@@ -50,6 +50,7 @@ No rename migration exists yet in this repo to cite, but the same
 symmetry rule applies: `ALTER TABLE t RENAME COLUMN old TO new` going up
 pairs with `ALTER TABLE t RENAME COLUMN new TO old` going down. A rename
 is also the one alteration that breaks callers immediately — check
-`internal/data/sqlc/queries/*.sql` for every reference to the old column
-name before renaming, since sqlc will fail to generate (not silently skip)
-if a query still refers to a column that's gone after step 5 in `SKILL.md`.
+`internal/services/*/store/queries/*.sql` for every reference to the old
+column name before renaming, since sqlc will fail to generate (not silently
+skip) if a query still refers to a column that's gone after step 5 in
+`SKILL.md`.

@@ -8,16 +8,12 @@ paths: ["internal/services/**", "internal/handlers/**", "internal/api/**", "inte
 
 An endpoint touches four backend pieces and four frontend ones. Work top to bottom.
 
-## 0. Which context, and has it moved?
+## 0. Which context?
 
 Find the owning context in [ADR 0011](../../../docs/adr/0011-modular-monolith-by-context.md)
 (`jobsearch`, `scoring`, `applications`, `cvtemplates`, `identity`). Pick it by which tables the
 endpoint *writes*. Reads may join other contexts' tables. If the route would write two contexts'
 tables, it belongs to one of them and calls the other's tx-scoped port. Nothing fits? Stop and ask.
-
-Check `AGENTS.md` § Migration status. If the context hasn't moved yet, use the legacy layout
-described there (`internal/api/services/<feature>`, `internal/api/router.go`, `providers.X`) and
-skip the paths below. Don't move a context as a side effect of adding one route.
 
 If the endpoint needs a new table, column or query, run the `schema-change` skill first. Come
 back once the store method exists.

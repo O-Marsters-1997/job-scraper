@@ -45,3 +45,5 @@ Rejected alternatives:
 - `internal/<ctx>/internal/<feature>` and `internal/<ctx>/internal/store`, so Go's `internal/` rule enforces store privacy: the applications pilot found the doubled `internal` hard to read, and depguard covers the same boundary.
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
+
+Status: complete (2026-09-28, PR #305) — `internal/data/db`, `internal/data/providers` and the legacy sqlc block removed.

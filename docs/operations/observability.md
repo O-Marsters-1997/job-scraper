@@ -43,8 +43,8 @@ Everything below needs the live Grafana Cloud stack and can't be verified headle
       `ollyn.marsters@gmail.com` within ~5 minutes of crossing the threshold.
 
 Everything else — `OpsState`'s counts and ages, the collector's happy and failure paths, and the
-worker's `/metrics` carrying no `jobscraper_*` series — is covered by `go test ./internal/data/db/...` (`./internal/scoring/...` once scoring moves)
-and `go test ./internal/telemetry/...`.
+worker's `/metrics` carrying no `jobscraper_*` series — is covered by
+`go test ./internal/services/scoring/store/...` and `go test ./internal/telemetry/...`.
 
 ## Manual verification: RabbitMQ alerts
 

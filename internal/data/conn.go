@@ -1,13 +1,36 @@
 package data
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// Connect builds a pgxpool from the POSTGRES_* env vars and pings it,
+// shared by every binary that connects to the database directly.
+func Connect(ctx context.Context) (*pgxpool.Pool, error) {
+	connStr, err := ConnString()
+	if err != nil {
+		return nil, err
+	}
+	pool, err := pgxpool.New(ctx, connStr)
+	if err != nil {
+		return nil, fmt.Errorf("postgres connect: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("postgres ping: %w", err)
+	}
+	slog.Info("connected to postgres", slog.String("host", pool.Config().ConnConfig.Host))
+	return pool, nil
+}
 
 // ConnString builds the Postgres DSN from POSTGRES_* env vars, shared by
 // every binary that connects to the database directly.
