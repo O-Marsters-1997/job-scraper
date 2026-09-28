@@ -29,14 +29,12 @@ func NewDocsClient() *DocsClient {
 	return &DocsClient{docs: map[string]docFixture{}}
 }
 
-// Disconnected returns a DocsClient whose HTTPClientForUser always fails
-// with err, standing in for a user with no Google account linked.
+// Disconnected returns a DocsClient whose HTTPClientForUser always fails with err.
 func Disconnected(err error) *DocsClient {
 	return &DocsClient{connectErr: err, docs: map[string]docFixture{}}
 }
 
-// WithDoc registers docID's tabs and metadata and returns the receiver for
-// chaining.
+// WithDoc registers docID's tabs and metadata; returns the receiver for chaining.
 func (d *DocsClient) WithDoc(docID string, tabs []google.Tab, meta google.FileMeta) *DocsClient {
 	d.mu.Lock()
 	defer d.mu.Unlock()

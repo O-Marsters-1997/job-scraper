@@ -8,8 +8,7 @@ import (
 )
 
 // Deps are the stores and collaborators Build wires into the Module; New
-// builds the real ones and calls Build. Tests call Build directly with
-// fakes and stubs (ADR 0012).
+// builds the real ones and calls Build (ADR 0012).
 type Deps struct {
 	CV          Store
 	TrackedDocs trackeddocs.Store

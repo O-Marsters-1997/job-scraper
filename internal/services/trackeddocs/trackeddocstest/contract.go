@@ -18,9 +18,7 @@ type Fixture struct {
 }
 
 // RunStoreContract proves newStore's trackeddocs.Store behaves the same
-// whether it's the fake or the real store (ADR 0012). A successful
-// HideTab/ShowTab needs a tab that only cvtemplates.Store.EnsureTabs can
-// create, so that case stays in cvtemplates' store_test.go.
+// whether it's the fake or the real store (ADR 0012).
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 

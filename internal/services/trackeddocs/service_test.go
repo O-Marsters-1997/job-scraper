@@ -54,52 +54,77 @@ func TestAddDoc(t *testing.T) {
 }
 
 func TestRemoveDoc(t *testing.T) {
-	gc := identitytest.NewDocsClient()
-	st := trackeddocstest.NewFakeStore()
-	if err := st.AddTrackedDoc(context.Background(), dto.AddTrackedDocInput{UserID: "u1", DocID: "docA"}); err != nil {
-		t.Fatal(err)
-	}
-	svc := trackeddocs.New(gc, st)
+	t.Run("removes a tracked doc", func(t *testing.T) {
+		st := trackeddocstest.NewFakeStore()
+		if err := st.AddTrackedDoc(context.Background(), dto.AddTrackedDocInput{UserID: "u1", DocID: "docA"}); err != nil {
+			t.Fatal(err)
+		}
+		svc := trackeddocs.New(identitytest.NewDocsClient(), st)
 
-	if err := svc.RemoveDoc(context.Background(), "u1", "docA"); err != nil {
-		t.Fatalf("unexpected error on first remove: %v", err)
-	}
+		if err := svc.RemoveDoc(context.Background(), "u1", "docA"); err != nil {
+			t.Fatal(err)
+		}
+	})
 
-	err := svc.RemoveDoc(context.Background(), "u1", "docA")
-	status, ok := apperr.StatusFor(err)
-	if !ok || status != apperr.KindNotFound.Status() {
-		t.Errorf("expected a not-found error, got %v", err)
-	}
+	t.Run("missing doc returns not found", func(t *testing.T) {
+		svc := trackeddocs.New(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+
+		err := svc.RemoveDoc(context.Background(), "u1", "docA")
+		status, ok := apperr.StatusFor(err)
+		if !ok || status != apperr.KindNotFound.Status() {
+			t.Errorf("expected a not-found error, got %v", err)
+		}
+	})
 }
 
-func TestHideShowTab(t *testing.T) {
-	gc := identitytest.NewDocsClient()
-	st := trackeddocstest.NewFakeStore()
-	st.SeedTab("u1", "docA", "t1", true)
-	svc := trackeddocs.New(gc, st)
+func TestHideTab(t *testing.T) {
+	t.Run("hides a visible tab", func(t *testing.T) {
+		st := trackeddocstest.NewFakeStore()
+		st.SeedTab("u1", "docA", "t1", true)
+		svc := trackeddocs.New(identitytest.NewDocsClient(), st)
 
-	if _, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
-		t.Fatal(err)
-	}
-	if st.Visible("u1", "docA", "t1") {
-		t.Error("tab should be hidden")
-	}
+		if _, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
+			t.Fatal(err)
+		}
+		if st.Visible("u1", "docA", "t1") {
+			t.Error("tab should be hidden")
+		}
+	})
 
-	if _, err := svc.ShowTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
-		t.Fatal(err)
-	}
-	if !st.Visible("u1", "docA", "t1") {
-		t.Error("tab should be visible")
-	}
+	t.Run("missing tab returns not found", func(t *testing.T) {
+		svc := trackeddocs.New(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+
+		_, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t-missing"})
+
+		status, ok := apperr.StatusFor(err)
+		if !ok || status != apperr.KindNotFound.Status() {
+			t.Fatalf("expected a not-found error, got %v", err)
+		}
+	})
 }
 
-func TestHideTab_MissingReturnsNotFound(t *testing.T) {
-	svc := trackeddocs.New(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+func TestShowTab(t *testing.T) {
+	t.Run("shows a hidden tab", func(t *testing.T) {
+		st := trackeddocstest.NewFakeStore()
+		st.SeedTab("u1", "docA", "t1", false)
+		svc := trackeddocs.New(identitytest.NewDocsClient(), st)
 
-	_, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t-missing"})
+		if _, err := svc.ShowTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
+			t.Fatal(err)
+		}
+		if !st.Visible("u1", "docA", "t1") {
+			t.Error("tab should be visible")
+		}
+	})
 
-	status, ok := apperr.StatusFor(err)
-	if !ok || status != apperr.KindNotFound.Status() {
-		t.Fatalf("expected a not-found error, got %v", err)
-	}
+	t.Run("missing tab returns not found", func(t *testing.T) {
+		svc := trackeddocs.New(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+
+		_, err := svc.ShowTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t-missing"})
+
+		status, ok := apperr.StatusFor(err)
+		if !ok || status != apperr.KindNotFound.Status() {
+			t.Fatalf("expected a not-found error, got %v", err)
+		}
+	})
 }

@@ -50,8 +50,6 @@ func (f *FakeStore) SeedTab(userID, docID, tabID string, visible bool) {
 	f.tabs[tabKey(userID, docID, tabID)] = visible
 }
 
-// Visible reports a seeded tab's current visibility, for a test to assert
-// against after HideTab/ShowTab.
 func (f *FakeStore) Visible(userID, docID, tabID string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
