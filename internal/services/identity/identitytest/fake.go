@@ -5,6 +5,7 @@ package identitytest
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -17,9 +18,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
 )
 
-// FakeStore backs identity.Deps.Store; its CreateUser/UpdateEmail and AI
-// credential methods also satisfy profile.Store and aicredentials.Store, so
-// one fake covers every store Deps field.
 type FakeStore struct {
 	mu       sync.Mutex
 	users    map[string]dto.User
@@ -165,6 +163,7 @@ func (f *FakeStore) ListUserAICredentialProviders(_ context.Context, userID stri
 			out = append(out, k[len(prefix):])
 		}
 	}
+	sort.Strings(out)
 	return out, nil
 }
 

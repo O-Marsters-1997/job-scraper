@@ -102,7 +102,7 @@ func main() {
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
 	orch := scraper.New(js.Catalog()).WithSourceBuilder(builder.BuildSource)
 	orch.WithRejectFilter(scoringModule)
-	orch.WithCandidates(js.Candidates())
+	orch.WithCandidates(js.Targets())
 	processor := &taskProcessor{
 		js: js, broker: q, orchestrator: orch, boards: boardPoller, exporter: exporter,
 		detailers: map[string]sources.DetailFetcher{

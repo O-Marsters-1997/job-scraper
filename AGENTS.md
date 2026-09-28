@@ -18,9 +18,11 @@ The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular
   it builds every module with `<ctx>.New(...)`.
 - `internal/services/<ctx>/`: `module.go` (`New(deps) *Module` and the narrow facade: exported methods that
   other contexts, the worker or `cmd/admin` call), `routes.go` (`m.Routes(r)`), and the context's main
-  feature service in `service.go` (`NewService`).
-- `internal/services/<feature>/`: each other feature service of a context, e.g. `applicationstatuses` belongs
-  to `applications`. It declares its own store interface and never imports the store.
+  feature service in `service.go` (`NewService`). A context is one package: one `Service`, one `Store`
+  interface, one `<ctx>test` fake. Add a feature file, not a feature package.
+- `internal/services/<feature>/`: only when the store must import the feature's types, so folding it into
+  the context root would be an import cycle (`sourcetargets` owns `Candidate`, which `jobsearch/store`
+  returns). It declares its own store interface and never imports the store.
 - `internal/services/<ctx>/store/`: `store.go`, `transform.go` (sqlc row → `dto` converters named
   `to<Name>DTO`), `queries/` and generated `sqlc/`. Only `internal/services/<ctx>/` imports it; a
   `<ctx>-store` depguard rule enforces that.
@@ -63,7 +65,7 @@ See [ADR 0008](docs/adr/0008-handlers-over-feature-services.md):
   `Update`, `Delete`). There is no third way. Routes are registered in the owning module's `Routes`.
   Handlers hold no business logic and don't log; only `writeError` logs, and only for an error with no
   `apperr` kind.
-- Domain validation and orchestration live in `internal/services/<ctx>` or `internal/services/<feature>`. A service's
+- Domain validation and orchestration live in `internal/services/<ctx>` (or a split-out `internal/services/<feature>`). A service's
   dependencies are required constructor args: a store interface declared in the service's own package,
   plus small local interfaces for anything else (queue publisher, verifier, another module's facade).
   No `With*` setters.

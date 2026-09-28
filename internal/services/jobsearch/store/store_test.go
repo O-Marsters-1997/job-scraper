@@ -11,7 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
-	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -24,7 +23,7 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 }
 
 func TestStoreSatisfiesContract(t *testing.T) {
-	jobsearchtest.RunStoreContract(t, func(t *testing.T) (jobsearch.Store, string) {
+	jobsearchtest.RunStoreContract(t, func(t *testing.T) (jobsearchtest.Store, string) {
 		t.Helper()
 		st, pool := newStore(t)
 		return st, insertUser(t, pool)

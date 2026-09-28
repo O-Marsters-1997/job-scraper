@@ -1,0 +1,148 @@
+package jobsearch
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/detect"
+	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
+)
+
+const defaultCheckIntervalMinutes = 360
+
+func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.CreateCompanyInput) (dto.Company, error) {
+	if in.URL == "" {
+		return dto.Company{}, apperr.Invalid("url is required")
+	}
+	source, token, ok := detect.ResolveBoard(in.URL)
+	if !ok {
+		return dto.Company{}, apperr.Unprocessable("could not resolve an ATS board from that URL")
+	}
+
+	company, err := s.store.UpsertCompany(ctx, dto.CompanyUpsert{
+		Slug: token,
+		Name: humanizeSlug(token),
+	})
+	if err != nil {
+		return dto.Company{}, err
+	}
+	if _, err := s.store.UpsertCandidateBoard(ctx, company.ID, source, token); err != nil {
+		return dto.Company{}, err
+	}
+
+	if in.Track == nil || *in.Track {
+		if _, err := s.store.SetCompanyTracking(ctx, userID, company.ID, true, defaultCheckIntervalMinutes); err != nil {
+			return dto.Company{}, err
+		}
+	}
+	return company, nil
+}
+
+func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.SetCompanyTrackingInput) (dto.CompanyTracking, error) {
+	if in.Enabled == nil {
+		return dto.CompanyTracking{}, apperr.Invalid("enabled is required")
+	}
+	interval := 0
+	if in.CheckIntervalMinutes != nil {
+		interval = *in.CheckIntervalMinutes
+		if interval < 60 {
+			return dto.CompanyTracking{}, apperr.Invalid("check_interval_minutes must be at least 60")
+		}
+	}
+
+	company, err := s.store.GetCompany(ctx, in.CompanyID)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	tracking, err := s.store.SetCompanyTracking(ctx, userID, company.ID, *in.Enabled, interval)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	if company.ATSSource != "" {
+		if _, err := s.targets.UpsertSourceTargetForCompany(ctx, userID, company.ATSSource, company.ATSToken, company.ID, *in.Enabled, tracking.CheckIntervalMinutes); err != nil {
+			return dto.CompanyTracking{}, err
+		}
+	}
+	return tracking, nil
+}
+
+func (s *Service) ListCompanyBoards(ctx context.Context, _, companyID string) ([]dto.CompanyBoard, error) {
+	if _, err := s.store.GetCompany(ctx, companyID); err != nil {
+		return nil, err
+	}
+	return s.store.ListCompanyBoards(ctx, companyID)
+}
+
+func (s *Service) AddCompanyBoard(ctx context.Context, _ string, in dto.AddCompanyBoardInput) (dto.CompanyBoard, error) {
+	companyID := in.CompanyID
+	if _, err := s.store.GetCompany(ctx, companyID); err != nil {
+		return dto.CompanyBoard{}, err
+	}
+	source, token, ok := detect.ResolveBoard(in.URL)
+	if !ok {
+		return dto.CompanyBoard{}, apperr.Unprocessable("could not resolve an ATS board from that URL")
+	}
+	board, err := s.store.UpsertCandidateBoard(ctx, companyID, source, token)
+	if err != nil {
+		return dto.CompanyBoard{}, err
+	}
+	if in.Confirm && board.Status == dto.BoardCandidate {
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.BoardVerifyTask, CompanyID: companyID, BoardToken: token}
+		if err := s.queue.Publish(ctx, task); err != nil {
+			return dto.CompanyBoard{}, err
+		}
+	}
+	return board, nil
+}
+
+func (s *Service) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
+	return s.store.UpsertCompany(ctx, c)
+}
+
+func (s *Service) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error) {
+	return s.store.ListCompaniesToCrawl(ctx, limit)
+}
+
+func (s *Service) TouchCompanyCrawled(ctx context.Context, id string) error {
+	return s.store.TouchCompanyCrawled(ctx, id)
+}
+
+func (s *Service) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+	return s.store.VerifyCompanyBoard(ctx, companyID, source, token, method)
+}
+
+func (s *Service) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	return s.store.ListDueBoards(ctx)
+}
+
+func (s *Service) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
+	return s.store.ListActiveBoards(ctx)
+}
+
+func (s *Service) ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error) {
+	return s.store.ClaimBoard(ctx, id, manual)
+}
+
+func (s *Service) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
+	return s.store.CompleteBoard(ctx, snapshot)
+}
+
+func (s *Service) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
+	return s.store.FailBoard(ctx, poll)
+}
+
+func (s *Service) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
+	return s.store.GetVerifiedBoardID(ctx, source, token)
+}
+
+func (s *Service) GetLastScraped(ctx context.Context, source string) (time.Time, bool, error) {
+	return s.store.GetLastScraped(ctx, source)
+}
+
+func (s *Service) SetLastScraped(ctx context.Context, source string) error {
+	return s.store.SetLastScraped(ctx, source)
+}

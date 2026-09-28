@@ -16,7 +16,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
-	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
 )
 
 // CompletedEffect is one recorded CompleteAnswerEffect call.
@@ -211,8 +210,6 @@ func (f *FakeStore) GetSearchConfig(_ context.Context, userID string) (dto.Searc
 	return cfg, nil
 }
 
-// UpsertSearchConfig satisfies scoringconfig.Store: the scoring and
-// scoringconfig services share one underlying store, real and fake alike.
 func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -338,7 +335,4 @@ func (f *FakeStore) RetireScoringOption(_ context.Context, id string) error {
 	return data.ErrNotFound
 }
 
-var (
-	_ scoring.Store       = (*FakeStore)(nil)
-	_ scoringconfig.Store = (*FakeStore)(nil)
-)
+var _ scoring.Store = (*FakeStore)(nil)

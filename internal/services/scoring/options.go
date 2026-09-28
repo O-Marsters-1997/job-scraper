@@ -1,4 +1,4 @@
-package scoringconfig
+package scoring
 
 import (
 	"context"

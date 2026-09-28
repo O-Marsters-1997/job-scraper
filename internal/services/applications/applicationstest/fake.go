@@ -1,6 +1,3 @@
-// Package applicationstest is the applications feature's test double: a
-// map-backed fake of applications.Store, proven against the real store by
-// RunStoreContract (ADR 0012).
 package applicationstest
 
 import (
@@ -8,18 +5,24 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
+
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
+var defaultStatusNames = []string{"Saved", "Applied", "Interviewing", "Offer", "Rejected"}
+
 type FakeStore struct {
-	mu   sync.Mutex
-	apps map[string]dto.Application
+	mu       sync.Mutex
+	apps     map[string]dto.Application
+	statuses map[string]dto.ApplicationStatus
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{apps: make(map[string]dto.Application)}
+	return &FakeStore{apps: make(map[string]dto.Application), statuses: make(map[string]dto.ApplicationStatus)}
 }
 
 func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error) {
@@ -105,6 +108,69 @@ func (f *FakeStore) GetApplicationsForJobs(_ context.Context, userID string, job
 		}
 	}
 	return out, nil
+}
+
+func (f *FakeStore) CreateApplicationStatus(_ context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name, Colour: colour}
+	f.statuses[s.ID] = s
+	return s, nil
+}
+
+func (f *FakeStore) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.statuses[id]
+	if !ok || s.UserID != userID {
+		return dto.ApplicationStatus{}, apperr.NotFound("status not found")
+	}
+	s.Name, s.Colour = name, colour
+	f.statuses[id] = s
+	return s, nil
+}
+
+// DeleteApplicationStatus is a no-op for an unknown id, matching the real
+// store's unconditional DELETE.
+func (f *FakeStore) DeleteApplicationStatus(_ context.Context, id, _ string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.statuses, id)
+	return nil
+}
+
+func (f *FakeStore) CountApplicationsUsingStatus(_ context.Context, statusID, userID string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var n int64
+	for _, a := range f.apps {
+		if a.StatusID == statusID && a.UserID == userID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *FakeStore) ListApplicationStatusesByUser(_ context.Context, userID string) ([]dto.ApplicationStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.ApplicationStatus{}
+	for _, s := range f.statuses {
+		if s.UserID == userID {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, name := range defaultStatusNames {
+		s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name}
+		f.statuses[s.ID] = s
+	}
+	return nil
 }
 
 var _ applications.Store = (*FakeStore)(nil)

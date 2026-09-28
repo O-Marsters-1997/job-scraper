@@ -26,3 +26,16 @@ type Alerter interface {
 type ProfileReader interface {
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 }
+
+// Extractor turns a user's free preference text into stances against the
+// live option bank, billed to apiKey. It may return a pick for an id or
+// stance the bank doesn't have; the caller drops those.
+type Extractor interface {
+	Extract(ctx context.Context, apiKey, text string, options []dto.ScoringOption, dimensions []dto.DimensionSpec) ([]dto.Pick, error)
+}
+
+// Reconsiderer re-evaluates a user's discovered-job candidates against an
+// updated Search Config.
+type Reconsiderer interface {
+	Reconsider(ctx context.Context, config dto.SearchConfig) error
+}

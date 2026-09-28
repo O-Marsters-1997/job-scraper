@@ -26,13 +26,13 @@ in `Routes`. "Anything more" means:
 - calling more than one store method or another module's facade
 - choosing a status by branching
 
-`companies.AddBoard` is the example. `AddCompanyBoardInput` carries the company ID (via its
+`jobsearch.Service.AddCompanyBoard` is the example. `AddCompanyBoardInput` carries the company ID (via its
 `path:"id"` tag) and the URL to resolve. The method validates the input, resolves the board and
 makes two store calls. No shortcut version of that logic belongs in `Routes`.
 
 If you're about to write
 `handlers.Create(func(ctx, userID string, in dto.X) (dto.Y, error) { ... })` in `Routes`, the
-closure is the sign. Give it a name and move it into the feature's service package.
+closure is the sign. Give it a name and move it into the context's service.
 
 Legacy contexts (see `AGENTS.md` § Migration status) do the same in `internal/api/router.go`,
 binding `db.Method` values.

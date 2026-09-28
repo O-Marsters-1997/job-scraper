@@ -13,9 +13,8 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
-	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
 type boardPollState struct {
@@ -48,29 +47,27 @@ type FakeStore struct {
 	sourceTargets map[string]dto.SourceTarget
 	targetByKey   map[string]string
 
-	candidates      map[string]candidates.Candidate
-	candidateByURL  map[string]string
-	assessedVersion map[string]time.Time
-	detailPending   map[string]bool
+	candidates     map[string]sourcetargets.Candidate
+	candidateByURL map[string]string
+	detailPending  map[string]bool
 }
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
-		jobs:            make(map[string]dto.Job),
-		byURL:           make(map[string]string),
-		byBoard:         make(map[string]string),
-		companies:       make(map[string]dto.Company),
-		companyBySlug:   make(map[string]string),
-		tracking:        make(map[string]dto.CompanyTracking),
-		boards:          make(map[string]dto.CompanyBoard),
-		pollState:       make(map[string]*boardPollState),
-		lastScraped:     make(map[string]time.Time),
-		sourceTargets:   make(map[string]dto.SourceTarget),
-		targetByKey:     make(map[string]string),
-		candidates:      make(map[string]candidates.Candidate),
-		candidateByURL:  make(map[string]string),
-		assessedVersion: make(map[string]time.Time),
-		detailPending:   make(map[string]bool),
+		jobs:           make(map[string]dto.Job),
+		byURL:          make(map[string]string),
+		byBoard:        make(map[string]string),
+		companies:      make(map[string]dto.Company),
+		companyBySlug:  make(map[string]string),
+		tracking:       make(map[string]dto.CompanyTracking),
+		boards:         make(map[string]dto.CompanyBoard),
+		pollState:      make(map[string]*boardPollState),
+		lastScraped:    make(map[string]time.Time),
+		sourceTargets:  make(map[string]dto.SourceTarget),
+		targetByKey:    make(map[string]string),
+		candidates:     make(map[string]sourcetargets.Candidate),
+		candidateByURL: make(map[string]string),
+		detailPending:  make(map[string]bool),
 	}
 }
 
@@ -258,8 +255,12 @@ func (f *FakeStore) ListCompaniesForUser(_ context.Context, userID string) ([]dt
 func (f *FakeStore) SetCompanyTracking(_ context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	key := trackingKey(userID, companyID)
+	if checkIntervalMinutes == 0 {
+		checkIntervalMinutes = cmp.Or(f.tracking[key].CheckIntervalMinutes, 360)
+	}
 	t := dto.CompanyTracking{UserID: userID, CompanyID: companyID, Enabled: enabled, CheckIntervalMinutes: checkIntervalMinutes}
-	f.tracking[trackingKey(userID, companyID)] = t
+	f.tracking[key] = t
 	return t, nil
 }
 
@@ -605,10 +606,10 @@ func (f *FakeStore) ClaimRecoverableSourceTarget(_ context.Context, id, runID st
 	return t, nil
 }
 
-func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards []dto.Job) ([]candidates.Candidate, error) {
+func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards []dto.Job) ([]sourcetargets.Candidate, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]candidates.Candidate, 0, len(cards))
+	out := make([]sourcetargets.Candidate, 0, len(cards))
 	for _, card := range cards {
 		if card.URL == "" {
 			continue
@@ -619,14 +620,14 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 			f.candidateByURL[card.URL] = id
 		}
 		card.Source = target.Source
-		cand := candidates.Candidate{ID: id, URL: card.URL, Card: card}
+		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
 		f.candidates[id] = cand
 		out = append(out, cand)
 	}
 	return out, nil
 }
 
-func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int) ([]candidates.Candidate, error) {
+func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int) ([]sourcetargets.Candidate, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	ids := make([]string, 0, len(f.candidates))
@@ -635,7 +636,7 @@ func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int)
 	}
 	slices.Sort(ids)
 
-	out := make([]candidates.Candidate, 0, len(ids))
+	out := make([]sourcetargets.Candidate, 0, len(ids))
 	skip := afterID != ""
 	for _, id := range ids {
 		if skip {
@@ -652,19 +653,10 @@ func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int)
 	return out, nil
 }
 
-func (f *FakeStore) Assess(_ context.Context, candidateID, userID string, version time.Time, passes bool) (bool, error) {
+func (f *FakeStore) Assess(_ context.Context, candidateID, _ string, _ time.Time, passes bool) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	key := candidateID + "|" + userID
-	if last, ok := f.assessedVersion[key]; ok && !version.After(last) {
-		return false, nil
-	}
-	f.assessedVersion[key] = version
-	if !passes || f.detailPending[candidateID] {
-		return false, nil
-	}
-	f.detailPending[candidateID] = true
-	return true, nil
+	return passes && !f.detailPending[candidateID], nil
 }
 
 func (f *FakeStore) MarkDetailPending(_ context.Context, candidateID string) error {
@@ -678,4 +670,4 @@ func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 	return nil
 }
 
-var _ jobsearch.Store = (*FakeStore)(nil)
+var _ Store = (*FakeStore)(nil)

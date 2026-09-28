@@ -14,16 +14,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
-	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses/applicationstatusestest"
 )
 
 const testUserID = "route-test-user"
 
 func newTestRouter() chi.Router {
-	m := applications.Build(applications.Deps{
-		Applications: applicationstest.NewFakeStore(),
-		Statuses:     applicationstatusestest.NewFakeStore(),
-	})
+	m := applications.Build(applications.Deps{Store: applicationstest.NewFakeStore()})
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r

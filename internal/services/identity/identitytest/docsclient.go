@@ -11,9 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
-// DocsClient is a map-backed stub of the Google Docs/Drive surface identity
-// exposes to cvtemplates and trackeddocs. A per-doc failure is a one-method
-// override in the test that needs it, not a knob here (ADR 0012).
 type DocsClient struct {
 	mu         sync.Mutex
 	connectErr error

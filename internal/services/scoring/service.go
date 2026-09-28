@@ -39,6 +39,7 @@ type Store interface {
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
+	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
@@ -59,16 +60,20 @@ type Service struct {
 	credentials  Credentials
 	alerter      Alerter
 	profiles     ProfileReader
+	candidates   Reconsiderer
+	extractor    Extractor
 	tickInterval time.Duration
 }
 
-// NewService wires the answer-effect loop. tickInterval <= 0 defaults to
-// two seconds; tests pass a short interval to drive Run without sleeping.
-func NewService(store Store, answerer Answerer, credentials Credentials, alerter Alerter, profiles ProfileReader, tickInterval time.Duration) *Service {
+func NewService(deps Deps) *Service {
+	tickInterval := deps.TickInterval
 	if tickInterval <= 0 {
 		tickInterval = defaultAnswerEffectTick
 	}
-	return &Service{store: store, answerer: answerer, credentials: credentials, alerter: alerter, profiles: profiles, tickInterval: tickInterval}
+	return &Service{
+		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
+		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+	}
 }
 
 // Run ticks at the configured interval, draining the answer-effect queue.

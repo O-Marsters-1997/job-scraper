@@ -1,6 +1,4 @@
-// Package aicredentials is the identity context's per-user AI provider key
-// storage, encrypted at rest with AES-256-GCM.
-package aicredentials
+package identity
 
 import (
 	"context"
@@ -18,25 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// Store is the identity store's user_ai_credentials CRUD, dealing in
-// already-encrypted keys.
-type Store interface {
-	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
-	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
-	DeleteUserAICredential(ctx context.Context, userID, provider string) error
-	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
-}
-
-// Service encrypts and decrypts provider API keys with a key read from
-// AI_CREDENTIAL_ENC_KEY (base64, must decode to 32 bytes) at construction.
-type Service struct {
-	key   []byte
-	store Store
-}
-
-// New reads AI_CREDENTIAL_ENC_KEY and returns an error if it is missing or
-// does not decode to 32 bytes.
-func New(store Store) (*Service, error) {
+func credentialKeyFromEnv() ([]byte, error) {
 	enc := os.Getenv("AI_CREDENTIAL_ENC_KEY")
 	if enc == "" {
 		return nil, errors.New("AI_CREDENTIAL_ENC_KEY not set")
@@ -48,11 +28,10 @@ func New(store Store) (*Service, error) {
 	if len(key) != 32 {
 		return nil, fmt.Errorf("AI_CREDENTIAL_ENC_KEY: expected 32 bytes, got %d", len(key))
 	}
-	return &Service{key: key, store: store}, nil
+	return key, nil
 }
 
-// Update saves in.APIKey for in.Provider, or clears it when APIKey is nil.
-func (s *Service) Update(ctx context.Context, userID string, in dto.UpsertCredentialInput) (struct{}, error) {
+func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.UpsertCredentialInput) (struct{}, error) {
 	if in.Provider == "" {
 		return struct{}{}, apperr.Invalid("provider required")
 	}
@@ -61,31 +40,49 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpsertCreden
 	}
 	enc, err := s.encrypt(strings.Trim(*in.APIKey, `"`))
 	if err != nil {
-		return struct{}{}, fmt.Errorf("aicredentials.Update: %w", err)
+		return struct{}{}, fmt.Errorf("identity.UpdateCredential: %w", err)
 	}
 	return struct{}{}, s.store.UpsertUserAICredential(ctx, userID, in.Provider, enc)
 }
 
-// Get returns userID's decrypted key for provider.
-func (s *Service) Get(ctx context.Context, userID, provider string) (string, error) {
+func (s *Service) GetCredential(ctx context.Context, userID, provider string) (string, error) {
 	enc, err := s.store.GetUserAICredential(ctx, userID, provider)
 	if err != nil {
 		return "", err
 	}
 	plain, err := s.decrypt(enc)
 	if err != nil {
-		return "", fmt.Errorf("aicredentials.Get: %w", err)
+		return "", fmt.Errorf("identity.GetCredential: %w", err)
 	}
 	return plain, nil
 }
 
-// ListProviders returns the providers userID has a configured key for.
-func (s *Service) ListProviders(ctx context.Context, userID string) ([]string, error) {
-	return s.store.ListUserAICredentialProviders(ctx, userID)
+func (s *Service) GetAIPrefs(ctx context.Context, userID string) (dto.AIPrefsView, error) {
+	configured, err := s.store.ListUserAICredentialProviders(ctx, userID)
+	if err != nil {
+		return dto.AIPrefsView{}, err
+	}
+	if configured == nil {
+		configured = []string{}
+	}
+	return dto.AIPrefsView{
+		ConfiguredProviders: configured,
+		ScoringEnabled:      len(configured) > 0,
+	}, nil
+}
+
+func (s *Service) GetProfile(ctx context.Context, userID string) (dto.ProfileView, error) {
+	p, err := s.store.GetProfile(ctx, userID)
+	return dto.ProfileView(p), err
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, userID string, in dto.UpdateProfileInput) (struct{}, error) {
+	_, err := s.store.UpdateEmail(ctx, userID, in.Email)
+	return struct{}{}, err
 }
 
 func (s *Service) encrypt(plaintext string) (string, error) {
-	block, err := aes.NewCipher(s.key)
+	block, err := aes.NewCipher(s.credKey)
 	if err != nil {
 		return "", err
 	}
@@ -106,7 +103,7 @@ func (s *Service) decrypt(ciphertext string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	block, err := aes.NewCipher(s.key)
+	block, err := aes.NewCipher(s.credKey)
 	if err != nil {
 		return "", err
 	}

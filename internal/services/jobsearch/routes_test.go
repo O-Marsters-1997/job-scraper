@@ -16,7 +16,7 @@ import (
 
 func newIngestRouter(t *testing.T, st *jobsearchtest.FakeStore) http.Handler {
 	t.Helper()
-	m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: jobsearchtest.NoopQueue{}})
+	m := jobsearch.Build(jobsearchtest.NewDeps(st))
 	r := chi.NewRouter()
 	m.PublicRoutes(r)
 	return r

@@ -11,7 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
-	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses/applicationstatusestest"
 )
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
@@ -45,7 +44,7 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, title string) string {
 	return id
 }
 
-func TestApplicationsStoreContract(t *testing.T) {
+func TestStoreContract(t *testing.T) {
 	applicationstest.RunStoreContract(t, func(t *testing.T) applicationstest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
@@ -53,17 +52,6 @@ func TestApplicationsStoreContract(t *testing.T) {
 			Store:  st,
 			UserID: insertUser(t, pool),
 			JobID:  insertJob(t, pool, "Contract Job"),
-		}
-	})
-}
-
-func TestApplicationStatusesStoreContract(t *testing.T) {
-	applicationstatusestest.RunStoreContract(t, func(t *testing.T) applicationstatusestest.Fixture {
-		t.Helper()
-		st, pool := newStore(t)
-		return applicationstatusestest.Fixture{
-			Store:  st,
-			UserID: insertUser(t, pool),
 		}
 	})
 }

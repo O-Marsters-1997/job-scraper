@@ -16,17 +16,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
-	"github.com/ollymarsters/job-scraper/internal/services/trackeddocs/trackeddocstest"
 )
 
 const testUserID = "route-test-user"
 
-func newTestRouter(gc cvtemplates.DocsClient, trackedDocs *trackeddocstest.FakeStore) chi.Router {
-	m := cvtemplates.Build(cvtemplates.Deps{
-		CV:          cvtemplatestest.NewFakeStore(),
-		TrackedDocs: trackedDocs,
-		DocsClient:  gc,
-	})
+func newTestRouter(gc cvtemplates.DocsClient, st cvtemplates.Store) chi.Router {
+	m := cvtemplates.Build(cvtemplates.Deps{Store: st, DocsClient: gc})
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r
@@ -41,7 +36,7 @@ func authedRequest(method, path, body string) *http.Request {
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
-	r := newTestRouter(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+	r := newTestRouter(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
 
 	handlerstest.RequiresAuth(t, r,
 		"GET /cv-templates/",
@@ -61,7 +56,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 
 func TestExportCV(t *testing.T) {
 	t.Run("streams the PDF on success", func(t *testing.T) {
-		r := newTestRouter(identitytest.NewDocsClient(), trackeddocstest.NewFakeStore())
+		r := newTestRouter(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
@@ -79,7 +74,7 @@ func TestExportCV(t *testing.T) {
 
 	t.Run("maps an upstream failure to 502", func(t *testing.T) {
 		gc := failingExport{DocsClient: identitytest.NewDocsClient(), err: errors.New("google is down")}
-		r := newTestRouter(gc, trackeddocstest.NewFakeStore())
+		r := newTestRouter(gc, cvtemplatestest.NewFakeStore())
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
@@ -91,9 +86,9 @@ func TestExportCV(t *testing.T) {
 }
 
 func TestTrackedDocRoutesHappyPaths(t *testing.T) {
-	trackedDocs := trackeddocstest.NewFakeStore()
+	st := cvtemplatestest.NewFakeStore()
 	gc := identitytest.NewDocsClient().WithDoc("doc-1", nil, google.FileMeta{Title: "My CV"})
-	r := newTestRouter(gc, trackedDocs)
+	r := newTestRouter(gc, st)
 
 	t.Run("add tracked doc", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -104,25 +99,26 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 	})
 
 	t.Run("hide tab", func(t *testing.T) {
-		trackedDocs.SeedTab(testUserID, "doc-1", "t1", true)
+		tdID := seedTab(t, st, testUserID, "doc-1", "t1", true)
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(http.MethodPost, "/tracked-docs/doc-1/tabs/t1/hide", ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
-		if trackedDocs.Visible(testUserID, "doc-1", "t1") {
+		if tabVisible(t, st, tdID, "t1") {
 			t.Error("tab should be hidden")
 		}
 	})
 
 	t.Run("show tab", func(t *testing.T) {
+		tdID := seedDoc(t, st, testUserID, "doc-1")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(http.MethodPost, "/tracked-docs/doc-1/tabs/t1/show", ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
-		if !trackedDocs.Visible(testUserID, "doc-1", "t1") {
+		if !tabVisible(t, st, tdID, "t1") {
 			t.Error("tab should be visible")
 		}
 	})

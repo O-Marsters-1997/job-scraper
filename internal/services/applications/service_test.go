@@ -147,3 +147,68 @@ func TestListFiltersByStatusWhenGiven(t *testing.T) {
 		t.Fatalf("got = %+v, want empty", got)
 	}
 }
+
+func assertKind(t *testing.T, err error, want apperr.Kind) {
+	t.Helper()
+	status, ok := apperr.StatusFor(err)
+	if !ok || status != want.Status() {
+		t.Fatalf("status = %v, ok = %v, want %d", status, ok, want.Status())
+	}
+}
+
+func TestCreateStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		in   dto.ApplicationStatusInput
+	}{
+		{name: "requires name", in: dto.ApplicationStatusInput{Colour: "#00ff00"}},
+		{name: "requires colour", in: dto.ApplicationStatusInput{Name: "Offer"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := applications.NewService(applicationstest.NewFakeStore())
+			_, err := svc.CreateStatus(context.Background(), "user-1", tt.in)
+			assertKind(t, err, apperr.KindInvalid)
+		})
+	}
+}
+
+func TestCreateStatusSucceeds(t *testing.T) {
+	svc := applications.NewService(applicationstest.NewFakeStore())
+	got, err := svc.CreateStatus(context.Background(), "user-1", dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "Offer" {
+		t.Fatalf("name = %q, want Offer", got.Name)
+	}
+}
+
+func TestDeleteStatusRefusesAStatusInUse(t *testing.T) {
+	store := applicationstest.NewFakeStore()
+	status, err := store.CreateApplicationStatus(context.Background(), "user-1", "Applied", "#6366f1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1", StatusID: status.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := applications.NewService(store)
+
+	err = svc.DeleteStatus(context.Background(), "user-1", status.ID)
+
+	assertKind(t, err, apperr.KindConflict)
+	fields := apperr.FieldsFor(err)
+	if fields["count"] != int64(3) {
+		t.Fatalf("fields = %+v, want count=3", fields)
+	}
+}
+
+func TestDeleteStatusSucceedsWhenUnused(t *testing.T) {
+	svc := applications.NewService(applicationstest.NewFakeStore())
+	if err := svc.DeleteStatus(context.Background(), "user-1", "s1"); err != nil {
+		t.Fatal(err)
+	}
+}

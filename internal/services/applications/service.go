@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
@@ -17,6 +19,13 @@ type Store interface {
 	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
 	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
+
+	CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error)
+	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error)
+	DeleteApplicationStatus(ctx context.Context, id, userID string) error
+	CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error)
+	ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error)
+	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
 }
 
 type Service struct {

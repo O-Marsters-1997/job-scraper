@@ -12,14 +12,13 @@ import (
 func buildModule(t *testing.T, st *scoringtest.FakeStore) *scoring.Module {
 	t.Helper()
 	return scoring.Build(scoring.Deps{
-		Store:              st,
-		ScoringConfigStore: st,
-		Answerer:           &fakeAnswerer{t: t, forbidden: true},
-		Credentials:        &fakeCredentials{},
-		Alerter:            &fakeAlerter{},
-		Profiles:           &fakeProfiles{},
-		Candidates:         scoringtest.Reconsiders(),
-		Extractor:          scoringtest.Extracts(nil),
+		Store:       st,
+		Answerer:    &fakeAnswerer{t: t, forbidden: true},
+		Credentials: &fakeCredentials{},
+		Alerter:     &fakeAlerter{},
+		Profiles:    &fakeProfiles{},
+		Candidates:  scoringtest.Reconsiders(),
+		Extractor:   scoringtest.Extracts(nil),
 	})
 }
 

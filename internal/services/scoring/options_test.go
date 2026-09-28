@@ -1,4 +1,4 @@
-package scoringconfig_test
+package scoring_test
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
-	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
 )
 
 func TestOptions(t *testing.T) {
@@ -19,15 +19,15 @@ func TestOptions(t *testing.T) {
 		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
 		{ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retired},
 	})
-	svc := scoringconfig.New(store, scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
+	svc := scoring.NewService(scoring.Deps{Store: store, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
 
 	got, err := svc.Options(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(got.Dimensions) != len(scoringconfig.Dimensions) {
-		t.Fatalf("dimensions = %d, want %d", len(got.Dimensions), len(scoringconfig.Dimensions))
+	if len(got.Dimensions) != len(scoring.Dimensions) {
+		t.Fatalf("dimensions = %d, want %d", len(got.Dimensions), len(scoring.Dimensions))
 	}
 	want := []dto.ScoringOption{{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go"}}
 	if diff := cmp.Diff(want, got.Options); diff != "" {

@@ -25,7 +25,7 @@ func seedJobs(n int) *jobsearchtest.FakeStore {
 }
 
 func TestListRejectsBadPagination(t *testing.T) {
-	svc := jobsearch.NewService(jobsearchtest.NewFakeStore())
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, nil)
 	for _, q := range []dto.JobsQuery{
 		{Limit: "9999"},
 		{Cursor: "not-base64"},
@@ -40,7 +40,7 @@ func TestListRejectsBadPagination(t *testing.T) {
 }
 
 func TestListPaginates(t *testing.T) {
-	svc := jobsearch.NewService(seedJobs(3))
+	svc := jobsearch.NewService(seedJobs(3), nil, nil)
 
 	page, err := svc.List(context.Background(), "user-1", dto.JobsQuery{Limit: "2"})
 	if err != nil {
@@ -60,7 +60,7 @@ func TestListPaginates(t *testing.T) {
 }
 
 func TestGetMapsNotFound(t *testing.T) {
-	svc := jobsearch.NewService(jobsearchtest.NewFakeStore())
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, nil)
 	_, err := svc.Get(context.Background(), "user-1", "missing")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
 		t.Fatalf("status = %v, ok = %v, want 404", status, ok)

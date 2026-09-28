@@ -26,11 +26,11 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/auth/logout", logoutHandler(m.service))
 	r.Get("/auth/me", meHandler)
 
-	r.Get("/profile", handlers.GetAll(m.profile.Get))
-	r.Put("/profile", handlers.Update(m.profile.Update))
+	r.Get("/profile", handlers.GetAll(m.service.GetProfile))
+	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
 
-	r.Get("/ai-prefs", handlers.GetAll(m.aiPrefs.Get))
-	r.Put("/ai-credentials", handlers.Update(m.aiCredentials.Update))
+	r.Get("/ai-prefs", handlers.GetAll(m.service.GetAIPrefs))
+	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.google))
 	r.Get("/google/status", handlers.GetAll(m.google.Status))

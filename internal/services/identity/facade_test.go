@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/aicredentials"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
@@ -21,11 +20,9 @@ func buildModule(t *testing.T, st *identitytest.FakeStore, gc *fakeGoogleClient)
 	t.Helper()
 	setEncryptionKey(t)
 	m, err := identity.Build(identity.Deps{
-		Store:         st,
-		Seeder:        &seeder{},
-		AICredentials: st,
-		Profile:       st,
-		GoogleClient:  gc,
+		Store:        st,
+		Seeder:       &seeder{},
+		GoogleClient: gc,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -37,12 +34,8 @@ func TestGetReturnsTheUsersDecryptedCredential(t *testing.T) {
 	st := identitytest.NewFakeStore()
 	m := buildModule(t, st, newFakeGoogleClient())
 
-	creds, err := aicredentials.New(st)
-	if err != nil {
-		t.Fatal(err)
-	}
 	key := `"sk-test"`
-	if _, err := creds.Update(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
+	if _, err := newService(st, &seeder{}).UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
 		t.Fatal(err)
 	}
 

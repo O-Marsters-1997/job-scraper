@@ -17,8 +17,6 @@ const sessionTTL = 30 * 24 * time.Hour
 
 var bcryptCost = bcrypt.DefaultCost
 
-// Store is shared by Service and Module: authentication plus the reads
-// Module exposes to routes, the worker's cleanup and other contexts' ports.
 type Store interface {
 	GetUserByUsername(ctx context.Context, username string) (dto.User, error)
 	CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error)
@@ -29,6 +27,11 @@ type Store interface {
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
+	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
+	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
+	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
+	DeleteUserAICredential(ctx context.Context, userID, provider string) error
+	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
 }
 
 // StatusSeeder seeds a new user's default application Statuses inside tx;
@@ -38,12 +41,13 @@ type StatusSeeder interface {
 }
 
 type Service struct {
-	store  Store
-	seeder StatusSeeder
+	store   Store
+	seeder  StatusSeeder
+	credKey []byte
 }
 
-func NewService(store Store, seeder StatusSeeder) *Service {
-	return &Service{store: store, seeder: seeder}
+func NewService(store Store, seeder StatusSeeder, credKey []byte) *Service {
+	return &Service{store: store, seeder: seeder, credKey: credKey}
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {

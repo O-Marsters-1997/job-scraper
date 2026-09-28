@@ -19,9 +19,11 @@ import (
 
 type QueuePublisher interface {
 	Publish(ctx context.Context, task queue.Task) error
+	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
 }
 
 type Store interface {
+	CandidateStore
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
 	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
@@ -40,21 +42,14 @@ type SearchConfigReader interface {
 	SearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 }
 
-// Reconsiderer re-evaluates saved candidates against a search config; the
-// jobsearch context's own candidates sibling satisfies it.
-type Reconsiderer interface {
-	Reconsider(ctx context.Context, config dto.SearchConfig) error
-}
-
 type Service struct {
-	targets    Store
-	configs    SearchConfigReader
-	candidates Reconsiderer
-	queue      QueuePublisher
+	targets Store
+	configs SearchConfigReader
+	queue   QueuePublisher
 }
 
-func New(targets Store, configs SearchConfigReader, candidates Reconsiderer, q QueuePublisher) *Service {
-	return &Service{targets: targets, configs: configs, candidates: candidates, queue: q}
+func New(targets Store, configs SearchConfigReader, q QueuePublisher) *Service {
+	return &Service{targets: targets, configs: configs, queue: q}
 }
 
 // Create validates a new source target against the source registry, then
@@ -179,7 +174,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	} else if err != nil {
 		return dto.SourceTarget{}, apperr.Unavailable("search saved but candidate reconsideration failed")
 	}
-	if err := s.candidates.Reconsider(ctx, cfg); err != nil {
+	if err := s.Reconsider(ctx, cfg); err != nil {
 		return dto.SourceTarget{}, apperr.Unavailable("search saved but candidate reconsideration failed")
 	}
 

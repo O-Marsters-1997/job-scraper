@@ -12,10 +12,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-type failingPublisher struct{ err error }
+type failingPublisher struct {
+	*queuetest.Recorder
+	err error
+}
 
 func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.err }
 
@@ -28,13 +32,14 @@ func (fakeSearchConfigReader) SearchConfig(context.Context, string) (dto.SearchC
 }
 
 type fakeStore struct {
+	*jobsearchtest.FakeStore
 	mu        sync.Mutex
 	targets   map[string]dto.SourceTarget
 	CreateErr error
 }
 
 func newFakeStore() *fakeStore {
-	return &fakeStore{targets: make(map[string]dto.SourceTarget)}
+	return &fakeStore{FakeStore: jobsearchtest.NewFakeStore(), targets: make(map[string]dto.SourceTarget)}
 }
 
 func (f *fakeStore) GetVerifiedBoardID(context.Context, string, string) (string, error) {
@@ -167,12 +172,17 @@ func (f *fakeStore) forceRunState(id, status, runError string) {
 	f.targets[id] = target
 }
 
-type fakeReconsiderer struct{ err error }
+type failingCandidateList struct {
+	*fakeStore
+	err error
+}
 
-func (f fakeReconsiderer) Reconsider(context.Context, dto.SearchConfig) error { return f.err }
+func (f failingCandidateList) ListForUser(context.Context, string, string, int) ([]sourcetargets.Candidate, error) {
+	return nil, f.err
+}
 
 func newService(targets *fakeStore, q sourcetargets.QueuePublisher) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigReader{}, fakeReconsiderer{}, q)
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, q)
 }
 
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
@@ -207,7 +217,7 @@ func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 }
 
 func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
-	svc := newService(newFakeStore(), failingPublisher{err: errors.New("queue unavailable")})
+	svc := newService(newFakeStore(), failingPublisher{Recorder: queuetest.NewRecorder(), err: errors.New("queue unavailable")})
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -307,7 +317,7 @@ func TestUpdate_EnablingDiscoveryTargetReconsidersCandidates(t *testing.T) {
 func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 	store := newFakeStore()
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", false, nil)
-	svc := sourcetargets.New(store, fakeSearchConfigReader{}, fakeReconsiderer{err: errors.New("boom")}, queuetest.NewRecorder())
+	svc := sourcetargets.New(failingCandidateList{fakeStore: store, err: errors.New("boom")}, fakeSearchConfigReader{}, queuetest.NewRecorder())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
 	if status, ok := apperr.StatusFor(err); !ok || status != 503 {

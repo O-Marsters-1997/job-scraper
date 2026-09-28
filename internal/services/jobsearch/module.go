@@ -2,15 +2,13 @@ package jobsearch
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/candidates"
-	"github.com/ollymarsters/job-scraper/internal/services/companies"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
-	"github.com/ollymarsters/job-scraper/internal/services/sources"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
@@ -18,11 +16,9 @@ var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
 	store         Store
+	targetLister  sourcetargets.Store
 	jobs          *Service
-	companies     *companies.Service
 	sourceTargets *sourcetargets.Service
-	sources       *sources.Service
-	candidates    *candidates.Service
 	ingest        *Ingester
 }
 
@@ -37,54 +33,73 @@ type QueuePublisher interface {
 }
 
 type Store interface {
-	candidates.Store
-	companies.Store
-	companies.SourceTargets
-	sourcetargets.Store
-
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
+	GetCompany(ctx context.Context, id string) (dto.Company, error)
+	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
+	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
+	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
+	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error)
+	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
+	TouchCompanyCrawled(ctx context.Context, id string) error
+	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
+	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
+	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
+	FailBoard(ctx context.Context, poll dto.BoardPoll) error
+	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
+	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
+	SetLastScraped(ctx context.Context, source string) error
+}
+
+type SourceTargets interface {
+	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error)
 }
 
 type Deps struct {
-	Store   Store
-	Scoring ScoringPort
-	Queue   QueuePublisher
+	Store          Store
+	CompanyTargets SourceTargets
+	SourceTargets  sourcetargets.Store
+	Scoring        ScoringPort
+	Queue          QueuePublisher
 }
 
 func Build(deps Deps) *Module {
-	cand := candidates.New(deps.Store, deps.Queue)
 	return &Module{
 		store:         deps.Store,
-		jobs:          NewService(deps.Store),
-		companies:     companies.New(deps.Store, deps.Store, deps.Queue),
-		sourceTargets: sourcetargets.New(deps.Store, deps.Scoring, cand, deps.Queue),
-		sources:       sources.New(),
-		candidates:    cand,
+		targetLister:  deps.SourceTargets,
+		jobs:          NewService(deps.Store, deps.CompanyTargets, deps.Queue),
+		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
 		ingest:        newIngester(deps.Store, deps.Store),
 	}
 }
 
 func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
-	return Build(Deps{Store: store.New(pool, scoring), Scoring: scoring, Queue: q})
+	st := store.New(pool, scoring)
+	return Build(Deps{
+		Store:          st,
+		CompanyTargets: st,
+		SourceTargets:  st,
+		Scoring:        scoring,
+		Queue:          q,
+	})
 }
 
 func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
-	return m.candidates.Reconsider(ctx, cfg)
+	return m.sourceTargets.Reconsider(ctx, cfg)
 }
 
-func (m *Module) Boards() *companies.Service { return m.companies }
+func (m *Module) Boards() *Service { return m.jobs }
 
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
 
 func (m *Module) Catalog() *Service { return m.jobs }
 
-func (m *Module) Candidates() *candidates.Service { return m.candidates }
-
 func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
-	return m.candidates.DeleteExpired(ctx)
+	return m.sourceTargets.DeleteExpired(ctx)
 }

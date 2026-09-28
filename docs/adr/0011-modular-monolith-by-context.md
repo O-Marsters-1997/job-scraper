@@ -12,7 +12,7 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - `internal/services/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
   - `Module` has a narrow facade: exported methods for what other contexts, the worker or `cmd/admin` need, taking and returning `dto` types.
   - `m.Routes(r chi.Router)`, in `internal/services/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
-  - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). Each other feature gets a sibling package, `internal/services/<feature>/`: `applicationstatuses` belongs to `applications`. A feature package declares its own store interface and never imports the store; `New` passes the store in.
+  - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). A context is one package: one `Service`, one `Store` interface, and each feature a file on that `Service`. A feature gets its own package only when the store returns its types, so folding it into the root would be an import cycle: `sourcetargets` owns `Candidate`, which `jobsearch/store` returns. Such a package declares its own store interface and never imports the store. `Build(Deps)` takes the store and one field per other boundary: external clients and other contexts' ports.
   - `internal/services/<ctx>/store/` holds the store (`store.go`), its sqlc-to-`dto` converters (`transform.go`, named `to<Name>DTO`), its queries and its generated sqlc.
   - `cmd/api/main.go` is the only composition root. `internal/api` shrinks to the HTTP shell: middleware, CORS, and mounting each module's routes.
   - `handlers.Handle` and the CRUD generics move to `internal/handlers`, so every context can import them.
@@ -47,6 +47,7 @@ Rejected alternatives:
 - Per-context Postgres schemas and roles: more than a locality goal needs.
 - One shared `pgsqlc`: ownership would be enforced only by review.
 - Per-context mock packages: a wide store interface would come back.
+- A sibling package per feature, joined by ports: each had one consumer, its own context, and the ports (`Reconsiderer`, `CredentialLister`, ...) existed only to connect siblings.
 - `internal/<ctx>/internal/<feature>` and `internal/<ctx>/internal/store`, so Go's `internal/` rule enforces store privacy: the applications pilot found the doubled `internal` hard to read, and depguard covers the same boundary.
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.

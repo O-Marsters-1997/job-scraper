@@ -9,29 +9,24 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
-	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses"
-	"github.com/ollymarsters/job-scraper/internal/services/applicationstatuses/applicationstatusestest"
 )
 
 type failingSeed struct {
-	applicationstatuses.Store
+	applications.Store
 	err error
 }
 
 func (f failingSeed) SeedDefaultStatuses(context.Context, pgx.Tx, string) error { return f.err }
 
 func TestSeedDefaultsSeedsTheUsersStatuses(t *testing.T) {
-	statuses := applicationstatusestest.NewFakeStore()
-	m := applications.Build(applications.Deps{
-		Applications: applicationstest.NewFakeStore(),
-		Statuses:     statuses,
-	})
+	store := applicationstest.NewFakeStore()
+	m := applications.Build(applications.Deps{Store: store})
 
 	if err := m.SeedDefaults(context.Background(), nil, "user-1"); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := statuses.ListApplicationStatusesByUser(context.Background(), "user-1")
+	got, err := store.ListApplicationStatusesByUser(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,8 +38,7 @@ func TestSeedDefaultsSeedsTheUsersStatuses(t *testing.T) {
 func TestSeedDefaultsPropagatesStoreError(t *testing.T) {
 	wantErr := errors.New("boom")
 	m := applications.Build(applications.Deps{
-		Applications: applicationstest.NewFakeStore(),
-		Statuses:     failingSeed{Store: applicationstatusestest.NewFakeStore(), err: wantErr},
+		Store: failingSeed{Store: applicationstest.NewFakeStore(), err: wantErr},
 	})
 
 	if err := m.SeedDefaults(context.Background(), nil, "user-1"); !errors.Is(err, wantErr) {
