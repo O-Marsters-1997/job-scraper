@@ -90,10 +90,8 @@ Use the `schema-change` skill for the full migration → sqlc → store procedur
 
 ## Tests
 
-- Services are tested without HTTP, using small hand fakes of their own store interface in the same
-  package. No generated mocks.
-- Store tests run against a real Postgres testcontainer via `internal/pgtest` (one container per test
-  binary).
+Load the `testing-policy` skill before writing or changing any test: it maps each kind of code to its
+test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-packages.md)).
 
 ## Commands
 

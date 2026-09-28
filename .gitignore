@@ -9,6 +9,7 @@ bin/
 !.claude/skills/add-source/
 !.claude/skills/new-handler/
 !.claude/skills/schema-change/
+!.claude/skills/testing-policy/
 .idea
 .vscode
 */**/node_modules
