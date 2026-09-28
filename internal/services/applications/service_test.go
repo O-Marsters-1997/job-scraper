@@ -12,8 +12,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 )
 
-// failingCreate overrides CreateApplication to force an error path the real
-// store only reaches through a DB constraint (ADR 0012).
 type failingCreate struct {
 	applications.Store
 	err error

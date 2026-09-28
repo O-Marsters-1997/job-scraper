@@ -56,10 +56,6 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}",
 	)
-	// Delete is idempotent (204 either way, matching the real store's
-	// unconditional DELETE) and status update 400s on the missing required
-	// fields before it ever reaches the store, so only application update
-	// reaches a not-found from an unknown id.
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
 
