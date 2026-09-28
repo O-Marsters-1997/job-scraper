@@ -6,70 +6,26 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 )
 
-type fakeJobStore struct {
-	jobs []dto.Job
-}
-
-func seedJobs(n int) *fakeJobStore {
-	f := &fakeJobStore{}
+func seedJobs(n int) *jobsearchtest.FakeStore {
+	st := jobsearchtest.NewFakeStore()
 	for i := range n {
-		f.jobs = append(f.jobs, dto.Job{
-			ID:        string(rune('a' + i)),
-			URL:       "https://example.com/" + string(rune('a'+i)),
+		if _, _, err := st.SaveCanonical(context.Background(), dto.Job{
+			Title: "Role", URL: "https://example.com/" + string(rune('a'+i)),
 			ScrapedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC),
-		})
-	}
-	return f
-}
-
-func (f *fakeJobStore) Page(_ context.Context, _ string, options dto.JobPageOptions) (dto.JobPage, error) {
-	items := make([]dto.Job, len(f.jobs))
-	copy(items, f.jobs)
-	if options.CursorID != "" {
-		for i, j := range items {
-			if j.ID == options.CursorID {
-				items = items[i+1:]
-				break
-			}
+		}); err != nil {
+			panic(err)
 		}
 	}
-	limit := int(options.Limit)
-	if limit > 0 && limit < len(items) {
-		items = items[:limit]
-	}
-	return dto.JobPage{Items: items}, nil
-}
-
-func (f *fakeJobStore) GetJob(_ context.Context, id, _ string) (dto.Job, error) {
-	for _, j := range f.jobs {
-		if j.ID == id {
-			return j, nil
-		}
-	}
-	return dto.Job{}, data.ErrNotFound
-}
-
-func (f *fakeJobStore) NewURLs(_ context.Context, urls []string) ([]string, error) {
-	known := make(map[string]bool, len(f.jobs))
-	for _, j := range f.jobs {
-		known[j.URL] = true
-	}
-	out := make([]string, 0, len(urls))
-	for _, u := range urls {
-		if !known[u] {
-			out = append(out, u)
-		}
-	}
-	return out, nil
+	return st
 }
 
 func TestListRejectsBadPagination(t *testing.T) {
-	svc := jobsearch.NewService(&fakeJobStore{})
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore())
 	for _, q := range []dto.JobsQuery{
 		{Limit: "9999"},
 		{Cursor: "not-base64"},
@@ -104,7 +60,7 @@ func TestListPaginates(t *testing.T) {
 }
 
 func TestGetMapsNotFound(t *testing.T) {
-	svc := jobsearch.NewService(&fakeJobStore{})
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore())
 	_, err := svc.Get(context.Background(), "user-1", "missing")
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
 		t.Fatalf("status = %v, ok = %v, want 404", status, ok)

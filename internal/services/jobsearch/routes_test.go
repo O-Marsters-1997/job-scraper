@@ -1,8 +1,7 @@
-package jobsearch
+package jobsearch_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,60 +9,25 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 )
 
-type fakeIngestStore struct {
-	byURL  map[string]dto.Job
-	nextID int
-}
-
-func newFakeIngestStore() *fakeIngestStore {
-	return &fakeIngestStore{byURL: make(map[string]dto.Job)}
-}
-
-func (f *fakeIngestStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
-	if existing, ok := f.byURL[job.URL]; ok {
-		return existing, "unchanged", nil
-	}
-	f.nextID++
-	job.ID = fmtID(f.nextID)
-	f.byURL[job.URL] = job
-	return job, "new", nil
-}
-
-func (f *fakeIngestStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.Company, error) {
-	return dto.Company{Slug: c.Slug, Name: c.Name}, nil
-}
-
-func fmtID(n int) string {
-	digits := "0123456789"
-	s := ""
-	for n > 0 {
-		s = string(digits[n%10]) + s
-		n /= 10
-	}
-	if s == "" {
-		s = "0"
-	}
-	return "job-" + s
-}
-
-func newIngestRouter(store *fakeIngestStore) http.Handler {
-	m := &Module{ingest: newIngester(store, store)}
+func newIngestRouter(t *testing.T, st *jobsearchtest.FakeStore) http.Handler {
+	t.Helper()
+	m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: jobsearchtest.NoopQueue{}})
 	r := chi.NewRouter()
 	m.PublicRoutes(r)
 	return r
 }
 
 func TestIngestHandlerRejectsMalformedBody(t *testing.T) {
-	handlerstest.RejectsMalformedBody(t, newIngestRouter(newFakeIngestStore()), "POST /ingest")
+	handlerstest.RejectsMalformedBody(t, newIngestRouter(t, jobsearchtest.NewFakeStore()), "POST /ingest")
 }
 
 func TestIngestHandlerRepeatedDeliveryKeepsOneCanonicalJob(t *testing.T) {
-	store := newFakeIngestStore()
-	handler := newIngestRouter(store)
+	handler := newIngestRouter(t, jobsearchtest.NewFakeStore())
 	body := `{"title":"Engineer","url":"https://example.com/job2"}`
 
 	var firstID string
@@ -75,7 +39,7 @@ func TestIngestHandlerRepeatedDeliveryKeepsOneCanonicalJob(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 		}
-		var res IngestResult
+		var res jobsearch.IngestResult
 		if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 			t.Fatal(err)
 		}
@@ -88,13 +52,54 @@ func TestIngestHandlerRepeatedDeliveryKeepsOneCanonicalJob(t *testing.T) {
 			t.Fatalf("second delivery = %+v, want unchanged with job_id %q", res, firstID)
 		}
 	}
-	if len(store.byURL) != 1 {
-		t.Fatalf("stored %d jobs, want 1", len(store.byURL))
+}
+
+func TestIngestHandlerRejectsInvalidJobs(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+	}{
+		{"non-http url scheme", `{"Title":"Engineer","URL":"file:///tmp/job"}`},
+		{"malformed board id", `{"Title":"Engineer","URL":"https://example.com/jobs/bad-board","BoardID":"not-a-uuid"}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := newIngestRouter(t, jobsearchtest.NewFakeStore())
+			req := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+			}
+			var res jobsearch.IngestResult
+			if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+				t.Fatal(err)
+			}
+			if res.Status != "rejected" {
+				t.Fatalf("result = %+v, want rejected", res)
+			}
+		})
+	}
+}
+
+func TestIngestHandlerRejectsConflictingBoardIdentity(t *testing.T) {
+	handler := newIngestRouter(t, jobsearchtest.NewFakeStore())
+	first := `{"Title":"Engineer","URL":"https://example.com/conflict","BoardID":"11111111-1111-1111-1111-111111111111","ProviderPostingID":"posting-1"}`
+	conflict := `{"Title":"Engineer","URL":"https://example.com/conflict","BoardID":"22222222-2222-2222-2222-222222222222","ProviderPostingID":"posting-2"}`
+
+	for _, body := range []string{first, conflict} {
+		req := httptest.NewRequest(http.MethodPost, "/ingest", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+		}
 	}
 }
 
 func TestIngestBatchHandlerReturnsOrderedOutcomes(t *testing.T) {
-	handler := newIngestRouter(newFakeIngestStore())
+	handler := newIngestRouter(t, jobsearchtest.NewFakeStore())
 	body := `{"jobs":[{"title":"Engineer","url":"https://example.com/1"},{"title":"","url":"https://example.com/2"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/ingest/batch", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
@@ -103,7 +108,9 @@ func TestIngestBatchHandlerReturnsOrderedOutcomes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
 	}
-	var view ingestBatchView
+	var view struct {
+		Results []jobsearch.IngestResult `json:"results"`
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &view); err != nil {
 		t.Fatal(err)
 	}

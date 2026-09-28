@@ -14,12 +14,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-// ErrBoardClaimUnavailable is the jobsearch store's sentinel, re-exported
-// for the worker to match (ADR 0011).
 var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
-	store         *store.Store
+	store         Store
 	jobs          *Service
 	companies     *companies.Service
 	sourceTargets *sourcetargets.Service
@@ -28,52 +26,65 @@ type Module struct {
 	ingest        *Ingester
 }
 
-// ScoringPort is scoring's facade as jobsearch needs it: Search Config
-// reads for source-target filtering, plus the tx-scoped write ports jobsearch
-// calls instead of writing scoring's tables directly (ADR 0011).
 type ScoringPort interface {
 	sourcetargets.SearchConfigReader
 	store.ScoringWriter
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
-	st := store.New(pool, scoring)
-	cand := candidates.New(st, q)
+type QueuePublisher interface {
+	Publish(ctx context.Context, task queue.Task) error
+	EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error
+}
+
+type Store interface {
+	candidates.Store
+	companies.Store
+	companies.SourceTargets
+	sourcetargets.Store
+
+	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
+	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
+	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	NewURLs(ctx context.Context, urls []string) ([]string, error)
+	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
+	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
+}
+
+type Deps struct {
+	Store   Store
+	Scoring ScoringPort
+	Queue   QueuePublisher
+}
+
+func Build(deps Deps) *Module {
+	cand := candidates.New(deps.Store, deps.Queue)
 	return &Module{
-		store:         st,
-		jobs:          NewService(st),
-		companies:     companies.New(st, st, q),
-		sourceTargets: sourcetargets.New(st, scoring, cand, q),
+		store:         deps.Store,
+		jobs:          NewService(deps.Store),
+		companies:     companies.New(deps.Store, deps.Store, deps.Queue),
+		sourceTargets: sourcetargets.New(deps.Store, deps.Scoring, cand, deps.Queue),
 		sources:       sources.New(),
 		candidates:    cand,
-		ingest:        newIngester(st, st),
+		ingest:        newIngester(deps.Store, deps.Store),
 	}
 }
 
-// Reconsider re-evaluates the caller's saved candidates against cfg;
-// legacy scoringconfig calls this through its own Reconsiderer interface
-// (ADR 0011).
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+	return Build(Deps{Store: store.New(pool, scoring), Scoring: scoring, Queue: q})
+}
+
 func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 	return m.candidates.Reconsider(ctx, cfg)
 }
 
-// Boards exposes company and board management to other contexts, the
-// worker's board poller and crawler, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Boards() *companies.Service { return m.companies }
 
-// Targets exposes source-target management to other contexts, the worker's
-// run recovery, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
 
-// Catalog exposes job lookups to other contexts, the worker's new-URL
-// check, and cmd/admin (ADR 0011 Phase 9).
 func (m *Module) Catalog() *Service { return m.jobs }
 
-// Candidates exposes candidate capture to the worker's scrape orchestrator
-// (ADR 0011 Phase 9).
 func (m *Module) Candidates() *candidates.Service { return m.candidates }
 
-// DeleteExpiredCandidates is called by the worker's daily cleanup.
 func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
 	return m.candidates.DeleteExpired(ctx)
 }
