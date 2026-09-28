@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -30,6 +31,7 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	}
 
 	r := chi.NewRouter()
+	r.Use(otelhttp.NewMiddleware("api"))
 	r.Use(chimw.RequestID)
 	r.Use(logger.Middleware)
 	r.Use(telemetry.AccessLog)

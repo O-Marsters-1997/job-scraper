@@ -28,10 +28,14 @@ build:
 
 # run the worker
 run *args:
-    METRICS_ADDR=:9092 LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/worker {{args}}
+    OTEL_SERVICE_NAME=worker METRICS_ADDR=:9092 LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/worker {{args}}
 
 run-api:
-    LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/api
+    OTEL_SERVICE_NAME=api LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/api
+
+# run a local Grafana + Tempo + OTLP collector (Grafana :3000, OTLP :4318, Tempo :3200); set OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+tracing-up:
+    docker run --rm --name otel-lgtm -p 3000:3000 -p 4318:4318 -p 3200:3200 grafana/otel-lgtm
 
 # ── Code generation ───────────────────────────────────────────────────────────
 

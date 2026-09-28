@@ -29,6 +29,13 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
+	shutdownTracing, err := telemetry.InitTracing(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "tracing init failed", slog.Any(logger.KeyErr, err))
+		os.Exit(1)
+	}
+	defer func() { _ = shutdownTracing(context.Background()) }()
+
 	pool, err := db.Connect(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))

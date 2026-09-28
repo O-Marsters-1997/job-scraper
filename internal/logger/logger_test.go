@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
@@ -200,6 +201,34 @@ func TestTransportNoRunID(t *testing.T) {
 	}
 	if gotHeader != "" {
 		t.Errorf("%s header = %q, want none", logger.HeaderRunID, gotHeader)
+	}
+}
+
+func TestSpanContextOverridesTraceID(t *testing.T) {
+	var buf bytes.Buffer
+	log, err := logger.New(&buf, "json", "debug")
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+
+	traceID := trace.TraceID{1, 2, 3}
+	spanID := trace.SpanID{4, 5}
+	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: traceID,
+		SpanID:  spanID,
+	}))
+	ctx = logger.With(ctx, slog.String(logger.KeyTraceID, "uuid-fallback"))
+	log.InfoContext(ctx, "handled")
+
+	var got map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("Unmarshal(%s) = %v", buf.String(), err)
+	}
+	if got[logger.KeyTraceID] != traceID.String() {
+		t.Errorf("%s = %v, want %s", logger.KeyTraceID, got[logger.KeyTraceID], traceID)
+	}
+	if got[logger.KeySpanID] != spanID.String() {
+		t.Errorf("%s = %v, want %s", logger.KeySpanID, got[logger.KeySpanID], spanID)
 	}
 }
 

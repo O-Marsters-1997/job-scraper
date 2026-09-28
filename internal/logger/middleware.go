@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // HeaderRunID carries a run's ID across the worker's calls to the api's
@@ -35,7 +36,7 @@ func Transport(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return runIDTransport{base}
+	return otelhttp.NewTransport(runIDTransport{base})
 }
 
 type runIDTransport struct {
