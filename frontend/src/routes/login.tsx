@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createSignal, onMount } from "solid-js";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,19 +108,7 @@ function LoginPage() {
 					) : (
 						<>
 							Sign in
-							<svg
-								aria-hidden="true"
-								width="17"
-								height="17"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<path d="M5 12h14M13 6l6 6-6 6" />
-							</svg>
+							<Icon name="arrowRight" size={17} strokeWidth={2.2} />
 						</>
 					)}
 				</Button>

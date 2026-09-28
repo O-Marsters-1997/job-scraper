@@ -7,6 +7,7 @@ import {
 	Title,
 } from "@kobalte/core/dialog";
 import { For, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -81,20 +82,7 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 					<div class="flex items-center justify-between border-b border-border px-5 py-4">
 						<Title class="text-sm font-semibold text-foreground">Filters</Title>
 						<CloseButton class="flex size-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-muted hover:text-foreground">
-							<svg
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true"
-							>
-								<line x1="18" y1="6" x2="6" y2="18" />
-								<line x1="6" y1="6" x2="18" y2="18" />
-							</svg>
+							<Icon name="x" size={14} />
 						</CloseButton>
 					</div>
 

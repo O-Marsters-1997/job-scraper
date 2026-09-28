@@ -1,4 +1,5 @@
 import { For, type JSX, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 
 export function Field(props: {
@@ -59,19 +60,7 @@ export function ChoiceGroup(props: {
 								)}
 							>
 								<Show when={props.isOn(o.id)}>
-									<svg
-										aria-hidden="true"
-										width="10"
-										height="10"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="3.5"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<polyline points="20 6 9 17 4 12" />
-									</svg>
+									<Icon name="check" size={10} strokeWidth={3.5} />
 								</Show>
 							</span>
 							{o.label}

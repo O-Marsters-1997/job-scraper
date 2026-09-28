@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { AddDocDialog } from "@/components/cv/AddDocDialog";
+import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
@@ -98,19 +99,7 @@ function CVTemplatesPage() {
 		<div class="px-7 py-6">
 			<PageHeading title="CVs" subtitle="Google Docs tracked as CVs">
 				<Button class="shrink-0" onClick={() => setDialogOpen(true)}>
-					<svg
-						aria-hidden="true"
-						width="12"
-						height="12"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2.5"
-						stroke-linecap="round"
-					>
-						<line x1="12" y1="5" x2="12" y2="19" />
-						<line x1="5" y1="12" x2="19" y2="12" />
-					</svg>
+					<Icon name="plus" size={12} strokeWidth={2.5} />
 					Add doc
 				</Button>
 			</PageHeading>
@@ -160,19 +149,7 @@ function CVTemplatesPage() {
 							Add a Google Doc to see your CVs here.
 						</p>
 						<Button onClick={() => setDialogOpen(true)}>
-							<svg
-								aria-hidden="true"
-								width="12"
-								height="12"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2.5"
-								stroke-linecap="round"
-							>
-								<line x1="12" y1="5" x2="12" y2="19" />
-								<line x1="5" y1="12" x2="19" y2="12" />
-							</svg>
+							<Icon name="plus" size={12} strokeWidth={2.5} />
 							Add doc
 						</Button>
 					</div>
@@ -276,21 +253,7 @@ function CVTemplatesPage() {
 															title="Open in Google Docs"
 															class="text-faint transition-colors hover:text-foreground"
 														>
-															<svg
-																aria-hidden="true"
-																width="12"
-																height="12"
-																viewBox="0 0 24 24"
-																fill="none"
-																stroke="currentColor"
-																stroke-width="2"
-																stroke-linecap="round"
-																stroke-linejoin="round"
-															>
-																<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-																<polyline points="15 3 21 3 21 9" />
-																<line x1="10" y1="14" x2="21" y2="3" />
-															</svg>
+															<Icon name="externalLink" size={12} />
 															<span class="sr-only">
 																Open {cv.Title || "document"} in Google Docs
 															</span>
@@ -321,23 +284,7 @@ function CVTemplatesPage() {
 															disabled={hideMutation.isPending}
 															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive-strong disabled:opacity-50"
 														>
-															<svg
-																aria-hidden="true"
-																width="14"
-																height="14"
-																viewBox="0 0 24 24"
-																fill="none"
-																stroke="currentColor"
-																stroke-width="2"
-																stroke-linecap="round"
-																stroke-linejoin="round"
-															>
-																<polyline points="3 6 5 6 21 6" />
-																<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-																<path d="M10 11v6" />
-																<path d="M14 11v6" />
-																<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-															</svg>
+															<Icon name="trash" size={14} />
 														</button>
 													</Show>
 													<Show when={!cv.Visible}>
@@ -348,20 +295,7 @@ function CVTemplatesPage() {
 															disabled={showMutation.isPending}
 															class="inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-primary disabled:opacity-50"
 														>
-															<svg
-																aria-hidden="true"
-																width="14"
-																height="14"
-																viewBox="0 0 24 24"
-																fill="none"
-																stroke="currentColor"
-																stroke-width="2"
-																stroke-linecap="round"
-																stroke-linejoin="round"
-															>
-																<path d="M1 4v6h6" />
-																<path d="M3.51 15a9 9 0 1 0 .49-3.5" />
-															</svg>
+															<Icon name="rotateCcw" size={14} />
 														</button>
 													</Show>
 												</TableCell>

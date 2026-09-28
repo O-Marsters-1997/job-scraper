@@ -8,6 +8,7 @@ import {
 	type SortingState,
 } from "@tanstack/solid-table";
 import { createSignal, For, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { SortableTableHead } from "@/components/SortableTableHead";
@@ -73,21 +74,11 @@ export function JobsDataTable<TData extends Job>(
 		<div class="flex flex-col gap-3">
 			<div class="flex items-center gap-2">
 				<div class="relative max-w-xs flex-1">
-					<svg
-						aria-hidden="true"
+					<Icon
+						name="search"
+						size={14}
 						class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<circle cx="11" cy="11" r="8" />
-						<line x1="21" y1="21" x2="16.65" y2="16.65" />
-					</svg>
+					/>
 					<Label for="jobs-search" class="sr-only">
 						Search jobs
 					</Label>
@@ -106,21 +97,7 @@ export function JobsDataTable<TData extends Job>(
 					onClick={() => setFiltersOpen(true)}
 					class="relative shrink-0"
 				>
-					<svg
-						width="14"
-						height="14"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						aria-hidden="true"
-					>
-						<line x1="4" y1="6" x2="20" y2="6" />
-						<line x1="8" y1="12" x2="16" y2="12" />
-						<line x1="11" y1="18" x2="13" y2="18" />
-					</svg>
+					<Icon name="filter" size={14} />
 					Filters
 					<Show when={filterCount() > 0}>
 						<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">

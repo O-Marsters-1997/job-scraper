@@ -1,6 +1,7 @@
 import { cva } from "class-variance-authority";
 import type { JSX } from "solid-js";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { oklchToHex, toOklch } from "@/lib/color";
 import {
@@ -206,19 +207,7 @@ export default function TweaksPanel() {
 									class="flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-background hover:text-foreground"
 									aria-label="Back to tweaks"
 								>
-									<svg
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										aria-hidden="true"
-									>
-										<polyline points="15 18 9 12 15 6" />
-									</svg>
+									<Icon name="chevronLeft" size={14} />
 								</button>
 								<span class="text-data font-semibold tracking-tight text-foreground">
 									Custom theme
@@ -231,20 +220,7 @@ export default function TweaksPanel() {
 							class="flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-background hover:text-foreground"
 							aria-label="Close tweaks"
 						>
-							<svg
-								width="14"
-								height="14"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								aria-hidden="true"
-							>
-								<line x1="18" y1="6" x2="6" y2="18" />
-								<line x1="6" y1="6" x2="18" y2="18" />
-							</svg>
+							<Icon name="x" size={14} />
 						</button>
 					</div>
 
@@ -342,27 +318,7 @@ export default function TweaksPanel() {
 				title="Tweaks"
 				aria-label="Open tweaks panel"
 			>
-				<svg
-					width="16"
-					height="16"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<line x1="21" y1="4" x2="7" y2="4" />
-					<line x1="3" y1="4" x2="7" y2="4" />
-					<line x1="21" y1="12" x2="11" y2="12" />
-					<line x1="7" y1="12" x2="3" y2="12" />
-					<line x1="21" y1="20" x2="15" y2="20" />
-					<line x1="11" y1="20" x2="3" y2="20" />
-					<circle cx="7" cy="4" r="2" />
-					<circle cx="11" cy="12" r="2" />
-					<circle cx="15" cy="20" r="2" />
-				</svg>
+				<Icon name="sliders" />
 			</button>
 		</div>
 	);
@@ -427,19 +383,7 @@ function ThemeSection(props: {
 								</div>
 								<Show when={selected()}>
 									<span class="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
-										<svg
-											width="10"
-											height="10"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											aria-hidden="true"
-										>
-											<polyline points="20 6 9 17 4 12" />
-										</svg>
+										<Icon name="check" size={10} strokeWidth={3} />
 									</span>
 								</Show>
 								<span

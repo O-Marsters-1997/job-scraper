@@ -1,6 +1,7 @@
 import { Chart as ChartJS } from "chart.js";
 import { Line } from "solid-chartjs";
 import { createSignal, For, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Card } from "@/components/ui/card";
 import {
 	createThemedMemo,
@@ -130,20 +131,7 @@ export function JobsOverTimeChart(props: { jobs: Job[] }) {
 						title="Reset zoom"
 						class="ml-1 flex size-7 items-center justify-center rounded-md border border-border text-muted transition-colors hover:bg-surface-muted hover:text-foreground"
 					>
-						<svg
-							aria-hidden="true"
-							width="13"
-							height="13"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-							<path d="M3 3v5h5" />
-						</svg>
+						<Icon name="history" size={13} />
 					</button>
 				</div>
 			</div>
