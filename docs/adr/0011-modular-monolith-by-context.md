@@ -31,6 +31,11 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
 - **Errors.**
   - A store returns sentinels declared in its own package, kinded with `apperr` when they map to an HTTP status, and maps `pgx.ErrNoRows` to its own `ErrNotFound`.
   - The context root (`internal/services/<ctx>`) re-exports only the sentinels that other contexts or the worker must match. The root can't declare them itself, because it imports the store.
+  - Amendment (2026-09-28): `ErrNotFound` carried no domain-specific detail in any store, so four
+    independently-built copies were silently not `errors.Is`-equal to each other. It's now one
+    `data.ErrNotFound` (`internal/data/errors.go`), returned directly — no per-store declaration
+    or root re-export. A sentinel stays local only when it carries real domain meaning
+    (`ErrApplicationExists`, `ErrUsernameTaken`, ...).
 - **Migration order.** `applications` is the pilot, followed by `identity`, `cvtemplates` and `scoring`. `jobsearch` goes last, taking whatever remains of `internal/data/db`. Until a context moves, `*jobsdb.DB` keeps serving it.
 
 Rejected alternatives:

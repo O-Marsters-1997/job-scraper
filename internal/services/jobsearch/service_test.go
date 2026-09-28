@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
-	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
 type fakeJobStore struct {
@@ -51,7 +51,7 @@ func (f *fakeJobStore) GetJob(_ context.Context, id, _ string) (dto.Job, error) 
 			return j, nil
 		}
 	}
-	return dto.Job{}, store.ErrNotFound
+	return dto.Job{}, data.ErrNotFound
 }
 
 func (f *fakeJobStore) NewURLs(_ context.Context, urls []string) ([]string, error) {

@@ -14,15 +14,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store/sqlc"
 )
 
-var (
-	ErrNotFound      = apperr.NotFound("not found")
-	ErrUsernameTaken = apperr.Conflict("username already taken")
-)
+var ErrUsernameTaken = apperr.Conflict("username already taken")
 
 type Store struct {
 	pool    *pgxpool.Pool
@@ -44,7 +42,7 @@ func parseUUID(s string) (pgtype.UUID, error) {
 func (s *Store) GetUserByUsername(ctx context.Context, username string) (dto.User, error) {
 	u, err := s.queries.GetUserByUsername(ctx, username)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.User{}, ErrNotFound
+		return dto.User{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.User{}, fmt.Errorf("store.GetUserByUsername: %w", err)
@@ -106,7 +104,7 @@ func (s *Store) GetSession(ctx context.Context, id string) (dto.Session, error) 
 	}
 	row, err := s.queries.GetSession(ctx, sid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Session{}, ErrNotFound
+		return dto.Session{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Session{}, fmt.Errorf("store.GetSession: %w", err)
@@ -139,7 +137,7 @@ func (s *Store) GetProfile(ctx context.Context, userID string) (dto.Profile, err
 	}
 	row, err := s.queries.GetUserProfile(ctx, uid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, ErrNotFound
+		return dto.Profile{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Profile{}, fmt.Errorf("store.GetProfile: %w", err)
@@ -157,7 +155,7 @@ func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Prof
 		Email: pgtype.Text{String: email, Valid: email != ""},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, ErrNotFound
+		return dto.Profile{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Profile{}, fmt.Errorf("store.UpdateEmail: %w", err)
@@ -190,7 +188,7 @@ func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string
 		Provider: provider,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
+		return "", data.ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("store.GetUserAICredential: %w", err)

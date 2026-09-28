@@ -34,8 +34,8 @@ The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular
   `migrate.go` (`RunMigrations`) and `sqlc/schema.sql`, which every context's sqlc block
   reads and every binary connects through.
 - `internal/data`: generic, reusable information with no database or context coupling —
-  currently empty above `db/`; add to it only when something genuinely reusable needs a
-  home (e.g. cross-context sentinel errors), not speculatively.
+  e.g. `errors.go`'s `ErrNotFound`, the sentinel shared by stores with no domain-specific
+  detail to add. Add to it only when something is genuinely reusable, not speculatively.
 
 ### Context rules
 

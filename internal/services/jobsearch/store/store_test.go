@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
@@ -155,7 +156,7 @@ func TestGetJobNotFound(t *testing.T) {
 	ctx := context.Background()
 	userID := insertUser(t, pool)
 
-	if _, err := st.GetJob(ctx, "00000000-0000-0000-0000-000000000000", userID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetJob(ctx, "00000000-0000-0000-0000-000000000000", userID); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -291,7 +292,7 @@ func TestCompanyBoardsRoundTrip(t *testing.T) {
 		t.Fatalf("boards = %+v, err = %v", boards, err)
 	}
 
-	if _, err := st.GetVerifiedBoardID(ctx, "greenhouse", "board-co"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetVerifiedBoardID(ctx, "greenhouse", "board-co"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("unverified board: err = %v, want ErrNotFound", err)
 	}
 }
@@ -436,7 +437,7 @@ func TestSourceTargetRunRecovery(t *testing.T) {
 	if err != nil || got.ID != target.ID {
 		t.Fatalf("get target = %+v, err = %v", got, err)
 	}
-	if _, err := st.GetSourceTarget(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetSourceTarget(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("missing target: err = %v, want ErrNotFound", err)
 	}
 
@@ -457,7 +458,7 @@ func TestSourceTargetRunRecovery(t *testing.T) {
 	if err != nil || claimed.ID != target.ID {
 		t.Fatalf("claim recoverable = %+v, err = %v", claimed, err)
 	}
-	if _, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("re-claim before stale again: err = %v, want ErrNotFound", err)
 	}
 

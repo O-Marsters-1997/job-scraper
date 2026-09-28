@@ -13,15 +13,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store/sqlc"
 )
 
-var (
-	ErrApplicationExists = apperr.Conflict("application already exists for this job")
-	ErrNotFound          = apperr.NotFound("not found")
-)
+var ErrApplicationExists = apperr.Conflict("application already exists for this job")
 
 type Store struct {
 	pool    *pgxpool.Pool
@@ -158,7 +156,7 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.Application{}, ErrNotFound
+			return dto.Application{}, data.ErrNotFound
 		}
 		return dto.Application{}, fmt.Errorf("store.UpdateApplication: %w", err)
 	}

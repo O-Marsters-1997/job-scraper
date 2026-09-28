@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -56,7 +56,7 @@ func (o *Orchestrator) searchConfig(ctx context.Context, target dto.SourceTarget
 	config := dto.SearchConfig{UserID: target.UserID}
 	if o.cfgDB != nil {
 		stored, err := o.cfgDB.SearchConfig(ctx, target.UserID)
-		if err != nil && !errors.Is(err, scoring.ErrNotFound) {
+		if err != nil && !errors.Is(err, data.ErrNotFound) {
 			return config, err
 		}
 		if err == nil {

@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
@@ -174,7 +174,7 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	}
 
 	cfg, err := s.configs.SearchConfig(ctx, userID)
-	if errors.Is(err, scoring.ErrNotFound) {
+	if errors.Is(err, data.ErrNotFound) {
 		cfg = dto.SearchConfig{UserID: userID}
 	} else if err != nil {
 		return dto.SourceTarget{}, apperr.Unavailable("search saved but candidate reconsideration failed")
