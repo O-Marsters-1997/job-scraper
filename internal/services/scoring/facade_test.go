@@ -18,6 +18,8 @@ func buildModule(t *testing.T, st *scoringtest.FakeStore) *scoring.Module {
 		Credentials:        &fakeCredentials{},
 		Alerter:            &fakeAlerter{},
 		Profiles:           &fakeProfiles{},
+		Candidates:         scoringtest.Reconsiders(),
+		Extractor:          scoringtest.Extracts(nil),
 	})
 }
 

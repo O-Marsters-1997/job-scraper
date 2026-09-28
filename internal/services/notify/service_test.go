@@ -4,15 +4,17 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/notify"
 )
 
-type sentEmail struct{ to string }
-type mockNotifier struct{ sent []sentEmail }
+type sentEmail struct{ To string }
+type fakeNotifier struct{ sent []sentEmail }
 
-func (m *mockNotifier) Send(_ context.Context, to, _, _ string) error {
-	m.sent = append(m.sent, sentEmail{to: to})
+func (n *fakeNotifier) Send(_ context.Context, to, _, _ string) error {
+	n.sent = append(n.sent, sentEmail{To: to})
 	return nil
 }
 
@@ -21,7 +23,7 @@ func TestNotifyNewJobUsesRecipient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sender := &mockNotifier{}
+	sender := &fakeNotifier{}
 	svc := notify.NewNotificationService(sender, renderer)
 	job := dto.Job{ID: "job-1", Title: "Engineer", URL: "https://example.com/job"}
 	for _, email := range []string{"alice@example.com", "bob@example.com", ""} {
@@ -29,7 +31,8 @@ func TestNotifyNewJobUsesRecipient(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(sender.sent) != 2 || sender.sent[0].to != "alice@example.com" || sender.sent[1].to != "bob@example.com" {
-		t.Fatalf("recipients: %+v", sender.sent)
+	want := []sentEmail{{To: "alice@example.com"}, {To: "bob@example.com"}}
+	if diff := cmp.Diff(want, sender.sent); diff != "" {
+		t.Errorf("recipients mismatch, empty email skipped (-want +got):\n%s", diff)
 	}
 }

@@ -38,7 +38,12 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	return &Client{http: &http.Client{Timeout: 60 * time.Second}, baseURL: chatCompletionsURL}
+	return NewClientAt(chatCompletionsURL, &http.Client{Timeout: 60 * time.Second})
+}
+
+// NewClientAt builds a Client for tests to point at an httptest.Server.
+func NewClientAt(baseURL string, httpClient *http.Client) *Client {
+	return &Client{http: httpClient, baseURL: baseURL}
 }
 
 type bankOption struct {

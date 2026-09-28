@@ -5,18 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoringconfig"
 )
 
 func TestOptions(t *testing.T) {
 	retired := time.Now()
-	store := newFakeStore()
-	store.options = []dto.ScoringOption{
+	store := scoringtest.NewFakeStore()
+	store.SeedOptions([]dto.ScoringOption{
 		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
 		{ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retired},
-	}
-	svc := scoringconfig.New(store, &fakeReconsiderer{}, &fakeRecomputer{}, &fakeExtractor{}, &fakeCredentials{}, &fakeBackfiller{})
+	})
+	svc := scoringconfig.New(store, scoringtest.Reconsiders(), scoringtest.Recomputes(0), &fakeExtractor{}, &fakeCredentials{}, scoringtest.Backfills(0))
 
 	got, err := svc.Options(context.Background(), "user-1")
 	if err != nil {
@@ -26,11 +29,8 @@ func TestOptions(t *testing.T) {
 	if len(got.Dimensions) != len(scoringconfig.Dimensions) {
 		t.Fatalf("dimensions = %d, want %d", len(got.Dimensions), len(scoringconfig.Dimensions))
 	}
-	if len(got.Options) != 1 {
-		t.Fatalf("options = %d, want 1 (retired excluded): %+v", len(got.Options), got.Options)
-	}
-	want := dto.ScoringOption{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go"}
-	if got.Options[0] != want {
-		t.Fatalf("option = %+v, want %+v (question text must not survive to the view)", got.Options[0], want)
+	want := []dto.ScoringOption{{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go"}}
+	if diff := cmp.Diff(want, got.Options); diff != "" {
+		t.Errorf("options mismatch, retired excluded and question text stripped (-want +got):\n%s", diff)
 	}
 }
