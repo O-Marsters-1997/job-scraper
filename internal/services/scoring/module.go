@@ -18,10 +18,6 @@ import (
 
 var _ telemetry.StateReader = (*Module)(nil)
 
-// ErrNotFound is the scoring store's not-found sentinel, re-exported for
-// contexts that must match it (ADR 0011).
-var ErrNotFound = store.ErrNotFound
-
 type noopAlerter struct{}
 
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }

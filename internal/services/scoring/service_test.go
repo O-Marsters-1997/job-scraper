@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
@@ -104,7 +105,7 @@ func (f *fakeStore) ClaimAnswerEffect(context.Context) (dto.AnswerEffect, error)
 		return dto.AnswerEffect{}, f.ClaimErr
 	}
 	if len(f.effects) == 0 {
-		return dto.AnswerEffect{}, store.ErrNotFound
+		return dto.AnswerEffect{}, data.ErrNotFound
 	}
 	e := f.effects[0]
 	f.effects = f.effects[1:]
@@ -123,7 +124,7 @@ func (f *fakeStore) GetJobForScoring(_ context.Context, jobID string) (dto.Job, 
 	defer f.mu.Unlock()
 	job, ok := f.jobs[jobID]
 	if !ok {
-		return dto.Job{}, store.ErrNotFound
+		return dto.Job{}, data.ErrNotFound
 	}
 	return job, nil
 }
@@ -169,7 +170,7 @@ func (f *fakeStore) GetSearchConfig(_ context.Context, userID string) (dto.Searc
 	defer f.mu.Unlock()
 	cfg, ok := f.search[userID]
 	if !ok {
-		return dto.SearchConfig{}, store.ErrNotFound
+		return dto.SearchConfig{}, data.ErrNotFound
 	}
 	return cfg, nil
 }

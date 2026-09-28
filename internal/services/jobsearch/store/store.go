@@ -20,13 +20,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/candidates"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 )
 
 var (
-	ErrNotFound              = apperr.NotFound("not found")
 	ErrInvalidID             = errors.New("invalid ID")
 	ErrCanonicalConflict     = errors.New("canonical job identity conflict")
 	ErrBoardConflict         = apperr.Conflict("board belongs to another company")
@@ -148,7 +148,7 @@ func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, erro
 	}
 	row, err := s.queries.GetJob(ctx, sqlc.GetJobParams{ID: jid, UserID: uid})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Job{}, ErrNotFound
+		return dto.Job{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Job{}, fmt.Errorf("store.GetJob: %w", err)
@@ -313,7 +313,7 @@ func (s *Store) GetCompany(ctx context.Context, id string) (dto.Company, error) 
 	}
 	row, err := s.queries.GetCompany(ctx, cid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Company{}, ErrNotFound
+		return dto.Company{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("store.GetCompany: %w", err)
@@ -422,7 +422,7 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
 	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: token})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
+		return "", data.ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("store.GetVerifiedBoardID: %w", err)
@@ -562,7 +562,7 @@ func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabl
 	row, err := s.queries.UpdateSourceTarget(ctx, params)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.SourceTarget{}, ErrNotFound
+			return dto.SourceTarget{}, data.ErrNotFound
 		}
 		return dto.SourceTarget{}, fmt.Errorf("store.UpdateSourceTarget: %w", err)
 	}
@@ -591,7 +591,7 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string) (dto.Source
 	}
 	row, err := s.queries.StartSourceTargetRun(ctx, tid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("start source target run: %w", err)
@@ -606,7 +606,7 @@ func (s *Store) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarge
 	}
 	row, err := s.queries.GetSourceTarget(ctx, tid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("store.GetSourceTarget: %w", err)
@@ -627,7 +627,7 @@ func (s *Store) TransitionSourceTargetRun(ctx context.Context, id, runID, status
 		ID: tid, RunID: rid, RunStatus: status, LastRunError: runError,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("store.TransitionSourceTargetRun: %w", err)
@@ -658,7 +658,7 @@ func (s *Store) ClaimRecoverableSourceTarget(ctx context.Context, id, runID stri
 	}
 	row, err := s.queries.ClaimRecoverableSourceTarget(ctx, sqlc.ClaimRecoverableSourceTargetParams{ID: tid, RunID: rid})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, ErrNotFound
+		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("store.ClaimRecoverableSourceTarget: %w", err)
@@ -853,7 +853,7 @@ func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token
 		VerificationMethod: pgtype.Text{String: method, Valid: true},
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.CompanyBoard{}, ErrNotFound
+		return dto.CompanyBoard{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.CompanyBoard{}, fmt.Errorf("store.VerifyCompanyBoard: %w", err)

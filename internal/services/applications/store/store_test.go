@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
@@ -127,7 +128,7 @@ func TestUpdateApplication(t *testing.T) {
 		t.Fatalf("notes = %q, want %q", updated.Notes, "followed up")
 	}
 
-	if _, err := st.UpdateApplication(context.Background(), userID, "00000000-0000-0000-0000-000000000000", dto.UpdateApplicationInput{}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.UpdateApplication(context.Background(), userID, "00000000-0000-0000-0000-000000000000", dto.UpdateApplicationInput{}); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("missing update: err = %v, want ErrNotFound", err)
 	}
 }

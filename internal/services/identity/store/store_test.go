@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
@@ -73,7 +74,7 @@ func TestGetUserByUsername(t *testing.T) {
 		ctx := context.Background()
 
 		_, err := st.GetUserByUsername(ctx, "nonexistent")
-		if !errors.Is(err, store.ErrNotFound) {
+		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
@@ -137,7 +138,7 @@ func TestGetSession(t *testing.T) {
 		}
 
 		_, err = st.GetSession(ctx, session.ID)
-		if !errors.Is(err, store.ErrNotFound) {
+		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
@@ -161,7 +162,7 @@ func TestDeleteSession(t *testing.T) {
 	}
 
 	_, err = st.GetSession(ctx, session.ID)
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -213,7 +214,7 @@ func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
 		t.Fatalf("rollback: %v", err)
 	}
 
-	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound after rollback", err)
 	}
 }
@@ -257,7 +258,7 @@ func TestGetProfileNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := st.GetProfile(ctx, "00000000-0000-0000-0000-000000000000")
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -271,7 +272,7 @@ func TestUserAICredentials(t *testing.T) {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
-	if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound before any credential saved", err)
 	}
 
@@ -311,7 +312,7 @@ func TestUserAICredentials(t *testing.T) {
 	if err := st.DeleteUserAICredential(ctx, user.ID, "anthropic"); err != nil {
 		t.Fatalf("DeleteUserAICredential: %v", err)
 	}
-	if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.GetUserAICredential(ctx, user.ID, "anthropic"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound after delete", err)
 	}
 }

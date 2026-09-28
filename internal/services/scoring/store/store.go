@@ -14,13 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
-
-var ErrNotFound = apperr.NotFound("not found")
 
 // ScoringInput is one job and its cached answers, keyed by question hash,
 // ready for Recompute.
@@ -135,7 +133,7 @@ func (s *Store) GetSearchConfig(ctx context.Context, userID string) (dto.SearchC
 	}
 	row, err := s.queries.GetSearchConfig(ctx, uid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SearchConfig{}, ErrNotFound
+		return dto.SearchConfig{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("store.GetSearchConfig: %w", err)
@@ -227,7 +225,7 @@ func (s *Store) RewordScoringOption(ctx context.Context, id, question string) er
 		return fmt.Errorf("store.RewordScoringOption: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("store.RewordScoringOption: option %q: %w", id, ErrNotFound)
+		return fmt.Errorf("store.RewordScoringOption: option %q: %w", id, data.ErrNotFound)
 	}
 	if err := queries.QueueOptionBackfill(ctx); err != nil {
 		return fmt.Errorf("store.RewordScoringOption: queue backfill: %w", err)
@@ -246,7 +244,7 @@ func (s *Store) RetireScoringOption(ctx context.Context, id string) error {
 		return fmt.Errorf("store.RetireScoringOption: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("store.RetireScoringOption: option %q: %w", id, ErrNotFound)
+		return fmt.Errorf("store.RetireScoringOption: option %q: %w", id, data.ErrNotFound)
 	}
 	return nil
 }
@@ -270,7 +268,7 @@ func (s *Store) QueueMissingAnswers(ctx context.Context, userID string, hashes [
 func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
 	row, err := s.queries.ClaimAnswerEffect(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.AnswerEffect{}, ErrNotFound
+		return dto.AnswerEffect{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.AnswerEffect{}, fmt.Errorf("store.ClaimAnswerEffect: %w", err)
@@ -307,7 +305,7 @@ func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, er
 	}
 	row, err := s.queries.GetJobForScoring(ctx, jid)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Job{}, ErrNotFound
+		return dto.Job{}, data.ErrNotFound
 	}
 	if err != nil {
 		return dto.Job{}, fmt.Errorf("store.GetJobForScoring: %w", err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
@@ -561,7 +562,7 @@ func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
 	if first.RunID == second.RunID || first.RunID == "" {
 		t.Fatalf("run IDs = %q, %q", first.RunID, second.RunID)
 	}
-	if _, err := st.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); !errors.Is(err, store.ErrNotFound) {
+	if _, err := st.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("stale completion error = %v", err)
 	}
 	current, err := st.TransitionSourceTargetRun(ctx, target.ID, second.RunID, "succeeded", "")

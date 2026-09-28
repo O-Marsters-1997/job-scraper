@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
@@ -19,7 +19,7 @@ var errSourceTargetExists = apperr.Conflict("source target already exists")
 type fakeSearchConfigReader struct{}
 
 func (fakeSearchConfigReader) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
-	return dto.SearchConfig{}, scoring.ErrNotFound
+	return dto.SearchConfig{}, data.ErrNotFound
 }
 
 type fakeStore struct {

@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
@@ -71,7 +72,7 @@ func (s *Service) RunTick(ctx context.Context) error {
 	g.SetLimit(maxConcurrentEffects)
 	for {
 		effect, err := s.store.ClaimAnswerEffect(ctx)
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, data.ErrNotFound) {
 			break
 		}
 		if err != nil {
@@ -234,7 +235,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 // current preferences and each job's cached answers. It never calls Answerer.
 func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error) {
 	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return dto.RecomputeResult{}, err
 	}
 
@@ -265,7 +266,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 // userID's already-scored jobs missing an answer to a currently picked question.
 func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64, error) {
 	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return 0, err
 	}
 	if len(cfg.Preferences.Picks) == 0 {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
@@ -90,7 +91,7 @@ func TestGetSearchConfig_MissingReturnsErrNotFound(t *testing.T) {
 	userID := insertUser(t, pool)
 
 	_, err := st.GetSearchConfig(context.Background(), userID)
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -136,7 +137,7 @@ func TestScoringOptions_AddRewordRetireLifecycle(t *testing.T) {
 func TestRewordScoringOption_MissingReturnsErrNotFound(t *testing.T) {
 	st, _ := newStore(t)
 	err := st.RewordScoringOption(context.Background(), "missing", "question")
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -144,7 +145,7 @@ func TestRewordScoringOption_MissingReturnsErrNotFound(t *testing.T) {
 func TestRetireScoringOption_MissingReturnsErrNotFound(t *testing.T) {
 	st, _ := newStore(t)
 	err := st.RetireScoringOption(context.Background(), "missing")
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -158,7 +159,7 @@ func TestRetireScoringOption_AlreadyRetiredReturnsErrNotFound(t *testing.T) {
 	if err := st.RetireScoringOption(ctx, "tech:zig"); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.RetireScoringOption(ctx, "tech:zig"); !errors.Is(err, store.ErrNotFound) {
+	if err := st.RetireScoringOption(ctx, "tech:zig"); !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -345,7 +346,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 func TestClaimAnswerEffect_EmptyQueueReturnsErrNotFound(t *testing.T) {
 	st, _ := newStore(t)
 	_, err := st.ClaimAnswerEffect(context.Background())
-	if !errors.Is(err, store.ErrNotFound) {
+	if !errors.Is(err, data.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }

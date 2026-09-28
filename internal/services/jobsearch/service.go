@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
@@ -86,7 +87,7 @@ func (s *Service) NewURLs(ctx context.Context, urls []string) ([]string, error) 
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	job, err := s.store.GetJob(ctx, id, userID)
 	switch {
-	case errors.Is(err, store.ErrNotFound):
+	case errors.Is(err, data.ErrNotFound):
 		return dto.Job{}, apperr.NotFound("job not found")
 	case errors.Is(err, store.ErrInvalidID):
 		return dto.Job{}, apperr.Invalid("invalid job ID")

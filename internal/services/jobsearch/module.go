@@ -14,12 +14,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
 
-// ErrNotFound and ErrBoardClaimUnavailable are the jobsearch store's
-// sentinels, re-exported for the worker to match (ADR 0011).
-var (
-	ErrNotFound              = store.ErrNotFound
-	ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
-)
+// ErrBoardClaimUnavailable is the jobsearch store's sentinel, re-exported
+// for the worker to match (ADR 0011).
+var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
 	store         *store.Store
