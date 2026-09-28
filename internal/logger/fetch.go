@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // FetchTransport wraps base with a DEBUG "outbound fetch" line per round
@@ -14,7 +17,13 @@ func FetchTransport(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return fetchLogTransport{base}
+	return OutboundSpans(fetchLogTransport{base})
+}
+
+// OutboundSpans records a client span per round trip without sending trace
+// headers, so a third party never sees our trace IDs.
+func OutboundSpans(base http.RoundTripper) http.RoundTripper {
+	return otelhttp.NewTransport(base, otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()))
 }
 
 type fetchLogTransport struct {

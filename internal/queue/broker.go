@@ -11,6 +11,9 @@ import (
 
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -22,6 +25,7 @@ const (
 	workExchange = "source.work"
 	deadExchange = "source.dead.exchange"
 	deadQueue    = "source.dead"
+	tracerName   = "internal/queue"
 )
 
 type Broker struct {
@@ -112,7 +116,7 @@ func declareTopology(ch *amqp.Channel) error {
 	return nil
 }
 
-func (b *Broker) Publish(ctx context.Context, task Task) error {
+func (b *Broker) Publish(ctx context.Context, task Task) (err error) {
 	if err := task.Validate(); err != nil {
 		return err
 	}
@@ -131,7 +135,17 @@ func (b *Broker) Publish(ctx context.Context, task Task) error {
 	if task.Kind != DetailTask {
 		priority = 8
 	}
-	msg := amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: task.ID, Priority: priority, Timestamp: time.Now(), Body: body}
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "publish "+task.Source, trace.WithSpanKind(trace.SpanKindProducer))
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	headers := amqp.Table{}
+	otel.GetTextMapPropagator().Inject(ctx, headerCarrier(headers))
+	msg := amqp.Publishing{ContentType: "application/json", DeliveryMode: amqp.Persistent, MessageId: task.ID, Priority: priority, Timestamp: time.Now(), Headers: headers, Body: body}
 	if err := b.pub.PublishWithContext(ctx, workExchange, task.Source, true, false, msg); err != nil {
 		return fmt.Errorf("publish %s: %w", task.ID, err)
 	}
@@ -240,12 +254,19 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 				slog.String(logger.KeyTargetID, task.TargetID),
 				slog.String(logger.KeyRunID, task.RunID),
 			)
+			taskCtx = otel.GetTextMapPropagator().Extract(taskCtx, headerCarrier(delivery.Headers))
+			taskCtx, span := otel.Tracer(tracerName).Start(taskCtx, "process "+source, trace.WithSpanKind(trace.SpanKindConsumer))
 			slog.DebugContext(taskCtx, "queue delivery received", slog.Bool("redelivered", task.Redelivered))
 			if err == nil {
 				handlerStart := time.Now()
 				err = handler(taskCtx, task)
 				logTaskDone(taskCtx, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
 			}
+			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+			}
+			span.End()
 			if ctx.Err() != nil {
 				return nil
 			}

@@ -10,6 +10,7 @@ const (
 	KeyWaitMS        = "wait_ms"
 	KeyRequestID     = "request_id"
 	KeyTraceID       = "trace_id"
+	KeySpanID        = "span_id"
 	KeyRunID         = "run_id"
 	KeyTaskID        = "task_id"
 	KeyTargetID      = "target_id"

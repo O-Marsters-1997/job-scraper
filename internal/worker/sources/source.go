@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
 
@@ -54,7 +55,7 @@ func NewBase(cfg Config) PaginatedBase {
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,
-		client: &http.Client{Timeout: DefaultTimeout, Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client: &http.Client{Timeout: DefaultTimeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
 			}

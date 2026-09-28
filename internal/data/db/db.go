@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,7 +21,12 @@ func Connect(ctx context.Context) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, err
 	}
-	pool, err := pgxpool.New(ctx, connStr)
+	cfg, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		return nil, fmt.Errorf("postgres config: %w", err)
+	}
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
