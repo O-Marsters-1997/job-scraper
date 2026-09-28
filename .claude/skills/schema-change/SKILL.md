@@ -1,7 +1,7 @@
 ---
 name: schema-change
 description: Change the Postgres schema: create, alter or drop tables, columns, indexes or constraints, backfill data, and update the sqlc queries and generated code to match. Use for "write a migration", "change the schema", "add a column", "new index", "rename a field", "backfill".
-paths: ["scripts/migrations/**", "internal/data/sqlc/**", "internal/services/*/store/**", "sqlc.yaml"]
+paths: ["scripts/migrations/**", "internal/data/db/sqlc/**", "internal/services/*/store/**", "sqlc.yaml"]
 ---
 
 # Schema change
@@ -36,7 +36,7 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    `just migrate-down && just migrate-up`. If Down errors or Up-after-Down
    fails, Down doesn't mirror Up — fix it now, not after this ships.
 
-5. **Mirror the end state into `internal/data/sqlc/schema.sql` by hand.**
+5. **Mirror the end state into `internal/data/db/sqlc/schema.sql` by hand.**
    sqlc reads only this file, never `scripts/migrations/`
    (`AGENTS.md` "sqlc"). Add/change table and index definitions to match
    what the migration produces after Up.
