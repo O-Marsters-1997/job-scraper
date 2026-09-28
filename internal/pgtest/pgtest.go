@@ -35,14 +35,14 @@ func Pool() (*pgxpool.Pool, error) {
 
 // New returns the pool shared by this test binary (see Pool), with
 // every table truncated so the caller starts from an empty database.
-func New(t testing.TB) *pgxpool.Pool {
-	t.Helper()
+func New(tb testing.TB) *pgxpool.Pool {
+	tb.Helper()
 
 	p, err := Pool()
 	if err != nil {
-		t.Fatalf("pgtest: %v", err)
+		tb.Fatalf("pgtest: %v", err)
 	}
-	truncateAll(t, p)
+	truncateAll(tb, p)
 
 	return p
 }
@@ -88,8 +88,8 @@ func chdirToRepoRoot() error {
 	return os.Chdir(filepath.Join(filepath.Dir(filename), "../.."))
 }
 
-func truncateAll(t testing.TB, pool *pgxpool.Pool) {
-	t.Helper()
+func truncateAll(tb testing.TB, pool *pgxpool.Pool) {
+	tb.Helper()
 	ctx := context.Background()
 
 	rows, err := pool.Query(ctx, `
@@ -97,7 +97,7 @@ func truncateAll(t testing.TB, pool *pgxpool.Pool) {
 		WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name != 'goose_db_version'
 	`)
 	if err != nil {
-		t.Fatalf("pgtest: list tables: %v", err)
+		tb.Fatalf("pgtest: list tables: %v", err)
 	}
 	defer rows.Close()
 
@@ -105,18 +105,18 @@ func truncateAll(t testing.TB, pool *pgxpool.Pool) {
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			t.Fatalf("pgtest: scan table name: %v", err)
+			tb.Fatalf("pgtest: scan table name: %v", err)
 		}
 		tables = append(tables, name)
 	}
 	if err := rows.Err(); err != nil {
-		t.Fatalf("pgtest: list tables: %v", err)
+		tb.Fatalf("pgtest: list tables: %v", err)
 	}
 	if len(tables) == 0 {
 		return
 	}
 
 	if _, err := pool.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
-		t.Fatalf("pgtest: truncate: %v", err)
+		tb.Fatalf("pgtest: truncate: %v", err)
 	}
 }

@@ -92,11 +92,10 @@ func TestService_List(t *testing.T) {
 	modTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	cases := []struct {
-		name    string
-		setup   func(gc *fakeDocsClient, st *fakeStore)
-		wantN   int
-		wantErr bool
-		check   func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore)
+		name  string
+		setup func(gc *fakeDocsClient, st *fakeStore)
+		wantN int
+		check func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore)
 	}{
 		{
 			name: "two docs two tabs each",
@@ -113,6 +112,7 @@ func TestService_List(t *testing.T) {
 			},
 			wantN: 4,
 			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+				t.Helper()
 				for _, cv := range cvs {
 					want := "https://docs.google.com/document/d/" + cv.DocID + "/edit?tab=t." + cv.TabID
 					if cv.DocURL != want {
@@ -130,18 +130,12 @@ func TestService_List(t *testing.T) {
 			},
 			wantN: 1,
 			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+				t.Helper()
 				want := "https://docs.google.com/document/d/docA/edit?tab=t.0"
 				if cvs[0].DocURL != want {
 					t.Errorf("DocURL = %q, want %q", cvs[0].DocURL, want)
 				}
 			},
-		},
-		{
-			name: "not connected",
-			setup: func(gc *fakeDocsClient, _ *fakeStore) {
-				gc.connectErr = apperr.Unauthorized("google account not connected")
-			},
-			wantErr: true,
 		},
 		{
 			name: "skips inaccessible doc",
@@ -153,6 +147,7 @@ func TestService_List(t *testing.T) {
 			},
 			wantN: 1,
 			check: func(t *testing.T, cvs []cvtemplates.CV, _ *fakeStore) {
+				t.Helper()
 				if cvs[0].DocID != "docB" {
 					t.Errorf("expected CV from docB, got %q", cvs[0].DocID)
 				}
@@ -168,6 +163,7 @@ func TestService_List(t *testing.T) {
 			},
 			wantN: 1,
 			check: func(t *testing.T, cvs []cvtemplates.CV, st *fakeStore) {
+				t.Helper()
 				if cvs[0].Visible {
 					t.Error("returned CV should have Visible=false for a hidden tab")
 				}
@@ -190,13 +186,6 @@ func TestService_List(t *testing.T) {
 
 			svc := cvtemplates.NewService(gc, st)
 			cvs, err := svc.List(context.Background(), "u1")
-
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected an error, got nil")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -207,6 +196,16 @@ func TestService_List(t *testing.T) {
 				tc.check(t, cvs, st)
 			}
 		})
+	}
+}
+
+func TestService_List_NotConnectedReturnsError(t *testing.T) {
+	gc := &fakeDocsClient{connectErr: apperr.Unauthorized("google account not connected")}
+	svc := cvtemplates.NewService(gc, &fakeStore{})
+
+	_, err := svc.List(context.Background(), "u1")
+	if err == nil {
+		t.Fatal("expected an error, got nil")
 	}
 }
 

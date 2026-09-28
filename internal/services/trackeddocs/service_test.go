@@ -76,13 +76,26 @@ func (f *fakeStore) ShowTab(_ context.Context, userID, docID, tabID string) erro
 }
 
 func TestAddDoc(t *testing.T) {
+	gc := &fakeDocsClient{}
+	st := newFakeStore()
+	svc := trackeddocs.New(gc, st)
+
+	_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "https://docs.google.com/document/d/abc1234567890/edit"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !st.docs["u1/abc1234567890"] {
+		t.Errorf("expected doc abc1234567890 tracked for u1, got %+v", st.docs)
+	}
+}
+
+func TestAddDoc_Rejects(t *testing.T) {
 	cases := []struct {
 		name    string
 		url     string
 		metaErr map[string]error
 		wantErr error
 	}{
-		{name: "valid URL", url: "https://docs.google.com/document/d/abc1234567890/edit"},
 		{name: "garbage URL", url: "not-a-url", wantErr: trackeddocs.ErrInvalidDoc},
 		{
 			name:    "inaccessible doc",
@@ -100,20 +113,11 @@ func TestAddDoc(t *testing.T) {
 
 			_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: tc.url})
 
-			if tc.wantErr != nil {
-				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("expected %v, got %v", tc.wantErr, err)
-				}
-				if len(st.docs) != 0 {
-					t.Errorf("AddTrackedDoc should not have been called, got %+v", st.docs)
-				}
-				return
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("expected %v, got %v", tc.wantErr, err)
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if !st.docs["u1/abc1234567890"] {
-				t.Errorf("expected doc abc1234567890 tracked for u1, got %+v", st.docs)
+			if len(st.docs) != 0 {
+				t.Errorf("AddTrackedDoc should not have been called, got %+v", st.docs)
 			}
 		})
 	}

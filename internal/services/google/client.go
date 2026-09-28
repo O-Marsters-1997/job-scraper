@@ -92,11 +92,11 @@ func (c *Client) getToken(ctx context.Context, userID string) (*oauth2.Token, er
 
 	access, err := tokencrypt.Decrypt(row.AccessTokenEnc)
 	if err != nil {
-		return nil, fmt.Errorf("%w: decrypt access: %v", ErrTokenUnusable, err)
+		return nil, fmt.Errorf("%w: decrypt access: %w", ErrTokenUnusable, err)
 	}
 	refresh, err := tokencrypt.Decrypt(row.RefreshTokenEnc)
 	if err != nil {
-		return nil, fmt.Errorf("%w: decrypt refresh: %v", ErrTokenUnusable, err)
+		return nil, fmt.Errorf("%w: decrypt refresh: %w", ErrTokenUnusable, err)
 	}
 
 	return &oauth2.Token{
