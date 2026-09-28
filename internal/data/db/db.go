@@ -28,7 +28,7 @@ func Connect(ctx context.Context) (*pgxpool.Pool, error) {
 		pool.Close()
 		return nil, fmt.Errorf("postgres ping: %w", err)
 	}
-	slog.Info("connected to postgres", slog.String("host", pool.Config().ConnConfig.Host))
+	slog.InfoContext(ctx, "connected to postgres", slog.String("host", pool.Config().ConnConfig.Host))
 	return pool, nil
 }
 

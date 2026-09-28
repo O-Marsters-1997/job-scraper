@@ -1,0 +1,28 @@
+package logger
+
+const (
+	KeyErr           = "err"
+	KeyEvent         = "event"
+	KeyRoute         = "route"
+	KeyMethod        = "method"
+	KeyStatus        = "status"
+	KeyDurationMS    = "duration_ms"
+	KeyWaitMS        = "wait_ms"
+	KeyRequestID     = "request_id"
+	KeyTraceID       = "trace_id"
+	KeyRunID         = "run_id"
+	KeyTaskID        = "task_id"
+	KeyTargetID      = "target_id"
+	KeySource        = "source"
+	KeyKind          = "kind"
+	KeyOutcome       = "outcome"
+	KeyBoardID       = "board_id"
+	KeyCompanyID     = "company_id"
+	KeyCompanySlug   = "company_slug"
+	KeyDocID         = "doc_id"
+	KeyUserID        = "user_id"
+	KeyCostUSD       = "cost_usd"
+	KeyURL           = "url"
+	KeyCount         = "count"
+	KeyDeliveryCount = "delivery_count"
+)

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 const maxBodyBytes = 8 << 20
@@ -110,7 +112,9 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 	}()
 	for attempt := 0; attempt < 2; attempt++ {
+		start := time.Now()
 		resp, err := f.base.RoundTrip(req)
+		logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
 		if err != nil {
 			if f.zone != nil && errors.Is(err, errZoneExhausted) {
 				f.zone.result(true, false, probe)

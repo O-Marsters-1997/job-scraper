@@ -28,10 +28,10 @@ build:
 
 # run the worker
 run *args:
-    METRICS_ADDR=:9092 go run ./cmd/worker {{args}}
+    METRICS_ADDR=:9092 LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/worker {{args}}
 
 run-api:
-    go run ./cmd/api
+    LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/api
 
 # ── Code generation ───────────────────────────────────────────────────────────
 

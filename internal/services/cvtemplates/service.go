@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
@@ -67,17 +68,17 @@ func (s *Service) List(ctx context.Context, userID string) ([]CV, error) {
 	for _, doc := range tracked {
 		tabs, err := s.gc.ListTabs(ctx, userID, doc.DocID)
 		if err != nil {
-			slog.Warn("cvtemplates.List: skipping inaccessible doc",
-				slog.String("doc_id", doc.DocID),
-				slog.Any("err", err),
+			slog.WarnContext(ctx, "cvtemplates.List: skipping inaccessible doc",
+				slog.String(logger.KeyDocID, doc.DocID),
+				slog.Any(logger.KeyErr, err),
 			)
 			continue
 		}
 		meta, err := s.gc.FileMeta(ctx, userID, doc.DocID)
 		if err != nil {
-			slog.Warn("cvtemplates.List: skipping doc (FileMeta failed)",
-				slog.String("doc_id", doc.DocID),
-				slog.Any("err", err),
+			slog.WarnContext(ctx, "cvtemplates.List: skipping doc (FileMeta failed)",
+				slog.String(logger.KeyDocID, doc.DocID),
+				slog.Any(logger.KeyErr, err),
 			)
 			continue
 		}

@@ -5,9 +5,11 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
 	"github.com/ollymarsters/job-scraper/internal/api/auth"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -28,6 +30,8 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	}
 
 	r := chi.NewRouter()
+	r.Use(chimw.RequestID)
+	r.Use(logger.Middleware)
 	r.Use(telemetry.AccessLog)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{allowedOrigin},

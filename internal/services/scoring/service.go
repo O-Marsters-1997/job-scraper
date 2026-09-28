@@ -14,6 +14,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -60,7 +61,7 @@ func (s *Service) Run(ctx context.Context) error {
 			return nil
 		case <-ticker.C:
 			if err := s.RunTick(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("answer effect tick failed", slog.Any("err", err))
+				slog.ErrorContext(ctx, "answer effect tick failed", slog.Any(logger.KeyErr, err))
 			}
 		}
 	}
@@ -81,7 +82,7 @@ func (s *Service) RunTick(ctx context.Context) error {
 		}
 		g.Go(func() error {
 			if err := s.process(ctx, effect); err != nil {
-				slog.Error("answer effect failed", slog.String("effect_id", effect.ID), slog.Any("err", err))
+				slog.ErrorContext(ctx, "answer effect failed", slog.String("effect_id", effect.ID), slog.Any(logger.KeyErr, err))
 			}
 			return nil
 		})
@@ -170,11 +171,11 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 			}
 			cost = usage.Cost
 			for _, sc := range surviving {
-				slog.Info("score call",
-					slog.String("event", telemetry.EventScoreCall),
-					slog.String("user_id", sc.UserID),
+				slog.InfoContext(ctx, "score call",
+					slog.String(logger.KeyEvent, telemetry.EventScoreCall),
+					slog.String(logger.KeyUserID, sc.UserID),
 					slog.String("model", usage.Model),
-					slog.Float64("cost_usd", usage.Cost),
+					slog.Float64(logger.KeyCostUSD, usage.Cost),
 				)
 			}
 			break
@@ -218,14 +219,14 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		}
 		profile, err := s.profiles.GetProfile(ctx, sc.UserID)
 		if err != nil {
-			slog.Error("notification recipient lookup failed", slog.String("user_id", sc.UserID), slog.Any("err", err))
+			slog.ErrorContext(ctx, "notification recipient lookup failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 			continue
 		}
 		if profile.Email == "" {
 			continue
 		}
 		if err := s.alerter.NotifyNewJob(ctx, job, profile.Email); err != nil {
-			slog.Error("notification send failed", slog.String("user_id", sc.UserID), slog.Any("err", err))
+			slog.ErrorContext(ctx, "notification send failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 		}
 	}
 	return nil

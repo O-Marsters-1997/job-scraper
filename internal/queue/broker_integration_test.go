@@ -17,6 +17,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -495,8 +496,12 @@ func waitForDeadLetterCount(broker *Broker, want int) (int, error) {
 func captureTaskDoneLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
+	lg, err := logger.New(buf, "json", "debug")
+	if err != nil {
+		t.Fatalf("logger.New() = %v", err)
+	}
 	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(buf, nil)))
+	slog.SetDefault(lg)
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	return buf
 }

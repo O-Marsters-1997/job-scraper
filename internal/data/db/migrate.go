@@ -25,7 +25,7 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("goose up: %w", err)
 	}
 
-	slog.Info("migrations applied")
+	slog.InfoContext(ctx, "migrations applied")
 
 	return nil
 }

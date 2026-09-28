@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
@@ -71,7 +72,18 @@ func (i *Ingester) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResu
 		}
 		i.upsertCompanies(ctx, []dto.Job{saved})
 	}
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		slog.DebugContext(ctx, "ingest jobs", slog.Int(logger.KeyCount, len(jobs)), slog.Any("by_status", countByStatus(results)))
+	}
 	return results, nil
+}
+
+func countByStatus(results []IngestResult) map[string]int {
+	counts := make(map[string]int)
+	for _, r := range results {
+		counts[r.Status]++
+	}
+	return counts
 }
 
 func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
@@ -96,8 +108,8 @@ func (i *Ingester) upsertCompanies(ctx context.Context, jobs []dto.Job) {
 			ATSToken:  atsToken,
 		}
 		if _, err := i.companies.UpsertCompany(ctx, upsert); err != nil {
-			slog.Warn("ingest: could not upsert company",
-				slog.String("slug", j.CompanySlug), slog.Any("err", err))
+			slog.WarnContext(ctx, "ingest: could not upsert company",
+				slog.String(logger.KeyCompanySlug, j.CompanySlug), slog.Any(logger.KeyErr, err))
 		}
 	}
 }

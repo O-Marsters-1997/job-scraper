@@ -24,14 +24,14 @@ import (
 )
 
 func main() {
-	slog.SetDefault(logger.New())
+	slog.SetDefault(logger.MustFromEnv())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		slog.Error("db init failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 	defer pool.Close()
@@ -42,17 +42,17 @@ func main() {
 	}
 	q, err := queue.NewBroker(brokerURL)
 	if err != nil {
-		slog.Error("queue init failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "queue init failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
-	slog.Info("queue client ready")
+	slog.InfoContext(ctx, "queue client ready")
 	defer func() { _ = q.Close() }()
 
 	apps := applications.New(pool)
 	idm, err := identity.New(pool, apps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
-		slog.Error("identity init failed", slog.Any("err", err))
+		slog.ErrorContext(ctx, "identity init failed", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 
@@ -64,7 +64,7 @@ func main() {
 	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom)
 	go func() {
 		if err := scoringModule.Run(ctx); err != nil {
-			slog.Error("answer effect loop failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "answer effect loop failed", slog.Any(logger.KeyErr, err))
 		}
 	}()
 
@@ -77,7 +77,7 @@ func main() {
 	}
 	go func() {
 		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
-			slog.Error("metrics server failed", slog.Any("err", err))
+			slog.ErrorContext(ctx, "metrics server failed", slog.Any(logger.KeyErr, err))
 		}
 	}()
 
@@ -95,9 +95,9 @@ func main() {
 		_ = srv.Shutdown(context.Background())
 	}()
 
-	slog.Info("api server starting", slog.String("addr", port))
+	slog.InfoContext(ctx, "api server starting", slog.String("addr", port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		slog.Error("server error", slog.Any("err", err))
+		slog.ErrorContext(ctx, "server error", slog.Any(logger.KeyErr, err))
 		os.Exit(1)
 	}
 }
