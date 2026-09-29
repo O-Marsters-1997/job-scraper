@@ -10,12 +10,21 @@ import {
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { allConfirmed, toMappings } from "@/lib/tailoring";
+import {
+	allConfirmed,
+	isSettled,
+	selectedAchievementIds,
+	toMappings,
+} from "@/lib/tailoring";
 import { MissingAiKeyError } from "../../api/tailoring";
+import { GoogleWriteConsent } from "../../components/GoogleWriteConsent";
 import { useCVTemplates } from "../../hooks/useCVTemplates";
 import { useExperience } from "../../hooks/useExperience";
+import { useGoogleStatus } from "../../hooks/useGoogle";
 import {
 	type CVRef,
+	useCreateDraft,
+	useDraft,
 	useHeadings,
 	useSaveHeadings,
 	useSuggestions,
@@ -28,12 +37,13 @@ export const Route = createFileRoute("/_auth/jobs_/$id/tailor")({
 	component: TailorPage,
 });
 
-type Step = "cv" | "headings" | "achievements";
+type Step = "cv" | "headings" | "achievements" | "generate";
 
 const STEP_LABELS: { step: Step; label: string }[] = [
 	{ step: "cv", label: "Base CV" },
 	{ step: "headings", label: "Headings" },
 	{ step: "achievements", label: "Achievements" },
+	{ step: "generate", label: "Generate" },
 ];
 
 function Stepper(props: { current: Step; skippedHeadings: boolean }) {
@@ -70,6 +80,7 @@ function TailorPage() {
 	const [cv, setCv] = createSignal<CVRef>();
 	const [step, setStep] = createSignal<Step>("cv");
 	const [skipped, setSkipped] = createSignal(false);
+	const [achievementIds, setAchievementIds] = createSignal<string[]>([]);
 
 	const pickCv = (ref: CVRef) => {
 		setCv(ref);
@@ -113,6 +124,18 @@ function TailorPage() {
 					jobId={() => params().id}
 					cv={cv}
 					onBack={() => setStep(skipped() ? "cv" : "headings")}
+					onContinue={(ids) => {
+						setAchievementIds(ids);
+						setStep("generate");
+					}}
+				/>
+			</Show>
+			<Show when={step() === "generate" && cv()}>
+				<GenerateStep
+					jobId={() => params().id}
+					cv={cv}
+					achievementIds={achievementIds}
+					onBack={() => setStep("achievements")}
 				/>
 			</Show>
 		</div>
@@ -249,6 +272,7 @@ function AchievementsStep(props: {
 	jobId: () => string;
 	cv: () => CVRef | undefined;
 	onBack: () => void;
+	onContinue: (achievementIds: string[]) => void;
 }) {
 	const suggestions = useSuggestions(
 		() => props.jobId(),
@@ -347,11 +371,117 @@ function AchievementsStep(props: {
 								<span class="text-xs text-muted">
 									{selectedCount()} of {data().length} Achievements selected
 								</span>
+								<Button
+									disabled={selectedCount() === 0}
+									onClick={() =>
+										props.onContinue(
+											selectedAchievementIds(data(), overrides()),
+										)
+									}
+								>
+									Continue
+								</Button>
 							</div>
 						</div>
 					);
 				}}
 			</QueryBoundary>
 		</Show>
+	);
+}
+
+function GenerateStep(props: {
+	jobId: () => string;
+	cv: () => CVRef | undefined;
+	achievementIds: () => string[];
+	onBack: () => void;
+}) {
+	const google = useGoogleStatus();
+	const create = useCreateDraft();
+	const [draftId, setDraftId] = createSignal<string>();
+	const draft = useDraft(draftId);
+
+	const generate = () => {
+		const ref = props.cv();
+		if (!ref) return;
+		create.mutate(
+			{
+				jobId: props.jobId(),
+				...ref,
+				achievementIds: props.achievementIds(),
+			},
+			{ onSuccess: (r) => setDraftId(r.id) },
+		);
+	};
+	const retry = () => {
+		setDraftId(undefined);
+		generate();
+	};
+
+	return (
+		<div class="space-y-4">
+			<GoogleWriteConsent returnTo={`/jobs/${props.jobId()}/tailor`} />
+			<Panel>
+				<Show
+					when={draftId()}
+					fallback={
+						<>
+							<p class="mb-4 text-sm text-muted">
+								FastTrack copies your CV into a new Google Doc and rewrites the
+								bullets of the roles you mapped, using only the{" "}
+								{props.achievementIds().length} Achievements you chose. Treat
+								the result as a first draft.
+							</p>
+							<Show when={create.error}>
+								<p class="mb-3 text-sm text-danger">
+									Could not start the draft. Check your selection and try again.
+								</p>
+							</Show>
+							<div class="flex gap-2">
+								<Button variant="outline" onClick={props.onBack}>
+									Back
+								</Button>
+								<Button
+									disabled={
+										create.isPending ||
+										!google.data?.canWrite ||
+										props.achievementIds().length === 0
+									}
+									onClick={generate}
+								>
+									Generate draft
+								</Button>
+							</div>
+						</>
+					}
+				>
+					<Show when={draft.data?.status === "ready"}>
+						<p class="mb-3 text-sm text-foreground">Your draft is ready.</p>
+						<a
+							href={draft.data?.draftDocUrl ?? undefined}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:bg-primary-hover"
+						>
+							Open in Google Docs
+						</a>
+					</Show>
+					<Show when={draft.data?.status === "failed"}>
+						<p class="mb-3 text-sm text-danger">
+							Generating the draft failed
+							{draft.data?.lastError ? `: ${draft.data.lastError}` : "."}
+						</p>
+						<Button variant="outline" onClick={retry}>
+							Try again
+						</Button>
+					</Show>
+					<Show when={!draft.data || !isSettled(draft.data.status)}>
+						<p class="text-sm text-muted" aria-live="polite">
+							Writing your draft. This usually takes under a minute.
+						</p>
+					</Show>
+				</Show>
+			</Panel>
+		</div>
 	);
 }

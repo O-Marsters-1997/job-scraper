@@ -320,6 +320,30 @@ type SourceTarget struct {
 	UpdatedAt            pgtype.Timestamptz
 }
 
+type TailoredCv struct {
+	ID             pgtype.UUID
+	UserID         pgtype.UUID
+	JobID          pgtype.UUID
+	BaseDocID      string
+	BaseTabID      string
+	AchievementIds []pgtype.UUID
+	EditSet        []byte
+	Findings       []byte
+	RawOutput      string
+	Model          string
+	PromptVersion  string
+	JobFingerprint string
+	Cost           float32
+	DraftDocID     pgtype.Text
+	Status         string
+	Outcome        pgtype.Text
+	Attempts       int32
+	DueAt          pgtype.Timestamptz
+	LeaseUntil     pgtype.Timestamptz
+	LastError      string
+	CreatedAt      pgtype.Timestamptz
+}
+
 type TrackedCompany struct {
 	UserID               pgtype.UUID
 	CompanyID            pgtype.UUID
