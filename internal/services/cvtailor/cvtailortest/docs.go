@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
@@ -28,6 +30,9 @@ type Drive struct {
 	Tabs    []google.Tab
 	Copies  []string
 	Deleted []string
+	// PDF is the body ExportPDF serves; PDFErr fails it.
+	PDF     string
+	PDFErr  error
 	Updates [][]json.RawMessage
 	// BatchUpdateErr fails every BatchUpdate on a copy.
 	BatchUpdateErr error
@@ -60,6 +65,13 @@ func (d *Drive) DeleteFile(_ context.Context, _, fileID string) error {
 	defer d.mu.Unlock()
 	d.Deleted = append(d.Deleted, fileID)
 	return nil
+}
+
+func (d *Drive) ExportPDF(_ context.Context, _, _, _ string) (io.ReadCloser, error) {
+	if d.PDFErr != nil {
+		return nil, d.PDFErr
+	}
+	return io.NopCloser(strings.NewReader(d.PDF)), nil
 }
 
 var _ cvtailor.Drive = (*Drive)(nil)

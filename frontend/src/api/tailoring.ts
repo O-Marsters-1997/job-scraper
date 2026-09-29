@@ -1,3 +1,4 @@
+import { KeptDraftExistsError } from "../lib/tailoring";
 import {
 	type CVHeading,
 	cvHeadingSchema,
@@ -11,7 +12,7 @@ import {
 	type Suggestion,
 	suggestionSchema,
 } from "../types/tailoring";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchBlob } from "./client";
 import { mockDelay, mocked } from "./config";
 
 export class MissingAiKeyError extends Error {
@@ -113,5 +114,68 @@ export async function fetchDraft(id: string): Promise<Draft> {
 			return db.getDraft(id);
 		},
 		() => apiFetch(`/tailoring/drafts/${id}`, undefined, draftSchema),
+	);
+}
+
+export async function fetchDraftPdf(id: string): Promise<ArrayBuffer> {
+	return mocked(
+		async (db) => {
+			await mockDelay();
+			return db.getMockPdfBytes();
+		},
+		() => apiFetchBlob(`/tailoring/drafts/${id}/pdf`),
+	);
+}
+
+export async function fetchJobDrafts(jobId: string): Promise<Draft[]> {
+	return mocked(
+		async (db) => {
+			await mockDelay(60);
+			return db.getJobDrafts(jobId);
+		},
+		() =>
+			apiFetch(
+				`/tailoring/jobs/${jobId}/drafts`,
+				undefined,
+				draftSchema.array(),
+			),
+	);
+}
+
+export async function keepDraft(id: string): Promise<Draft> {
+	return mocked(
+		async (db) => {
+			await mockDelay(80);
+			return db.keepDraft(id);
+		},
+		async () => {
+			try {
+				return await apiFetch(
+					`/tailoring/drafts/${id}/keep`,
+					{ method: "POST" },
+					draftSchema,
+				);
+			} catch (err) {
+				if (err instanceof Error && err.message.endsWith(": 409")) {
+					throw new KeptDraftExistsError();
+				}
+				throw err;
+			}
+		},
+	);
+}
+
+export async function discardDraft(id: string): Promise<Draft> {
+	return mocked(
+		async (db) => {
+			await mockDelay(80);
+			return db.discardDraft(id);
+		},
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/discard`,
+				{ method: "POST" },
+				draftSchema,
+			),
 	);
 }

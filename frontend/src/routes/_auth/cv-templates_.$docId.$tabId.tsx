@@ -1,12 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import {
-	createResource,
-	onCleanup,
-	type ResourceFetcherInfo,
-	Show,
-} from "solid-js";
+import { Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { PdfPreview } from "@/components/PdfPreview";
 import { fetchCVPdf } from "../../api/cvTemplates";
+import { usePdfUrl } from "../../hooks/usePdfUrl";
 
 export const Route = createFileRoute("/_auth/cv-templates_/$docId/$tabId")({
 	component: CVDetailPage,
@@ -18,33 +15,16 @@ function tabParam(tabId: string): string {
 	return tabId.startsWith("t.") ? tabId : `t.${tabId}`;
 }
 
-type CVPdfSource = { docId: string; tabId: string };
-
-// Revokes the previous object URL here too, not just in onCleanup, so a
-// doc/tab switch doesn't leak it before the component unmounts.
-async function loadCVPdfURL(
-	source: CVPdfSource,
-	{ value }: ResourceFetcherInfo<string>,
-): Promise<string> {
-	if (value) URL.revokeObjectURL(value);
-	const data = await fetchCVPdf(source.docId, source.tabId);
-	return URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
-}
-
 function CVDetailPage() {
 	const params = Route.useParams();
 
 	const docsUrl = () =>
 		`https://docs.google.com/document/d/${params().docId}/edit?tab=${tabParam(params().tabId)}`;
 
-	const [pdfURL] = createResource(
-		(): CVPdfSource => ({ docId: params().docId, tabId: params().tabId }),
-		loadCVPdfURL,
+	const pdfURL = usePdfUrl(
+		() => ({ docId: params().docId, tabId: params().tabId }),
+		(source) => fetchCVPdf(source.docId, source.tabId),
 	);
-
-	onCleanup(() => {
-		if (pdfURL.latest) URL.revokeObjectURL(pdfURL.latest);
-	});
 
 	return (
 		<div class="flex min-h-screen flex-col bg-background">
@@ -86,32 +66,7 @@ function CVDetailPage() {
 			</div>
 
 			<div class="flex flex-1 flex-col items-center px-7 py-8">
-				<Show when={pdfURL.loading}>
-					<div class="h-[1120px] w-full max-w-3xl animate-pulse rounded-xl bg-surface-muted" />
-				</Show>
-
-				<Show when={pdfURL.error}>
-					{(err) => (
-						<div class="w-full max-w-3xl rounded-xl border border-destructive/30 bg-destructive-subtle p-6">
-							<p class="mb-1 text-sm font-semibold text-destructive-strong">
-								Failed to load PDF
-							</p>
-							<p class="text-sm text-muted">
-								{err() instanceof Error ? err().message : "Failed to load PDF"}
-							</p>
-						</div>
-					)}
-				</Show>
-
-				<Show when={!pdfURL.loading && !pdfURL.error && pdfURL()}>
-					{(url) => (
-						<iframe
-							src={url()}
-							title="CV PDF"
-							class="h-[1120px] w-full max-w-3xl rounded-xl border border-border bg-surface"
-						/>
-					)}
-				</Show>
+				<PdfPreview url={pdfURL} title="CV PDF" class="max-w-3xl" />
 			</div>
 		</div>
 	);

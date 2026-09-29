@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"strings"
@@ -43,6 +44,7 @@ type Drive interface {
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
+	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
 // Docs is everything the module needs from the Google client.

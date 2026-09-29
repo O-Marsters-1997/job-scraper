@@ -25,10 +25,12 @@ import type {
 	CVHeading,
 	Draft,
 	DraftInput,
+	DraftProvenance,
 	DraftRef,
 	HeadingMapping,
 	Suggestion,
 } from "@/types/tailoring";
+import { KeptDraftExistsError } from "../lib/tailoring";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
@@ -1326,6 +1328,26 @@ export function getSuggestions(): Suggestion[] {
 
 const mockDrafts = new Map<string, { draft: Draft; polls: number }>();
 
+const MOCK_DOC_URL = "https://docs.google.com/document/d/mock-draft/edit";
+
+function mockProvenance(): DraftProvenance {
+	const achievements = experience.flatMap((p) => p.achievements).slice(0, 2);
+	return {
+		positions: experience.slice(0, 1).map((p) => ({
+			positionId: p.id,
+			employer: p.employer,
+			title: p.title,
+			bullets: achievements.map((a) => ({
+				segments: [
+					{ text: `${a.text} using `, novel: false },
+					{ text: "Kubernetes", novel: true },
+				],
+				achievements: [{ id: a.id, positionId: p.id, text: a.text }],
+			})),
+		})),
+	};
+}
+
 export function createDraft(input: DraftInput): DraftRef {
 	const id = `draft-${mockDrafts.size + 1}`;
 	mockDrafts.set(id, {
@@ -1333,26 +1355,71 @@ export function createDraft(input: DraftInput): DraftRef {
 			id,
 			jobId: input.jobId,
 			status: "pending",
+			outcome: null,
 			draftDocUrl: null,
 			lastError: "",
+			createdAt: new Date().toISOString(),
+			findings: [],
+			provenance: null,
 		},
 		polls: 0,
 	});
 	return { id };
 }
 
-export function getDraft(id: string): Draft {
+function mockEntry(id: string) {
 	const entry = mockDrafts.get(id);
 	if (!entry) throw new Error(`no mock draft ${id}`);
+	return entry;
+}
+
+export function getDraft(id: string): Draft {
+	const entry = mockEntry(id);
 	entry.polls += 1;
-	if (entry.polls >= 3) {
+	if (entry.polls >= 3 && entry.draft.status !== "ready") {
 		entry.draft = {
 			...entry.draft,
 			status: "ready",
-			draftDocUrl: "https://docs.google.com/document/d/mock-draft/edit",
+			draftDocUrl: MOCK_DOC_URL,
+			provenance: mockProvenance(),
+			findings: [
+				{
+					check: "grounding",
+					severity: "block",
+					message: 'number "40%" does not appear in the cited Achievements',
+				},
+				{
+					check: "skills",
+					severity: "info",
+					message: 'job skill "Terraform" has no source in your CV or Bank',
+				},
+			],
 		};
 	} else if (entry.polls === 2) {
 		entry.draft = { ...entry.draft, status: "running" };
 	}
+	return entry.draft;
+}
+
+export function getJobDrafts(jobId: string): Draft[] {
+	return [...mockDrafts.values()]
+		.map((e) => e.draft)
+		.filter((d) => d.jobId === jobId)
+		.reverse();
+}
+
+export function keepDraft(id: string): Draft {
+	const entry = mockEntry(id);
+	const other = getJobDrafts(entry.draft.jobId).find(
+		(d) => d.outcome === "kept" && d.id !== id,
+	);
+	if (other) throw new KeptDraftExistsError();
+	entry.draft = { ...entry.draft, outcome: "kept" };
+	return entry.draft;
+}
+
+export function discardDraft(id: string): Draft {
+	const entry = mockEntry(id);
+	entry.draft = { ...entry.draft, outcome: "discarded", draftDocUrl: null };
 	return entry.draft;
 }
