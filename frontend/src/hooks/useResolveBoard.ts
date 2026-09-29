@@ -1,6 +1,7 @@
 import { createQuery } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
-import { ResolveError, resolveUrl } from "../api/sources";
+import { resolveUrl } from "../api/sources";
+import { ResolveError } from "../lib/resolveError";
 
 export function useResolveBoard(url: () => string) {
 	return createQuery(() => ({

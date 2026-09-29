@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ResolveError } from "../lib/resolveError";
 import {
 	type ResolvedURL,
 	resolvedUrlSchema,
@@ -13,8 +14,6 @@ export async function fetchSources() {
 		() => apiFetch("/sources", undefined, sourceInfoSchema.array()),
 	);
 }
-
-export class ResolveError extends Error {}
 
 export async function resolveUrl(url: string): Promise<ResolvedURL> {
 	return mocked(

@@ -1,5 +1,4 @@
 import { faker } from "@faker-js/faker";
-import { ResolveError } from "@/api/sources";
 import type {
 	Application,
 	ApplicationWithDetails,
@@ -36,6 +35,7 @@ import type {
 	HeadingMapping,
 	Suggestion,
 } from "@/types/tailoring";
+import { ResolveError } from "../lib/resolveError";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
