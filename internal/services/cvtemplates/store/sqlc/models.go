@@ -149,6 +149,16 @@ type CompanyBoard struct {
 	CreatedAt          pgtype.Timestamptz
 }
 
+type CvHeadingMapping struct {
+	UserID      pgtype.UUID
+	DocID       string
+	TabID       string
+	HeadingText string
+	PositionID  pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type EffectOutbox struct {
 	ID             pgtype.UUID
 	JobID          pgtype.UUID

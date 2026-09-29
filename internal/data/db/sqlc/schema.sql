@@ -130,6 +130,17 @@ CREATE TABLE achievements (
 );
 CREATE INDEX achievements_position_sort_idx ON achievements (position_id, sort_order);
 
+CREATE TABLE cv_heading_mappings (
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    doc_id       TEXT        NOT NULL,
+    tab_id       TEXT        NOT NULL,
+    heading_text TEXT        NOT NULL,
+    position_id  UUID        REFERENCES positions(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, doc_id, tab_id, heading_text)
+);
+
 CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

@@ -20,4 +20,5 @@ func (m *Module) Routes(r chi.Router) {
 		r.Patch("/achievements/{id}", handlers.Update(m.svc.UpdateAchievement))
 		r.Delete("/achievements/{id}", handlers.Delete(m.store.DeleteAchievement))
 	})
+	m.tailorRoutes(r)
 }

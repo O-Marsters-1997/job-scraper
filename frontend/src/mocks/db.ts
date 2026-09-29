@@ -21,6 +21,7 @@ import type {
 	SourceTarget,
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
+import type { CVHeading, HeadingMapping, Suggestion } from "@/types/tailoring";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
@@ -1268,4 +1269,50 @@ export function switchMockUser(username: string): void {
 	mockUser.id = `user-${username}`;
 	mockUser.username = username;
 	applications = [];
+}
+
+const savedHeadings = new Map<string, HeadingMapping[]>();
+
+export function getHeadings(docId: string, tabId: string): CVHeading[] {
+	const saved = savedHeadings.get(`${docId}/${tabId}`);
+	const roles: { text: string; match: string | null; slots: number }[] = [
+		{
+			text: "Senior Backend Engineer, Acme Ltd",
+			match: "position-1",
+			slots: 2,
+		},
+		{ text: "Software Engineer, Globex", match: "position-2", slots: 1 },
+	];
+	return roles.map((r) => {
+		const s = saved?.find((m) => m.headingText === r.text);
+		return {
+			text: r.text,
+			positionId: s ? s.positionId : r.match,
+			confirmed: s !== undefined,
+			slotCount: r.slots,
+		};
+	});
+}
+
+export function saveHeadings(
+	docId: string,
+	tabId: string,
+	mappings: HeadingMapping[],
+): HeadingMapping[] {
+	savedHeadings.set(`${docId}/${tabId}`, mappings);
+	return mappings;
+}
+
+export function getSuggestions(): Suggestion[] {
+	const scores = [0.81, 0.64, 0.42, 0.17];
+	return experience.flatMap((p) => {
+		const slots = p.id === "position-1" ? 2 : 3;
+		return p.achievements.map((a, i) => ({
+			achievementId: a.id,
+			positionId: p.id,
+			text: a.text,
+			score: scores[i] ?? 0.1,
+			preselected: i < slots,
+		}));
+	});
 }

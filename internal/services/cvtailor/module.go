@@ -11,6 +11,7 @@ import (
 type Deps struct {
 	Store Store
 	Docs  DocFetcher
+	Asker Asker
 }
 
 type Module struct {
@@ -19,9 +20,9 @@ type Module struct {
 }
 
 func Build(deps Deps) *Module {
-	return &Module{store: deps.Store, svc: NewService(deps.Store, deps.Docs)}
+	return &Module{store: deps.Store, svc: NewService(deps.Store, deps.Docs, deps.Asker)}
 }
 
-func New(pool *pgxpool.Pool, docs DocFetcher) *Module {
-	return Build(Deps{Store: store.New(pool), Docs: docs})
+func New(pool *pgxpool.Pool, docs DocFetcher, asker Asker) *Module {
+	return Build(Deps{Store: store.New(pool), Docs: docs, Asker: asker})
 }

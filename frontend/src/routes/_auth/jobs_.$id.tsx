@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
@@ -66,6 +66,7 @@ function FactRow(props: {
 
 function JobDetailPage() {
 	const params = Route.useParams();
+	const navigate = useNavigate();
 	const jobsQuery = useJob(() => params().id);
 	const appsQuery = useApplications();
 
@@ -212,7 +213,18 @@ function JobDetailPage() {
 										</div>
 									</div>
 
-									<div class="shrink-0">
+									<div class="flex shrink-0 items-start gap-2">
+										<Button
+											size="sm"
+											onClick={() =>
+												navigate({
+													to: "/jobs/$id/tailor",
+													params: { id: params().id },
+												})
+											}
+										>
+											Tailor CV
+										</Button>
 										<JobActionsMenu
 											job={j()}
 											appSummary={appSummary()}

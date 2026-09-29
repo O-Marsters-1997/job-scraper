@@ -37,6 +37,14 @@ func TestStoreContract(t *testing.T) {
 	})
 }
 
+func TestStoreHeadingMappingContract(t *testing.T) {
+	cvtailortest.RunHeadingMappingContract(t, func(t *testing.T) cvtailortest.Fixture {
+		t.Helper()
+		pool := pgtest.New(t)
+		return cvtailortest.Fixture{Store: store.New(pool), UserID: insertUser(t, pool), Other: insertUser(t, pool)}
+	})
+}
+
 func TestDeletePositionCascadesAchievementRows(t *testing.T) {
 	pool := pgtest.New(t)
 	st := store.New(pool)
