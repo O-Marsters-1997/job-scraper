@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -51,8 +53,12 @@ type Search struct {
 func (s Search) startURL() string {
 	v := url.Values{}
 	v.Set("q", s.Keywords)
-	if s.Region != "" {
+	switch {
+	case s.Region == "":
+	case sourcespec.ValidFilterOption("wis", "region", s.Region):
 		v.Set("w", s.Region)
+	default:
+		slog.Warn("wis: dropping invalid filter value", slog.String("param", "region"), slog.String("value", s.Region))
 	}
 	v.Set("per_page", strconv.Itoa(pageSize))
 	return baseURL + "?" + v.Encode()

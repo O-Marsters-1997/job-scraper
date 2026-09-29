@@ -16,6 +16,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -64,21 +65,13 @@ type Search struct {
 	SalaryBand  string // maps to f_SB2; 1-9
 }
 
-var (
-	validRecency     = map[string]bool{"r86400": true, "r604800": true, "r2592000": true}
-	validArrangement = map[string]bool{"1": true, "2": true, "3": true}
-	validExperience  = map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "6": true}
-	validJobType     = map[string]bool{"F": true, "P": true, "C": true, "T": true, "I": true}
-	validSalaryBand  = map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true}
-)
-
 func isNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
 }
 
-func inSet(set map[string]bool) func(string) bool {
-	return func(s string) bool { return set[s] }
+func enumerated(field string) func(string) bool {
+	return func(value string) bool { return sourcespec.ValidFilterOption("linkedin", field, value) }
 }
 
 func setFilter(v url.Values, param, value string, valid func(string) bool) {
@@ -99,13 +92,13 @@ func (s Search) pageURL(start int) string {
 		v.Set("location", s.Location)
 	}
 	setFilter(v, "f_C", s.CompanyID, isNumeric)
-	setFilter(v, "f_TPR", s.Recency, inSet(validRecency))
-	setFilter(v, "f_WT", s.Arrangement, inSet(validArrangement))
-	setFilter(v, "f_E", s.Experience, inSet(validExperience))
-	setFilter(v, "f_JT", s.JobType, inSet(validJobType))
+	setFilter(v, "f_TPR", s.Recency, enumerated("recency"))
+	setFilter(v, "f_WT", s.Arrangement, enumerated("arrangement"))
+	setFilter(v, "f_E", s.Experience, enumerated("experience"))
+	setFilter(v, "f_JT", s.JobType, enumerated("job_type"))
 	setFilter(v, "geoId", s.GeoID, isNumeric)
-	setFilter(v, "f_D", s.Distance, isNumeric)
-	setFilter(v, "f_SB2", s.SalaryBand, inSet(validSalaryBand))
+	setFilter(v, "f_D", s.Distance, enumerated("distance"))
+	setFilter(v, "f_SB2", s.SalaryBand, enumerated("salary_band"))
 	v.Set("start", strconv.Itoa(start))
 	return searchURL + "?" + v.Encode()
 }
