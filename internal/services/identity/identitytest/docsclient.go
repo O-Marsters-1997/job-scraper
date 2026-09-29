@@ -2,6 +2,7 @@ package identitytest
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -68,4 +69,13 @@ func (d *DocsClient) FileMeta(_ context.Context, _, docID string) (google.FileMe
 
 func (d *DocsClient) ExportPDF(context.Context, string, string, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("pdf-bytes")), nil
+}
+
+func (d *DocsClient) GetDocument(_ context.Context, _, docID, _ string) (json.RawMessage, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.docs[docID]; !ok {
+		return nil, apperr.NotFound("doc not registered with stub")
+	}
+	return json.RawMessage(`{}`), nil
 }

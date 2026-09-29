@@ -1,0 +1,352 @@
+{
+  "tabProperties": {
+    "tabId": "t.0",
+    "title": "CV",
+    "index": 0
+  },
+  "documentTab": {
+    "body": {
+      "content": [
+        {
+          "endIndex": 1,
+          "sectionBreak": {
+            "sectionStyle": {
+              "columnSeparatorStyle": "NONE",
+              "contentDirection": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 1,
+          "endIndex": 10,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 1,
+                "endIndex": 10,
+                "textRun": {
+                  "content": "Jane Doe\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 10,
+          "endIndex": 18,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 10,
+                "endIndex": 18,
+                "textRun": {
+                  "content": "Profile\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_1",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 18,
+          "endIndex": 91,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 18,
+                "endIndex": 91,
+                "textRun": {
+                  "content": "Backend engineer with six years building Go services and data pipelines.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 91,
+          "endIndex": 102,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 91,
+                "endIndex": 102,
+                "textRun": {
+                  "content": "Experience\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_1",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 102,
+          "endIndex": 145,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 102,
+                "endIndex": 145,
+                "textRun": {
+                  "content": "Senior Engineer, Acme Ltd (2021 - Present)\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 145,
+          "endIndex": 224,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 145,
+                "endIndex": 224,
+                "textRun": {
+                  "content": "Led migration of billing to event-driven services, cutting p99 latency by 40%.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 224,
+          "endIndex": 267,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 224,
+                "endIndex": 267,
+                "textRun": {
+                  "content": "Mentored four engineers through promotion.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 267,
+          "endIndex": 303,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 267,
+                "endIndex": 303,
+                "textRun": {
+                  "content": "Engineer, Widgets Inc (2018 - 2021)\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 303,
+          "endIndex": 357,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 303,
+                "endIndex": 357,
+                "textRun": {
+                  "content": "Built the ingestion API handling 2M requests per day.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 357,
+          "endIndex": 364,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 357,
+                "endIndex": 364,
+                "textRun": {
+                  "content": "Skills\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_1",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 364,
+          "endIndex": 367,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 364,
+                "endIndex": 367,
+                "textRun": {
+                  "content": "Go\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 367,
+          "endIndex": 378,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 367,
+                "endIndex": 378,
+                "textRun": {
+                  "content": "PostgreSQL\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 378,
+          "endIndex": 389,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 378,
+                "endIndex": 389,
+                "textRun": {
+                  "content": "Kubernetes\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 389,
+          "endIndex": 399,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 389,
+                "endIndex": 399,
+                "textRun": {
+                  "content": "Education\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_1",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 399,
+          "endIndex": 441,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 399,
+                "endIndex": 441,
+                "textRun": {
+                  "content": "BSc Computer Science, University of Leeds\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

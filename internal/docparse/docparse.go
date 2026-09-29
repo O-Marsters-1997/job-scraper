@@ -1,0 +1,227 @@
+package docparse
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+var (
+	profileHeading = regexp.MustCompile(`(?i)\b(profile|summary|about)\b`)
+	skillsHeading  = regexp.MustCompile(`(?i)\b(skills|technologies)\b`)
+	skillSplit     = regexp.MustCompile(`\s*[,;|•·]\s*`)
+	separators     = []string{" | ", " • ", " · ", "; ", ", "}
+)
+
+// Heading is a heading paragraph. Index is its start index in the Doc body.
+type Heading struct {
+	Text  string
+	Level int
+	Index int
+}
+
+// Slot is one editable paragraph. HeadingIndex points into DocStructure.Headings
+// (-1 before the first heading); StartIndex and EndIndex are Doc body indices.
+type Slot struct {
+	ID           string
+	HeadingIndex int
+	Text         string
+	StartIndex   int
+	EndIndex     int
+}
+
+// SkillsSlot is the skills section. It spans StartIndex to EndIndex and, for a
+// prose layout, records the Separator the items were joined with.
+type SkillsSlot struct {
+	Items      []string
+	List       bool
+	Separator  string
+	StartIndex int
+	EndIndex   int
+}
+
+// DocStructure is the parsed shape of one Docs Tab. Profile and Skills are nil
+// when the CV has no such section.
+type DocStructure struct {
+	Headings []Heading
+	Slots    []Slot
+	Profile  *Slot
+	Skills   *SkillsSlot
+}
+
+type tab struct {
+	DocumentTab struct {
+		Body struct {
+			Content []element `json:"content"`
+		} `json:"body"`
+	} `json:"documentTab"`
+}
+
+type element struct {
+	StartIndex int        `json:"startIndex"`
+	EndIndex   int        `json:"endIndex"`
+	Paragraph  *paragraph `json:"paragraph"`
+	Table      *struct {
+		TableRows []struct {
+			TableCells []struct {
+				Content []element `json:"content"`
+			} `json:"tableCells"`
+		} `json:"tableRows"`
+	} `json:"table"`
+}
+
+type paragraph struct {
+	Elements []struct {
+		TextRun *struct {
+			Content string `json:"content"`
+		} `json:"textRun"`
+	} `json:"elements"`
+	ParagraphStyle struct {
+		NamedStyleType string `json:"namedStyleType"`
+	} `json:"paragraphStyle"`
+	Bullet *json.RawMessage `json:"bullet"`
+}
+
+type para struct {
+	text       string
+	level      int
+	list       bool
+	start, end int
+}
+
+// Parse turns the JSON of one Docs API Tab (a Tab object with documentTab.body)
+// into a DocStructure.
+func Parse(tabJSON []byte) (DocStructure, error) {
+	var t tab
+	if err := json.Unmarshal(tabJSON, &t); err != nil {
+		return DocStructure{}, fmt.Errorf("docparse.Parse: %w", err)
+	}
+	var paras []para
+	flatten(t.DocumentTab.Body.Content, &paras)
+	return build(paras), nil
+}
+
+func flatten(content []element, out *[]para) {
+	for _, el := range content {
+		switch {
+		case el.Paragraph != nil:
+			var sb strings.Builder
+			for _, pe := range el.Paragraph.Elements {
+				if pe.TextRun != nil {
+					sb.WriteString(pe.TextRun.Content)
+				}
+			}
+			*out = append(*out, para{
+				text:  strings.TrimSpace(sb.String()),
+				level: headingLevel(el.Paragraph.ParagraphStyle.NamedStyleType),
+				list:  el.Paragraph.Bullet != nil,
+				start: el.StartIndex,
+				end:   el.EndIndex,
+			})
+		case el.Table != nil:
+			for _, row := range el.Table.TableRows {
+				for _, cell := range row.TableCells {
+					flatten(cell.Content, out)
+				}
+			}
+		}
+	}
+}
+
+func headingLevel(style string) int {
+	var n int
+	if _, err := fmt.Sscanf(style, "HEADING_%d", &n); err != nil {
+		return 0
+	}
+	return n
+}
+
+type section int
+
+const (
+	sectionRole section = iota
+	sectionProfile
+	sectionSkills
+)
+
+func build(paras []para) DocStructure {
+	var ds DocStructure
+	current := sectionRole
+	headingIdx := -1
+	var skillParas []para
+
+	for _, p := range paras {
+		if p.text == "" {
+			continue
+		}
+		if p.level > 0 {
+			ds.Headings = append(ds.Headings, Heading{Text: p.text, Level: p.level, Index: p.start})
+			headingIdx = len(ds.Headings) - 1
+			switch {
+			case ds.Profile == nil && profileHeading.MatchString(p.text):
+				current = sectionProfile
+			case ds.Skills == nil && skillsHeading.MatchString(p.text):
+				current = sectionSkills
+			default:
+				current = sectionRole
+			}
+			continue
+		}
+		switch current {
+		case sectionProfile:
+			if ds.Profile == nil && !p.list {
+				ds.Profile = &Slot{ID: "profile", HeadingIndex: headingIdx, Text: p.text, StartIndex: p.start, EndIndex: p.end}
+			}
+		case sectionSkills:
+			skillParas = append(skillParas, p)
+		case sectionRole:
+			if p.list {
+				ds.Slots = append(ds.Slots, Slot{
+					ID:           fmt.Sprintf("s%d", len(ds.Slots)),
+					HeadingIndex: headingIdx,
+					Text:         p.text,
+					StartIndex:   p.start,
+					EndIndex:     p.end,
+				})
+			}
+		}
+	}
+	ds.Skills = buildSkills(skillParas)
+	return ds
+}
+
+func buildSkills(paras []para) *SkillsSlot {
+	if len(paras) == 0 {
+		return nil
+	}
+	s := &SkillsSlot{
+		List:       paras[0].list,
+		StartIndex: paras[0].start,
+		EndIndex:   paras[len(paras)-1].end,
+	}
+	for _, p := range paras {
+		if s.List {
+			s.Items = append(s.Items, p.text)
+			continue
+		}
+		if s.Separator == "" {
+			s.Separator = detectSeparator(p.text)
+		}
+		for _, item := range skillSplit.Split(p.text, -1) {
+			if item != "" {
+				s.Items = append(s.Items, item)
+			}
+		}
+	}
+	return s
+}
+
+func detectSeparator(text string) string {
+	for _, sep := range separators {
+		if strings.Contains(text, sep) {
+			return sep
+		}
+	}
+	return ""
+}

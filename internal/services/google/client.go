@@ -12,6 +12,7 @@ import (
 	"golang.org/x/oauth2"
 	googleoauth "golang.org/x/oauth2/google"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
@@ -177,6 +178,60 @@ func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, err
 		tabs[i] = Tab{ID: t.TabProperties.TabID, Title: t.TabProperties.Title}
 	}
 	return tabs, nil
+}
+
+// GetDocument returns the JSON of one Tab of the Doc, child Tabs searched
+// recursively, for docparse.Parse. An empty tabID selects the first Tab.
+func (c *Client) GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error) {
+	hc, err := c.HTTPClientForUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("google.GetDocument: %w", err)
+	}
+
+	url := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?includeTabsContent=true&fields=tabs", docID)
+	resp, err := hc.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("google.GetDocument request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google.GetDocument: unexpected status %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Tabs []json.RawMessage `json:"tabs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("google.GetDocument decode: %w", err)
+	}
+
+	tab, ok := findTab(body.Tabs, tabID)
+	if !ok {
+		return nil, apperr.NotFound("tab not found in document")
+	}
+	return tab, nil
+}
+
+func findTab(tabs []json.RawMessage, tabID string) (json.RawMessage, bool) {
+	for _, raw := range tabs {
+		var t struct {
+			TabProperties struct {
+				TabID string `json:"tabId"`
+			} `json:"tabProperties"`
+			ChildTabs []json.RawMessage `json:"childTabs"`
+		}
+		if err := json.Unmarshal(raw, &t); err != nil {
+			continue
+		}
+		if tabID == "" || t.TabProperties.TabID == tabID {
+			return raw, true
+		}
+		if child, ok := findTab(t.ChildTabs, tabID); ok {
+			return child, true
+		}
+	}
+	return nil, false
 }
 
 func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, error) {

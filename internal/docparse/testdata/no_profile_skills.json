@@ -1,0 +1,242 @@
+{
+  "tabProperties": {
+    "tabId": "t.0",
+    "title": "CV",
+    "index": 0
+  },
+  "documentTab": {
+    "body": {
+      "content": [
+        {
+          "endIndex": 1,
+          "sectionBreak": {
+            "sectionStyle": {
+              "columnSeparatorStyle": "NONE",
+              "contentDirection": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 1,
+          "endIndex": 12,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 1,
+                "endIndex": 12,
+                "textRun": {
+                  "content": "John Smith\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 12,
+          "endIndex": 25,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 12,
+                "endIndex": 25,
+                "textRun": {
+                  "content": "Work History\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 25,
+          "endIndex": 50,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 25,
+                "endIndex": 50,
+                "textRun": {
+                  "content": "Data Analyst | Northwind\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_3",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 50,
+          "endIndex": 112,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 50,
+                "endIndex": 112,
+                "textRun": {
+                  "content": "Automated weekly reporting in Python, saving 10 hours a week.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 112,
+          "endIndex": 113,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 112,
+                "endIndex": 113,
+                "textRun": {
+                  "content": "\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 113,
+          "endIndex": 149,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 113,
+                "endIndex": 149,
+                "textRun": {
+                  "content": "Built dashboards used by 200 staff.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 149,
+          "endIndex": 166,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 149,
+                "endIndex": 166,
+                "textRun": {
+                  "content": "Intern | Contoso\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_3",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 166,
+          "endIndex": 216,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 166,
+                "endIndex": 216,
+                "textRun": {
+                  "content": "Cleaned survey data for a 5,000 respondent study.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 216,
+          "endIndex": 226,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 216,
+                "endIndex": 226,
+                "textRun": {
+                  "content": "Education\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 226,
+          "endIndex": 241,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 226,
+                "endIndex": 241,
+                "textRun": {
+                  "content": "MSc Statistics\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
