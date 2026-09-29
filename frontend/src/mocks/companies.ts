@@ -10,6 +10,7 @@ import type {
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
 import { failIfRequested, hostMatches, humanizeSlug, slugify } from "./helpers";
+import { getJobs } from "./jobs";
 import { seed } from "./seed";
 import { mockUser } from "./user";
 
@@ -97,6 +98,9 @@ export function getTrackedCompanies(): TrackedCompany[] {
 					url: BOARD_URLS[b.Source]?.(b.BoardToken) ?? "",
 				})),
 			open_jobs: c.JobCount,
+			relevant_jobs: getJobs().filter(
+				(j) => j.CompanyID === c.ID && j.SuitabilityScore != null,
+			).length,
 			last_checked_at: c.LastCheckedAt,
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name));
@@ -195,6 +199,7 @@ function companyToSourceTarget(company: Company): SourceTarget {
 		RunStatus: "idle",
 		LastRunAt: company.LastCheckedAt,
 		LastRunError: "",
+		URL: "",
 	};
 }
 

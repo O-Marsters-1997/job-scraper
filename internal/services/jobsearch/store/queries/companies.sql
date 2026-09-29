@@ -46,6 +46,9 @@ UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1;
 -- name: ListTrackedCompaniesForUser :many
 SELECT c.id, c.name, c.slug, tc.enabled, tc.check_interval_minutes,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
+    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
+     WHERE j.company_id = c.id AND j.closed_at IS NULL
+       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS relevant_jobs,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
      JOIN board_poll_state bps ON bps.board_id = cb.id
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at

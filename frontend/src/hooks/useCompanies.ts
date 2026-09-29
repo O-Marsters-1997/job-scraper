@@ -4,6 +4,7 @@ import {
 	addCompanyBoard,
 	fetchCompanies,
 	fetchCompanyBoards,
+	fetchTrackedCompanies,
 	setCompanyTracking,
 } from "../api/companies";
 import { keys } from "../api/keys";
@@ -17,6 +18,14 @@ export const companiesQueryOptions = queryOptions({
 
 export function useCompanies() {
 	return createQuery(() => companiesQueryOptions);
+}
+
+export function useTrackedCompanies(poll: () => boolean = () => false) {
+	return createQuery(() => ({
+		queryKey: keys.companies.tracked,
+		queryFn: fetchTrackedCompanies,
+		refetchInterval: poll() ? 4000 : false,
+	}));
 }
 
 export function useCompanyBoards(
@@ -37,7 +46,7 @@ export function useAddCompanyBoard() {
 	return useInvalidatingMutation(
 		({ id, url, confirm }: { id: string; url: string; confirm: boolean }) =>
 			addCompanyBoard(id, url, confirm),
-		(board) => [keys.companies.boards(board.CompanyID)],
+		(board) => [keys.companies.boards(board.CompanyID), keys.companies.tracked],
 	);
 }
 

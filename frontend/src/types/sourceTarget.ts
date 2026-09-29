@@ -10,6 +10,7 @@ export const sourceTargetSchema = z.object({
 	RunStatus: z.enum(["idle", "queued", "running", "succeeded", "failed"]),
 	LastRunAt: z.string().nullable(),
 	LastRunError: z.string(),
+	URL: z.string(),
 });
 
 export type SourceTarget = z.infer<typeof sourceTargetSchema>;

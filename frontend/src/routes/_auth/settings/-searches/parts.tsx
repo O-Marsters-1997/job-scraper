@@ -22,7 +22,10 @@ export function SegmentedTabs(props: {
 	value: SearchTab;
 	onChange: (tab: SearchTab) => void;
 	boardCount: number | undefined;
+	companyCount: number | undefined;
 }) {
+	const count = (key: SearchTab) =>
+		key === "boards" ? props.boardCount : props.companyCount;
 	return (
 		<div role="tablist" class="inline-flex rounded-md border border-border">
 			<For each={TABS}>
@@ -41,9 +44,9 @@ export function SegmentedTabs(props: {
 					>
 						<Icon name={t.icon} size={13} />
 						{t.label}
-						<Show when={t.key === "boards" && props.boardCount !== undefined}>
+						<Show when={count(t.key) !== undefined}>
 							<span class="font-mono tabular-nums opacity-70">
-								{props.boardCount}
+								{count(t.key)}
 							</span>
 						</Show>
 					</button>
@@ -59,9 +62,10 @@ export function SearchField(props: {
 	placeholder: string;
 	value: string;
 	onInput: (value: string) => void;
+	class?: string;
 }) {
 	return (
-		<div class="relative w-full sm:max-w-64">
+		<div class={cn("relative w-full sm:max-w-64", props.class)}>
 			<Icon
 				name="search"
 				size={14}

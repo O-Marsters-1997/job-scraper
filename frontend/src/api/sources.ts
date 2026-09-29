@@ -1,6 +1,8 @@
+import { z } from "zod";
+import { ResolveError } from "../lib/resolveError";
 import {
-	type ResolvedBoard,
-	resolvedBoardSchema,
+	type ResolvedURL,
+	resolvedUrlSchema,
 	sourceInfoSchema,
 } from "../types/source";
 import { apiFetch } from "./client";
@@ -13,17 +15,23 @@ export async function fetchSources() {
 	);
 }
 
-export async function resolveBoard(url: string): Promise<ResolvedBoard | null> {
+export async function resolveUrl(url: string): Promise<ResolvedURL> {
 	return mocked(
-		(db) => db.resolveBoard(url),
+		(db) => db.resolveUrl(url),
 		async () => {
 			const response = await fetch(
 				`${API_BASE}/sources/resolve?${new URLSearchParams({ url })}`,
 				{ credentials: "include" },
 			);
-			if (response.status === 422 || response.status === 400) return null;
+			if (response.status === 422) {
+				const body: unknown = await response.json().catch(() => null);
+				const message = z.object({ error: z.string() }).safeParse(body);
+				throw new ResolveError(
+					message.success ? message.data.error : "Unrecognised URL",
+				);
+			}
 			if (!response.ok) throw new Error(`resolve: ${response.status}`);
-			return resolvedBoardSchema.parse(await response.json());
+			return resolvedUrlSchema.parse(await response.json());
 		},
 	);
 }

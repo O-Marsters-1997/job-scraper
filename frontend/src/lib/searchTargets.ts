@@ -1,10 +1,15 @@
-import type { SourceInfo } from "@/types/source";
+import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type { SourceTarget } from "@/types/sourceTarget";
 
 export const SEARCH_PAGE_SIZE = 10;
 
 export type SearchTab = "boards" | "ats";
-export type SearchSortKey = "search" | "lastRun";
+export type SearchSortKey =
+	| "search"
+	| "lastRun"
+	| "company"
+	| "open"
+	| "checked";
 export type SortDir = "asc" | "desc";
 export type SearchStatus = "active" | "paused" | "failed";
 
@@ -31,7 +36,13 @@ export function parseSearchParams(raw: Record<string, unknown>): SearchParams {
 				? raw.status
 				: undefined,
 		sort:
-			raw.sort === "search" || raw.sort === "lastRun" ? raw.sort : undefined,
+			raw.sort === "search" ||
+			raw.sort === "lastRun" ||
+			raw.sort === "company" ||
+			raw.sort === "open" ||
+			raw.sort === "checked"
+				? raw.sort
+				: undefined,
 		dir: raw.dir === "asc" || raw.dir === "desc" ? raw.dir : undefined,
 		page: Number.isInteger(page) && page > 1 ? page : undefined,
 	};
@@ -90,7 +101,7 @@ export function sortTargets(
 	sort: SearchSortKey | undefined,
 	dir: SortDir = "asc",
 ): SourceTarget[] {
-	if (!sort) return targets;
+	if (sort !== "search" && sort !== "lastRun") return targets;
 	const by =
 		sort === "search"
 			? (a: SourceTarget, b: SourceTarget) => a.Value.localeCompare(b.Value)
@@ -127,4 +138,23 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
 	const hours = Math.round(mins / 60);
 	if (hours < 24) return `${hours}h ago`;
 	return `${Math.round(hours / 24)}d ago`;
+}
+
+function nonEmpty(filters: Record<string, string>): [string, string][] {
+	return Object.entries(filters)
+		.filter(([, v]) => v !== "")
+		.sort(([a], [b]) => a.localeCompare(b));
+}
+
+export function isDuplicateSearch(
+	targets: SourceTarget[],
+	resolved: Pick<ResolvedURL, "source" | "value" | "filters">,
+): boolean {
+	const want = JSON.stringify(nonEmpty(resolved.filters));
+	return targets.some(
+		(t) =>
+			t.Source === resolved.source &&
+			t.Value === resolved.value &&
+			JSON.stringify(nonEmpty(t.Filters)) === want,
+	);
 }

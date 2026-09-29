@@ -101,6 +101,11 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 	};
 });
 
+const jobsWithCompanyIDs: Job[] = jobs.map((j) => ({
+	...j,
+	CompanyID: companies.find((c) => c.Slug === j.CompanySlug)?.ID ?? j.CompanyID,
+}));
+
 const companyBoards: CompanyBoard[] = companies
 	.filter((company) => company.ATSSource)
 	.map((company) => ({
@@ -153,6 +158,7 @@ const discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "succeeded",
 		LastRunAt: faker.date.recent({ days: 1 }).toISOString(),
 		LastRunError: "",
+		URL: "",
 	},
 	{
 		ID: "target-linkedin-1",
@@ -164,6 +170,7 @@ const discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "idle",
 		LastRunAt: null,
 		LastRunError: "",
+		URL: "",
 	},
 ];
 
@@ -199,7 +206,7 @@ const cvs: CV[] = [
 
 export const seed = {
 	statuses,
-	jobs,
+	jobs: jobsWithCompanyIDs,
 	companies,
 	companyBoards,
 	applications,

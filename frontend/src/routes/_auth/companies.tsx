@@ -1,18 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { FormFeedback } from "@/components/FormFeedback";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,12 +20,9 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { formatDate } from "@/lib/datetime";
-import { UnresolvableBoardError } from "../../api/companies";
 import {
 	companiesQueryOptions,
-	useAddCompany,
 	useCompanies,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
@@ -48,13 +36,9 @@ export const Route = createFileRoute("/_auth/companies")({
 
 function CompaniesPage() {
 	const query = useCompanies();
-	const addMutation = useAddCompany();
 	const trackMutation = useSetCompanyTracking();
 
 	const [search, setSearch] = createSignal("");
-	const [showAdd, setShowAdd] = createSignal(false);
-	const [newUrl, setNewUrl] = createSignal("");
-	const [addedCompany, setAddedCompany] = createSignal(false);
 
 	const filtered = createMemo(() => {
 		const q = search().trim().toLowerCase();
@@ -67,50 +51,11 @@ function CompaniesPage() {
 		trackMutation.mutate({ id: c.ID, enabled: !c.Tracked });
 	};
 
-	const addForm = useFormSubmit(
-		async () => {
-			const url = newUrl().trim();
-			if (!url) return;
-			setAddedCompany(false);
-			await addMutation.mutateAsync({ url, track: true });
-			resetForm();
-			setAddedCompany(true);
-			setShowAdd(false);
-		},
-		(err) =>
-			err instanceof UnresolvableBoardError
-				? "Couldn't detect an ATS board from that URL. Try the direct board link, e.g. https://boards.greenhouse.io/acmecorp."
-				: "Failed to add company. Please try again.",
-	);
-
-	function resetForm() {
-		setNewUrl("");
-		addForm.setError(null);
-	}
-
 	return (
 		<div class="px-7 py-6">
 			<PageHeading
 				title="Companies"
 				subtitle="Every company we've encountered. Track a company to follow its current and future boards."
-			>
-				<Button
-					onClick={() => {
-						setAddedCompany(false);
-						addForm.setError(null);
-						setShowAdd(true);
-					}}
-				>
-					Add company
-				</Button>
-			</PageHeading>
-
-			<FormFeedback
-				success={
-					addedCompany()
-						? "Company added. Open its detail page to verify the candidate board."
-						: false
-				}
 			/>
 
 			<div class="mb-4 max-w-xs">
@@ -191,49 +136,6 @@ function CompaniesPage() {
 					</Card>
 				)}
 			</QueryBoundary>
-
-			<Dialog open={showAdd()} onOpenChange={setShowAdd}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Add company</DialogTitle>
-					</DialogHeader>
-					<form onSubmit={addForm.submit} class="flex flex-col gap-3">
-						<div class="flex flex-col gap-2">
-							<label
-								for="add-company-url"
-								class="text-xs font-medium text-foreground"
-							>
-								ATS board URL
-							</label>
-							<Input
-								id="add-company-url"
-								placeholder="e.g. https://boards.greenhouse.io/acmecorp"
-								value={newUrl()}
-								onInput={(e) => setNewUrl(e.currentTarget.value)}
-							/>
-						</div>
-						<FormFeedback error={addForm.error()} />
-						<DialogFooter>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => {
-									setShowAdd(false);
-									resetForm();
-								}}
-							>
-								Cancel
-							</Button>
-							<Button
-								type="submit"
-								disabled={addForm.pending() || !newUrl().trim()}
-							>
-								{addForm.pending() ? "Adding…" : "Add"}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
 		</div>
 	);
 }

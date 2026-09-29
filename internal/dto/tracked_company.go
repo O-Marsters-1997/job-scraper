@@ -18,5 +18,6 @@ type TrackedCompany struct {
 	CheckIntervalMinutes int            `json:"check_interval_minutes"`
 	Boards               []TrackedBoard `json:"boards"`
 	OpenJobs             int            `json:"open_jobs"`
+	RelevantJobs         int            `json:"relevant_jobs"`
 	LastCheckedAt        *time.Time     `json:"last_checked_at"`
 }
