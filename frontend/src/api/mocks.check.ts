@@ -141,8 +141,8 @@ try {
 	);
 
 	await run("fetchSources", () => sources.fetchSources());
-	await run("resolveBoard", () =>
-		sources.resolveBoard("https://boards.greenhouse.io/acme"),
+	await run("resolveUrl", () =>
+		sources.resolveUrl("https://boards.greenhouse.io/acme"),
 	);
 
 	await run("fetchSourceTargets", () => sourceTargets.fetchSourceTargets());

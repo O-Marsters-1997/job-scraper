@@ -1,4 +1,4 @@
-import type { SourceInfo } from "@/types/source";
+import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type { SourceTarget } from "@/types/sourceTarget";
 
 export const SEARCH_PAGE_SIZE = 10;
@@ -138,4 +138,23 @@ export function relativeTime(iso: string | null, now = Date.now()): string {
 	const hours = Math.round(mins / 60);
 	if (hours < 24) return `${hours}h ago`;
 	return `${Math.round(hours / 24)}d ago`;
+}
+
+function nonEmpty(filters: Record<string, string>): [string, string][] {
+	return Object.entries(filters)
+		.filter(([, v]) => v !== "")
+		.sort(([a], [b]) => a.localeCompare(b));
+}
+
+export function isDuplicateSearch(
+	targets: SourceTarget[],
+	resolved: Pick<ResolvedURL, "source" | "value" | "filters">,
+): boolean {
+	const want = JSON.stringify(nonEmpty(resolved.filters));
+	return targets.some(
+		(t) =>
+			t.Source === resolved.source &&
+			t.Value === resolved.value &&
+			JSON.stringify(nonEmpty(t.Filters)) === want,
+	);
 }

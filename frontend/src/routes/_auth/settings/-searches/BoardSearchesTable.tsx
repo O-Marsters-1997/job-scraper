@@ -204,6 +204,18 @@ export function BoardSearchesTable(props: {
 													>
 														{t.Value}
 													</span>
+													<Show when={t.URL}>
+														<a
+															href={t.URL}
+															target="_blank"
+															rel="noopener noreferrer"
+															aria-label={`Open on ${label(t.Source)}`}
+															title={`Open on ${label(t.Source)}`}
+															class="grid size-6 shrink-0 place-items-center rounded text-faint transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+														>
+															<Icon name="externalLink" size={12} />
+														</a>
+													</Show>
 												</div>
 											</TableCell>
 											<TableCell>
