@@ -22,6 +22,20 @@ type HeadingMappingsInput struct {
 	Mappings []HeadingMapping `json:"mappings"`
 }
 
+// CVTabQuery names one Tab of a base CV Google Doc.
+type CVTabQuery struct {
+	DocID string `json:"-" path:"docId"`
+	TabID string `json:"-" path:"tabId"`
+}
+
+// SuggestionsQuery selects the Job to rank Achievements for; DocID and TabID
+// optionally name the base CV Tab whose slot counts drive preselection.
+type SuggestionsQuery struct {
+	JobID string `json:"-" path:"jobId"`
+	DocID string `json:"docId"`
+	TabID string `json:"tabId"`
+}
+
 // Suggestion ranks one Achievement for a Job. Score is P(yes) x confidence.
 type Suggestion struct {
 	AchievementID string  `json:"achievementId"`

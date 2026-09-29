@@ -14,16 +14,20 @@ import (
 // Headings returns the base CV Tab's role headings. A saved mapping comes
 // back confirmed as-is; an unmapped heading is auto-matched to a Position by
 // employer, and stays unconfirmed until the User saves it.
-func (s *Service) Headings(ctx context.Context, userID, docID, tabID string) ([]dto.CVHeading, error) {
-	doc, err := s.parseTab(ctx, userID, docID, tabID)
-	if err != nil {
-		return nil, err
-	}
+func (s *Service) Headings(ctx context.Context, userID string, q dto.CVTabQuery) ([]dto.CVHeading, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	saved, err := s.store.ListHeadingMappings(ctx, userID, docID, tabID)
+	return s.headings(ctx, userID, q, positions)
+}
+
+func (s *Service) headings(ctx context.Context, userID string, q dto.CVTabQuery, positions []dto.Position) ([]dto.CVHeading, error) {
+	doc, err := s.parseTab(ctx, userID, q.DocID, q.TabID)
+	if err != nil {
+		return nil, err
+	}
+	saved, err := s.store.ListHeadingMappings(ctx, userID, q.DocID, q.TabID)
 	if err != nil {
 		return nil, err
 	}

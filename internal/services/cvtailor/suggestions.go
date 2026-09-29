@@ -23,7 +23,7 @@ func achievementQuestion(text string) string {
 // Suggestions ranks the User's Achievements for the Job by P(yes) x confidence
 // and preselects the top N per Position: its base CV slot count, else 3.
 // docID and tabID may be empty.
-func (s *Service) Suggestions(ctx context.Context, userID, jobID, docID, tabID string) ([]dto.Suggestion, error) {
+func (s *Service) Suggestions(ctx context.Context, userID string, q dto.SuggestionsQuery) ([]dto.Suggestion, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -37,22 +37,22 @@ func (s *Service) Suggestions(ctx context.Context, userID, jobID, docID, tabID s
 	if len(questions) == 0 {
 		return []dto.Suggestion{}, nil
 	}
-	answers, err := s.asker.Ask(ctx, userID, jobID, questions)
+	answers, err := s.asker.Ask(ctx, userID, q.JobID, questions)
 	if err != nil {
 		return nil, err
 	}
-	slots, err := s.slotCounts(ctx, userID, docID, tabID)
+	slots, err := s.slotCounts(ctx, userID, q, positions)
 	if err != nil {
 		return nil, err
 	}
 	return rankSuggestions(positions, answers, slots), nil
 }
 
-func (s *Service) slotCounts(ctx context.Context, userID, docID, tabID string) (map[string]int, error) {
-	if docID == "" || tabID == "" {
+func (s *Service) slotCounts(ctx context.Context, userID string, q dto.SuggestionsQuery, positions []dto.Position) (map[string]int, error) {
+	if q.DocID == "" || q.TabID == "" {
 		return nil, nil
 	}
-	headings, err := s.Headings(ctx, userID, docID, tabID)
+	headings, err := s.headings(ctx, userID, dto.CVTabQuery{DocID: q.DocID, TabID: q.TabID}, positions)
 	if err != nil {
 		return nil, fmt.Errorf("tailoring: slot counts: %w", err)
 	}

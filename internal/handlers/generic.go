@@ -78,6 +78,9 @@ func DecodeQuery[Q any](r *http.Request) (Q, error) {
 
 func fillPath(r *http.Request, in any) {
 	v := reflect.ValueOf(in).Elem()
+	if v.Kind() != reflect.Struct {
+		return
+	}
 	t := v.Type()
 	for i := range t.NumField() {
 		if tag := t.Field(i).Tag.Get("path"); tag != "" {
@@ -156,7 +159,8 @@ func GetByID[Out any](fn func(ctx context.Context, userID, id string) (Out, erro
 }
 
 // Query adapts (ctx, userID, q Q) -> (Out, error) to a 200 read, q decoded
-// from the URL query string.
+// from the URL query string. Path-tagged fields on Q are filled from chi URL
+// params.
 func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, error)) http.HandlerFunc {
 	type req struct {
 		userID string
@@ -172,6 +176,7 @@ func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, er
 			if err != nil {
 				return req{}, apperr.Invalid("bad request")
 			}
+			fillPath(r, &q)
 			return req{userID: uid, q: q}, nil
 		},
 		func(ctx context.Context, in req) (Out, error) { return fn(ctx, in.userID, in.q) },

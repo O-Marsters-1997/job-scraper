@@ -83,7 +83,7 @@ func TestHeadingsAutoMatch(t *testing.T) {
 	addPosition(t, st, "Initech", "Engineer")
 	addPosition(t, st, "Initech", "Engineer")
 
-	got, err := svc.Headings(ctx, userID, "doc", "tab")
+	got, err := svc.Headings(ctx, userID, dto.CVTabQuery{DocID: "doc", TabID: "tab"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 	svc, st := newService(t, fakeDocs{cvTab(t, roleBlock{"Engineer, Acme", 1}, roleBlock{"Volunteer, Nowhere", 1})}, nil)
 	acme := addPosition(t, st, "Acme", "Engineer")
 
-	first, err := svc.Headings(ctx, userID, "doc", "tab")
+	first, err := svc.Headings(ctx, userID, dto.CVTabQuery{DocID: "doc", TabID: "tab"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second, err := svc.Headings(ctx, userID, "doc", "tab")
+	second, err := svc.Headings(ctx, userID, dto.CVTabQuery{DocID: "doc", TabID: "tab"})
 	if err != nil {
 		t.Fatal(err)
 	}

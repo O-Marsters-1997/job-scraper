@@ -54,7 +54,7 @@ func TestSuggestionsRankByPYesTimesConfidence(t *testing.T) {
 	p := addPosition(t, st, "Acme", "Engineer")
 	addAchievements(t, p.ID, st, "a", "b", "c", "d", "e")
 
-	got, err := svc.Suggestions(context.Background(), userID, "job-1", "", "")
+	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Suggestions(context.Background(), userID, "job-1", "doc", "tab")
+	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1", DocID: "doc", TabID: "tab"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 func TestSuggestionsEmptyBankMakesNoAskCall(t *testing.T) {
 	asker := &fakeAsker{}
 	svc, _ := newService(t, nil, asker)
-	got, err := svc.Suggestions(context.Background(), userID, "job-1", "", "")
+	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestSuggestionsPropagatesMissingKey(t *testing.T) {
 	p := addPosition(t, st, "Acme", "Engineer")
 	addAchievements(t, p.ID, st, "a")
 
-	_, err := svc.Suggestions(context.Background(), userID, "job-1", "", "")
+	_, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if !errors.Is(err, missingKey) {
 		t.Errorf("Suggestions() err = %v, want %v", err, missingKey)
 	}
