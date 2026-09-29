@@ -16,8 +16,8 @@ import {
 import type { SourceInfo } from "../../../types/source";
 import type { SourceTarget } from "../../../types/sourceTarget";
 import { BoardSearchesTable } from "./-searches/BoardSearchesTable";
-import { SegmentedTabs } from "./-searches/parts";
 import { PasteBox } from "./-searches/PasteBox";
+import { SegmentedTabs } from "./-searches/parts";
 import { SearchForm, type SearchPrefill } from "./-searches/SearchForm";
 import { UndoToasts, useUndoDelete } from "./-searches/useUndoDelete";
 

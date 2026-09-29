@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+import { ResolveError } from "@/api/sources";
 import type {
 	Application,
 	ApplicationWithDetails,
@@ -20,7 +21,6 @@ import type {
 	PositionInput,
 } from "@/types/experience";
 import type { Job, ScoreRow } from "@/types/job";
-import { ResolveError } from "@/api/sources";
 import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type {
 	CreateSourceTargetPayload,
