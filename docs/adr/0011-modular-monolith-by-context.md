@@ -23,9 +23,9 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - Only the owning context writes its tables. Any store may SELECT-join another context's tables, which keeps score-sorted job pagination in one query.
   - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` serves signup.
 - **Enforcement.**
-  - `sqlc.yaml` has one `sql:` block per context. All of them read the shared `internal/data/sqlc/schema.sql`.
+  - `sqlc.yaml` has one `sql:` block per context. All of them read the shared `internal/data/db/sqlc/schema.sql`.
   - Queries live in `internal/services/<ctx>/store/queries/` and generate into `internal/services/<ctx>/store/sqlc/`, so a context cannot call another context's write queries.
-  - `depguard` keeps each store private. A `<ctx>-store` rule per context denies `internal/services/<ctx>/store` outside `internal/services/<ctx>/`, and the `services` rule denies the legacy `providers` and `data/db` to every context. This is enforced by lint, not by the compiler.
+  - `depguard` keeps each store private. A `<ctx>-store` rule per context denies `internal/services/<ctx>/store` outside `internal/services/<ctx>/`. This is enforced by lint, not by the compiler.
   - The worker and `cmd/admin` import context roots only and never call `Routes`. ADR 0009's rule stands, and `depguard` keeps enforcing it.
 - **Tests.**
   - `providers` and `providers.Mock*` are removed. Each service declares its own store interface and is tested with small hand fakes.
@@ -54,4 +54,4 @@ Rejected alternatives:
 
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
 
-Status: complete (2026-09-28, PR #305) — `internal/data/db`, `internal/data/providers` and the legacy sqlc block removed.
+Status: complete (2026-09-28, PR #305) — `internal/data/providers` and the legacy sqlc block removed.

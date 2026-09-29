@@ -33,6 +33,3 @@ makes two store calls. No shortcut version of that logic belongs in `Routes`.
 If you're about to write
 `handlers.Create(func(ctx, userID string, in dto.X) (dto.Y, error) { ... })` in `Routes`, the
 closure is the sign. Give it a name and move it into the context's service.
-
-Legacy contexts (see `AGENTS.md` § Migration status) do the same in `internal/api/router.go`,
-binding `db.Method` values.
