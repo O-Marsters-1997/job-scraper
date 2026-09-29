@@ -7,6 +7,7 @@ type SourceTarget struct {
 	UserID               string
 	Source               string
 	Value                string
+	URL                  string
 	Enabled              bool
 	Filters              map[string]string
 	CompanyID            string

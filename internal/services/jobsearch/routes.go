@@ -22,7 +22,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/sources/resolve", handlers.Query(m.jobs.ResolveBoard))
 
 	r.Route("/source-targets", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.targetLister.ListSourceTargetsByUser))
+		r.Get("/", handlers.GetAll(m.sourceTargets.List))
 		r.Post("/", handlers.Create(m.sourceTargets.Create))
 		r.Patch("/{id}", handlers.Update(m.sourceTargets.Update))
 		r.Post("/{id}/scrape", handlers.GetByID(m.sourceTargets.Scrape))
