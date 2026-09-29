@@ -38,7 +38,7 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
     `data.ErrNotFound` (`internal/data/errors.go`), returned directly — no per-store declaration
     or root re-export. A sentinel stays local only when it carries real domain meaning
     (`ErrApplicationExists`, `ErrUsernameTaken`, ...).
-- **Migration order.** `applications` is the pilot, followed by `identity`, `cvtemplates` and `scoring`. `jobsearch` goes last, taking whatever remains of `internal/data/db`. Until a context moves, `*jobsdb.DB` keeps serving it.
+- **Migration order.** `applications` was the pilot, followed by `identity`, `cvtemplates` and `scoring`. `jobsearch` went last, taking what remained of the old `*jobsdb.DB`. `internal/data/db` now only connects and migrates.
 
 Rejected alternatives:
 
