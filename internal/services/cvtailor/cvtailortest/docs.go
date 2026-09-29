@@ -27,15 +27,12 @@ var _ cvtailor.DocFetcher = Docs{}
 // Drive records the Drive and Docs writes a Draft makes and can fail on
 // demand.
 type Drive struct {
-	mu      sync.Mutex
-	Tabs    []google.Tab
-	Copies  []string
-	Deleted []string
-	Updates [][]json.RawMessage
-	// BasePages is the page count of the base CV, one when zero.
-	BasePages int
-	// DraftPages holds the page count of each successive export of a copy;
-	// the last repeats, and one is assumed when it is empty.
+	mu          sync.Mutex
+	Tabs        []google.Tab
+	Copies      []string
+	Deleted     []string
+	Updates     [][]json.RawMessage
+	BasePages   int
 	DraftPages  []int
 	copyExports int
 	// BatchUpdateErr fails every BatchUpdate on a copy.
