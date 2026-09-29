@@ -182,6 +182,21 @@ func (f *FakeStore) ListAnswers(_ context.Context, jobID, fingerprint, model str
 	return out, nil
 }
 
+func (f *FakeStore) SaveAnswers(_ context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := answerKey(jobID, fingerprint, model)
+	if f.answers[key] == nil {
+		f.answers[key] = make(map[string]dto.Answer, len(answers))
+	}
+	for hash, a := range answers {
+		if _, exists := f.answers[key][hash]; !exists {
+			f.answers[key][hash] = a
+		}
+	}
+	return nil
+}
+
 func (f *FakeStore) markScored(jobID string, scores []dto.JobScore) {
 	for _, sc := range scores {
 		f.scored[scoredKey(jobID, sc.UserID)] = true

@@ -110,6 +110,12 @@ func (m *Module) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyI
 	return m.store.CompanyTracked(ctx, tx, userID, companyID)
 }
 
+// Ask answers arbitrary questions about a job, reusing cached Jev answers
+// and billing the rest to userID's OpenRouter key.
+func (m *Module) Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error) {
+	return m.svc.Ask(ctx, userID, jobID, questions)
+}
+
 func (m *Module) AddOption(ctx context.Context, id, dimension, label, question string) error {
 	return m.store.AddScoringOption(ctx, id, dimension, label, question)
 }
