@@ -19,7 +19,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
-	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -35,7 +34,7 @@ type Store interface {
 	ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error)
-	ListInterestedConfigs(ctx context.Context, jobID string, discovery bool) ([]dto.SearchConfig, error)
+	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
@@ -140,8 +139,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return err
 	}
 
-	discovery, _ := sourcespec.SourceRole(job.Source)
-	configs, err := s.store.ListInterestedConfigs(ctx, effect.JobID, discovery == sourcespec.RoleDiscovery)
+	configs, err := s.store.ListInterestedConfigs(ctx, effect.JobID)
 	if err != nil {
 		return fail(fmt.Errorf("load interested configs: %w", err))
 	}

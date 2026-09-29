@@ -24,7 +24,6 @@ type QueuePublisher interface {
 
 type Store interface {
 	CandidateStore
-	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
 	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
 	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
@@ -53,16 +52,19 @@ func New(targets Store, configs SearchConfigReader, q QueuePublisher) *Service {
 }
 
 // Create validates a new source target against the source registry, then
-// creates it. Discovery sources (and ATS sources with ScrapeNow set) start a
-// run immediately and publish it to the queue.
+// creates it. An enabled target starts a run immediately and publishes it to
+// the queue.
 func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSourceTargetInput) (dto.SourceTarget, error) {
 	if in.Source == "" || in.Value == "" {
 		return dto.SourceTarget{}, apperr.Invalid("source and value are required")
 	}
 
+	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleATS {
+		return dto.SourceTarget{}, apperr.Invalid("ATS boards are tracked as companies — add it under Company boards")
+	}
 	if role, _ := sourcespec.SourceRole(in.Source); role == sourcespec.RoleDiscovery {
 		if t := detect.Detect(in.Value); t != detect.UnknownHTML && t != detect.Aggregator {
-			return dto.SourceTarget{}, apperr.Invalid("that looks like an ATS board — add it under Tracked companies")
+			return dto.SourceTarget{}, apperr.Invalid("that looks like an ATS board — add it under Company boards")
 		}
 	}
 
@@ -80,14 +82,7 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		enabled = *in.Enabled
 	}
 
-	role, _ := sourcespec.SourceRole(in.Source)
-	startNow := enabled && (role == sourcespec.RoleDiscovery || in.ScrapeNow)
-	if startNow && role == sourcespec.RoleATS {
-		if _, err := s.targets.GetVerifiedBoardID(ctx, in.Source, in.Value); err != nil {
-			return dto.SourceTarget{}, apperr.Unprocessable("verified Board required to start search")
-		}
-	}
-
+	startNow := enabled
 	create := s.targets.CreateSourceTarget
 	if startNow {
 		create = s.targets.CreateSourceTargetWithRun
@@ -208,11 +203,6 @@ func (s *Service) Scrape(ctx context.Context, userID, id string) (dto.SourceTarg
 }
 
 func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.SourceTarget, error) {
-	if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
-		if _, err := s.targets.GetVerifiedBoardID(ctx, target.Source, target.Value); err != nil {
-			return dto.SourceTarget{}, err
-		}
-	}
 	queued, err := s.targets.StartSourceTargetRun(ctx, target.ID)
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -238,16 +228,7 @@ func (s *Service) ClaimRecoverableSourceTarget(ctx context.Context, id, runID st
 
 func (s *Service) publishRun(ctx context.Context, queued dto.SourceTarget) (dto.SourceTarget, error) {
 	queued.Enabled = true
-	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: queued.Source, TargetID: queued.ID, RunID: queued.RunID}
-	if role, _ := sourcespec.SourceRole(queued.Source); role == sourcespec.RoleATS {
-		boardID, err := s.targets.GetVerifiedBoardID(ctx, queued.Source, queued.Value)
-		if err != nil {
-			return queued, err
-		}
-		task.Kind, task.BoardID, task.Manual = queue.BoardCheckTask, boardID, true
-	} else {
-		task.Kind = queue.ListingPageTask
-	}
+	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: queued.Source, Kind: queue.ListingPageTask, TargetID: queued.ID, RunID: queued.RunID}
 	if err := s.queue.Publish(ctx, task); err != nil {
 		return queued, err
 	}

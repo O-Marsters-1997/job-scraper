@@ -40,14 +40,11 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
     (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     tc.check_interval_minutes,
-    st.last_checked_at
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
-LEFT JOIN LATERAL (
-    SELECT last_checked_at FROM source_targets
-    WHERE user_id = $1 AND source = c.ats_source AND value = c.ats_token
-    ORDER BY last_checked_at DESC NULLS LAST LIMIT 1
-) st ON TRUE
 ORDER BY c.name
 `
 

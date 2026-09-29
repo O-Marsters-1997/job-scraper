@@ -84,12 +84,20 @@ func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
 
 func TestCreate_PropagatesConflict(t *testing.T) {
 	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
-	in := dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme", Enabled: boolPtr(false)}
+	in := dto.CreateSourceTargetInput{Source: "wis", Value: "engineer", Enabled: boolPtr(false)}
 	if _, err := svc.Create(context.Background(), "user-1", in); err != nil {
 		t.Fatalf("first Create() err = %v", err)
 	}
 	if _, err := svc.Create(context.Background(), "user-1", in); wantStatus(t, err) != 409 {
 		t.Fatalf("duplicate Create() err = %v, want 409", err)
+	}
+}
+
+func TestCreate_RejectsATSSource(t *testing.T) {
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
+	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})
+	if got := wantStatus(t, err); got != 400 {
+		t.Fatalf("Create(greenhouse) status = %d, want 400", got)
 	}
 }
 

@@ -222,7 +222,7 @@ func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 		t.Fatalf("insert tracked company: %v", err)
 	}
 
-	configs, err := st.ListInterestedConfigs(ctx, jobID, false)
+	configs, err := st.ListInterestedConfigs(ctx, jobID)
 	if err != nil {
 		t.Fatal(err)
 	}

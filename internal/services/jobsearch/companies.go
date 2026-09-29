@@ -58,16 +58,7 @@ func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.
 	if err != nil {
 		return dto.CompanyTracking{}, err
 	}
-	tracking, err := s.store.SetCompanyTracking(ctx, userID, company.ID, *in.Enabled, interval)
-	if err != nil {
-		return dto.CompanyTracking{}, err
-	}
-	if company.ATSSource != "" {
-		if _, err := s.targets.UpsertSourceTargetForCompany(ctx, userID, company.ATSSource, company.ATSToken, company.ID, *in.Enabled, tracking.CheckIntervalMinutes); err != nil {
-			return dto.CompanyTracking{}, err
-		}
-	}
-	return tracking, nil
+	return s.store.SetCompanyTracking(ctx, userID, company.ID, *in.Enabled, interval)
 }
 
 func (s *Service) ListCompanyBoards(ctx context.Context, _, companyID string) ([]dto.CompanyBoard, error) {

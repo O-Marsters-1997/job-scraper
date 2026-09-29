@@ -17,7 +17,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
-	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 // ScoringInput is one job and its cached answers, keyed by question hash,
@@ -65,10 +64,8 @@ func (s *Store) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, fir
 		if err != nil {
 			return fmt.Errorf("store.JobsChanged: load job: %w", err)
 		}
-		role, _ := sourcespec.SourceRole(job.Source)
 		err = queries.QueueAnswerEffect(ctx, sqlc.QueueAnswerEffectParams{
-			JobID: jobID, Fingerprint: job.ContentFingerprint.String,
-			FirstDiscovery: firstDiscovery, Discovery: role == sourcespec.RoleDiscovery,
+			JobID: jobID, Fingerprint: job.ContentFingerprint.String, FirstDiscovery: firstDiscovery,
 		})
 		if err != nil {
 			return fmt.Errorf("store.JobsChanged: queue answer effect: %w", err)
@@ -313,12 +310,12 @@ func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, er
 	return toJobDTO(row), nil
 }
 
-func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string, discovery bool) ([]dto.SearchConfig, error) {
+func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error) {
 	jid, err := parseUUID(jobID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListInterestedConfigs(ctx, sqlc.ListInterestedConfigsParams{JobID: jid, Discovery: discovery})
+	rows, err := s.queries.ListInterestedConfigs(ctx, jid)
 	if err != nil {
 		return nil, fmt.Errorf("store.ListInterestedConfigs: %w", err)
 	}

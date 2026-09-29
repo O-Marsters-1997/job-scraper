@@ -57,23 +57,18 @@ type Store interface {
 	SetLastScraped(ctx context.Context, source string) error
 }
 
-type SourceTargets interface {
-	UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error)
-}
-
 type Deps struct {
-	Store          Store
-	CompanyTargets SourceTargets
-	SourceTargets  sourcetargets.Store
-	Scoring        ScoringPort
-	Queue          QueuePublisher
+	Store         Store
+	SourceTargets sourcetargets.Store
+	Scoring       ScoringPort
+	Queue         QueuePublisher
 }
 
 func Build(deps Deps) *Module {
 	return &Module{
 		store:         deps.Store,
 		targetLister:  deps.SourceTargets,
-		jobs:          NewService(deps.Store, deps.CompanyTargets, deps.Queue),
+		jobs:          NewService(deps.Store, deps.Queue),
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
 		ingest:        newIngester(deps.Store, deps.Store),
 	}
@@ -82,11 +77,10 @@ func Build(deps Deps) *Module {
 func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
 	st := store.New(pool, scoring)
 	return Build(Deps{
-		Store:          st,
-		CompanyTargets: st,
-		SourceTargets:  st,
-		Scoring:        scoring,
-		Queue:          q,
+		Store:         st,
+		SourceTargets: st,
+		Scoring:       scoring,
+		Queue:         q,
 	})
 }
 

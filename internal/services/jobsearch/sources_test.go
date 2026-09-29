@@ -10,7 +10,7 @@ import (
 )
 
 func TestListSources(t *testing.T) {
-	got, err := jobsearch.NewService(nil, nil, nil).ListSources(context.Background(), "user-1")
+	got, err := jobsearch.NewService(nil, nil).ListSources(context.Background(), "user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestListSources(t *testing.T) {
 }
 
 func TestResolveBoard(t *testing.T) {
-	svc := jobsearch.NewService(nil, nil, nil)
+	svc := jobsearch.NewService(nil, nil)
 
 	_, err := svc.ResolveBoard(context.Background(), "user-1", dto.ResolveBoardQuery{})
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {

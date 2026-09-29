@@ -24,13 +24,12 @@ type jobCursor struct {
 }
 
 type Service struct {
-	store   Store
-	targets SourceTargets
-	queue   QueuePublisher
+	store Store
+	queue QueuePublisher
 }
 
-func NewService(store Store, targets SourceTargets, q QueuePublisher) *Service {
-	return &Service{store: store, targets: targets, queue: q}
+func NewService(store Store, q QueuePublisher) *Service {
+	return &Service{store: store, queue: q}
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {

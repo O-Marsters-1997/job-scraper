@@ -18,7 +18,6 @@ WHERE EXISTS (
     WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
 ) OR EXISTS (
     SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
-        AND (sqlc.arg(discovery)::boolean OR st.value = j.company_slug)
 );
 
 -- name: ListOptionAnswers :many

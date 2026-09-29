@@ -486,26 +486,6 @@ func (f *FakeStore) CreateSourceTargetWithRun(ctx context.Context, userID, sourc
 	return f.StartSourceTargetRun(ctx, t.ID)
 }
 
-func (f *FakeStore) UpsertSourceTargetForCompany(_ context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key := targetKey(userID, source, value)
-	if id, ok := f.targetByKey[key]; ok {
-		t := f.sourceTargets[id]
-		t.Enabled, t.CompanyID = enabled, companyID
-		if interval > 0 {
-			t.CheckIntervalMinutes = interval
-		}
-		f.sourceTargets[id] = t
-		return t, nil
-	}
-	id := f.nextID("target")
-	t := dto.SourceTarget{ID: id, UserID: userID, Source: source, Value: value, Enabled: enabled, CompanyID: companyID, CheckIntervalMinutes: interval, UpdatedAt: time.Now()}
-	f.sourceTargets[id] = t
-	f.targetByKey[key] = id
-	return t, nil
-}
-
 func (f *FakeStore) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

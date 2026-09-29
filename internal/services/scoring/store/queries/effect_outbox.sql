@@ -18,7 +18,6 @@ WHERE j.id = sqlc.arg(job_id)::uuid
         OR EXISTS (
             SELECT 1 FROM source_targets st
             WHERE st.enabled AND st.source = j.source
-                AND (sqlc.arg(discovery)::boolean OR st.value = j.company_slug)
         )
     )
 ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;

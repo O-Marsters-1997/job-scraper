@@ -3,6 +3,8 @@ package store_test
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -1117,35 +1119,77 @@ func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
 	}
 }
 
-func TestUpsertSourceTargetForCompanyToggle(t *testing.T) {
+func TestRetireATSSourceTargetsMigration(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
 	userID := insertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	if err != nil {
-		t.Fatalf("UpsertCompany: %v", err)
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id, check_interval_minutes)
+		VALUES ($1, 'greenhouse', 'acme', false, '{}', $2, 180)`, userID, company.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO source_targets (user_id, source, value, enabled, filters)
+		VALUES ($1, 'linkedin', 'go', true, '{}')`, userID); err != nil {
+		t.Fatal(err)
 	}
 
-	created, err := st.UpsertSourceTargetForCompany(ctx, userID, "greenhouse", "acme", company.ID, true, 180)
+	raw, err := os.ReadFile("scripts/migrations/20260929150000_retire_ats_source_targets.sql")
 	if err != nil {
-		t.Fatalf("UpsertSourceTargetForCompany create: %v", err)
+		t.Fatal(err)
 	}
-	if !created.Enabled || created.CompanyID != company.ID || created.CheckIntervalMinutes != 180 {
-		t.Fatalf("unexpected created target: %+v", created)
+	up, _, _ := strings.Cut(string(raw), "-- +goose Down")
+	if _, err := pool.Exec(ctx, up); err != nil {
+		t.Fatalf("migration up: %v", err)
 	}
 
-	disabled, err := st.UpsertSourceTargetForCompany(ctx, userID, "greenhouse", "acme", company.ID, false, 0)
+	var enabled bool
+	var interval int
+	err = pool.QueryRow(ctx, `SELECT enabled, check_interval_minutes FROM tracked_companies WHERE user_id = $1 AND company_id = $2`,
+		userID, company.ID).Scan(&enabled, &interval)
 	if err != nil {
-		t.Fatalf("UpsertSourceTargetForCompany disable: %v", err)
+		t.Fatalf("tracked company not created: %v", err)
 	}
-	if disabled.ID != created.ID {
-		t.Errorf("expected same target row on toggle, got different ID")
+	if enabled || interval != 180 {
+		t.Errorf("tracked company = enabled %v, interval %d, want false, 180", enabled, interval)
 	}
-	if disabled.Enabled {
-		t.Errorf("expected target to be disabled")
+	var atsTargets, otherTargets int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FILTER (WHERE source = 'greenhouse'), COUNT(*) FILTER (WHERE source = 'linkedin') FROM source_targets`).Scan(&atsTargets, &otherTargets); err != nil {
+		t.Fatal(err)
 	}
-	if disabled.CheckIntervalMinutes != 180 {
-		t.Errorf("expected interval preserved, got %d", disabled.CheckIntervalMinutes)
+	if atsTargets != 0 || otherTargets != 1 {
+		t.Errorf("targets after migration = %d ATS, %d other, want 0, 1", atsTargets, otherTargets)
+	}
+}
+
+func TestListCompaniesForUserLastChecked(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "test"); err != nil {
+		t.Fatal(err)
+	}
+	completed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := pool.Exec(ctx, `INSERT INTO board_poll_state (board_id, last_completed_at) VALUES ($1, $2)`, board.ID, completed); err != nil {
+		t.Fatal(err)
+	}
+
+	companies, err := st.ListCompaniesForUser(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(companies) != 1 || companies[0].LastCheckedAt == nil || !companies[0].LastCheckedAt.Equal(completed) {
+		t.Errorf("ListCompaniesForUser() = %+v, want last check %v", companies, completed)
 	}
 }
 

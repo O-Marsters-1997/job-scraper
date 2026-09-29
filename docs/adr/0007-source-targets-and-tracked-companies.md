@@ -7,7 +7,7 @@ What to scrape is per-user data, not process-wide env vars. Sources are a fixed 
 Users choose Targets within a Source in `source_targets`. Each registry source has two independent attributes:
 
 - **kind** is the shape of `value` and drives the input widget and validation: `board` is a token, `url` is a URL, and `filter` is a keyword plus structured `filters` (JSONB) declared per source.
-- **role** is purpose: `ats` sources are tracked per Company (below); `discovery` covers aggregators and HTML boards. An ATS URL pasted into a discovery source is rejected with a pointer to Companies. The finer aggregator-vs-HTML split stays in `detect` (ADR 0003).
+- **role** is purpose: `ats` sources are tracked per Company (below); `discovery` covers aggregators and HTML boards. ATS sources are not valid Source Targets: `POST /source-targets` rejects them, and tracking is managed from Settings → Searches. An ATS URL pasted into a discovery source is rejected with a pointer to Company boards. The finer aggregator-vs-HTML split stays in `detect` (ADR 0003).
 
 Creating a discovery Target starts a run immediately through the source's queue (ADR 0006).
 
