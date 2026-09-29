@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "adhd": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/misc/adhd/SKILL.md",
+      "computedHash": "4ffab0eafec7df84fbc155c3036765b7957c03118e242d209c40e9d88b36e5a8"
+    },
     "frontend-best-practices": {
       "source": "O-Marsters-1997/skills",
       "sourceType": "github",
@@ -42,6 +48,12 @@
       "sourceType": "github",
       "skillPath": "skills/code/tailwind-shadcn/SKILL.md",
       "computedHash": "e3d84b962fa49587f9fb0b3eba7404d6a6f96a76e208952fc6ba09a1546480fb"
+    },
+    "unslop": {
+      "source": "O-Marsters-1997/skills",
+      "sourceType": "github",
+      "skillPath": "skills/misc/unslop/SKILL.md",
+      "computedHash": "5b14b8b7765436ee334c2bf47b9e86562501ccd7a315d2b5dad1f1e7992fbcc5"
     }
   }
 }

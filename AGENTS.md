@@ -11,45 +11,25 @@
 
 ## Layout
 
-The API is a modular monolith split by context ([ADR 0011](docs/adr/0011-modular-monolith-by-context.md)):
-`jobsearch`, `scoring`, `applications`, `cvtemplates` and `identity`.
+Modular monolith split by context ([ADR 0011](docs/adr/0011-modular-monolith-by-context.md), which has the
+full layout, port and enforcement rules): `jobsearch`, `scoring`, `applications`, `cvtemplates`, `identity`.
 
-- `cmd/<binary>`: entrypoints only, with wiring and env. `cmd/api/main.go` is the only composition root:
-  it builds every module with `<ctx>.New(...)`.
-- `internal/services/<ctx>/`: `module.go` (`New(deps) *Module` and the narrow facade: exported methods that
-  other contexts, the worker or `cmd/admin` call), `routes.go` (`m.Routes(r)`), and the context's main
-  feature service in `service.go` (`NewService`). A context is one package: one `Service`, one `Store`
-  interface, one `<ctx>test` fake. Add a feature file, not a feature package.
-- `internal/services/<feature>/`: only when the store must import the feature's types, so folding it into
-  the context root would be an import cycle (`sourcetargets` owns `Candidate`, which `jobsearch/store`
-  returns). It declares its own store interface and never imports the store.
-- `internal/services/<ctx>/store/`: `store.go`, `transform.go` (sqlc row → `dto` converters named
-  `to<Name>DTO`), `queries/` and generated `sqlc/`. Only `internal/services/<ctx>/` imports it; a
-  `<ctx>-store` depguard rule enforces that.
-- `internal/api/`: the HTTP shell only (middleware, CORS, mounting each module's `Routes`), used only by `cmd/api`.
-- `internal/worker/`: used only by `cmd/worker` (scraper, discover, source adapters, proxy); `cmd/snapshot`
-  also reads the adapters. It imports context roots for state, never `internal/api` (ADR 0009).
-- Everything else directly under `internal/` is the shared kernel (`dto`, `apperr`, `queue`, `handlers`,
-  `pgtest`, `telemetry`, `sourcespec`, …). It imports no context, no `internal/api` and no `internal/worker`.
-  `depguard` in `.golangci.yml` enforces the api/worker/shared/services rules.
-- `internal/data/db`: connecting to Postgres and running migrations — `db.go` (`Connect`),
-  `migrate.go` (`RunMigrations`) and `sqlc/schema.sql`, which every context's sqlc block
-  reads and every binary connects through.
-- `internal/data`: generic, reusable information with no database or context coupling —
-  e.g. `errors.go`'s `ErrNotFound`, the sentinel shared by stores with no domain-specific
-  detail to add. Add to it only when something is genuinely reusable, not speculatively.
+- `cmd/<binary>`: entrypoints only. `cmd/api/main.go` is the only composition root.
+- `internal/services/<ctx>/`: one package per context with `module.go` (`New(deps)` and the facade),
+  `routes.go` and `service.go`. Add a feature file, not a feature package. `store/` (with `queries/` and
+  generated `sqlc/`) is imported only by its own context (`<ctx>-store` depguard rule).
+- `internal/api/`: HTTP shell only, used by `cmd/api`. `internal/worker/`: used by `cmd/worker`; imports
+  context roots, never `internal/api` (ADR 0009).
+- Everything else under `internal/` is the shared kernel and imports no context, `internal/api` or
+  `internal/worker`. `internal/data/db` connects and migrates; `internal/data` holds only genuinely
+  reusable pieces (e.g. `ErrNotFound`).
 
-### Context rules
+Rules:
 
-- Only the owning context writes its tables. Any store may SELECT-join another context's tables.
-- A write that must also change another context's rows in the same transaction calls that context's
-  tx-scoped port, e.g. `scoring.JobsChanged(ctx, tx, jobIDs)`. Never write another context's table directly.
-- `dto` holds only HTTP shapes and types that cross a facade; context-private shapes stay in the context.
-- Stores declare their own sentinels (`apperr`-kinded when they map to a status). The root re-exports only
-  those other contexts must match.
+- Only the owning context writes its tables; any store may SELECT-join others. A cross-context write in one
+  transaction goes through that context's tx-scoped port (`scoring.JobsChanged(ctx, tx, jobIDs)`).
+- `dto` holds only HTTP shapes and types that cross a facade.
 - Place new code by the table map in ADR 0011. If a feature doesn't fit a context, stop and ask.
-
-Every context has moved to this layout (ADR 0011).
 
 ## Adding a new source
 
