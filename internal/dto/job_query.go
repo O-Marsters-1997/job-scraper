@@ -4,6 +4,7 @@ type JobsQuery struct {
 	Limit        string `json:"limit"`
 	Availability string `json:"availability"`
 	CompanyID    string `json:"company_id"`
+	Scored       string `json:"scored"`
 	Cursor       string `json:"cursor"`
 }
 

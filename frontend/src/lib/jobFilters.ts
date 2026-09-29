@@ -8,6 +8,8 @@ export interface JobFilters {
 	sal: boolean;
 	salMin?: number | undefined;
 	salMax?: number | undefined;
+	company?: string | undefined;
+	scored: boolean;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -18,6 +20,8 @@ export const DEFAULT_FILTERS: JobFilters = {
 	suit: undefined,
 	salMin: undefined,
 	salMax: undefined,
+	company: undefined,
+	scored: false,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -39,6 +43,9 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		sal: raw.sal === true || raw.sal === "true",
 		salMin: coerceNum(raw.salMin),
 		salMax: coerceNum(raw.salMax),
+		company:
+			typeof raw.company === "string" && raw.company ? raw.company : undefined,
+		scored: raw.scored === true || raw.scored === "1" || raw.scored === 1,
 	};
 }
 
@@ -82,6 +89,8 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 				`${j.Title} ${j.CompanySlug} ${j.Location} ${j.Source}`.toLowerCase();
 			if (!hay.includes(q)) return false;
 		}
+		if (f.company && j.CompanyID !== f.company) return false;
+		if (f.scored && j.SuitabilityScore == null) return false;
 		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
 			return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;

@@ -17,6 +17,7 @@ export async function fetchJobs(
 	options: {
 		cursor?: string | undefined;
 		companyId?: string | undefined;
+		scored?: boolean | undefined;
 		limit?: number;
 	} = {},
 ): Promise<JobPage> {
@@ -30,7 +31,8 @@ export async function fetchJobs(
 				.getJobs()
 				.filter(
 					(job) => !options.companyId || job.CompanySlug === company?.Slug,
-				);
+				)
+				.filter((job) => !options.scored || job.SuitabilityScore != null);
 			const offset = options.cursor ? Number(options.cursor) : 0;
 			const limit = options.limit ?? 100;
 			return {
@@ -44,6 +46,7 @@ export async function fetchJobs(
 			});
 			if (options.cursor) params.set("cursor", options.cursor);
 			if (options.companyId) params.set("company_id", options.companyId);
+			if (options.scored) params.set("scored", "1");
 			return apiFetch(`/jobs?${params}`, undefined, jobPageSchema);
 		},
 	);

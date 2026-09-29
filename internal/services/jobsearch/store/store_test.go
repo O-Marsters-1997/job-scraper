@@ -1148,3 +1148,51 @@ func TestUpsertSourceTargetForCompanyToggle(t *testing.T) {
 		t.Errorf("expected interval preserved, got %d", disabled.CheckIntervalMinutes)
 	}
 }
+
+func TestPageJobsScoredOnlyFiltersToCallersScoredJobsOfCompany(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	var otherUserID string
+	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('scored-filter-other', 'hash') RETURNING id`).Scan(&otherUserID); err != nil {
+		t.Fatal(err)
+	}
+	acme := "10000000-0000-0000-0000-000000000003"
+	other := "10000000-0000-0000-0000-000000000004"
+	for id, slug := range map[string]string{acme: "scored-filter-acme", other: "scored-filter-other"} {
+		if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,$2,$2)`, id, slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert := func(id, company string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id) VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'x','test',NOW(),NOW(),'d',$2)`, id, company); err != nil {
+			t.Fatal(err)
+		}
+	}
+	score := func(jobID, user string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid, $2::uuid, 50, '[]'::jsonb)`, jobID, user); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scoredID := "40000000-0000-0000-0000-000000000001"
+	unscoredID := "40000000-0000-0000-0000-000000000002"
+	scoredByOtherID := "40000000-0000-0000-0000-000000000003"
+	otherCompanyID := "40000000-0000-0000-0000-000000000004"
+	insert(scoredID, acme)
+	insert(unscoredID, acme)
+	insert(scoredByOtherID, acme)
+	insert(otherCompanyID, other)
+	score(scoredID, userID)
+	score(scoredByOtherID, otherUserID)
+	score(otherCompanyID, userID)
+
+	page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: acme, ScoredOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].ID != scoredID {
+		t.Fatalf("Page(scored) items = %+v, want only %s", page.Items, scoredID)
+	}
+}

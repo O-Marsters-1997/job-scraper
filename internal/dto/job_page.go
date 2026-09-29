@@ -8,6 +8,7 @@ type JobPageOptions struct {
 	CursorID     string
 	Availability string
 	CompanyID    string
+	ScoredOnly   bool
 }
 
 type JobPage struct {

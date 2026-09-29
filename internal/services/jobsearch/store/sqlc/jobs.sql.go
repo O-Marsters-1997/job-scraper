@@ -165,9 +165,10 @@ LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
   AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
   AND ($5::text = 'all' OR ($5::text = 'open' AND j.closed_at IS NULL) OR ($5::text = 'closed' AND j.closed_at IS NOT NULL))
+  AND (NOT $6::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = $1::uuid))
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
 ORDER BY j.scraped_at DESC, j.id DESC
-LIMIT $6::int
+LIMIT $7::int
 `
 
 type PageJobsParams struct {
@@ -176,6 +177,7 @@ type PageJobsParams struct {
 	CursorID     pgtype.UUID
 	CompanyID    pgtype.UUID
 	Availability string
+	ScoredOnly   bool
 	PageLimit    int32
 }
 
@@ -205,6 +207,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 		arg.CursorID,
 		arg.CompanyID,
 		arg.Availability,
+		arg.ScoredOnly,
 		arg.PageLimit,
 	)
 	if err != nil {
