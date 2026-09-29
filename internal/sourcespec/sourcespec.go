@@ -32,9 +32,16 @@ const (
 
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
 type FilterField struct {
-	Name     string `json:"name"`
-	Label    string `json:"label"`
-	Required bool   `json:"required"`
+	Name     string         `json:"name"`
+	Label    string         `json:"label"`
+	Required bool           `json:"required"`
+	Options  []FilterOption `json:"options,omitempty"` // non-empty for enumerated fields
+}
+
+// FilterOption is one permitted value of an enumerated FilterField.
+type FilterOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
 }
 
 // SourceInfo is the serialisable view of a registry entry, suitable for API responses.
@@ -64,18 +71,57 @@ var entries = []registryEntry{
 	{name: "recruitee", label: "Recruitee", kind: kindBoard, role: RoleATS, urlPrefix: "https://recruitee.com"},
 	{name: "personio", label: "Personio", kind: kindBoard, role: RoleATS, urlPrefix: "https://personio.de"},
 	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
-		{Name: "region", Label: "Region", Required: false},
+		{Name: "region", Label: "Region", Options: []FilterOption{
+			{Value: "uk", Label: "United Kingdom"},
+		}},
 	}},
 	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Label: "Location", Required: false},
 		{Name: "company_id", Label: "Company ID", Required: false},
-		{Name: "recency", Label: "Recency", Required: false},
-		{Name: "arrangement", Label: "Work Arrangement", Required: false},
-		{Name: "experience", Label: "Experience Level", Required: false},
-		{Name: "job_type", Label: "Job Type", Required: false},
+		{Name: "recency", Label: "Recency", Options: []FilterOption{
+			{Value: "r86400", Label: "Past 24 hours"},
+			{Value: "r604800", Label: "Past week"},
+			{Value: "r2592000", Label: "Past month"},
+		}},
+		{Name: "arrangement", Label: "Work Arrangement", Options: []FilterOption{
+			{Value: "1", Label: "On-site"},
+			{Value: "2", Label: "Remote"},
+			{Value: "3", Label: "Hybrid"},
+		}},
+		{Name: "experience", Label: "Experience Level", Options: []FilterOption{
+			{Value: "1", Label: "Internship"},
+			{Value: "2", Label: "Entry level"},
+			{Value: "3", Label: "Associate"},
+			{Value: "4", Label: "Mid-Senior level"},
+			{Value: "5", Label: "Director"},
+			{Value: "6", Label: "Executive"},
+		}},
+		{Name: "job_type", Label: "Job Type", Options: []FilterOption{
+			{Value: "F", Label: "Full-time"},
+			{Value: "P", Label: "Part-time"},
+			{Value: "C", Label: "Contract"},
+			{Value: "T", Label: "Temporary"},
+			{Value: "I", Label: "Internship"},
+		}},
 		{Name: "geo_id", Label: "Geo ID", Required: false},
-		{Name: "distance", Label: "Distance", Required: false},
-		{Name: "salary_band", Label: "Salary Band", Required: false},
+		{Name: "distance", Label: "Distance", Options: []FilterOption{
+			{Value: "10", Label: "10 miles"},
+			{Value: "25", Label: "25 miles"},
+			{Value: "50", Label: "50 miles"},
+			{Value: "75", Label: "75 miles"},
+			{Value: "100", Label: "100 miles"},
+		}},
+		{Name: "salary_band", Label: "Salary Band", Options: []FilterOption{
+			{Value: "1", Label: "$40,000+"},
+			{Value: "2", Label: "$60,000+"},
+			{Value: "3", Label: "$80,000+"},
+			{Value: "4", Label: "$100,000+"},
+			{Value: "5", Label: "$120,000+"},
+			{Value: "6", Label: "$140,000+"},
+			{Value: "7", Label: "$160,000+"},
+			{Value: "8", Label: "$180,000+"},
+			{Value: "9", Label: "$200,000+"},
+		}},
 	}},
 	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
 	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com"},
@@ -128,6 +174,26 @@ func LookupFilterFields(name string) ([]FilterField, bool) {
 		return nil, false
 	}
 	return e.filters, true
+}
+
+// ValidFilterOption reports whether value is a declared option of the named enumerated
+// filter on the source. It is false for unknown sources, unknown fields and free-form fields.
+func ValidFilterOption(source, field, value string) bool {
+	fields, ok := LookupFilterFields(source)
+	if !ok {
+		return false
+	}
+	for _, f := range fields {
+		if f.Name != field {
+			continue
+		}
+		for _, o := range f.Options {
+			if o.Value == value {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SourceRole returns the role (RoleATS | RoleDiscovery) for a source, plus whether
