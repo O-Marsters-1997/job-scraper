@@ -1,4 +1,5 @@
-import { createEffect, createSignal, Show } from "solid-js";
+import { createSignal } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useAddTrackedDoc } from "../../hooks/useCVTemplates";
 
 export function AddDocDialog(props: {
@@ -17,35 +19,33 @@ export function AddDocDialog(props: {
 }) {
 	const addMutation = useAddTrackedDoc();
 	const [docUrl, setDocUrl] = createSignal("");
-	const [urlError, setUrlError] = createSignal<string | null>(null);
 
-	createEffect(() => {
-		if (!props.open) {
-			setDocUrl("");
-			setUrlError(null);
-		}
-	});
-
-	const handleAdd = async () => {
-		setUrlError(null);
-		try {
+	const form = useFormSubmit(
+		async () => {
 			await addMutation.mutateAsync(docUrl().trim());
-			props.onOpenChange(false);
-		} catch (err) {
+			handleOpenChange(false);
+		},
+		(err) => {
 			if (err instanceof Error && err.message === "invalid-url") {
-				setUrlError("Invalid Google Docs URL or ID");
-			} else if (err instanceof Error && err.message === "access-denied") {
-				setUrlError(
-					"Cannot access this document. Make sure it's shared with your Google account.",
-				);
-			} else {
-				setUrlError("Something went wrong. Please try again.");
+				return "Invalid Google Docs URL or ID";
 			}
+			if (err instanceof Error && err.message === "access-denied") {
+				return "Cannot access this document. Make sure it's shared with your Google account.";
+			}
+			return "Something went wrong. Please try again.";
+		},
+	);
+
+	const handleOpenChange = (open: boolean) => {
+		if (!open) {
+			setDocUrl("");
+			form.setError(null);
 		}
+		props.onOpenChange(open);
 	};
 
 	return (
-		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
+		<Dialog open={props.open} onOpenChange={handleOpenChange}>
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>Add Google Doc</DialogTitle>
@@ -54,7 +54,8 @@ export function AddDocDialog(props: {
 					</p>
 				</DialogHeader>
 
-				<div class="flex flex-col gap-3">
+				<form onSubmit={form.submit} class="flex flex-col gap-3">
+					<FormFeedback error={form.error()} />
 					<div>
 						<Label for="add-doc-url">Google Docs URL</Label>
 						<Input
@@ -64,34 +65,24 @@ export function AddDocDialog(props: {
 							value={docUrl()}
 							onInput={(e) => {
 								setDocUrl(e.currentTarget.value);
-								setUrlError(null);
+								form.setError(null);
 							}}
-							onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-							aria-invalid={!!urlError()}
-							aria-describedby={urlError() ? "add-doc-url-error" : undefined}
+							aria-invalid={!!form.error()}
 						/>
-						<Show when={urlError()}>
-							<p
-								id="add-doc-url-error"
-								class="mt-1.5 text-xs text-destructive-strong"
-							>
-								{urlError()}
-							</p>
-						</Show>
 					</div>
-				</div>
-
-				<DialogFooter class="border-t border-border pt-4">
-					<Button variant="outline" onClick={() => props.onOpenChange(false)}>
-						Cancel
-					</Button>
-					<Button
-						onClick={handleAdd}
-						disabled={addMutation.isPending || !docUrl().trim()}
-					>
-						Add doc
-					</Button>
-				</DialogFooter>
+					<DialogFooter class="border-t border-border pt-4">
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => handleOpenChange(false)}
+						>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={form.pending() || !docUrl().trim()}>
+							Add doc
+						</Button>
+					</DialogFooter>
+				</form>
 			</DialogContent>
 		</Dialog>
 	);

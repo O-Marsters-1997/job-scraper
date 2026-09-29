@@ -1,4 +1,5 @@
 import { createSignal, For, Show, untrack } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -14,14 +15,26 @@ import {
 	useCreateApplication,
 	useUpdateApplication,
 } from "@/hooks/useApplications";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
+import type { Application } from "@/types/application";
 import type { Job } from "@/types/job";
 
 export interface ExistingApp {
 	id: string;
 	statusId: string;
-	notes?: string;
-	appliedAt?: string | null;
-	salaryInfo?: string;
+	notes: string;
+	appliedAt: string | null;
+	salaryInfo: string;
+}
+
+export function toExistingApp(app: Application): ExistingApp {
+	return {
+		id: app.ID,
+		statusId: app.StatusID,
+		notes: app.Notes,
+		appliedAt: app.AppliedAt,
+		salaryInfo: app.SalaryInfo,
+	};
 }
 
 interface TrackApplicationDialogProps {
@@ -69,7 +82,7 @@ function TrackApplicationForm(props: {
 	const [appliedAt, setAppliedAt] = createSignal(existingApp?.appliedAt ?? "");
 	const [salary, setSalary] = createSignal(existingApp?.salaryInfo ?? "");
 
-	const handleSubmit = async () => {
+	const form = useFormSubmit(async () => {
 		const jobId = props.job?.ID;
 		if (!jobId) return;
 		if (!isEdit) {
@@ -94,10 +107,13 @@ function TrackApplicationForm(props: {
 			});
 		}
 		props.onClose();
-	};
+	});
+	const pending = () =>
+		form.pending() || createMutation.isPending || updateMutation.isPending;
 
 	return (
-		<>
+		<form onSubmit={form.submit} class="flex flex-col gap-4">
+			<FormFeedback error={form.error()} />
 			<div class="flex flex-col gap-4">
 				<div>
 					<Label for="track-status">Status</Label>
@@ -150,14 +166,11 @@ function TrackApplicationForm(props: {
 			</div>
 
 			<DialogFooter class="border-t border-border pt-4">
-				<Button variant="outline" onClick={props.onClose}>
+				<Button type="button" variant="outline" onClick={props.onClose}>
 					Cancel
 				</Button>
-				<Button
-					onClick={handleSubmit}
-					disabled={createMutation.isPending || updateMutation.isPending}
-				>
-					{createMutation.isPending || updateMutation.isPending
+				<Button type="submit" disabled={pending()}>
+					{pending()
 						? isEdit
 							? "Updating…"
 							: "Saving…"
@@ -166,6 +179,6 @@ function TrackApplicationForm(props: {
 							: "Save"}
 				</Button>
 			</DialogFooter>
-		</>
+		</form>
 	);
 }

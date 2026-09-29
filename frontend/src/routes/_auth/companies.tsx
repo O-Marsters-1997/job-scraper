@@ -29,6 +29,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { formatDate } from "@/lib/datetime";
 import { UnresolvableBoardError } from "../../api/companies";
 import {
@@ -53,7 +54,6 @@ function CompaniesPage() {
 	const [search, setSearch] = createSignal("");
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [newUrl, setNewUrl] = createSignal("");
-	const [addError, setAddError] = createSignal<string | null>(null);
 	const [addedCompany, setAddedCompany] = createSignal(false);
 
 	const filtered = createMemo(() => {
@@ -67,34 +67,26 @@ function CompaniesPage() {
 		trackMutation.mutate({ id: c.ID, enabled: !c.Tracked });
 	};
 
-	const resetForm = () => {
-		setNewUrl("");
-		setAddError(null);
-	};
-
-	const handleAdd = async () => {
-		const url = newUrl().trim();
-		if (!url) return;
-		setAddError(null);
-		setAddedCompany(false);
-		try {
-			await addMutation.mutateAsync({
-				url,
-				track: true,
-			});
+	const addForm = useFormSubmit(
+		async () => {
+			const url = newUrl().trim();
+			if (!url) return;
+			setAddedCompany(false);
+			await addMutation.mutateAsync({ url, track: true });
 			resetForm();
 			setAddedCompany(true);
 			setShowAdd(false);
-		} catch (err) {
-			if (err instanceof UnresolvableBoardError) {
-				setAddError(
-					"Couldn't detect an ATS board from that URL. Try the direct board link, e.g. https://boards.greenhouse.io/acmecorp.",
-				);
-			} else {
-				setAddError("Failed to add company. Please try again.");
-			}
-		}
-	};
+		},
+		(err) =>
+			err instanceof UnresolvableBoardError
+				? "Couldn't detect an ATS board from that URL. Try the direct board link, e.g. https://boards.greenhouse.io/acmecorp."
+				: "Failed to add company. Please try again.",
+	);
+
+	function resetForm() {
+		setNewUrl("");
+		addForm.setError(null);
+	}
 
 	return (
 		<div class="px-7 py-6">
@@ -105,7 +97,7 @@ function CompaniesPage() {
 				<Button
 					onClick={() => {
 						setAddedCompany(false);
-						setAddError(null);
+						addForm.setError(null);
 						setShowAdd(true);
 					}}
 				>
@@ -205,7 +197,7 @@ function CompaniesPage() {
 					<DialogHeader>
 						<DialogTitle>Add company</DialogTitle>
 					</DialogHeader>
-					<div class="flex flex-col gap-3">
+					<form onSubmit={addForm.submit} class="flex flex-col gap-3">
 						<div class="flex flex-col gap-2">
 							<label
 								for="add-company-url"
@@ -218,30 +210,28 @@ function CompaniesPage() {
 								placeholder="e.g. https://boards.greenhouse.io/acmecorp"
 								value={newUrl()}
 								onInput={(e) => setNewUrl(e.currentTarget.value)}
-								onKeyDown={(e) => e.key === "Enter" && handleAdd()}
 							/>
 						</div>
-						<Show when={addError()}>
-							<p class="text-xs text-destructive-strong">{addError()}</p>
-						</Show>
-					</div>
-					<DialogFooter>
-						<Button
-							variant="outline"
-							onClick={() => {
-								setShowAdd(false);
-								resetForm();
-							}}
-						>
-							Cancel
-						</Button>
-						<Button
-							onClick={handleAdd}
-							disabled={addMutation.isPending || !newUrl().trim()}
-						>
-							{addMutation.isPending ? "Adding…" : "Add"}
-						</Button>
-					</DialogFooter>
+						<FormFeedback error={addForm.error()} />
+						<DialogFooter>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setShowAdd(false);
+									resetForm();
+								}}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								disabled={addForm.pending() || !newUrl().trim()}
+							>
+								{addForm.pending() ? "Adding…" : "Add"}
+							</Button>
+						</DialogFooter>
+					</form>
 				</DialogContent>
 			</Dialog>
 		</div>

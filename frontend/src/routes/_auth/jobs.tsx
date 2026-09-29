@@ -1,6 +1,9 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
-import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import {
+	TrackApplicationDialog,
+	toExistingApp,
+} from "@/components/jobs/TrackApplicationDialog";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
@@ -68,14 +71,10 @@ function JobsPage() {
 	};
 
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
-	const currentSummary = () => {
-		const id = trackingJobId();
-		return id ? appsForJobs()[id] : undefined;
-	};
 	const existingApp = () => {
-		const summary = currentSummary();
-		if (!summary) return undefined;
-		return { id: summary.ApplicationID, statusId: summary.StatusID };
+		const jobId = trackingJobId();
+		const app = applications.data?.find((a) => a.JobID === jobId);
+		return app ? toExistingApp(app) : undefined;
 	};
 
 	const columns = createJobColumns({

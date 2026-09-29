@@ -7,6 +7,7 @@ import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
@@ -38,7 +39,7 @@ function StatusesPage() {
 
 	const [deleteError, setDeleteError] = createSignal<string | null>(null);
 
-	const handleAdd = async () => {
+	const addForm = useFormSubmit(async () => {
 		if (!newName().trim()) return;
 		await createMutation.mutateAsync({
 			name: newName().trim(),
@@ -47,15 +48,16 @@ function StatusesPage() {
 		setNewName("");
 		setNewColour(STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR);
 		setShowAdd(false);
-	};
+	});
 
 	const startEdit = (s: ApplicationStatus) => {
+		editForm.setError(null);
 		setEditingId(s.ID);
 		setEditName(s.Name);
 		setEditColour(s.Colour);
 	};
 
-	const handleUpdate = async () => {
+	const editForm = useFormSubmit(async () => {
 		const id = editingId();
 		if (!id || !editName().trim()) return;
 		await updateMutation.mutateAsync({
@@ -64,15 +66,19 @@ function StatusesPage() {
 			colour: editColour(),
 		});
 		setEditingId(null);
-	};
+	});
 
 	const handleDelete = async (id: string) => {
 		setDeleteError(null);
-		const result = await deleteMutation.mutateAsync(id);
-		if (result.count !== undefined) {
-			setDeleteError(
-				`Cannot delete: ${result.count} application${result.count !== 1 ? "s" : ""} use this status. Reassign them first.`,
-			);
+		try {
+			const result = await deleteMutation.mutateAsync(id);
+			if (result.count !== undefined) {
+				setDeleteError(
+					`Cannot delete: ${result.count} application${result.count !== 1 ? "s" : ""} use this status. Reassign them first.`,
+				);
+			}
+		} catch {
+			setDeleteError("Could not delete the status. Please try again.");
 		}
 	};
 
@@ -86,7 +92,9 @@ function StatusesPage() {
 					</Button>
 				</Show>
 			</SettingsActions>
-			<FormFeedback error={deleteError()} />
+			<FormFeedback
+				error={addForm.error() ?? editForm.error() ?? deleteError()}
+			/>
 
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
@@ -94,7 +102,10 @@ function StatusesPage() {
 						<Card class="overflow-hidden divide-y divide-border">
 							<For each={data()}>
 								{(status) => (
-									<div class="flex items-center gap-3 px-4 py-3">
+									<form
+										onSubmit={editForm.submit}
+										class="flex items-center gap-3 px-4 py-3"
+									>
 										<Show
 											when={editingId() === status.ID}
 											fallback={
@@ -151,9 +162,8 @@ function StatusesPage() {
 												/>
 											</div>
 											<button
-												type="button"
-												onClick={handleUpdate}
-												disabled={updateMutation.isPending}
+												type="submit"
+												disabled={editForm.pending()}
 												class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
 											>
 												Save
@@ -166,12 +176,15 @@ function StatusesPage() {
 												Cancel
 											</button>
 										</Show>
-									</div>
+									</form>
 								)}
 							</For>
 
 							<Show when={showAdd()}>
-								<div class="flex items-center gap-2 px-4 py-3">
+								<form
+									onSubmit={addForm.submit}
+									class="flex items-center gap-2 px-4 py-3"
+								>
 									<div class="flex gap-1">
 										<For each={STATUS_PALETTE}>
 											{(p) => (
@@ -197,12 +210,10 @@ function StatusesPage() {
 										placeholder="Status name"
 										value={newName()}
 										onInput={(e) => setNewName(e.currentTarget.value)}
-										onKeyDown={(e) => e.key === "Enter" && handleAdd()}
 									/>
 									<button
-										type="button"
-										onClick={handleAdd}
-										disabled={createMutation.isPending || !newName().trim()}
+										type="submit"
+										disabled={addForm.pending() || !newName().trim()}
 										class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
 									>
 										Add
@@ -212,12 +223,13 @@ function StatusesPage() {
 										onClick={() => {
 											setShowAdd(false);
 											setNewName("");
+											addForm.setError(null);
 										}}
 										class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
 									>
 										Cancel
 									</button>
-								</div>
+								</form>
 							</Show>
 						</Card>
 

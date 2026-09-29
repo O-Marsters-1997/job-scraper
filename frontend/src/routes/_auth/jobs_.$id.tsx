@@ -1,11 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
+import { ErrorState } from "@/components/ErrorState";
 import { Icon } from "@/components/Icon";
 import { JobActionsMenu } from "@/components/jobs/JobActionsMenu";
 import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
-import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import {
+	TrackApplicationDialog,
+	toExistingApp,
+} from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +31,8 @@ import { queryClient } from "../../lib/queryClient";
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) =>
 		Promise.all([
-			queryClient.ensureQueryData(jobQueryOptions(params.id)),
-			queryClient.ensureQueryData(applicationsQueryOptions()),
+			queryClient.prefetchQuery(jobQueryOptions(params.id)),
+			queryClient.prefetchQuery(applicationsQueryOptions()),
 		]),
 	component: JobDetailPage,
 });
@@ -94,14 +98,7 @@ function JobDetailPage() {
 
 	const existingApp = () => {
 		const a = app();
-		if (!a) return undefined;
-		return {
-			id: a.ID,
-			statusId: a.StatusID,
-			notes: a.Notes,
-			appliedAt: a.AppliedAt,
-			salaryInfo: a.SalaryInfo,
-		};
+		return a ? toExistingApp(a) : undefined;
 	};
 
 	return (
@@ -112,28 +109,38 @@ function JobDetailPage() {
 			<Show
 				when={job()}
 				fallback={
-					<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
-						<Icon
-							name="zoomIn"
-							size={40}
-							strokeWidth={1.5}
-							class="text-faint"
+					<Show
+						when={jobsQuery.isError}
+						fallback={
+							<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
+								<Icon
+									name="zoomIn"
+									size={40}
+									strokeWidth={1.5}
+									class="text-faint"
+								/>
+								<div>
+									<p class="text-base font-semibold text-foreground">
+										Job not found
+									</p>
+									<p class="mt-1 text-sm text-muted">
+										No job with ID{" "}
+										<code class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
+											{params().id}
+										</code>
+									</p>
+								</div>
+								<Button as={Link} to="/jobs" variant="outline" size="sm">
+									← Back to Jobs
+								</Button>
+							</div>
+						}
+					>
+						<ErrorState
+							error={jobsQuery.error}
+							onRetry={() => jobsQuery.refetch()}
 						/>
-						<div>
-							<p class="text-base font-semibold text-foreground">
-								Job not found
-							</p>
-							<p class="mt-1 text-sm text-muted">
-								No job with ID{" "}
-								<code class="rounded bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-foreground">
-									{params().id}
-								</code>
-							</p>
-						</div>
-						<Button as={Link} to="/jobs" variant="outline" size="sm">
-							← Back to Jobs
-						</Button>
-					</div>
+					</Show>
 				}
 			>
 				{(j) => (
@@ -236,7 +243,7 @@ function JobDetailPage() {
 							</CardContent>
 						</Card>
 
-						<div class="grid grid-cols-[1fr_284px] items-start gap-4">
+						<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
 							<Card>
 								<CardHeader>
 									<CardTitle>Description</CardTitle>
