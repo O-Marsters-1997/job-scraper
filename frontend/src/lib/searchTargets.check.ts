@@ -2,6 +2,7 @@ import type { SourceInfo } from "@/types/source";
 import type { SourceTarget } from "@/types/sourceTarget";
 import {
 	describeFilters,
+	isDuplicateSearch,
 	matchesSearch,
 	paginate,
 	parseSearchParams,
@@ -41,6 +42,7 @@ const target = (over: Partial<SourceTarget>): SourceTarget => ({
 	RunStatus: "succeeded",
 	LastRunAt: null,
 	LastRunError: "",
+	URL: "",
 	...over,
 });
 
@@ -95,3 +97,29 @@ const p = paginate(
 );
 eq([p.page, p.pageCount, p.from, p.to, p.items.length], [3, 3, 21, 25, 5]);
 eq(paginate([], undefined).from, 0);
+
+const existing = [target({ Filters: { recency: "day", empty: "" } })];
+eq(
+	isDuplicateSearch(existing, {
+		source: "linkedin",
+		value: "engineer",
+		filters: { recency: "day" },
+	}),
+	true,
+);
+eq(
+	isDuplicateSearch(existing, {
+		source: "linkedin",
+		value: "engineer",
+		filters: {},
+	}),
+	false,
+);
+eq(
+	isDuplicateSearch(existing, {
+		source: "indeed",
+		value: "engineer",
+		filters: { recency: "day" },
+	}),
+	false,
+);

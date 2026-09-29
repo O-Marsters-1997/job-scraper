@@ -21,11 +21,13 @@ import {
 	useUpdateSourceTarget,
 } from "../../../hooks/useSourceTargets";
 import type { TrackedBoard, TrackedCompany } from "../../../types/company";
+import type { SourceInfo } from "../../../types/source";
 import type { SourceTarget } from "../../../types/sourceTarget";
 import { BoardSearchesTable } from "./-searches/BoardSearchesTable";
 import { CompanyBoardsTable } from "./-searches/CompanyBoardsTable";
+import { PasteBox } from "./-searches/PasteBox";
 import { SegmentedTabs } from "./-searches/parts";
-import { SearchForm } from "./-searches/SearchForm";
+import { SearchForm, type SearchPrefill } from "./-searches/SearchForm";
 import { TrackCompanyBox } from "./-searches/TrackCompanyBox";
 import { UndoToasts, useUndoDelete } from "./-searches/useUndoDelete";
 
@@ -48,6 +50,7 @@ function SearchesPage() {
 	const confirmMutation = useAddCompanyBoard();
 
 	const [showForm, setShowForm] = createSignal(false);
+	const [prefill, setPrefill] = createSignal<SearchPrefill>();
 	const [notice, setNotice] = createSignal<string | null>(null);
 	const [error, setError] = createSignal<string | null>(null);
 	let noticeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -92,6 +95,11 @@ function SearchesPage() {
 			search: (prev: SearchParams) => ({ ...prev, ...patch }),
 			replace: opts?.replace ?? false,
 		});
+
+	const closeForm = () => {
+		setShowForm(false);
+		setPrefill(undefined);
+	};
 
 	const run = async (t: SourceTarget) => {
 		setError(null);
@@ -145,9 +153,35 @@ function SearchesPage() {
 		);
 	};
 
+	const onCreated = (created: SourceTarget, info: SourceInfo | undefined) => {
+		closeForm();
+		if (created.RunStatus === "failed") {
+			setError("Search saved, but it could not start. Use Run now to retry.");
+		} else {
+			announce(
+				`Added “${created.Value}” on ${info?.label ?? created.Source}. First run queued.`,
+			);
+		}
+	};
+
 	return (
 		<>
 			<FormFeedback success={notice() ?? false} error={error()} />
+
+			<PasteBox
+				targets={query.data}
+				onSearch={(r) => {
+					setNotice(null);
+					setPrefill({
+						source: r.source,
+						value: r.value,
+						filters: r.filters,
+						dropped: r.dropped,
+					});
+					setShowForm(true);
+					setParams({ tab: undefined, page: undefined });
+				}}
+			/>
 
 			<div class="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 				<SegmentedTabs
@@ -171,6 +205,7 @@ function SearchesPage() {
 						size="sm"
 						onClick={() => {
 							setNotice(null);
+							setPrefill(undefined);
 							setShowForm(true);
 						}}
 					>
@@ -212,22 +247,26 @@ function SearchesPage() {
 					{(data) => (
 						<>
 							<Show when={showForm() && sourcesQuery.isSuccess}>
-								<SearchForm
-									sources={boardSources()}
-									onCancel={() => setShowForm(false)}
-									onCreated={(created, info) => {
-										setShowForm(false);
-										if (created.RunStatus === "failed") {
-											setError(
-												"Search saved, but it could not start. Use Run now to retry.",
-											);
-										} else {
-											announce(
-												`Added “${created.Value}” on ${info?.label ?? created.Source}. First run queued.`,
-											);
-										}
-									}}
-								/>
+								<Show
+									when={prefill()}
+									keyed
+									fallback={
+										<SearchForm
+											sources={boardSources()}
+											onCancel={closeForm}
+											onCreated={onCreated}
+										/>
+									}
+								>
+									{(initial) => (
+										<SearchForm
+											sources={boardSources()}
+											initial={initial}
+											onCancel={closeForm}
+											onCreated={onCreated}
+										/>
+									)}
+								</Show>
 							</Show>
 							<BoardSearchesTable
 								targets={visibleTargets(data())}
