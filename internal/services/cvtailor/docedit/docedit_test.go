@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/ollymarsters/job-scraper/internal/docedit"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
 )
 
 type fixtureDoc struct {
@@ -23,7 +23,7 @@ type fixtureDoc struct {
 
 func loadFixture(t *testing.T, name string) fixtureDoc {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("..", "docparse", "testdata", name))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docparse", "testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package tailoring_test
+package cvtailor_test
 
 import (
 	"context"
@@ -6,14 +6,14 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/tailoringtest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
 func ptr(s string) *string { return &s }
 
 func TestCreatePositionValidation(t *testing.T) {
-	svc := tailoring.NewService(tailoringtest.NewFakeStore())
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore())
 	cases := []struct {
 		name string
 		in   dto.PositionInput
@@ -34,7 +34,7 @@ func TestCreatePositionValidation(t *testing.T) {
 }
 
 func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
-	svc := tailoring.NewService(tailoringtest.NewFakeStore())
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore())
 	got, err := svc.CreatePosition(context.Background(), "u1", dto.PositionInput{
 		Employer: " Acme ", Title: "Engineer", StartDate: ptr("2020-01-01"), EndDate: ptr(""),
 	})
@@ -47,7 +47,7 @@ func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
 }
 
 func TestCreateAchievementRejectsBlankText(t *testing.T) {
-	svc := tailoring.NewService(tailoringtest.NewFakeStore())
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore())
 	_, err := svc.CreateAchievement(context.Background(), "u1", dto.AchievementInput{PositionID: "p", Text: " "})
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("CreateAchievement() err = %v, want an invalid error", err)
@@ -55,7 +55,7 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 }
 
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
-	svc := tailoring.NewService(tailoringtest.NewFakeStore())
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore())
 	_, err := svc.ReorderPositions(context.Background(), "u1", dto.ReorderInput{IDs: []string{"a", "a"}})
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("ReorderPositions() err = %v, want an invalid error", err)

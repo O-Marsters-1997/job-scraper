@@ -10,8 +10,8 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/store"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/tailoringtest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
 var seedCounter atomic.Int64
@@ -30,10 +30,10 @@ func insertUser(t *testing.T, pool *pgxpool.Pool) string {
 }
 
 func TestStoreContract(t *testing.T) {
-	tailoringtest.RunStoreContract(t, func(t *testing.T) tailoringtest.Fixture {
+	cvtailortest.RunStoreContract(t, func(t *testing.T) cvtailortest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)
-		return tailoringtest.Fixture{Store: store.New(pool), UserID: insertUser(t, pool), Other: insertUser(t, pool)}
+		return cvtailortest.Fixture{Store: store.New(pool), UserID: insertUser(t, pool), Other: insertUser(t, pool)}
 	})
 }
 

@@ -1,9 +1,9 @@
-package tailoring
+package cvtailor
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/store"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
 
 // Deps are the stores and collaborators Build wires into the Module; New

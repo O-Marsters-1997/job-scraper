@@ -1,4 +1,4 @@
-// Package store is the tailoring context's Postgres store: positions and
+// Package store is the cvtailor context's Postgres store: positions and
 // achievements.
 package store
 
@@ -14,7 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/store/sqlc"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store/sqlc"
 )
 
 const dateLayout = time.DateOnly

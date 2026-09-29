@@ -16,11 +16,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -96,9 +96,9 @@ func main() {
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 
-	tailoringModule := tailoring.New(pool)
+	cvtailorModule := cvtailor.New(pool)
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, tailoringModule)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule)}
 
 	go func() {
 		<-ctx.Done()

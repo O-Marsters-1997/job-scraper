@@ -1,6 +1,6 @@
-// Package tailoringtest is a map-backed fake of tailoring.Store, proven
+// Package cvtailortest is a map-backed fake of cvtailor.Store, proven
 // against the real store by RunStoreContract (ADR 0012).
-package tailoringtest
+package cvtailortest
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 )
 
 var (
@@ -219,4 +219,4 @@ func sameSet(ids []string, want int, member func(string) bool) bool {
 	return true
 }
 
-var _ tailoring.Store = (*FakeStore)(nil)
+var _ cvtailor.Store = (*FakeStore)(nil)
