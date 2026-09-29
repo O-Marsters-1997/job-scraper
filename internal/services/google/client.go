@@ -386,7 +386,6 @@ func (c *Client) DeleteFile(ctx context.Context, userID, fileID string) error {
 	return nil
 }
 
-// do sends an authenticated request and returns the response only on a 2xx.
 func (c *Client) do(ctx context.Context, userID, method, target string, body []byte) (*http.Response, error) {
 	hc, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {

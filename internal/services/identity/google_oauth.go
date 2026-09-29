@@ -25,8 +25,6 @@ const (
 
 var tailorReturnPath = regexp.MustCompile(`^/jobs/[A-Za-z0-9_-]+/tailor$`)
 
-// safeReturnPath returns p if it is an in-app path the OAuth callback may
-// redirect to, else the integrations page.
 func safeReturnPath(p string) string {
 	if p == defaultReturnPath || tailorReturnPath.MatchString(p) {
 		return p
@@ -49,9 +47,6 @@ type oauthRedirect struct {
 	state, authURL, returnPath string
 }
 
-// oauthStartHandler starts the read-only link, or with ?write=1 the
-// incremental drive.file consent. ?return= is checked against the in-app
-// allow-list.
 func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthStart, error) {
