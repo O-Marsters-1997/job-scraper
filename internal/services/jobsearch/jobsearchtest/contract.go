@@ -121,6 +121,74 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("list tracked companies returns only this user's, paused included, with boards", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		active, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "active-co", Name: "Active Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		paused, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "paused-co", Name: "Paused Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untracked-co", Name: "Untracked Co"}); err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, active.ID, "greenhouse", "active-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, active.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, paused.ID, false, 0); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+
+		got, err := st.ListTrackedCompaniesForUser(ctx, userID)
+		if err != nil || len(got) != 2 {
+			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want two companies", got, err)
+		}
+		if got[0].ID != active.ID || !got[0].Enabled || got[0].CheckIntervalMinutes != 180 ||
+			len(got[0].Boards) != 1 || got[0].Boards[0].ID != board.ID || got[0].Boards[0].Status != dto.BoardCandidate {
+			t.Fatalf("active company = %+v, want enabled at 180 with its board", got[0])
+		}
+		if got[1].ID != paused.ID || got[1].Enabled || got[1].Boards == nil || len(got[1].Boards) != 0 {
+			t.Fatalf("paused company = %+v, want disabled with empty boards", got[1])
+		}
+
+		other, err := st.ListTrackedCompaniesForUser(ctx, missingID)
+		if err != nil || len(other) != 0 {
+			t.Fatalf("ListTrackedCompaniesForUser(other user) = %+v, %v, want none", other, err)
+		}
+	})
+
+	t.Run("delete company tracking removes it and keeps the company", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untrack-co", Name: "Untrack Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if err := st.DeleteCompanyTracking(ctx, userID, c.ID); err != nil {
+			t.Fatalf("DeleteCompanyTracking(...) = %v", err)
+		}
+		tracked, err := st.ListTrackedCompaniesForUser(ctx, userID)
+		if err != nil || len(tracked) != 0 {
+			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want none", tracked, err)
+		}
+		if _, err := st.GetCompany(ctx, c.ID); err != nil {
+			t.Fatalf("GetCompany(...) = %v, want the company kept", err)
+		}
+		if err := st.DeleteCompanyTracking(ctx, userID, c.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("second DeleteCompanyTracking(...) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

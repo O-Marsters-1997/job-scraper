@@ -61,6 +61,24 @@ func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.
 	return s.store.SetCompanyTracking(ctx, userID, company.ID, *in.Enabled, interval)
 }
 
+func (s *Service) ListTrackedCompanies(ctx context.Context, userID string) ([]dto.TrackedCompany, error) {
+	companies, err := s.store.ListTrackedCompaniesForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range companies {
+		for j := range companies[i].Boards {
+			b := &companies[i].Boards[j]
+			b.URL = detect.BoardURL(b.Source, b.BoardToken)
+		}
+	}
+	return companies, nil
+}
+
+func (s *Service) UntrackCompany(ctx context.Context, userID, companyID string) error {
+	return s.store.DeleteCompanyTracking(ctx, userID, companyID)
+}
+
 func (s *Service) ListCompanyBoards(ctx context.Context, _, companyID string) ([]dto.CompanyBoard, error) {
 	if _, err := s.store.GetCompany(ctx, companyID); err != nil {
 		return nil, err

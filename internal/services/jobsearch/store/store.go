@@ -337,6 +337,64 @@ func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.
 	return out, nil
 }
 
+func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error) {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListTrackedCompaniesForUser(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListTrackedCompaniesForUser: %w", err)
+	}
+	boardRows, err := s.queries.ListTrackedCompanyBoards(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListTrackedCompaniesForUser boards: %w", err)
+	}
+	boards := make(map[string][]dto.TrackedBoard, len(rows))
+	for _, b := range boardRows {
+		companyID := b.CompanyID.String()
+		boards[companyID] = append(boards[companyID], dto.TrackedBoard{
+			ID: b.ID.String(), Source: b.Source, BoardToken: b.BoardToken, Status: dto.BoardStatus(b.Status),
+		})
+	}
+	out := make([]dto.TrackedCompany, len(rows))
+	for i, r := range rows {
+		id := r.ID.String()
+		out[i] = dto.TrackedCompany{
+			ID: id, Name: r.Name, Slug: r.Slug, Enabled: r.Enabled,
+			CheckIntervalMinutes: int(r.CheckIntervalMinutes),
+			Boards:               []dto.TrackedBoard{},
+			OpenJobs:             int(r.OpenJobs),
+		}
+		if b, ok := boards[id]; ok {
+			out[i].Boards = b
+		}
+		if r.LastCheckedAt.Valid {
+			out[i].LastCheckedAt = &r.LastCheckedAt.Time
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) DeleteCompanyTracking(ctx context.Context, userID, companyID string) error {
+	uid, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	cid, err := parseUUID(companyID)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteCompanyTracking(ctx, sqlc.DeleteCompanyTrackingParams{UserID: uid, CompanyID: cid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteCompanyTracking: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, interval int) (dto.CompanyTracking, error) {
 	uid, err := parseUUID(userID)
 	if err != nil {

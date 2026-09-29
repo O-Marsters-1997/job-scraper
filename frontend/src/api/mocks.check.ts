@@ -68,6 +68,8 @@ try {
 	await run("setCompanyTracking", () =>
 		companies.setCompanyTracking("company-1", true),
 	);
+	await run("fetchTrackedCompanies", () => companies.fetchTrackedCompanies());
+	await run("untrackCompany", () => companies.untrackCompany("company-1"));
 	await run("fetchCompanyBoards", () =>
 		companies.fetchCompanyBoards("company-1"),
 	);

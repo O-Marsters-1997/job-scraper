@@ -115,3 +115,24 @@ func RewriteToATS(rawURL string) (string, ATSType, bool) {
 
 	return "", UnknownHTML, false
 }
+
+// BoardURL is the public board page for a source and token, the inverse of
+// ResolveBoard. It returns "" for a source that has no board page.
+func BoardURL(source, token string) string {
+	switch source {
+	case "greenhouse":
+		return "https://boards.greenhouse.io/" + token
+	case "lever":
+		return "https://jobs.lever.co/" + token
+	case "ashby":
+		return "https://jobs.ashbyhq.com/" + token
+	case "workable":
+		return "https://apply.workable.com/" + token
+	case "recruitee":
+		return "https://" + token + ".recruitee.com"
+	case "personio":
+		return "https://" + token + ".jobs.personio.de"
+	default:
+		return ""
+	}
+}
