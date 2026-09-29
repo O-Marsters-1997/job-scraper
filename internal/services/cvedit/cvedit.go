@@ -19,7 +19,6 @@ import (
 const (
 	chatCompletionsURL = "https://openrouter.ai/api/v1/chat/completions"
 
-	// Model is the OpenRouter model requested for every tailoring call.
 	Model = "anthropic/claude-sonnet-5.5"
 )
 
@@ -40,7 +39,6 @@ func hashPrompts(voice, rules string) string {
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
-// Client calls OpenRouter's chat completions endpoint over HTTP.
 type Client struct {
 	http    *http.Client
 	baseURL string
