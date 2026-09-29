@@ -189,8 +189,8 @@ func TestRecomputeAfterConfigUpdateShowsScoresOnJobs(t *testing.T) {
 		"preferences":     map[string]any{"picks": []any{}, "salaryFloor": map[string]any{"amount": 60000, "currency": "GBP"}},
 	})
 	recomputed := do[dto.RecomputeResult](u, http.StatusOK, http.MethodPost, "/scores/recompute", nil)
-	if recomputed.Recomputed != 1 {
-		t.Fatalf("recomputed = %d, want 1", recomputed.Recomputed)
+	if recomputed.Recomputed != 1 || recomputed.Queued != 0 {
+		t.Fatalf("refresh = %+v, want 1 recomputed and 0 queued", recomputed)
 	}
 
 	page := do[dto.JobPage](u, http.StatusOK, http.MethodGet, "/jobs", nil)

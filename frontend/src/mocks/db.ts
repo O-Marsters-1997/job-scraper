@@ -1089,7 +1089,7 @@ export function recomputeScores(): RecomputeResult {
 			SuitabilityScore: Math.min(100, job.SuitabilityScore + 1),
 		};
 	});
-	return { recomputed };
+	return { recomputed, queued: 0 };
 }
 
 export function createApplication(data: CreateApplicationPayload): Application {

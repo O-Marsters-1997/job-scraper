@@ -353,6 +353,20 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 	return dto.RecomputeResult{Recomputed: int64(len(scores))}, nil
 }
 
+// Refresh re-scores userID's jobs, then queues answers for any picked question
+// a scored job is still missing.
+func (s *Service) Refresh(ctx context.Context, userID string) (dto.RecomputeResult, error) {
+	result, err := s.Recompute(ctx, userID)
+	if err != nil {
+		return dto.RecomputeResult{}, fmt.Errorf("recompute scores: %w", err)
+	}
+	result.Queued, err = s.FillMissingAnswers(ctx, userID)
+	if err != nil {
+		return dto.RecomputeResult{}, fmt.Errorf("fill missing answers: %w", err)
+	}
+	return result, nil
+}
+
 // FillMissingAnswers queues an answer effect, without alerting, for each of
 // userID's already-scored jobs missing an answer to a currently picked question.
 func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64, error) {

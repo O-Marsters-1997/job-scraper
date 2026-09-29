@@ -37,8 +37,10 @@ test("shows an updated score on the job detail page after recompute, without rel
 		.getByRole("navigation", { name: "Settings sections" })
 		.getByRole("link", { name: /^Scoring/ })
 		.click();
-	await page.getByRole("button", { name: "Recompute scores" }).click();
-	await expect(page.getByText(/jobs re-ranked\./)).toBeVisible();
+	await page.getByRole("button", { name: "Refresh scores" }).click();
+	await expect(
+		page.getByText(/Rescored \d+ jobs · answering \d+/),
+	).toBeVisible();
 
 	for (let i = 0; i < 5 && page.url() !== jobUrl; i++) {
 		await page.goBack();

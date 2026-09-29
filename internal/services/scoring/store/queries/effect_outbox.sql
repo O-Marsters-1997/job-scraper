@@ -1,10 +1,3 @@
--- name: QueueOptionBackfill :exec
-INSERT INTO effect_outbox (job_id, fingerprint)
-SELECT DISTINCT j.id, j.content_fingerprint
-FROM jobs j JOIN job_scores s ON s.job_id = j.id
-WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
-ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING;
-
 -- name: QueueAnswerEffect :exec
 INSERT INTO effect_outbox (job_id, fingerprint, first_discovery)
 SELECT sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(first_discovery)::boolean

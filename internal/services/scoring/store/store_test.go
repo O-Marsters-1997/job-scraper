@@ -175,7 +175,7 @@ func TestRetireScoringOption_AlreadyRetiredReturnsErrNotFound(t *testing.T) {
 	}
 }
 
-func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
+func TestBankEdits_QueueNoEffects(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
 
@@ -195,14 +195,17 @@ func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 	if err := st.AddScoringOption(ctx, "tech:zig", "tech", "Zig", "Does the role use Zig?"); err != nil {
 		t.Fatalf("AddScoringOption: %v", err)
 	}
+	if err := st.RewordScoringOption(ctx, "tech:zig", "Does the role primarily use Zig?"); err != nil {
+		t.Fatalf("RewordScoringOption: %v", err)
+	}
 
-	for jobID, want := range map[string]int{scored: 1, closed: 0, unscored: 0} {
+	for _, jobID := range []string{scored, closed, unscored} {
 		var count int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
-		if count != want {
-			t.Errorf("effects for job %s = %d, want %d", jobID, count, want)
+		if count != 0 {
+			t.Errorf("effects for job %s = %d, want 0", jobID, count)
 		}
 	}
 }
