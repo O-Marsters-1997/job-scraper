@@ -34,7 +34,6 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
 }
 
-// parseID maps a malformed id to notFound: no row can carry it.
 func parseID(s string, notFound error) (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if err := id.Scan(s); err != nil {
