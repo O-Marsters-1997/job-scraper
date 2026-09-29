@@ -10,8 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// RunHeadingMappingContract proves the store's heading mappings are scoped
-// per user and Tab, upsert on re-save, and keep "none" as a saved choice.
 func RunHeadingMappingContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 	ctx := context.Background()

@@ -159,8 +159,7 @@ func GetByID[Out any](fn func(ctx context.Context, userID, id string) (Out, erro
 }
 
 // Query adapts (ctx, userID, q Q) -> (Out, error) to a 200 read, q decoded
-// from the URL query string. Path-tagged fields on Q are filled from chi URL
-// params.
+// from the URL query string.
 func Query[Q, Out any](fn func(ctx context.Context, userID string, q Q) (Out, error)) http.HandlerFunc {
 	type req struct {
 		userID string

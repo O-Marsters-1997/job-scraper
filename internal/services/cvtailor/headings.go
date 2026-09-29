@@ -11,9 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// Headings returns the base CV Tab's role headings. A saved mapping comes
-// back confirmed as-is; an unmapped heading is auto-matched to a Position by
-// employer, and stays unconfirmed until the User saves it.
 func (s *Service) Headings(ctx context.Context, userID string, q dto.CVTabQuery) ([]dto.CVHeading, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
@@ -49,7 +46,6 @@ func (s *Service) headings(ctx context.Context, userID string, q dto.CVTabQuery,
 	return out, nil
 }
 
-// SaveHeadings stores the User's heading-to-Position choices for one Tab.
 func (s *Service) SaveHeadings(ctx context.Context, userID string, in dto.HeadingMappingsInput) ([]dto.HeadingMapping, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {

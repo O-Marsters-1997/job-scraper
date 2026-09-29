@@ -10,7 +10,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store/sqlc"
 )
 
-// ListHeadingMappings returns the saved mappings for one CV Tab.
 func (s *Store) ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error) {
 	uid, err := parseID(userID, ErrPositionNotFound)
 	if err != nil {
@@ -31,7 +30,6 @@ func (s *Store) ListHeadingMappings(ctx context.Context, userID, docID, tabID st
 	return out, nil
 }
 
-// SaveHeadingMappings upserts the mappings for one CV Tab in one transaction.
 func (s *Store) SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error {
 	uid, err := parseID(userID, ErrPositionNotFound)
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 
 const defaultSlotCount = 3
 
-// Asker answers arbitrary questions about a Job, keyed by question text.
 type Asker interface {
 	Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error)
 }
@@ -20,9 +19,6 @@ func achievementQuestion(text string) string {
 	return "Would this job value a candidate who: " + text
 }
 
-// Suggestions ranks the User's Achievements for the Job by P(yes) x confidence
-// and preselects the top N per Position: its base CV slot count, else 3.
-// docID and tabID may be empty.
 func (s *Service) Suggestions(ctx context.Context, userID string, q dto.SuggestionsQuery) ([]dto.Suggestion, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
