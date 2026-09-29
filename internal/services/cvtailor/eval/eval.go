@@ -5,8 +5,8 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -173,10 +173,17 @@ func draft(f Fixture, edits cvedit.EditSet) checks.Draft {
 	return d
 }
 
-func Report(w io.Writer, promptVersion, model string, outcomes []Outcome) {
-	_, _ = fmt.Fprintf(w, "prompt_version=%s model=%s runs=%d\n\n", promptVersion, model, len(outcomes))
-	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "check\tfirst attempt\tafter retries")
+func Report(promptVersion, model string, outcomes []Outcome) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "prompt_version=%s model=%s runs=%d\n\n", promptVersion, model, len(outcomes))
+	writeCheckTable(&b, outcomes)
+	writeRetrySummary(&b, outcomes)
+	return b.String()
+}
+
+func writeCheckTable(b *strings.Builder, outcomes []Outcome) {
+	var rows strings.Builder
+	rows.WriteString("check\tfirst attempt\tafter retries\n")
 	for _, name := range checkNames {
 		first, final := 0, 0
 		for _, o := range outcomes {
@@ -187,27 +194,26 @@ func Report(w io.Writer, promptVersion, model string, outcomes []Outcome) {
 				final++
 			}
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", name, rate(first, len(outcomes)), rate(final, len(outcomes)))
+		fmt.Fprintf(&rows, "%s\t%s\t%s\n", name, rate(first, len(outcomes)), rate(final, len(outcomes)))
 	}
+	tw := tabwriter.NewWriter(b, 0, 4, 2, ' ', 0)
+	_, _ = tw.Write([]byte(rows.String()))
 	_ = tw.Flush()
+}
 
+func writeRetrySummary(b *strings.Builder, outcomes []Outcome) {
 	retries, cost := 0, 0.0
-	_, _ = fmt.Fprintln(w, "\nretries per run, by fixture")
-	names := make([]string, 0, len(outcomes))
 	perFixture := map[string][]int{}
 	for _, o := range outcomes {
 		retries += o.Retries()
 		cost += o.Cost
-		if _, ok := perFixture[o.Fixture]; !ok {
-			names = append(names, o.Fixture)
-		}
 		perFixture[o.Fixture] = append(perFixture[o.Fixture], o.Retries())
 	}
-	slices.Sort(names)
-	for _, n := range names {
-		_, _ = fmt.Fprintf(w, "%s: %v\n", n, perFixture[n])
+	b.WriteString("\nretries per run, by fixture\n")
+	for _, name := range slices.Sorted(maps.Keys(perFixture)) {
+		fmt.Fprintf(b, "%s: %v\n", name, perFixture[name])
 	}
-	_, _ = fmt.Fprintf(w, "\ntotal retries=%d cost=$%.4f\n", retries, cost)
+	fmt.Fprintf(b, "\ntotal retries=%d cost=$%.4f\n", retries, cost)
 }
 
 func hasBlock(findings []checks.Finding, check string) bool {

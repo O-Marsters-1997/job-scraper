@@ -1,7 +1,6 @@
 package eval_test
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -43,7 +42,7 @@ func fixture(t *testing.T, name string) eval.Fixture {
 	return eval.Fixture{}
 }
 
-func TestFixturesCoverPRDScenariosAndHaveSlots(t *testing.T) {
+func TestFixturesCoverPRDScenarios(t *testing.T) {
 	all, err := eval.Fixtures()
 	if err != nil {
 		t.Fatalf("Fixtures: %v", err)
@@ -58,7 +57,7 @@ func TestFixturesCoverPRDScenariosAndHaveSlots(t *testing.T) {
 	}
 }
 
-func TestRun_RetriesOnBlockFindingAndReports(t *testing.T) {
+func TestRunRetriesOnBlockFindingAndReports(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
 	ed := &scriptedEditor{results: []cvedit.Result{
 		{Edits: bullet("Cut API latency by 40%", "a1"), Cost: 0.01},
@@ -77,9 +76,7 @@ func TestRun_RetriesOnBlockFindingAndReports(t *testing.T) {
 		t.Errorf("retry input = %+v, want prior edits and findings", ed.inputs[1])
 	}
 
-	var buf bytes.Buffer
-	eval.Report(&buf, "v1", "m", []eval.Outcome{out})
-	report := buf.String()
+	report := eval.Report("v1", "m", []eval.Outcome{out})
 	for _, want := range []string{"prompt_version=v1", "total retries=1"} {
 		if !strings.Contains(report, want) {
 			t.Errorf("report missing %q:\n%s", want, report)
@@ -96,7 +93,7 @@ func TestRun_RetriesOnBlockFindingAndReports(t *testing.T) {
 	}
 }
 
-func TestRun_StopsAfterTwoRetries(t *testing.T) {
+func TestRunStopsAfterTwoRetries(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
 	ed := &scriptedEditor{results: []cvedit.Result{{Edits: bullet("Cut API latency by 40%", "a1")}}}
 

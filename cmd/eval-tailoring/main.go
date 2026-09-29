@@ -42,7 +42,7 @@ func main() {
 	if len(outcomes) == 0 {
 		fail("no fixture matched")
 	}
-	eval.Report(os.Stdout, cvedit.PromptVersion, cvedit.Model, outcomes)
+	fmt.Print(eval.Report(cvedit.PromptVersion, cvedit.Model, outcomes))
 }
 
 func fail(msg string) {
