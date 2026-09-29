@@ -32,6 +32,7 @@ export const keys = {
 			[...tailoringAll, "headings", docId, tabId] as const,
 		suggestions: (jobId: string, docId: string, tabId: string) =>
 			[...tailoringAll, "suggestions", jobId, docId, tabId] as const,
+		draft: (id: string) => [...tailoringAll, "draft", id] as const,
 	},
 	sourceTargets: ["source-targets"] as const,
 	sources: ["sources"] as const,

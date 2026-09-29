@@ -1,6 +1,11 @@
 import {
 	type CVHeading,
 	cvHeadingSchema,
+	type Draft,
+	type DraftInput,
+	type DraftRef,
+	draftRefSchema,
+	draftSchema,
 	type HeadingMapping,
 	headingMappingSchema,
 	type Suggestion,
@@ -79,5 +84,34 @@ export async function fetchSuggestions(
 				throw err;
 			}
 		},
+	);
+}
+
+export async function createDraft(input: DraftInput): Promise<DraftRef> {
+	return mocked(
+		async (db) => {
+			await mockDelay(120);
+			return db.createDraft(input);
+		},
+		() =>
+			apiFetch(
+				"/tailoring/drafts",
+				{
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(input),
+				},
+				draftRefSchema,
+			),
+	);
+}
+
+export async function fetchDraft(id: string): Promise<Draft> {
+	return mocked(
+		async (db) => {
+			await mockDelay(60);
+			return db.getDraft(id);
+		},
+		() => apiFetch(`/tailoring/drafts/${id}`, undefined, draftSchema),
 	);
 }

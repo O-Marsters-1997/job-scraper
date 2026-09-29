@@ -22,6 +22,8 @@ type Fixture struct {
 	Store  cvtailor.Store
 	UserID string
 	Other  string
+	// JobID is an existing Job; a real store needs a jobs row for it.
+	JobID string
 }
 
 // RunStoreContract proves newStore's cvtailor.Store behaves the same

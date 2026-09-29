@@ -1,5 +1,10 @@
-import type { CVHeading } from "../types/tailoring";
-import { allConfirmed, toMappings } from "./tailoring";
+import type { CVHeading, Suggestion } from "../types/tailoring";
+import {
+	allConfirmed,
+	isSettled,
+	selectedAchievementIds,
+	toMappings,
+} from "./tailoring";
 
 const heading = (text: string, confirmed: boolean): CVHeading => ({
 	text,
@@ -32,4 +37,29 @@ assert(
 assert(
 	mappings[1]?.positionId === "p1",
 	"an untouched heading keeps its match",
+);
+
+const suggestion = (id: string, preselected: boolean): Suggestion => ({
+	achievementId: id,
+	positionId: "p1",
+	text: id,
+	score: 0.5,
+	preselected,
+});
+
+const picked = selectedAchievementIds(
+	[suggestion("a", true), suggestion("b", true), suggestion("c", false)],
+	{ b: false, c: true },
+);
+assert(
+	picked.join() === "a,c",
+	"an override beats the preselection, either way",
+);
+assert(
+	isSettled("ready") && isSettled("failed"),
+	"ready and failed stop polling",
+);
+assert(
+	!isSettled("pending") && !isSettled("running"),
+	"in-flight keeps polling",
 );

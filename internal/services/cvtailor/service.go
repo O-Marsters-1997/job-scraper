@@ -24,6 +24,12 @@ type Store interface {
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
+	CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error)
+	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
+	ClaimDraft(ctx context.Context) (dto.DraftClaim, error)
+	SetDraftDoc(ctx context.Context, claim dto.DraftClaim, docID string) error
+	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error
+	FailDraft(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 }
 
 type Service struct {

@@ -21,7 +21,14 @@ import type {
 	SourceTarget,
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
-import type { CVHeading, HeadingMapping, Suggestion } from "@/types/tailoring";
+import type {
+	CVHeading,
+	Draft,
+	DraftInput,
+	DraftRef,
+	HeadingMapping,
+	Suggestion,
+} from "@/types/tailoring";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
@@ -1315,4 +1322,37 @@ export function getSuggestions(): Suggestion[] {
 			preselected: i < slots,
 		}));
 	});
+}
+
+const mockDrafts = new Map<string, { draft: Draft; polls: number }>();
+
+export function createDraft(input: DraftInput): DraftRef {
+	const id = `draft-${mockDrafts.size + 1}`;
+	mockDrafts.set(id, {
+		draft: {
+			id,
+			jobId: input.jobId,
+			status: "pending",
+			draftDocUrl: null,
+			lastError: "",
+		},
+		polls: 0,
+	});
+	return { id };
+}
+
+export function getDraft(id: string): Draft {
+	const entry = mockDrafts.get(id);
+	if (!entry) throw new Error(`no mock draft ${id}`);
+	entry.polls += 1;
+	if (entry.polls >= 3) {
+		entry.draft = {
+			...entry.draft,
+			status: "ready",
+			draftDocUrl: "https://docs.google.com/document/d/mock-draft/edit",
+		};
+	} else if (entry.polls === 2) {
+		entry.draft = { ...entry.draft, status: "running" };
+	}
+	return entry.draft;
 }

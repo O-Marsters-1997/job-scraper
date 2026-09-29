@@ -2,12 +2,15 @@ package store_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
@@ -43,6 +46,91 @@ func TestStoreHeadingMappingContract(t *testing.T) {
 		pool := pgtest.New(t)
 		return cvtailortest.Fixture{Store: store.New(pool), UserID: insertUser(t, pool), Other: insertUser(t, pool)}
 	})
+}
+
+func insertJob(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	var id string
+	err := pool.QueryRow(context.Background(),
+		`INSERT INTO jobs (title, url, company_slug, source, updated_at, description, content_fingerprint)
+		 VALUES ('Role', 'https://example.com/' || gen_random_uuid()::text, 'acme', 'test', NOW(), 'Build things in Go', 'fp-1')
+		 RETURNING id`).Scan(&id)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	return id
+}
+
+func TestStoreDraftContract(t *testing.T) {
+	cvtailortest.RunDraftContract(t, func(t *testing.T) cvtailortest.Fixture {
+		t.Helper()
+		pool := pgtest.New(t)
+		return cvtailortest.Fixture{
+			Store: store.New(pool), UserID: insertUser(t, pool), Other: insertUser(t, pool), JobID: insertJob(t, pool),
+		}
+	})
+}
+
+func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := context.Background()
+	uid, jobID := insertUser(t, pool), insertJob(t, pool)
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{"00000000-0000-0000-0000-00000000dead"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := st.ClaimDraft(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.JobDescription != "Build things in Go" || first.JobFingerprint != "fp-1" {
+		t.Errorf("ClaimDraft() job facts = %q, %q, want the Job's description and fingerprint", first.JobDescription, first.JobFingerprint)
+	}
+	if _, err := st.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
+		t.Fatalf("ClaimDraft() under a live lease err = %v, want ErrNotFound", err)
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE tailored_cvs SET lease_until = NOW() - interval '1 second' WHERE id = $1`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := st.ClaimDraft(ctx)
+	if err != nil {
+		t.Fatalf("ClaimDraft() after lease expiry err = %v, want the crashed Draft", err)
+	}
+	if second.ID != d.ID || second.Attempts != 2 {
+		t.Errorf("ClaimDraft() = %+v, want Draft %s on attempt 2", second, d.ID)
+	}
+	if err := st.CompleteDraft(ctx, first, dto.DraftResult{EditSet: json.RawMessage(`{}`)}); err == nil {
+		t.Error("CompleteDraft() by the crashed claim err = nil, want it rejected")
+	}
+}
+
+func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
+	pool := pgtest.New(t)
+	_, err := store.New(pool).CreateDraft(context.Background(), insertUser(t, pool), dto.DraftInput{
+		JobID: "00000000-0000-0000-0000-00000000dead", DocID: "doc", TabID: "t.0", AchievementIDs: []string{"00000000-0000-0000-0000-00000000dead"},
+	})
+	if !errors.Is(err, store.ErrJobNotFound) {
+		t.Errorf("CreateDraft() err = %v, want ErrJobNotFound", err)
+	}
+}
+
+func TestOnlyOneKeptTailoredCVPerJob(t *testing.T) {
+	pool := pgtest.New(t)
+	ctx := context.Background()
+	uid, jobID := insertUser(t, pool), insertJob(t, pool)
+	insert := `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, outcome)
+		VALUES ($1, $2, 'doc', 't.0', '{}', $3)`
+	if _, err := pool.Exec(ctx, insert, uid, jobID, "kept"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, insert, uid, jobID, "discarded"); err != nil {
+		t.Errorf("second discarded row err = %v, want it allowed", err)
+	}
+	if _, err := pool.Exec(ctx, insert, uid, jobID, "kept"); err == nil {
+		t.Error("second kept row err = nil, want the unique index to reject it")
+	}
 }
 
 func TestDeletePositionCascadesAchievementRows(t *testing.T) {

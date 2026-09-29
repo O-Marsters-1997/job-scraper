@@ -96,7 +96,12 @@ func main() {
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 
-	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule)
+	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm)
+	go func() {
+		if err := cvtailorModule.Run(ctx); err != nil {
+			slog.ErrorContext(ctx, "draft generation loop failed", slog.Any(logger.KeyErr, err))
+		}
+	}()
 
 	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule)}
 
