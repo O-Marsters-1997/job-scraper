@@ -1,30 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
-import { FormFeedback } from "@/components/FormFeedback";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-	Dialog,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
-import {
-	useApplications,
-	useDeleteApplication,
-	useUpdateApplication,
-} from "../../hooks/useApplications";
+import { useApplications } from "../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../types/application";
+import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
+import { EditApplicationDialog } from "./-applications/EditApplicationDialog";
 
 export const Route = createFileRoute("/_auth/applications")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -38,53 +24,17 @@ function ApplicationsPage() {
 	const navigate = useNavigate();
 	const query = useApplications(() => search().status);
 	const statusesQuery = useApplicationStatuses();
-	const updateMutation = useUpdateApplication();
-	const deleteMutation = useDeleteApplication();
 
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [editingApp, setEditingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
-	const [editStatusId, setEditStatusId] = createSignal("");
-	const [editNotes, setEditNotes] = createSignal("");
-	const [editAppliedAt, setEditAppliedAt] = createSignal("");
-	const [editSalary, setEditSalary] = createSignal("");
-
-	const openEdit = (app: ApplicationWithDetails) => {
-		saveForm.setError(null);
-		setEditingApp(app);
-		setEditStatusId(app.StatusID);
-		setEditNotes(app.Notes);
-		setEditAppliedAt(app.AppliedAt ?? "");
-		setEditSalary(app.SalaryInfo);
-		setModalOpen(true);
-	};
-
-	const closeEdit = () => setModalOpen(false);
-
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
 
-	const saveForm = useFormSubmit(async () => {
-		const app = editingApp();
-		if (!app) return;
-		await updateMutation.mutateAsync({
-			id: app.ID,
-			data: {
-				status_id: editStatusId() || undefined,
-				notes: editNotes(),
-				applied_at: editAppliedAt() || null,
-				salary_info: editSalary(),
-			},
-		});
-		closeEdit();
-	});
-
-	const deleteForm = useFormSubmit(async () => {
-		const app = deletingApp();
-		if (!app) return;
-		await deleteMutation.mutateAsync(app.ID);
-		setDeletingApp(null);
-	});
+	const openEdit = (app: ApplicationWithDetails) => {
+		setEditingApp(app);
+		setModalOpen(true);
+	};
 
 	const statusColour = (app: ApplicationWithDetails) => {
 		if (app.StatusColour) return app.StatusColour;
@@ -196,116 +146,16 @@ function ApplicationsPage() {
 				)}
 			</QueryBoundary>
 
-			<Dialog open={modalOpen()} onOpenChange={setModalOpen}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Edit application</DialogTitle>
-						<p class="text-sm text-faint">{editingApp()?.JobTitle}</p>
-					</DialogHeader>
+			<EditApplicationDialog
+				app={editingApp()}
+				open={modalOpen()}
+				onOpenChange={setModalOpen}
+			/>
 
-					<form onSubmit={saveForm.submit} class="flex flex-col gap-4">
-						<FormFeedback error={saveForm.error()} />
-						<div>
-							<Label for="edit-app-status">Status</Label>
-							<select
-								id="edit-app-status"
-								class="field"
-								value={editStatusId()}
-								onChange={(e) => setEditStatusId(e.currentTarget.value)}
-							>
-								<option value="">— No status —</option>
-								<For each={statusesQuery.data}>
-									{(s) => <option value={s.ID}>{s.Name}</option>}
-								</For>
-							</select>
-						</div>
-
-						<div class="grid grid-cols-2 gap-3">
-							<div>
-								<Label for="edit-app-applied-at">Applied date</Label>
-								<Input
-									id="edit-app-applied-at"
-									type="date"
-									value={editAppliedAt()}
-									onInput={(e) => setEditAppliedAt(e.currentTarget.value)}
-								/>
-							</div>
-
-							<div>
-								<Label for="edit-app-salary">Salary / comp</Label>
-								<Input
-									id="edit-app-salary"
-									type="text"
-									placeholder="e.g. £80,000"
-									value={editSalary()}
-									onInput={(e) => setEditSalary(e.currentTarget.value)}
-								/>
-							</div>
-						</div>
-
-						<div>
-							<Label for="edit-app-notes">Notes</Label>
-							<textarea
-								id="edit-app-notes"
-								class="field resize-y"
-								rows={3}
-								placeholder="Any notes about this application…"
-								value={editNotes()}
-								onInput={(e) => setEditNotes(e.currentTarget.value)}
-							/>
-						</div>
-						<DialogFooter class="border-t border-border pt-4">
-							<Button type="button" variant="outline" onClick={closeEdit}>
-								Cancel
-							</Button>
-							<Button type="submit" disabled={saveForm.pending()}>
-								Save
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
-
-			<Dialog
-				open={deletingApp() !== null}
-				onOpenChange={(open) => {
-					if (open) return;
-					setDeletingApp(null);
-					deleteForm.setError(null);
-				}}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Delete application?</DialogTitle>
-						<p class="text-sm text-muted">
-							This removes tracking for{" "}
-							<span class="font-medium text-foreground">
-								{deletingApp()?.JobTitle}
-							</span>
-							. The job stays on your Jobs list. This can't be undone.
-						</p>
-					</DialogHeader>
-					<form onSubmit={deleteForm.submit} class="flex flex-col gap-4">
-						<FormFeedback error={deleteForm.error()} />
-						<DialogFooter class="border-t border-border pt-4">
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => setDeletingApp(null)}
-							>
-								Cancel
-							</Button>
-							<Button
-								type="submit"
-								variant="destructive"
-								disabled={deleteForm.pending()}
-							>
-								{deleteForm.pending() ? "Deleting…" : "Delete application"}
-							</Button>
-						</DialogFooter>
-					</form>
-				</DialogContent>
-			</Dialog>
+			<DeleteApplicationDialog
+				app={deletingApp()}
+				onClose={() => setDeletingApp(null)}
+			/>
 		</div>
 	);
 }

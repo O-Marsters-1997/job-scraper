@@ -1,22 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
-import {
-	TrackApplicationDialog,
-	toExistingApp,
-} from "@/components/jobs/TrackApplicationDialog";
+import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
-import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
-import { useApplications } from "../../hooks/useApplications";
 import { useCompanies } from "../../hooks/useCompanies";
 import { useAllJobs } from "../../hooks/useJobs";
+import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
-import type { JobApplicationSummary } from "../../types/application";
 
 export const Route = createFileRoute("/_auth/jobs")({
 	validateSearch: (raw: Record<string, unknown>): Partial<JobFilters> =>
@@ -32,21 +27,6 @@ function JobsPage() {
 	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();
 	const jobs = () => query.data ?? [];
-	const applications = useApplications();
-	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
-		Object.fromEntries(
-			(applications.data ?? []).map((app) => [
-				app.JobID,
-				{
-					ApplicationID: app.ID,
-					StatusID: app.StatusID,
-					StatusName: app.StatusName,
-					StatusColour: app.StatusColour,
-				},
-			]),
-		),
-	);
-
 	const companies = useCompanies();
 	const companyName = () =>
 		companies.data?.find((c) => c.ID === filters().company)?.Name ??
@@ -64,32 +44,7 @@ function JobsPage() {
 		});
 	};
 
-	const [modalOpen, setModalOpen] = createSignal(false);
-	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
-
-	const openTrack = (jobId: string) => {
-		setTrackingJobId(jobId);
-		setModalOpen(true);
-	};
-
-	const openEdit = (jobId: string) => {
-		if (!appsForJobs()[jobId]) return;
-		setTrackingJobId(jobId);
-		setModalOpen(true);
-	};
-
-	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
-	const existingApp = () => {
-		const jobId = trackingJobId();
-		const app = applications.data?.find((a) => a.JobID === jobId);
-		return app ? toExistingApp(app) : undefined;
-	};
-
-	const columns = createJobColumns({
-		appsForJobs,
-		onTrack: openTrack,
-		onEdit: openEdit,
-	});
+	const track = useTrackJobs(jobs);
 
 	return (
 		<div class="px-7 py-6">
@@ -154,7 +109,7 @@ function JobsPage() {
 
 			<Show when={query.isSuccess}>
 				<JobsDataTable
-					columns={columns}
+					columns={track.columns}
 					data={filtered()}
 					filters={filters()}
 					onChange={setFilters}
@@ -163,10 +118,10 @@ function JobsPage() {
 			</Show>
 
 			<TrackApplicationDialog
-				open={modalOpen()}
-				onOpenChange={setModalOpen}
-				job={currentJob()}
-				existingApp={existingApp()}
+				open={track.modalOpen()}
+				onOpenChange={track.setModalOpen}
+				job={track.currentJob()}
+				existingApp={track.existingApp()}
 			/>
 		</div>
 	);

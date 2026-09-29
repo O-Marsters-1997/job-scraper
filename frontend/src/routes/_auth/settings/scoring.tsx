@@ -20,8 +20,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { uniqueCapitalised } from "@/lib/capitalise";
 import { cn } from "@/lib/utils";
-import { useCompanies } from "../../../hooks/useCompanies";
-import { useRecomputeScores, useScoringStatus } from "../../../hooks/useScores";
 import {
 	useScoringConfig,
 	useUpdateScoringConfig,
@@ -32,19 +30,17 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../../../types/scoringOptions";
+import { FiltersSection } from "./-scoring/FiltersSection";
+import { RecomputeControls } from "./-scoring/RecomputeControls";
+import { STANCE_TONE, type Stance } from "./-scoring/stance";
+import { useExclusionFilters } from "./-scoring/useExclusionFilters";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
 });
 
-type Stance = "nice" | "avoid";
 type StanceMap = Record<string, Stance | undefined>;
 type Dim = ScoringOption["dimension"];
-
-const STANCE_TONE: Record<Stance, string> = {
-	nice: "border-accent-border bg-accent-subtle text-accent-text",
-	avoid: "border-destructive/40 bg-surface text-destructive-strong",
-};
 
 function ScoringPage() {
 	const configQuery = useScoringConfig();
@@ -65,8 +61,6 @@ function ScoringForm(props: {
 	options: Accessor<ScoringOptionsView>;
 }) {
 	const mutation = useUpdateScoringConfig();
-	const recompute = useRecomputeScores();
-	const scoringStatus = useScoringStatus();
 
 	const initialConfig = untrack(() => props.config());
 
@@ -106,20 +100,7 @@ function ScoringForm(props: {
 	const [salaryFloor, setSalaryFloor] = createSignal(
 		initialConfig.preferences.salaryFloor?.amount.toString() ?? "",
 	);
-	const [threshold, setThreshold] = createSignal(initialConfig.notifyThreshold);
-	const [titleKeywords, setTitleKeywords] = createSignal(
-		initialConfig.excludedTitleKeywords,
-	);
-	const [companies, setCompanies] = createSignal(
-		initialConfig.excludedCompanies,
-	);
-	const [locations, setLocations] = createSignal(
-		initialConfig.excludedLocations,
-	);
-	const companiesQuery = useCompanies();
-	const companyOptions = createMemo(() =>
-		(companiesQuery.data ?? []).map((c) => ({ id: c.Name, label: c.Name })),
-	);
+	const filters = useExclusionFilters(initialConfig);
 
 	const params = useParams({ strict: false });
 	const [notice, setNotice] = createSignal<string | null>(null);
@@ -136,10 +117,10 @@ function ScoringForm(props: {
 		setError(null);
 		try {
 			const result = await mutation.mutateAsync({
-				notifyThreshold: threshold(),
-				excludedTitleKeywords: titleKeywords(),
-				excludedCompanies: uniqueCapitalised(companies()),
-				excludedLocations: uniqueCapitalised(locations()),
+				notifyThreshold: filters.threshold(),
+				excludedTitleKeywords: filters.titleKeywords(),
+				excludedCompanies: uniqueCapitalised(filters.companies()),
+				excludedLocations: uniqueCapitalised(filters.locations()),
 				preferences: {
 					picks: Object.entries(stances)
 						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
@@ -166,17 +147,6 @@ function ScoringForm(props: {
 		}
 	};
 
-	const handleRecompute = async () => {
-		setNotice(null);
-		setError(null);
-		try {
-			const result = await recompute.mutateAsync();
-			flash(`${result.recomputed} jobs re-ranked.`);
-		} catch {
-			setError("Could not recompute scores. Try again.");
-		}
-	};
-
 	const pairPickers = (dim: Dim, like: string, avoid: string) => (
 		<>
 			<MultiCombobox
@@ -199,21 +169,14 @@ function ScoringForm(props: {
 	return (
 		<>
 			<SettingsActions>
-				<Show when={scoringStatus.data?.pending}>
-					{(pending) => (
-						<span class="hidden text-xs text-faint tabular-nums sm:inline">
-							{pending()} pending
-						</span>
-					)}
-				</Show>
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={recompute.isPending}
-					onClick={handleRecompute}
-				>
-					{recompute.isPending ? "Recomputing…" : "Recompute scores"}
-				</Button>
+				<RecomputeControls
+					onStart={() => {
+						setNotice(null);
+						setError(null);
+					}}
+					onDone={flash}
+					onError={setError}
+				/>
 				<Button size="sm" disabled={mutation.isPending} onClick={handleSave}>
 					{mutation.isPending ? "Saving…" : "Save"}
 				</Button>
@@ -281,52 +244,7 @@ function ScoringForm(props: {
 					/>
 				</Match>
 				<Match when={params().section === "filters"}>
-					<p class="text-xs text-faint">
-						Jobs matching any exclusion are dropped before scoring.
-					</p>
-					<MultiCombobox
-						label="Excluded title keywords"
-						hint={`Whole words only: "java" won't exclude "JavaScript".`}
-						options={[]}
-						value={titleKeywords()}
-						onChange={setTitleKeywords}
-						placeholder="Type a keyword, then Enter"
-						chipClass={STANCE_TONE.avoid}
-						creatable
-					/>
-					<MultiCombobox
-						label="Excluded companies"
-						options={companyOptions()}
-						value={companies()}
-						onChange={(names) => setCompanies(uniqueCapitalised(names))}
-						placeholder="Search or type a company…"
-						chipClass={STANCE_TONE.avoid}
-						creatable
-					/>
-					<MultiCombobox
-						label="Excluded locations"
-						options={[]}
-						value={locations()}
-						onChange={(names) => setLocations(uniqueCapitalised(names))}
-						placeholder="Type a location, then Enter"
-						chipClass={STANCE_TONE.avoid}
-						creatable
-					/>
-					<Field
-						label="Notify me at a score of"
-						for="threshold"
-						hint="Out of 100."
-					>
-						<Input
-							id="threshold"
-							type="number"
-							min="0"
-							max="100"
-							value={threshold()}
-							onInput={(e) => setThreshold(Number(e.currentTarget.value))}
-							class="w-24 font-mono tabular-nums"
-						/>
-					</Field>
+					<FiltersSection filters={filters} />
 				</Match>
 				<Match when={params().section === "other"}>
 					<Field

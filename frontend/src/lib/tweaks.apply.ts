@@ -1,17 +1,16 @@
 import {
 	CUSTOM_DEFAULTS,
 	type DensityKey,
-	FONTS,
 	type FontKey,
 	markThemeApplied,
 	type RadiusKey,
 	type SidebarWidthKey,
 	type SizeKey,
 	THEME_VAR_NAMES,
-	THEMES,
 	type ThemeKey,
 	type Tweaks,
 } from "./tweaks";
+import { FONTS, THEMES } from "./tweaks.themes";
 
 const FONT_VAR_NAMES = ["--font-sans", "--font-mono"];
 
