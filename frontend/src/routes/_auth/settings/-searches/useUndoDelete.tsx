@@ -1,16 +1,21 @@
-import { useQueryClient } from "@tanstack/solid-query";
+import { type QueryKey, useQueryClient } from "@tanstack/solid-query";
 import { createSignal, For, onCleanup } from "solid-js";
-import { keys } from "@/api/keys";
-import { deleteSourceTarget } from "@/api/sourceTargets";
 
 const UNDO_WINDOW_MS = 5000;
 
 interface PendingDelete {
 	id: string;
 	label: string;
+	verb: string;
 }
 
-export function useUndoDelete(onError: (message: string) => void) {
+export function useUndoDelete(opts: {
+	commit: (id: string, keepalive: boolean) => Promise<void>;
+	queryKey: QueryKey;
+	verb: string;
+	errorMessage: string;
+	onError: (message: string) => void;
+}) {
 	const queryClient = useQueryClient();
 	const [pending, setPending] = createSignal<PendingDelete[]>([]);
 	const [inFlight, setInFlight] = createSignal<string[]>([]);
@@ -25,10 +30,10 @@ export function useUndoDelete(onError: (message: string) => void) {
 		drop(id);
 		setInFlight((ids) => [...ids, id]);
 		try {
-			await deleteSourceTarget(id, { keepalive });
-			await queryClient.invalidateQueries({ queryKey: keys.sourceTargets });
+			await opts.commit(id, keepalive);
+			await queryClient.invalidateQueries({ queryKey: opts.queryKey });
 		} catch {
-			onError("Could not delete the search. Please try again.");
+			opts.onError(opts.errorMessage);
 		} finally {
 			setInFlight((ids) => ids.filter((x) => x !== id));
 		}
@@ -49,7 +54,7 @@ export function useUndoDelete(onError: (message: string) => void) {
 			pending().some((p) => p.id === id) || inFlight().includes(id),
 		pending,
 		remove: (id: string, label: string) => {
-			setPending((list) => [...list, { id, label }]);
+			setPending((list) => [...list, { id, label, verb: opts.verb }]);
 			timers.set(
 				id,
 				setTimeout(() => void commit(id, false), UNDO_WINDOW_MS),
@@ -72,7 +77,9 @@ export function UndoToasts(props: {
 			<For each={props.items}>
 				{(item) => (
 					<div class="pointer-events-auto flex max-w-full items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-sm text-foreground shadow-md">
-						<span class="truncate">Deleted “{item.label}”.</span>
+						<span class="truncate">
+							{item.verb} “{item.label}”.
+						</span>
 						<button
 							type="button"
 							onClick={() => props.onUndo(item.id)}
