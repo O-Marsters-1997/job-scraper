@@ -66,6 +66,10 @@ lint:
 test:
     go test ./...
 
+# run tailoring fixtures against real Sonnet (needs OPENROUTER_API_KEY; args: -runs N, -fixture NAME)
+eval-tailoring *args:
+    go run ./cmd/eval-tailoring {{args}}
+
 # run tests with race detector
 test-race:
     go test -race ./...

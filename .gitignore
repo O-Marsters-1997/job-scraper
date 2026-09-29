@@ -7,6 +7,7 @@ bin/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/add-source/
+!.claude/skills/cv-tailoring/
 !.claude/skills/new-handler/
 !.claude/skills/schema-change/
 !.claude/skills/testing-policy/

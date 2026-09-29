@@ -1,0 +1,89 @@
+{
+ "Name": "terraform-gap",
+ "Scenario": "The job wants Terraform; Pulumi is a gap",
+ "JobDescription": "Platform engineer. You will own our AWS infrastructure with Terraform and Pulumi, run CI/CD, and improve reliability. Go or Python.",
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Acme",
+   "Title": "Platform Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Wrote Terraform modules for AWS VPCs and EKS clusters used by six teams"
+    },
+    {
+     "ID": "a2",
+     "Text": "Moved deploys to GitHub Actions and cut release time from 40 to 10 minutes"
+    },
+    {
+     "ID": "a3",
+     "Text": "Built an internal Figma plugin for design tokens"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Acme - Platform Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Built a design token plugin",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Managed cloud infrastructure",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Automated releases",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Full-stack engineer with a design background.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "Figma",
+    "Sketch",
+    "Terraform",
+    "AWS",
+    "Go"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}

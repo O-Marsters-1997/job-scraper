@@ -1,0 +1,88 @@
+{
+ "Name": "tight-slots",
+ "Scenario": "The Draft runs onto a second page",
+ "JobDescription": "Senior engineer with Go, Kubernetes, Postgres and strong mentoring experience. Describe your impact in detail.",
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Hooli",
+   "Title": "Senior Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Led migration of the billing service from a Rails monolith to Go, with the team of four"
+    },
+    {
+     "ID": "a2",
+     "Text": "Ran Kubernetes clusters and the on-call rota"
+    },
+    {
+     "ID": "a3",
+     "Text": "Mentored four engineers through promotion"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Hooli - Senior Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Migrated billing to Go",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Ran Kubernetes",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Mentored four engineers",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Senior engineer.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "Go",
+    "Kubernetes",
+    "Postgres",
+    "Rails"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}

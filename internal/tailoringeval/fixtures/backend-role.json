@@ -1,0 +1,100 @@
+{
+ "Name": "backend-role",
+ "Scenario": "Tailoring for a backend role",
+ "JobDescription": "Backend engineer. Kubernetes, on-call ownership, Postgres performance. Frontend experience is not needed.",
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Globex",
+   "Title": "Software Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Ran Kubernetes clusters for 12 services and joined the on-call rota"
+    },
+    {
+     "ID": "a2",
+     "Text": "Cut Postgres query time by 60% by adding indexes and rewriting joins"
+    },
+    {
+     "ID": "a3",
+     "Text": "Built a React dashboard for support staff"
+    },
+    {
+     "ID": "a4",
+     "Text": "Wrote CSS for the marketing site"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Globex - Software Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Built a React dashboard for support staff",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Wrote CSS for the marketing site",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Ran services on Kubernetes",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s3",
+    "HeadingIndex": 2,
+    "Text": "Improved Postgres queries",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Software engineer who likes shipping useful things.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "React",
+    "CSS",
+    "Kubernetes",
+    "Postgres",
+    "Go"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}
