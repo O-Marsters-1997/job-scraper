@@ -9,6 +9,8 @@ import (
 func (m *Module) Routes(r chi.Router) {
 	r.Route("/experience", func(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.store.ListPositions))
+		r.Post("/import/preview", handlers.Update(m.svc.PreviewImport))
+		r.Post("/import", handlers.Create(m.svc.ImportPositions))
 		r.Post("/positions", handlers.Create(m.svc.CreatePosition))
 		r.Put("/positions/order", handlers.Update(m.svc.ReorderPositions))
 		r.Patch("/positions/{id}", handlers.Update(m.svc.UpdatePosition))

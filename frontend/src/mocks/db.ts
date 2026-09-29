@@ -8,7 +8,12 @@ import type {
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard, CompanyTracking } from "@/types/company";
 import type { CV } from "@/types/cv";
-import type { Achievement, Position, PositionInput } from "@/types/experience";
+import type {
+	Achievement,
+	ImportPosition,
+	Position,
+	PositionInput,
+} from "@/types/experience";
 import type { Job, ScoreRow } from "@/types/job";
 import type { ResolvedBoard, SourceInfo } from "@/types/source";
 import type {
@@ -844,6 +849,47 @@ export function updatePosition(id: string, input: PositionInput): Position {
 
 export function deletePosition(id: string): void {
 	experience = experience.filter((p) => p.id !== id);
+}
+
+export function previewExperienceImport(): ImportPosition[] {
+	return [
+		{
+			employer: "Acme Ltd",
+			title: "Senior Backend Engineer",
+			startDate: "2021-03-01",
+			endDate: null,
+			achievements: ["Cut p99 API latency by 40%", "Mentored four engineers"],
+			employerExists: experience.some((p) => p.employer === "Acme Ltd"),
+		},
+		{
+			employer: "Initech",
+			title: "Developer",
+			startDate: null,
+			endDate: null,
+			achievements: ["Maintained the payroll batch jobs"],
+			employerExists: false,
+		},
+	];
+}
+
+export function importExperience(positions: ImportPosition[]): Position[] {
+	const created = positions.map((p): Position => {
+		const id = `position-${faker.string.uuid().slice(0, 8)}`;
+		return {
+			id,
+			employer: p.employer,
+			title: p.title,
+			startDate: p.startDate,
+			endDate: p.endDate,
+			achievements: p.achievements.map((text) => ({
+				id: `achievement-${faker.string.uuid().slice(0, 8)}`,
+				positionId: id,
+				text,
+			})),
+		};
+	});
+	experience = [...created, ...experience];
+	return created;
 }
 
 function inOrder<T extends { id: string }>(items: T[], ids: string[]): T[] {

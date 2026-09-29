@@ -21,14 +21,17 @@ type Store interface {
 	UpdateAchievement(ctx context.Context, userID string, in dto.AchievementInput) (dto.Achievement, error)
 	DeleteAchievement(ctx context.Context, userID, id string) error
 	ReorderAchievements(ctx context.Context, userID, positionID string, ids []string) error
+	// ImportPositions adds every Position with its Achievements, or none of them.
+	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 }
 
 type Service struct {
 	store Store
+	docs  DocFetcher
 }
 
-func NewService(store Store) *Service {
-	return &Service{store: store}
+func NewService(store Store, docs DocFetcher) *Service {
+	return &Service{store: store, docs: docs}
 }
 
 func (s *Service) CreatePosition(ctx context.Context, userID string, in dto.PositionInput) (dto.Position, error) {

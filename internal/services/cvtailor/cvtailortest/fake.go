@@ -205,6 +205,28 @@ func (f *FakeStore) ReorderAchievements(_ context.Context, userID, positionID st
 	return nil
 }
 
+func (f *FakeStore) ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error) {
+	out := make([]dto.Position, len(in))
+	for i := len(in) - 1; i >= 0; i-- {
+		p := in[i]
+		created, err := f.CreatePosition(ctx, userID, dto.PositionInput{
+			Employer: p.Employer, Title: p.Title, StartDate: p.StartDate, EndDate: p.EndDate,
+		})
+		if err != nil {
+			return nil, err
+		}
+		out[i] = created
+		for _, text := range p.Achievements {
+			a, err := f.CreateAchievement(ctx, userID, dto.AchievementInput{PositionID: created.ID, Text: text})
+			if err != nil {
+				return nil, err
+			}
+			out[i].Achievements = append(out[i].Achievements, a)
+		}
+	}
+	return out, nil
+}
+
 func sameSet(ids []string, want int, member func(string) bool) bool {
 	if len(ids) != want {
 		return false

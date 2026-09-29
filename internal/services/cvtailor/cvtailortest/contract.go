@@ -143,6 +143,28 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("import adds positions with achievements above the existing ones in order", func(t *testing.T) {
+		f := newStore(t)
+		position(t, f, f.UserID, "Existing")
+		start := "2021-03-01"
+		got, err := f.Store.ImportPositions(ctx, f.UserID, []dto.ImportPosition{
+			{Employer: "Acme", Title: "Engineer", StartDate: &start, Achievements: []string{"one", "two"}},
+			{Employer: "Globex", Title: "Intern"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 || got[0].Employer != "Acme" || got[1].Employer != "Globex" {
+			t.Fatalf("ImportPositions() = %+v, want Acme then Globex", got)
+		}
+		if diff := cmp.Diff([]string{"Acme", "Globex", "Existing"}, employers(t, f)); diff != "" {
+			t.Fatalf("employers (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"one", "two"}, texts(t, f, got[0].ID)); diff != "" {
+			t.Fatalf("achievements (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("update achievement changes its text", func(t *testing.T) {
 		f := newStore(t)
 		p := position(t, f, f.UserID, "Acme")
