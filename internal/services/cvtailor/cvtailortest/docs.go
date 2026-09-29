@@ -32,7 +32,6 @@ type Drive struct {
 	Copies      []string
 	Deleted     []string
 	Updates     [][]json.RawMessage
-	BasePages   int
 	DraftPages  []int
 	copyExports int
 	// BatchUpdateErr fails every BatchUpdate on a copy.
@@ -64,9 +63,8 @@ func (d *Drive) BatchUpdate(_ context.Context, _, _ string, reqs []json.RawMessa
 func (d *Drive) ExportPDF(_ context.Context, _, docID, _ string) (io.ReadCloser, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	pages := max(d.BasePages, 1)
+	pages := 1
 	if slices.Contains(d.Copies, docID) {
-		pages = 1
 		if len(d.DraftPages) > 0 {
 			pages = d.DraftPages[min(d.copyExports, len(d.DraftPages)-1)]
 		}
