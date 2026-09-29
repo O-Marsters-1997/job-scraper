@@ -104,6 +104,29 @@
           "legendFormat": "{{source}} / {{kind}}"
         }
       ]
+    },
+    {
+      "id": 9,
+      "title": "Boards overdue and failing",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_boards_overdue{env=\"$env\"}", "legendFormat": "overdue" },
+        { "refId": "B", "expr": "jobscraper_boards_failing{env=\"$env\"}", "legendFormat": "failing" },
+        { "refId": "C", "expr": "jobscraper_source_targets_failed{env=\"$env\"}", "legendFormat": "source targets failed" }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Harvest age",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "datasource": { "type": "prometheus", "uid": "__PROM_DATASOURCE_UID__" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "jobscraper_harvest_age_seconds{env=\"$env\"}", "legendFormat": "{{harvester}}" }
+      ]
     }
   ]
 }

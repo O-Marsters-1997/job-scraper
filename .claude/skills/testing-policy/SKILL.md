@@ -6,7 +6,6 @@ description: >
   a `*test` package, pgtest, a snapshot golden or a fuzz target; or when the prompt says "write a
   test", "add tests", "cover this", "fix this test", or implements a feature with TDD. Load it
   alongside go-idiomatic, which owns generic Go test style. SKIP for frontend tests.
-paths: ["**/*_test.go", "internal/pgtest/**", "internal/services/**/*test/**"]
 ---
 
 # Testing policy

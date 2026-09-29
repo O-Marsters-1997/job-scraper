@@ -1,7 +1,6 @@
 ---
 name: tune-tailoring
 description: Change the CV-tailoring prompts, checks or model safely, and add eval fixtures. Use for edits to voice.md, rules.md, internal/services/cvtailor/checks, cvedit.Model, or "add a tailoring fixture". Requires an eval run before and after.
-paths: ["internal/services/cvtailor/cvedit/**", "internal/services/cvtailor/checks/**", "internal/services/cvtailor/eval/**", "cmd/eval-tailoring/**"]
 ---
 
 # CV tailoring

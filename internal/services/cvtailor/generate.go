@@ -197,7 +197,7 @@ func (g *Generator) generate(ctx context.Context, claim dto.DraftClaim) (string,
 		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 	}
 	if draftPages > basePages {
-		short, shortCost, err := g.shorten(ctx, claim, key, docID, res)
+		short, shortCost, err := g.shorten(ctx, claim, key, docID, pl, res)
 		if err != nil {
 			return docID, dto.DraftResult{}, err
 		}
@@ -218,44 +218,45 @@ func (g *Generator) generate(ctx context.Context, claim dto.DraftClaim) (string,
 	}, nil
 }
 
-// editUntilClean asks the model for edits and re-prompts with the blocking
-// Findings up to maxCheckRetries times. Blocks that survive are left for the
-// caller to record.
 func (g *Generator) editUntilClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, float64, error) {
 	res, err := g.editValid(ctx, key, pl, in)
+	if err != nil {
+		return cvedit.Result{}, res.Cost, err
+	}
 	cost := res.Cost
 	for range maxCheckRetries {
-		if err != nil {
-			return cvedit.Result{}, 0, err
-		}
 		blocks := blocking(checks.Run(pl.draft(res.Edits, 0, 0)))
 		if len(blocks) == 0 {
 			break
 		}
-		in.PriorEdits, in.PriorFindings = &res.Edits, blocks
-		res, err = g.editValid(ctx, key, pl, in)
-		cost += res.Cost
+		prior := res.Edits
+		in.PriorEdits, in.PriorFindings = &prior, blocks
+		retry, err := g.editValid(ctx, key, pl, in)
+		cost += retry.Cost
+		if err != nil {
+			slog.WarnContext(ctx, "draft retry failed, keeping the blocked edit", slog.Any(logger.KeyErr, err))
+			break
+		}
+		res = retry
 	}
-	return res, cost, err
+	return res, cost, nil
 }
 
-// shorten re-asks for the longest bullets to come back shorter and applies
-// the result to the same copy, whose structure it re-reads.
-func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, prior cvedit.Result) (cvedit.Result, float64, error) {
-	pl, err := g.plan(ctx, claim, docID)
-	if err != nil {
-		return cvedit.Result{}, 0, err
-	}
+func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, float64, error) {
 	in := pl.input(claim.JobDescription)
 	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
-	res, err := g.editValid(ctx, key, pl, in)
+	res, cost, err := g.editUntilClean(ctx, key, pl, in)
 	if err != nil {
-		return cvedit.Result{}, 0, err
+		return cvedit.Result{}, cost, err
 	}
-	if err := g.applyEdits(ctx, claim, docID, pl, res.Edits); err != nil {
-		return cvedit.Result{}, 0, err
+	copyPlan, err := g.plan(ctx, claim, docID)
+	if err != nil {
+		return cvedit.Result{}, cost, err
 	}
-	return res, res.Cost, nil
+	if err := g.applyEdits(ctx, claim, docID, copyPlan, res.Edits); err != nil {
+		return cvedit.Result{}, cost, err
+	}
+	return res, cost, nil
 }
 
 func (g *Generator) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
@@ -364,8 +365,6 @@ type plan struct {
 	bank      []string
 }
 
-// plan reads the CV tab of docID, the base Doc or a copy of it, against the
-// heading mappings of the base Doc.
 func (g *Generator) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
 	raw, err := g.docs.GetDocument(ctx, claim.UserID, docID, claim.TabID)
 	if err != nil {
@@ -489,8 +488,6 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 	return nil
 }
 
-// draft describes the edits to the checks. Zero pages mean the page counts
-// were not measured.
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
 	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
 	if pl.structure.Skills != nil {

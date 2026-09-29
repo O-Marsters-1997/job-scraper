@@ -83,11 +83,15 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 		}
 	})
 
-	t.Run("ops state on an empty queue is zero pending", func(t *testing.T) {
+	t.Run("ops state on an empty store reports nothing", func(t *testing.T) {
 		st := newStore(t)
 		state, err := st.OpsState(context.Background())
-		if err != nil || state.OutboxPending != 0 {
-			t.Fatalf("OpsState(...) = %+v, %v, want zero pending", state, err)
+		if err != nil {
+			t.Fatalf("OpsState(...) error = %v", err)
+		}
+		if state.OutboxPending != 0 || state.BoardsOverdue != 0 || state.BoardsFailing != 0 ||
+			state.SourceTargetsFailed != 0 || len(state.HarvestAge) != 0 {
+			t.Errorf("OpsState(...) = %+v, want no pending effects, overdue or failing boards, failed targets or harvests", state)
 		}
 	})
 }

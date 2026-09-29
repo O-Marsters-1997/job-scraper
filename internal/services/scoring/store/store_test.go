@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -662,44 +663,145 @@ func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, 
 	}
 }
 
-func TestOpsState_CountsPendingRunningAndFailed(t *testing.T) {
-	st, pool := newStore(t)
+func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leaseUntil *time.Time, failures int) {
+	t.Helper()
 	ctx := context.Background()
-
-	now := time.Now()
-	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-1"), "pending", now.Add(-2*time.Hour))
-	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-2"), "running", now.Add(-10*time.Minute))
-	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-3"), "failed", now)
-	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-4"), "failed", now)
-	insertEffectOutbox(t, pool, insertJob(t, pool, "fp-5"), "done", now)
-
-	state, err := st.OpsState(ctx)
-	if err != nil {
-		t.Fatalf("OpsState: %v", err)
+	n := seedCounter.Add(1)
+	var companyID, boardID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, fmt.Sprintf("co-%d", n)).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
 	}
-	if state.OutboxPending != 2 {
-		t.Errorf("OutboxPending = %d, want 2", state.OutboxPending)
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at) VALUES ($1, 'greenhouse', $2, $3, 'manual', NOW()) RETURNING id`,
+		companyID, fmt.Sprintf("tok-%d", n), status).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
 	}
-	if state.OutboxFailed != 2 {
-		t.Errorf("OutboxFailed = %d, want 2", state.OutboxFailed)
-	}
-	if state.OutboxOldestPendingAge < 115*time.Minute || state.OutboxOldestPendingAge > 125*time.Minute {
-		t.Errorf("OutboxOldestPendingAge = %s, want ~2h", state.OutboxOldestPendingAge)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO board_poll_state (board_id, next_due_at, lease_until, consecutive_failures) VALUES ($1, $2, $3, $4)`,
+		boardID, nextDueAt, leaseUntil, failures); err != nil {
+		t.Fatalf("insert board_poll_state: %v", err)
 	}
 }
 
-func TestOpsState_NoPendingIsZero(t *testing.T) {
-	st, _ := newStore(t)
-	state, err := st.OpsState(context.Background())
-	if err != nil {
-		t.Fatalf("OpsState: %v", err)
-	}
-	if state.OutboxPending != 0 || state.OutboxFailed != 0 {
-		t.Errorf("expected zero counts, got %+v", state)
-	}
-	if state.OutboxOldestPendingAge != 0 {
-		t.Errorf("OutboxOldestPendingAge = %s, want 0", state.OutboxOldestPendingAge)
-	}
+func TestOpsState(t *testing.T) {
+	t.Run("counts pending, running and failed effects", func(t *testing.T) {
+		st, pool := newStore(t)
+		now := time.Now()
+		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-1"), "pending", now.Add(-2*time.Hour))
+		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-2"), "running", now.Add(-10*time.Minute))
+		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-3"), "failed", now)
+		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-4"), "failed", now)
+		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-5"), "done", now)
+
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		if state.OutboxPending != 2 {
+			t.Errorf("OpsState().OutboxPending = %d, want %d", state.OutboxPending, 2)
+		}
+		if state.OutboxFailed != 2 {
+			t.Errorf("OpsState().OutboxFailed = %d, want %d", state.OutboxFailed, 2)
+		}
+		if state.OutboxOldestPendingAge < 115*time.Minute || state.OutboxOldestPendingAge > 125*time.Minute {
+			t.Errorf("OpsState().OutboxOldestPendingAge = %s, want ~2h", state.OutboxOldestPendingAge)
+		}
+	})
+
+	t.Run("empty database reports zero", func(t *testing.T) {
+		st, _ := newStore(t)
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		want := dto.OpsState{HarvestAge: map[string]time.Duration{}}
+		if diff := cmp.Diff(want, state); diff != "" {
+			t.Errorf("OpsState() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("counts verified unleased boards past due as overdue", func(t *testing.T) {
+		st, pool := newStore(t)
+		now := time.Now()
+		overdue := now.Add(-2 * time.Hour)
+		liveLease := now.Add(time.Hour)
+		expiredLease := now.Add(-time.Hour)
+		insertBoard(t, pool, "verified", overdue, nil, 0)
+		insertBoard(t, pool, "verified", overdue, &liveLease, 0)
+		insertBoard(t, pool, "verified", overdue, &expiredLease, 0)
+		insertBoard(t, pool, "retired", overdue, nil, 0)
+		insertBoard(t, pool, "candidate", overdue, nil, 0)
+		insertBoard(t, pool, "verified", now.Add(2*time.Hour), nil, 0)
+
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		if state.BoardsOverdue != 2 {
+			t.Errorf("OpsState().BoardsOverdue = %d, want %d", state.BoardsOverdue, 2)
+		}
+	})
+
+	t.Run("counts verified boards with three consecutive failures as failing", func(t *testing.T) {
+		st, pool := newStore(t)
+		due := time.Now().Add(time.Hour)
+		insertBoard(t, pool, "verified", due, nil, 3)
+		insertBoard(t, pool, "verified", due, nil, 2)
+		insertBoard(t, pool, "retired", due, nil, 5)
+
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		if state.BoardsFailing != 1 {
+			t.Errorf("OpsState().BoardsFailing = %d, want %d", state.BoardsFailing, 1)
+		}
+	})
+
+	t.Run("counts source targets whose last run failed", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := insertUser(t, pool)
+		for i, status := range []string{"failed", "failed", "succeeded", "idle"} {
+			if _, err := pool.Exec(context.Background(),
+				`INSERT INTO source_targets (user_id, source, value, run_status) VALUES ($1, 'linkedin', $2, $3)`,
+				userID, fmt.Sprintf("q-%d", i), status); err != nil {
+				t.Fatalf("insert source_target: %v", err)
+			}
+		}
+
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		if state.SourceTargetsFailed != 2 {
+			t.Errorf("OpsState().SourceTargetsFailed = %d, want %d", state.SourceTargetsFailed, 2)
+		}
+	})
+
+	t.Run("reports harvest age per harvester", func(t *testing.T) {
+		st, pool := newStore(t)
+		now := time.Now()
+		for harvester, at := range map[string]time.Time{"ashby": now.Add(-3 * time.Hour), "lever": now.Add(-time.Minute)} {
+			if _, err := pool.Exec(context.Background(), `INSERT INTO harvest_runs (harvester, last_succeeded_at) VALUES ($1, $2)`, harvester, at); err != nil {
+				t.Fatalf("insert harvest_runs: %v", err)
+			}
+		}
+
+		state, err := st.OpsState(context.Background())
+		if err != nil {
+			t.Fatalf("OpsState() error = %v", err)
+		}
+		if len(state.HarvestAge) != 2 {
+			t.Fatalf("len(OpsState().HarvestAge) = %d, want %d", len(state.HarvestAge), 2)
+		}
+		if age := state.HarvestAge["ashby"]; age < 179*time.Minute || age > 181*time.Minute {
+			t.Errorf("OpsState().HarvestAge[ashby] = %s, want ~3h", age)
+		}
+		if age := state.HarvestAge["lever"]; age < 0 || age > 2*time.Minute {
+			t.Errorf("OpsState().HarvestAge[lever] = %s, want ~1m", age)
+		}
+	})
 }
 
 func TestQueueMissingAnswers_QueuesOnlyOpenScoredFingerprintedJobsMissingHash(t *testing.T) {
