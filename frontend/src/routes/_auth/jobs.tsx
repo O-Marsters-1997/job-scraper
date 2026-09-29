@@ -1,9 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import {
 	TrackApplicationDialog,
 	toExistingApp,
 } from "@/components/jobs/TrackApplicationDialog";
+import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
@@ -11,6 +13,7 @@ import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useApplications } from "../../hooks/useApplications";
+import { useCompanies } from "../../hooks/useCompanies";
 import { useAllJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
 import type { JobApplicationSummary } from "../../types/application";
@@ -43,6 +46,11 @@ function JobsPage() {
 			]),
 		),
 	);
+
+	const companies = useCompanies();
+	const companyName = () =>
+		companies.data?.find((c) => c.ID === filters().company)?.Name ??
+		"Selected company";
 
 	const filters = () => parseSearch(search() as Record<string, unknown>);
 	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
@@ -114,6 +122,33 @@ function JobsPage() {
 						Error
 					</p>
 					<p class="text-sm text-muted">{query.error?.message}</p>
+				</div>
+			</Show>
+
+			<Show when={filters().company || filters().scored}>
+				<div class="mb-3 flex flex-wrap items-center gap-2">
+					<Show when={filters().company}>
+						<Button
+							variant="outline"
+							size="sm"
+							aria-label={`Clear company filter: ${companyName()}`}
+							onClick={() => setFilters({ company: undefined })}
+						>
+							{companyName()}
+							<Icon name="x" size={12} />
+						</Button>
+					</Show>
+					<Show when={filters().scored}>
+						<Button
+							variant="outline"
+							size="sm"
+							aria-label="Clear scored filter"
+							onClick={() => setFilters({ scored: false })}
+						>
+							Scored for me
+							<Icon name="x" size={12} />
+						</Button>
+					</Show>
 				</div>
 			</Show>
 

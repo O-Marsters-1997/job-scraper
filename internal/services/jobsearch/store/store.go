@@ -105,7 +105,7 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 	if err != nil {
 		return dto.JobPage{}, ErrInvalidID
 	}
-	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit}
+	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit, ScoredOnly: options.ScoredOnly}
 	if params.Availability == "" {
 		params.Availability = "open"
 	}

@@ -46,7 +46,7 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		return dto.JobPage{}, apperr.Invalid("invalid availability")
 	}
 
-	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID}
+	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID, ScoredOnly: q.Scored == "1"}
 	if q.Cursor != "" {
 		decoded, err := decodeJobCursor(q.Cursor)
 		if err != nil {
