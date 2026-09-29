@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -18,10 +19,15 @@ var (
 	ErrDraftNotFound = apperr.NotFound("draft not found")
 )
 
-func toDraft(t sqlc.TailoredCv) dto.Draft {
+func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
+	var findings []dto.DraftFinding
+	if err := json.Unmarshal(t.Findings, &findings); err != nil {
+		return dto.Draft{}, fmt.Errorf("decode findings: %w", err)
+	}
 	return dto.Draft{
 		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, LastError: t.LastError, DraftDocID: t.DraftDocID.String,
-	}
+		Findings: findings,
+	}, nil
 }
 
 // CreateDraft inserts a pending Draft for userID; ErrJobNotFound when the Job
@@ -48,7 +54,11 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
 	}
-	return toDraft(row), nil
+	d, err := toDraft(row)
+	if err != nil {
+		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
+	}
+	return d, nil
 }
 
 func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
@@ -67,7 +77,11 @@ func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, err
 	if err != nil {
 		return dto.Draft{}, fmt.Errorf("store.GetDraft: %w", err)
 	}
-	return toDraft(row), nil
+	d, err := toDraft(row)
+	if err != nil {
+		return dto.Draft{}, fmt.Errorf("store.GetDraft: %w", err)
+	}
+	return d, nil
 }
 
 // ClaimDraft leases the next due Draft, or one whose lease expired, under
@@ -111,10 +125,14 @@ func (s *Store) CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto
 	if err != nil {
 		return err
 	}
+	findings, err := json.Marshal(res.Findings)
+	if err != nil {
+		return fmt.Errorf("store.CompleteDraft: encode findings: %w", err)
+	}
 	n, err := s.queries.CompleteDraft(ctx, sqlc.CompleteDraftParams{
 		ID: id, Attempts: int32(claim.Attempts), EditSet: res.EditSet, RawOutput: res.RawOutput,
 		Model: res.Model, PromptVersion: res.PromptVersion, JobFingerprint: res.JobFingerprint,
-		Cost: float32(res.Cost), DraftDocID: res.DraftDocID,
+		Cost: float32(res.Cost), DraftDocID: res.DraftDocID, Findings: findings,
 	})
 	if err != nil {
 		return fmt.Errorf("store.CompleteDraft: %w", err)

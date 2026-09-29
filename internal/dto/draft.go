@@ -19,15 +19,26 @@ type DraftRef struct {
 	ID string `json:"id"`
 }
 
+// DraftFinding is one check result recorded on a Draft. Severity is block,
+// warn or info.
+type DraftFinding struct {
+	Check    string   `json:"check"`
+	Severity string   `json:"severity"`
+	SlotID   string   `json:"slotId,omitempty"`
+	Message  string   `json:"message"`
+	Score    *float64 `json:"score,omitempty"`
+}
+
 // Draft is a Tailored CV's generation state. Status is pending, running,
 // ready or failed; DraftDocURL is set once the Doc exists.
 type Draft struct {
-	ID          string  `json:"id"`
-	JobID       string  `json:"jobId"`
-	Status      string  `json:"status"`
-	DraftDocURL *string `json:"draftDocUrl"`
-	LastError   string  `json:"lastError"`
-	DraftDocID  string  `json:"-"`
+	ID          string         `json:"id"`
+	JobID       string         `json:"jobId"`
+	Status      string         `json:"status"`
+	DraftDocURL *string        `json:"draftDocUrl"`
+	LastError   string         `json:"lastError"`
+	Findings    []DraftFinding `json:"findings"`
+	DraftDocID  string         `json:"-"`
 }
 
 // DraftClaim is a Draft leased to the generator with the Job facts it
@@ -54,6 +65,7 @@ type DraftResult struct {
 	JobFingerprint string
 	Cost           float64
 	DraftDocID     string
+	Findings       []DraftFinding
 }
 
 // DraftFailure records why a claimed Draft attempt failed. Terminal skips

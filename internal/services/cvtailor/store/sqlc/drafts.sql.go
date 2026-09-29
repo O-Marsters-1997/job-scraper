@@ -64,8 +64,8 @@ UPDATE tailored_cvs SET status = 'ready', lease_until = NULL, last_error = '',
     edit_set = $1::jsonb, raw_output = $2::text,
     model = $3::text, prompt_version = $4::text,
     job_fingerprint = $5::text, cost = $6::real,
-    draft_doc_id = $7::text
-WHERE id = $8::uuid AND attempts = $9::int AND status = 'running'
+    draft_doc_id = $7::text, findings = $8::jsonb
+WHERE id = $9::uuid AND attempts = $10::int AND status = 'running'
 `
 
 type CompleteDraftParams struct {
@@ -76,6 +76,7 @@ type CompleteDraftParams struct {
 	JobFingerprint string
 	Cost           float32
 	DraftDocID     string
+	Findings       []byte
 	ID             pgtype.UUID
 	Attempts       int32
 }
@@ -89,6 +90,7 @@ func (q *Queries) CompleteDraft(ctx context.Context, arg CompleteDraftParams) (i
 		arg.JobFingerprint,
 		arg.Cost,
 		arg.DraftDocID,
+		arg.Findings,
 		arg.ID,
 		arg.Attempts,
 	)

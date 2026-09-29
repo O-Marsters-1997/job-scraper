@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -71,13 +73,17 @@ func RunDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		f := newStore(t)
 		d := create(t, f)
 		c := claim(t, f)
-		res := dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), Model: "m", PromptVersion: "p", DraftDocID: "doc-copy", Cost: 0.5}
+		finding := dto.DraftFinding{Check: "skills", Severity: "info", Message: "the job asks for Rust"}
+		res := dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), Model: "m", PromptVersion: "p", DraftDocID: "doc-copy", Cost: 0.5, Findings: []dto.DraftFinding{finding}}
 		if err := f.Store.CompleteDraft(ctx, c, res); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
 		if got.Status != "ready" || got.DraftDocID != "doc-copy" {
 			t.Errorf("GetDraft() = %+v, want ready with the Doc", got)
+		}
+		if diff := cmp.Diff([]dto.DraftFinding{finding}, got.Findings); diff != "" {
+			t.Errorf("GetDraft().Findings mismatch (-want +got):\n%s", diff)
 		}
 		if err := f.Store.CompleteDraft(ctx, c, res); err == nil {
 			t.Error("second CompleteDraft() err = nil, want a stale-claim error")

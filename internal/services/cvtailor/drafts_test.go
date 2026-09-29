@@ -3,6 +3,7 @@ package cvtailor_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,7 +72,12 @@ func newDraftEnv(t *testing.T) draftEnv {
 
 func (e draftEnv) generator(t *testing.T, editor editorFunc, creds credentials) *cvtailor.Generator {
 	t.Helper()
-	docs := cvtailortest.Docs{TabJSON: tabJSON(t, head(heading), bullet("Built APIs"), bullet("Ran on-call"), bullet("Wrote docs"))}
+	return e.generatorFor(t, tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs")), editor, creds)
+}
+
+func (e draftEnv) generatorFor(t *testing.T, tab json.RawMessage, editor editorFunc, creds credentials) *cvtailor.Generator {
+	t.Helper()
+	docs := cvtailortest.Docs{TabJSON: tab}
 	return cvtailor.NewGenerator(cvtailor.GeneratorDeps{
 		Store: e.store, Docs: docs, Drive: e.drive, Editor: editor, Creds: creds,
 	})
@@ -240,5 +246,152 @@ func TestCreateDraftValidation(t *testing.T) {
 				t.Errorf("CreateDraft() err = %v, want an invalid error", err)
 			}
 		})
+	}
+}
+
+type recordingEditor struct {
+	inputs  []cvedit.Input
+	replies []cvedit.Result
+}
+
+func (r *recordingEditor) edit(in cvedit.Input) (cvedit.Result, error) {
+	r.inputs = append(r.inputs, in)
+	return r.replies[min(len(r.inputs), len(r.replies))-1], nil
+}
+
+func bulletResult(e draftEnv, text string) cvedit.Result {
+	return cvedit.Result{
+		Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID,
+			Bullets:    []cvedit.Bullet{{AchievementIDs: []string{e.pos.Achievements[0].ID}, Text: text}},
+		}}},
+		Cost: 0.01,
+	}
+}
+
+func blockFindings(d dto.Draft) []dto.DraftFinding {
+	var out []dto.DraftFinding
+	for _, f := range d.Findings {
+		if f.Severity == "block" {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func TestGeneratorRetriesABlockedEditWithItsFindings(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.queue(t)
+	ed := &recordingEditor{replies: []cvedit.Result{
+		bulletResult(e, "Leveraged Postgres"),
+		bulletResult(e, "Moved queries to Postgres"),
+	}}
+
+	if err := e.generator(t, ed.edit, credentials{}).RunTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ed.inputs) != 2 {
+		t.Fatalf("editor calls = %d, want 2", len(ed.inputs))
+	}
+	retry := ed.inputs[1]
+	if retry.PriorEdits == nil || len(retry.PriorFindings) != 1 || retry.PriorFindings[0].Check != "banned_words" {
+		t.Errorf("retry input = %+v, want the prior edits and the banned-word finding", retry)
+	}
+	d := e.draft(t, id)
+	if d.Status != "ready" || len(blockFindings(d)) != 0 {
+		t.Errorf("GetDraft() = %+v, want ready with no block findings", d)
+	}
+	if got := e.store.DraftResult(id).Cost; got != 0.02 {
+		t.Errorf("recorded cost = %v, want both calls billed", got)
+	}
+}
+
+func TestGeneratorStopsAfterTwoRetriesAndKeepsTheFindings(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.queue(t)
+	ed := &recordingEditor{replies: []cvedit.Result{bulletResult(e, "Leveraged Postgres")}}
+
+	if err := e.generator(t, ed.edit, credentials{}).RunTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ed.inputs) != 3 {
+		t.Errorf("editor calls = %d, want 1 attempt and 2 retries", len(ed.inputs))
+	}
+	d := e.draft(t, id)
+	blocks := blockFindings(d)
+	if d.Status != "ready" || len(blocks) != 1 || blocks[0].Check != "banned_words" {
+		t.Errorf("GetDraft() = %+v, want ready with the surviving banned-word finding", d)
+	}
+}
+
+func TestGeneratorShortensOnceWhenTheDraftRunsOverAPage(t *testing.T) {
+	e := newDraftEnv(t)
+	e.drive.DraftPages = []int{2, 1}
+	id := e.queue(t)
+	ed := &recordingEditor{replies: []cvedit.Result{
+		bulletResult(e, "Cut p99 latency by moving queries"),
+		bulletResult(e, "Cut p99 latency"),
+	}}
+
+	if err := e.generator(t, ed.edit, credentials{}).RunTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ed.inputs) != 2 || !slices.Contains(ed.inputs[1].ShortenBullets, "Cut p99 latency by moving queries") {
+		t.Fatalf("editor inputs = %+v, want one shorten retry naming the long bullet", ed.inputs)
+	}
+	if len(e.drive.Copies) != 1 || len(e.drive.Updates) != 3 {
+		t.Errorf("copies = %v, updates = %d, want the same copy edited again", e.drive.Copies, len(e.drive.Updates))
+	}
+	if d := e.draft(t, id); d.Status != "ready" || len(blockFindings(d)) != 0 {
+		t.Errorf("GetDraft() = %+v, want ready with no block findings", d)
+	}
+}
+
+func TestGeneratorShortensOnlyOnceAndRecordsTheOverflow(t *testing.T) {
+	e := newDraftEnv(t)
+	e.drive.DraftPages = []int{2}
+	id := e.queue(t)
+	ed := &recordingEditor{replies: []cvedit.Result{bulletResult(e, "Cut p99 latency")}}
+
+	if err := e.generator(t, ed.edit, credentials{}).RunTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ed.inputs) != 2 {
+		t.Errorf("editor calls = %d, want 1 attempt and 1 shorten retry", len(ed.inputs))
+	}
+	blocks := blockFindings(e.draft(t, id))
+	if len(blocks) != 1 || blocks[0].Check != "page_count" {
+		t.Errorf("block findings = %+v, want the page_count overflow", blocks)
+	}
+}
+
+func TestGeneratorRecordsSkillGapsAsInfoFindings(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.queue(t)
+	tab := tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), head("Skills"), bullet("Go"), bullet("SQL"))
+	res := bulletResult(e, "Cut p99 latency")
+	res.Edits.Skills = []string{"Go", "SQL"}
+	res.Edits.JobSkills = []string{"Go", "Kubernetes"}
+	ed := &recordingEditor{replies: []cvedit.Result{res}}
+
+	if err := e.generatorFor(t, tab, ed.edit, credentials{}).RunTick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !ed.inputs[0].HasSkills {
+		t.Error("editor input HasSkills = false, want the base CV's skills section offered")
+	}
+	var infos []dto.DraftFinding
+	for _, f := range e.draft(t, id).Findings {
+		if f.Severity == "info" {
+			infos = append(infos, f)
+		}
+	}
+	if len(infos) != 1 || !strings.Contains(infos[0].Message, "Kubernetes") {
+		t.Errorf("info findings = %+v, want the Kubernetes gap", infos)
 	}
 }

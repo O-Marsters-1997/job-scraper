@@ -38,7 +38,7 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending"}, userID: userID, input: in, dueAt: time.Now()}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	return d.Draft, nil
 }
@@ -103,7 +103,7 @@ func (f *FakeStore) CompleteDraft(_ context.Context, claim dto.DraftClaim, res d
 	if err != nil {
 		return err
 	}
-	d.Status, d.LastError, d.DraftDocID, d.result = "ready", "", res.DraftDocID, res
+	d.Status, d.LastError, d.DraftDocID, d.Findings, d.result = "ready", "", res.DraftDocID, slices.Clone(res.Findings), res
 	return nil
 }
 
