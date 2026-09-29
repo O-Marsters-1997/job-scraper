@@ -1,5 +1,3 @@
-// Package docedit turns a docparse.DocStructure and a cvedit.EditSet into
-// Google Docs batchUpdate requests that touch only editable ranges.
 package docedit
 
 import (
@@ -19,7 +17,6 @@ var (
 	ErrTooManyBullets  = errors.New("docedit: more bullets than slots")
 )
 
-// Range is a Docs API range over body indices.
 type Range struct {
 	StartIndex int `json:"startIndex"`
 	EndIndex   int `json:"endIndex"`
@@ -38,15 +35,13 @@ type InsertText struct {
 	Text     string   `json:"text"`
 }
 
-// Request is one element of a Docs batchUpdate requests array. Exactly one
-// field is set.
+// Request is one element of a batchUpdate requests array; the Docs API
+// requires exactly one field set.
 type Request struct {
 	DeleteContentRange *DeleteContentRange `json:"deleteContentRange,omitempty"`
 	InsertText         *InsertText         `json:"insertText,omitempty"`
 }
 
-// PositionSlots maps a cvedit.PositionEdit.PositionID to the IDs of that
-// position's slots in document order.
 type PositionSlots map[string][]string
 
 type edit struct {
@@ -54,11 +49,8 @@ type edit struct {
 	reqs  []Request
 }
 
-// Requests builds the batchUpdate requests for edits. They are ordered by
-// descending document index so earlier indices stay valid as they apply.
-// A slot with no matching bullet is deleted whole; a position with more
-// bullets than slots is rejected. Profile and skills edits are skipped when
-// the structure has no such section.
+// Requests orders batchUpdate requests by descending document index so
+// earlier indices stay valid as the Docs API applies them.
 func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.EditSet) ([]Request, error) {
 	slots := make(map[string]docparse.Slot, len(ds.Slots))
 	for _, s := range ds.Slots {
