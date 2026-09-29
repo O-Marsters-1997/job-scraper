@@ -81,7 +81,7 @@ func TestStateCollector(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			collector := telemetry.NewStateCollector(tt.reader)
 			if err := testutil.CollectAndCompare(collector, strings.NewReader(tt.want)); err != nil {
-				t.Fatal(err)
+				t.Errorf("CollectAndCompare() mismatch: %v", err)
 			}
 		})
 	}
