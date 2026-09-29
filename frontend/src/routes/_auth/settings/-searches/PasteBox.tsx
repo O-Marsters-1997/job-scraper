@@ -3,8 +3,8 @@ import { Icon } from "@/components/Icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isDuplicateSearch } from "@/lib/searchTargets";
-import { ResolveError } from "../../../../api/sources";
 import { useResolveUrl } from "../../../../hooks/useSources";
+import { ResolveError } from "../../../../lib/resolveError";
 import type { ResolvedURL } from "../../../../types/source";
 import type { SourceTarget } from "../../../../types/sourceTarget";
 

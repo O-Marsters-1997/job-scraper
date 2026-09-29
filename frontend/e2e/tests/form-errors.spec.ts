@@ -39,23 +39,19 @@ test.describe("Form errors", () => {
 		await expect(statusesPage.statusText(name)).toHaveCount(1);
 	});
 
-	test("a failing company add keeps the dialog open with an error", async ({
+	test("a failing company track shows an error and keeps the pasted URL", async ({
 		page,
-		companiesPage,
 	}) => {
-		await companiesPage.goto();
+		await page.goto("/settings/searches?tab=ats");
 		await page.evaluate(() => localStorage.setItem("mock-fail", "addCompany"));
 
-		await page.getByRole("button", { name: "Add company" }).click();
-		const dialog = page.getByRole("dialog");
-		await dialog
-			.getByLabel("ATS board URL")
-			.fill("https://boards.greenhouse.io/acmecorp");
-		await dialog.getByRole("button", { name: "Add", exact: true }).click();
+		const url = page.getByLabel("Company board URL");
+		await url.fill("https://boards.greenhouse.io/acmecorp");
+		await page.getByRole("button", { name: /Track company/ }).click();
 
 		await expect(
-			dialog.getByText("Failed to add company. Please try again."),
+			page.getByText("Could not track the company. Please try again."),
 		).toBeVisible();
-		await expect(dialog).toBeVisible();
+		await expect(url).toHaveValue("https://boards.greenhouse.io/acmecorp");
 	});
 });

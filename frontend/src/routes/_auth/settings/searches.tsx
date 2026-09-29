@@ -1,24 +1,34 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
+import { createFileRoute } from "@tanstack/solid-router";
 import { createMemo, createSignal, onCleanup, Show } from "solid-js";
+import { untrackCompany } from "@/api/companies";
+import { keys } from "@/api/keys";
+import { deleteSourceTarget } from "@/api/sourceTargets";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { parseSearchParams, type SearchParams } from "@/lib/searchTargets";
 import { AlreadyRunningError } from "../../../api/sourceTargets";
+import {
+	useAddCompanyBoard,
+	useSetCompanyTracking,
+	useTrackedCompanies,
+} from "../../../hooks/useCompanies";
 import { useSources } from "../../../hooks/useSources";
 import {
 	useRerunSourceTarget,
 	useSourceTargets,
 	useUpdateSourceTarget,
 } from "../../../hooks/useSourceTargets";
+import type { TrackedBoard, TrackedCompany } from "../../../types/company";
 import type { SourceInfo } from "../../../types/source";
 import type { SourceTarget } from "../../../types/sourceTarget";
 import { BoardSearchesTable } from "./-searches/BoardSearchesTable";
+import { CompanyBoardsTable } from "./-searches/CompanyBoardsTable";
 import { PasteBox } from "./-searches/PasteBox";
 import { SegmentedTabs } from "./-searches/parts";
 import { SearchForm, type SearchPrefill } from "./-searches/SearchForm";
+import { TrackCompanyBox } from "./-searches/TrackCompanyBox";
 import { UndoToasts, useUndoDelete } from "./-searches/useUndoDelete";
 
 export const Route = createFileRoute("/_auth/settings/searches")({
@@ -34,6 +44,10 @@ function SearchesPage() {
 	const sourcesQuery = useSources();
 	const updateMutation = useUpdateSourceTarget();
 	const rerunMutation = useRerunSourceTarget();
+	const [confirming, setConfirming] = createSignal<string[]>([]);
+	const trackedQuery = useTrackedCompanies(() => confirming().length > 0);
+	const trackingMutation = useSetCompanyTracking();
+	const confirmMutation = useAddCompanyBoard();
 
 	const [showForm, setShowForm] = createSignal(false);
 	const [prefill, setPrefill] = createSignal<SearchPrefill>();
@@ -48,7 +62,20 @@ function SearchesPage() {
 		noticeTimer = setTimeout(() => setNotice(null), 6000);
 	};
 
-	const undo = useUndoDelete(setError);
+	const undo = useUndoDelete({
+		commit: (id, keepalive) => deleteSourceTarget(id, { keepalive }),
+		queryKey: keys.sourceTargets,
+		verb: "Deleted",
+		errorMessage: "Could not delete the search. Please try again.",
+		onError: setError,
+	});
+	const untrack = useUndoDelete({
+		commit: (id, keepalive) => untrackCompany(id, { keepalive }),
+		queryKey: keys.companies.tracked,
+		verb: "Untracked",
+		errorMessage: "Could not untrack the company. Please try again.",
+		onError: setError,
+	});
 
 	const params = createMemo(() => parseSearchParams(search()));
 	const tab = () => params().tab ?? "boards";
@@ -56,6 +83,9 @@ function SearchesPage() {
 		(sourcesQuery.data ?? []).filter((s) => s.role === "discovery");
 	const visibleTargets = (all: SourceTarget[]) =>
 		all.filter((t) => !undo.isHidden(t.ID));
+
+	const visibleCompanies = (all: TrackedCompany[]) =>
+		all.filter((c) => !untrack.isHidden(c.id));
 
 	const setParams = (
 		patch: Partial<SearchParams>,
@@ -94,6 +124,35 @@ function SearchesPage() {
 		);
 	};
 
+	const toggleCompany = (c: TrackedCompany) => {
+		setError(null);
+		trackingMutation.mutate(
+			{
+				id: c.id,
+				enabled: !c.enabled,
+				checkIntervalMinutes: c.check_interval_minutes,
+			},
+			{ onError: () => setError("Could not update the company.") },
+		);
+	};
+
+	const confirmBoard = (c: TrackedCompany, board: TrackedBoard) => {
+		setError(null);
+		setConfirming((ids) => [...ids, board.id]);
+		confirmMutation.mutate(
+			{ id: c.id, url: board.url, confirm: true },
+			{
+				onSuccess: () => announce(`Verification queued for ${c.name}.`),
+				onError: () => setError("Could not confirm the board."),
+				onSettled: () =>
+					setTimeout(
+						() => setConfirming((ids) => ids.filter((x) => x !== board.id)),
+						30000,
+					),
+			},
+		);
+	};
+
 	const onCreated = (created: SourceTarget, info: SourceInfo | undefined) => {
 		closeForm();
 		if (created.RunStatus === "failed") {
@@ -128,9 +187,18 @@ function SearchesPage() {
 				<SegmentedTabs
 					value={tab()}
 					onChange={(t) =>
-						setParams({ tab: t === "ats" ? "ats" : undefined, page: undefined })
+						setParams({
+							tab: t === "ats" ? "ats" : undefined,
+							q: undefined,
+							src: undefined,
+							status: undefined,
+							sort: undefined,
+							dir: undefined,
+							page: undefined,
+						})
 					}
 					boardCount={query.data?.length}
+					companyCount={trackedQuery.data?.length}
 				/>
 				<Show when={tab() === "boards" && !showForm()}>
 					<Button
@@ -148,16 +216,30 @@ function SearchesPage() {
 			</div>
 
 			<Show when={tab() === "ats"}>
-				<Card class="px-4 py-6 text-sm text-muted">
-					Company boards are managed from the{" "}
-					<Link
-						to="/companies"
-						class="font-medium text-primary hover:underline"
-					>
-						Companies directory
-					</Link>
-					.
-				</Card>
+				<div class="flex flex-col gap-3">
+					<TrackCompanyBox
+						sources={sourcesQuery.data ?? []}
+						onTracked={(name) => {
+							setError(null);
+							announce(`Tracking ${name}. Confirm the board to start polling.`);
+						}}
+						onError={setError}
+					/>
+					<QueryBoundary query={trackedQuery} fallbackRows={4}>
+						{(data) => (
+							<CompanyBoardsTable
+								companies={visibleCompanies(data())}
+								sources={sourcesQuery.data ?? []}
+								params={params()}
+								onParams={setParams}
+								onToggle={toggleCompany}
+								onUntrack={(c) => untrack.remove(c.id, c.name)}
+								onConfirm={confirmBoard}
+								confirming={(id) => confirming().includes(id)}
+							/>
+						)}
+					</QueryBoundary>
+				</div>
 			</Show>
 
 			<Show when={tab() === "boards"}>
@@ -201,7 +283,13 @@ function SearchesPage() {
 				</QueryBoundary>
 			</Show>
 
-			<UndoToasts items={undo.pending()} onUndo={undo.undo} />
+			<UndoToasts
+				items={[...undo.pending(), ...untrack.pending()]}
+				onUndo={(id) => {
+					undo.undo(id);
+					untrack.undo(id);
+				}}
+			/>
 		</>
 	);
 }

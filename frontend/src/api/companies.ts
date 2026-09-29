@@ -134,7 +134,10 @@ export async function fetchTrackedCompanies(): Promise<TrackedCompany[]> {
 	);
 }
 
-export async function untrackCompany(id: string): Promise<void> {
+export async function untrackCompany(
+	id: string,
+	opts?: { keepalive?: boolean },
+): Promise<void> {
 	return mocked(
 		async (db) => {
 			await mockDelay(80);
@@ -144,6 +147,7 @@ export async function untrackCompany(id: string): Promise<void> {
 			const response = await fetch(`${API_BASE}/companies/${id}/tracking`, {
 				method: "DELETE",
 				credentials: "include",
+				keepalive: opts?.keepalive ?? false,
 			});
 			if (!response.ok)
 				throw new Error(`Failed to untrack company: ${response.status}`);
