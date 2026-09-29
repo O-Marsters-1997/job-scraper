@@ -1,0 +1,279 @@
+{
+  "tabProperties": {
+    "tabId": "t.0",
+    "title": "CV",
+    "index": 0
+  },
+  "documentTab": {
+    "body": {
+      "content": [
+        {
+          "endIndex": 1,
+          "sectionBreak": {
+            "sectionStyle": {
+              "columnSeparatorStyle": "NONE",
+              "contentDirection": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 1,
+          "endIndex": 11,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 1,
+                "endIndex": 11,
+                "textRun": {
+                  "content": "Priya Rao\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 11,
+          "endIndex": 76,
+          "table": {
+            "rows": 1,
+            "columns": 1,
+            "tableRows": [
+              {
+                "startIndex": 12,
+                "endIndex": 76,
+                "tableCells": [
+                  {
+                    "startIndex": 13,
+                    "endIndex": 76,
+                    "content": [
+                      {
+                        "startIndex": 14,
+                        "endIndex": 23,
+                        "paragraph": {
+                          "elements": [
+                            {
+                              "startIndex": 14,
+                              "endIndex": 23,
+                              "textRun": {
+                                "content": "About me\n",
+                                "textStyle": {}
+                              }
+                            }
+                          ],
+                          "paragraphStyle": {
+                            "namedStyleType": "HEADING_2",
+                            "direction": "LEFT_TO_RIGHT"
+                          }
+                        }
+                      },
+                      {
+                        "startIndex": 23,
+                        "endIndex": 76,
+                        "paragraph": {
+                          "elements": [
+                            {
+                              "startIndex": 23,
+                              "endIndex": 76,
+                              "textRun": {
+                                "content": "Full-stack developer focused on accessible products.\n",
+                                "textStyle": {}
+                              }
+                            }
+                          ],
+                          "paragraphStyle": {
+                            "namedStyleType": "NORMAL_TEXT",
+                            "direction": "LEFT_TO_RIGHT"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "startIndex": 76,
+          "endIndex": 87,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 76,
+                "endIndex": 87,
+                "textRun": {
+                  "content": "Experience\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 87,
+          "endIndex": 105,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 87,
+                "endIndex": 105,
+                "textRun": {
+                  "content": "Tech Lead, Globex\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_3",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 105,
+          "endIndex": 152,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 105,
+                "endIndex": 152,
+                "textRun": {
+                  "content": "Shipped a design system adopted by five teams.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 152,
+          "endIndex": 186,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 152,
+                "endIndex": 186,
+                "textRun": {
+                  "content": "Cut CI time from 25 to 9 minutes.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 186,
+          "endIndex": 205,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 186,
+                "endIndex": 205,
+                "textRun": {
+                  "content": "Developer, Initech\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_3",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 205,
+          "endIndex": 255,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 205,
+                "endIndex": 255,
+                "textRun": {
+                  "content": "Rebuilt checkout in React, lifting conversion 8%.\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            },
+            "bullet": {
+              "listId": "kix.list1",
+              "nestingLevel": 0,
+              "textStyle": {}
+            }
+          }
+        },
+        {
+          "startIndex": 255,
+          "endIndex": 272,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 255,
+                "endIndex": 272,
+                "textRun": {
+                  "content": "Technical Skills\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_2",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        },
+        {
+          "startIndex": 272,
+          "endIndex": 319,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 272,
+                "endIndex": 319,
+                "textRun": {
+                  "content": "TypeScript, React, Node.js, PostgreSQL, Docker\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT",
+              "direction": "LEFT_TO_RIGHT"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

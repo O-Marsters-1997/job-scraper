@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -73,4 +74,8 @@ func (f *fakeGoogleClient) FileMeta(context.Context, string, string) (google.Fil
 
 func (f *fakeGoogleClient) ExportPDF(context.Context, string, string, string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("pdf-bytes")), nil
+}
+
+func (f *fakeGoogleClient) GetDocument(context.Context, string, string, string) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
 }

@@ -4,6 +4,7 @@ package identity
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,7 @@ type googleClient interface {
 	DeleteToken(ctx context.Context, userID string) error
 	ListTabs(ctx context.Context, userID, docID string) ([]google.Tab, error)
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
+	GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error)
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
