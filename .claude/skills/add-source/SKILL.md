@@ -1,7 +1,6 @@
 ---
 name: add-source
 description: Add a new job source, either an ATS board API (Greenhouse, Lever, Ashby…) or an HTML listing site. Use for "add a source", "scrape X", "new job board", "support <site>".
-paths: ["internal/worker/sources/**", "cmd/worker/**", "cmd/snapshot/**"]
 ---
 
 # Add a Job Source

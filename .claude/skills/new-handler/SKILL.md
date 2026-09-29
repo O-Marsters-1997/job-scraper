@@ -1,7 +1,6 @@
 ---
 name: new-handler
 description: Add an HTTP handler/endpoint and its frontend api function and hook. Covers dto, service, module route, zod schema, mock and query hook. Use for "new handler", "add an endpoint", "new route", "expose X to the frontend".
-paths: ["internal/services/**", "internal/handlers/**", "internal/api/**", "internal/dto/**", "frontend/src/api/**", "frontend/src/hooks/**", "frontend/src/mocks/**", "frontend/src/types/**"]
 ---
 
 # New Handler
