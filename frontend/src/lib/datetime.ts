@@ -21,13 +21,16 @@ export function formatDate(iso: string): string {
 }
 
 export function formatRelative(iso: string): string {
-	const diffMs = new Date(iso).getTime() - Date.now();
+	const then = new Date(iso).getTime();
+	if (Number.isNaN(then)) return "—";
+	const diffMs = then - Date.now();
 	const diffSec = Math.round(diffMs / 1000);
 	const diffMin = Math.round(diffSec / 60);
 	const diffHr = Math.round(diffMin / 60);
 	const diffDay = Math.round(diffHr / 24);
 	const diffWk = Math.round(diffDay / 7);
 	const diffMo = Math.round(diffDay / 30);
+	const diffYr = Math.round(diffDay / 365);
 	const abs = (n: number) => Math.abs(n);
 
 	if (abs(diffSec) < 60) return "just now";
@@ -35,5 +38,6 @@ export function formatRelative(iso: string): string {
 	if (abs(diffHr) < 24) return rtf.format(diffHr, "hour");
 	if (abs(diffDay) < 7) return rtf.format(diffDay, "day");
 	if (abs(diffWk) < 5) return rtf.format(diffWk, "week");
-	return rtf.format(diffMo, "month");
+	if (abs(diffMo) < 12) return rtf.format(diffMo, "month");
+	return rtf.format(diffYr, "year");
 }

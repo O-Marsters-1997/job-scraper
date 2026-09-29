@@ -6,7 +6,12 @@ import {
 } from "@/components/jobs/TrackApplicationDialog";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
-import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
+import {
+	applyJobFilters,
+	DEFAULT_FILTERS,
+	parseSearch,
+	sourceOptions,
+} from "@/lib/jobFilters";
 import { createJobColumns } from "../../components/jobs/columns";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
@@ -44,7 +49,7 @@ function JobsPage() {
 		),
 	);
 
-	const filters = () => parseSearch(search() as Record<string, unknown>);
+	const filters = (): JobFilters => ({ ...DEFAULT_FILTERS, ...search() });
 	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
 	const srcOptions = () => sourceOptions(jobs());
 

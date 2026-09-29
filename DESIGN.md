@@ -135,7 +135,7 @@ The TweaksPanel Sharp/Round control overrides `--radius-*` at runtime.
 
 Elevation: cards, tables, and the shell rely on **borders only**. Shadows are
 reserved for overlays — `shadow-xl` on dropdown content and the auth cards,
-`shadow-2xl` on modals (over a `bg-black/30` + `backdrop-blur-[2px]` scrim).
+`shadow-2xl` on modals (over a `bg-scrim` + `backdrop-blur-[2px]` scrim).
 
 ## 5. Layout & Composition
 

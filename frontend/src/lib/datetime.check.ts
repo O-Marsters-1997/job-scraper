@@ -1,4 +1,4 @@
-import { dayKey } from "./datetime";
+import { dayKey, formatRelative } from "./datetime";
 
 // ponytail: inline assert + ambient `process` so tsgo doesn't need @types/node
 declare const process: { env: Record<string, string | undefined> };
@@ -20,6 +20,23 @@ try {
 		"a job scraped at 00:30 local BST must land in today's local bucket",
 	);
 	ok(dayKey(scrapedAt) === "2025-07-15");
+
+	ok(
+		formatRelative("not a date") === "—",
+		"invalid dates must not throw or read NaN",
+	);
+	ok(formatRelative("") === "—", "empty string is an invalid date");
+	const daysAgo = (n: number) =>
+		new Date(Date.now() - n * 86_400_000).toISOString();
+	ok(formatRelative(daysAgo(400)) === "last year", "400 days ago is last year");
+	ok(
+		formatRelative(daysAgo(800)) === "2 years ago",
+		"800 days ago is 2 years ago",
+	);
+	ok(
+		formatRelative(daysAgo(60)) === "2 months ago",
+		"60 days ago stays in months",
+	);
 } finally {
 	if (savedTZ === undefined) delete process.env.TZ;
 	else process.env.TZ = savedTZ;

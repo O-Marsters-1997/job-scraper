@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -155,9 +156,13 @@ function SearchesPage() {
 		updateMutation.mutate({ id: t.ID, enabled: !t.Enabled });
 	};
 
-	const handleDelete = (id: string) => {
-		deleteMutation.mutate(id);
+	const deleteSearch = async (id: string) => {
+		await deleteMutation.mutateAsync(id);
 	};
+
+	const [deletingTarget, setDeletingTarget] = createSignal<SourceTarget | null>(
+		null,
+	);
 
 	const handleRerun = async (id: string) => {
 		setConflictError(null);
@@ -248,7 +253,7 @@ function SearchesPage() {
 										}}
 									>
 										<span
-											class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+											class="inline-block h-3.5 w-3.5 transform rounded-full bg-surface shadow transition-transform"
 											style={{
 												transform: t.Enabled
 													? "translateX(18px)"
@@ -260,7 +265,7 @@ function SearchesPage() {
 								<TableCell>
 									<button
 										type="button"
-										onClick={() => handleDelete(t.ID)}
+										onClick={() => setDeletingTarget(t)}
 										disabled={deleteMutation.isPending}
 										class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle disabled:opacity-50"
 									>
@@ -532,6 +537,23 @@ function SearchesPage() {
 					</>
 				)}
 			</QueryBoundary>
+			<ConfirmDeleteDialog
+				open={deletingTarget() !== null}
+				onClose={() => setDeletingTarget(null)}
+				title="Delete search?"
+				confirmLabel="Delete search"
+				description={
+					<>
+						This removes the{" "}
+						<span class="font-medium text-foreground">
+							{deletingTarget()?.Value}
+						</span>{" "}
+						search. Jobs it already found stay on your Jobs list. This can't be
+						undone.
+					</>
+				}
+				onConfirm={() => deleteSearch(deletingTarget()?.ID ?? "")}
+			/>
 		</>
 	);
 }

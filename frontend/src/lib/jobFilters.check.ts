@@ -4,6 +4,7 @@ import {
 	DEFAULT_FILTERS,
 	filterCompanyJobs,
 	normalizeArrangement,
+	parseSearch,
 	parseSalary,
 } from "./jobFilters";
 
@@ -17,6 +18,15 @@ function eq(a: unknown, b: unknown): void {
 			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
 		);
 }
+
+ok(
+	parseSearch({ suit: "" }).suit === undefined,
+	"empty suit must not become 0",
+);
+ok(parseSearch({}).suit === undefined);
+ok(parseSearch({ suit: "0" }).suit === 0, "an explicit 0 is kept");
+ok(parseSearch({ suit: "70" }).suit === 70);
+ok(parseSearch({ suit: "abc" }).suit === undefined);
 
 eq(parseSalary("£80,000 to £95,000"), { min: 80000, max: 95000 });
 eq(parseSalary("£80k - £95k"), { min: 80000, max: 95000 });

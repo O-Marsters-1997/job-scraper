@@ -1,10 +1,11 @@
-export const MATCHED_COLOUR = "#059669";
-export const MISSING_COLOUR = "#dc2626";
-export const WARNING_COLOUR = "#d97706";
+export const MATCHED_COLOUR = "var(--color-score-matched)";
+export const MISSING_COLOUR = "var(--color-destructive-strong)";
+export const WARNING_COLOUR = "var(--color-score-warning)";
+const GOOD_COLOUR = "var(--color-score-good)";
 
 export function scoreColour(n: number): string {
 	if (n >= 80) return MATCHED_COLOUR;
-	if (n >= 65) return "#10b981";
+	if (n >= 65) return GOOD_COLOUR;
 	if (n >= 50) return WARNING_COLOUR;
 	return MISSING_COLOUR;
 }

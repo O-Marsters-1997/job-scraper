@@ -33,6 +33,16 @@ import type {
 	ScoringOptionsView,
 } from "../types/scoringOptions";
 
+function at<T>(items: readonly T[], index: number): T {
+	const item = items[index];
+	if (item === undefined) throw new Error(`mock index ${index} out of range`);
+	return item;
+}
+
+function cycle<T>(items: readonly T[], index: number): T {
+	return at(items, index % items.length);
+}
+
 faker.seed(1234);
 
 const STATUS_DEFINITIONS = [
@@ -369,13 +379,13 @@ let jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		DaysInOffice: daysInOffice,
 		SuitabilityScore: scored ? faker.number.int({ min: 30, max: 100 }) : null,
 		Breakdown: scored ? mockBreakdown(i) : null,
-		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
-		Skills: SKILL_SETS[i % SKILL_SETS.length]!,
-		EmploymentType: EMPLOYMENT_TYPES[i % EMPLOYMENT_TYPES.length]!,
+		Description: cycle(JOB_DESCRIPTIONS, i),
+		Skills: cycle(SKILL_SETS, i),
+		EmploymentType: cycle(EMPLOYMENT_TYPES, i),
 		ExperienceLevel: deriveExperienceLevel(title),
-		TeamName: TEAM_NAMES[i % TEAM_NAMES.length]!,
-		CompanySize: COMPANY_SIZES[i % COMPANY_SIZES.length]!,
-		SalaryRange: SALARY_RANGES[i % SALARY_RANGES.length]!,
+		TeamName: cycle(TEAM_NAMES, i),
+		CompanySize: cycle(COMPANY_SIZES, i),
+		SalaryRange: cycle(SALARY_RANGES, i),
 	};
 });
 
@@ -400,7 +410,7 @@ let companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		ID: `company-${i + 1}`,
 		Slug: slug,
 		Name: name,
-		ATSSource: hasBoard ? ATS_SOURCES[i % ATS_SOURCES.length]! : "",
+		ATSSource: hasBoard ? cycle(ATS_SOURCES, i) : "",
 		ATSToken: hasBoard ? slug : "",
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
@@ -446,7 +456,7 @@ function humanizeSlug(slug: string): string {
 	return slug
 		.split(/[-_]/)
 		.filter(Boolean)
-		.map((w) => w[0]!.toUpperCase() + w.slice(1))
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 		.join(" ");
 }
 
@@ -463,9 +473,9 @@ let applications: Application[] = [];
 let appJobCursor = 0;
 
 for (const { statusIndex, count } of APP_DISTRIBUTION) {
-	const status = statuses[statusIndex]!;
+	const status = at(statuses, statusIndex);
 	for (let c = 0; c < count; c++) {
-		const job = jobs[appJobCursor++]!;
+		const job = at(jobs, appJobCursor++);
 		const isSaved = statusIndex === 0;
 		const appliedAt = isSaved
 			? null
@@ -671,7 +681,7 @@ export function updateSourceTarget(
 ): SourceTarget {
 	const companyIdx = companies.findIndex((c) => c.TargetID === id);
 	if (companyIdx !== -1) {
-		const company = companies[companyIdx]!;
+		const company = at(companies, companyIdx);
 		const updated: Company = {
 			...company,
 			Tracked: patch.enabled ?? company.Tracked,
@@ -688,8 +698,8 @@ export function updateSourceTarget(
 	const idx = discoverySourceTargets.findIndex((t) => t.ID === id);
 	if (idx === -1) throw new Error("Source target not found");
 	const updated: SourceTarget = {
-		...discoverySourceTargets[idx]!,
-		Enabled: patch.enabled ?? discoverySourceTargets[idx]!.Enabled,
+		...at(discoverySourceTargets, idx),
+		Enabled: patch.enabled ?? at(discoverySourceTargets, idx).Enabled,
 	};
 	discoverySourceTargets = [
 		...discoverySourceTargets.slice(0, idx),
@@ -715,7 +725,7 @@ export function rerunSourceTarget(id: string): SourceTarget {
 		};
 	}
 	const updated: SourceTarget = {
-		...discoverySourceTargets[idx]!,
+		...at(discoverySourceTargets, idx),
 		RunStatus: "succeeded",
 		LastRunAt: new Date().toISOString(),
 	};
@@ -1084,8 +1094,8 @@ export function recomputeScores(): RecomputeResult {
 
 export function createApplication(data: CreateApplicationPayload): Application {
 	const status = data.status_id
-		? (statuses.find((s) => s.ID === data.status_id) ?? statuses[0]!)
-		: statuses[0]!;
+		? (statuses.find((s) => s.ID === data.status_id) ?? at(statuses, 0))
+		: at(statuses, 0);
 	const app: Application = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
@@ -1108,7 +1118,7 @@ export function updateApplication(
 	failIfRequested("updateApplication");
 	const idx = applications.findIndex((a) => a.ID === id);
 	if (idx === -1) throw new Error("Application not found");
-	const prev = applications[idx]!;
+	const prev = at(applications, idx);
 	const updated: Application = {
 		...prev,
 		StatusID: data.status_id ?? prev.StatusID,
@@ -1149,7 +1159,7 @@ export function updateStatus(
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
-	const updated = { ...statuses[idx]!, Name: name, Colour: colour };
+	const updated = { ...at(statuses, idx), Name: name, Colour: colour };
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;
 }
@@ -1248,7 +1258,7 @@ export function setCompanyTracking(
 ): CompanyTracking {
 	const idx = companies.findIndex((c) => c.ID === id);
 	if (idx === -1) throw new Error("Company not found");
-	const company = companies[idx]!;
+	const company = at(companies, idx);
 	const updated: Company = {
 		...company,
 		Tracked: enabled,

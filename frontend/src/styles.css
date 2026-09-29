@@ -66,9 +66,21 @@
 	--color-source-greenhouse: oklch(0.3862 0.1078 157.07);
 	--color-source-lever: oklch(0.4661 0.1461 36.24);
 
+	/* Modal scrim and translucent white fills for dark panels */
+	--color-scrim: oklch(0 0 0 / 0.3);
+	--color-overlay-10: oklch(1 0 0 / 0.1);
+	--color-overlay-15: oklch(1 0 0 / 0.15);
+	--color-overlay-20: oklch(1 0 0 / 0.2);
+	--color-overlay-25: oklch(1 0 0 / 0.25);
+
 	/* Sidebar count-badge surfaces */
 	--color-sidebar-badge: oklch(1 0 0 / 0.07);
 	--color-sidebar-badge-active: oklch(0.62 0.2 300 / 0.12);
+
+	/* Score scale: strong matches, a step below, and cautionary amber */
+	--color-score-matched: oklch(0.596 0.1274 163.23);
+	--color-score-good: oklch(0.696 0.1704 162.48);
+	--color-score-warning: oklch(0.6658 0.1574 58.32);
 
 	/* Status palette (defaults / chips) */
 	--color-status-saved: oklch(0.5544 0.0407 257.42);

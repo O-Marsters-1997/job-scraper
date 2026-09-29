@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 
 interface Props {
 	html: string;
@@ -17,7 +17,7 @@ function looksHtml(s: string): boolean {
 }
 
 export default function JobDescription(props: Props) {
-	const decoded = () => decodeEntities(props.html);
+	const decoded = createMemo(() => decodeEntities(props.html));
 
 	return (
 		<Show
@@ -28,7 +28,13 @@ export default function JobDescription(props: Props) {
 				</div>
 			}
 		>
-			<div class="job-description" innerHTML={DOMPurify.sanitize(decoded())} />
+			<div
+				class="job-description"
+				innerHTML={DOMPurify.sanitize(decoded(), {
+					FORBID_ATTR: ["style"],
+					FORBID_TAGS: ["form", "input"],
+				})}
+			/>
 		</Show>
 	);
 }

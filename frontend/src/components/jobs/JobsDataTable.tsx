@@ -27,7 +27,7 @@ import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import type { Job } from "@/types/job";
 
 interface JobsDataTableProps<TData extends Job> {
-	columns: ColumnDef<TData, unknown>[];
+	columns: ColumnDef<TData, never>[];
 	data: TData[];
 	filters: JobFilters;
 	onChange: (patch: Partial<JobFilters>) => void;
@@ -100,7 +100,7 @@ export function JobsDataTable<TData extends Job>(
 					<Icon name="filter" size={14} />
 					Filters
 					<Show when={filterCount() > 0}>
-						<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+						<Badge class="ml-0.5 h-4 min-w-4 px-1 text-2xs">
 							{filterCount()}
 						</Badge>
 					</Show>

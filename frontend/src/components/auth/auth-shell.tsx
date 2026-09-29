@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import { createSignal, type JSX, onCleanup, Show } from "solid-js";
 import { RoleCloud } from "@/components/auth/role-cloud";
 import { FastTrackMark } from "@/components/brand-mark";
 import { oklchLightness } from "@/lib/color";
@@ -11,7 +11,7 @@ const Wordmark = (props: { class?: string; tone?: "dark" | "light" }) => (
 			class={
 				props.tone === "light"
 					? "grid h-9 w-9 place-items-center rounded-[10px] bg-primary/10 text-primary"
-					: "grid h-[34px] w-[34px] place-items-center rounded-[10px] border border-white/20 bg-white/10 text-[var(--bright)]"
+					: "grid h-[34px] w-[34px] place-items-center rounded-[10px] border border-overlay-20 bg-overlay-10 text-[var(--bright)]"
 			}
 		>
 			<FastTrackMark size={19} />
@@ -27,7 +27,17 @@ const Wordmark = (props: { class?: string; tone?: "dark" | "light" }) => (
 	</span>
 );
 
+function createDesktop() {
+	const query = window.matchMedia("(min-width: 1024px)");
+	const [desktop, setDesktop] = createSignal(query.matches);
+	const onChange = (e: MediaQueryListEvent) => setDesktop(e.matches);
+	query.addEventListener("change", onChange);
+	onCleanup(() => query.removeEventListener("change", onChange));
+	return desktop;
+}
+
 export function AuthShell(props: { children: JSX.Element }) {
+	const desktop = createDesktop();
 	const sidebarL = oklchLightness(
 		getComputedStyle(document.documentElement)
 			.getPropertyValue("--color-sidebar")
@@ -52,7 +62,9 @@ export function AuthShell(props: { children: JSX.Element }) {
 					class="absolute inset-x-0 bottom-0 top-[72px] z-[1]"
 					aria-hidden="true"
 				>
-					<RoleCloud variant="compact" />
+					<Show when={!desktop()}>
+						<RoleCloud variant="compact" />
+					</Show>
 				</div>
 
 				<Wordmark class="relative z-[2]" />
@@ -86,7 +98,9 @@ export function AuthShell(props: { children: JSX.Element }) {
 					</div>
 
 					<div class="auth-field" aria-hidden="true">
-						<RoleCloud />
+						<Show when={desktop()}>
+							<RoleCloud />
+						</Show>
 					</div>
 				</div>
 			</section>

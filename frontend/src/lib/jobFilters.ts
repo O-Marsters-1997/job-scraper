@@ -23,6 +23,8 @@ export const DEFAULT_FILTERS: JobFilters = {
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
 export function parseSearch(raw: Record<string, unknown>): JobFilters {
 	const coerceNum = (v: unknown) => {
+		if (v === null || (typeof v === "string" && v.trim() === ""))
+			return undefined;
 		const n = Number(v);
 		return Number.isFinite(n) ? n : undefined;
 	};

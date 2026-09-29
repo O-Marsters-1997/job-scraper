@@ -1,18 +1,27 @@
 import { createSignal } from "solid-js";
+import { z } from "zod";
 
-export type ThemeKey =
-	| "violet"
-	| "midnight"
-	| "ember"
-	| "forest"
-	| "plum"
-	| "graphite"
-	| "custom";
-export type FontKey = "jakarta" | "dm" | "sora" | "outfit" | "ibm";
-export type SizeKey = "xs" | "sm" | "md" | "lg";
-export type SidebarWidthKey = "narrow" | "default" | "wide";
-export type DensityKey = "compact" | "default" | "spacious";
-export type RadiusKey = "sharp" | "default" | "round";
+export const THEME_KEYS = [
+	"violet",
+	"midnight",
+	"ember",
+	"forest",
+	"plum",
+	"graphite",
+	"custom",
+] as const;
+export const FONT_KEYS = ["jakarta", "dm", "sora", "outfit", "ibm"] as const;
+export const SIZE_KEYS = ["xs", "sm", "md", "lg"] as const;
+export const SIDEBAR_WIDTH_KEYS = ["narrow", "default", "wide"] as const;
+export const DENSITY_KEYS = ["compact", "default", "spacious"] as const;
+export const RADIUS_KEYS = ["sharp", "default", "round"] as const;
+
+export type ThemeKey = (typeof THEME_KEYS)[number];
+export type FontKey = (typeof FONT_KEYS)[number];
+export type SizeKey = (typeof SIZE_KEYS)[number];
+export type SidebarWidthKey = (typeof SIDEBAR_WIDTH_KEYS)[number];
+export type DensityKey = (typeof DENSITY_KEYS)[number];
+export type RadiusKey = (typeof RADIUS_KEYS)[number];
 
 export interface Tweaks {
 	theme: ThemeKey;
@@ -326,16 +335,6 @@ export const THEMES: Record<ThemeKey, ThemeEntry> = {
 	},
 };
 
-export const THEME_KEYS: ThemeKey[] = [
-	"violet",
-	"midnight",
-	"ember",
-	"forest",
-	"plum",
-	"graphite",
-	"custom",
-];
-
 interface FontEntry {
 	name: string;
 	ui: string;
@@ -370,65 +369,45 @@ export const FONTS: Record<FontKey, FontEntry> = {
 	},
 };
 
-export const FONT_KEYS: FontKey[] = ["jakarta", "dm", "sora", "outfit", "ibm"];
-
-function savedChoice<T extends string>(
-	value: unknown,
-	choices: readonly T[],
-	fallback: T,
-): T {
-	return typeof value === "string" && choices.includes(value as T)
-		? (value as T)
-		: fallback;
+export function defaultTweaks(): Tweaks {
+	return { ...DEFAULTS, customColors: { ...CUSTOM_DEFAULTS } };
 }
+
+const savedTweaksSchema = z.object({
+	theme: z.enum(THEME_KEYS).catch(DEFAULTS.theme),
+	font: z.enum(FONT_KEYS).catch(DEFAULTS.font),
+	size: z.enum(SIZE_KEYS).catch(DEFAULTS.size),
+	sidebarWidth: z.enum(SIDEBAR_WIDTH_KEYS).catch(DEFAULTS.sidebarWidth),
+	density: z.enum(DENSITY_KEYS).catch(DEFAULTS.density),
+	radius: z.enum(RADIUS_KEYS).catch(DEFAULTS.radius),
+	customColors: z.record(z.string(), z.unknown()).catch({}),
+});
 
 export function loadTweaks(): Tweaks {
 	try {
 		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored) {
-			const parsed: unknown = JSON.parse(stored);
-			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-				return DEFAULTS;
-			const value = parsed as Record<string, unknown>;
-			const savedColors = value.customColors;
-			const colors =
-				savedColors &&
-				typeof savedColors === "object" &&
-				!Array.isArray(savedColors)
-					? (savedColors as Record<string, unknown>)
-					: {};
+			const parsed = savedTweaksSchema.safeParse(JSON.parse(stored));
+			if (!parsed.success) return defaultTweaks();
+			const colors = parsed.data.customColors;
 			return {
-				theme: savedChoice(value.theme, THEME_KEYS, DEFAULTS.theme),
-				font: savedChoice(value.font, FONT_KEYS, DEFAULTS.font),
-				size: savedChoice(value.size, ["xs", "sm", "md", "lg"], DEFAULTS.size),
-				sidebarWidth: savedChoice(
-					value.sidebarWidth,
-					["narrow", "default", "wide"],
-					DEFAULTS.sidebarWidth,
-				),
-				density: savedChoice(
-					value.density,
-					["compact", "default", "spacious"],
-					DEFAULTS.density,
-				),
-				radius: savedChoice(
-					value.radius,
-					["sharp", "default", "round"],
-					DEFAULTS.radius,
-				),
+				...parsed.data,
 				customColors: Object.fromEntries(
-					Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [
-						key,
-						typeof colors[key] === "string" &&
-						(typeof CSS === "undefined" || CSS.supports("color", colors[key]))
-							? colors[key]
-							: fallback,
-					]),
+					Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => {
+						const saved = colors[key];
+						return [
+							key,
+							typeof saved === "string" &&
+							(typeof CSS === "undefined" || CSS.supports("color", saved))
+								? saved
+								: fallback,
+						];
+					}),
 				),
 			};
 		}
 	} catch {}
-	return { ...DEFAULTS };
+	return defaultTweaks();
 }
 
 export function saveTweaks(t: Tweaks): void {

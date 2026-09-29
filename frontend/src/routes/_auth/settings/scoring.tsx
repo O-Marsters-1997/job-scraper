@@ -27,7 +27,11 @@ import {
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
 import { useScoringOptions } from "../../../hooks/useScoringOptions";
-import type { ScoringConfig } from "../../../types/scoringConfig";
+import {
+	type ScoringConfig,
+	type Stance,
+	scoringNumbersSchema,
+} from "../../../types/scoringConfig";
 import type {
 	ScoringOption,
 	ScoringOptionsView,
@@ -37,13 +41,13 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 	component: ScoringPage,
 });
 
-type Stance = "nice" | "avoid";
 type StanceMap = Record<string, Stance | undefined>;
 type Dim = ScoringOption["dimension"];
 
 const STANCE_TONE: Record<Stance, string> = {
 	nice: "border-accent-border bg-accent-subtle text-accent-text",
 	avoid: "border-destructive/40 bg-surface text-destructive-strong",
+	block: "border-destructive/40 bg-surface text-destructive-strong",
 };
 
 function ScoringPage() {
@@ -74,7 +78,7 @@ function ScoringForm(props: {
 		Object.fromEntries(
 			initialConfig.preferences.picks
 				.filter((p) => p.source === "manual")
-				.map((p) => [p.optionId, p.stance as Stance]),
+				.map((p) => [p.optionId, p.stance]),
 		),
 	);
 
@@ -134,9 +138,19 @@ function ScoringForm(props: {
 	const handleSave = async () => {
 		setNotice(null);
 		setError(null);
+		const numbers = scoringNumbersSchema.safeParse({
+			notifyThreshold: threshold(),
+			salaryFloor: salaryFloor()
+				? { amount: Number(salaryFloor()), currency: "GBP" }
+				: null,
+		});
+		if (!numbers.success) {
+			setError(numbers.error.issues[0]?.message ?? "Check the numbers.");
+			return;
+		}
 		try {
 			const result = await mutation.mutateAsync({
-				notifyThreshold: threshold(),
+				notifyThreshold: numbers.data.notifyThreshold,
 				excludedTitleKeywords: titleKeywords(),
 				excludedCompanies: uniqueCapitalised(companies()),
 				excludedLocations: uniqueCapitalised(locations()),
@@ -149,9 +163,7 @@ function ScoringForm(props: {
 							source: "manual",
 							overridden: false,
 						})),
-					salaryFloor: salaryFloor()
-						? { amount: Number(salaryFloor()), currency: "GBP" }
-						: null,
+					salaryFloor: numbers.data.salaryFloor,
 					preferenceText: preferenceText(),
 				},
 				updatedAt: props.config().updatedAt,
@@ -351,8 +363,7 @@ function ScoringForm(props: {
 											"inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium",
 											p.overridden
 												? "border-border text-faint line-through"
-												: (STANCE_TONE[p.stance as Stance] ??
-														"border-border-strong bg-surface-muted text-muted"),
+												: STANCE_TONE[p.stance],
 										)}
 									>
 										{labelFor(p.optionId)}
