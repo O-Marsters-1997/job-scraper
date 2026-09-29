@@ -34,6 +34,7 @@ export const draftFindingSchema = z.object({
 	severity: z.enum(["block", "warn", "info"]),
 	slotId: z.string().optional(),
 	message: z.string(),
+	score: z.number().optional(),
 });
 
 export const provenanceBulletSchema = z.object({

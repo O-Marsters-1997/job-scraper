@@ -23,8 +23,11 @@ func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
 		ids[i] = e.queue(t)
 	}
 	bullet := cvedit.Bullet{AchievementIDs: []string{e.pos.Achievements[0].ID}, Text: "Cut p99 latency by moving Redis queries to Postgres"}
-	if err := e.generator(t, editing(bullet), credentials{}).RunTick(context.Background()); err != nil {
-		t.Fatal(err)
+	gen := e.generator(t, editing(bullet), credentials{})
+	for range n {
+		if err := gen.RunTick(context.Background()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return ids
 }
@@ -125,9 +128,9 @@ func TestOnlyAReadyDraftCanBeKeptOrDiscarded(t *testing.T) {
 
 func TestReviewRoutes(t *testing.T) {
 	e := newDraftEnv(t)
-	e.drive.PDF = "%PDF-fake"
 	r := e.router()
 	ids := e.readyDrafts(t, 2)
+	e.drive.PDF = "%PDF-fake"
 
 	w := do(t, r, http.MethodGet, "/tailoring/drafts/"+ids[0]+"/pdf", "")
 	if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/pdf" || w.Body.String() != "%PDF-fake" {
