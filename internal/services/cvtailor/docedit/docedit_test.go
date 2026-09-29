@@ -12,8 +12,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
 )
 
 type fixtureDoc struct {

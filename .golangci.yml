@@ -51,7 +51,7 @@ linters:
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
-            - pkg: github.com/ollymarsters/job-scraper/internal/services/tailoring/tailoringtest
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
         no-testify:
           files: ["**/*_test.go"]
@@ -105,11 +105,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/scoring/store
               desc: only the scoring context uses its store; call the scoring Module facade (ADR 0011)
-        tailoring-store:
-          files: ["$all", "!**/internal/services/tailoring/**"]
+        cvtailor-store:
+          files: ["$all", "!**/internal/services/cvtailor/**"]
           deny:
-            - pkg: github.com/ollymarsters/job-scraper/internal/services/tailoring/store
-              desc: only the tailoring context uses its store; call the tailoring Module facade (ADR 0011)
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtailor/store
+              desc: only the cvtailor context uses its store; call the cvtailor Module facade (ADR 0011)
   exclusions:
     rules:
       # forbidigo's reflect.DeepEqual/time.Sleep bans are a test-only policy (ADR 0012);

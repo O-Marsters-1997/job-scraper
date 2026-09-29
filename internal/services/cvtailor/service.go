@@ -1,6 +1,6 @@
-// Package tailoring is the tailoring context: the Experience Bank of
+// Package cvtailor is the cvtailor context: the Experience Bank of
 // Positions and Achievements a User tailors CVs from (ADR 0011).
-package tailoring
+package cvtailor
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package tailoring
+package cvtailor
 
 import (
 	"github.com/go-chi/chi/v5"

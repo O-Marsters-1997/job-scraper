@@ -1,4 +1,4 @@
-package tailoringtest
+package cvtailortest
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 )
 
 // missingID is a well-formed but nonexistent UUID, valid input for both the
@@ -19,12 +19,12 @@ const missingID = "00000000-0000-0000-0000-00000000dead"
 // write for. The fake accepts any string; a real store needs rows that
 // user_id's foreign key resolves to.
 type Fixture struct {
-	Store  tailoring.Store
+	Store  cvtailor.Store
 	UserID string
 	Other  string
 }
 
-// RunStoreContract proves newStore's tailoring.Store behaves the same
+// RunStoreContract proves newStore's cvtailor.Store behaves the same
 // whether it's the fake or the real store (ADR 0012).
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()

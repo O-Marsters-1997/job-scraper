@@ -41,10 +41,10 @@ sql:
         out: "internal/services/scoring/store/sqlc"
         sql_package: "pgx/v5"
   - engine: "postgresql"
-    queries: "internal/services/tailoring/store/queries"
+    queries: "internal/services/cvtailor/store/queries"
     schema: "internal/data/db/sqlc/schema.sql"
     gen:
       go:
         package: "sqlc"
-        out: "internal/services/tailoring/store/sqlc"
+        out: "internal/services/cvtailor/store/sqlc"
         sql_package: "pgx/v5"

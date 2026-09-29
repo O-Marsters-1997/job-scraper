@@ -1,4 +1,4 @@
-package tailoring_test
+package cvtailor_test
 
 import (
 	"encoding/json"
@@ -12,12 +12,12 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/tailoringtest"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
 func newTestRouter() chi.Router {
-	m := tailoring.Build(tailoring.Deps{Store: tailoringtest.NewFakeStore()})
+	m := cvtailor.Build(cvtailor.Deps{Store: cvtailortest.NewFakeStore()})
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r
