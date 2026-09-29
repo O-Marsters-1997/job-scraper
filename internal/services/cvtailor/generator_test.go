@@ -348,6 +348,58 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("plans the shorten retry against the original CV", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		docs := cvtailortest.EditedCopyDocs{
+			BaseDocID: docID,
+			Base: tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs"),
+				head("Skills"), bullet("Go"), bullet("SQL")),
+			Copy: tabJSON(t, head(heading), bullet("Cut p99 latency by moving queries"), bullet("Ran on-call"), bullet("Wrote docs"),
+				head("Skills"), bullet("Go"), bullet("SQL"), bullet("Kubernetes")),
+		}
+		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by moving queries", 0.25), e.bulletResult("Cut p99 latency", 0.25))
+
+		e.run(t, docs, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, cvtailortest.Key("sk-or-test"))
+
+		if len(editor.Inputs) != 2 {
+			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
+		}
+		first, shorten := editor.Inputs[0], editor.Inputs[1]
+		if diff := cmp.Diff(first.BaseSkills, shorten.BaseSkills); diff != "" {
+			t.Errorf("shorten BaseSkills mismatch (-original +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(first.Positions, shorten.Positions); diff != "" {
+			t.Errorf("shorten Positions mismatch (-original +got):\n%s", diff)
+		}
+		if d := e.draft(t, id); d.Status != "ready" {
+			t.Errorf("GetDraft(%s) = %+v, want ready", id, d)
+		}
+	})
+
+	t.Run("retries a shortened edit that is blocked", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		editor := cvtailortest.Editing(
+			e.bulletResult("Cut p99 latency by moving queries", 0.25),
+			e.bulletResult("Leveraged Postgres", 0.25),
+			e.bulletResult("Cut p99 latency", 0.25),
+		)
+
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, cvtailortest.Key("sk-or-test"))
+
+		if len(editor.Inputs) != 3 {
+			t.Fatalf("editor calls = %d, want 1 attempt, 1 shorten and 1 retry of the blocked shorten", len(editor.Inputs))
+		}
+		if len(editor.Inputs[2].ShortenBullets) == 0 {
+			t.Errorf("retry input = %+v, want it to keep the shorten request", editor.Inputs[2])
+		}
+		d := e.draft(t, id)
+		if d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
+			t.Errorf("GetDraft(%s) = %+v, want ready with no block findings", id, d)
+		}
+	})
+
 	t.Run("records skill gaps as info findings", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.queue(t)

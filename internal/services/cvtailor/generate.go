@@ -197,7 +197,7 @@ func (g *Generator) generate(ctx context.Context, claim dto.DraftClaim) (string,
 		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 	}
 	if draftPages > basePages {
-		short, shortCost, err := g.shorten(ctx, claim, key, docID, res)
+		short, shortCost, err := g.shorten(ctx, claim, key, docID, pl, res)
 		if err != nil {
 			return docID, dto.DraftResult{}, err
 		}
@@ -242,21 +242,21 @@ func (g *Generator) editUntilClean(ctx context.Context, key string, pl plan, in 
 	return res, cost, nil
 }
 
-func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, prior cvedit.Result) (cvedit.Result, float64, error) {
-	pl, err := g.plan(ctx, claim, docID)
-	if err != nil {
-		return cvedit.Result{}, 0, err
-	}
+func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, float64, error) {
 	in := pl.input(claim.JobDescription)
 	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
-	res, err := g.editValid(ctx, key, pl, in)
+	res, cost, err := g.editUntilClean(ctx, key, pl, in)
 	if err != nil {
-		return cvedit.Result{}, 0, err
+		return cvedit.Result{}, cost, err
 	}
-	if err := g.applyEdits(ctx, claim, docID, pl, res.Edits); err != nil {
-		return cvedit.Result{}, 0, err
+	copyPlan, err := g.plan(ctx, claim, docID)
+	if err != nil {
+		return cvedit.Result{}, cost, err
 	}
-	return res, res.Cost, nil
+	if err := g.applyEdits(ctx, claim, docID, copyPlan, res.Edits); err != nil {
+		return cvedit.Result{}, cost, err
+	}
+	return res, cost, nil
 }
 
 func (g *Generator) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
