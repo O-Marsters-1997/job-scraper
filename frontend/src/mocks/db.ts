@@ -15,13 +15,13 @@ import type {
 	PositionInput,
 } from "@/types/experience";
 import type { Job, ScoreRow } from "@/types/job";
-import type { CVHeading, HeadingMapping, Suggestion } from "@/types/tailoring";
 import type { ResolvedBoard, SourceInfo } from "@/types/source";
 import type {
 	CreateSourceTargetPayload,
 	SourceTarget,
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
+import type { CVHeading, HeadingMapping, Suggestion } from "@/types/tailoring";
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
@@ -1276,7 +1276,11 @@ const savedHeadings = new Map<string, HeadingMapping[]>();
 export function getHeadings(docId: string, tabId: string): CVHeading[] {
 	const saved = savedHeadings.get(`${docId}/${tabId}`);
 	const roles: { text: string; match: string | null; slots: number }[] = [
-		{ text: "Senior Backend Engineer, Acme Ltd", match: "position-1", slots: 2 },
+		{
+			text: "Senior Backend Engineer, Acme Ltd",
+			match: "position-1",
+			slots: 2,
+		},
 		{ text: "Software Engineer, Globex", match: "position-2", slots: 1 },
 	];
 	return roles.map((r) => {
