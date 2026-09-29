@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
@@ -24,6 +27,9 @@ import (
 const (
 	statusReady    = "ready"
 	cleanupTimeout = 30 * time.Second
+
+	maxCheckRetries = 2
+	shortenBullets  = 3
 )
 
 var errInvalidEdit = errors.New("model returned an invalid edit")
@@ -43,6 +49,7 @@ type Drive interface {
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
+	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
 // Docs is everything the module needs from the Google client.
@@ -164,38 +171,129 @@ func (g *Generator) generate(ctx context.Context, claim dto.DraftClaim) (string,
 		return "", dto.DraftResult{}, fmt.Errorf("load credential: %w", err)
 	}
 
-	pl, err := g.plan(ctx, claim)
+	pl, err := g.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
-	res, err := g.editor.Edit(ctx, key, pl.input(claim.JobDescription))
+	res, cost, err := g.editUntilClean(ctx, key, pl, pl.input(claim.JobDescription))
 	if err != nil {
-		return "", dto.DraftResult{}, fmt.Errorf("edit: %w", err)
-	}
-	if err := pl.validate(res.Edits); err != nil {
 		return "", dto.DraftResult{}, err
-	}
-	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), res.Edits)
-	if err != nil {
-		return "", dto.DraftResult{}, fmt.Errorf("build doc edits: %w", err)
-	}
-	editSet, err := json.Marshal(res.Edits)
-	if err != nil {
-		return "", dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
-	}
-	result := dto.DraftResult{
-		EditSet: editSet, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
-		JobFingerprint: claim.JobFingerprint, Cost: res.Cost,
 	}
 
 	docID, err := g.copyTab(ctx, claim)
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if err := g.applyEdits(ctx, claim, docID, requests); err != nil {
+	if err := g.applyEdits(ctx, claim, docID, pl, res.Edits); err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	return docID, result, nil
+
+	basePages, err := g.pageCount(ctx, claim.UserID, claim.DocID, claim.TabID)
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("count base pages: %w", err)
+	}
+	draftPages, err := g.pageCount(ctx, claim.UserID, docID, claim.TabID)
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
+	}
+	if draftPages > basePages {
+		short, shortCost, err := g.shorten(ctx, claim, key, docID, pl, res)
+		if err != nil {
+			return docID, dto.DraftResult{}, err
+		}
+		res, cost = short, cost+shortCost
+		if draftPages, err = g.pageCount(ctx, claim.UserID, docID, claim.TabID); err != nil {
+			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
+		}
+	}
+
+	editSet, err := json.Marshal(res.Edits)
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
+	}
+	return docID, dto.DraftResult{
+		EditSet: editSet, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
+		JobFingerprint: claim.JobFingerprint, Cost: cost,
+		Findings: toDraftFindings(checks.Run(pl.draft(res.Edits, basePages, draftPages))),
+	}, nil
+}
+
+func (g *Generator) editUntilClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, float64, error) {
+	res, err := g.editValid(ctx, key, pl, in)
+	if err != nil {
+		return cvedit.Result{}, res.Cost, err
+	}
+	cost := res.Cost
+	for range maxCheckRetries {
+		blocks := blocking(checks.Run(pl.draft(res.Edits, 0, 0)))
+		if len(blocks) == 0 {
+			break
+		}
+		prior := res.Edits
+		in.PriorEdits, in.PriorFindings = &prior, blocks
+		retry, err := g.editValid(ctx, key, pl, in)
+		cost += retry.Cost
+		if err != nil {
+			slog.WarnContext(ctx, "draft retry failed, keeping the blocked edit", slog.Any(logger.KeyErr, err))
+			break
+		}
+		res = retry
+	}
+	return res, cost, nil
+}
+
+func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, float64, error) {
+	in := pl.input(claim.JobDescription)
+	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
+	res, cost, err := g.editUntilClean(ctx, key, pl, in)
+	if err != nil {
+		return cvedit.Result{}, cost, err
+	}
+	copyPlan, err := g.plan(ctx, claim, docID)
+	if err != nil {
+		return cvedit.Result{}, cost, err
+	}
+	if err := g.applyEdits(ctx, claim, docID, copyPlan, res.Edits); err != nil {
+		return cvedit.Result{}, cost, err
+	}
+	return res, cost, nil
+}
+
+func (g *Generator) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
+	res, err := g.editor.Edit(ctx, key, in)
+	if err != nil {
+		return res, fmt.Errorf("edit: %w", err)
+	}
+	return res, pl.validate(res.Edits)
+}
+
+func blocking(findings []checks.Finding) []cvedit.Finding {
+	var out []cvedit.Finding
+	for _, f := range findings {
+		if f.Severity == checks.Block {
+			out = append(out, cvedit.Finding{Check: f.Check, SlotID: f.SlotID, Message: f.Message})
+		}
+	}
+	return out
+}
+
+func longestBullets(edits cvedit.EditSet, n int) []string {
+	var texts []string
+	for _, pe := range edits.Positions {
+		for _, b := range pe.Bullets {
+			texts = append(texts, b.Text)
+		}
+	}
+	slices.SortStableFunc(texts, func(a, b string) int { return utf8.RuneCountInString(b) - utf8.RuneCountInString(a) })
+	return texts[:min(n, len(texts))]
+}
+
+func toDraftFindings(findings []checks.Finding) []dto.DraftFinding {
+	out := make([]dto.DraftFinding, len(findings))
+	for i, f := range findings {
+		out[i] = dto.DraftFinding{Check: f.Check, Severity: string(f.Severity), SlotID: f.SlotID, Message: f.Message, Score: f.Score}
+	}
+	return out
 }
 
 func (g *Generator) copyTab(ctx context.Context, claim dto.DraftClaim) (string, error) {
@@ -233,7 +331,11 @@ func (g *Generator) copyTab(ctx context.Context, claim dto.DraftClaim) (string, 
 	return docID, nil
 }
 
-func (g *Generator) applyEdits(ctx context.Context, claim dto.DraftClaim, docID string, requests []docedit.Request) error {
+func (g *Generator) applyEdits(ctx context.Context, claim dto.DraftClaim, docID string, pl plan, edits cvedit.EditSet) error {
+	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
+	if err != nil {
+		return fmt.Errorf("build doc edits: %w", err)
+	}
 	if len(requests) == 0 {
 		return nil
 	}
@@ -254,16 +356,17 @@ func (g *Generator) applyEdits(ctx context.Context, claim dto.DraftClaim, docID 
 type planned struct {
 	cvedit.Position
 	slotIDs []string
-	cited   map[string]bool
+	texts   map[string]string
 }
 
 type plan struct {
 	structure docparse.DocStructure
 	positions []planned
+	bank      []string
 }
 
-func (g *Generator) plan(ctx context.Context, claim dto.DraftClaim) (plan, error) {
-	raw, err := g.docs.GetDocument(ctx, claim.UserID, claim.DocID, claim.TabID)
+func (g *Generator) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
+	raw, err := g.docs.GetDocument(ctx, claim.UserID, docID, claim.TabID)
 	if err != nil {
 		return plan{}, fmt.Errorf("load CV tab: %w", err)
 	}
@@ -305,12 +408,13 @@ func (g *Generator) plan(ctx context.Context, claim dto.DraftClaim) (plan, error
 	for _, p := range bank {
 		pp := planned{
 			Position: cvedit.Position{ID: p.ID, Employer: p.Employer, Title: p.Title},
-			cited:    map[string]bool{},
+			texts:    map[string]string{},
 		}
 		for _, a := range p.Achievements {
+			pl.bank = append(pl.bank, a.Text)
 			if confirmed[a.ID] {
 				pp.Achievements = append(pp.Achievements, cvedit.Achievement{ID: a.ID, Text: a.Text})
-				pp.cited[a.ID] = true
+				pp.texts[a.ID] = a.Text
 			}
 		}
 		if len(pp.Achievements) == 0 {
@@ -335,6 +439,12 @@ func (g *Generator) plan(ctx context.Context, claim dto.DraftClaim) (plan, error
 
 func (pl plan) input(jobDescription string) cvedit.Input {
 	in := cvedit.Input{JobDescription: jobDescription}
+	if pl.structure.Profile != nil {
+		in.HasProfile, in.BaseProfile = true, pl.structure.Profile.Text
+	}
+	if pl.structure.Skills != nil {
+		in.HasSkills, in.BaseSkills = true, pl.structure.Skills.Items
+	}
 	for _, p := range pl.positions {
 		in.Positions = append(in.Positions, p.Position)
 	}
@@ -369,11 +479,41 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 				return fmt.Errorf("%w: bullet with no text or citation", errInvalidEdit)
 			}
 			for _, id := range b.AchievementIDs {
-				if !p.cited[id] {
+				if _, ok := p.texts[id]; !ok {
 					return fmt.Errorf("%w: achievement %q is not confirmed for position %q", errInvalidEdit, id, pe.PositionID)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
+	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
+	if pl.structure.Skills != nil {
+		d.BaseSkills = pl.structure.Skills.Items
+	}
+	if pl.structure.Profile != nil && edits.Profile != nil {
+		d.Profile = &checks.Slot{ID: pl.structure.Profile.ID, Text: *edits.Profile, BaseText: pl.structure.Profile.Text}
+	}
+	byID := make(map[string]planned, len(pl.positions))
+	for _, p := range pl.positions {
+		byID[p.ID] = p
+	}
+	for _, pe := range edits.Positions {
+		p := byID[pe.PositionID]
+		cp := checks.Position{ID: p.ID}
+		for _, a := range p.Achievements {
+			cp.Achievements = append(cp.Achievements, a.Text)
+		}
+		for i, b := range pe.Bullets {
+			slot := checks.Slot{ID: p.slotIDs[i], Text: b.Text, BaseText: p.SlotTexts[i]}
+			for _, id := range b.AchievementIDs {
+				slot.Cited = append(slot.Cited, p.texts[id])
+			}
+			cp.Bullets = append(cp.Bullets, slot)
+		}
+		d.Positions = append(d.Positions, cp)
+	}
+	return d
 }

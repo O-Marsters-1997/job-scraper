@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
@@ -60,4 +62,143 @@ func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("ReorderPositions() err = %v, want an invalid error", err)
 	}
+}
+
+const (
+	user    = "user-1"
+	jobID   = "job-1"
+	docID   = "doc-1"
+	tabID   = "t.0"
+	heading = "Engineer, Acme"
+)
+
+type draftEnv struct {
+	store *cvtailortest.FakeStore
+	svc   *cvtailor.Service
+	pos   dto.Position
+	input dto.DraftInput
+}
+
+func newDraftEnv(t *testing.T) draftEnv {
+	t.Helper()
+	store := cvtailortest.NewFakeStore()
+	ctx := context.Background()
+	pos, err := store.CreatePosition(ctx, user, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{"Cut p99 latency by moving queries to Postgres", "Mentored four engineers"} {
+		a, err := store.CreateAchievement(ctx, user, dto.AchievementInput{PositionID: pos.ID, Text: text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		pos.Achievements = append(pos.Achievements, a)
+	}
+	if err := store.SaveHeadingMappings(ctx, user, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	store.SetJob(jobID, "We need a Go engineer.", "fp-1")
+	return draftEnv{
+		store: store,
+		svc:   cvtailor.NewService(store, nil, nil),
+		pos:   pos,
+		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
+	}
+}
+
+func TestCreateDraft(t *testing.T) {
+	t.Run("queues a pending Draft for confirmed achievements", func(t *testing.T) {
+		e := newDraftEnv(t)
+
+		id := e.queue(t)
+
+		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
+		if diff := cmp.Diff(want, e.draft(t, id)); diff != "" {
+			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
+		}
+	})
+
+	e := newDraftEnv(t)
+	other, err := e.store.CreatePosition(context.Background(), user, dto.PositionInput{Employer: "Unmapped", Title: "Dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unmapped, err := e.store.CreateAchievement(context.Background(), user, dto.AchievementInput{PositionID: other.ID, Text: "Shipped"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name   string
+		user   string
+		mutate func(*dto.DraftInput)
+	}{
+		{"no achievements is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = nil }},
+		{"repeated achievement is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
+		{"another user's achievement is invalid", "user-2", func(*dto.DraftInput) {}},
+		{"achievement of an unmapped position is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
+		{"missing tab is invalid", user, func(in *dto.DraftInput) { in.TabID = "" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := e.input
+			in.AchievementIDs = append([]string(nil), in.AchievementIDs...)
+			tc.mutate(&in)
+
+			_, err := e.svc.CreateDraft(context.Background(), tc.user, in)
+
+			if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", in, err)
+			}
+		})
+	}
+}
+
+func TestGetDraft(t *testing.T) {
+	t.Run("links the Doc of a ready Draft", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		claim, err := e.store.ClaimDraft(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.store.CompleteDraft(context.Background(), claim, dto.DraftResult{DraftDocID: "copy-1"}); err != nil {
+			t.Fatal(err)
+		}
+
+		got := e.draft(t, id)
+
+		want := "https://docs.google.com/document/d/copy-1/edit"
+		if got.DraftDocURL == nil || *got.DraftDocURL != want {
+			t.Errorf("GetDraft(%s).DraftDocURL = %v, want %q", id, got.DraftDocURL, want)
+		}
+	})
+
+	t.Run("hides the Doc of a Draft that is not ready", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		claim, err := e.store.ClaimDraft(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.store.SetDraftDoc(context.Background(), claim, "copy-1"); err != nil {
+			t.Fatal(err)
+		}
+
+		got := e.draft(t, id)
+
+		if got.DraftDocURL != nil {
+			t.Errorf("GetDraft(%s).DraftDocURL = %q, want none before the Draft is ready", id, *got.DraftDocURL)
+		}
+	})
+
+	t.Run("another user's Draft is not found", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+
+		_, err := e.svc.GetDraft(context.Background(), "user-2", dto.DraftQuery{ID: id})
+
+		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
+			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", id, err)
+		}
+	})
 }
