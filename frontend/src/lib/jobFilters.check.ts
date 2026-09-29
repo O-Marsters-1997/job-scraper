@@ -4,8 +4,8 @@ import {
 	DEFAULT_FILTERS,
 	filterCompanyJobs,
 	normalizeArrangement,
-	parseSearch,
 	parseSalary,
+	parseSearch,
 } from "./jobFilters";
 
 // ponytail: inline assert so tsgo doesn't need @types/node
