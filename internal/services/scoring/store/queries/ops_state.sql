@@ -2,4 +2,16 @@
 SELECT
     (SELECT count(*) FROM effect_outbox WHERE status IN ('pending', 'running')) AS outbox_pending,
     (SELECT MIN(created_at)::timestamptz FROM effect_outbox WHERE status IN ('pending', 'running')) AS oldest_pending_created_at,
-    (SELECT count(*) FROM effect_outbox WHERE status = 'failed') AS outbox_failed;
+    (SELECT count(*) FROM effect_outbox WHERE status = 'failed') AS outbox_failed,
+    (SELECT count(*)
+       FROM board_poll_state ps
+       JOIN company_boards b ON b.id = ps.board_id
+      WHERE b.status = 'verified' AND ps.lease_until IS NULL AND ps.next_due_at < NOW()) AS boards_overdue,
+    (SELECT count(*)
+       FROM board_poll_state ps
+       JOIN company_boards b ON b.id = ps.board_id
+      WHERE b.status = 'verified' AND ps.consecutive_failures >= 3) AS boards_failing,
+    (SELECT count(*) FROM source_targets WHERE run_status = 'failed') AS source_targets_failed;
+
+-- name: HarvestRuns :many
+SELECT harvester, last_succeeded_at FROM harvest_runs;

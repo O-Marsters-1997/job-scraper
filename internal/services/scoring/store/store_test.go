@@ -702,6 +702,112 @@ func TestOpsState_NoPendingIsZero(t *testing.T) {
 	}
 }
 
+func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leased bool, failures int) {
+	t.Helper()
+	ctx := context.Background()
+	n := seedCounter.Add(1)
+	var companyID, boardID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, fmt.Sprintf("co-%d", n)).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at) VALUES ($1, 'greenhouse', $2, $3, 'manual', NOW()) RETURNING id`,
+		companyID, fmt.Sprintf("tok-%d", n), status).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
+	}
+	var leaseUntil *time.Time
+	if leased {
+		until := time.Now().Add(time.Hour)
+		leaseUntil = &until
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO board_poll_state (board_id, next_due_at, lease_until, consecutive_failures) VALUES ($1, $2, $3, $4)`,
+		boardID, nextDueAt, leaseUntil, failures); err != nil {
+		t.Fatalf("insert board_poll_state: %v", err)
+	}
+}
+
+func TestOpsState_CountsOverdueBoards(t *testing.T) {
+	st, pool := newStore(t)
+	now := time.Now()
+	insertBoard(t, pool, "verified", now.Add(-2*time.Hour), false, 0)
+	insertBoard(t, pool, "verified", now.Add(-2*time.Hour), true, 0)
+	insertBoard(t, pool, "retired", now.Add(-2*time.Hour), false, 0)
+	insertBoard(t, pool, "candidate", now.Add(-2*time.Hour), false, 0)
+	insertBoard(t, pool, "verified", now.Add(2*time.Hour), false, 0)
+
+	state, err := st.OpsState(context.Background())
+	if err != nil {
+		t.Fatalf("OpsState: %v", err)
+	}
+	if state.BoardsOverdue != 1 {
+		t.Errorf("BoardsOverdue = %d, want 1", state.BoardsOverdue)
+	}
+}
+
+func TestOpsState_CountsFailingBoards(t *testing.T) {
+	st, pool := newStore(t)
+	now := time.Now().Add(time.Hour)
+	insertBoard(t, pool, "verified", now, false, 3)
+	insertBoard(t, pool, "verified", now, false, 2)
+	insertBoard(t, pool, "retired", now, false, 5)
+
+	state, err := st.OpsState(context.Background())
+	if err != nil {
+		t.Fatalf("OpsState: %v", err)
+	}
+	if state.BoardsFailing != 1 {
+		t.Errorf("BoardsFailing = %d, want 1", state.BoardsFailing)
+	}
+}
+
+func TestOpsState_CountsFailedSourceTargets(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	for i, status := range []string{"failed", "failed", "succeeded", "idle"} {
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO source_targets (user_id, source, value, run_status) VALUES ($1, 'linkedin', $2, $3)`,
+			userID, fmt.Sprintf("q-%d", i), status); err != nil {
+			t.Fatalf("insert source_target: %v", err)
+		}
+	}
+
+	state, err := st.OpsState(ctx)
+	if err != nil {
+		t.Fatalf("OpsState: %v", err)
+	}
+	if state.SourceTargetsFailed != 2 {
+		t.Errorf("SourceTargetsFailed = %d, want 2", state.SourceTargetsFailed)
+	}
+}
+
+func TestOpsState_ReportsHarvestAgePerHarvester(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	for harvester, at := range map[string]time.Time{"ashby": now.Add(-3 * time.Hour), "lever": now.Add(-time.Minute)} {
+		if _, err := pool.Exec(ctx, `INSERT INTO harvest_runs (harvester, last_succeeded_at) VALUES ($1, $2)`, harvester, at); err != nil {
+			t.Fatalf("insert harvest_runs: %v", err)
+		}
+	}
+
+	state, err := st.OpsState(ctx)
+	if err != nil {
+		t.Fatalf("OpsState: %v", err)
+	}
+	if len(state.HarvestAge) != 2 {
+		t.Fatalf("HarvestAge = %v, want two harvesters", state.HarvestAge)
+	}
+	if age := state.HarvestAge["ashby"]; age < 179*time.Minute || age > 181*time.Minute {
+		t.Errorf("HarvestAge[ashby] = %s, want ~3h", age)
+	}
+	if age := state.HarvestAge["lever"]; age < 0 || age > 2*time.Minute {
+		t.Errorf("HarvestAge[lever] = %s, want ~1m", age)
+	}
+}
+
 func TestQueueMissingAnswers_QueuesOnlyOpenScoredFingerprintedJobsMissingHash(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()

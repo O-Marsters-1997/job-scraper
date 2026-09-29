@@ -11,22 +11,65 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const harvestRuns = `-- name: HarvestRuns :many
+SELECT harvester, last_succeeded_at FROM harvest_runs
+`
+
+func (q *Queries) HarvestRuns(ctx context.Context) ([]HarvestRun, error) {
+	rows, err := q.db.Query(ctx, harvestRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HarvestRun
+	for rows.Next() {
+		var i HarvestRun
+		if err := rows.Scan(&i.Harvester, &i.LastSucceededAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const opsState = `-- name: OpsState :one
 SELECT
     (SELECT count(*) FROM effect_outbox WHERE status IN ('pending', 'running')) AS outbox_pending,
     (SELECT MIN(created_at)::timestamptz FROM effect_outbox WHERE status IN ('pending', 'running')) AS oldest_pending_created_at,
-    (SELECT count(*) FROM effect_outbox WHERE status = 'failed') AS outbox_failed
+    (SELECT count(*) FROM effect_outbox WHERE status = 'failed') AS outbox_failed,
+    (SELECT count(*)
+       FROM board_poll_state ps
+       JOIN company_boards b ON b.id = ps.board_id
+      WHERE b.status = 'verified' AND ps.lease_until IS NULL AND ps.next_due_at < NOW()) AS boards_overdue,
+    (SELECT count(*)
+       FROM board_poll_state ps
+       JOIN company_boards b ON b.id = ps.board_id
+      WHERE b.status = 'verified' AND ps.consecutive_failures >= 3) AS boards_failing,
+    (SELECT count(*) FROM source_targets WHERE run_status = 'failed') AS source_targets_failed
 `
 
 type OpsStateRow struct {
 	OutboxPending          int64
 	OldestPendingCreatedAt pgtype.Timestamptz
 	OutboxFailed           int64
+	BoardsOverdue          int64
+	BoardsFailing          int64
+	SourceTargetsFailed    int64
 }
 
 func (q *Queries) OpsState(ctx context.Context) (OpsStateRow, error) {
 	row := q.db.QueryRow(ctx, opsState)
 	var i OpsStateRow
-	err := row.Scan(&i.OutboxPending, &i.OldestPendingCreatedAt, &i.OutboxFailed)
+	err := row.Scan(
+		&i.OutboxPending,
+		&i.OldestPendingCreatedAt,
+		&i.OutboxFailed,
+		&i.BoardsOverdue,
+		&i.BoardsFailing,
+		&i.SourceTargetsFailed,
+	)
 	return i, err
 }
