@@ -10,6 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
@@ -27,7 +28,7 @@ type credentials struct{ err error }
 func (c credentials) Get(context.Context, string, string) (string, error) { return "sk-or-test", c.err }
 
 const (
-	user    = "user-1"
+	user    = handlerstest.UserID
 	jobID   = "job-1"
 	docID   = "doc-1"
 	tabID   = "t.0"
@@ -61,10 +62,11 @@ func newDraftEnv(t *testing.T) draftEnv {
 		t.Fatal(err)
 	}
 	store.SetJob(jobID, "We need a Go engineer.", "fp-1")
+	drive := &cvtailortest.Drive{Tabs: []google.Tab{{ID: tabID}, {ID: "t.1"}}}
 	return draftEnv{
 		store: store,
-		drive: &cvtailortest.Drive{Tabs: []google.Tab{{ID: tabID}, {ID: "t.1"}}},
-		svc:   cvtailor.NewService(store, nil, nil),
+		drive: drive,
+		svc:   cvtailor.NewService(store, nil, nil, drive),
 		pos:   pos,
 		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -19,14 +20,20 @@ var (
 	ErrDraftNotFound = apperr.NotFound("draft not found")
 )
 
+var ErrKeptDraftExists = apperr.Conflict("this job already has a kept draft")
+
 func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
-	var findings []dto.DraftFinding
+	findings := []dto.DraftFinding{}
 	if err := json.Unmarshal(t.Findings, &findings); err != nil {
 		return dto.Draft{}, fmt.Errorf("decode findings: %w", err)
 	}
+	var outcome *string
+	if t.Outcome.Valid {
+		outcome = &t.Outcome.String
+	}
 	return dto.Draft{
-		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, LastError: t.LastError, DraftDocID: t.DraftDocID.String,
-		Findings: findings,
+		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, LastError: t.LastError,
+		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet,
 	}, nil
 }
 
@@ -54,11 +61,7 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
 	}
-	d, err := toDraft(row)
-	if err != nil {
-		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
-	}
-	return d, nil
+	return toDraft(row)
 }
 
 func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
@@ -77,11 +80,55 @@ func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, err
 	if err != nil {
 		return dto.Draft{}, fmt.Errorf("store.GetDraft: %w", err)
 	}
-	d, err := toDraft(row)
+	return toDraft(row)
+}
+
+// ListJobDrafts returns userID's Drafts of the Job, newest first.
+func (s *Store) ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
 	if err != nil {
-		return dto.Draft{}, fmt.Errorf("store.GetDraft: %w", err)
+		return nil, err
 	}
-	return d, nil
+	jid, err := parseID(jobID, ErrJobNotFound)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobDrafts(ctx, sqlc.ListJobDraftsParams{JobID: jid, UserID: uid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobDrafts: %w", err)
+	}
+	out := make([]dto.Draft, len(rows))
+	for i, row := range rows {
+		if out[i], err = toDraft(row); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// SetDraftOutcome records outcome on the Draft. Discarding also drops its
+// Doc id. Keeping a second Draft of one Job is ErrKeptDraftExists.
+func (s *Store) SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	did, err := parseID(id, ErrDraftNotFound)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	row, err := s.queries.SetDraftOutcome(ctx, sqlc.SetDraftOutcomeParams{Outcome: outcome, ID: did, UserID: uid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.Draft{}, ErrDraftNotFound
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return dto.Draft{}, ErrKeptDraftExists
+	}
+	if err != nil {
+		return dto.Draft{}, fmt.Errorf("store.SetDraftOutcome: %w", err)
+	}
+	return toDraft(row)
 }
 
 // ClaimDraft leases the next due Draft, or one whose lease expired, under

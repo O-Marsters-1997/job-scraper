@@ -2,13 +2,10 @@ package cvtailor
 
 import (
 	"context"
-	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
-
-const docURLPrefix = "https://docs.google.com/document/d/"
 
 // CreateDraft queues a pending Draft. Every cited Achievement must belong
 // to userID and sit under a Position the User has mapped a heading of the
@@ -57,16 +54,4 @@ func (s *Service) CreateDraft(ctx context.Context, userID string, in dto.DraftIn
 		return dto.DraftRef{}, err
 	}
 	return dto.DraftRef{ID: draft.ID}, nil
-}
-
-func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
-	draft, err := s.store.GetDraft(ctx, userID, q.ID)
-	if err != nil {
-		return dto.Draft{}, err
-	}
-	if draft.DraftDocID != "" && draft.Status == statusReady {
-		url := docURLPrefix + strings.TrimSpace(draft.DraftDocID) + "/edit"
-		draft.DraftDocURL = &url
-	}
-	return draft, nil
 }

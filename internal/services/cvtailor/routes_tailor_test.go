@@ -18,6 +18,10 @@ func TestTailorRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /tailoring/jobs/{jobId}/suggestions",
 		"POST /tailoring/drafts",
 		"GET /tailoring/drafts/{id}",
+		"GET /tailoring/drafts/{id}/pdf",
+		"POST /tailoring/drafts/{id}/keep",
+		"POST /tailoring/drafts/{id}/discard",
+		"GET /tailoring/jobs/{jobId}/drafts",
 	)
 	handlerstest.RejectsMalformedBody(t, r, "PUT /tailoring/cvs/{docId}/{tabId}/headings", "POST /tailoring/drafts")
 }

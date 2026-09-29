@@ -31,6 +31,10 @@ type Drive struct {
 	Tabs    []google.Tab
 	Copies  []string
 	Deleted []string
+	// PDF, when set, is the body ExportPDF serves in place of a generated
+	// one; PDFErr fails it.
+	PDF     string
+	PDFErr  error
 	Updates [][]json.RawMessage
 	// BasePages is the page count of the base CV, one when zero.
 	BasePages int
@@ -67,6 +71,12 @@ func (d *Drive) BatchUpdate(_ context.Context, _, _ string, reqs []json.RawMessa
 func (d *Drive) ExportPDF(_ context.Context, _, docID, _ string) (io.ReadCloser, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.PDFErr != nil {
+		return nil, d.PDFErr
+	}
+	if d.PDF != "" {
+		return io.NopCloser(strings.NewReader(d.PDF)), nil
+	}
 	pages := max(d.BasePages, 1)
 	if slices.Contains(d.Copies, docID) {
 		pages = 1
