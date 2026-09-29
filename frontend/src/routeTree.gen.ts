@@ -17,6 +17,7 @@ import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
 import { Route as AuthInsightsRouteImport } from './routes/_auth/insights'
+import { Route as AuthExperienceRouteImport } from './routes/_auth/experience'
 import { Route as AuthCvTemplatesRouteImport } from './routes/_auth/cv-templates'
 import { Route as AuthCompaniesRouteImport } from './routes/_auth/companies'
 import { Route as AuthApplicationsRouteImport } from './routes/_auth/applications'
@@ -70,6 +71,11 @@ const AuthJobsRoute = AuthJobsRouteImport.update({
 const AuthInsightsRoute = AuthInsightsRouteImport.update({
   id: '/insights',
   path: '/insights',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthExperienceRoute = AuthExperienceRouteImport.update({
+  id: '/experience',
+  path: '/experience',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthCvTemplatesRoute = AuthCvTemplatesRouteImport.update({
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
+  '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/applications': typeof AuthApplicationsRoute
   '/companies': typeof AuthCompaniesRoute
   '/cv-templates': typeof AuthCvTemplatesRoute
+  '/experience': typeof AuthExperienceRoute
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/_auth/applications': typeof AuthApplicationsRoute
   '/_auth/companies': typeof AuthCompaniesRoute
   '/_auth/cv-templates': typeof AuthCvTemplatesRoute
+  '/_auth/experience': typeof AuthExperienceRoute
   '/_auth/insights': typeof AuthInsightsRoute
   '/_auth/jobs': typeof AuthJobsRoute
   '/_auth/overview': typeof AuthOverviewRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/cv-templates'
+    | '/experience'
     | '/insights'
     | '/jobs'
     | '/overview'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/applications'
     | '/companies'
     | '/cv-templates'
+    | '/experience'
     | '/insights'
     | '/jobs'
     | '/overview'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/_auth/applications'
     | '/_auth/companies'
     | '/_auth/cv-templates'
+    | '/_auth/experience'
     | '/_auth/insights'
     | '/_auth/jobs'
     | '/_auth/overview'
@@ -361,6 +373,13 @@ declare module '@tanstack/solid-router' {
       path: '/insights'
       fullPath: '/insights'
       preLoaderRoute: typeof AuthInsightsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/experience': {
+      id: '/_auth/experience'
+      path: '/experience'
+      fullPath: '/experience'
+      preLoaderRoute: typeof AuthExperienceRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/cv-templates': {
@@ -512,6 +531,7 @@ interface AuthRouteChildren {
   AuthApplicationsRoute: typeof AuthApplicationsRoute
   AuthCompaniesRoute: typeof AuthCompaniesRoute
   AuthCvTemplatesRoute: typeof AuthCvTemplatesRoute
+  AuthExperienceRoute: typeof AuthExperienceRoute
   AuthInsightsRoute: typeof AuthInsightsRoute
   AuthJobsRoute: typeof AuthJobsRoute
   AuthOverviewRoute: typeof AuthOverviewRoute
@@ -525,6 +545,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthApplicationsRoute: AuthApplicationsRoute,
   AuthCompaniesRoute: AuthCompaniesRoute,
   AuthCvTemplatesRoute: AuthCvTemplatesRoute,
+  AuthExperienceRoute: AuthExperienceRoute,
   AuthInsightsRoute: AuthInsightsRoute,
   AuthJobsRoute: AuthJobsRoute,
   AuthOverviewRoute: AuthOverviewRoute,

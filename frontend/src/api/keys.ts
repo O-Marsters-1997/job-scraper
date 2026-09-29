@@ -24,6 +24,7 @@ export const keys = {
 		all: companiesAll,
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
 	},
+	experience: ["experience"] as const,
 	sourceTargets: ["source-targets"] as const,
 	sources: ["sources"] as const,
 	profile: ["profile"] as const,
