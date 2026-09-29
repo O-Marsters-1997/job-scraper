@@ -702,7 +702,7 @@ func TestOpsState_NoPendingIsZero(t *testing.T) {
 	}
 }
 
-func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leased bool, failures int) {
+func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leaseUntil *time.Time, failures int) {
 	t.Helper()
 	ctx := context.Background()
 	n := seedCounter.Add(1)
@@ -716,11 +716,6 @@ func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time
 		companyID, fmt.Sprintf("tok-%d", n), status).Scan(&boardID); err != nil {
 		t.Fatalf("insert board: %v", err)
 	}
-	var leaseUntil *time.Time
-	if leased {
-		until := time.Now().Add(time.Hour)
-		leaseUntil = &until
-	}
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO board_poll_state (board_id, next_due_at, lease_until, consecutive_failures) VALUES ($1, $2, $3, $4)`,
 		boardID, nextDueAt, leaseUntil, failures); err != nil {
@@ -731,27 +726,31 @@ func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time
 func TestOpsState_CountsOverdueBoards(t *testing.T) {
 	st, pool := newStore(t)
 	now := time.Now()
-	insertBoard(t, pool, "verified", now.Add(-2*time.Hour), false, 0)
-	insertBoard(t, pool, "verified", now.Add(-2*time.Hour), true, 0)
-	insertBoard(t, pool, "retired", now.Add(-2*time.Hour), false, 0)
-	insertBoard(t, pool, "candidate", now.Add(-2*time.Hour), false, 0)
-	insertBoard(t, pool, "verified", now.Add(2*time.Hour), false, 0)
+	overdue := now.Add(-2 * time.Hour)
+	liveLease := now.Add(time.Hour)
+	expiredLease := now.Add(-time.Hour)
+	insertBoard(t, pool, "verified", overdue, nil, 0)
+	insertBoard(t, pool, "verified", overdue, &liveLease, 0)
+	insertBoard(t, pool, "verified", overdue, &expiredLease, 0)
+	insertBoard(t, pool, "retired", overdue, nil, 0)
+	insertBoard(t, pool, "candidate", overdue, nil, 0)
+	insertBoard(t, pool, "verified", now.Add(2*time.Hour), nil, 0)
 
 	state, err := st.OpsState(context.Background())
 	if err != nil {
 		t.Fatalf("OpsState: %v", err)
 	}
-	if state.BoardsOverdue != 1 {
-		t.Errorf("BoardsOverdue = %d, want 1", state.BoardsOverdue)
+	if state.BoardsOverdue != 2 {
+		t.Errorf("BoardsOverdue = %d, want 2", state.BoardsOverdue)
 	}
 }
 
 func TestOpsState_CountsFailingBoards(t *testing.T) {
 	st, pool := newStore(t)
 	now := time.Now().Add(time.Hour)
-	insertBoard(t, pool, "verified", now, false, 3)
-	insertBoard(t, pool, "verified", now, false, 2)
-	insertBoard(t, pool, "retired", now, false, 5)
+	insertBoard(t, pool, "verified", now, nil, 3)
+	insertBoard(t, pool, "verified", now, nil, 2)
+	insertBoard(t, pool, "retired", now, nil, 5)
 
 	state, err := st.OpsState(context.Background())
 	if err != nil {

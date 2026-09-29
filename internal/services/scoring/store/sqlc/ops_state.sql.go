@@ -43,7 +43,7 @@ SELECT
     (SELECT count(*)
        FROM board_poll_state ps
        JOIN company_boards b ON b.id = ps.board_id
-      WHERE b.status = 'verified' AND ps.lease_until IS NULL AND ps.next_due_at < NOW()) AS boards_overdue,
+      WHERE b.status = 'verified' AND (ps.lease_until IS NULL OR ps.lease_until < NOW()) AND ps.next_due_at < NOW()) AS boards_overdue,
     (SELECT count(*)
        FROM board_poll_state ps
        JOIN company_boards b ON b.id = ps.board_id
