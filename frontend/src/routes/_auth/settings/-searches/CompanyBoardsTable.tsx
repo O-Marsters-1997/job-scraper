@@ -225,7 +225,8 @@ export function CompanyBoardsTable(props: {
 													search={{ company: c.id, scored: true }}
 													class="text-primary hover:underline"
 												>
-													<strong>{c.relevant_jobs}</strong> of {c.open_jobs} open
+													<strong>{c.relevant_jobs}</strong> of {c.open_jobs}{" "}
+													open
 												</Link>
 											</TableCell>
 											<TableCell class="whitespace-nowrap text-xs text-muted">
