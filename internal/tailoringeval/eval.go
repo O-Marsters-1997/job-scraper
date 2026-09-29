@@ -26,7 +26,6 @@ const maxRetries = 2
 
 var checkNames = []string{"grounding", "skills", "banned_words", "slot_length", "page_count"}
 
-// Position is one Bank Position mapped to the base CV heading it sits under.
 type Position struct {
 	ID           string
 	Employer     string
@@ -35,8 +34,6 @@ type Position struct {
 	Achievements []cvedit.Achievement
 }
 
-// Fixture is a Bank, a job description and a parsed base CV, so no Google
-// call is needed.
 type Fixture struct {
 	Name           string
 	Scenario       string
@@ -45,7 +42,6 @@ type Fixture struct {
 	Structure      docparse.DocStructure
 }
 
-// Fixtures loads the embedded fixture set.
 func Fixtures() ([]Fixture, error) {
 	entries, err := fs.ReadDir(fixtureFS, "fixtures")
 	if err != nil {
@@ -69,22 +65,18 @@ func Fixtures() ([]Fixture, error) {
 	return out, nil
 }
 
-// Editor is the slice of cvedit.Client the evaluation uses.
 type Editor interface {
 	Edit(ctx context.Context, apiKey string, in cvedit.Input) (cvedit.Result, error)
 }
 
-// Outcome is one fixture run: the findings after each attempt.
 type Outcome struct {
 	Fixture  string
 	Attempts [][]checks.Finding
 	Cost     float64
 }
 
-// Retries is how many attempts followed the first.
 func (o Outcome) Retries() int { return len(o.Attempts) - 1 }
 
-// Run edits the fixture, retrying on block findings up to maxRetries times.
 func Run(ctx context.Context, ed Editor, apiKey string, f Fixture) (Outcome, error) {
 	out := Outcome{Fixture: f.Name}
 	in := input(f)
@@ -183,9 +175,6 @@ func draft(f Fixture, edits cvedit.EditSet) checks.Draft {
 	return d
 }
 
-// Report writes per-check pass rates and retry counts for one prompt version.
-// A run passes a check when no block finding from it remains, either on the
-// first attempt or after retries.
 func Report(w io.Writer, promptVersion, model string, outcomes []Outcome) {
 	_, _ = fmt.Fprintf(w, "prompt_version=%s model=%s runs=%d\n\n", promptVersion, model, len(outcomes))
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
