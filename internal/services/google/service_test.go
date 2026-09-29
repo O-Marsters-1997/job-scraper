@@ -23,9 +23,14 @@ type fakeClient struct {
 	deletedUser string
 	exchangeErr error
 	savedToken  *oauth2.Token
+	writeScope  bool
 }
 
-func (f *fakeClient) AuthURL(state string) string {
+func (f *fakeClient) HasScope(_ context.Context, _, scope string) (bool, error) {
+	return f.writeScope && scope == google.DriveFileScope, nil
+}
+
+func (f *fakeClient) AuthURL(state string, _ bool) string {
 	return "https://accounts.google.com/o?state=" + state
 }
 
@@ -116,5 +121,21 @@ func TestDisconnect(t *testing.T) {
 	}
 	if client.deletedUser != "user-1" {
 		t.Fatalf("deletedUser = %q, want user-1", client.deletedUser)
+	}
+}
+
+func TestStatusCanWriteReflectsDriveFileScope(t *testing.T) {
+	hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(`{"email":"a@example.com"}`))}, nil
+	})}
+	for _, granted := range []bool{false, true} {
+		svc := google.NewService(&fakeClient{httpClient: hc, writeScope: granted})
+		got, err := svc.Status(context.Background(), "user-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.CanWrite != granted {
+			t.Errorf("granted=%v: CanWrite = %v", granted, got.CanWrite)
+		}
 	}
 }
