@@ -98,8 +98,7 @@ function JobDetailPage() {
 
 	const existingApp = () => {
 		const a = app();
-		if (!a) return undefined;
-		return toExistingApp(a);
+		return a ? toExistingApp(a) : undefined;
 	};
 
 	return (

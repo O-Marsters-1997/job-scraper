@@ -103,9 +103,8 @@ function CompanyDetailPage() {
 		(boards) => {
 			const id = checkingBoardID();
 			if (!id) return false;
-			return boards?.find((b) => b.ID === id)?.Status === "verified"
-				? false
-				: BOARD_CHECK_POLL_MS;
+			const verified = boards?.find((b) => b.ID === id)?.Status === "verified";
+			return verified ? false : BOARD_CHECK_POLL_MS;
 		},
 	);
 	const addBoardMutation = useAddCompanyBoard();

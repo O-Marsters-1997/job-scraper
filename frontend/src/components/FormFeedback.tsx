@@ -12,7 +12,10 @@ export function FormFeedback(props: {
 				</div>
 			</Show>
 			<Show when={props.error}>
-				<div class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong">
+				<div
+					role="alert"
+					class="mb-4 rounded-lg border border-destructive/30 bg-destructive-subtle px-4 py-3 text-sm text-destructive-strong"
+				>
 					{props.error}
 				</div>
 			</Show>
