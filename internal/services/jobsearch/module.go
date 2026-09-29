@@ -16,7 +16,6 @@ var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
 type Module struct {
 	store         Store
-	targetLister  sourcetargets.Store
 	jobs          *Service
 	sourceTargets *sourcetargets.Service
 	ingest        *Ingester
@@ -67,7 +66,6 @@ type Deps struct {
 func Build(deps Deps) *Module {
 	return &Module{
 		store:         deps.Store,
-		targetLister:  deps.SourceTargets,
 		jobs:          NewService(deps.Store, deps.Queue),
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
 		ingest:        newIngester(deps.Store, deps.Store),

@@ -13,13 +13,32 @@ func (s *Service) ListSources(context.Context, string) ([]sourcespec.SourceInfo,
 	return sourcespec.Sources(), nil
 }
 
-func (s *Service) ResolveBoard(_ context.Context, _ string, q dto.ResolveBoardQuery) (dto.ResolvedBoard, error) {
+func (s *Service) ResolveBoard(_ context.Context, _ string, q dto.ResolveBoardQuery) (dto.ResolvedURL, error) {
 	if q.URL == "" {
-		return dto.ResolvedBoard{}, apperr.Invalid("missing url")
+		return dto.ResolvedURL{}, apperr.Invalid("missing url")
 	}
-	source, token, ok := detect.ResolveBoard(q.URL)
-	if !ok {
-		return dto.ResolvedBoard{}, apperr.Unprocessable("could not resolve an ATS board from that URL")
+	if search, ok := detect.ParseSearchURL(q.URL); ok {
+		return dto.ResolvedURL{
+			Kind:    "search",
+			Source:  search.Source,
+			Value:   search.Value,
+			Filters: search.Filters,
+			Dropped: search.Dropped,
+			URL:     detect.BuildSearchURL(search.Source, search.Value, search.Filters),
+		}, nil
 	}
-	return dto.ResolvedBoard{Source: source, Value: token}, nil
+	if source, token, ok := detect.ResolveBoard(q.URL); ok {
+		return dto.ResolvedURL{
+			Kind:    "ats",
+			Source:  source,
+			Value:   token,
+			Filters: map[string]string{},
+			Dropped: []string{},
+			URL:     q.URL,
+		}, nil
+	}
+	if label, ok := detect.UnsupportedBoard(q.URL); ok {
+		return dto.ResolvedURL{}, apperr.Unprocessable(label + " searches aren't supported yet — use Build from fields")
+	}
+	return dto.ResolvedURL{}, apperr.Unprocessable("could not recognise a supported board or search page in that URL")
 }

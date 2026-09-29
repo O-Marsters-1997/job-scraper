@@ -12,7 +12,11 @@ type ResolveBoardQuery struct {
 	URL string `json:"url"`
 }
 
-type ResolvedBoard struct {
-	Source string `json:"source"`
-	Value  string `json:"value"`
+type ResolvedURL struct {
+	Kind    string            `json:"kind"`
+	Source  string            `json:"source"`
+	Value   string            `json:"value"`
+	Filters map[string]string `json:"filters"`
+	Dropped []string          `json:"dropped"`
+	URL     string            `json:"url"`
 }

@@ -93,6 +93,37 @@ func TestCreate_PropagatesConflict(t *testing.T) {
 	}
 }
 
+func TestCreate_IndeedURLsDifferingInTrackingParamsConflict(t *testing.T) {
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
+	first := dto.CreateSourceTargetInput{Source: "indeed", Value: "https://www.indeed.com/jobs?q=golang&l=London&vjk=abc"}
+	second := dto.CreateSourceTargetInput{Source: "indeed", Value: "https://www.indeed.com/jobs?l=London&q=golang&from=searchOnDesktopSerp&start=10"}
+	target, err := svc.Create(context.Background(), "user-1", first)
+	if err != nil {
+		t.Fatalf("first Create() err = %v", err)
+	}
+	if want := "https://www.indeed.com/jobs?l=London&q=golang"; target.Value != want {
+		t.Errorf("stored value = %q, want %q", target.Value, want)
+	}
+	if _, err := svc.Create(context.Background(), "user-1", second); wantStatus(t, err) != 409 {
+		t.Fatalf("second Create() err = %v, want 409", err)
+	}
+}
+
+func TestList_FillsBoardURL(t *testing.T) {
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
+	in := dto.CreateSourceTargetInput{Source: "wis", Value: "engineer", Filters: map[string]string{"region": "uk"}, Enabled: boolPtr(false)}
+	if _, err := svc.Create(context.Background(), "user-1", in); err != nil {
+		t.Fatalf("Create() err = %v", err)
+	}
+	got, err := svc.List(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("List() err = %v", err)
+	}
+	if len(got) != 1 || got[0].URL != "https://workinstartups.com/search?q=engineer&w=uk" {
+		t.Fatalf("List() = %+v, want one target with the board URL", got)
+	}
+}
+
 func TestCreate_RejectsATSSource(t *testing.T) {
 	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})

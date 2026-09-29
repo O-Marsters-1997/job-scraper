@@ -68,6 +68,12 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		}
 	}
 
+	if in.Source == "indeed" {
+		if search, ok := detect.ParseSearchURL(in.Value); ok && search.Source == in.Source {
+			in.Value = search.Value
+		}
+	}
+
 	if err := validateSourceValue(in.Source, in.Value, in.Filters); err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -174,6 +180,17 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	}
 
 	return target, nil
+}
+
+func (s *Service) List(ctx context.Context, userID string) ([]dto.SourceTarget, error) {
+	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range targets {
+		targets[i].URL = detect.BuildSearchURL(targets[i].Source, targets[i].Value, targets[i].Filters)
+	}
+	return targets, nil
 }
 
 func (s *Service) Delete(ctx context.Context, userID, id string) error {
