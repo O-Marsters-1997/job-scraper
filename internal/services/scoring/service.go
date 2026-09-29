@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
@@ -38,6 +39,7 @@ type Store interface {
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
+	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
@@ -255,6 +257,69 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		}
 	}
 	return nil
+}
+
+// Ask answers questions about jobID from the Jev answer cache, sending only
+// the misses to Jev with userID's OpenRouter key and caching the results.
+// The map is keyed by question text.
+func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error) {
+	job, err := s.store.GetJobForScoring(ctx, jobID)
+	if errors.Is(err, data.ErrNotFound) {
+		return nil, apperr.NotFound("job not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scoring.Ask: load job: %w", err)
+	}
+
+	cached, err := s.store.ListAnswers(ctx, jobID, job.ContentFingerprint, jev.Model)
+	if err != nil {
+		return nil, fmt.Errorf("scoring.Ask: load cached answers: %w", err)
+	}
+
+	out := make(map[string]dto.Answer, len(questions))
+	var missing []string
+	for _, q := range questions {
+		if _, done := out[q]; done {
+			continue
+		}
+		if a, ok := cached[QuestionHash(q)]; ok {
+			out[q] = a
+			continue
+		}
+		out[q] = dto.Answer{}
+		missing = append(missing, q)
+	}
+	if len(missing) == 0 {
+		return out, nil
+	}
+
+	key, err := s.credentials.Get(ctx, userID, jev.Provider)
+	if errors.Is(err, data.ErrNotFound) {
+		return nil, apperr.Unprocessable("connect an OpenRouter key in Settings, AI to answer job questions")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scoring.Ask: load credential: %w", err)
+	}
+	answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
+	if err != nil {
+		return nil, fmt.Errorf("scoring.Ask: answer questions: %w", err)
+	}
+	slog.InfoContext(ctx, "score call",
+		slog.String(logger.KeyEvent, telemetry.EventScoreCall),
+		slog.String(logger.KeyUserID, userID),
+		slog.String("model", usage.Model),
+		slog.Float64(logger.KeyCostUSD, usage.Cost),
+	)
+
+	fresh := make(map[string]dto.Answer, len(answers))
+	for q, a := range answers {
+		out[q] = a
+		fresh[QuestionHash(q)] = a
+	}
+	if err := s.store.SaveAnswers(ctx, jobID, job.ContentFingerprint, jev.Model, fresh); err != nil {
+		return nil, fmt.Errorf("scoring.Ask: cache answers: %w", err)
+	}
+	return out, nil
 }
 
 // Recompute re-scores every job userID already has a score for, from their

@@ -359,6 +359,33 @@ func (s *Store) ListAnswers(ctx context.Context, jobID, fingerprint, model strin
 	return answers, nil
 }
 
+// SaveAnswers caches answers for one job version, keeping any already stored.
+func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
+	jid, err := parseUUID(jobID)
+	if err != nil {
+		return err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin save answers: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+	for hash, a := range answers {
+		err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
+			JobID: jid, Fingerprint: fingerprint, QuestionHash: hash, Model: model,
+			PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
+		})
+		if err != nil {
+			return fmt.Errorf("store.SaveAnswers: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit save answers: %w", err)
+	}
+	return nil
+}
+
 // CompleteAnswerEffect writes the effect's answers and every surviving
 // user's score, then marks it done, in one transaction.
 func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {

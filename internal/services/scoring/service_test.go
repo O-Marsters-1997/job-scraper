@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -67,7 +69,7 @@ type fakeCredentials struct{ key string }
 
 func (f *fakeCredentials) Get(context.Context, string, string) (string, error) {
 	if f.key == "" {
-		return "", errors.New("no credential")
+		return "", data.ErrNotFound
 	}
 	return f.key, nil
 }
@@ -853,6 +855,72 @@ func TestFillMissingAnswers(t *testing.T) {
 		}
 		if queued != 0 || len(st.QueuedMissing()) != 0 {
 			t.Fatalf("queued = %d, calls = %d, want 0 (retired option never asked)", queued, len(st.QueuedMissing()))
+		}
+	})
+}
+
+func TestAsk(t *testing.T) {
+	ctx := context.Background()
+	job := dto.Job{ID: "job-1", ContentFingerprint: "fp-1"}
+	newSvc := func(t *testing.T, key string) (*scoring.Service, *fakeAnswerer) {
+		t.Helper()
+		st := newFakeStore()
+		st.SeedJob(job, nil)
+		answerer := &fakeAnswerer{t: t}
+		return scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: key}}), answerer
+	}
+
+	t.Run("second ask with the same questions makes no Jev call", func(t *testing.T) {
+		svc, answerer := newSvc(t, "sk-or-test")
+		qs := []string{"Is it remote?", "Is it senior?"}
+		first, err := svc.Ask(ctx, "user-1", job.ID, qs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := svc.Ask(ctx, "user-1", job.ID, qs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(answerer.calls) != 1 {
+			t.Fatalf("Answer calls = %v, want exactly one", answerer.calls)
+		}
+		if len(second) != 2 || second["Is it remote?"] != first["Is it remote?"] {
+			t.Fatalf("second = %+v, want the cached answers %+v", second, first)
+		}
+	})
+
+	t.Run("changing one question asks only that question", func(t *testing.T) {
+		svc, answerer := newSvc(t, "sk-or-test")
+		if _, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?", "Is it senior?"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?", "Is it junior?"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(answerer.calls) != 2 || !slices.Equal(answerer.calls[1], []string{"Is it junior?"}) {
+			t.Fatalf("Answer calls = %v, want a second call for only %q", answerer.calls, "Is it junior?")
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %+v, want answers for both questions", got)
+		}
+	})
+
+	t.Run("a user with no key gets an unprocessable error", func(t *testing.T) {
+		svc, _ := newSvc(t, "")
+		_, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?"})
+		ae, ok := errors.AsType[*apperr.Error](err)
+		if !ok || ae.Kind() != apperr.KindUnprocessable {
+			t.Fatalf("Ask(...) err = %v, want an unprocessable apperr", err)
+		}
+	})
+
+	t.Run("an unknown job is not found", func(t *testing.T) {
+		svc, _ := newSvc(t, "sk-or-test")
+		_, err := svc.Ask(ctx, "user-1", "missing", []string{"Is it remote?"})
+		ae, ok := errors.AsType[*apperr.Error](err)
+		if !ok || ae.Kind() != apperr.KindNotFound {
+			t.Fatalf("Ask(...) err = %v, want a not-found apperr", err)
 		}
 	})
 }

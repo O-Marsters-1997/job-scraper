@@ -837,3 +837,23 @@ func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 		t.Fatalf("losers = %d, want %d", notFounds.Load(), claimers-1)
 	}
 }
+
+func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	jobID := insertJob(t, pool, "fp-1")
+
+	if err := st.SaveAnswers(ctx, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.5}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveAnswers(ctx, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.9}, "h2": {PNo: 0.5}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.ListAnswers(ctx, jobID, "fp-1", "m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["h1"].PYes != 0.5 || got["h2"].PNo != 0.5 {
+		t.Fatalf("answers = %+v, want h1 kept at 0.5 and h2 added", got)
+	}
+}
