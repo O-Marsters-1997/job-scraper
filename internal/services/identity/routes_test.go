@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -289,4 +290,75 @@ func extractState(t *testing.T, signed string) string {
 		t.Fatalf("oauth_state cookie %q doesn't look like state:signature", signed)
 	}
 	return m[1]
+}
+
+func TestGoogleOAuthStartWriteVariantAsksForDriveFile(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "test-secret")
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start?write=1", http.NoBody))
+	if loc := w.Header().Get("Location"); !strings.Contains(loc, "include_granted_scopes=true") {
+		t.Fatalf("Location = %q, want write consent URL", loc)
+	}
+
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
+	if loc := w.Header().Get("Location"); strings.Contains(loc, "drive.file") {
+		t.Fatalf("plain start Location = %q, must not request write scope", loc)
+	}
+}
+
+func TestGoogleOAuthCallbackRedirectsToAllowListedReturnPath(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "test-secret")
+	tests := []struct {
+		name, ret, want string
+	}{
+		{"tailor route", "/jobs/42/tailor", "/jobs/42/tailor"},
+		{"no return", "", "/settings/integrations"},
+		{"external URL", "https://evil.example/x", "/settings/integrations"},
+		{"protocol-relative", "//evil.example", "/settings/integrations"},
+		{"unlisted in-app path", "/profile", "/settings/integrations"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+			session := signup(t, r, "dave")
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start?write=1&return="+url.QueryEscape(tt.ret), http.NoBody))
+			state := stateCookie(t, w)
+
+			cb := httptest.NewRequest(http.MethodGet, "/google/oauth/callback?state="+extractState(t, state.Value)+"&code=c", http.NoBody)
+			cb.AddCookie(session)
+			for _, c := range w.Result().Cookies() {
+				cb.AddCookie(c)
+			}
+			w = httptest.NewRecorder()
+			r.ServeHTTP(w, cb)
+			if got := w.Header().Get("Location"); got != tt.want {
+				t.Fatalf("Location = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGoogleOAuthCallbackIgnoresForgedReturnCookie(t *testing.T) {
+	t.Setenv("SESSION_SECRET", "test-secret")
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	session := signup(t, r, "erin")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
+	state := stateCookie(t, w)
+
+	cb := httptest.NewRequest(http.MethodGet, "/google/oauth/callback?state="+extractState(t, state.Value)+"&code=c", http.NoBody)
+	cb.AddCookie(session)
+	cb.AddCookie(state)
+	cb.AddCookie(&http.Cookie{Name: "oauth_return", Value: "https://evil.example"})
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, cb)
+	if got := w.Header().Get("Location"); got != "/settings/integrations" {
+		t.Fatalf("Location = %q", got)
+	}
 }

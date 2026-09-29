@@ -19,20 +19,42 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type fakeGoogleClient struct {
-	mu          sync.Mutex
-	connected   map[string]bool
-	exchangeErr error
-	tabs        []google.Tab
-	meta        google.FileMeta
+	mu           sync.Mutex
+	connected    map[string]bool
+	scopes       map[string]string
+	exchangeErr  error
+	tabs         []google.Tab
+	writeGranted bool
+	meta         google.FileMeta
 }
 
 func newFakeGoogleClient() *fakeGoogleClient {
-	return &fakeGoogleClient{connected: map[string]bool{}}
+	return &fakeGoogleClient{connected: map[string]bool{}, scopes: map[string]string{}}
 }
 
-func (f *fakeGoogleClient) AuthURL(state string) string {
-	return "https://accounts.google.com/o?state=" + state
+func (f *fakeGoogleClient) AuthURL(state string, write bool) string {
+	u := "https://accounts.google.com/o?state=" + state
+	if write {
+		u += "&scope=drive.file&include_granted_scopes=true"
+	}
+	return u
 }
+
+func (f *fakeGoogleClient) HasScope(_ context.Context, userID, scope string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.scopes[userID] == scope, nil
+}
+
+func (f *fakeGoogleClient) CopyFile(context.Context, string, string, string) (string, error) {
+	return "copy-id", nil
+}
+
+func (f *fakeGoogleClient) BatchUpdate(context.Context, string, string, []json.RawMessage) error {
+	return nil
+}
+
+func (f *fakeGoogleClient) DeleteFile(context.Context, string, string) error { return nil }
 
 func (f *fakeGoogleClient) Exchange(context.Context, string) (*oauth2.Token, error) {
 	return &oauth2.Token{AccessToken: "tok"}, f.exchangeErr
@@ -42,6 +64,9 @@ func (f *fakeGoogleClient) SaveToken(_ context.Context, userID string, _ *oauth2
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.connected[userID] = true
+	if f.writeGranted {
+		f.scopes[userID] = google.DriveFileScope
+	}
 	return nil
 }
 

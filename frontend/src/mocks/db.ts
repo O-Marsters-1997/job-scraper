@@ -944,14 +944,14 @@ export function setAiCredential(provider: string, apiKey: string | null): void {
 	aiPrefs = { ...aiPrefs, configuredProviders: [...providers] };
 }
 
-let googleStatus: GoogleStatus = { connected: false };
+let googleStatus: GoogleStatus = { connected: false, canWrite: false };
 
 export function getGoogleStatus(): GoogleStatus {
 	return structuredClone(googleStatus);
 }
 
 export function disconnectGoogle(): void {
-	googleStatus = { connected: false };
+	googleStatus = { connected: false, canWrite: false };
 }
 
 let profile: Profile = { username: "demo", email: "demo@example.com" };

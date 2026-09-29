@@ -18,7 +18,8 @@ import (
 )
 
 type googleClient interface {
-	AuthURL(state string) string
+	AuthURL(state string, write bool) string
+	HasScope(ctx context.Context, userID, scope string) (bool, error)
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
 	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
 	HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error)
@@ -27,6 +28,9 @@ type googleClient interface {
 	FileMeta(ctx context.Context, userID, docID string) (google.FileMeta, error)
 	GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error)
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
+	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
+	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
+	DeleteFile(ctx context.Context, userID, fileID string) error
 }
 
 // Deps are Build's collaborators; New builds the real ones and calls Build.

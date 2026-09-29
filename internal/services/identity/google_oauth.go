@@ -10,38 +10,79 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-const oauthStateCookie = "oauth_state"
+const (
+	oauthStateCookie  = "oauth_state"
+	oauthReturnCookie = "oauth_return"
+	defaultReturnPath = "/settings/integrations"
+)
+
+var tailorReturnPath = regexp.MustCompile(`^/jobs/[A-Za-z0-9_-]+/tailor$`)
+
+// safeReturnPath returns p if it is an in-app path the OAuth callback may
+// redirect to, else the integrations page.
+func safeReturnPath(p string) string {
+	if p == defaultReturnPath || tailorReturnPath.MatchString(p) {
+		return p
+	}
+	return defaultReturnPath
+}
 
 type googleAuthConnector interface {
-	AuthURL(state string) string
+	AuthURL(state string, write bool) string
 	Connect(ctx context.Context, userID, code string) error
 }
 
-type oauthRedirect struct {
-	state, authURL string
+type oauthStart struct {
+	state      string
+	write      bool
+	returnPath string
 }
 
+type oauthRedirect struct {
+	state, authURL, returnPath string
+}
+
+// oauthStartHandler starts the read-only link, or with ?write=1 the
+// incremental drive.file consent. ?return= is checked against the in-app
+// allow-list.
 func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
 	return handlers.Handle(
-		func(r *http.Request) (string, error) { return generateState() },
-		func(_ context.Context, state string) (oauthRedirect, error) {
-			return oauthRedirect{state: state, authURL: svc.AuthURL(state)}, nil
+		func(r *http.Request) (oauthStart, error) {
+			state, err := generateState()
+			if err != nil {
+				return oauthStart{}, err
+			}
+			q := r.URL.Query()
+			return oauthStart{
+				state:      state,
+				write:      q.Get("write") == "1",
+				returnPath: safeReturnPath(q.Get("return")),
+			}, nil
+		},
+		func(_ context.Context, in oauthStart) (oauthRedirect, error) {
+			return oauthRedirect{
+				state:      in.state,
+				authURL:    svc.AuthURL(in.state, in.write),
+				returnPath: in.returnPath,
+			}, nil
 		},
 		func(w http.ResponseWriter, r *http.Request, out oauthRedirect) {
 			setOAuthStateCookie(w, out.state)
+			setOAuthReturnCookie(w, out.returnPath)
 			http.Redirect(w, r, out.authURL, http.StatusTemporaryRedirect)
 		},
 	)
 }
 
 type oauthConnect struct {
-	userID, code string
+	userID, code, returnPath string
 }
 
 func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
@@ -58,14 +99,19 @@ func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
 			if err != nil {
 				return oauthConnect{}, err
 			}
-			return oauthConnect{userID: uid, code: code}, nil
+			returnPath := defaultReturnPath
+			if c, err := r.Cookie(oauthReturnCookie); err == nil {
+				returnPath = safeReturnPath(c.Value)
+			}
+			return oauthConnect{userID: uid, code: code, returnPath: returnPath}, nil
 		},
-		func(ctx context.Context, in oauthConnect) (struct{}, error) {
-			return struct{}{}, svc.Connect(ctx, in.userID, in.code)
+		func(ctx context.Context, in oauthConnect) (string, error) {
+			return in.returnPath, svc.Connect(ctx, in.userID, in.code)
 		},
-		func(w http.ResponseWriter, r *http.Request, _ struct{}) {
+		func(w http.ResponseWriter, r *http.Request, returnPath string) {
 			http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
-			http.Redirect(w, r, "/settings/integrations", http.StatusTemporaryRedirect)
+			http.SetCookie(w, &http.Cookie{Name: oauthReturnCookie, Value: "", MaxAge: -1, Path: "/"})
+			http.Redirect(w, r, returnPath, http.StatusTemporaryRedirect)
 		},
 	)
 }
@@ -79,15 +125,22 @@ func generateState() (string, error) {
 }
 
 func setOAuthStateCookie(w http.ResponseWriter, state string) {
-	signed := signOAuthState(state)
+	setOAuthCookie(w, oauthStateCookie, signOAuthState(state))
+}
+
+func setOAuthReturnCookie(w http.ResponseWriter, returnPath string) {
+	setOAuthCookie(w, oauthReturnCookie, returnPath)
+}
+
+func setOAuthCookie(w http.ResponseWriter, name, value string) {
 	secure := os.Getenv("COOKIE_SECURE") == "true"
 	sameSite := http.SameSiteLaxMode
 	if secure {
 		sameSite = http.SameSiteNoneMode
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     oauthStateCookie,
-		Value:    signed,
+		Name:     name,
+		Value:    value,
 		HttpOnly: true,
 		SameSite: sameSite,
 		Secure:   secure,
