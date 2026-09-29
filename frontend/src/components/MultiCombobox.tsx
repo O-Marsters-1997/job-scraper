@@ -3,6 +3,15 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 
+function isCreatedOption(value: unknown): boolean {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"created" in value &&
+		value.created === true
+	);
+}
+
 function SearchInput() {
 	const ctx = useComboboxContext();
 	const highlightBestMatch = () =>
@@ -14,7 +23,7 @@ function SearchInput() {
 			const rank = (node: (typeof nodes)[number]) => {
 				const text = node.textValue.toLowerCase();
 				if (list.selectionManager().isSelected(node.key)) return 4;
-				if ((node.rawValue as ComboOption).created) return 2;
+				if (isCreatedOption(node.rawValue)) return 2;
 				return text === q ? 0 : text.startsWith(q) ? 1 : 3;
 			};
 			const best = nodes.sort((a, b) => rank(a) - rank(b))[0];

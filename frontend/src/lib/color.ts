@@ -136,3 +136,15 @@ export function toOklch(css: string): string {
 	}
 	return `oklch(${Ls} ${Cs} ${Hs})`;
 }
+
+/** Append a two-digit hex alpha to a colour, expanding #rgb and replacing any existing alpha. */
+export function hexAlpha(hex: string, alpha: string): string {
+	const m = hex.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i);
+	const digits = m?.[1];
+	if (!digits) return hex;
+	const full =
+		digits.length === 3
+			? [...digits].map((c) => c + c).join("")
+			: digits.slice(0, 6);
+	return `#${full.toLowerCase()}${alpha}`;
+}

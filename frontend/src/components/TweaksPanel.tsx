@@ -83,7 +83,7 @@ export default function TweaksPanel() {
 
 		function handlePointerDown(e: PointerEvent) {
 			if (!open()) return;
-			const target = e.target as Element | null;
+			const target = e.target instanceof Element ? e.target : null;
 			if (!target) return;
 			// Kobalte Popover portals render in <body>; let clicks inside them pass
 			if (target.closest("[data-tweaks-portal]")) return;
@@ -92,7 +92,7 @@ export default function TweaksPanel() {
 
 		function handleKeyDown(e: KeyboardEvent) {
 			if (e.key !== "Escape" || !open()) return;
-			const target = e.target as Element | null;
+			const target = e.target instanceof Element ? e.target : null;
 			// Let Kobalte's own popover (e.g. the colour picker) handle its own Escape
 			if (target?.closest("[data-tweaks-portal]")) return;
 			close();
@@ -340,12 +340,12 @@ function ThemeSection(props: {
 			<div class="grid grid-cols-2 gap-2">
 				<For each={THEME_KEYS}>
 					{(key) => {
-						const sw = () => props.swatchFor(key as ThemeKey);
+						const sw = () => props.swatchFor(key);
 						const selected = () => props.selected === key;
 						return (
 							<button
 								type="button"
-								onClick={() => props.onSelect(key as ThemeKey)}
+								onClick={() => props.onSelect(key)}
 								aria-pressed={selected()}
 								class={themeButtonVariants({ selected: selected() })}
 							>
@@ -358,8 +358,8 @@ function ThemeSection(props: {
 											class="h-1 w-7 rounded-full"
 											style={{ background: sw().ac }}
 										/>
-										<span class="h-1 w-5 rounded-full bg-white/25" />
-										<span class="h-1 w-6 rounded-full bg-white/15" />
+										<span class="h-1 w-5 rounded-full bg-overlay-25" />
+										<span class="h-1 w-6 rounded-full bg-overlay-15" />
 									</div>
 									<div class="flex-1 p-1.5" style={{ background: sw().cv }}>
 										<div
@@ -411,7 +411,7 @@ function TypographySection(props: {
 					{(key) => (
 						<button
 							type="button"
-							onClick={() => props.onSelect(key as FontKey)}
+							onClick={() => props.onSelect(key)}
 							aria-pressed={props.selected === key}
 							style={{ "font-family": FONTS[key].ui }}
 							class={cn(
@@ -444,11 +444,11 @@ function SizeSection(props: {
 	onSelect: (key: SizeKey) => void;
 }) {
 	const OPTIONS = [
-		{ key: "xs" as SizeKey, label: "XS", px: "12px" },
-		{ key: "sm" as SizeKey, label: "S", px: "14px" },
-		{ key: "md" as SizeKey, label: "M", px: "17px" },
-		{ key: "lg" as SizeKey, label: "L", px: "20px" },
-	];
+		{ key: "xs", label: "XS", px: "12px" },
+		{ key: "sm", label: "S", px: "14px" },
+		{ key: "md", label: "M", px: "17px" },
+		{ key: "lg", label: "L", px: "20px" },
+	] satisfies { key: SizeKey; label: string; px: string }[];
 	return (
 		<Section label="Size scale" hint="base → headings proportional">
 			<div class="flex gap-1.5">
@@ -502,7 +502,7 @@ function SidebarWidthSection(props: {
 					{ value: "wide", label: "Wide" },
 				]}
 				value={props.selected}
-				onChange={(v) => props.onSelect(v as SidebarWidthKey)}
+				onChange={props.onSelect}
 			/>
 		</Section>
 	);
@@ -521,7 +521,7 @@ function DensitySection(props: {
 					{ value: "spacious", label: "Spacious" },
 				]}
 				value={props.selected}
-				onChange={(v) => props.onSelect(v as DensityKey)}
+				onChange={props.onSelect}
 			/>
 		</Section>
 	);
@@ -540,7 +540,7 @@ function RadiusSection(props: {
 					{ value: "round", label: "Round" },
 				]}
 				value={props.selected}
-				onChange={(v) => props.onSelect(v as RadiusKey)}
+				onChange={props.onSelect}
 			/>
 		</Section>
 	);
@@ -596,18 +596,18 @@ function Section(props: SectionProps) {
 	);
 }
 
-interface SegOption {
-	value: string;
+interface SegOption<T extends string> {
+	value: T;
 	label: string;
 }
 
-interface SegControlProps {
-	options: SegOption[];
-	value: string;
-	onChange: (value: string) => void;
+interface SegControlProps<T extends string> {
+	options: SegOption<T>[];
+	value: T;
+	onChange: (value: T) => void;
 }
 
-function SegControl(props: SegControlProps) {
+function SegControl<T extends string>(props: SegControlProps<T>) {
 	return (
 		<div class="flex overflow-hidden rounded-md border border-border">
 			<For each={props.options}>

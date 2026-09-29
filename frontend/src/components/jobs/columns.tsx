@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/solid-router";
-import type { ColumnDef } from "@tanstack/solid-table";
+import { createColumnHelper } from "@tanstack/solid-table";
 import { Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -25,42 +25,39 @@ declare module "@tanstack/solid-table" {
 	}
 }
 
-export function createJobColumns(
-	ctx: JobTableContext,
-): ColumnDef<Job, unknown>[] {
+const col = createColumnHelper<Job>();
+
+export function createJobColumns(ctx: JobTableContext) {
 	return [
-		{
-			accessorKey: "Title",
+		col.accessor("Title", {
 			header: "Title",
 			cell: (info) => (
 				<Link
 					to="/jobs/$id"
 					params={{ id: info.row.original.ID }}
 					class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
-					title={info.getValue() as string}
+					title={info.getValue()}
 				>
-					{info.getValue() as string}
+					{info.getValue()}
 				</Link>
 			),
-		},
-		{
-			accessorKey: "CompanySlug",
+		}),
+		col.accessor("CompanySlug", {
 			header: "Company",
 			cell: (info) => (
 				<span
 					class="block max-w-[180px] truncate text-muted"
-					title={titleCase(info.getValue() as string)}
+					title={titleCase(info.getValue())}
 				>
-					{titleCase(info.getValue() as string)}
+					{titleCase(info.getValue())}
 				</span>
 			),
-		},
-		{
-			accessorKey: "Location",
+		}),
+		col.accessor("Location", {
 			header: "Location",
 			cell: (info) => (
 				<Show
-					when={info.getValue() as string | null | undefined}
+					when={info.getValue()}
 					fallback={<span class="text-faint">—</span>}
 				>
 					{(val) => (
@@ -70,9 +67,8 @@ export function createJobColumns(
 					)}
 				</Show>
 			),
-		},
-		{
-			accessorKey: "DaysInOffice",
+		}),
+		col.accessor("DaysInOffice", {
 			header: "Office",
 			enableSorting: false,
 			enableGlobalFilter: false,
@@ -81,7 +77,7 @@ export function createJobColumns(
 					<Match when={info.getValue() === 0}>
 						<span class="text-muted">Remote</span>
 					</Match>
-					<Match when={info.getValue() as number | null | undefined}>
+					<Match when={info.getValue()}>
 						{(val) => (
 							<span class="font-mono text-xs tabular-nums text-muted">
 								{val()}d/wk
@@ -90,14 +86,13 @@ export function createJobColumns(
 					</Match>
 				</Switch>
 			),
-		},
-		{
-			accessorKey: "SuitabilityScore",
+		}),
+		col.accessor("SuitabilityScore", {
 			header: "Suitability",
 			enableGlobalFilter: false,
 			sortUndefined: -1,
 			cell: (info) => {
-				const val = info.getValue() as number | null | undefined;
+				const val = info.getValue();
 				const rowId = info.row.original.ID;
 				const meta = info.table.options.meta;
 				const expanded = () => meta?.isExpanded(rowId) ?? false;
@@ -122,23 +117,21 @@ export function createJobColumns(
 					</button>
 				);
 			},
-		},
-		{
-			accessorKey: "Source",
+		}),
+		col.accessor("Source", {
 			header: "Source",
-			cell: (info) => <SourceBadge source={info.getValue() as string} />,
-		},
-		{
-			accessorKey: "ScrapedAt",
+			cell: (info) => <SourceBadge source={info.getValue()} />,
+		}),
+		col.accessor("ScrapedAt", {
 			header: "Scraped",
 			enableGlobalFilter: false,
 			cell: (info) => (
 				<span class="font-mono text-xs tabular-nums text-faint">
-					{formatRelative(info.getValue() as string)}
+					{formatRelative(info.getValue())}
 				</span>
 			),
-		},
-		{
+		}),
+		col.display({
 			id: "status",
 			header: "Status",
 			enableSorting: false,
@@ -161,8 +154,8 @@ export function createJobColumns(
 					)}
 				</Show>
 			),
-		},
-		{
+		}),
+		col.display({
 			id: "actions",
 			enableSorting: false,
 			enableGlobalFilter: false,
@@ -176,6 +169,6 @@ export function createJobColumns(
 					/>
 				</div>
 			),
-		},
+		}),
 	];
 }

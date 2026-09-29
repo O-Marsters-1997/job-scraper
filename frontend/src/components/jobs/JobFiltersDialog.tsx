@@ -67,7 +67,7 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 	return (
 		<Root open={props.open} onOpenChange={props.onOpenChange} modal>
 			<Portal>
-				<Overlay class="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
+				<Overlay class="fixed inset-0 z-50 bg-scrim backdrop-blur-[2px] data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0" />
 				<Content
 					class={cn(
 						"fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border-t border-border bg-surface shadow-2xl",

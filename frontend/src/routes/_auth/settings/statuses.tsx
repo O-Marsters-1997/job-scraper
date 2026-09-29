@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
+import { DEFAULT_STATUS_HEX, STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
 	useCreateApplicationStatus,
@@ -29,15 +30,14 @@ function StatusesPage() {
 
 	const [showAdd, setShowAdd] = createSignal(false);
 	const [newName, setNewName] = createSignal("");
-	const [newColour, setNewColour] = createSignal(
-		STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR,
-	);
+	const [newColour, setNewColour] = createSignal(DEFAULT_STATUS_HEX);
 
 	const [editingId, setEditingId] = createSignal<string | null>(null);
 	const [editName, setEditName] = createSignal("");
 	const [editColour, setEditColour] = createSignal("");
 
-	const [deleteError, setDeleteError] = createSignal<string | null>(null);
+	const [deletingStatus, setDeletingStatus] =
+		createSignal<ApplicationStatus | null>(null);
 
 	const addForm = useFormSubmit(async () => {
 		if (!newName().trim()) return;
@@ -46,7 +46,7 @@ function StatusesPage() {
 			colour: newColour(),
 		});
 		setNewName("");
-		setNewColour(STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR);
+		setNewColour(DEFAULT_STATUS_HEX);
 		setShowAdd(false);
 	});
 
@@ -69,16 +69,11 @@ function StatusesPage() {
 	});
 
 	const handleDelete = async (id: string) => {
-		setDeleteError(null);
-		try {
-			const result = await deleteMutation.mutateAsync(id);
-			if (result.count !== undefined) {
-				setDeleteError(
-					`Cannot delete: ${result.count} application${result.count !== 1 ? "s" : ""} use this status. Reassign them first.`,
-				);
-			}
-		} catch {
-			setDeleteError("Could not delete the status. Please try again.");
+		const result = await deleteMutation.mutateAsync(id);
+		if (result.count !== undefined) {
+			throw new Error(
+				`Cannot delete: ${result.count} application${result.count !== 1 ? "s" : ""} use this status. Reassign them first.`,
+			);
 		}
 	};
 
@@ -92,9 +87,7 @@ function StatusesPage() {
 					</Button>
 				</Show>
 			</SettingsActions>
-			<FormFeedback
-				error={addForm.error() ?? editForm.error() ?? deleteError()}
-			/>
+			<FormFeedback error={addForm.error() ?? editForm.error()} />
 
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
@@ -126,7 +119,7 @@ function StatusesPage() {
 													</button>
 													<button
 														type="button"
-														onClick={() => handleDelete(status.ID)}
+														onClick={() => setDeletingStatus(status)}
 														class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
 													>
 														Delete
@@ -239,6 +232,22 @@ function StatusesPage() {
 					</>
 				)}
 			</QueryBoundary>
+			<ConfirmDeleteDialog
+				open={deletingStatus() !== null}
+				onClose={() => setDeletingStatus(null)}
+				title="Delete status?"
+				confirmLabel="Delete status"
+				description={
+					<>
+						This removes the{" "}
+						<span class="font-medium text-foreground">
+							{deletingStatus()?.Name}
+						</span>{" "}
+						status. This can't be undone.
+					</>
+				}
+				onConfirm={() => handleDelete(deletingStatus()?.ID ?? "")}
+			/>
 		</>
 	);
 }

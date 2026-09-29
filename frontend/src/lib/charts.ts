@@ -220,9 +220,7 @@ export function verticalBarOptions(): ChartOptions<"bar"> {
 
 export const destructiveHex = () => cssVarHex("--color-destructive");
 
-export function hexAlpha(hex: string, alpha: string): string {
-	return `${hex}${alpha}`;
-}
+export { hexAlpha } from "./color";
 
 // Canvas can't read CSS variables live, so chart colours are baked into
 // plain values at build time; wrap any such builder in this so it recomputes

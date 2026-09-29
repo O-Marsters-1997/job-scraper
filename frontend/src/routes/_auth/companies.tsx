@@ -139,6 +139,16 @@ function CompaniesPage() {
 								</TableRow>
 							</TableHeader>
 							<TableBody>
+								<Show when={filtered().length === 0 && search().trim()}>
+									<TableRow>
+										<TableCell
+											colspan={5}
+											class="py-10 text-center text-sm text-muted"
+										>
+											No companies match "{search().trim()}".
+										</TableCell>
+									</TableRow>
+								</Show>
 								<For each={filtered()}>
 									{(c) => (
 										<TableRow>

@@ -145,7 +145,9 @@ function ApplicationsPage() {
 						fallback={
 							<Card class="p-10 text-center">
 								<p class="text-sm text-muted">
-									No applications yet. Track a job from the Jobs page.
+									{search().status
+										? "No applications with this status."
+										: "No applications yet. Track a job from the Jobs page."}
 								</p>
 							</Card>
 						}
