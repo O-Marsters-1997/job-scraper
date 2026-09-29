@@ -863,6 +863,7 @@ func TestAsk(t *testing.T) {
 	ctx := context.Background()
 	job := dto.Job{ID: "job-1", ContentFingerprint: "fp-1"}
 	newSvc := func(t *testing.T, key string) (*scoring.Service, *fakeAnswerer) {
+		t.Helper()
 		st := newFakeStore()
 		st.SeedJob(job, nil)
 		answerer := &fakeAnswerer{t: t}
