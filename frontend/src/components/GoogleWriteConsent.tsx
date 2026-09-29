@@ -6,7 +6,6 @@ type GoogleWriteConsentProps = {
 	returnTo: string;
 };
 
-/** Renders only when the user's Google link lacks write access. */
 export function GoogleWriteConsent(props: GoogleWriteConsentProps) {
 	const status = useGoogleStatus();
 	const href = () =>

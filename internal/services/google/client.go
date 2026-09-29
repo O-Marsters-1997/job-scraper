@@ -53,9 +53,7 @@ func NewClient(clientID, clientSecret, redirectURL string, store Store) *Client 
 	return &Client{cfg: cfg, store: store}
 }
 
-// AuthURL is the consent URL. With write it asks for drive.file on top of
-// the scopes already granted and forces the consent screen so Google
-// returns a refresh token again.
+// Google returns a refresh token only when the consent screen is forced.
 func (c *Client) AuthURL(state string, write bool) string {
 	if !write {
 		return c.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
@@ -69,7 +67,6 @@ func (c *Client) AuthURL(state string, write bool) string {
 	)
 }
 
-// HasScope reports whether the user's stored token was granted scope.
 func (c *Client) HasScope(ctx context.Context, userID, scope string) (bool, error) {
 	row, err := c.store.GetGoogleToken(ctx, userID)
 	if err != nil {
@@ -110,8 +107,7 @@ func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token
 	})
 }
 
-// grantedScope prefers the scope in the token response. A refreshed token
-// may omit it, so the stored scope is kept before falling back to read-only.
+// Google's refresh response may omit the scope field.
 func (c *Client) grantedScope(ctx context.Context, userID string, tok *oauth2.Token) string {
 	if scope, _ := tok.Extra("scope").(string); scope != "" {
 		return scope
@@ -338,8 +334,6 @@ func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io
 	return resp.Body, nil
 }
 
-// CopyFile copies a Drive file and returns the new file's ID. It needs the
-// drive.file scope.
 func (c *Client) CopyFile(ctx context.Context, userID, fileID, name string) (string, error) {
 	body, err := json.Marshal(map[string]string{"name": name})
 	if err != nil {
@@ -361,7 +355,6 @@ func (c *Client) CopyFile(ctx context.Context, userID, fileID, name string) (str
 	return out.ID, nil
 }
 
-// BatchUpdate applies Docs API requests to a Doc in one atomic call.
 func (c *Client) BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error {
 	body, err := json.Marshal(map[string][]json.RawMessage{"requests": requests})
 	if err != nil {
