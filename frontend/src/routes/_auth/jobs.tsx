@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_auth/jobs")({
 
 function JobsPage() {
 	const search = Route.useSearch();
-	const navigate = useNavigate();
+	const navigate = useNavigate({ from: "/jobs" });
 
 	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();

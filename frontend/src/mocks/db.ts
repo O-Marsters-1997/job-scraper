@@ -566,7 +566,18 @@ const SOURCE_INFOS: SourceInfo[] = [
 		kind: "filter",
 		role: "discovery",
 		url_prefix: "https://workinstartups.com",
-		filters: [{ name: "region", label: "Region", required: false }],
+		filters: [
+			{
+				name: "region",
+				label: "Region",
+				required: false,
+				options: [
+					{ value: "uk", label: "UK" },
+					{ value: "us", label: "US" },
+					{ value: "remote", label: "Remote" },
+				],
+			},
+		],
 	},
 	{
 		name: "linkedin",
@@ -574,7 +585,19 @@ const SOURCE_INFOS: SourceInfo[] = [
 		kind: "filter",
 		role: "discovery",
 		url_prefix: "https://www.linkedin.com/jobs",
-		filters: [{ name: "location", label: "Location", required: false }],
+		filters: [
+			{ name: "location", label: "Location", required: false },
+			{
+				name: "recency",
+				label: "Recency",
+				required: false,
+				options: [
+					{ value: "day", label: "Past 24 hours" },
+					{ value: "week", label: "Past week" },
+					{ value: "month", label: "Past month" },
+				],
+			},
+		],
 	},
 	{
 		name: "indeed",
@@ -663,10 +686,7 @@ function companyToSourceTarget(company: Company): SourceTarget {
 }
 
 export function getSourceTargets(): SourceTarget[] {
-	const atsTargets = companies
-		.filter((c) => c.TargetID)
-		.map(companyToSourceTarget);
-	return [...atsTargets, ...discoverySourceTargets];
+	return discoverySourceTargets;
 }
 
 export function createSourceTarget(

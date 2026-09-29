@@ -13,6 +13,12 @@ export class ConflictError extends Error {
 	}
 }
 
+export class AlreadyRunningError extends Error {
+	constructor() {
+		super("source target is already running");
+	}
+}
+
 export async function fetchSourceTargets(): Promise<SourceTarget[]> {
 	return mocked(
 		async (db) => {
@@ -70,13 +76,20 @@ export async function updateSourceTarget(
 	);
 }
 
-export async function deleteSourceTarget(id: string): Promise<void> {
+export async function deleteSourceTarget(
+	id: string,
+	opts?: { keepalive?: boolean },
+): Promise<void> {
 	return mocked(
 		async (db) => {
 			await mockDelay(80);
 			db.deleteSourceTarget(id);
 		},
-		() => apiFetchVoid(`/source-targets/${id}`, { method: "DELETE" }),
+		() =>
+			apiFetchVoid(`/source-targets/${id}`, {
+				method: "DELETE",
+				keepalive: opts?.keepalive ?? false,
+			}),
 	);
 }
 
@@ -86,11 +99,15 @@ export async function rerunSourceTarget(id: string): Promise<SourceTarget> {
 			await mockDelay(80);
 			return db.rerunSourceTarget(id);
 		},
-		() =>
-			apiFetch(
-				`/source-targets/${id}/scrape`,
-				{ method: "POST" },
-				sourceTargetSchema,
-			),
+		async () => {
+			const response = await fetch(`${API_BASE}/source-targets/${id}/scrape`, {
+				method: "POST",
+				credentials: "include",
+			});
+			if (response.status === 409) throw new AlreadyRunningError();
+			if (!response.ok)
+				throw new Error(`Failed to start search: ${response.status}`);
+			return sourceTargetSchema.parse(await response.json());
+		},
 	);
 }

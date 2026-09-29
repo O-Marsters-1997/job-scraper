@@ -1,9 +1,15 @@
 import { z } from "zod";
 
+export const sourceFilterOptionSchema = z.object({
+	value: z.string(),
+	label: z.string(),
+});
+
 export const sourceFilterFieldSchema = z.object({
 	name: z.string(),
 	label: z.string(),
 	required: z.boolean(),
+	options: z.array(sourceFilterOptionSchema).optional(),
 });
 
 export type SourceFilterField = z.infer<typeof sourceFilterFieldSchema>;
