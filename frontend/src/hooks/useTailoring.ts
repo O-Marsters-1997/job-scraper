@@ -14,9 +14,10 @@ export type CVRef = { docId: string; tabId: string };
 export function useHeadings(cv: Accessor<CVRef | undefined>) {
 	return createQuery(() => {
 		const ref = cv();
+		const { docId = "", tabId = "" } = ref ?? {};
 		return {
-			queryKey: keys.tailoring.headings(ref?.docId ?? "", ref?.tabId ?? ""),
-			queryFn: () => fetchHeadings(ref?.docId ?? "", ref?.tabId ?? ""),
+			queryKey: keys.tailoring.headings(docId, tabId),
+			queryFn: () => fetchHeadings(docId, tabId),
 			enabled: ref !== undefined,
 		};
 	});
@@ -33,19 +34,14 @@ export function useSaveHeadings() {
 export function useSuggestions(
 	jobId: Accessor<string>,
 	cv: Accessor<CVRef | undefined>,
-	enabled: Accessor<boolean>,
 ) {
 	return createQuery(() => {
 		const ref = cv();
+		const { docId = "", tabId = "" } = ref ?? {};
 		return {
-			queryKey: keys.tailoring.suggestions(
-				jobId(),
-				ref?.docId ?? "",
-				ref?.tabId ?? "",
-			),
-			queryFn: () =>
-				fetchSuggestions(jobId(), ref?.docId ?? "", ref?.tabId ?? ""),
-			enabled: ref !== undefined && enabled(),
+			queryKey: keys.tailoring.suggestions(jobId(), docId, tabId),
+			queryFn: () => fetchSuggestions(jobId(), docId, tabId),
+			enabled: ref !== undefined,
 			retry: false,
 			staleTime: 5 * 60 * 1000,
 		};

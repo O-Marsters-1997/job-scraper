@@ -253,7 +253,6 @@ function AchievementsStep(props: {
 	const suggestions = useSuggestions(
 		() => props.jobId(),
 		() => props.cv(),
-		() => true,
 	);
 	const positions = useExperience();
 	const [overrides, setOverrides] = createSignal<Record<string, boolean>>({});

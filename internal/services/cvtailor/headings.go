@@ -56,8 +56,9 @@ func (s *Service) SaveHeadings(ctx context.Context, userID string, in dto.Headin
 		owned[p.ID] = true
 	}
 	for i, m := range in.Mappings {
-		in.Mappings[i].HeadingText = strings.TrimSpace(m.HeadingText)
-		if in.Mappings[i].HeadingText == "" {
+		m.HeadingText = strings.TrimSpace(m.HeadingText)
+		in.Mappings[i] = m
+		if m.HeadingText == "" {
 			return nil, apperr.Invalid("headingText is required")
 		}
 		if m.PositionID != nil && !owned[*m.PositionID] {

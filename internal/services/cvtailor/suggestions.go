@@ -20,10 +20,9 @@ func achievementQuestion(text string) string {
 	return "Would this job value a candidate who: " + text
 }
 
-// Suggestions ranks every Achievement in the User's Bank for the Job by
-// P(yes) x confidence and preselects the top N per Position, where N is the
-// slot count of the Position's heading in the base CV Tab, else 3. docID and
-// tabID may be empty.
+// Suggestions ranks the User's Achievements for the Job by P(yes) x confidence
+// and preselects the top N per Position: its base CV slot count, else 3.
+// docID and tabID may be empty.
 func (s *Service) Suggestions(ctx context.Context, userID, jobID, docID, tabID string) ([]dto.Suggestion, error) {
 	positions, err := s.store.ListPositions(ctx, userID)
 	if err != nil {
@@ -49,7 +48,6 @@ func (s *Service) Suggestions(ctx context.Context, userID, jobID, docID, tabID s
 	return rankSuggestions(positions, answers, slots), nil
 }
 
-// slotCounts maps a Position ID to the slots of the base CV headings mapped to it.
 func (s *Service) slotCounts(ctx context.Context, userID, docID, tabID string) (map[string]int, error) {
 	if docID == "" || tabID == "" {
 		return nil, nil
