@@ -3,9 +3,12 @@ import type { Accessor } from "solid-js";
 import { keys } from "../api/keys";
 import {
 	createDraft,
+	discardDraft,
 	fetchDraft,
 	fetchHeadings,
+	fetchJobDrafts,
 	fetchSuggestions,
+	keepDraft,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
@@ -68,4 +71,20 @@ export function useDraft(id: Accessor<string | undefined>) {
 				? false
 				: DRAFT_POLL_MS,
 	}));
+}
+
+export function useJobDrafts(jobId: Accessor<string>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.jobDrafts(jobId()),
+		queryFn: () => fetchJobDrafts(jobId()),
+		retry: false,
+	}));
+}
+
+export function useKeepDraft() {
+	return useInvalidatingMutation(keepDraft, [keys.tailoring.all]);
+}
+
+export function useDiscardDraft() {
+	return useInvalidatingMutation(discardDraft, [keys.tailoring.all]);
 }

@@ -103,3 +103,16 @@ func (c *countedExports) ExportPDF(context.Context, string, string, string) (io.
 func ExportsPages(d cvtailor.Drive, pages ...int) cvtailor.Drive {
 	return &countedExports{Drive: d, pages: pages}
 }
+
+type exportsPDF struct {
+	cvtailor.Drive
+	body string
+}
+
+func (e exportsPDF) ExportPDF(context.Context, string, string, string) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(e.body)), nil
+}
+
+func ExportsPDF(d cvtailor.Drive, body string) cvtailor.Drive {
+	return exportsPDF{Drive: d, body: body}
+}

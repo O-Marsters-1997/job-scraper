@@ -12,6 +12,7 @@ import {
 } from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
@@ -351,6 +352,8 @@ function JobDetailPage() {
 								</Show>
 
 								<SuitabilityPanel job={j()} />
+
+								<JobDrafts jobId={params().id} />
 
 								<Card>
 									<CardHeader class="pb-2">

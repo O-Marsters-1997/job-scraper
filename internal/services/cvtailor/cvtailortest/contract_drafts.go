@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -119,6 +120,60 @@ func RunDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("ClaimDraft() err = %v, want ErrNotFound while backing off", err)
+		}
+	})
+
+	t.Run("a Job's Drafts list newest first and only for their owner", func(t *testing.T) {
+		f := newStore(t)
+		first, second := create(t, f), create(t, f)
+		got, err := f.Store.ListJobDrafts(ctx, f.UserID, f.JobID)
+		if err != nil || len(got) != 2 {
+			t.Fatalf("ListJobDrafts() = %+v, %v, want two Drafts", got, err)
+		}
+		if got[0].ID != second.ID || got[1].ID != first.ID {
+			t.Errorf("ListJobDrafts() ids = %s, %s, want %s, %s", got[0].ID, got[1].ID, second.ID, first.ID)
+		}
+		other, err := f.Store.ListJobDrafts(ctx, f.Other, f.JobID)
+		if err != nil || len(other) != 0 {
+			t.Errorf("ListJobDrafts(other user) = %+v, %v, want none", other, err)
+		}
+	})
+
+	t.Run("a Job keeps at most one Draft", func(t *testing.T) {
+		f := newStore(t)
+		first, second := create(t, f), create(t, f)
+		kept, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeKept)
+		if err != nil || kept.Outcome == nil || *kept.Outcome != dto.OutcomeKept {
+			t.Fatalf("SetDraftOutcome(kept) = %+v, %v", kept, err)
+		}
+		_, err = f.Store.SetDraftOutcome(ctx, f.UserID, second.ID, dto.OutcomeKept)
+		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
+			t.Errorf("second SetDraftOutcome(kept) err = %v, want a conflict", err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, first.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, second.ID, dto.OutcomeKept); err != nil {
+			t.Errorf("SetDraftOutcome(kept) after discarding the first err = %v, want nil", err)
+		}
+	})
+
+	t.Run("discarding drops the Doc id and keeps the row", func(t *testing.T) {
+		f := newStore(t)
+		d := create(t, f)
+		c := claim(t, f)
+		if err := f.Store.CompleteDraft(ctx, c, dto.DraftResult{EditSet: json.RawMessage(`{}`), DraftDocID: "doc-copy"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.UserID, d.ID, dto.OutcomeDiscarded); err != nil {
+			t.Fatal(err)
+		}
+		got, err := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if err != nil || got.DraftDocID != "" || got.Outcome == nil || *got.Outcome != dto.OutcomeDiscarded {
+			t.Errorf("GetDraft() = %+v, %v, want discarded with no Doc", got, err)
+		}
+		if _, err := f.Store.SetDraftOutcome(ctx, f.Other, d.ID, dto.OutcomeKept); err == nil {
+			t.Error("SetDraftOutcome(other user) err = nil, want not found")
 		}
 	})
 }

@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
@@ -15,7 +17,7 @@ import (
 func ptr(s string) *string { return &s }
 
 func TestCreatePositionValidation(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil)
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	cases := []struct {
 		name string
 		in   dto.PositionInput
@@ -36,7 +38,7 @@ func TestCreatePositionValidation(t *testing.T) {
 }
 
 func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil)
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	got, err := svc.CreatePosition(context.Background(), "u1", dto.PositionInput{
 		Employer: " Acme ", Title: "Engineer", StartDate: ptr("2020-01-01"), EndDate: ptr(""),
 	})
@@ -49,7 +51,7 @@ func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
 }
 
 func TestCreateAchievementRejectsBlankText(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil)
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	_, err := svc.CreateAchievement(context.Background(), "u1", dto.AchievementInput{PositionID: "p", Text: " "})
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("CreateAchievement() err = %v, want an invalid error", err)
@@ -57,7 +59,7 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 }
 
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil)
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	_, err := svc.ReorderPositions(context.Background(), "u1", dto.ReorderInput{IDs: []string{"a", "a"}})
 	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
 		t.Fatalf("ReorderPositions() err = %v, want an invalid error", err)
@@ -65,7 +67,7 @@ func TestReorderRejectsRepeatedIDs(t *testing.T) {
 }
 
 const (
-	user    = "user-1"
+	user    = handlerstest.UserID
 	jobID   = "job-1"
 	docID   = "doc-1"
 	tabID   = "t.0"
@@ -74,6 +76,7 @@ const (
 
 type draftEnv struct {
 	store *cvtailortest.FakeStore
+	drive *cvtailortest.Drive
 	svc   *cvtailor.Service
 	pos   dto.Position
 	input dto.DraftInput
@@ -98,9 +101,11 @@ func newDraftEnv(t *testing.T) draftEnv {
 		t.Fatal(err)
 	}
 	store.SetJob(jobID, "We need a Go engineer.", "fp-1")
+	drive := newDrive()
 	return draftEnv{
 		store: store,
-		svc:   cvtailor.NewService(store, nil, nil),
+		drive: drive,
+		svc:   cvtailor.NewService(store, nil, nil, drive),
 		pos:   pos,
 		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
 	}
@@ -113,7 +118,7 @@ func TestCreateDraft(t *testing.T) {
 		id := e.queue(t)
 
 		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
-		if diff := cmp.Diff(want, e.draft(t, id)); diff != "" {
+		if diff := cmp.Diff(want, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "CreatedAt")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
 	})

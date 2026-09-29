@@ -29,7 +29,7 @@ type Module struct {
 func Build(deps Deps) *Module {
 	return &Module{
 		store: deps.Store,
-		svc:   NewService(deps.Store, deps.Docs, deps.Asker),
+		svc:   NewService(deps.Store, deps.Docs, deps.Asker, deps.Drive),
 		gen: NewGenerator(GeneratorDeps{
 			Store: deps.Store, Docs: deps.Docs, Drive: deps.Drive, Editor: deps.Editor, Creds: deps.Creds,
 		}),

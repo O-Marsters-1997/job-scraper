@@ -3,6 +3,7 @@ package cvtailortest
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -10,7 +11,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-var errDraftNotFound = apperr.NotFound("draft not found")
+var (
+	errDraftNotFound = apperr.NotFound("draft not found")
+	errKeptExists    = apperr.Conflict("this job already has a kept draft")
+)
 
 type draft struct {
 	dto.Draft
@@ -38,7 +42,7 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}}, userID: userID, input: in, dueAt: time.Now()}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now()}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	return d.Draft, nil
 }
@@ -49,6 +53,49 @@ func (f *FakeStore) GetDraft(_ context.Context, userID, id string) (dto.Draft, e
 	d, ok := f.drafts[id]
 	if !ok || d.userID != userID {
 		return dto.Draft{}, errDraftNotFound
+	}
+	return d.Draft, nil
+}
+
+func (f *FakeStore) ListJobDrafts(_ context.Context, userID, jobID string) ([]dto.Draft, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var owned []*draft
+	for _, d := range f.drafts {
+		if d.userID == userID && d.JobID == jobID {
+			owned = append(owned, d)
+		}
+	}
+	slices.SortFunc(owned, func(a, b *draft) int {
+		if c := b.CreatedAt.Compare(a.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	out := make([]dto.Draft, len(owned))
+	for i, d := range owned {
+		out[i] = d.Draft
+	}
+	return out, nil
+}
+
+func (f *FakeStore) SetDraftOutcome(_ context.Context, userID, id, outcome string) (dto.Draft, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[id]
+	if !ok || d.userID != userID {
+		return dto.Draft{}, errDraftNotFound
+	}
+	if outcome == dto.OutcomeKept {
+		for _, other := range f.drafts {
+			if other != d && other.userID == userID && other.JobID == d.JobID && other.Outcome != nil && *other.Outcome == dto.OutcomeKept {
+				return dto.Draft{}, errKeptExists
+			}
+		}
+	}
+	d.Outcome = &outcome
+	if outcome == dto.OutcomeDiscarded {
+		d.DraftDocID = ""
 	}
 	return d.Draft, nil
 }
@@ -103,7 +150,7 @@ func (f *FakeStore) CompleteDraft(_ context.Context, claim dto.DraftClaim, res d
 	if err != nil {
 		return err
 	}
-	d.Status, d.LastError, d.DraftDocID, d.Findings, d.result = "ready", "", res.DraftDocID, slices.Clone(res.Findings), res
+	d.Status, d.LastError, d.DraftDocID, d.Findings, d.result, d.EditSet = "ready", "", res.DraftDocID, slices.Clone(res.Findings), res, res.EditSet
 	return nil
 }
 

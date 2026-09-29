@@ -222,6 +222,57 @@ func (q *Queries) InsertDraft(ctx context.Context, arg InsertDraftParams) (Tailo
 	return i, err
 }
 
+const listJobDrafts = `-- name: ListJobDrafts :many
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
+`
+
+type ListJobDraftsParams struct {
+	JobID  pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([]TailoredCv, error) {
+	rows, err := q.db.Query(ctx, listJobDrafts, arg.JobID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TailoredCv
+	for rows.Next() {
+		var i TailoredCv
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.JobID,
+			&i.BaseDocID,
+			&i.BaseTabID,
+			&i.AchievementIds,
+			&i.EditSet,
+			&i.Findings,
+			&i.RawOutput,
+			&i.Model,
+			&i.PromptVersion,
+			&i.JobFingerprint,
+			&i.Cost,
+			&i.DraftDocID,
+			&i.Status,
+			&i.Outcome,
+			&i.Attempts,
+			&i.DueAt,
+			&i.LeaseUntil,
+			&i.LastError,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setDraftDoc = `-- name: SetDraftDoc :exec
 UPDATE tailored_cvs SET draft_doc_id = $1::text
 WHERE id = $2::uuid AND attempts = $3::int AND status = 'running'
@@ -236,4 +287,46 @@ type SetDraftDocParams struct {
 func (q *Queries) SetDraftDoc(ctx context.Context, arg SetDraftDocParams) error {
 	_, err := q.db.Exec(ctx, setDraftDoc, arg.DraftDocID, arg.ID, arg.Attempts)
 	return err
+}
+
+const setDraftOutcome = `-- name: SetDraftOutcome :one
+UPDATE tailored_cvs SET outcome = $1::text,
+    draft_doc_id = CASE WHEN $1::text = 'discarded' THEN NULL ELSE draft_doc_id END
+WHERE id = $2::uuid AND user_id = $3::uuid
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, attempts, due_at, lease_until, last_error, created_at
+`
+
+type SetDraftOutcomeParams struct {
+	Outcome string
+	ID      pgtype.UUID
+	UserID  pgtype.UUID
+}
+
+func (q *Queries) SetDraftOutcome(ctx context.Context, arg SetDraftOutcomeParams) (TailoredCv, error) {
+	row := q.db.QueryRow(ctx, setDraftOutcome, arg.Outcome, arg.ID, arg.UserID)
+	var i TailoredCv
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.BaseDocID,
+		&i.BaseTabID,
+		&i.AchievementIds,
+		&i.EditSet,
+		&i.Findings,
+		&i.RawOutput,
+		&i.Model,
+		&i.PromptVersion,
+		&i.JobFingerprint,
+		&i.Cost,
+		&i.DraftDocID,
+		&i.Status,
+		&i.Outcome,
+		&i.Attempts,
+		&i.DueAt,
+		&i.LeaseUntil,
+		&i.LastError,
+		&i.CreatedAt,
+	)
+	return i, err
 }

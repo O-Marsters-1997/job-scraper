@@ -457,14 +457,23 @@ function GenerateStep(props: {
 				>
 					<Show when={draft.data?.status === "ready"}>
 						<p class="mb-3 text-sm text-foreground">Your draft is ready.</p>
-						<a
-							href={draft.data?.draftDocUrl ?? undefined}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:bg-primary-hover"
-						>
-							Open in Google Docs
-						</a>
+						<div class="flex flex-wrap gap-2">
+							<Link
+								to="/tailoring/drafts/$id"
+								params={{ id: draftId() ?? "" }}
+								class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:bg-primary-hover"
+							>
+								Review draft
+							</Link>
+							<a
+								href={draft.data?.draftDocUrl ?? undefined}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="inline-flex h-8 items-center rounded-md border border-border bg-surface px-3 text-xs font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-muted"
+							>
+								Open in Google Docs
+							</a>
+						</div>
 					</Show>
 					<Show when={draft.data?.status === "failed"}>
 						<p class="mb-3 text-sm text-danger">
