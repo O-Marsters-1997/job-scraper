@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
+DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
+`
+
+type DeleteCompanyTrackingParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) DeleteCompanyTracking(ctx context.Context, arg DeleteCompanyTrackingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCompanyTracking, arg.UserID, arg.CompanyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCompany = `-- name: GetCompany :one
 SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
 `
@@ -126,6 +143,56 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 			&i.FirstSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrackedCompaniesForUser = `-- name: ListTrackedCompaniesForUser :many
+SELECT c.id, c.name, c.slug, tc.enabled, tc.check_interval_minutes,
+    (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
+FROM tracked_companies tc
+JOIN companies c ON c.id = tc.company_id
+WHERE tc.user_id = $1
+ORDER BY c.name, c.id
+`
+
+type ListTrackedCompaniesForUserRow struct {
+	ID                   pgtype.UUID
+	Name                 string
+	Slug                 string
+	Enabled              bool
+	CheckIntervalMinutes int32
+	OpenJobs             int64
+	LastCheckedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype.UUID) ([]ListTrackedCompaniesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listTrackedCompaniesForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTrackedCompaniesForUserRow
+	for rows.Next() {
+		var i ListTrackedCompaniesForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Enabled,
+			&i.CheckIntervalMinutes,
+			&i.OpenJobs,
+			&i.LastCheckedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -30,7 +30,8 @@ func TestRoutesRequireAuth(t *testing.T) {
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
-		"GET /companies", "POST /companies", "PUT /companies/{id}/tracking",
+		"GET /companies", "GET /companies/tracked", "POST /companies",
+		"PUT /companies/{id}/tracking", "DELETE /companies/{id}/tracking",
 		"GET /companies/{id}/boards", "POST /companies/{id}/boards",
 	)
 }

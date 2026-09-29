@@ -41,6 +41,28 @@ export const companyBoardSchema = z.object({
 
 export type CompanyBoard = z.infer<typeof companyBoardSchema>;
 
+export const trackedBoardSchema = z.object({
+	id: z.string(),
+	source: z.string(),
+	board_token: z.string(),
+	status: z.enum(["candidate", "verified", "retired"]),
+	url: z.string(),
+});
+
+export const trackedCompanySchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	slug: z.string(),
+	enabled: z.boolean(),
+	check_interval_minutes: z.number(),
+	boards: z.array(trackedBoardSchema),
+	open_jobs: z.number(),
+	last_checked_at: z.string().nullable(),
+});
+
+export type TrackedBoard = z.infer<typeof trackedBoardSchema>;
+export type TrackedCompany = z.infer<typeof trackedCompanySchema>;
+
 export interface AddCompanyPayload {
 	url: string;
 	track?: boolean;

@@ -252,6 +252,47 @@ func (f *FakeStore) ListCompaniesForUser(_ context.Context, userID string) ([]dt
 	return out, nil
 }
 
+func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string) ([]dto.TrackedCompany, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]dto.TrackedCompany, 0)
+	for _, c := range f.companies {
+		tr, ok := f.tracking[trackingKey(userID, c.ID)]
+		if !ok {
+			continue
+		}
+		tc := dto.TrackedCompany{
+			ID: c.ID, Name: c.Name, Slug: c.Slug, Enabled: tr.Enabled,
+			CheckIntervalMinutes: tr.CheckIntervalMinutes, Boards: []dto.TrackedBoard{},
+		}
+		for _, b := range f.boards {
+			if b.CompanyID == c.ID {
+				tc.Boards = append(tc.Boards, dto.TrackedBoard{ID: b.ID, Source: b.Source, BoardToken: b.BoardToken, Status: b.Status})
+			}
+		}
+		slices.SortFunc(tc.Boards, func(a, b dto.TrackedBoard) int { return cmp.Compare(a.ID, b.ID) })
+		for _, j := range f.jobs {
+			if j.CompanyID == c.ID {
+				tc.OpenJobs++
+			}
+		}
+		out = append(out, tc)
+	}
+	slices.SortFunc(out, func(a, b dto.TrackedCompany) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID)) })
+	return out, nil
+}
+
+func (f *FakeStore) DeleteCompanyTracking(_ context.Context, userID, companyID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := trackingKey(userID, companyID)
+	if _, ok := f.tracking[key]; !ok {
+		return data.ErrNotFound
+	}
+	delete(f.tracking, key)
+	return nil
+}
+
 func (f *FakeStore) SetCompanyTracking(_ context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

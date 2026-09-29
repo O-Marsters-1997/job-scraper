@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
@@ -299,4 +300,32 @@ func assertKind(t *testing.T, err error, want apperr.Kind) {
 	if wantStatus := want.Status(); status != wantStatus {
 		t.Errorf("status = %d, want %d", status, wantStatus)
 	}
+}
+
+func TestListTrackedCompanies(t *testing.T) {
+	t.Run("fills each board's public URL", func(t *testing.T) {
+		svc, _ := newCompanyService(queuetest.NewRecorder())
+		company, err := svc.CreateCompany(t.Context(), "user-1", dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := svc.ListTrackedCompanies(t.Context(), "user-1")
+		if err != nil || len(got) != 1 || len(got[0].Boards) != 1 {
+			t.Fatalf("ListTrackedCompanies(...) = %+v, %v, want one company with one board", got, err)
+		}
+		if got[0].ID != company.ID || got[0].Boards[0].URL != "https://boards.greenhouse.io/acme" {
+			t.Fatalf("ListTrackedCompanies(...) = %+v, want board URL filled", got[0])
+		}
+	})
+}
+
+func TestUntrackCompany(t *testing.T) {
+	t.Run("unknown tracking is not found", func(t *testing.T) {
+		svc, _ := newCompanyService(queuetest.NewRecorder())
+		err := svc.UntrackCompany(t.Context(), "user-1", "missing")
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("UntrackCompany(...) err = %v, want ErrNotFound", err)
+		}
+	})
 }

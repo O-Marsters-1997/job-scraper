@@ -3,11 +3,13 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyTracking,
+	TrackedCompany,
 } from "../types/company";
 import {
 	companyBoardSchema,
 	companySchema,
 	companyTrackingSchema,
+	trackedCompanySchema,
 } from "../types/company";
 import { apiFetch } from "./client";
 import { API_BASE, mockDelay, mocked } from "./config";
@@ -117,6 +119,34 @@ export async function addCompanyBoard(
 			if (!response.ok)
 				throw new Error(`Failed to add board: ${response.status}`);
 			return companyBoardSchema.parse(await response.json());
+		},
+	);
+}
+
+export async function fetchTrackedCompanies(): Promise<TrackedCompany[]> {
+	return mocked(
+		async (db) => {
+			await mockDelay();
+			return db.getTrackedCompanies();
+		},
+		() =>
+			apiFetch("/companies/tracked", undefined, trackedCompanySchema.array()),
+	);
+}
+
+export async function untrackCompany(id: string): Promise<void> {
+	return mocked(
+		async (db) => {
+			await mockDelay(80);
+			db.untrackCompany(id);
+		},
+		async () => {
+			const response = await fetch(`${API_BASE}/companies/${id}/tracking`, {
+				method: "DELETE",
+				credentials: "include",
+			});
+			if (!response.ok)
+				throw new Error(`Failed to untrack company: ${response.status}`);
 		},
 	);
 }

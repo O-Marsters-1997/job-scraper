@@ -94,6 +94,48 @@ func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) 
 	return items, nil
 }
 
+const listTrackedCompanyBoards = `-- name: ListTrackedCompanyBoards :many
+SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status
+FROM company_boards cb
+JOIN tracked_companies tc ON tc.company_id = cb.company_id
+WHERE tc.user_id = $1
+ORDER BY cb.created_at, cb.id
+`
+
+type ListTrackedCompanyBoardsRow struct {
+	ID         pgtype.UUID
+	CompanyID  pgtype.UUID
+	Source     string
+	BoardToken string
+	Status     string
+}
+
+func (q *Queries) ListTrackedCompanyBoards(ctx context.Context, userID pgtype.UUID) ([]ListTrackedCompanyBoardsRow, error) {
+	rows, err := q.db.Query(ctx, listTrackedCompanyBoards, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTrackedCompanyBoardsRow
+	for rows.Next() {
+		var i ListTrackedCompanyBoardsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.Source,
+			&i.BoardToken,
+			&i.Status,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertCandidateBoard = `-- name: UpsertCandidateBoard :one
 INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)

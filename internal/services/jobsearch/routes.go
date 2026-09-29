@@ -32,6 +32,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Route("/companies", func(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.store.ListCompaniesForUser))
 		r.Post("/", handlers.Create(m.jobs.CreateCompany))
+		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))
+		r.Delete("/{id}/tracking", handlers.Delete(m.jobs.UntrackCompany))
 		r.Put("/{id}/tracking", handlers.Update(m.jobs.SetCompanyTracking))
 		r.Get("/{id}/boards", handlers.GetByID(m.jobs.ListCompanyBoards))
 		r.Post("/{id}/boards", handlers.Create(m.jobs.AddCompanyBoard))

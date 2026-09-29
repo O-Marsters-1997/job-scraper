@@ -39,6 +39,8 @@ type Store interface {
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
+	ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error)
+	DeleteCompanyTracking(ctx context.Context, userID, companyID string) error
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	GetCompany(ctx context.Context, id string) (dto.Company, error)
 	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)

@@ -21,3 +21,10 @@ UPDATE company_boards
 SET status = 'verified', verification_method = $4, verified_at = NOW()
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
 RETURNING *;
+
+-- name: ListTrackedCompanyBoards :many
+SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status
+FROM company_boards cb
+JOIN tracked_companies tc ON tc.company_id = cb.company_id
+WHERE tc.user_id = $1
+ORDER BY cb.created_at, cb.id;

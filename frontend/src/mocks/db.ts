@@ -6,7 +6,12 @@ import type {
 	UpdateApplicationPayload,
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
-import type { Company, CompanyBoard, CompanyTracking } from "@/types/company";
+import type {
+	Company,
+	CompanyBoard,
+	CompanyTracking,
+	TrackedCompany,
+} from "@/types/company";
 import type { CV } from "@/types/cv";
 import type {
 	Achievement,
@@ -437,6 +442,19 @@ let companyBoards: CompanyBoard[] = companies
 		LastCompletedAt: company.LastCheckedAt,
 		CreatedAt: company.FirstSeenAt,
 	}));
+
+const trackedCompanyIds = new Set(
+	companies.filter((c) => c.Tracked).map((c) => c.ID),
+);
+
+const BOARD_URLS: Record<string, (token: string) => string> = {
+	greenhouse: (t) => `https://boards.greenhouse.io/${t}`,
+	lever: (t) => `https://jobs.lever.co/${t}`,
+	ashby: (t) => `https://jobs.ashbyhq.com/${t}`,
+	workable: (t) => `https://apply.workable.com/${t}`,
+	recruitee: (t) => `https://${t}.recruitee.com`,
+	personio: (t) => `https://${t}.jobs.personio.de`,
+};
 
 const ATS_HOSTS: Record<string, string> = {
 	"greenhouse.io": "greenhouse",
@@ -1199,8 +1217,41 @@ export function addCompany(url: string, track: boolean): Company | null {
 		LastCheckedAt: null,
 	};
 	companies = [company, ...companies];
+	if (track) trackedCompanyIds.add(company.ID);
 	addCompanyBoard(company.ID, url, false);
 	return company;
+}
+
+export function getTrackedCompanies(): TrackedCompany[] {
+	failIfRequested("getTrackedCompanies");
+	return companies
+		.filter((c) => trackedCompanyIds.has(c.ID))
+		.map((c) => ({
+			id: c.ID,
+			name: c.Name,
+			slug: c.Slug,
+			enabled: c.Tracked,
+			check_interval_minutes: c.CheckIntervalMinutes,
+			boards: companyBoards
+				.filter((b) => b.CompanyID === c.ID)
+				.map((b) => ({
+					id: b.ID,
+					source: b.Source,
+					board_token: b.BoardToken,
+					status: b.Status,
+					url: BOARD_URLS[b.Source]?.(b.BoardToken) ?? "",
+				})),
+			open_jobs: c.JobCount,
+			last_checked_at: c.LastCheckedAt,
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function untrackCompany(id: string): void {
+	if (!trackedCompanyIds.delete(id)) throw new Error("Company not tracked");
+	companies = companies.map((c) =>
+		c.ID === id ? { ...c, Tracked: false, TargetID: "" } : c,
+	);
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {
@@ -1258,6 +1309,7 @@ export function setCompanyTracking(
 	const idx = companies.findIndex((c) => c.ID === id);
 	if (idx === -1) throw new Error("Company not found");
 	const company = companies[idx]!;
+	trackedCompanyIds.add(id);
 	const updated: Company = {
 		...company,
 		Tracked: enabled,

@@ -42,3 +42,17 @@ ORDER BY last_crawled_at NULLS FIRST LIMIT $1;
 
 -- name: TouchCompanyCrawled :exec
 UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1;
+
+-- name: ListTrackedCompaniesForUser :many
+SELECT c.id, c.name, c.slug, tc.enabled, tc.check_interval_minutes,
+    (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
+FROM tracked_companies tc
+JOIN companies c ON c.id = tc.company_id
+WHERE tc.user_id = $1
+ORDER BY c.name, c.id;
+
+-- name: DeleteCompanyTracking :execrows
+DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2;
