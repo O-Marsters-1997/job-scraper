@@ -5,7 +5,7 @@ package docedit
 import (
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
@@ -94,7 +94,7 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 		all = append(all, replace(ds.Skills.StartIndex, ds.Skills.EndIndex-1, joinSkills(*ds.Skills, edits.Skills)))
 	}
 
-	sort.SliceStable(all, func(i, j int) bool { return all[i].start > all[j].start })
+	slices.SortStableFunc(all, func(a, b edit) int { return b.start - a.start })
 	var reqs []Request
 	for _, e := range all {
 		reqs = append(reqs, e.reqs...)

@@ -61,7 +61,6 @@ func collectRuns(node any, text *[]rune) {
 	}
 }
 
-// apply runs the requests against a body indexed like the Docs API.
 func apply(t *testing.T, body []rune, reqs []docedit.Request) string {
 	t.Helper()
 	doc := append([]rune(nil), body...)
