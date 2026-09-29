@@ -73,4 +73,22 @@ test.describe("Jobs", () => {
 				.getByText(titleText.trim()),
 		).toBeVisible();
 	});
+
+	test.describe("at 375px", () => {
+		test.use({ viewport: { width: 375, height: 700 } });
+
+		test("the job detail page does not scroll horizontally", async ({
+			page,
+			jobsPage,
+		}) => {
+			await jobsPage.openFirstJob();
+			await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+			const overflow = await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth -
+					document.documentElement.clientWidth,
+			);
+			expect(overflow).toBeLessThanOrEqual(0);
+		});
+	});
 });

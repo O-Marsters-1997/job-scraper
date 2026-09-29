@@ -645,6 +645,7 @@ export function getSourceTargets(): SourceTarget[] {
 export function createSourceTarget(
 	payload: CreateSourceTargetPayload,
 ): SourceTarget | null {
+	failIfRequested("createSourceTarget");
 	const exists = getSourceTargets().some(
 		(t) => t.Source === payload.source && t.Value === payload.value,
 	);
@@ -761,6 +762,7 @@ export function getCVs(): CV[] {
 }
 
 export function addTrackedDoc(url: string): void {
+	failIfRequested("addTrackedDoc");
 	const docId = `doc-${faker.string.uuid().slice(0, 8)}`;
 	cvs = [
 		...cvs,
@@ -1011,6 +1013,11 @@ export function updateProfile(payload: { email: string }): void {
 	profile = { ...profile, email: payload.email };
 }
 
+function failIfRequested(op: string): void {
+	const requested = globalThis.localStorage?.getItem("mock-fail") ?? "";
+	if (requested.split(",").includes(op)) throw new Error(`mock ${op} failed`);
+}
+
 function buildWithDetails(app: Application): ApplicationWithDetails {
 	const job = jobs.find((j) => j.ID === app.JobID);
 	const status = statuses.find((s) => s.ID === app.StatusID);
@@ -1039,6 +1046,7 @@ export function getStatuses(): ApplicationStatus[] {
 }
 
 export function getCompanies(): Company[] {
+	failIfRequested("getCompanies");
 	return companies;
 }
 
@@ -1097,6 +1105,7 @@ export function updateApplication(
 	id: string,
 	data: UpdateApplicationPayload,
 ): Application {
+	failIfRequested("updateApplication");
 	const idx = applications.findIndex((a) => a.ID === id);
 	if (idx === -1) throw new Error("Application not found");
 	const prev = applications[idx]!;
@@ -1121,6 +1130,7 @@ export function deleteApplication(id: string): void {
 }
 
 export function createStatus(name: string, colour: string): ApplicationStatus {
+	failIfRequested("createStatus");
 	const status: ApplicationStatus = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
@@ -1152,6 +1162,7 @@ export function deleteStatus(id: string): { count?: number } {
 }
 
 export function addCompany(url: string, track: boolean): Company | null {
+	failIfRequested("addCompany");
 	let hostname: string;
 	try {
 		hostname = new URL(url).hostname;

@@ -7,7 +7,7 @@ import {
 	setCompanyTracking,
 } from "../api/companies";
 import { keys } from "../api/keys";
-import type { AddCompanyPayload } from "../types/company";
+import type { AddCompanyPayload, CompanyBoard } from "../types/company";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const companiesQueryOptions = queryOptions({
@@ -21,13 +21,15 @@ export function useCompanies() {
 
 export function useCompanyBoards(
 	id: () => string,
-	refetchInterval: () => number | false = () => false,
+	refetchInterval: (
+		boards: CompanyBoard[] | undefined,
+	) => number | false = () => false,
 ) {
 	return createQuery(() => ({
 		queryKey: keys.companies.boards(id()),
 		queryFn: () => fetchCompanyBoards(id()),
 		enabled: Boolean(id()),
-		refetchInterval: refetchInterval(),
+		refetchInterval: (query) => refetchInterval(query.state.data),
 	}));
 }
 

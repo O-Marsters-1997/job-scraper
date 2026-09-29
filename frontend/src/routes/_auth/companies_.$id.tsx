@@ -1,14 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import {
-	createEffect,
-	createMemo,
-	createSignal,
-	For,
-	onCleanup,
-	Show,
-} from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { ErrorState } from "@/components/ErrorState";
 import { createJobColumns } from "@/components/jobs/columns";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
+import {
+	TrackApplicationDialog,
+	toExistingApp,
+} from "@/components/jobs/TrackApplicationDialog";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +32,7 @@ import {
 	filterCompanyJobs,
 	sourceOptions,
 } from "@/lib/jobFilters";
+import { useApplications } from "../../hooks/useApplications";
 import {
 	companiesQueryOptions,
 	useAddCompanyBoard,
@@ -43,6 +42,7 @@ import {
 } from "../../hooks/useCompanies";
 import { useAllJobs } from "../../hooks/useJobs";
 import { queryClient } from "../../lib/queryClient";
+import type { JobApplicationSummary } from "../../types/application";
 import type { CompanyBoard } from "../../types/company";
 
 function boardURLFor(board: CompanyBoard): string {
@@ -88,7 +88,7 @@ const BOARD_CHECK_POLL_MS = 2000;
 const BOARD_CHECK_TIMEOUT_MS = 30_000;
 
 export const Route = createFileRoute("/_auth/companies_/$id")({
-	loader: () => queryClient.ensureQueryData(companiesQueryOptions),
+	loader: () => queryClient.prefetchQuery(companiesQueryOptions),
 	component: CompanyDetailPage,
 });
 
@@ -100,23 +100,27 @@ function CompanyDetailPage() {
 	const [checkingBoardID, setCheckingBoardID] = createSignal<string>();
 	const boardsQuery = useCompanyBoards(
 		() => params().id,
-		() => (checkingBoardID() ? BOARD_CHECK_POLL_MS : false),
+		(boards) => {
+			const id = checkingBoardID();
+			if (!id) return false;
+			return boards?.find((b) => b.ID === id)?.Status === "verified"
+				? false
+				: BOARD_CHECK_POLL_MS;
+		},
 	);
 	const addBoardMutation = useAddCompanyBoard();
 	const [boardURL, setBoardURL] = createSignal("");
 	const [boardMessage, setBoardMessage] = createSignal("");
 	let checkTimeout: ReturnType<typeof setTimeout> | undefined;
 	onCleanup(() => clearTimeout(checkTimeout));
-	createEffect(() => {
-		const id = checkingBoardID();
-		const board = boardsQuery.data?.find((b) => b.ID === id);
-		if (board?.Status !== "verified") return;
-		clearTimeout(checkTimeout);
-		setCheckingBoardID(undefined);
-		setBoardMessage("Board verified.");
-	});
+	const checkedBoardVerified = () =>
+		boardsQuery.data?.find((b) => b.ID === checkingBoardID())?.Status ===
+		"verified";
+	const boardStatusMessage = () =>
+		checkedBoardVerified() ? "Board verified." : boardMessage();
 	const saveBoard = async (url: string) => {
 		setBoardMessage("");
+		setCheckingBoardID(undefined);
 		clearTimeout(checkTimeout);
 		try {
 			const board = await addBoardMutation.mutateAsync({
@@ -132,6 +136,7 @@ function CompanyDetailPage() {
 			setBoardMessage("Checking the board…");
 			setCheckingBoardID(board.ID);
 			checkTimeout = setTimeout(() => {
+				if (checkedBoardVerified()) return;
 				setCheckingBoardID(undefined);
 				setBoardMessage(
 					"Verification failed; retry when the board is available.",
@@ -159,10 +164,41 @@ function CompanyDetailPage() {
 		applyJobFilters(jobsForCompany(), filters()),
 	);
 
+	const applications = useApplications();
+	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
+		Object.fromEntries(
+			(applications.data ?? []).map((app) => [
+				app.JobID,
+				{
+					ApplicationID: app.ID,
+					StatusID: app.StatusID,
+					StatusName: app.StatusName,
+					StatusColour: app.StatusColour,
+				},
+			]),
+		),
+	);
+	const [trackingJobId, setTrackingJobId] = createSignal<string | null>(null);
+	const [modalOpen, setModalOpen] = createSignal(false);
+	const openTrack = (jobId: string) => {
+		setTrackingJobId(jobId);
+		setModalOpen(true);
+	};
+	const openEdit = (jobId: string) => {
+		if (!appsForJobs()[jobId]) return;
+		openTrack(jobId);
+	};
+	const currentJob = () =>
+		(jobsQuery.data ?? []).find((j) => j.ID === trackingJobId());
+	const existingApp = () => {
+		const app = applications.data?.find((a) => a.JobID === trackingJobId());
+		return app ? toExistingApp(app) : undefined;
+	};
+
 	const columns = createJobColumns({
-		appsForJobs: () => undefined,
-		onTrack: () => {},
-		onEdit: () => {},
+		appsForJobs,
+		onTrack: openTrack,
+		onEdit: openEdit,
 	});
 
 	return (
@@ -173,16 +209,26 @@ function CompanyDetailPage() {
 			<Show
 				when={company()}
 				fallback={
-					<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
-						<div>
-							<p class="text-base font-semibold text-foreground">
-								Company not found
-							</p>
-						</div>
-						<Button as={Link} to="/companies" variant="outline" size="sm">
-							← Back to Companies
-						</Button>
-					</div>
+					<Show
+						when={companiesQuery.isError}
+						fallback={
+							<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
+								<div>
+									<p class="text-base font-semibold text-foreground">
+										Company not found
+									</p>
+								</div>
+								<Button as={Link} to="/companies" variant="outline" size="sm">
+									← Back to Companies
+								</Button>
+							</div>
+						}
+					>
+						<ErrorState
+							error={companiesQuery.error}
+							onRetry={() => companiesQuery.refetch()}
+						/>
+					</Show>
 				}
 			>
 				{(c) => (
@@ -229,7 +275,7 @@ function CompanyDetailPage() {
 							</CardContent>
 						</Card>
 
-						<div class="grid grid-cols-[1fr_284px] items-start gap-4">
+						<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
 							<Card>
 								<CardHeader>
 									<CardTitle>Jobs at {c().Name}</CardTitle>
@@ -344,9 +390,9 @@ function CompanyDetailPage() {
 											>
 												Add and verify board
 											</Button>
-											<Show when={boardMessage()}>
+											<Show when={boardStatusMessage()}>
 												<output class="text-xs text-muted">
-													{boardMessage()}
+													{boardStatusMessage()}
 												</output>
 											</Show>
 										</form>
@@ -447,6 +493,12 @@ function CompanyDetailPage() {
 								</Show>
 							</div>
 						</div>
+						<TrackApplicationDialog
+							open={modalOpen()}
+							onOpenChange={setModalOpen}
+							job={currentJob()}
+							existingApp={existingApp()}
+						/>
 					</div>
 				)}
 			</Show>
