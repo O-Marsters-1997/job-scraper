@@ -15,7 +15,7 @@ export function SortableTableHead(props: {
 				<button
 					type="button"
 					onClick={(e) => props.onToggle?.(e)}
-					class="flex items-center gap-1 select-none hover:text-foreground"
+					class="flex items-center gap-1 uppercase tracking-wide select-none hover:text-foreground"
 				>
 					{props.children}
 					<span class="text-faint" aria-hidden="true">
