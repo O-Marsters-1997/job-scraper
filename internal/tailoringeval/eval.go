@@ -1,5 +1,3 @@
-// Package tailoringeval runs cvedit and checks over fixtures against a real
-// model and reports check pass rates and retry counts per prompt version.
 package tailoringeval
 
 import (
