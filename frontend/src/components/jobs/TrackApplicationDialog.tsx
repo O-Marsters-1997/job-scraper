@@ -16,7 +16,11 @@ import {
 	useUpdateApplication,
 } from "@/hooks/useApplications";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import type { Application } from "@/types/application";
+import type {
+	Application,
+	ApplicationWithDetails,
+	JobApplicationSummary,
+} from "@/types/application";
 import type { Job } from "@/types/job";
 
 export interface ExistingApp {
@@ -25,6 +29,17 @@ export interface ExistingApp {
 	notes: string;
 	appliedAt: string | null;
 	salaryInfo: string;
+}
+
+export function toApplicationSummary(
+	app: ApplicationWithDetails,
+): JobApplicationSummary {
+	return {
+		ApplicationID: app.ID,
+		StatusID: app.StatusID,
+		StatusName: app.StatusName,
+		StatusColour: app.StatusColour,
+	};
 }
 
 export function toExistingApp(app: Application): ExistingApp {

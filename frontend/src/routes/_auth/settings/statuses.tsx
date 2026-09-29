@@ -6,7 +6,6 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
@@ -16,6 +15,8 @@ import {
 	useUpdateApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
+import { AddStatusForm } from "./-statuses/AddStatusForm";
+import { StatusRow } from "./-statuses/StatusRow";
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
 	component: StatusesPage,
@@ -102,134 +103,36 @@ function StatusesPage() {
 						<Card class="overflow-hidden divide-y divide-border">
 							<For each={data()}>
 								{(status) => (
-									<form
+									<StatusRow
+										status={status}
+										editing={editingId() === status.ID}
+										name={editName()}
+										colour={editColour()}
+										pending={editForm.pending()}
+										onName={setEditName}
+										onColour={setEditColour}
+										onEdit={() => startEdit(status)}
+										onCancel={() => setEditingId(null)}
+										onDelete={() => handleDelete(status.ID)}
 										onSubmit={editForm.submit}
-										class="flex items-center gap-3 px-4 py-3"
-									>
-										<Show
-											when={editingId() === status.ID}
-											fallback={
-												<>
-													<span
-														class="size-3 shrink-0 rounded-full"
-														style={{ background: status.Colour }}
-													/>
-													<span class="flex-1 text-sm font-medium text-foreground">
-														{status.Name}
-													</span>
-													<button
-														type="button"
-														onClick={() => startEdit(status)}
-														class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
-													>
-														Edit
-													</button>
-													<button
-														type="button"
-														onClick={() => handleDelete(status.ID)}
-														class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
-													>
-														Delete
-													</button>
-												</>
-											}
-										>
-											<div class="flex flex-1 items-center gap-2">
-												<div class="flex gap-1">
-													<For each={STATUS_PALETTE}>
-														{(p) => (
-															<button
-																type="button"
-																title={p.label}
-																onClick={() => setEditColour(p.hex)}
-																class="h-5 w-5 rounded-full border-2 transition"
-																style={{
-																	background: p.hex,
-																	"border-color":
-																		editColour() === p.hex
-																			? "var(--color-foreground)"
-																			: "transparent",
-																}}
-															/>
-														)}
-													</For>
-												</div>
-												<Input
-													class="flex-1"
-													aria-label="Status name"
-													value={editName()}
-													onInput={(e) => setEditName(e.currentTarget.value)}
-												/>
-											</div>
-											<button
-												type="submit"
-												disabled={editForm.pending()}
-												class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
-											>
-												Save
-											</button>
-											<button
-												type="button"
-												onClick={() => setEditingId(null)}
-												class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
-											>
-												Cancel
-											</button>
-										</Show>
-									</form>
+									/>
 								)}
 							</For>
 
 							<Show when={showAdd()}>
-								<form
+								<AddStatusForm
+									name={newName()}
+									colour={newColour()}
+									pending={addForm.pending()}
+									onName={setNewName}
+									onColour={setNewColour}
+									onCancel={() => {
+										setShowAdd(false);
+										setNewName("");
+										addForm.setError(null);
+									}}
 									onSubmit={addForm.submit}
-									class="flex items-center gap-2 px-4 py-3"
-								>
-									<div class="flex gap-1">
-										<For each={STATUS_PALETTE}>
-											{(p) => (
-												<button
-													type="button"
-													title={p.label}
-													onClick={() => setNewColour(p.hex)}
-													class="h-5 w-5 rounded-full border-2 transition"
-													style={{
-														background: p.hex,
-														"border-color":
-															newColour() === p.hex
-																? "var(--color-foreground)"
-																: "transparent",
-													}}
-												/>
-											)}
-										</For>
-									</div>
-									<Input
-										class="flex-1"
-										aria-label="Status name"
-										placeholder="Status name"
-										value={newName()}
-										onInput={(e) => setNewName(e.currentTarget.value)}
-									/>
-									<button
-										type="submit"
-										disabled={addForm.pending() || !newName().trim()}
-										class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
-									>
-										Add
-									</button>
-									<button
-										type="button"
-										onClick={() => {
-											setShowAdd(false);
-											setNewName("");
-											addForm.setError(null);
-										}}
-										class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
-									>
-										Cancel
-									</button>
-								</form>
+								/>
 							</Show>
 						</Card>
 
