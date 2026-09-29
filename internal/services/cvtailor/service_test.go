@@ -110,18 +110,11 @@ func TestCreateDraft(t *testing.T) {
 	t.Run("queues a pending Draft for confirmed achievements", func(t *testing.T) {
 		e := newDraftEnv(t)
 
-		ref, err := e.svc.CreateDraft(context.Background(), user, e.input)
-		if err != nil {
-			t.Fatalf("CreateDraft() error = %v", err)
-		}
+		id := e.queue(t)
 
-		got, err := e.svc.GetDraft(context.Background(), user, dto.DraftQuery{ID: ref.ID})
-		if err != nil {
-			t.Fatalf("GetDraft(%s) error = %v", ref.ID, err)
-		}
-		want := dto.Draft{ID: ref.ID, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", ref.ID, diff)
+		want := dto.Draft{ID: id, JobID: jobID, Status: "pending", Findings: []dto.DraftFinding{}}
+		if diff := cmp.Diff(want, e.draft(t, id)); diff != "" {
+			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
 	})
 
@@ -163,10 +156,7 @@ func TestCreateDraft(t *testing.T) {
 func TestGetDraft(t *testing.T) {
 	t.Run("links the Doc of a ready Draft", func(t *testing.T) {
 		e := newDraftEnv(t)
-		ref, err := e.svc.CreateDraft(context.Background(), user, e.input)
-		if err != nil {
-			t.Fatal(err)
-		}
+		id := e.queue(t)
 		claim, err := e.store.ClaimDraft(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -175,23 +165,17 @@ func TestGetDraft(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := e.svc.GetDraft(context.Background(), user, dto.DraftQuery{ID: ref.ID})
-		if err != nil {
-			t.Fatalf("GetDraft(%s) error = %v", ref.ID, err)
-		}
+		got := e.draft(t, id)
 
 		want := "https://docs.google.com/document/d/copy-1/edit"
 		if got.DraftDocURL == nil || *got.DraftDocURL != want {
-			t.Errorf("GetDraft(%s).DraftDocURL = %v, want %q", ref.ID, got.DraftDocURL, want)
+			t.Errorf("GetDraft(%s).DraftDocURL = %v, want %q", id, got.DraftDocURL, want)
 		}
 	})
 
 	t.Run("hides the Doc of a Draft that is not ready", func(t *testing.T) {
 		e := newDraftEnv(t)
-		ref, err := e.svc.CreateDraft(context.Background(), user, e.input)
-		if err != nil {
-			t.Fatal(err)
-		}
+		id := e.queue(t)
 		claim, err := e.store.ClaimDraft(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -200,27 +184,21 @@ func TestGetDraft(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := e.svc.GetDraft(context.Background(), user, dto.DraftQuery{ID: ref.ID})
-		if err != nil {
-			t.Fatalf("GetDraft(%s) error = %v", ref.ID, err)
-		}
+		got := e.draft(t, id)
 
 		if got.DraftDocURL != nil {
-			t.Errorf("GetDraft(%s).DraftDocURL = %q, want none before the Draft is ready", ref.ID, *got.DraftDocURL)
+			t.Errorf("GetDraft(%s).DraftDocURL = %q, want none before the Draft is ready", id, *got.DraftDocURL)
 		}
 	})
 
 	t.Run("another user's Draft is not found", func(t *testing.T) {
 		e := newDraftEnv(t)
-		ref, err := e.svc.CreateDraft(context.Background(), user, e.input)
-		if err != nil {
-			t.Fatal(err)
-		}
+		id := e.queue(t)
 
-		_, err = e.svc.GetDraft(context.Background(), "user-2", dto.DraftQuery{ID: ref.ID})
+		_, err := e.svc.GetDraft(context.Background(), "user-2", dto.DraftQuery{ID: id})
 
 		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
-			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", ref.ID, err)
+			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", id, err)
 		}
 	})
 }

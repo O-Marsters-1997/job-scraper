@@ -18,6 +18,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
+const apiKey = cvtailortest.Key("sk-or-test")
+
 func newDrive() *cvtailortest.Drive {
 	return &cvtailortest.Drive{Tabs: []google.Tab{{ID: tabID}, {ID: "t.1"}}}
 }
@@ -81,7 +83,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		res := e.bulletResult("Cut p99 latency", 0.5)
 		res.Raw = `{"raw":true}`
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), apiKey)
 
 		url := "https://docs.google.com/document/d/copy-1/edit"
 		wantDraft := dto.Draft{ID: id, JobID: jobID, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
@@ -148,7 +150,7 @@ func TestGeneratorRunTick(t *testing.T) {
 			drive := newDrive()
 			res := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: e.pos.ID, Bullets: tc.bullets(e)}}}}
 
-			e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), cvtailortest.Key("sk-or-test"))
+			e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), apiKey)
 
 			d := e.draft(t, id)
 			if d.Status == "ready" || d.LastError == "" {
@@ -166,7 +168,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		drive := newDrive()
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsBatchUpdate(drive, context.DeadlineExceeded), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsBatchUpdate(drive, context.DeadlineExceeded), editor, apiKey)
 
 		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
 			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
@@ -182,7 +184,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		drive := newDrive()
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsExport(drive, errors.New("export unavailable")), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsExport(drive, errors.New("export unavailable")), editor, apiKey)
 
 		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
 			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
@@ -198,7 +200,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		drive := newDrive()
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsNoPages(drive), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsNoPages(drive), editor, apiKey)
 
 		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
 			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
@@ -230,7 +232,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		blocked, clean := e.bulletResult("Leveraged Postgres", 0.25), e.bulletResult("Moved queries to Postgres", 0.25)
 		editor := cvtailortest.Editing(blocked, clean)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 2", len(editor.Inputs))
@@ -260,7 +262,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		id := e.queue(t)
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
 
 		if len(editor.Inputs) != 3 {
 			t.Errorf("editor calls = %d, want 1 attempt and 2 retries", len(editor.Inputs))
@@ -279,7 +281,7 @@ func TestGeneratorRunTick(t *testing.T) {
 			cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5}, Err: errors.New("model unavailable")},
 		)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
 
 		d := e.draft(t, id)
 		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
@@ -298,7 +300,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		}}}}
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25), invalid)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
 
 		d := e.draft(t, id)
 		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
@@ -316,7 +318,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		long := "Cut p99 latency by moving queries"
 		editor := cvtailortest.Editing(e.bulletResult(long, 0.25), e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(drive, 1, 2, 1), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(drive, 1, 2, 1), editor, apiKey)
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -338,7 +340,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		id := e.queue(t)
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2), editor, apiKey)
 
 		if len(editor.Inputs) != 2 {
 			t.Errorf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -360,7 +362,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by moving queries", 0.25), e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, docs, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, docs, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, apiKey)
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -386,7 +388,7 @@ func TestGeneratorRunTick(t *testing.T) {
 			e.bulletResult("Cut p99 latency", 0.25),
 		)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, apiKey)
 
 		if len(editor.Inputs) != 3 {
 			t.Fatalf("editor calls = %d, want 1 attempt, 1 shorten and 1 retry of the blocked shorten", len(editor.Inputs))
@@ -409,7 +411,7 @@ func TestGeneratorRunTick(t *testing.T) {
 		res.Edits.JobSkills = []string{"Go", "Kubernetes"}
 		editor := cvtailortest.Editing(res)
 
-		e.run(t, cvtailortest.Docs{TabJSON: tab}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+		e.run(t, cvtailortest.Docs{TabJSON: tab}, newDrive(), editor, apiKey)
 
 		if !editor.Inputs[0].HasSkills {
 			t.Error("editor input HasSkills = false, want the base CV's skills section offered")
