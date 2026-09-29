@@ -10,6 +10,7 @@ import (
 // builds the real ones and calls Build (ADR 0012).
 type Deps struct {
 	Store Store
+	Docs  DocFetcher
 }
 
 type Module struct {
@@ -18,9 +19,9 @@ type Module struct {
 }
 
 func Build(deps Deps) *Module {
-	return &Module{store: deps.Store, svc: NewService(deps.Store)}
+	return &Module{store: deps.Store, svc: NewService(deps.Store, deps.Docs)}
 }
 
-func New(pool *pgxpool.Pool) *Module {
-	return Build(Deps{Store: store.New(pool)})
+func New(pool *pgxpool.Pool, docs DocFetcher) *Module {
+	return Build(Deps{Store: store.New(pool), Docs: docs})
 }

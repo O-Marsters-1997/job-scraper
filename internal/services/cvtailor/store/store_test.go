@@ -62,3 +62,27 @@ func TestDeletePositionCascadesAchievementRows(t *testing.T) {
 		t.Fatalf("achievements rows after position delete = %d, want 0", n)
 	}
 }
+
+func TestImportPositionsIsAllOrNothing(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := context.Background()
+	uid := insertUser(t, pool)
+
+	bad := "not-a-date"
+	_, err := st.ImportPositions(ctx, uid, []dto.ImportPosition{
+		{Employer: "Broken", Title: "Engineer", StartDate: &bad},
+		{Employer: "Acme", Title: "Engineer", Achievements: []string{"shipped"}},
+	})
+	if err == nil {
+		t.Fatal("ImportPositions() error = nil, want an error for the bad date")
+	}
+
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM positions`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("positions rows after failed import = %d, want 0", n)
+	}
+}

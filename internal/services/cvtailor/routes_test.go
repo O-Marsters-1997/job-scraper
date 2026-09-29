@@ -114,3 +114,33 @@ func TestExperienceJourney(t *testing.T) {
 		t.Fatalf("delete cascaded achievement status = %d, want 404", w.Code)
 	}
 }
+
+func TestImportRoutes(t *testing.T) {
+	m := cvtailor.Build(cvtailor.Deps{
+		Store: cvtailortest.NewFakeStore(),
+		Docs:  cvtailortest.Docs{TabJSON: tabJSON(t, head("Engineer, Acme"), bullet("shipped"))},
+	})
+	r := chi.NewRouter()
+	m.Routes(r)
+	handlerstest.RequiresAuth(t, r, "POST /experience/import/preview", "POST /experience/import")
+	handlerstest.RejectsMalformedBody(t, r, "POST /experience/import/preview", "POST /experience/import")
+
+	w := do(t, r, http.MethodPost, "/experience/import/preview", `{"docId":"d","tabId":"t"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("preview status = %d, body %s", w.Code, w.Body)
+	}
+
+	w = do(t, r, http.MethodPost, "/experience/import", w.Body.String())
+	if w.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body %s", w.Code, w.Body)
+	}
+
+	w = do(t, r, http.MethodGet, "/experience/", "")
+	var got []dto.Position
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Employer != "Acme" || len(got[0].Achievements) != 1 {
+		t.Fatalf("GET /experience after import = %+v, want one Acme position with one achievement", got)
+	}
+}

@@ -96,7 +96,7 @@ func main() {
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 
-	cvtailorModule := cvtailor.New(pool)
+	cvtailorModule := cvtailor.New(pool, idm.DocsClient())
 
 	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule)}
 

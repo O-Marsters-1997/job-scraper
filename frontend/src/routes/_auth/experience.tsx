@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { ImportFromCV } from "@/components/experience/ImportFromCV";
 import { PositionCard } from "@/components/experience/PositionCard";
 import { PositionForm } from "@/components/experience/PositionForm";
 import { Icon } from "@/components/Icon";
@@ -22,6 +23,7 @@ function ExperiencePage() {
 	const query = useExperience();
 	const create = useCreatePosition();
 	const [adding, setAdding] = createSignal(false);
+	const [importing, setImporting] = createSignal(false);
 
 	return (
 		<div class="px-7 py-6">
@@ -29,11 +31,20 @@ function ExperiencePage() {
 				title="Experience"
 				subtitle="Your Positions and Achievements, the source for tailored CVs"
 			>
-				<Button class="shrink-0" onClick={() => setAdding(true)}>
-					<Icon name="plus" size={12} strokeWidth={2.5} />
-					Add position
-				</Button>
+				<div class="flex shrink-0 gap-2">
+					<Button variant="outline" onClick={() => setImporting(true)}>
+						Import from CV
+					</Button>
+					<Button onClick={() => setAdding(true)}>
+						<Icon name="plus" size={12} strokeWidth={2.5} />
+						Add position
+					</Button>
+				</div>
 			</PageHeading>
+
+			<Show when={importing()}>
+				<ImportFromCV onDone={() => setImporting(false)} />
+			</Show>
 
 			<Show when={adding()}>
 				<div class="mb-4 rounded-xl border border-border bg-surface p-4">

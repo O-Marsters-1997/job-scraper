@@ -24,3 +24,18 @@ export interface PositionInput {
 	startDate: string | null;
 	endDate: string | null;
 }
+
+export const importPositionSchema = z.object({
+	employer: z.string(),
+	title: z.string(),
+	startDate: z.string().nullable(),
+	endDate: z.string().nullable(),
+	achievements: z.array(z.string()),
+	employerExists: z.boolean(),
+});
+
+export const importPreviewSchema = z.object({
+	positions: z.array(importPositionSchema),
+});
+
+export type ImportPosition = z.infer<typeof importPositionSchema>;
