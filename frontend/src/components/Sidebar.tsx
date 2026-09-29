@@ -75,6 +75,7 @@ const NAV: NavItem[] = [
 		exact: true,
 		when: (ctx) => ctx.googleConnected,
 	},
+	{ to: "/experience", label: "Experience", icon: "briefcase" },
 	{ to: "/insights", label: "Insights", icon: "barChart", exact: true },
 	{ to: "/settings", label: "Settings", icon: "settings" },
 ];

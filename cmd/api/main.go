@@ -20,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -95,7 +96,9 @@ func main() {
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule)}
+	tailoringModule := tailoring.New(pool)
+
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, tailoringModule)}
 
 	go func() {
 		<-ctx.Done()

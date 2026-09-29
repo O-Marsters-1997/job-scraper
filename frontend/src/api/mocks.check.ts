@@ -5,6 +5,7 @@ import * as applicationStatuses from "./applicationStatuses";
 import * as applications from "./applications";
 import * as companies from "./companies";
 import * as cvTemplates from "./cvTemplates";
+import * as experience from "./experience";
 import * as google from "./google";
 import * as jobs from "./jobs";
 import * as profile from "./profile";
@@ -86,6 +87,40 @@ try {
 	await run("hideTab", () => cvTemplates.hideTab("doc-1", "t.0"));
 	await run("showTab", () => cvTemplates.showTab("doc-1", "t.0"));
 	await run("fetchCVPdf", () => cvTemplates.fetchCVPdf("doc-1", "t.0"));
+
+	await run("fetchExperience", () => experience.fetchExperience());
+	await run("createPosition", () =>
+		experience.createPosition({
+			employer: "Acme",
+			title: "Engineer",
+			startDate: null,
+			endDate: null,
+		}),
+	);
+	await run("updatePosition", () =>
+		experience.updatePosition("position-1", {
+			employer: "Acme",
+			title: "Engineer",
+			startDate: null,
+			endDate: null,
+		}),
+	);
+	await run("deletePosition", () => experience.deletePosition("position-2"));
+	await run("reorderPositions", () =>
+		experience.reorderPositions(["position-1"]),
+	);
+	await run("createAchievement", () =>
+		experience.createAchievement("position-1", "Did a thing"),
+	);
+	await run("updateAchievement", () =>
+		experience.updateAchievement("achievement-1", "Did another thing"),
+	);
+	await run("deleteAchievement", () =>
+		experience.deleteAchievement("achievement-2"),
+	);
+	await run("reorderAchievements", () =>
+		experience.reorderAchievements("position-1", ["achievement-1"]),
+	);
 
 	await run("fetchAiPrefs", () => aiPrefs.fetchAiPrefs());
 	await run("updateAiCredentials", () =>

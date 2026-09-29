@@ -44,6 +44,7 @@ const ICONS = {
 	chevronDown: () => <polyline points="6 9 12 15 18 9" />,
 	chevronLeft: () => <polyline points="15 18 9 12 15 6" />,
 	chevronRight: () => <polyline points="9 18 15 12 9 6" />,
+	chevronUp: () => <polyline points="18 15 12 9 6 15" />,
 	dashboard: () => (
 		<>
 			<rect width="7" height="9" x="3" y="3" rx="1" />

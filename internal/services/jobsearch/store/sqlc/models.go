@@ -57,6 +57,16 @@ func (ns NullScoringDimension) Value() (driver.Value, error) {
 	return string(ns.ScoringDimension), nil
 }
 
+type Achievement struct {
+	ID         pgtype.UUID
+	PositionID pgtype.UUID
+	UserID     pgtype.UUID
+	Text       string
+	SortOrder  int32
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type Application struct {
 	ID         pgtype.UUID
 	UserID     pgtype.UUID
@@ -241,6 +251,18 @@ type OptionAnswer struct {
 	PNotStated   float32
 	Confidence   float32
 	AnsweredAt   pgtype.Timestamptz
+}
+
+type Position struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Employer  string
+	Title     string
+	StartDate pgtype.Date
+	EndDate   pgtype.Date
+	SortOrder int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type ScoringOption struct {

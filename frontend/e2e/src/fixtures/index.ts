@@ -3,6 +3,7 @@ import { AppShellComponent } from "../components/app-shell.component";
 import { MobileNavComponent } from "../components/mobile-nav.component";
 import { TweaksPanelComponent } from "../components/tweaks-panel.component";
 import { CompaniesPage } from "../pages/companies.page";
+import { ExperiencePage } from "../pages/experience.page";
 import { InsightsPage } from "../pages/insights.page";
 import { JobsPage } from "../pages/jobs.page";
 import { LoginPage } from "../pages/login.page";
@@ -15,6 +16,7 @@ type Fixtures = {
 	jobsPage: JobsPage;
 	companiesPage: CompaniesPage;
 	overviewPage: OverviewPage;
+	experiencePage: ExperiencePage;
 	insightsPage: InsightsPage;
 	statusesPage: StatusesPage;
 	appShell: AppShellComponent;
@@ -35,6 +37,9 @@ export const test = base.extend<Fixtures>({
 	},
 	overviewPage: async ({ page }, use) => {
 		await use(new OverviewPage(page));
+	},
+	experiencePage: async ({ page }, use) => {
+		await use(new ExperiencePage(page));
 	},
 	insightsPage: async ({ page }, use) => {
 		await use(new InsightsPage(page));
