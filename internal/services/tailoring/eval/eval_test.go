@@ -1,4 +1,4 @@
-package tailoringeval_test
+package eval_test
 
 import (
 	"bytes"
@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
-	"github.com/ollymarsters/job-scraper/internal/tailoringeval"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/eval"
 )
 
 type scriptedEditor struct {
@@ -28,9 +28,9 @@ func bullet(text string, ids ...string) cvedit.EditSet {
 	}}}
 }
 
-func fixture(t *testing.T, name string) tailoringeval.Fixture {
+func fixture(t *testing.T, name string) eval.Fixture {
 	t.Helper()
-	all, err := tailoringeval.Fixtures()
+	all, err := eval.Fixtures()
 	if err != nil {
 		t.Fatalf("Fixtures: %v", err)
 	}
@@ -40,11 +40,11 @@ func fixture(t *testing.T, name string) tailoringeval.Fixture {
 		}
 	}
 	t.Fatalf("no fixture %q", name)
-	return tailoringeval.Fixture{}
+	return eval.Fixture{}
 }
 
 func TestFixturesCoverPRDScenariosAndHaveSlots(t *testing.T) {
-	all, err := tailoringeval.Fixtures()
+	all, err := eval.Fixtures()
 	if err != nil {
 		t.Fatalf("Fixtures: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestRun_RetriesOnBlockFindingAndReports(t *testing.T) {
 		{Edits: bullet("Cut API latency", "a1"), Cost: 0.01},
 	}}
 
-	out, err := tailoringeval.Run(context.Background(), ed, "key", f)
+	out, err := eval.Run(context.Background(), ed, "key", f)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestRun_RetriesOnBlockFindingAndReports(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	tailoringeval.Report(&buf, "v1", "m", []tailoringeval.Outcome{out})
+	eval.Report(&buf, "v1", "m", []eval.Outcome{out})
 	report := buf.String()
 	for _, want := range []string{"prompt_version=v1", "total retries=1"} {
 		if !strings.Contains(report, want) {
@@ -100,7 +100,7 @@ func TestRun_StopsAfterTwoRetries(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
 	ed := &scriptedEditor{results: []cvedit.Result{{Edits: bullet("Cut API latency by 40%", "a1")}}}
 
-	out, err := tailoringeval.Run(context.Background(), ed, "key", f)
+	out, err := eval.Run(context.Background(), ed, "key", f)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

@@ -1,4 +1,4 @@
-package tailoringeval
+package eval
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
-	"github.com/ollymarsters/job-scraper/internal/services/checks"
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/checks"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
 )
 
 //go:embed fixtures/*.json

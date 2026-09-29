@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
-	"github.com/ollymarsters/job-scraper/internal/tailoringeval"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/eval"
 )
 
 func main() {
@@ -20,19 +20,19 @@ func main() {
 	if apiKey == "" {
 		fail("OPENROUTER_API_KEY is not set")
 	}
-	fixtures, err := tailoringeval.Fixtures()
+	fixtures, err := eval.Fixtures()
 	if err != nil {
 		fail(err.Error())
 	}
 
 	client := cvedit.NewClient()
-	var outcomes []tailoringeval.Outcome
+	var outcomes []eval.Outcome
 	for _, f := range fixtures {
 		if !strings.Contains(f.Name, *only) {
 			continue
 		}
 		for range *runs {
-			o, err := tailoringeval.Run(context.Background(), client, apiKey, f)
+			o, err := eval.Run(context.Background(), client, apiKey, f)
 			if err != nil {
 				fail(err.Error())
 			}
@@ -42,7 +42,7 @@ func main() {
 	if len(outcomes) == 0 {
 		fail("no fixture matched")
 	}
-	tailoringeval.Report(os.Stdout, cvedit.PromptVersion, cvedit.Model, outcomes)
+	eval.Report(os.Stdout, cvedit.PromptVersion, cvedit.Model, outcomes)
 }
 
 func fail(msg string) {

@@ -1,7 +1,7 @@
 ---
-name: cv-tailoring
-description: Change the CV-tailoring prompts, checks or model safely, and add eval fixtures. Use for edits to voice.md, rules.md, internal/services/checks, cvedit.Model, or "add a tailoring fixture". Requires an eval run before and after.
-paths: ["internal/services/cvedit/**", "internal/services/checks/**", "internal/tailoringeval/**", "cmd/eval-tailoring/**"]
+name: tune-tailoring
+description: Change the CV-tailoring prompts, checks or model safely, and add eval fixtures. Use for edits to voice.md, rules.md, internal/services/tailoring/checks, cvedit.Model, or "add a tailoring fixture". Requires an eval run before and after.
+paths: ["internal/services/tailoring/cvedit/**", "internal/services/tailoring/checks/**", "internal/services/tailoring/eval/**", "cmd/eval-tailoring/**"]
 ---
 
 # CV tailoring
@@ -21,15 +21,19 @@ model, so they change together or not at all.
    the retry counts per fixture against the baseline.
 4. Put both tables in the PR description. Do not merge a change that lowers a pass rate or raises
    retries without saying why.
-5. A new check needs unit tests in `internal/services/checks` and its name added to `checkNames`
-   in `internal/tailoringeval/eval.go`.
+5. A new check needs unit tests in `internal/services/tailoring/checks` and its name added to `checkNames`
+   in `internal/services/tailoring/eval/eval.go`.
+
+`voice.md` and `rules.md` are developer-owned today. If users later supply their own voice, `rules.md` splits
+into a fixed contract and user preferences, and the eval should then check that grounding and the other
+checks hold under any voice.
 
 Runs cost real money and vary, so use `-runs 5` or more before drawing conclusions and `-fixture NAME`
 to iterate on one scenario.
 
 ## Adding a fixture
 
-A fixture is `internal/tailoringeval/fixtures/<name>.json`, loaded by `tailoringeval.Fixtures`:
+A fixture is `internal/services/tailoring/eval/fixtures/<name>.json`, loaded by `eval.Fixtures`:
 
 - `Scenario`: the PRD scenario or failure it probes.
 - `JobDescription`: plain text.
