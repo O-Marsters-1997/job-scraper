@@ -220,20 +220,26 @@ func (g *Generator) generate(ctx context.Context, claim dto.DraftClaim) (string,
 
 func (g *Generator) editUntilClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, float64, error) {
 	res, err := g.editValid(ctx, key, pl, in)
+	if err != nil {
+		return cvedit.Result{}, res.Cost, err
+	}
 	cost := res.Cost
 	for range maxCheckRetries {
-		if err != nil {
-			return cvedit.Result{}, 0, err
-		}
 		blocks := blocking(checks.Run(pl.draft(res.Edits, 0, 0)))
 		if len(blocks) == 0 {
 			break
 		}
-		in.PriorEdits, in.PriorFindings = &res.Edits, blocks
-		res, err = g.editValid(ctx, key, pl, in)
-		cost += res.Cost
+		prior := res.Edits
+		in.PriorEdits, in.PriorFindings = &prior, blocks
+		retry, err := g.editValid(ctx, key, pl, in)
+		cost += retry.Cost
+		if err != nil {
+			slog.WarnContext(ctx, "draft retry failed, keeping the blocked edit", slog.Any(logger.KeyErr, err))
+			break
+		}
+		res = retry
 	}
-	return res, cost, err
+	return res, cost, nil
 }
 
 func (g *Generator) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, prior cvedit.Result) (cvedit.Result, float64, error) {

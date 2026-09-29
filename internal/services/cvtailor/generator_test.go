@@ -236,8 +236,8 @@ func TestGeneratorRunTick(t *testing.T) {
 			t.Fatalf("editor calls = %d, want 2", len(editor.Inputs))
 		}
 		retry := editor.Inputs[1]
-		if retry.PriorEdits == nil {
-			t.Error("retry PriorEdits = nil, want the blocked edit")
+		if diff := cmp.Diff(&blocked.Edits, retry.PriorEdits); diff != "" {
+			t.Errorf("retry PriorEdits mismatch (-want +got):\n%s", diff)
 		}
 		var priorChecks []string
 		for _, f := range retry.PriorFindings {
@@ -268,6 +268,44 @@ func TestGeneratorRunTick(t *testing.T) {
 		d := e.draft(t, id)
 		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
 			t.Errorf("GetDraft(%s) = %+v, want ready with the surviving banned-word finding; block checks (-want +got):\n%s", id, d, diff)
+		}
+	})
+
+	t.Run("keeps the blocked edit when a retry fails", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		editor := cvtailortest.ReplyingWith(
+			cvtailortest.Reply{Result: e.bulletResult("Leveraged Postgres", 0.25)},
+			cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5}, Err: errors.New("model unavailable")},
+		)
+
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+
+		d := e.draft(t, id)
+		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
+			t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
+		}
+		if got := e.store.DraftResult(id).Cost; got != 0.75 {
+			t.Errorf("recorded cost = %v, want 0.75 including the failed call", got)
+		}
+	})
+
+	t.Run("keeps the blocked edit when a retry returns an invalid edit", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		invalid := cvedit.Result{Cost: 0.5, Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{"nope"}, Text: "Invented"}},
+		}}}}
+		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25), invalid)
+
+		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, cvtailortest.Key("sk-or-test"))
+
+		d := e.draft(t, id)
+		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
+			t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
+		}
+		if got := e.store.DraftResult(id).Cost; got != 0.75 {
+			t.Errorf("recorded cost = %v, want 0.75 including the invalid call", got)
 		}
 	})
 
