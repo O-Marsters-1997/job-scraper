@@ -1,4 +1,4 @@
-package sonnet_test
+package cvedit_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/services/sonnet"
+	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
 )
 
 type wireMessage struct {
@@ -33,7 +33,7 @@ type wireRequest struct {
 	} `json:"response_format"`
 }
 
-func fakeServer(t *testing.T, content string, cost float64, captured *wireRequest) *sonnet.Client {
+func fakeServer(t *testing.T, content string, cost float64, captured *wireRequest) *cvedit.Client {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-or-test" {
@@ -48,16 +48,16 @@ func fakeServer(t *testing.T, content string, cost float64, captured *wireReques
 		})
 	}))
 	t.Cleanup(server.Close)
-	return sonnet.NewClientAt(server.URL, server.Client())
+	return cvedit.NewClientAt(server.URL, server.Client())
 }
 
-func baseInput() sonnet.Input {
-	return sonnet.Input{
+func baseInput() cvedit.Input {
+	return cvedit.Input{
 		JobDescription: "We need a Go engineer who knows Postgres.",
-		Positions: []sonnet.Position{{
+		Positions: []cvedit.Position{{
 			ID: "pos-1", Employer: "Acme", Title: "Engineer",
 			SlotTexts:    []string{"Built APIs", "Ran on-call"},
-			Achievements: []sonnet.Achievement{{ID: "ach-1", Text: "Cut p99 latency by moving queries to Postgres"}},
+			Achievements: []cvedit.Achievement{{ID: "ach-1", Text: "Cut p99 latency by moving queries to Postgres"}},
 		}},
 	}
 }
@@ -72,8 +72,8 @@ func TestClient_Edit_ShapesRequest_DecodesResult(t *testing.T) {
 		t.Fatalf("Edit: %v", err)
 	}
 
-	if captured.Model != sonnet.Model {
-		t.Errorf("model = %q, want %q", captured.Model, sonnet.Model)
+	if captured.Model != cvedit.Model {
+		t.Errorf("model = %q, want %q", captured.Model, cvedit.Model)
 	}
 	if len(captured.Messages) != 2 || captured.Messages[0].Role != "system" || captured.Messages[1].Role != "user" {
 		t.Fatalf("messages = %+v, want system then user", captured.Messages)
@@ -158,8 +158,8 @@ func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
 	var captured wireRequest
 	client := fakeServer(t, `{"positions":[]}`, 0, &captured)
 	in := baseInput()
-	in.PriorEdits = &sonnet.EditSet{Positions: []sonnet.PositionEdit{{PositionID: "pos-1"}}}
-	in.PriorFindings = []sonnet.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
+	in.PriorEdits = &cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: "pos-1"}}}
+	in.PriorFindings = []cvedit.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
 	in.ShortenBullets = []string{"A very long bullet about latency"}
 
 	if _, err := client.Edit(context.Background(), "sk-or-test", in); err != nil {
@@ -210,7 +210,7 @@ func TestClient_Edit_StatusError(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
-	client := sonnet.NewClientAt(server.URL, server.Client())
+	client := cvedit.NewClientAt(server.URL, server.Client())
 
 	_, err := client.Edit(context.Background(), "sk-or-test", baseInput())
 	if want := fmt.Sprintf("status %d", http.StatusInternalServerError); err == nil || !strings.Contains(err.Error(), want) {

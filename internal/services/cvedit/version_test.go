@@ -1,4 +1,4 @@
-package sonnet
+package cvedit
 
 import "testing"
 

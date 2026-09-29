@@ -1,6 +1,6 @@
-// Package sonnet calls OpenRouter chat completions to rewrite a CV's bullet
+// Package cvedit calls OpenRouter chat completions to rewrite a CV's bullet
 // slots for one job from a fixed set of the user's own achievements.
-package sonnet
+package cvedit
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ const (
 	chatCompletionsURL = "https://openrouter.ai/api/v1/chat/completions"
 
 	// Model is the OpenRouter model requested for every tailoring call.
-	Model = "anthropic/claude-sonnet-5"
+	Model = "anthropic/claude-sonnet-5.5"
 )
 
 //go:embed voice.md
