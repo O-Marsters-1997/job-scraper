@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+import { ResolveError } from "@/api/sources";
 import type {
 	Application,
 	ApplicationWithDetails,
@@ -20,7 +21,7 @@ import type {
 	PositionInput,
 } from "@/types/experience";
 import type { Job, ScoreRow } from "@/types/job";
-import type { ResolvedBoard, SourceInfo } from "@/types/source";
+import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type {
 	CreateSourceTargetPayload,
 	SourceTarget,
@@ -629,21 +630,65 @@ export function getSources(): SourceInfo[] {
 	return SOURCE_INFOS;
 }
 
-export function resolveBoard(url: string): ResolvedBoard | null {
-	let hostname: string;
+export function resolveUrl(url: string): ResolvedURL {
+	let parsed: URL;
 	try {
-		hostname = new URL(url).hostname;
+		parsed = new URL(url);
 	} catch {
-		return null;
+		throw new ResolveError(
+			"could not recognise a supported board or search page in that URL",
+		);
 	}
-	const match = SOURCE_INFOS.find(
-		(s) =>
-			s.kind === "board" &&
-			hostMatches(hostname, new URL(s.url_prefix).hostname),
+	const source = SOURCE_INFOS.find((s) =>
+		hostMatches(parsed.hostname, new URL(s.url_prefix).hostname),
 	);
-	if (!match) return null;
-	const value = url.replace(/\/$/, "").split("/").pop() ?? hostname;
-	return { source: match.name, value };
+	if (source?.role === "ats") {
+		const value = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
+		return {
+			kind: "ats",
+			source: source.name,
+			value,
+			filters: {},
+			dropped: [],
+			url,
+		};
+	}
+	if (source?.kind === "filter" && source.filters.length > 0) {
+		const filters = Object.fromEntries(
+			source.filters
+				.map((f): [string, string] => [
+					f.name,
+					parsed.searchParams.get(f.name) ?? "",
+				])
+				.filter(([, v]) => v),
+		);
+		return {
+			kind: "search",
+			source: source.name,
+			value: parsed.searchParams.get("keywords") ?? "",
+			filters,
+			dropped: ["trk"],
+			url,
+		};
+	}
+	if (source?.kind === "url") {
+		return {
+			kind: "search",
+			source: source.name,
+			value: url,
+			filters: {},
+			dropped: [],
+			url,
+		};
+	}
+	if (source) {
+		throw new ResolveError(
+			`${source.label} searches aren't supported yet — use Build from fields`,
+		);
+	}
+	throw new ResolveError(
+		"could not recognise a supported board or search page in that URL",
+	);
 }
 
 let discoverySourceTargets: SourceTarget[] = [
@@ -657,6 +702,7 @@ let discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "succeeded",
 		LastRunAt: faker.date.recent({ days: 1 }).toISOString(),
 		LastRunError: "",
+		URL: "",
 	},
 	{
 		ID: "target-linkedin-1",
@@ -668,6 +714,7 @@ let discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "idle",
 		LastRunAt: null,
 		LastRunError: "",
+		URL: "",
 	},
 ];
 
@@ -682,6 +729,7 @@ function companyToSourceTarget(company: Company): SourceTarget {
 		RunStatus: "idle",
 		LastRunAt: company.LastCheckedAt,
 		LastRunError: "",
+		URL: "",
 	};
 }
 
@@ -707,6 +755,7 @@ export function createSourceTarget(
 		RunStatus: "succeeded",
 		LastRunAt: new Date().toISOString(),
 		LastRunError: "",
+		URL: SOURCE_INFOS.find((s) => s.name === payload.source)?.url_prefix ?? "",
 	};
 	discoverySourceTargets = [...discoverySourceTargets, target];
 	return target;

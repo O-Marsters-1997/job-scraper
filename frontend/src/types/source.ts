@@ -25,9 +25,19 @@ export const sourceInfoSchema = z.object({
 
 export type SourceInfo = z.infer<typeof sourceInfoSchema>;
 
-export const resolvedBoardSchema = z.object({
+export const resolvedUrlSchema = z.object({
+	kind: z.enum(["search", "ats"]),
 	source: z.string(),
 	value: z.string(),
+	filters: z
+		.record(z.string(), z.string())
+		.nullish()
+		.transform((v) => v ?? {}),
+	dropped: z
+		.array(z.string())
+		.nullish()
+		.transform((v) => v ?? []),
+	url: z.string(),
 });
 
-export type ResolvedBoard = z.infer<typeof resolvedBoardSchema>;
+export type ResolvedURL = z.infer<typeof resolvedUrlSchema>;

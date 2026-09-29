@@ -54,16 +54,28 @@ function FilterSelect(props: {
 	);
 }
 
+export interface SearchPrefill {
+	source: string;
+	value: string;
+	filters: Record<string, string>;
+	dropped: string[];
+}
+
 export function SearchForm(props: {
 	sources: SourceInfo[];
+	initial?: SearchPrefill;
 	onCreated: (target: SourceTarget, source: SourceInfo | undefined) => void;
 	onCancel: () => void;
 }) {
 	const createMutation = useCreateSourceTarget();
-	const [picked, setSourceName] = createSignal<string>();
+	const [picked, setSourceName] = createSignal<string | undefined>(
+		props.initial?.source,
+	);
 	const sourceName = () => picked() ?? props.sources[0]?.name;
-	const [value, setValue] = createSignal("");
-	const [filters, setFilters] = createSignal<Record<string, string>>({});
+	const [value, setValue] = createSignal(props.initial?.value ?? "");
+	const [filters, setFilters] = createSignal<Record<string, string>>(
+		props.initial?.filters ?? {},
+	);
 
 	const source = () => props.sources.find((s) => s.name === sourceName());
 
@@ -106,10 +118,26 @@ export function SearchForm(props: {
 			onSubmit={form.submit}
 			class="mb-4 flex flex-col gap-4 rounded-lg border border-border bg-surface-muted px-4 py-4"
 		>
-			<fieldset class="flex flex-wrap items-center gap-2">
+			<Show when={props.initial?.dropped.length}>
+				<p class="text-xs text-muted">
+					Won't be used:{" "}
+					<span class="font-mono">{props.initial?.dropped.join(", ")}</span>
+				</p>
+			</Show>
+
+			<fieldset
+				class="flex flex-wrap items-center gap-2"
+				disabled={Boolean(props.initial)}
+			>
 				<legend class="sr-only">Job board</legend>
 				<span class="text-xs font-medium text-foreground">Job board</span>
-				<For each={props.sources}>
+				<For
+					each={
+						props.initial
+							? props.sources.filter((s) => s.name === sourceName())
+							: props.sources
+					}
+				>
 					{(s) => (
 						<button
 							type="button"
