@@ -7,7 +7,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 )
 
-// Docs serves one canned Tab JSON for every GetDocument call.
 type Docs struct {
 	TabJSON json.RawMessage
 	Err     error

@@ -6,12 +6,7 @@ import {
 } from "../types/experience";
 import { apiFetch } from "./client";
 import { mockDelay, mocked } from "./config";
-
-const post = (body: unknown): RequestInit => ({
-	method: "POST",
-	headers: { "Content-Type": "application/json" },
-	body: JSON.stringify(body),
-});
+import { jsonInit } from "./experience";
 
 export async function previewExperienceImport(
 	docId: string,
@@ -25,7 +20,7 @@ export async function previewExperienceImport(
 		async () => {
 			const preview = await apiFetch(
 				"/experience/import/preview",
-				post({ docId, tabId }),
+				jsonInit("POST", { docId, tabId }),
 				importPreviewSchema,
 			);
 			return preview.positions;
@@ -44,7 +39,7 @@ export async function importExperience(
 		() =>
 			apiFetch(
 				"/experience/import",
-				post({ positions }),
+				jsonInit("POST", { positions }),
 				positionSchema.array(),
 			),
 	);

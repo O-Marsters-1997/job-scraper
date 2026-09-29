@@ -8,8 +8,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store/sqlc"
 )
 
-// ImportPositions creates every Position and its Achievements in one
-// transaction, keeping in's order at the top of the Bank.
 func (s *Store) ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error) {
 	uid, err := parseID(userID, ErrPositionNotFound)
 	if err != nil {

@@ -19,13 +19,10 @@ var (
 	dateForms = []string{"January 2006", "Jan 2006", "Jan. 2006", "1/2006", "01/2006", "2006"}
 )
 
-// DocFetcher returns the Docs API JSON of one Tab of a Doc.
 type DocFetcher interface {
 	GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error)
 }
 
-// PreviewImport parses a CV Tab into candidate Positions, flagging employers
-// the Bank already holds. It saves nothing.
 func (s *Service) PreviewImport(ctx context.Context, userID string, in dto.ImportPreviewInput) (dto.ImportPreview, error) {
 	if in.DocID == "" || in.TabID == "" {
 		return dto.ImportPreview{}, apperr.Invalid("docId and tabId are required")
@@ -54,8 +51,6 @@ func (s *Service) PreviewImport(ctx context.Context, userID string, in dto.Impor
 	return dto.ImportPreview{Positions: positions}, nil
 }
 
-// ImportPositions commits a reviewed import in one transaction, adding to
-// the Bank without merging into existing Positions.
 func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.ImportInput) ([]dto.Position, error) {
 	if len(in.Positions) == 0 {
 		return nil, apperr.Invalid("nothing to import")
@@ -82,11 +77,11 @@ func positionsFromStructure(ds docparse.DocStructure) []dto.ImportPosition {
 	byHeading := map[int]*dto.ImportPosition{}
 	var order []int
 	for _, slot := range ds.Slots {
+		if slot.HeadingIndex < 0 {
+			continue
+		}
 		p, ok := byHeading[slot.HeadingIndex]
 		if !ok {
-			if slot.HeadingIndex < 0 {
-				continue
-			}
 			parsed := parseHeading(ds.Headings[slot.HeadingIndex].Text)
 			p = &parsed
 			byHeading[slot.HeadingIndex] = p
@@ -101,8 +96,6 @@ func positionsFromStructure(ds docparse.DocStructure) []dto.ImportPosition {
 	return out
 }
 
-// parseHeading reads "Title at Employer (Jan 2020 - Present)" style headings
-// best-effort; whatever it cannot read is left empty for the user to fill in.
 func parseHeading(text string) dto.ImportPosition {
 	p := dto.ImportPosition{Achievements: []string{}}
 	if m := dateRange.FindStringSubmatchIndex(text); m != nil {

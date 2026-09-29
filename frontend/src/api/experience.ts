@@ -8,7 +8,7 @@ import {
 import { apiFetch, apiFetchVoid } from "./client";
 import { mockDelay, mocked } from "./config";
 
-const jsonInit = (method: string, body: unknown): RequestInit => ({
+export const jsonInit = (method: string, body: unknown): RequestInit => ({
 	method,
 	headers: { "Content-Type": "application/json" },
 	body: JSON.stringify(body),
