@@ -183,9 +183,9 @@ function ScoringForm(props: {
 		setError(null);
 		try {
 			const result = await recompute.mutateAsync();
-			flash(`${result.recomputed} jobs re-ranked.`);
+			flash(`Rescored ${result.recomputed} jobs · answering ${result.queued}`);
 		} catch {
-			setError("Could not recompute scores. Try again.");
+			setError("Could not refresh scores. Try again.");
 		}
 	};
 
@@ -224,7 +224,7 @@ function ScoringForm(props: {
 					disabled={recompute.isPending}
 					onClick={handleRecompute}
 				>
-					{recompute.isPending ? "Recomputing…" : "Recompute scores"}
+					{recompute.isPending ? "Refreshing…" : "Refresh scores"}
 				</Button>
 				<Button size="sm" disabled={mutation.isPending} onClick={handleSave}>
 					{mutation.isPending ? "Saving…" : "Save"}

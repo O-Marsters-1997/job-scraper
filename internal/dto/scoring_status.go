@@ -6,4 +6,5 @@ type ScoringStatus struct {
 
 type RecomputeResult struct {
 	Recomputed int64 `json:"recomputed"`
+	Queued     int64 `json:"queued"`
 }

@@ -765,6 +765,26 @@ func TestRecompute(t *testing.T) {
 	})
 }
 
+func TestRefresh(t *testing.T) {
+	st := newFakeStore()
+	st.SeedSearchConfig(dto.SearchConfig{
+		UserID: "user-1",
+		Preferences: dto.Preferences{Picks: []dto.Pick{
+			{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		}},
+	})
+	st.SeedScoringInputs("user-1", []store.ScoringInput{{Job: dto.Job{ID: "job-1"}}})
+	svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+
+	got, err := svc.Refresh(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if want := (dto.RecomputeResult{Recomputed: 1, Queued: 1}); got != want {
+		t.Fatalf("Refresh = %+v, want %+v", got, want)
+	}
+}
+
 func TestFillMissingAnswers(t *testing.T) {
 	t.Run("queues for the currently picked hashes", func(t *testing.T) {
 		st := newFakeStore()

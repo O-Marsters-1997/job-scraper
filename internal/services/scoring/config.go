@@ -76,15 +76,12 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	if err := s.candidates.Reconsider(ctx, updated); err != nil {
 		return dto.ScoringConfigView{}, fmt.Errorf("reconsider candidates: %w", err)
 	}
-	if _, err := s.Recompute(ctx, userID); err != nil {
-		return dto.ScoringConfigView{}, fmt.Errorf("recompute scores: %w", err)
-	}
-	queued, err := s.FillMissingAnswers(ctx, userID)
+	refreshed, err := s.Refresh(ctx, userID)
 	if err != nil {
-		return dto.ScoringConfigView{}, fmt.Errorf("fill missing answers: %w", err)
+		return dto.ScoringConfigView{}, err
 	}
 	view := toView(updated)
-	view.BackfillQueued = queued
+	view.BackfillQueued = refreshed.Queued
 	return view, nil
 }
 
