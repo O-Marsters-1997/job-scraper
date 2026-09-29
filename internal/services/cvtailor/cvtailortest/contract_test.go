@@ -12,3 +12,10 @@ func TestFakeStoreSatisfiesContract(t *testing.T) {
 		return cvtailortest.Fixture{Store: cvtailortest.NewFakeStore(), UserID: "user-1", Other: "user-2"}
 	})
 }
+
+func TestFakeStoreSatisfiesHeadingMappingContract(t *testing.T) {
+	cvtailortest.RunHeadingMappingContract(t, func(t *testing.T) cvtailortest.Fixture {
+		t.Helper()
+		return cvtailortest.Fixture{Store: cvtailortest.NewFakeStore(), UserID: "user-1", Other: "user-2"}
+	})
+}

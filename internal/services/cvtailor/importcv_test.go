@@ -57,7 +57,7 @@ func TestPreviewImportParsesHeadingsAndFlagsExistingEmployers(t *testing.T) {
 		bullet("Built reports."),
 		head("Education"),
 	)}
-	svc := cvtailor.NewService(store, docs)
+	svc := cvtailor.NewService(store, docs, nil)
 
 	got, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 	if err != nil {
@@ -78,7 +78,7 @@ func TestPreviewImportReadsDateRangesAndLeavesUnparseableEmpty(t *testing.T) {
 		head("Engineer, Acme (2018 - 2021)"), bullet("a"),
 		head("Lead, Globex (last summer - now-ish)"), bullet("b"),
 	)}
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), docs)
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), docs, nil)
 
 	got, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 	if err != nil {
@@ -99,7 +99,7 @@ func TestPreviewImportReadsDateRangesAndLeavesUnparseableEmpty(t *testing.T) {
 
 func TestPreviewImportPropagatesDocErrors(t *testing.T) {
 	notFound := apperr.NotFound("no such doc")
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), cvtailortest.Docs{Err: notFound})
+	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), cvtailortest.Docs{Err: notFound}, nil)
 
 	_, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 
@@ -110,7 +110,7 @@ func TestPreviewImportPropagatesDocErrors(t *testing.T) {
 
 func TestImportPositionsAppendsAndRejectsInvalidPositions(t *testing.T) {
 	store := cvtailortest.NewFakeStore()
-	svc := cvtailor.NewService(store, nil)
+	svc := cvtailor.NewService(store, nil, nil)
 	ctx := context.Background()
 
 	in := dto.ImportInput{Positions: []dto.ImportPosition{

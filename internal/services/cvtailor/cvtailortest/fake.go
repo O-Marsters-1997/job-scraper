@@ -35,11 +35,12 @@ type FakeStore struct {
 	mu           sync.Mutex
 	positions    map[string]*position
 	achievements map[string]*achievement
+	mappings     map[headingKey]*string
 	seq          int
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}}
+	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}}
 }
 
 func (f *FakeStore) nextID() string {

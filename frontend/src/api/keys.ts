@@ -2,6 +2,7 @@ const jobsAll = ["jobs"] as const;
 const scoresAll = ["scores"] as const;
 const applicationsAll = ["applications"] as const;
 const companiesAll = ["companies"] as const;
+const tailoringAll = ["tailoring"] as const;
 
 export const keys = {
 	jobs: {
@@ -25,6 +26,13 @@ export const keys = {
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
 	},
 	experience: ["experience"] as const,
+	tailoring: {
+		all: tailoringAll,
+		headings: (docId: string, tabId: string) =>
+			[...tailoringAll, "headings", docId, tabId] as const,
+		suggestions: (jobId: string, docId: string, tabId: string) =>
+			[...tailoringAll, "suggestions", jobId, docId, tabId] as const,
+	},
 	sourceTargets: ["source-targets"] as const,
 	sources: ["sources"] as const,
 	profile: ["profile"] as const,

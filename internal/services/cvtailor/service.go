@@ -22,15 +22,18 @@ type Store interface {
 	DeleteAchievement(ctx context.Context, userID, id string) error
 	ReorderAchievements(ctx context.Context, userID, positionID string, ids []string) error
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
+	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)
+	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
 }
 
 type Service struct {
 	store Store
 	docs  DocFetcher
+	asker Asker
 }
 
-func NewService(store Store, docs DocFetcher) *Service {
-	return &Service{store: store, docs: docs}
+func NewService(store Store, docs DocFetcher, asker Asker) *Service {
+	return &Service{store: store, docs: docs, asker: asker}
 }
 
 func (s *Service) CreatePosition(ctx context.Context, userID string, in dto.PositionInput) (dto.Position, error) {
