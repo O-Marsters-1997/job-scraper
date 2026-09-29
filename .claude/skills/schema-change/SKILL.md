@@ -1,7 +1,6 @@
 ---
 name: schema-change
 description: Change the Postgres schema: create, alter or drop tables, columns, indexes or constraints, backfill data, and update the sqlc queries and generated code to match. Use for "write a migration", "change the schema", "add a column", "new index", "rename a field", "backfill".
-paths: ["scripts/migrations/**", "internal/data/db/sqlc/**", "internal/services/*/store/**", "sqlc.yaml"]
 ---
 
 # Schema change
