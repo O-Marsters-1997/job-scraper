@@ -57,6 +57,7 @@ export const trackedCompanySchema = z.object({
 	check_interval_minutes: z.number(),
 	boards: z.array(trackedBoardSchema),
 	open_jobs: z.number(),
+	relevant_jobs: z.number(),
 	last_checked_at: z.string().nullable(),
 });
 

@@ -145,7 +145,7 @@ export function CompanyBoardsTable(props: {
 							<TableRow class="hover:bg-transparent">
 								{head("company", "Company", "asc")}
 								<TableHead>Boards</TableHead>
-								{head("open", "Open jobs", "desc")}
+								{head("open", "Roles", "desc")}
 								{head("checked", "Last checked", "desc")}
 								<TableHead class="w-20">Active</TableHead>
 								<TableHead class="w-10" />
@@ -222,10 +222,10 @@ export function CompanyBoardsTable(props: {
 											<TableCell class="font-mono text-xs tabular-nums">
 												<Link
 													to="/jobs"
-													search={{ company: c.id }}
+													search={{ company: c.id, scored: true }}
 													class="text-primary hover:underline"
 												>
-													{c.open_jobs}
+													<strong>{c.relevant_jobs}</strong> of {c.open_jobs} open
 												</Link>
 											</TableCell>
 											<TableCell class="whitespace-nowrap text-xs text-muted">

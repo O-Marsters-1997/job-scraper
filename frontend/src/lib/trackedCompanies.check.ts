@@ -28,6 +28,7 @@ const company = (
 		},
 	],
 	open_jobs: 0,
+	relevant_jobs: 0,
 	last_checked_at: null,
 	...over,
 });

@@ -365,6 +365,7 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 			CheckIntervalMinutes: int(r.CheckIntervalMinutes),
 			Boards:               []dto.TrackedBoard{},
 			OpenJobs:             int(r.OpenJobs),
+			RelevantJobs:         int(r.RelevantJobs),
 		}
 		if b, ok := boards[id]; ok {
 			out[i].Boards = b
