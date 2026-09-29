@@ -539,13 +539,25 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	if err != nil {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState: %w", err)
 	}
+	harvests, err := s.queries.HarvestRuns(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest runs: %w", err)
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
+	}
+	harvestAge := make(map[string]time.Duration, len(harvests))
+	for _, h := range harvests {
+		harvestAge[h.Harvester] = time.Since(h.LastSucceededAt.Time)
 	}
 	return dto.OpsState{
 		OutboxPending:          row.OutboxPending,
 		OutboxOldestPendingAge: oldestPendingAge,
 		OutboxFailed:           row.OutboxFailed,
+		BoardsOverdue:          row.BoardsOverdue,
+		BoardsFailing:          row.BoardsFailing,
+		SourceTargetsFailed:    row.SourceTargetsFailed,
+		HarvestAge:             harvestAge,
 	}, nil
 }

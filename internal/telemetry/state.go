@@ -25,6 +25,14 @@ var (
 		"jobscraper_outbox_oldest_pending_seconds", "Age in seconds of the oldest pending or running scoring effect.", nil, nil)
 	outboxFailedDesc = prometheus.NewDesc(
 		"jobscraper_outbox_failed", "Scoring effects with status failed.", nil, nil)
+	boardsOverdueDesc = prometheus.NewDesc(
+		"jobscraper_boards_overdue", "Verified, unleased Boards whose next_due_at has passed.", nil, nil)
+	boardsFailingDesc = prometheus.NewDesc(
+		"jobscraper_boards_failing", "Verified Boards with at least 3 consecutive failed polls.", nil, nil)
+	sourceTargetsFailedDesc = prometheus.NewDesc(
+		"jobscraper_source_targets_failed", "Source Targets whose last run failed.", nil, nil)
+	harvestAgeSecondsDesc = prometheus.NewDesc(
+		"jobscraper_harvest_age_seconds", "Seconds since each catalog harvester last succeeded.", []string{"harvester"}, nil)
 )
 
 type stateCollector struct {
@@ -43,6 +51,10 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- outboxPendingDesc
 	ch <- outboxOldestPendingSecondsDesc
 	ch <- outboxFailedDesc
+	ch <- boardsOverdueDesc
+	ch <- boardsFailingDesc
+	ch <- sourceTargetsFailedDesc
+	ch <- harvestAgeSecondsDesc
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
@@ -59,4 +71,10 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(outboxPendingDesc, prometheus.GaugeValue, float64(state.OutboxPending))
 	ch <- prometheus.MustNewConstMetric(outboxOldestPendingSecondsDesc, prometheus.GaugeValue, state.OutboxOldestPendingAge.Seconds())
 	ch <- prometheus.MustNewConstMetric(outboxFailedDesc, prometheus.GaugeValue, float64(state.OutboxFailed))
+	ch <- prometheus.MustNewConstMetric(boardsOverdueDesc, prometheus.GaugeValue, float64(state.BoardsOverdue))
+	ch <- prometheus.MustNewConstMetric(boardsFailingDesc, prometheus.GaugeValue, float64(state.BoardsFailing))
+	ch <- prometheus.MustNewConstMetric(sourceTargetsFailedDesc, prometheus.GaugeValue, float64(state.SourceTargetsFailed))
+	for harvester, age := range state.HarvestAge {
+		ch <- prometheus.MustNewConstMetric(harvestAgeSecondsDesc, prometheus.GaugeValue, age.Seconds(), harvester)
+	}
 }
