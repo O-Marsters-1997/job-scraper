@@ -75,6 +75,11 @@ linters:
               desc: packages at the internal/ root are shared; move this code under internal/api
             - pkg: github.com/ollymarsters/job-scraper/internal/worker
               desc: packages at the internal/ root are shared; move this code under internal/worker
+        kernel:
+          files: ["**/internal/**", "!**/internal/services/**", "!**/internal/api/**", "!**/internal/worker/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services
+              desc: the shared kernel never imports a context; move this code into the context that owns it (ADR 0011)
         applications-store:
           files: ["$all", "!**/internal/services/applications/**"]
           deny:

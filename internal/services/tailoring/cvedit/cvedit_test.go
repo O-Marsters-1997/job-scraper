@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
 )
 
 type wireMessage struct {

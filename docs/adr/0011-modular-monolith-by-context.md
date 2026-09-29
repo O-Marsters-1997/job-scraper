@@ -8,11 +8,13 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - `applications`: applications and statuses.
   - `cvtemplates`: tracked docs and tabs.
   - `identity`: users, sessions, profile, AI credentials, and the Google Link. The Google Link covers OAuth, tokens and the Docs client, which identity exposes to cvtemplates.
+  - `tailoring`: tailored CVs and the Experience Bank. Its `cvedit` (the Sonnet client and its prompts), `checks` (deterministic gates) and `docedit` (edits to Docs requests) are subpackages; see the amendment under Layout.
 - **Layout.** Every context lives under `internal/services/`.
   - `internal/services/<ctx>/module.go`: `New(deps) *Module`, where `deps` are required constructor args.
   - `Module` has a narrow facade: exported methods for what other contexts, the worker or `cmd/admin` need, taking and returning `dto` types.
   - `m.Routes(r chi.Router)`, in `internal/services/<ctx>/routes.go`, binds the context's routes with `handlers.Handle` (ADR 0008).
   - The context's main feature service is `internal/services/<ctx>/service.go` (`NewService`). A context is one package: one `Service`, one `Store` interface, and each feature a file on that `Service`. A feature gets its own package only when the store returns its types, so folding it into the root would be an import cycle: `sourcetargets` owns `Candidate`, which `jobsearch/store` returns. Such a package declares its own store interface and never imports the store. `Build(Deps)` takes the store and one field per other boundary: external clients and other contexts' ports.
+  - Amendment (2026-09-29): a context may hold subpackages beyond a feature that must avoid a store import cycle, for three kinds of code only: an external or LLM client with its prompts (`tailoring/cvedit`), pure rules with no store (`tailoring/checks`, `tailoring/docedit`), and a dev-only eval harness (`tailoring/eval`, consumed by `cmd/` alone). None of them imports the context's store or root. `cvedit`, `checks` and `docedit` had sat in the shared kernel while importing each other's context code, so they moved here and `depguard` now enforces the kernel rule.
   - `internal/services/<ctx>/store/` holds the store (`store.go`), its sqlc-to-`dto` converters (`transform.go`, named `to<Name>DTO`), its queries and its generated sqlc.
   - `cmd/api/main.go` is the only composition root. `internal/api` shrinks to the HTTP shell: middleware, CORS, and mounting each module's routes.
   - `handlers.Handle` and the CRUD generics move to `internal/handlers`, so every context can import them.

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
-	"github.com/ollymarsters/job-scraper/internal/services/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
 )
 
 const defaultSkillSeparator = ", "

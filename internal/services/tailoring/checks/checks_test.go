@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/services/checks"
+	"github.com/ollymarsters/job-scraper/internal/services/tailoring/checks"
 )
 
 func bulletDraft(text, base string, cited, positionAchievements []string) checks.Draft {
