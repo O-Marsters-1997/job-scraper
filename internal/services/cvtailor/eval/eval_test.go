@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/cvedit"
-	"github.com/ollymarsters/job-scraper/internal/services/tailoring/eval"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/eval"
 )
 
 type scriptedEditor struct {
