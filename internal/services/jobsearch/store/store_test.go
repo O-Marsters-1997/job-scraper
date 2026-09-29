@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1238,5 +1239,61 @@ func TestPageJobsScoredOnlyFiltersToCallersScoredJobsOfCompany(t *testing.T) {
 	}
 	if len(page.Items) != 1 || page.Items[0].ID != scoredID {
 		t.Fatalf("Page(scored) items = %+v, want only %s", page.Items, scoredID)
+	}
+}
+
+func TestListTrackedCompaniesCountsRelevantJobs(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	userID := insertUser(t, pool)
+	var otherID string
+	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('other-user', 'hash') RETURNING id`).Scan(&otherID); err != nil {
+		t.Fatal(err)
+	}
+
+	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "relevant-co", Name: "Relevant Co"})
+	if err != nil {
+		t.Fatalf("UpsertCompany: %v", err)
+	}
+	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 180); err != nil {
+		t.Fatalf("SetCompanyTracking: %v", err)
+	}
+
+	insertJob := func(n int, closed bool) string {
+		t.Helper()
+		var id string
+		err := pool.QueryRow(ctx,
+			`INSERT INTO jobs (title,location,url,company_slug,source,updated_at,scraped_at,description,company_id,closed_at)
+			 VALUES ('Role','','https://example.com/'||$1::text,'relevant-co','test',NOW(),NOW(),'d',$2::uuid,CASE WHEN $3::bool THEN NOW() END)
+			 RETURNING id::text`, strconv.Itoa(n), company.ID, closed).Scan(&id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	score := func(jobID, user, breakdown string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid,$2::uuid,50,$3::jsonb)`,
+			jobID, user, breakdown); err != nil {
+			t.Fatal(err)
+		}
+	}
+	scoredOpen := insertJob(1, false)
+	score(scoredOpen, userID, `[]`)
+	blocked := insertJob(2, false)
+	score(blocked, userID, `[{"effect":"blocked"}]`)
+	closedScored := insertJob(3, true)
+	score(closedScored, userID, `[]`)
+	otherUsers := insertJob(4, false)
+	score(otherUsers, otherID, `[]`)
+	insertJob(5, false)
+
+	got, err := st.ListTrackedCompaniesForUser(ctx, userID)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want one company", got, err)
+	}
+	if got[0].OpenJobs != 4 || got[0].RelevantJobs != 1 {
+		t.Fatalf("open, relevant = %d, %d, want 4, 1", got[0].OpenJobs, got[0].RelevantJobs)
 	}
 }

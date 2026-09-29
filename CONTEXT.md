@@ -78,7 +78,7 @@ One initiated discovery Source Target search or Verified Board check, complete w
 _Avoid_: Source, schedule
 
 **Relevance**:
-A 0–100 heuristic score of a Job's listing-card signals (title/company/location) against a User's criteria, computed pre-persistence; the relevance cutoff gates whether the Job advances to the next expensive stage.
+A pass/fail check of a Job's listing-card signals (title/company/location) against a User's Search Config exclusions, run before Suitability scoring; there is no cutoff. A Job that passes has a score row for that User.
 _Avoid_: Match score, filter score — keep distinct from Suitability
 
 **Source Target**:
@@ -154,8 +154,7 @@ once. Gates notification and ranks the list, with one breakdown row per Pick exp
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Search Config**:
-A User's editable search criteria (role, location, keywords), Picks (in `preferences`), relevance
-cutoff, and notify threshold — exactly one per User; the single source of truth feeding the
+A User's editable search criteria (role, location, keywords), Picks (in `preferences`), and notify threshold — exactly one per User; the single source of truth feeding the
 relevance gate, Suitability, and notifications.
 _Avoid_: Settings, query — "preferences" is the Search Config field holding Picks, not a synonym
 for the whole Search Config
@@ -263,7 +262,7 @@ _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 - "CV template" (the user's phrase, kept as the sidebar section name) vs **CV** — resolved: the section is "CV Templates", but a single listed/viewed item is a **CV**, which is precisely one **Tab**.
 - "doc" was used for both the Google Doc and a single CV — resolved: the whole file is a **Tracked Doc**; a single CV is a **Tab** within it.
 - "board" meant both a **Source** and the per-company ATS unit — resolved: a **Source** is a platform/site adapter; a **Board** is one company's listings on an ATS (a `{board_token}`) that a Source iterates.
-- "relevance" vs "suitability" — resolved: **Relevance** is the cheap pre-persistence heuristic gate signal; **Suitability** is the post-persistence LLM fit score. Both are 0–100 and per **User**, but differ in input (card vs full text), cost (free vs LLM), and timing.
+- "relevance" vs "suitability" — resolved: **Relevance** is the cheap pre-persistence heuristic gate signal; **Suitability** is the post-persistence LLM fit score. Both are per **User**, but differ in shape (pass/fail vs 0–100), input (card vs full text), cost (free vs LLM), and timing.
 - "score on a Job" read as a property of the shared **Job** — resolved: a score is per-**User** (a **Job**↔**User** assessment, modelled like **Application**), never a column on the shared catalog.
 - "source target value" for WIS was ambiguous — resolved: for **Filter Source** targets the `value` column is the keyword string (what to search for); additional structured parameters (e.g. region) live in the `filters` JSONB column, not in `value`.
 - "Job" previously meant one scraped URL — resolved: trusted ATS posting identity defines one **Job**; URLs are **Job URLs** and can be aliases.

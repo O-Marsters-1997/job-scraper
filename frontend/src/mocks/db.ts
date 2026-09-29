@@ -428,6 +428,11 @@ let companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 	};
 });
 
+jobs = jobs.map((j) => ({
+	...j,
+	CompanyID: companies.find((c) => c.Slug === j.CompanySlug)?.ID ?? j.CompanyID,
+}));
+
 let companyBoards: CompanyBoard[] = companies
 	.filter((company) => company.ATSSource)
 	.map((company) => ({
@@ -1311,6 +1316,9 @@ export function getTrackedCompanies(): TrackedCompany[] {
 					url: BOARD_URLS[b.Source]?.(b.BoardToken) ?? "",
 				})),
 			open_jobs: c.JobCount,
+			relevant_jobs: jobs.filter(
+				(j) => j.CompanyID === c.ID && j.SuitabilityScore != null,
+			).length,
 			last_checked_at: c.LastCheckedAt,
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name));
