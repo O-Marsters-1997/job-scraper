@@ -159,7 +159,7 @@ func (f *FakeStore) GetJobForScoring(_ context.Context, jobID string) (dto.Job, 
 	return job, nil
 }
 
-func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string, _ bool) ([]dto.SearchConfig, error) {
+func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string) ([]dto.SearchConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.configs[jobID], nil

@@ -141,14 +141,8 @@ WHERE EXISTS (
     WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
 ) OR EXISTS (
     SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
-        AND ($2::boolean OR st.value = j.company_slug)
 )
 `
-
-type ListInterestedConfigsParams struct {
-	JobID     pgtype.UUID
-	Discovery bool
-}
 
 type ListInterestedConfigsRow struct {
 	UserID                pgtype.UUID
@@ -159,8 +153,8 @@ type ListInterestedConfigsRow struct {
 	Preferences           []byte
 }
 
-func (q *Queries) ListInterestedConfigs(ctx context.Context, arg ListInterestedConfigsParams) ([]ListInterestedConfigsRow, error) {
-	rows, err := q.db.Query(ctx, listInterestedConfigs, arg.JobID, arg.Discovery)
+func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) ([]ListInterestedConfigsRow, error) {
+	rows, err := q.db.Query(ctx, listInterestedConfigs, jobID)
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,7 @@ func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.
 
 func newCompanyService(q jobsearch.QueuePublisher) (*jobsearch.Service, *jobsearchtest.FakeStore) {
 	st := jobsearchtest.NewFakeStore()
-	return jobsearch.NewService(st, st, q), st
+	return jobsearch.NewService(st, q), st
 }
 
 func listTargets(t *testing.T, st *jobsearchtest.FakeStore) []dto.SourceTarget {
@@ -140,7 +140,7 @@ func TestSetTracking(t *testing.T) {
 		assertKind(t, err, apperr.KindNotFound)
 	})
 
-	t.Run("enables tracking and syncs the legacy source target for an ATS company", func(t *testing.T) {
+	t.Run("enables tracking for an ATS company without writing a source target", func(t *testing.T) {
 		svc, companyStore := newCompanyService(queuetest.NewRecorder())
 		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 
@@ -153,24 +153,8 @@ func TestSetTracking(t *testing.T) {
 		if !tracking.Enabled || tracking.CheckIntervalMinutes != 180 {
 			t.Errorf("tracking = %+v", tracking)
 		}
-		legacy := listTargets(t, companyStore)
-		if len(legacy) != 1 || legacy[0].CheckIntervalMinutes != 180 {
-			t.Errorf("legacy target = %+v", legacy)
-		}
-	})
-
-	t.Run("tracks a company without a board and skips the legacy sync", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{
-			CompanyID: company.ID, Enabled: boolPtr(true), CheckIntervalMinutes: intPtr(180),
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if legacy := listTargets(t, companyStore); len(legacy) != 0 {
-			t.Errorf("want no legacy target, got %+v", legacy)
+		if targets := listTargets(t, companyStore); len(targets) != 0 {
+			t.Errorf("source targets = %+v, want none", targets)
 		}
 	})
 

@@ -524,25 +524,6 @@ func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, v
 	return toSourceTargetDTO(row), nil
 }
 
-func (s *Store) UpsertSourceTargetForCompany(ctx context.Context, userID, source, value, companyID string, enabled bool, interval int) (dto.SourceTarget, error) {
-	uid, err := parseUUID(userID)
-	if err != nil {
-		return dto.SourceTarget{}, err
-	}
-	cid, err := parseUUID(companyID)
-	if err != nil {
-		return dto.SourceTarget{}, err
-	}
-	row, err := s.queries.UpsertSourceTargetForCompany(ctx, sqlc.UpsertSourceTargetForCompanyParams{
-		UserID: uid, Source: source, Value: value, Enabled: enabled,
-		CompanyID: cid, CheckIntervalMinutes: int32(interval),
-	})
-	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("store.UpsertSourceTargetForCompany: %w", err)
-	}
-	return toSourceTargetDTO(row), nil
-}
-
 func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
 	tid, err := parseUUID(id)
 	if err != nil {

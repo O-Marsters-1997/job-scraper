@@ -107,7 +107,6 @@ WHERE j.id = $1::uuid
         OR EXISTS (
             SELECT 1 FROM source_targets st
             WHERE st.enabled AND st.source = j.source
-                AND ($4::boolean OR st.value = j.company_slug)
         )
     )
 ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
@@ -117,16 +116,10 @@ type QueueAnswerEffectParams struct {
 	JobID          pgtype.UUID
 	Fingerprint    string
 	FirstDiscovery bool
-	Discovery      bool
 }
 
 func (q *Queries) QueueAnswerEffect(ctx context.Context, arg QueueAnswerEffectParams) error {
-	_, err := q.db.Exec(ctx, queueAnswerEffect,
-		arg.JobID,
-		arg.Fingerprint,
-		arg.FirstDiscovery,
-		arg.Discovery,
-	)
+	_, err := q.db.Exec(ctx, queueAnswerEffect, arg.JobID, arg.Fingerprint, arg.FirstDiscovery)
 	return err
 }
 

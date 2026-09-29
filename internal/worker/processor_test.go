@@ -50,7 +50,7 @@ func newFixture(t *testing.T, ingestStatus int) fixture {
 	t.Helper()
 	store := jobsearchtest.NewFakeStore()
 	js := jobsearch.Build(jobsearch.Deps{
-		Store: store, CompanyTargets: store, SourceTargets: store,
+		Store: store, SourceTargets: store,
 		Scoring: jobsearchtest.NewNoopScoring(), Queue: jobsearchtest.NoopQueue{},
 	})
 	in := newIngest(t, ingestStatus)

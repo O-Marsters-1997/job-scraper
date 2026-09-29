@@ -15,17 +15,15 @@ import (
 
 type Store interface {
 	jobsearch.Store
-	jobsearch.SourceTargets
 	sourcetargets.Store
 }
 
 func NewDeps(st Store) jobsearch.Deps {
 	return jobsearch.Deps{
-		Store:          st,
-		CompanyTargets: st,
-		SourceTargets:  st,
-		Scoring:        NewNoopScoring(),
-		Queue:          NoopQueue{},
+		Store:         st,
+		SourceTargets: st,
+		Scoring:       NewNoopScoring(),
+		Queue:         NoopQueue{},
 	}
 }
 
