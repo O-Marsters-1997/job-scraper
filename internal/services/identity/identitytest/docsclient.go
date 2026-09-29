@@ -79,3 +79,15 @@ func (d *DocsClient) GetDocument(_ context.Context, _, docID, _ string) (json.Ra
 	}
 	return json.RawMessage(`{}`), nil
 }
+
+func (d *DocsClient) HasScope(context.Context, string, string) (bool, error) { return false, nil }
+
+func (d *DocsClient) CopyFile(context.Context, string, string, string) (string, error) {
+	return "copy-id", nil
+}
+
+func (d *DocsClient) BatchUpdate(context.Context, string, string, []json.RawMessage) error {
+	return nil
+}
+
+func (d *DocsClient) DeleteFile(context.Context, string, string) error { return nil }

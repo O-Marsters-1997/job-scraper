@@ -16,7 +16,8 @@ import (
 const userInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 type oauthClient interface {
-	AuthURL(state string) string
+	AuthURL(state string, write bool) string
+	HasScope(ctx context.Context, userID, scope string) (bool, error)
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
 	SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error
 	HTTPClientForUser(ctx context.Context, userID string) (*http.Client, error)
@@ -33,8 +34,8 @@ func NewService(client oauthClient) *Service {
 	return &Service{client: client}
 }
 
-func (s *Service) AuthURL(state string) string {
-	return s.client.AuthURL(state)
+func (s *Service) AuthURL(state string, write bool) string {
+	return s.client.AuthURL(state, write)
 }
 
 func (s *Service) Connect(ctx context.Context, userID, code string) error {
@@ -73,7 +74,11 @@ func (s *Service) Status(ctx context.Context, userID string) (dto.GoogleStatus, 
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return dto.GoogleStatus{}, err
 	}
-	return dto.GoogleStatus{Connected: true, Email: info.Email}, nil
+	canWrite, err := s.client.HasScope(ctx, userID, DriveFileScope)
+	if err != nil {
+		return dto.GoogleStatus{}, err
+	}
+	return dto.GoogleStatus{Connected: true, Email: info.Email, CanWrite: canWrite}, nil
 }
 
 func (s *Service) Disconnect(ctx context.Context, userID, _ string) error {

@@ -1,11 +1,14 @@
 package google
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +20,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
-const driveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
+const (
+	DriveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
+	DriveFileScope     = "https://www.googleapis.com/auth/drive.file"
+)
 
 type Tab struct {
 	ID    string
@@ -41,14 +47,32 @@ func NewClient(clientID, clientSecret, redirectURL string, store Store) *Client 
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		RedirectURL:  redirectURL,
-		Scopes:       []string{driveReadonlyScope},
+		Scopes:       []string{DriveReadonlyScope},
 		Endpoint:     googleoauth.Endpoint,
 	}
 	return &Client{cfg: cfg, store: store}
 }
 
-func (c *Client) AuthURL(state string) string {
-	return c.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+// Google returns a refresh token only when the consent screen is forced.
+func (c *Client) AuthURL(state string, write bool) string {
+	if !write {
+		return c.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	}
+	cfg := *c.cfg
+	cfg.Scopes = []string{DriveFileScope}
+	return cfg.AuthCodeURL(state,
+		oauth2.AccessTypeOffline,
+		oauth2.ApprovalForce,
+		oauth2.SetAuthURLParam("include_granted_scopes", "true"),
+	)
+}
+
+func (c *Client) HasScope(ctx context.Context, userID, scope string) (bool, error) {
+	row, err := c.store.GetGoogleToken(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return slices.Contains(strings.Fields(row.Scope), scope), nil
 }
 
 func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {
@@ -71,14 +95,27 @@ func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token
 		expiry = tok.Expiry
 	}
 
+	scope := c.grantedScope(ctx, userID, tok)
+
 	return c.store.UpsertGoogleToken(ctx, dto.UpsertGoogleTokenInput{
 		UserID:          userID,
 		AccessTokenEnc:  accessEnc,
 		RefreshTokenEnc: refreshEnc,
 		TokenType:       tok.TokenType,
 		Expiry:          expiry,
-		Scope:           driveReadonlyScope,
+		Scope:           scope,
 	})
+}
+
+// Google's refresh response may omit the scope field.
+func (c *Client) grantedScope(ctx context.Context, userID string, tok *oauth2.Token) string {
+	if scope, _ := tok.Extra("scope").(string); scope != "" {
+		return scope
+	}
+	if row, err := c.store.GetGoogleToken(ctx, userID); err == nil && row.Scope != "" {
+		return row.Scope
+	}
+	return DriveReadonlyScope
 }
 
 func (c *Client) DeleteToken(ctx context.Context, userID string) error {
@@ -295,4 +332,72 @@ func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io
 	}
 
 	return resp.Body, nil
+}
+
+func (c *Client) CopyFile(ctx context.Context, userID, fileID, name string) (string, error) {
+	body, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return "", fmt.Errorf("google.CopyFile marshal: %w", err)
+	}
+	resp, err := c.do(ctx, userID, http.MethodPost,
+		fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s/copy", url.PathEscape(fileID)), body)
+	if err != nil {
+		return "", fmt.Errorf("google.CopyFile: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("google.CopyFile decode: %w", err)
+	}
+	return out.ID, nil
+}
+
+func (c *Client) BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error {
+	body, err := json.Marshal(map[string][]json.RawMessage{"requests": requests})
+	if err != nil {
+		return fmt.Errorf("google.BatchUpdate marshal: %w", err)
+	}
+	resp, err := c.do(ctx, userID, http.MethodPost,
+		fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s:batchUpdate", url.PathEscape(docID)), body)
+	if err != nil {
+		return fmt.Errorf("google.BatchUpdate: %w", err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
+func (c *Client) DeleteFile(ctx context.Context, userID, fileID string) error {
+	resp, err := c.do(ctx, userID, http.MethodDelete,
+		fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s", url.PathEscape(fileID)), nil)
+	if err != nil {
+		return fmt.Errorf("google.DeleteFile: %w", err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
+func (c *Client) do(ctx context.Context, userID, method, target string, body []byte) (*http.Response, error) {
+	hc, err := c.HTTPClientForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
+	}
+	return resp, nil
 }
