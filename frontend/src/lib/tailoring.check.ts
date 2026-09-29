@@ -1,8 +1,11 @@
-import type { CVHeading, Suggestion } from "../types/tailoring";
+import type { CVHeading, DraftFinding, Suggestion } from "../types/tailoring";
 import {
 	allConfirmed,
 	isSettled,
+	keptDraft,
+	reviewFindings,
 	selectedAchievementIds,
+	skillGaps,
 	toMappings,
 } from "./tailoring";
 
@@ -62,4 +65,34 @@ assert(
 assert(
 	!isSettled("pending") && !isSettled("running"),
 	"in-flight keeps polling",
+);
+
+const finding = (
+	check: string,
+	severity: DraftFinding["severity"],
+	message: string,
+): DraftFinding => ({ check, severity, message });
+
+const findings = [
+	finding("length", "warn", "long"),
+	finding("skills", "info", "Terraform"),
+	finding("grounding", "block", "40%"),
+];
+assert(
+	reviewFindings(findings)
+		.map((f) => f.message)
+		.join() === "40%,long",
+	"findings list blocking first and leave skill gaps out",
+);
+assert(
+	skillGaps(findings).join() === "Terraform",
+	"info-level skills findings are the skill gaps",
+);
+assert(
+	keptDraft([{ outcome: null }, { outcome: "kept" }])?.outcome === "kept",
+	"the kept draft is found among a job's drafts",
+);
+assert(
+	keptDraft([{ outcome: "discarded" }]) === undefined,
+	"a discarded draft is not kept",
 );

@@ -55,7 +55,7 @@ func cvTab(t *testing.T, roles ...roleBlock) json.RawMessage {
 func newService(t *testing.T, docs cvtailor.DocFetcher, asker cvtailor.Asker) (*cvtailor.Service, *cvtailortest.FakeStore) {
 	t.Helper()
 	st := cvtailortest.NewFakeStore()
-	return cvtailor.NewService(st, docs, asker), st
+	return cvtailor.NewService(st, docs, asker, nil), st
 }
 
 func addPosition(t *testing.T, st *cvtailortest.FakeStore, employer, title string) dto.Position {

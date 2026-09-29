@@ -43,3 +43,12 @@ UPDATE tailored_cvs SET
     last_error = sqlc.arg(last_error)::text,
     draft_doc_id = CASE WHEN sqlc.arg(clear_doc)::bool THEN NULL ELSE draft_doc_id END
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'running';
+
+-- name: ListJobDrafts :many
+SELECT * FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id;
+
+-- name: SetDraftOutcome :one
+UPDATE tailored_cvs SET outcome = sqlc.arg(outcome)::text,
+    draft_doc_id = CASE WHEN sqlc.arg(outcome)::text = 'discarded' THEN NULL ELSE draft_doc_id END
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid
+RETURNING *;

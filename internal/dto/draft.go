@@ -1,6 +1,9 @@
 package dto
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
 // citing the Achievements the User confirmed.
@@ -20,14 +23,59 @@ type DraftRef struct {
 }
 
 // Draft is a Tailored CV's generation state. Status is pending, running,
-// ready or failed; DraftDocURL is set once the Doc exists.
+// ready or failed; DraftDocURL is set while the Doc exists. Outcome is nil
+// until the User keeps or discards a ready Draft. Provenance is set by
+// GetDraft only.
 type Draft struct {
-	ID          string  `json:"id"`
-	JobID       string  `json:"jobId"`
-	Status      string  `json:"status"`
-	DraftDocURL *string `json:"draftDocUrl"`
-	LastError   string  `json:"lastError"`
-	DraftDocID  string  `json:"-"`
+	ID          string           `json:"id"`
+	JobID       string           `json:"jobId"`
+	Status      string           `json:"status"`
+	Outcome     *string          `json:"outcome"`
+	DraftDocURL *string          `json:"draftDocUrl"`
+	LastError   string           `json:"lastError"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	Findings    []DraftFinding   `json:"findings"`
+	Provenance  *DraftProvenance `json:"provenance"`
+	DraftDocID  string           `json:"-"`
+	EditSet     json.RawMessage  `json:"-"`
+}
+
+const (
+	OutcomeKept      = "kept"
+	OutcomeDiscarded = "discarded"
+)
+
+// DraftFinding is a check result stored on a Draft; the shape matches
+// checks.Finding.
+type DraftFinding struct {
+	Check    string `json:"check"`
+	Severity string `json:"severity"`
+	SlotID   string `json:"slotId,omitempty"`
+	Message  string `json:"message"`
+}
+
+// DraftProvenance shows where each bullet of a Draft came from.
+type DraftProvenance struct {
+	Positions []ProvenancePosition `json:"positions"`
+}
+
+type ProvenancePosition struct {
+	PositionID string             `json:"positionId"`
+	Employer   string             `json:"employer"`
+	Title      string             `json:"title"`
+	Bullets    []ProvenanceBullet `json:"bullets"`
+}
+
+// ProvenanceBullet is one rewritten bullet, its cited Achievements, and its
+// text split so words absent from those Achievements are marked Novel.
+type ProvenanceBullet struct {
+	Segments     []TextSegment `json:"segments"`
+	Achievements []Achievement `json:"achievements"`
+}
+
+type TextSegment struct {
+	Text  string `json:"text"`
+	Novel bool   `json:"novel"`
 }
 
 // DraftClaim is a Draft leased to the generator with the Job facts it
@@ -67,4 +115,9 @@ type DraftFailure struct {
 
 type DraftQuery struct {
 	ID string `json:"-" path:"id"`
+}
+
+// DraftJobQuery selects the Drafts of one Job.
+type DraftJobQuery struct {
+	JobID string `json:"-" path:"jobId"`
 }

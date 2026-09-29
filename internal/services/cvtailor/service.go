@@ -26,6 +26,8 @@ type Store interface {
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
 	CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error)
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
+	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
+	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)
 	ClaimDraft(ctx context.Context) (dto.DraftClaim, error)
 	SetDraftDoc(ctx context.Context, claim dto.DraftClaim, docID string) error
 	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error
@@ -36,10 +38,11 @@ type Service struct {
 	store Store
 	docs  DocFetcher
 	asker Asker
+	drive Drive
 }
 
-func NewService(store Store, docs DocFetcher, asker Asker) *Service {
-	return &Service{store: store, docs: docs, asker: asker}
+func NewService(store Store, docs DocFetcher, asker Asker, drive Drive) *Service {
+	return &Service{store: store, docs: docs, asker: asker, drive: drive}
 }
 
 func (s *Service) CreatePosition(ctx context.Context, userID string, in dto.PositionInput) (dto.Position, error) {
