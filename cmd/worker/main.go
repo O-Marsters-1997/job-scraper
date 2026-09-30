@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,8 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/applications"
-	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -60,8 +60,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	apps := applications.New(pool)
-	idm := identity.NewFacade(pool, apps)
 	scoringModule := scoring.NewFacade(pool)
 
 	reg := prometheus.NewRegistry()
@@ -150,19 +148,8 @@ func main() {
 	if _, err := cr.AddFunc("@every 1m", reconcile); err != nil {
 		fatal(ctx, "reconcile schedule failed", err)
 	}
-	if _, err := cr.AddFunc("@daily", func() {
-		if err := proxy.Probe(ctx); err != nil {
-			slog.WarnContext(ctx, "Web Unlocker daily probe failed", slog.Any(logger.KeyErr, err))
-		}
-		if err := idm.DeleteExpiredSessions(ctx); err != nil {
-			slog.ErrorContext(ctx, "session cleanup failed", slog.Any(logger.KeyErr, err))
-		}
-		if err := js.DeleteExpiredCandidates(ctx); err != nil {
-			slog.ErrorContext(ctx, "candidate cleanup failed", slog.Any(logger.KeyErr, err))
-		}
-	}); err != nil {
-		fatal(ctx, "daily schedule failed", err)
-	}
+	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
+	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	cr.Start()
 	defer cr.Stop()
 
