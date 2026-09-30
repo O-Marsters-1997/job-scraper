@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import { PageHeading } from "@/components/PageHeading";
 import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
@@ -48,12 +49,10 @@ function JobsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">Jobs</h1>
-				<p class="mt-0.5 text-xs text-faint">
-					Open roles scraped from your configured sources
-				</p>
-			</div>
+			<PageHeading
+				title="Jobs"
+				subtitle="Open roles scraped from your configured sources"
+			/>
 
 			<Show when={aiPrefs.data && !aiPrefs.data.scoringEnabled}>
 				<div class="mb-4 rounded-xl border border-accent-border bg-accent-subtle px-4 py-3 text-sm text-accent-text">

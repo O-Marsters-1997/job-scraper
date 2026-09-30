@@ -1,5 +1,8 @@
 import { For, Show } from "solid-js";
-import { SortableTableHead } from "@/components/SortableTableHead";
+import {
+	SortableTableHead,
+	type SortDir,
+} from "@/components/SortableTableHead";
 import { Card } from "@/components/ui/card";
 import {
 	Table,
@@ -16,7 +19,7 @@ export type SortKey = "Title" | "ModifiedAt";
 export function CVTemplatesTable(props: {
 	rows: CV[];
 	searchQuery: string;
-	ariaSort: (key: SortKey) => "ascending" | "descending" | "none";
+	ariaSort: (key: SortKey) => SortDir;
 	onSort: (key: SortKey) => void;
 	hidePending: boolean;
 	showPending: boolean;

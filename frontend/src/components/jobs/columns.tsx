@@ -4,7 +4,6 @@ import { Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRelative } from "@/lib/datetime";
-import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
@@ -154,7 +153,7 @@ export function createJobColumns(
 						>
 							<StatusBadge
 								name={summary().StatusName}
-								colour={summary().StatusColour || STATUS_FALLBACK_COLOUR}
+								colour={summary().StatusColour}
 							/>
 						</Show>
 					)}

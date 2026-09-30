@@ -4,7 +4,6 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
-import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import type { ApplicationWithDetails } from "@/types/application";
 
 export function ApplicationCard(props: {
@@ -30,10 +29,7 @@ export function ApplicationCard(props: {
 				{(a) => (
 					<CardContent class="gap-2.5">
 						<div>
-							<StatusBadge
-								name={a().StatusName}
-								colour={a().StatusColour || STATUS_FALLBACK_COLOUR}
-							/>
+							<StatusBadge name={a().StatusName} colour={a().StatusColour} />
 						</div>
 						<Show when={a().AppliedAt}>
 							{(date) => (

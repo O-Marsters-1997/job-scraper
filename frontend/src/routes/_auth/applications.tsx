@@ -6,9 +6,9 @@ import {
 } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Card } from "@/components/ui/card";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { useApplications } from "../../hooks/useApplications";
@@ -55,14 +55,6 @@ function ApplicationsPage() {
 		return status?.Colour ?? STATUS_FALLBACK_COLOUR;
 	};
 
-	const chipClass = (active: boolean) =>
-		cn(
-			"inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
-			active
-				? "border-primary bg-accent-subtle text-accent-text"
-				: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
-		);
-
 	return (
 		<div class="px-7 py-6">
 			<PageHeading
@@ -71,32 +63,28 @@ function ApplicationsPage() {
 			/>
 
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
-				<button
-					type="button"
+				<ToggleChip
+					active={!search().status}
 					onClick={() =>
 						navigate({ to: "/applications", search: { status: undefined } })
 					}
-					aria-pressed={!search().status}
-					class={chipClass(!search().status)}
 				>
 					All
-				</button>
+				</ToggleChip>
 				<For each={statusesQuery.data}>
 					{(s) => (
-						<button
-							type="button"
+						<ToggleChip
+							active={search().status === s.ID}
 							onClick={() =>
 								navigate({ to: "/applications", search: { status: s.ID } })
 							}
-							aria-pressed={search().status === s.ID}
-							class={chipClass(search().status === s.ID)}
 						>
 							<span
 								class="inline-block size-2 rounded-full"
 								style={{ background: s.Colour }}
 							/>
 							{s.Name}
-						</button>
+						</ToggleChip>
 					)}
 				</For>
 			</div>

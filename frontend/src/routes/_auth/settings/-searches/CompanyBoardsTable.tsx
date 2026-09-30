@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import { createMemo, For, Show } from "solid-js";
-import { Icon } from "@/components/Icon";
-import { SortableTableHead } from "@/components/SortableTableHead";
+import { Pager } from "@/components/Pager";
+import { SearchField } from "@/components/SearchField";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,12 +13,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import {
-	paginate,
-	relativeTime,
-	type SearchParams,
-	type SearchSortKey,
-} from "@/lib/searchTargets";
+import { paginate, relativeTime, type SearchParams } from "@/lib/searchTargets";
 import {
 	boardCounts,
 	COMPANY_PAGE_SIZE,
@@ -28,7 +23,13 @@ import {
 import { cn } from "@/lib/utils";
 import type { TrackedBoard, TrackedCompany } from "../../../../types/company";
 import type { SourceInfo } from "../../../../types/source";
-import { EnabledSwitch, FilterChips, Pager, SearchField } from "./parts";
+import {
+	DeleteIconButton,
+	EmptyRow,
+	EnabledSwitch,
+	FilterChips,
+	SortHead,
+} from "./parts";
 
 const ALL = "all";
 
@@ -74,34 +75,6 @@ export function CompanyBoardsTable(props: {
 		];
 	};
 
-	const head = (key: SearchSortKey, text: string, firstDir: "asc" | "desc") => {
-		const sorted = () =>
-			props.params.sort !== key
-				? ("none" as const)
-				: props.params.dir === "desc"
-					? ("descending" as const)
-					: ("ascending" as const);
-		return (
-			<SortableTableHead
-				sorted={sorted()}
-				onToggle={() =>
-					props.onParams({
-						sort: key,
-						dir:
-							props.params.sort === key
-								? props.params.dir === "desc"
-									? "asc"
-									: "desc"
-								: firstDir,
-						page: undefined,
-					})
-				}
-			>
-				{text}
-			</SortableTableHead>
-		);
-	};
-
 	return (
 		<div class="flex flex-col gap-3">
 			<div class="flex flex-wrap items-center gap-2">
@@ -143,10 +116,31 @@ export function CompanyBoardsTable(props: {
 					<Table>
 						<TableHeader>
 							<TableRow class="hover:bg-transparent">
-								{head("company", "Company", "asc")}
+								<SortHead
+									sortKey="company"
+									firstDir="asc"
+									params={props.params}
+									onParams={props.onParams}
+								>
+									Company
+								</SortHead>
 								<TableHead>Boards</TableHead>
-								{head("open", "Roles", "desc")}
-								{head("checked", "Last checked", "desc")}
+								<SortHead
+									sortKey="open"
+									firstDir="desc"
+									params={props.params}
+									onParams={props.onParams}
+								>
+									Roles
+								</SortHead>
+								<SortHead
+									sortKey="checked"
+									firstDir="desc"
+									params={props.params}
+									onParams={props.onParams}
+								>
+									Last checked
+								</SortHead>
 								<TableHead class="w-20">Active</TableHead>
 								<TableHead class="w-10" />
 							</TableRow>
@@ -155,16 +149,11 @@ export function CompanyBoardsTable(props: {
 							<For
 								each={paged().items}
 								fallback={
-									<TableRow class="hover:bg-transparent">
-										<TableCell
-											colSpan={6}
-											class="py-10 text-center text-sm text-muted"
-										>
-											{filtersActive()
-												? "No companies match these filters."
-												: "No tracked companies yet. Paste a company board URL above."}
-										</TableCell>
-									</TableRow>
+									<EmptyRow colSpan={6}>
+										{filtersActive()
+											? "No companies match these filters."
+											: "No tracked companies yet. Paste a company board URL above."}
+									</EmptyRow>
 								}
 							>
 								{(c) => {
@@ -240,15 +229,11 @@ export function CompanyBoardsTable(props: {
 												/>
 											</TableCell>
 											<TableCell>
-												<button
-													type="button"
-													onClick={() => props.onUntrack(c)}
-													aria-label={`Untrack ${c.name}`}
+												<DeleteIconButton
+													label={`Untrack ${c.name}`}
 													title="Untrack"
-													class="grid size-7 place-items-center rounded text-faint transition hover:bg-destructive-subtle hover:text-destructive-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-												>
-													<Icon name="trash" size={13} />
-												</button>
+													onClick={() => props.onUntrack(c)}
+												/>
 											</TableCell>
 										</TableRow>
 									);
