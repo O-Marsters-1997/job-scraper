@@ -15,6 +15,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 )
 
+type RoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f RoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 type DocsClient struct {
 	mu           sync.Mutex
 	connectErr   error
@@ -24,10 +28,6 @@ type DocsClient struct {
 	scopes       map[string]string
 	ExchangeErr  error
 }
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 type docFixture struct {
 	tabs []google.Tab
@@ -72,7 +72,7 @@ func (d *DocsClient) HTTPClientForUser(_ context.Context, userID string) (*http.
 	if d.linked != nil && !d.linked[userID] {
 		return nil, google.ErrTokenNotFound
 	}
-	return &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+	return &http.Client{Transport: RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		body := fmt.Sprintf(`{"email":"%s@example.com"}`, userID)
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
 	})}, nil

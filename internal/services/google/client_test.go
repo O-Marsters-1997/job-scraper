@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
+	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
@@ -64,7 +65,7 @@ func TestGetDocument(t *testing.T) {
 	}}
 
 	var gotURL string
-	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	transport := identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		gotURL = r.URL.String()
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(docTabsJSON))}, nil
 	})
@@ -190,7 +191,7 @@ func TestDriveWriteMethods(t *testing.T) {
 	var method, target, body string
 	status := http.StatusOK
 	respBody := `{"id":"new-doc"}`
-	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	transport := identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		method, target = r.Method, r.URL.String()
 		b, _ := io.ReadAll(r.Body)
 		body = string(b)
@@ -228,7 +229,3 @@ func TestDriveWriteMethods(t *testing.T) {
 		t.Error("DeleteFile on 403 = nil error")
 	}
 }
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

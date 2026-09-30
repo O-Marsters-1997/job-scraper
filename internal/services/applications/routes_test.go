@@ -1,9 +1,7 @@
 package applications_test
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -44,121 +42,44 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 
 func TestRoutesHappyPaths(t *testing.T) {
 	r := newTestRouter()
-	var statusID, appID string
 
-	t.Run("create status", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/application-statuses/", `{"name":"Applied","colour":"#6366f1"}`))
-		if w.Code != http.StatusCreated {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got dto.ApplicationStatus
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if got.Name != "Applied" {
-			t.Fatalf("name = %q, want Applied", got.Name)
-		}
-		statusID = got.ID
-	})
+	status := handlerstest.Do[dto.ApplicationStatus](t, r, http.StatusCreated,
+		"POST /application-statuses/", `{"name":"Applied","colour":"#6366f1"}`)
+	if status.Name != "Applied" {
+		t.Fatalf("created status name = %q, want Applied", status.Name)
+	}
 
-	t.Run("list statuses", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/application-statuses/", ""))
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got []dto.ApplicationStatus
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if len(got) != 1 {
-			t.Fatalf("got %d statuses, want 1", len(got))
-		}
-	})
+	statuses := handlerstest.Do[[]dto.ApplicationStatus](t, r, http.StatusOK, "GET /application-statuses/", "")
+	if len(statuses) != 1 {
+		t.Fatalf("got %d statuses, want 1", len(statuses))
+	}
 
-	t.Run("update status", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPatch, "/application-statuses/"+statusID, `{"name":"Applied!","colour":"#6366f1"}`))
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-	})
+	handlerstest.Do[struct{}](t, r, http.StatusOK,
+		"PATCH /application-statuses/"+status.ID, `{"name":"Applied!","colour":"#6366f1"}`)
 
-	t.Run("create application", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/applications/", `{"job_id":"job-1","status_id":"`+statusID+`"}`))
-		if w.Code != http.StatusCreated {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got dto.Application
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if got.JobID != "job-1" {
-			t.Fatalf("job_id = %q, want job-1", got.JobID)
-		}
-		appID = got.ID
-	})
+	app := handlerstest.Do[dto.Application](t, r, http.StatusCreated,
+		"POST /applications/", `{"job_id":"job-1","status_id":"`+status.ID+`"}`)
+	if app.JobID != "job-1" {
+		t.Fatalf("created job_id = %q, want job-1", app.JobID)
+	}
 
-	t.Run("list applications", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/applications/", ""))
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got []dto.ApplicationWithDetails
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if len(got) != 1 {
-			t.Fatalf("got %d applications, want 1", len(got))
-		}
-	})
+	apps := handlerstest.Do[[]dto.ApplicationWithDetails](t, r, http.StatusOK, "GET /applications/", "")
+	if len(apps) != 1 {
+		t.Fatalf("got %d applications, want 1", len(apps))
+	}
 
-	t.Run("update application", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPatch, "/applications/"+appID, `{"notes":"followed up"}`))
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got dto.Application
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if got.Notes != "followed up" {
-			t.Fatalf("notes = %q, want followed up", got.Notes)
-		}
-	})
+	updated := handlerstest.Do[dto.Application](t, r, http.StatusOK,
+		"PATCH /applications/"+app.ID, `{"notes":"followed up"}`)
+	if updated.Notes != "followed up" {
+		t.Fatalf("updated notes = %q, want followed up", updated.Notes)
+	}
 
-	t.Run("applications for jobs", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/applications/for-jobs?job_ids=job-1", ""))
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var got map[string]dto.JobApplicationSummary
-		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-			t.Fatal(err)
-		}
-		if _, ok := got["job-1"]; !ok {
-			t.Fatalf("got = %+v, want job-1 present", got)
-		}
-	})
+	summaries := handlerstest.Do[map[string]dto.JobApplicationSummary](t, r, http.StatusOK,
+		"GET /applications/for-jobs?job_ids=job-1", "")
+	if _, ok := summaries["job-1"]; !ok {
+		t.Fatalf("for-jobs = %+v, want job-1 present", summaries)
+	}
 
-	t.Run("delete application", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodDelete, "/applications/"+appID, ""))
-		if w.Code != http.StatusNoContent {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-	})
-
-	t.Run("delete status", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, handlerstest.Request(t, http.MethodDelete, "/application-statuses/"+statusID, ""))
-		if w.Code != http.StatusNoContent {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-	})
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /application-statuses/"+status.ID, "")
 }

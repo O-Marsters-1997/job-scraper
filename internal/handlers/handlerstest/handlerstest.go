@@ -4,6 +4,7 @@
 package handlerstest
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -87,4 +88,34 @@ func RejectsBadPathID(t *testing.T, h http.Handler, routes ...string) {
 			t.Errorf("%s with an unknown id: status = %d, want %d", route, w.Code, http.StatusNotFound)
 		}
 	}
+}
+
+func DecodeJSON[T any](t *testing.T, body []byte) T {
+	t.Helper()
+	var v T
+	if err := json.Unmarshal(body, &v); err != nil {
+		t.Fatalf("body %q is not JSON: %v", body, err)
+	}
+	return v
+}
+
+func Serve(t *testing.T, h http.Handler, route, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	method, path := splitRoute(t, route)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, Request(t, method, path, body))
+	return w
+}
+
+func Do[T any](t *testing.T, h http.Handler, wantStatus int, route, body string) T {
+	t.Helper()
+	w := Serve(t, h, route, body)
+	if w.Code != wantStatus {
+		t.Fatalf("%s = %d, want %d: %s", route, w.Code, wantStatus, w.Body)
+	}
+	var v T
+	if _, isEmpty := any(v).(struct{}); isEmpty || w.Body.Len() == 0 {
+		return v
+	}
+	return DecodeJSON[T](t, w.Body.Bytes())
 }

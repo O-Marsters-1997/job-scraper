@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
 func TestNew(t *testing.T) {
@@ -167,7 +168,7 @@ func TestMiddlewareNoRunIDHeader(t *testing.T) {
 
 func TestTransport(t *testing.T) {
 	var gotHeader string
-	base := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	base := identitytest.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		gotHeader = req.Header.Get(logger.HeaderRunID)
 		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 	})
@@ -187,7 +188,7 @@ func TestTransport(t *testing.T) {
 
 func TestTransportNoRunID(t *testing.T) {
 	var gotHeader string
-	base := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+	base := identitytest.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
 		gotHeader = req.Header.Get(logger.HeaderRunID)
 		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 	})
@@ -231,7 +232,3 @@ func TestSpanContextOverridesTraceID(t *testing.T) {
 		t.Errorf("%s = %v, want %s", logger.KeySpanID, got[logger.KeySpanID], spanID)
 	}
 }
-
-type roundTripperFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

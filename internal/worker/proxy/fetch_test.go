@@ -8,14 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
 
 const maxBodyBytes = 8 << 20
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func response(status int, code string) *http.Response {
 	return &http.Response{StatusCode: status, Header: http.Header{"X-Brd-Err-Code": []string{code}}, Body: io.NopCloser(strings.NewReader("ok"))}
@@ -34,14 +31,14 @@ func TestProtectedZonePausesOnlyOnExhaustion(t *testing.T) {
 	now := time.Date(2026, 9, 23, 23, 50, 0, 0, time.UTC)
 	zone := &proxy.ZoneGate{Now: func() time.Time { return now }}
 	calls := 0
-	protected := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	protected := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		calls++
 		if calls == 1 {
 			return response(502, "client_10100"), nil
 		}
 		return response(200, ""), nil
 	}), zone)
-	direct := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }), nil)
+	direct := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }), nil)
 	req := newRequest(t, "https://8.8.8.8/jobs")
 	if _, err := protected.RoundTrip(req); !proxy.IsZonePaused(err) {
 		t.Fatalf("exhaustion should pause source: %v", err)
@@ -69,7 +66,7 @@ func TestProtectedZonePausesOnlyOnExhaustion(t *testing.T) {
 }
 
 func TestFetchRejectsUnsafeDestinations(t *testing.T) {
-	tr := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return response(200, ""), nil
 	}), nil)
 	for _, raw := range []string{"file:///etc/passwd", "http://127.0.0.1/", "http://10.0.0.1/", "http://169.254.169.254/"} {
@@ -80,7 +77,7 @@ func TestFetchRejectsUnsafeDestinations(t *testing.T) {
 }
 
 func TestFetchRejectsOversizedBody(t *testing.T) {
-	tr := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(strings.Repeat("x", maxBodyBytes+1)))}, nil
 	}), nil)
 	resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/"))
@@ -95,7 +92,7 @@ func TestFetchRejectsOversizedBody(t *testing.T) {
 
 func TestRateLimitDoesNotPauseZone(t *testing.T) {
 	calls := 0
-	tr := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		calls++
 		if calls == 1 {
 			return response(429, "client_10110"), nil
@@ -117,7 +114,7 @@ func TestRateLimitDoesNotPauseZone(t *testing.T) {
 func TestInFlightSuccessDoesNotResumeExhaustedZone(t *testing.T) {
 	inFlight := make(chan struct{})
 	release := make(chan struct{})
-	tr := proxy.NewFetchTransport(roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path == "/slow" {
 			close(inFlight)
 			<-release
@@ -146,7 +143,7 @@ func TestInFlightSuccessDoesNotResumeExhaustedZone(t *testing.T) {
 func TestFetchLimitsConcurrentRequestsPerHost(t *testing.T) {
 	entered := make(chan struct{}, 3)
 	release := make(chan struct{})
-	tr := proxy.NewFetchTransport(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		entered <- struct{}{}
 		<-release
 		return response(200, ""), nil
