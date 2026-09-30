@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -23,74 +26,68 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 	return &buf
 }
 
-func accessLogLines(buf *bytes.Buffer) []map[string]any {
+func accessLogLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
+	t.Helper()
 	var lines []map[string]any
-	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line == "" {
 			continue
 		}
 		var m map[string]any
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			continue
+			t.Fatalf("Unmarshal(%s) err = %v", line, err)
 		}
-		if m["event"] == telemetry.EventHTTPRequest {
+		if m[logger.KeyEvent] == telemetry.EventHTTPRequest {
 			lines = append(lines, m)
 		}
 	}
 	return lines
 }
 
-func TestAccessLogEmitsHTTPRequestEvent(t *testing.T) {
+func serveOnce(t *testing.T, method, pattern, target string, status int) (*httptest.ResponseRecorder, []map[string]any) {
+	t.Helper()
 	buf := captureLogs(t)
-
 	r := chi.NewRouter()
 	r.Use(telemetry.AccessLog)
-	r.Get("/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTeapot)
-	})
+	r.MethodFunc(method, pattern, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) })
 
-	req := httptest.NewRequest(http.MethodGet, "/jobs/123", nil)
 	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	lines := accessLogLines(buf)
-	if len(lines) != 1 {
-		t.Fatalf("got %d http.request lines, want 1 (log: %s)", len(lines), buf.String())
-	}
-
-	line := lines[0]
-	if line["method"] != http.MethodGet {
-		t.Errorf("method = %v, want GET", line["method"])
-	}
-	if line["route"] != "/jobs/{id}" {
-		t.Errorf("route = %v, want /jobs/{id}", line["route"])
-	}
-	status, _ := line["status"].(float64)
-	if int(status) != http.StatusTeapot {
-		t.Errorf("status = %v, want %d", line["status"], http.StatusTeapot)
-	}
-	if _, ok := line["duration_ms"]; !ok {
-		t.Errorf("duration_ms missing from log line: %v", line)
-	}
+	r.ServeHTTP(rec, httptest.NewRequest(method, target, nil))
+	return rec, accessLogLines(t, buf)
 }
 
-func TestAccessLogSkipsOptions(t *testing.T) {
-	buf := captureLogs(t)
+func TestAccessLog(t *testing.T) {
+	t.Run("emits an http.request event", func(t *testing.T) {
+		_, lines := serveOnce(t, http.MethodGet, "/jobs/{id}", "/jobs/123", http.StatusTeapot)
+		if len(lines) != 1 {
+			t.Fatalf("got %d http.request lines, want 1", len(lines))
+		}
 
-	r := chi.NewRouter()
-	r.Use(telemetry.AccessLog)
-	r.Options("/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
+		want := map[string]any{
+			logger.KeyEvent:  telemetry.EventHTTPRequest,
+			logger.KeyMethod: http.MethodGet,
+			logger.KeyRoute:  "/jobs/{id}",
+			logger.KeyStatus: float64(http.StatusTeapot),
+		}
+		ignore := cmpopts.IgnoreMapEntries(func(k string, _ any) bool {
+			_, wanted := want[k]
+			return !wanted
+		})
+		if diff := cmp.Diff(want, lines[0], ignore); diff != "" {
+			t.Errorf("log line (-want +got):\n%s", diff)
+		}
+		if _, ok := lines[0][logger.KeyDurationMS]; !ok {
+			t.Errorf("%s missing from log line: %v", logger.KeyDurationMS, lines[0])
+		}
 	})
 
-	req := httptest.NewRequest(http.MethodOptions, "/jobs/123", nil)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d (OPTIONS handling must still run)", rec.Code, http.StatusNoContent)
-	}
-	if lines := accessLogLines(buf); len(lines) != 0 {
-		t.Errorf("got %d http.request lines for OPTIONS, want 0", len(lines))
-	}
+	t.Run("skips OPTIONS but still handles it", func(t *testing.T) {
+		rec, lines := serveOnce(t, http.MethodOptions, "/jobs/{id}", "/jobs/123", http.StatusNoContent)
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+		if len(lines) != 0 {
+			t.Errorf("got %d http.request lines for OPTIONS, want 0", len(lines))
+		}
+	})
 }

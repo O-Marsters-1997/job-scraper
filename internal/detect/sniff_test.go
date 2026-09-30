@@ -61,3 +61,18 @@ func TestSniffATS(t *testing.T) {
 		})
 	}
 }
+
+func FuzzSniffATS(f *testing.F) {
+	for _, seed := range []string{
+		`<script>window.config = {board: "https://boards.greenhouse.io/embed/job_board?for=acmecorp&b=true"};</script>`,
+		`<script>var apiUrl = "https://jobs.lever.co/acme/postings.json";</script>`,
+		`<div data-config='{"boardUrl":"https://jobs.ashbyhq.com/acme"}'></div>`,
+		`<script>var board = "https://acme.myworkdayjobs.com/en-US/careers";</script>`,
+		`<html><body><h1>Careers at Acme</h1></body></html>`,
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(_ *testing.T, body []byte) {
+		detect.SniffATS(body)
+	})
+}

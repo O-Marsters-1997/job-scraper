@@ -2,6 +2,7 @@ package telemetry_test
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -55,11 +56,11 @@ func freeAddr(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Listen() err = %v", err)
 	}
 	addr := ln.Addr().String()
 	if err := ln.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Close() err = %v", err)
 	}
 	return addr
 }
@@ -73,9 +74,11 @@ func waitForServing(t *testing.T, addr string) string {
 		resp, err := http.Get("http://" + addr + "/metrics")
 		if err == nil {
 			defer func() { _ = resp.Body.Close() }()
-			buf := make([]byte, 4096)
-			n, _ := resp.Body.Read(buf)
-			return string(buf[:n])
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("ReadAll(/metrics) err = %v", err)
+			}
+			return string(body)
 		}
 		<-ticker.C
 	}

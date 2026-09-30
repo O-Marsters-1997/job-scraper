@@ -31,22 +31,22 @@ func TestStatusFor(t *testing.T) {
 				t.Fatalf("StatusFor(%v) ok = false, want true", tc.err)
 			}
 			if status != tc.want {
-				t.Fatalf("StatusFor(%v) = %d, want %d", tc.err, status, tc.want)
+				t.Errorf("StatusFor(%v) = %d, want %d", tc.err, status, tc.want)
 			}
 		})
 	}
+
+	t.Run("plain error has no status", func(t *testing.T) {
+		if status, ok := apperr.StatusFor(errors.New("plain")); ok {
+			t.Errorf("StatusFor(plain error) = %d, true, want ok = false", status)
+		}
+	})
 }
 
-func TestStatusForUnkinded(t *testing.T) {
-	if _, ok := apperr.StatusFor(errors.New("plain")); ok {
-		t.Fatal("StatusFor(plain error) ok = true, want false")
-	}
-}
-
-func TestErrorIsStableSentinel(t *testing.T) {
-	var errConflict = apperr.Conflict("application already exists")
+func TestErrorsIs(t *testing.T) {
+	errConflict := apperr.Conflict("application already exists")
 	wrapped := fmt.Errorf("db.Create: %w", errConflict)
 	if !errors.Is(wrapped, errConflict) {
-		t.Fatal("errors.Is did not find the sentinel through the wrap")
+		t.Errorf("errors.Is(%v, %v) = false, want true", wrapped, errConflict)
 	}
 }

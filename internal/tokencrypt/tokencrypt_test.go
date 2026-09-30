@@ -11,7 +11,7 @@ func newCipher(t *testing.T, key string) *tokencrypt.Cipher {
 	t.Helper()
 	c, err := tokencrypt.New(base64.StdEncoding.EncodeToString([]byte(key)))
 	if err != nil {
-		t.Fatalf("New() error = %v", err)
+		t.Fatalf("New() err = %v", err)
 	}
 	return c
 }
@@ -33,7 +33,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := tokencrypt.New(tt.key); err == nil {
-				t.Fatalf("New(%q) error = nil, want error", tt.key)
+				t.Errorf("New(%q) err = nil, want error", tt.key)
 			}
 		})
 	}
@@ -45,7 +45,7 @@ func TestFromEnv(t *testing.T) {
 		t.Fatalf("FromEnv() error = %v", err)
 	}
 	if _, err := tokencrypt.FromEnv("TOKENCRYPT_TEST_UNSET"); err == nil {
-		t.Fatal("FromEnv(unset) error = nil, want error")
+		t.Error("FromEnv(unset) err = nil, want error")
 	}
 }
 
@@ -73,17 +73,17 @@ func TestDecrypt(t *testing.T) {
 	t.Run("rejects tampered ciphertext", func(t *testing.T) {
 		raw, err := base64.StdEncoding.DecodeString(encrypt(t))
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("DecodeString() err = %v", err)
 		}
 		raw[len(raw)-1] ^= 0xFF
 		if _, err := c.Decrypt(base64.StdEncoding.EncodeToString(raw)); err == nil {
-			t.Fatal("Decrypt(tampered) error = nil, want error")
+			t.Error("Decrypt(tampered) err = nil, want error")
 		}
 	})
 
 	t.Run("rejects wrong key", func(t *testing.T) {
 		if _, err := newCipher(t, otherKey).Decrypt(encrypt(t)); err == nil {
-			t.Fatal("Decrypt with another key error = nil, want error")
+			t.Error("Decrypt with another key err = nil, want error")
 		}
 	})
 }

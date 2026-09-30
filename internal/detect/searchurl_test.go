@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
 )
@@ -65,49 +66,52 @@ func TestParseSearchURL(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := detect.ParseSearchURL(tt.url)
-			if !ok {
-				t.Fatalf("ParseSearchURL(%q) ok = false, want true", tt.url)
-			}
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("ParseSearchURL(%q) mismatch (-want +got):\n%s", tt.url, diff)
-			}
-		})
-	}
-}
+	t.Run("parses", func(t *testing.T) {
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got, ok := detect.ParseSearchURL(tt.url)
+				if !ok {
+					t.Fatalf("ParseSearchURL(%q) ok = false, want true", tt.url)
+				}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("ParseSearchURL(%q) mismatch (-want +got):\n%s", tt.url, diff)
+				}
+			})
+		}
+	})
 
-func TestParseSearchURL_Rejects(t *testing.T) {
-	for _, raw := range []string{
-		"",
-		"not a url",
-		"https://example.com/jobs/search/?keywords=go",
-		"https://www.linkedin.com/jobs/view/1234567890",
-		"https://www.linkedin.com/jobs/collections/recommended/",
-		"https://www.indeed.com/viewjob?jk=abc",
-		"https://remoteok.com/remote-golang-jobs",
-	} {
-		t.Run(raw, func(t *testing.T) {
-			if got, ok := detect.ParseSearchURL(raw); ok {
-				t.Errorf("ParseSearchURL(%q) = %+v, want not ok", raw, got)
-			}
-		})
-	}
+	t.Run("rejects", func(t *testing.T) {
+		for _, raw := range []string{
+			"",
+			"not a url",
+			"https://example.com/jobs/search/?keywords=go",
+			"https://www.linkedin.com/jobs/view/1234567890",
+			"https://www.linkedin.com/jobs/collections/recommended/",
+			"https://www.indeed.com/viewjob?jk=abc",
+			"https://remoteok.com/remote-golang-jobs",
+		} {
+			t.Run(raw, func(t *testing.T) {
+				if got, ok := detect.ParseSearchURL(raw); ok {
+					t.Errorf("ParseSearchURL(%q) = %+v, want not ok", raw, got)
+				}
+			})
+		}
+	})
 }
 
 func TestUnsupportedBoard(t *testing.T) {
 	tests := []struct {
+		name string
 		url  string
 		want string
 	}{
-		{"https://remoteok.com/remote-golang-jobs", "RemoteOK"},
-		{"https://remotive.com/remote-jobs/software-dev", "Remotive"},
-		{"https://example.com/careers", ""},
-		{"nonsense", ""},
+		{"remoteok", "https://remoteok.com/remote-golang-jobs", "RemoteOK"},
+		{"remotive", "https://remotive.com/remote-jobs/software-dev", "Remotive"},
+		{"careers page", "https://example.com/careers", ""},
+		{"not a url", "nonsense", ""},
 	}
 	for _, tt := range tests {
-		t.Run(tt.url, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got, ok := detect.UnsupportedBoard(tt.url)
 			if got != tt.want || ok != (tt.want != "") {
 				t.Errorf("UnsupportedBoard(%q) = %q, %v, want %q", tt.url, got, ok, tt.want)
@@ -148,49 +152,78 @@ func TestBuildSearchURL(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestSearchURLRoundTrip(t *testing.T) {
-	linkedin := map[string]string{
-		"location": "London", "company_id": "1337", "recency": "r86400", "arrangement": "3",
-		"experience": "4", "job_type": "F", "geo_id": "101165590", "distance": "25", "salary_band": "5",
-	}
-	tests := []struct {
-		name    string
-		source  string
-		value   string
-		filters map[string]string
-	}{
-		{"linkedin every filter", "linkedin", "golang engineer", linkedin},
-		{"linkedin keywords only", "linkedin", "go", map[string]string{}},
-		{"wis region", "wis", "product engineer", map[string]string{"region": "uk"}},
-		{"wis keywords only", "wis", "go", map[string]string{}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			built := detect.BuildSearchURL(tt.source, tt.value, tt.filters)
-			parsed, ok := detect.ParseSearchURL(built)
+	t.Run("round trips through ParseSearchURL", func(t *testing.T) {
+		linkedin := map[string]string{
+			"location": "London", "company_id": "1337", "recency": "r86400", "arrangement": "3",
+			"experience": "4", "job_type": "F", "geo_id": "101165590", "distance": "25", "salary_band": "5",
+		}
+		tests := []struct {
+			name    string
+			source  string
+			value   string
+			filters map[string]string
+		}{
+			{"linkedin every filter", "linkedin", "golang engineer", linkedin},
+			{"linkedin keywords only", "linkedin", "go", map[string]string{}},
+			{"wis region", "wis", "product engineer", map[string]string{"region": "uk"}},
+			{"wis keywords only", "wis", "go", map[string]string{}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				built := detect.BuildSearchURL(tt.source, tt.value, tt.filters)
+				parsed, ok := detect.ParseSearchURL(built)
+				if !ok {
+					t.Fatalf("ParseSearchURL(%q) ok = false", built)
+				}
+				want := detect.SearchURL{Source: tt.source, Value: tt.value, Filters: tt.filters, Dropped: []string{}}
+				if diff := cmp.Diff(want, parsed); diff != "" {
+					t.Errorf("Parse(Build(...)) mismatch (-want +got):\n%s", diff)
+				}
+				if again := detect.BuildSearchURL(parsed.Source, parsed.Value, parsed.Filters); again != built {
+					t.Errorf("Build(Parse(%q)) = %q", built, again)
+				}
+			})
+		}
+
+		t.Run("indeed", func(t *testing.T) {
+			raw := "https://www.indeed.com/jobs?fromage=7&jt=fulltime&l=London&q=golang&radius=25&sort=date"
+			parsed, ok := detect.ParseSearchURL(raw)
 			if !ok {
-				t.Fatalf("ParseSearchURL(%q) ok = false", built)
+				t.Fatal("ok = false")
 			}
-			want := detect.SearchURL{Source: tt.source, Value: tt.value, Filters: tt.filters, Dropped: []string{}}
-			if diff := cmp.Diff(want, parsed); diff != "" {
-				t.Errorf("Parse(Build(...)) mismatch (-want +got):\n%s", diff)
-			}
-			if again := detect.BuildSearchURL(parsed.Source, parsed.Value, parsed.Filters); again != built {
-				t.Errorf("Build(Parse(%q)) = %q", built, again)
+			if got := detect.BuildSearchURL(parsed.Source, parsed.Value, parsed.Filters); got != raw {
+				t.Errorf("Build(Parse(%q)) = %q", raw, got)
 			}
 		})
-	}
+	})
+}
 
-	t.Run("indeed", func(t *testing.T) {
-		raw := "https://www.indeed.com/jobs?fromage=7&jt=fulltime&l=London&q=golang&radius=25&sort=date"
-		parsed, ok := detect.ParseSearchURL(raw)
+func FuzzParseSearchURL(f *testing.F) {
+	for _, seed := range []string{
+		"",
+		"not a url",
+		"https://www.linkedin.com/jobs/search-results/?currentJobId=4012345678&keywords=golang%20engineer&f_TPR=r604800&f_WT=2&geoId=101165590",
+		"https://uk.linkedin.com/jobs/search/?keywords=platform&location=London&start=50&utm_source=share",
+		"https://workinstartups.com/search?q=product+engineer&w=uk&p=3&per_page=50",
+		"https://uk.indeed.com/jobs?q=golang&l=London&vjk=abc123&start=10&fromage=7",
+		"https://www.linkedin.com/jobs/view/1234567890",
+		"https://remoteok.com/remote-golang-jobs",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		p, ok := detect.ParseSearchURL(raw)
 		if !ok {
-			t.Fatal("ok = false")
+			return
 		}
-		if got := detect.BuildSearchURL(parsed.Source, parsed.Value, parsed.Filters); got != raw {
-			t.Errorf("Build(Parse(%q)) = %q", raw, got)
+		built := detect.BuildSearchURL(p.Source, p.Value, p.Filters)
+		again, ok := detect.ParseSearchURL(built)
+		if !ok {
+			t.Fatalf("ParseSearchURL(BuildSearchURL(%+v)) ok = false, built %q", p, built)
+		}
+		if diff := cmp.Diff(p, again, cmpopts.IgnoreFields(detect.SearchURL{}, "Dropped")); diff != "" {
+			t.Errorf("round trip of %q (-want +got):\n%s", raw, diff)
 		}
 	})
 }

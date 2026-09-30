@@ -48,3 +48,19 @@ func TestParseDocID(t *testing.T) {
 		}
 	})
 }
+
+func FuzzParseDocID(f *testing.F) {
+	for _, seed := range []string{
+		"https://docs.google.com/document/d/DOCID/edit",
+		"https://docs.google.com/document/d/DOCID/edit?tab=t.0",
+		"/document/d/DOCID/edit",
+		"1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+		"not-a-url",
+		"",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(_ *testing.T, in string) {
+		_, _ = docref.ParseDocID(in)
+	})
+}
