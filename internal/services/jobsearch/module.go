@@ -56,6 +56,9 @@ type Store interface {
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 	SetLastScraped(ctx context.Context, source string) error
+	LookupFetch(ctx context.Context, url string) (dto.CachedResponse, bool, error)
+	PutFetch(ctx context.Context, resp dto.CachedResponse) error
+	ForgetFetches(ctx context.Context, urls []string) error
 }
 
 type Deps struct {

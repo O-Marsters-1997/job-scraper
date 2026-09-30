@@ -3,7 +3,7 @@
 One `*jobsdb.DB` implemented every `providers` interface, so every service could reach every table and constructors took `db` several times over (`suitability.New(db, db, db, …, db)`). The goal is locality and data ownership inside one process and one database. Pulling a context out into its own service is not planned.
 
 - **Contexts.**
-  - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, source targets with their run state, and tracked companies.
+  - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, the fetch cache (`fetch_cache`), source targets with their run state, and tracked companies.
   - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox`, Jev and notify. The answer-effect loop becomes `scoring.Run(ctx)`.
   - `applications`: applications and statuses.
   - `cvtemplates`: tracked docs and tabs.

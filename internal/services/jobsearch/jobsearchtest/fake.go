@@ -41,6 +41,7 @@ type FakeStore struct {
 	pollState map[string]*boardPollState
 
 	lastScraped map[string]time.Time
+	fetches     map[string]dto.CachedResponse
 
 	sourceTargets map[string]dto.SourceTarget
 	targetByKey   map[string]string
@@ -61,6 +62,7 @@ func NewFakeStore() *FakeStore {
 		boards:         make(map[string]dto.CompanyBoard),
 		pollState:      make(map[string]*boardPollState),
 		lastScraped:    make(map[string]time.Time),
+		fetches:        make(map[string]dto.CachedResponse),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
 		candidates:     make(map[string]sourcetargets.Candidate),
@@ -684,3 +686,26 @@ func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 }
 
 var _ Store = (*FakeStore)(nil)
+
+func (f *FakeStore) LookupFetch(_ context.Context, url string) (dto.CachedResponse, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	resp, ok := f.fetches[url]
+	return resp, ok, nil
+}
+
+func (f *FakeStore) PutFetch(_ context.Context, resp dto.CachedResponse) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fetches[resp.URL] = resp
+	return nil
+}
+
+func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, u := range urls {
+		delete(f.fetches, u)
+	}
+	return nil
+}

@@ -67,6 +67,7 @@ func main() {
 	defer func() { _ = q.Close() }()
 
 	js := jobsearch.New(pool, q, scoringModule)
+	proxy.SetCache(js)
 
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {

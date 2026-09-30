@@ -173,6 +173,14 @@ type EffectOutbox struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type FetchCache struct {
+	Url       string
+	Status    int32
+	Header    []byte
+	Body      []byte
+	FetchedAt pgtype.Timestamptz
+}
+
 type GoogleOauthToken struct {
 	ID              pgtype.UUID
 	UserID          pgtype.UUID
