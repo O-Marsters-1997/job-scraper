@@ -3,8 +3,11 @@ package jobsearchtest
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -29,6 +32,31 @@ func NewDeps(st Store) jobsearch.Deps {
 
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
+
+	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := context.Background()
+		want := dto.CachedResponse{URL: "https://x.test/a", Status: 302, Header: http.Header{"Location": {"https://x.test/b"}}, Body: []byte("body")}
+		if _, ok, err := st.LookupFetch(ctx, want.URL); ok || err != nil {
+			t.Fatalf("LookupFetch(empty) = %v, %v, want miss", ok, err)
+		}
+		if err := st.PutFetch(ctx, want); err != nil {
+			t.Fatal(err)
+		}
+		got, ok, err := st.LookupFetch(ctx, want.URL)
+		if err != nil || !ok {
+			t.Fatalf("LookupFetch = %v, %v, want hit", ok, err)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("LookupFetch (-want +got):\n%s", diff)
+		}
+		if err := st.ForgetFetches(ctx, []string{want.URL}); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := st.LookupFetch(ctx, want.URL); ok {
+			t.Error("LookupFetch after ForgetFetches hit, want miss")
+		}
+	})
 
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
 		st, _ := newStore(t)

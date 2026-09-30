@@ -1,10 +1,12 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -13,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
@@ -84,14 +87,58 @@ func (z *ZoneGate) result(exhausted, success, probe bool) {
 	}
 }
 
+type Cache interface {
+	LookupFetch(ctx context.Context, url string) (dto.CachedResponse, bool, error)
+	PutFetch(ctx context.Context, resp dto.CachedResponse) error
+}
+
+var sharedCache Cache
+
+// SetCache must be called before any proxied Fetcher is built.
+func SetCache(c Cache) { sharedCache = c }
+
 type fetchTransport struct {
-	base http.RoundTripper
-	zone *ZoneGate
+	base  http.RoundTripper
+	zone  *ZoneGate
+	cache Cache
+}
+
+func cachedResponse(req *http.Request, c dto.CachedResponse) *http.Response {
+	return &http.Response{
+		Status:        fmt.Sprintf("%d %s", c.Status, http.StatusText(c.Status)),
+		StatusCode:    c.Status,
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        c.Header,
+		Body:          io.NopCloser(bytes.NewReader(c.Body)),
+		ContentLength: int64(len(c.Body)),
+		Request:       req,
+	}
+}
+
+func storable(resp *http.Response) bool {
+	ok := resp.StatusCode == http.StatusOK || (resp.StatusCode >= 300 && resp.StatusCode < 400)
+	return ok && resp.Header.Get("X-Brd-Error") == "" && !strings.Contains(strings.ToLower(resp.Header.Get("Proxy-Status")), "error=")
 }
 
 func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err := ValidateURL(req.Context(), req.URL); err != nil {
 		return nil, err
+	}
+	var collector *Collector
+	if f.cache != nil {
+		collector, _ = req.Context().Value(collectorKey{}).(*Collector)
+	}
+	if collector != nil {
+		hit, found, err := f.cache.LookupFetch(req.Context(), req.URL.String())
+		if err != nil {
+			return nil, fmt.Errorf("fetch cache lookup: %w", err)
+		}
+		if found {
+			collector.add(req.URL.String())
+			return cachedResponse(req, hit), nil
+		}
 	}
 	probe := false
 	if f.zone != nil {
@@ -131,6 +178,22 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		if resp.StatusCode != http.StatusTooManyRequests || attempt == 1 {
 			resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
+			if collector != nil && storable(resp) {
+				body, err := io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+				held = false
+				if err != nil {
+					return nil, err
+				}
+				stored := dto.CachedResponse{URL: req.URL.String(), Status: resp.StatusCode, Header: resp.Header, Body: body}
+				if err := f.cache.PutFetch(req.Context(), stored); err != nil {
+					slog.ErrorContext(req.Context(), "fetch cache write failed", slog.String(logger.KeyURL, stored.URL), slog.Any(logger.KeyErr, err))
+				} else {
+					collector.add(stored.URL)
+				}
+				resp.Body = io.NopCloser(bytes.NewReader(body))
+				return resp, nil
+			}
 			held = false
 			return resp, nil
 		}
@@ -225,7 +288,7 @@ func Fetcher(useProxy bool) (http.RoundTripper, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &fetchTransport{base: base, zone: sharedZone}, nil
+		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache}, nil
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
@@ -273,6 +336,6 @@ func Probe(ctx context.Context) error {
 	return nil
 }
 
-func NewFetchTransport(base http.RoundTripper, zone *ZoneGate) http.RoundTripper {
-	return &fetchTransport{base: base, zone: zone}
+func NewFetchTransport(base http.RoundTripper, zone *ZoneGate, cache Cache) http.RoundTripper {
+	return &fetchTransport{base: base, zone: zone, cache: cache}
 }

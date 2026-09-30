@@ -14,6 +14,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
@@ -65,11 +66,16 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		if fetcher == nil {
 			return fmt.Errorf("source %s cannot fetch details", task.Source)
 		}
+		ctx, fetches := proxy.WithCollector(ctx)
 		job, err := fetcher.GetDetails(ctx, task.URL)
 		if err != nil {
 			return err
 		}
-		return p.exporter.Export(ctx, job)
+		if err := p.exporter.Export(ctx, job); err != nil {
+			return err
+		}
+		p.forgetFetches(ctx, fetches)
+		return nil
 	case queue.ListingPageTask:
 		return p.processPage(ctx, task)
 	case queue.BoardCheckTask:
@@ -78,6 +84,12 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		return p.verifyBoard(ctx, task)
 	default:
 		return fmt.Errorf("unsupported task kind %s", task.Kind)
+	}
+}
+
+func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
+	if err := p.js.ForgetFetches(ctx, c.URLs()); err != nil {
+		slog.ErrorContext(ctx, "forget fetch cache failed", slog.Any(logger.KeyErr, err))
 	}
 }
 

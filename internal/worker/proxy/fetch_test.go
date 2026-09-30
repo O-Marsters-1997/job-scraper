@@ -47,8 +47,8 @@ func TestProtectedZonePausesOnlyOnExhaustion(t *testing.T) {
 			return response(502, "client_10100"), nil
 		}
 		return response(200, ""), nil
-	}), zone)
-	direct := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }), nil)
+	}), zone, nil)
+	direct := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }), nil, nil)
 	req := newRequest(t, "https://8.8.8.8/jobs")
 	if _, err := protected.RoundTrip(req); !proxy.IsZonePaused(err) {
 		t.Fatalf("exhaustion should pause source: %v", err)
@@ -78,7 +78,7 @@ func TestProtectedZonePausesOnlyOnExhaustion(t *testing.T) {
 func TestFetchRejectsUnsafeDestinations(t *testing.T) {
 	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return response(200, ""), nil
-	}), nil)
+	}), nil, nil)
 	for _, raw := range []string{"file:///etc/passwd", "http://127.0.0.1/", "http://10.0.0.1/", "http://169.254.169.254/"} {
 		if _, err := tr.RoundTrip(newRequest(t, raw)); err == nil {
 			t.Errorf("accepted %s", raw)
@@ -89,7 +89,7 @@ func TestFetchRejectsUnsafeDestinations(t *testing.T) {
 func TestFetchRejectsOversizedBody(t *testing.T) {
 	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(strings.Repeat("x", maxBodyBytes+1)))}, nil
-	}), nil)
+	}), nil, nil)
 	resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/"))
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestRateLimitDoesNotPauseZone(t *testing.T) {
 			return response(429, "client_10110"), nil
 		}
 		return response(200, ""), nil
-	}), &proxy.ZoneGate{})
+	}), &proxy.ZoneGate{}, nil)
 	for range 2 {
 		resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/"))
 		if err != nil {
@@ -132,7 +132,7 @@ func TestInFlightSuccessDoesNotResumeExhaustedZone(t *testing.T) {
 				return response(200, ""), nil
 			}
 			return response(502, "client_10100"), nil
-		}), &proxy.ZoneGate{})
+		}), &proxy.ZoneGate{}, nil)
 		slow := newRequest(t, freshURL("/slow"))
 		exhaust := newRequest(t, freshURL("/exhaust"))
 		next := newRequest(t, freshURL("/next"))
@@ -161,7 +161,7 @@ func TestFetchLimitsConcurrentRequestsPerHost(t *testing.T) {
 			entered.Add(1)
 			<-release
 			return response(200, ""), nil
-		}), nil)
+		}), nil, nil)
 		target := freshURL("/jobs")
 		requests := []*http.Request{newRequest(t, target), newRequest(t, target), newRequest(t, target)}
 		for _, req := range requests {

@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,9 +14,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
+	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/worker"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
@@ -24,6 +27,30 @@ type detailStub struct{ err error }
 
 func (d detailStub) GetDetails(_ context.Context, url string) (dto.Job, error) {
 	return dto.Job{Source: "wis", Title: "Job", URL: url}, d.err
+}
+
+const fetchedURL = "https://8.8.8.8/job"
+
+type fetchingDetailer struct{ client *http.Client }
+
+func newFetchingDetailer(cache proxy.Cache) fetchingDetailer {
+	upstream := identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("page"))}, nil
+	})
+	return fetchingDetailer{client: &http.Client{Transport: proxy.NewFetchTransport(upstream, nil, cache)}}
+}
+
+func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchedURL, nil)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	_ = resp.Body.Close()
+	return dto.Job{Source: "wis", Title: "Job", URL: url}, nil
 }
 
 type pageSource struct{ next string }
@@ -98,6 +125,7 @@ func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 		Exporter:     exporter,
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},
+			"indeed":   newFetchingDetailer(store),
 			"linkedin": detailStub{err: errors.New("page gone")},
 		},
 	})
@@ -164,7 +192,7 @@ func TestProcess(t *testing.T) {
 		wantIngestHits int32
 	}{
 		{"unsupported task kind fails without exporting", queue.Task{Source: "wis", Kind: "bogus"}, http.StatusOK, 0},
-		{"source without a detail fetcher fails without exporting", queuetest.DetailTask("indeed"), http.StatusOK, 0},
+		{"source without a detail fetcher fails without exporting", queuetest.DetailTask("ziprecruiter"), http.StatusOK, 0},
 		{"detail fetch failure is returned for requeue", queuetest.DetailTask("linkedin"), http.StatusOK, 0},
 		{"transient ingest failure is returned for requeue", queuetest.DetailTask("wis"), http.StatusServiceUnavailable, 3},
 	}
@@ -179,6 +207,26 @@ func TestProcess(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("detail task forgets its cached fetches once exported", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		if err := f.processor.Process(ctx, queuetest.DetailTask("indeed")); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := f.store.LookupFetch(ctx, fetchedURL); ok {
+			t.Fatal("cached fetch still present after a successful task")
+		}
+	})
+
+	t.Run("detail task keeps its cached fetches when the export fails", func(t *testing.T) {
+		f := newFixture(t, http.StatusServiceUnavailable, "")
+		if err := f.processor.Process(ctx, queuetest.DetailTask("indeed")); err == nil {
+			t.Fatal("Process() = nil, want export error")
+		}
+		if _, ok, _ := f.store.LookupFetch(ctx, fetchedURL); !ok {
+			t.Fatal("cached fetch missing after a failed task, want it kept for the retry")
+		}
+	})
 
 	t.Run("redelivered page task for a finished run does not scrape again", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
