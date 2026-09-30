@@ -14,7 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -23,7 +22,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
-	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -116,34 +114,8 @@ func main() {
 		}
 	}
 	reconcile := func() {
-		targets, err := js.Targets().ListRecoverableSourceTargets(ctx)
-		if err != nil {
+		if err := js.RecoverRuns(ctx); err != nil {
 			slog.ErrorContext(ctx, "list recoverable runs failed", slog.Any(logger.KeyErr, err))
-			return
-		}
-		for _, target := range targets {
-			target, err = js.Targets().ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
-			if errors.Is(err, data.ErrNotFound) {
-				continue
-			}
-			if err != nil {
-				slog.ErrorContext(ctx, "claim recoverable run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
-				continue
-			}
-			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: target.Source, TargetID: target.ID, RunID: target.RunID, Recovery: true}
-			if role, _ := sourcespec.SourceRole(target.Source); role == sourcespec.RoleATS {
-				boardID, err := js.Boards().GetVerifiedBoardID(ctx, target.Source, target.Value)
-				if err != nil {
-					slog.ErrorContext(ctx, "recover Board run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
-					continue
-				}
-				task.Kind, task.BoardID, task.Manual = queue.BoardCheckTask, boardID, true
-			} else {
-				task.Kind = queue.ListingPageTask
-			}
-			if err := q.Publish(ctx, task); err != nil {
-				slog.ErrorContext(ctx, "recover run publish failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
-			}
 		}
 	}
 	go reconcile()

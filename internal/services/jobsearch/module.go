@@ -18,6 +18,7 @@ type Module struct {
 	store         Store
 	jobs          *Service
 	sourceTargets *sourcetargets.Service
+	queue         QueuePublisher
 }
 
 type ScoringPort interface {
@@ -69,6 +70,7 @@ func Build(deps Deps) *Module {
 		store:         deps.Store,
 		jobs:          NewService(deps.Store, deps.Queue),
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
+		queue:         deps.Queue,
 	}
 }
 
