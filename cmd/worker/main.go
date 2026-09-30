@@ -17,7 +17,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/schedule"
@@ -41,7 +40,6 @@ import (
 
 func main() {
 	forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
-	noScrape := flag.Bool("no-scrape", false, "skip new scheduled Board checks")
 	flag.Parse()
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -88,30 +86,14 @@ func main() {
 		},
 	})
 	cr := cron.New()
-	if !*noScrape {
-		publishBoards := func() {
-			var boards []dto.BoardPoll
-			var err error
-			if *forceBoards {
-				boards, err = js.Boards().ListActiveBoards(ctx)
-			} else {
-				boards, err = js.Boards().ListDueBoards(ctx)
-			}
-			if err != nil {
-				slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
-				return
-			}
-			for _, board := range boards {
-				task := queue.Task{Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: *forceBoards}
-				if err := q.Publish(ctx, task); err != nil {
-					slog.ErrorContext(ctx, "publish Board check failed", slog.String(logger.KeyBoardID, board.ID), slog.Any(logger.KeyErr, err))
-				}
-			}
+	publishBoards := func() {
+		if err := js.PublishBoardChecks(ctx, *forceBoards); err != nil {
+			slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
 		}
-		go publishBoards()
-		if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
-			fatal(ctx, "Board schedule failed", err)
-		}
+	}
+	go publishBoards()
+	if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
+		fatal(ctx, "Board schedule failed", err)
 	}
 	reconcile := func() {
 		targets, err := js.Targets().ListRecoverableSourceTargets(ctx)

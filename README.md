@@ -22,7 +22,7 @@ Requires Go 1.26, Docker, `just`, `goose`, and `sqlc` for query generation.
 2. Run `just up`, then `just migrate-up`.
 3. Run `just build` or start the API and worker with `just run-api` and `just run`.
 
-The worker needs `API_BASE_URL` and the same `INGEST_SERVICE_TOKEN` as the API. RabbitMQ management is exposed only on `127.0.0.1:15672` by Compose. The API and worker each make their own broker connection. `--no-scrape` suppresses new scheduled Board starts while draining accepted tasks; `--scrape-now` requests active verified Board checks without changing their cadence.
+The worker needs `API_BASE_URL` and the same `INGEST_SERVICE_TOKEN` as the API. RabbitMQ management is exposed only on `127.0.0.1:15672` by Compose. The API and worker each make their own broker connection. `--scrape-now` requests active verified Board checks without changing their cadence.
 
 ## Source Targets and Boards
 
