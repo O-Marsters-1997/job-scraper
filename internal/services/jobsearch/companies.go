@@ -2,7 +2,6 @@ package jobsearch
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -106,52 +105,4 @@ func (s *Service) AddCompanyBoard(ctx context.Context, _ string, in dto.AddCompa
 		}
 	}
 	return board, nil
-}
-
-func (s *Service) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
-	return s.store.UpsertCompany(ctx, c)
-}
-
-func (s *Service) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error) {
-	return s.store.ListCompaniesToCrawl(ctx, limit)
-}
-
-func (s *Service) TouchCompanyCrawled(ctx context.Context, id string) error {
-	return s.store.TouchCompanyCrawled(ctx, id)
-}
-
-func (s *Service) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
-	return s.store.VerifyCompanyBoard(ctx, companyID, source, token, method)
-}
-
-func (s *Service) ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error) {
-	return s.store.ListDueBoards(ctx)
-}
-
-func (s *Service) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
-	return s.store.ListActiveBoards(ctx)
-}
-
-func (s *Service) ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error) {
-	return s.store.ClaimBoard(ctx, id, manual)
-}
-
-func (s *Service) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error {
-	return s.store.CompleteBoard(ctx, snapshot)
-}
-
-func (s *Service) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
-	return s.store.FailBoard(ctx, poll)
-}
-
-func (s *Service) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
-	return s.store.GetVerifiedBoardID(ctx, source, token)
-}
-
-func (s *Service) GetLastScraped(ctx context.Context, source string) (time.Time, bool, error) {
-	return s.store.GetLastScraped(ctx, source)
-}
-
-func (s *Service) SetLastScraped(ctx context.Context, source string) error {
-	return s.store.SetLastScraped(ctx, source)
 }

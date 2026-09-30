@@ -17,123 +17,113 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, linkedin.New(linkedin.Search{}))
+	sourcetest.RunSnapshotTests(t, linkedin.New("", nil))
 }
 
 func FuzzParse(f *testing.F) {
-	sourcetest.FuzzSnapshots(f, linkedin.New(linkedin.Search{}))
+	sourcetest.FuzzSnapshots(f, linkedin.New("", nil))
 }
 
 func TestFetchPage_SearchQuery(t *testing.T) {
 	tests := []struct {
-		name   string
-		search linkedin.Search
-		want   map[string]string
+		name     string
+		keywords string
+		filters  map[string]string
+		want     map[string]string
 	}{
 		{
-			name:   "keywords only, no filters set",
-			search: linkedin.Search{Keywords: "engineer"},
-			want:   map[string]string{"keywords": "engineer"},
+			name:     "keywords only, no filters set",
+			keywords: "engineer",
+			want:     map[string]string{"keywords": "engineer"},
 		},
 		{
-			name:   "location set",
-			search: linkedin.Search{Keywords: "engineer", Location: "London"},
-			want:   map[string]string{"keywords": "engineer", "location": "London"},
+			name:     "location set",
+			keywords: "engineer", filters: map[string]string{"location": "London"},
+			want: map[string]string{"keywords": "engineer", "location": "London"},
 		},
 		{
-			name:   "valid company_id",
-			search: linkedin.Search{CompanyID: "12345"},
-			want:   map[string]string{"f_C": "12345"},
+			name:     "valid company_id",
+			keywords: "", filters: map[string]string{"company_id": "12345"},
+			want: map[string]string{"f_C": "12345"},
 		},
 		{
-			name:   "invalid company_id dropped",
-			search: linkedin.Search{CompanyID: "not-a-number"},
-			want:   map[string]string{},
+			name:     "invalid company_id dropped",
+			keywords: "", filters: map[string]string{"company_id": "not-a-number"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid recency",
-			search: linkedin.Search{Recency: "r86400"},
-			want:   map[string]string{"f_TPR": "r86400"},
+			name:     "valid recency",
+			keywords: "", filters: map[string]string{"recency": "r86400"},
+			want: map[string]string{"f_TPR": "r86400"},
 		},
 		{
-			name:   "invalid recency dropped",
-			search: linkedin.Search{Recency: "r1"},
-			want:   map[string]string{},
+			name:     "invalid recency dropped",
+			keywords: "", filters: map[string]string{"recency": "r1"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid arrangement",
-			search: linkedin.Search{Arrangement: "2"},
-			want:   map[string]string{"f_WT": "2"},
+			name:     "valid arrangement",
+			keywords: "", filters: map[string]string{"arrangement": "2"},
+			want: map[string]string{"f_WT": "2"},
 		},
 		{
-			name:   "invalid arrangement dropped",
-			search: linkedin.Search{Arrangement: "9"},
-			want:   map[string]string{},
+			name:     "invalid arrangement dropped",
+			keywords: "", filters: map[string]string{"arrangement": "9"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid experience",
-			search: linkedin.Search{Experience: "3"},
-			want:   map[string]string{"f_E": "3"},
+			name:     "valid experience",
+			keywords: "", filters: map[string]string{"experience": "3"},
+			want: map[string]string{"f_E": "3"},
 		},
 		{
-			name:   "invalid experience dropped",
-			search: linkedin.Search{Experience: "7"},
-			want:   map[string]string{},
+			name:     "invalid experience dropped",
+			keywords: "", filters: map[string]string{"experience": "7"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid job_type",
-			search: linkedin.Search{JobType: "F"},
-			want:   map[string]string{"f_JT": "F"},
+			name:     "valid job_type",
+			keywords: "", filters: map[string]string{"job_type": "F"},
+			want: map[string]string{"f_JT": "F"},
 		},
 		{
-			name:   "invalid job_type dropped",
-			search: linkedin.Search{JobType: "X"},
-			want:   map[string]string{},
+			name:     "invalid job_type dropped",
+			keywords: "", filters: map[string]string{"job_type": "X"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid geo_id",
-			search: linkedin.Search{GeoID: "103644278"},
-			want:   map[string]string{"geoId": "103644278"},
+			name:     "valid geo_id",
+			keywords: "", filters: map[string]string{"geo_id": "103644278"},
+			want: map[string]string{"geoId": "103644278"},
 		},
 		{
-			name:   "invalid geo_id dropped",
-			search: linkedin.Search{GeoID: "abc"},
-			want:   map[string]string{},
+			name:     "invalid geo_id dropped",
+			keywords: "", filters: map[string]string{"geo_id": "abc"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid distance",
-			search: linkedin.Search{Distance: "25"},
-			want:   map[string]string{"f_D": "25"},
+			name:     "valid distance",
+			keywords: "", filters: map[string]string{"distance": "25"},
+			want: map[string]string{"f_D": "25"},
 		},
 		{
-			name:   "invalid distance dropped",
-			search: linkedin.Search{Distance: "far"},
-			want:   map[string]string{},
+			name:     "invalid distance dropped",
+			keywords: "", filters: map[string]string{"distance": "far"},
+			want: map[string]string{},
 		},
 		{
-			name:   "valid salary_band",
-			search: linkedin.Search{SalaryBand: "5"},
-			want:   map[string]string{"f_SB2": "5"},
+			name:     "valid salary_band",
+			keywords: "", filters: map[string]string{"salary_band": "5"},
+			want: map[string]string{"f_SB2": "5"},
 		},
 		{
-			name:   "invalid salary_band dropped",
-			search: linkedin.Search{SalaryBand: "0"},
-			want:   map[string]string{},
+			name:     "invalid salary_band dropped",
+			keywords: "", filters: map[string]string{"salary_band": "0"},
+			want: map[string]string{},
 		},
 		{
-			name: "all filters set together",
-			search: linkedin.Search{
-				Keywords:    "engineer",
-				Location:    "London",
-				CompanyID:   "12345",
-				Recency:     "r86400",
-				Arrangement: "2",
-				Experience:  "3",
-				JobType:     "F",
-				GeoID:       "103644278",
-				Distance:    "25",
-				SalaryBand:  "5",
-			},
+			name:     "all filters set together",
+			keywords: "engineer", filters: map[string]string{"location": "London", "company_id": "12345", "recency": "r86400", "arrangement": "2", "experience": "3", "job_type": "F", "geo_id": "103644278", "distance": "25", "salary_band": "5"},
 			want: map[string]string{
 				"keywords": "engineer",
 				"location": "London",
@@ -154,7 +144,7 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 			t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 			t.Setenv("BRIGHTDATA_CA_CERT", "")
 			var requested *url.URL
-			src := linkedin.New(tt.search)
+			src := linkedin.New(tt.keywords, tt.filters)
 			src.Client().Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				requested = r.URL
 				return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader("<html></html>"))}, nil

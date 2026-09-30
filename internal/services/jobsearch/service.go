@@ -73,10 +73,6 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	return page, nil
 }
 
-func (s *Service) NewURLs(ctx context.Context, urls []string) ([]string, error) {
-	return s.store.NewURLs(ctx, urls)
-}
-
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	job, err := s.store.GetJob(ctx, id, userID)
 	switch {

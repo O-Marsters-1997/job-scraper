@@ -20,7 +20,7 @@ import (
 
 var parsers = map[string]sources.SnapshotSource{
 	"wis":      wis.New(wis.Search{}),
-	"linkedin": linkedin.New(linkedin.Search{}),
+	"linkedin": linkedin.New("", nil),
 	"indeed":   indeed.New(""),
 }
 

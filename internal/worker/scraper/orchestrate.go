@@ -34,36 +34,16 @@ type Orchestrator struct {
 	candidates  CandidateCapturer
 }
 
-func New(db URLChecker) *Orchestrator {
-	return &Orchestrator{db: db}
-}
-
-func (o *Orchestrator) WithSourceBuilder(build func(dto.SourceTarget) (sources.Source, bool)) *Orchestrator {
-	o.buildTarget = build
-	return o
-}
-
-func (o *Orchestrator) WithRejectFilter(cfgDB SearchConfigReader) {
-	o.cfgDB = cfgDB
-}
-
-func (o *Orchestrator) WithCandidates(capturer CandidateCapturer) *Orchestrator {
-	o.candidates = capturer
-	return o
+func New(db URLChecker, cfgDB SearchConfigReader, buildTarget func(dto.SourceTarget) (sources.Source, bool), candidates CandidateCapturer) *Orchestrator {
+	return &Orchestrator{db: db, cfgDB: cfgDB, buildTarget: buildTarget, candidates: candidates}
 }
 
 func (o *Orchestrator) searchConfig(ctx context.Context, target dto.SourceTarget) (dto.SearchConfig, error) {
-	config := dto.SearchConfig{UserID: target.UserID}
-	if o.cfgDB != nil {
-		stored, err := o.cfgDB.SearchConfig(ctx, target.UserID)
-		if err != nil && !errors.Is(err, data.ErrNotFound) {
-			return config, err
-		}
-		if err == nil {
-			config = stored
-		}
+	stored, err := o.cfgDB.SearchConfig(ctx, target.UserID)
+	if errors.Is(err, data.ErrNotFound) {
+		return dto.SearchConfig{UserID: target.UserID}, nil
 	}
-	return config, nil
+	return stored, err
 }
 
 func rewriteCards(cards []dto.Job) {
@@ -77,9 +57,6 @@ func rewriteCards(cards []dto.Job) {
 }
 
 func (o *Orchestrator) ScrapePage(ctx context.Context, target dto.SourceTarget, cursor string) (string, error) {
-	if o.buildTarget == nil || o.candidates == nil {
-		return "", fmt.Errorf("discovery page processor unavailable")
-	}
 	src, ok := o.buildTarget(target)
 	if !ok {
 		return "", fmt.Errorf("unsupported source for target %s", target.ID)
