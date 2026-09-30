@@ -1,5 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import {
+	TrackApplicationDialog,
+	toExistingApp,
+} from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Card } from "@/components/ui/card";
@@ -10,7 +14,6 @@ import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { useApplications } from "../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../types/application";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
-import { EditApplicationDialog } from "./-applications/EditApplicationDialog";
 
 export const Route = createFileRoute("/_auth/applications")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -30,6 +33,16 @@ function ApplicationsPage() {
 		createSignal<ApplicationWithDetails | null>(null);
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
+
+	const editing = () => {
+		const app = editingApp();
+		return app
+			? {
+					job: { ID: app.JobID, Title: app.JobTitle },
+					existing: toExistingApp(app),
+				}
+			: undefined;
+	};
 
 	const openEdit = (app: ApplicationWithDetails) => {
 		setEditingApp(app);
@@ -146,10 +159,11 @@ function ApplicationsPage() {
 				)}
 			</QueryBoundary>
 
-			<EditApplicationDialog
-				app={editingApp()}
+			<TrackApplicationDialog
 				open={modalOpen()}
 				onOpenChange={setModalOpen}
+				job={editing()?.job}
+				existingApp={editing()?.existing}
 			/>
 
 			<DeleteApplicationDialog

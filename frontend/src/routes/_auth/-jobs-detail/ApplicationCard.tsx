@@ -10,7 +10,6 @@ import type { ApplicationWithDetails } from "@/types/application";
 export function ApplicationCard(props: {
 	app: ApplicationWithDetails | undefined;
 	onTrack: () => void;
-	onEdit: () => void;
 }) {
 	return (
 		<Card>
@@ -66,7 +65,7 @@ export function ApplicationCard(props: {
 								variant="outline"
 								size="sm"
 								class="w-full"
-								onClick={props.onEdit}
+								onClick={props.onTrack}
 							>
 								Edit
 							</Button>

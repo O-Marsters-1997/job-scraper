@@ -55,7 +55,7 @@ export function toExistingApp(app: Application): ExistingApp {
 interface TrackApplicationDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	job: Job | undefined;
+	job: Pick<Job, "ID" | "Title"> | undefined;
 	existingApp?: ExistingApp | undefined;
 }
 
@@ -82,7 +82,7 @@ export function TrackApplicationDialog(props: TrackApplicationDialogProps) {
 }
 
 function TrackApplicationForm(props: {
-	job: Job | undefined;
+	job: Pick<Job, "ID" | "Title"> | undefined;
 	existingApp?: ExistingApp | undefined;
 	onClose: () => void;
 }) {

@@ -1,26 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createSignal, For, Show } from "solid-js";
-import { DetailBoundary } from "@/components/DetailBoundary";
+import { For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
-import {
-	TrackApplicationDialog,
-	toApplicationSummary,
-	toExistingApp,
-} from "@/components/jobs/TrackApplicationDialog";
+import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type {
-	ApplicationWithDetails,
-	JobApplicationSummary,
-} from "@/types/application";
-import {
-	applicationsQueryOptions,
-	useApplications,
-} from "../../hooks/useApplications";
+import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { jobQueryOptions, useJob } from "../../hooks/useJobs";
+import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
@@ -38,32 +28,14 @@ export const Route = createFileRoute("/_auth/jobs_/$id")({
 function JobDetailPage() {
 	const params = Route.useParams();
 	const jobsQuery = useJob(() => params().id);
-	const appsQuery = useApplications();
+	const track = useTrackJobs(() => (jobsQuery.data ? [jobsQuery.data] : []));
 
-	const app = (): ApplicationWithDetails | undefined =>
-		appsQuery.data?.find((a) => a.JobID === params().id);
-	const appSummary = (): JobApplicationSummary | undefined => {
-		const a = app();
-		return a && toApplicationSummary(a);
-	};
-
-	const [modalOpen, setModalOpen] = createSignal(false);
-
-	const openTrack = () => setModalOpen(true);
-	const openEdit = () => {
-		if (!app()) return;
-		setModalOpen(true);
-	};
-
-	const existingApp = () => {
-		const a = app();
-		return a ? toExistingApp(a) : undefined;
-	};
+	const app = () =>
+		track.applications.data?.find((a) => a.JobID === params().id);
 
 	return (
-		<DetailBoundary
+		<QueryBoundary
 			query={jobsQuery}
-			data={jobsQuery.data}
 			notFound={
 				<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
 					<Icon name="zoomIn" size={40} strokeWidth={1.5} class="text-faint" />
@@ -87,9 +59,8 @@ function JobDetailPage() {
 					<JobHeader
 						job={j()}
 						app={app()}
-						appSummary={appSummary()}
-						onTrack={openTrack}
-						onEdit={openEdit}
+						appSummary={track.appsForJobs()[params().id]}
+						onTrack={() => track.openTrack(params().id)}
 					/>
 
 					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
@@ -147,20 +118,19 @@ function JobDetailPage() {
 
 							<ApplicationCard
 								app={app()}
-								onTrack={openTrack}
-								onEdit={openEdit}
+								onTrack={() => track.openTrack(params().id)}
 							/>
 						</div>
 					</div>
 
 					<TrackApplicationDialog
-						open={modalOpen()}
-						onOpenChange={setModalOpen}
-						job={j()}
-						existingApp={existingApp()}
+						open={track.modalOpen()}
+						onOpenChange={track.setModalOpen}
+						job={track.currentJob()}
+						existingApp={track.existingApp()}
 					/>
 				</div>
 			)}
-		</DetailBoundary>
+		</QueryBoundary>
 	);
 }

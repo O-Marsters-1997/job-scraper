@@ -14,7 +14,6 @@ import { ScoreCircle } from "./ScoreCircle";
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
-	onEdit: (jobId: string) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -172,7 +171,6 @@ export function createJobColumns(
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}
 						onTrack={() => ctx.onTrack(info.row.original.ID)}
-						onEdit={() => ctx.onEdit(info.row.original.ID)}
 					/>
 				</div>
 			),

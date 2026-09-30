@@ -31,7 +31,6 @@ export function JobHeader(props: {
 	app: ApplicationWithDetails | undefined;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
-	onEdit: () => void;
 }) {
 	const navigate = useNavigate();
 
@@ -123,7 +122,6 @@ export function JobHeader(props: {
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
-							onEdit={props.onEdit}
 						/>
 					</div>
 				</div>
