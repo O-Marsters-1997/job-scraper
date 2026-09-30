@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	DefaultSchedule = "0 * * * *"
-	DefaultTimeout  = 15 * time.Second
-	userAgent       = "Mozilla/5.0 (compatible; job-scraper/1.0)"
+	DefaultTimeout = 15 * time.Second
+	userAgent      = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
 type Config struct {

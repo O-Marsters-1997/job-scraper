@@ -14,7 +14,6 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/resend/resend-go/v3 v3.3.0
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/temoto/robotstxt v1.1.2
 	github.com/testcontainers/testcontainers-go v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.41.0
