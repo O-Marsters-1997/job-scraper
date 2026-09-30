@@ -21,9 +21,9 @@ import (
 const apiKey = "sk-or-test"
 
 type wireQuestion struct {
-	Type         string   `json:"type"`
-	Instructions string   `json:"instructions"`
-	Options      []string `json:"options"`
+	Type         string         `json:"type"`
+	Instructions string         `json:"instructions"`
+	Criteria     map[string]any `json:"criteria"`
 }
 
 type wireState struct {
@@ -140,7 +140,7 @@ func TestAnswer(t *testing.T) {
 		}
 
 		choice := func(q string) wireQuestion {
-			return wireQuestion{Type: "choice", Instructions: q, Options: []string{"yes", "no", "not_stated"}}
+			return wireQuestion{Type: "choice", Instructions: q, Criteria: map[string]any{"yes": nil, "no": nil, "not_stated": nil}}
 		}
 		wantQuestions := map[string]wireQuestion{"tech:go": choice("tech:go"), "tech:docker": choice("tech:docker")}
 		if diff := cmp.Diff(wantQuestions, captured.Questions); diff != "" {
