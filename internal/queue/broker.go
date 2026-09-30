@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -65,8 +66,20 @@ func NewBroker(url string) (*Broker, error) {
 	return b, nil
 }
 
+func dial(url string) (*amqp.Connection, error) {
+	cfg := amqp.Config{Locale: "en_US"}
+	if raw := os.Getenv("RABBITMQ_HEARTBEAT"); raw != "" {
+		seconds, err := strconv.Atoi(raw)
+		if err != nil || seconds < 1 {
+			return nil, fmt.Errorf("RABBITMQ_HEARTBEAT must be whole seconds >= 1, got %q", raw)
+		}
+		cfg.Heartbeat = time.Duration(seconds) * time.Second
+	}
+	return amqp.DialConfig(url, cfg)
+}
+
 func (b *Broker) connect() error {
-	conn, err := amqp.Dial(b.url)
+	conn, err := dial(b.url)
 	if err != nil {
 		return fmt.Errorf("rabbitmq connect: %w", err)
 	}
@@ -219,7 +232,7 @@ func (b *Broker) consumeSource(ctx context.Context, source string, handler func(
 }
 
 func (b *Broker) consumeSession(ctx context.Context, source string, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) error {
-	conn, err := amqp.Dial(b.url)
+	conn, err := dial(b.url)
 	if err != nil {
 		return err
 	}
