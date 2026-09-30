@@ -121,7 +121,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		failure := dto.ScoringFailure{Reason: err.Error()}
 		var jevErr *jev.Error
 		if errors.As(err, &jevErr) {
-			failure.Terminal = jevErr.Kind == jev.FailureTerminal
+			failure.Terminal = jevErr.Terminal
 			failure.RetryAfter = jevErr.RetryAfter
 		}
 		if saveErr := s.store.FailAnswerEffect(ctx, effect.ID, effect.Attempts, failure); saveErr != nil {
@@ -154,11 +154,11 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return err
 	}
 
-	options, err := s.store.ListScoringOptions(ctx)
+	bk, err := s.loadBank(ctx)
 	if err != nil {
 		return fail(fmt.Errorf("load scoring options: %w", err))
 	}
-	byID := optionsByID(options)
+	byID := bk.byID
 
 	asked := make(map[string]string)
 	for _, cfg := range surviving {
@@ -179,32 +179,9 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		}
 	}
 
-	fresh := make(map[string]dto.Answer)
-	var cost float64
-	if len(missing) > 0 {
-		for _, cfg := range surviving {
-			key, err := s.credentials.Get(ctx, cfg.UserID, jev.Provider)
-			if err != nil {
-				continue
-			}
-			answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
-			if err != nil {
-				return fail(fmt.Errorf("answer questions: %w", err))
-			}
-			for question, a := range answers {
-				fresh[QuestionHash(question)] = a
-			}
-			cost = usage.Cost
-			for _, sc := range surviving {
-				slog.InfoContext(ctx, "score call",
-					slog.String(logger.KeyEvent, telemetry.EventScoreCall),
-					slog.String(logger.KeyUserID, sc.UserID),
-					slog.String("model", usage.Model),
-					slog.Float64(logger.KeyCostUSD, usage.Cost),
-				)
-			}
-			break
-		}
+	fresh, cost, err := s.answerMissing(ctx, surviving, job, missing)
+	if err != nil {
+		return fail(err)
 	}
 
 	allAnswers := make(map[string]dto.Answer, len(cached)+len(fresh))
@@ -230,6 +207,41 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return nil
 	}
 
+	s.notifyNewJob(ctx, job, surviving, scores, saved)
+	return nil
+}
+
+func (s *Service) answerMissing(ctx context.Context, surviving []dto.SearchConfig, job dto.Job, missing []string) (map[string]dto.Answer, float64, error) {
+	fresh := make(map[string]dto.Answer)
+	if len(missing) == 0 {
+		return fresh, 0, nil
+	}
+	for _, cfg := range surviving {
+		key, err := s.credentials.Get(ctx, cfg.UserID, jev.Provider)
+		if err != nil {
+			continue
+		}
+		answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
+		if err != nil {
+			return nil, 0, fmt.Errorf("answer questions: %w", err)
+		}
+		for question, a := range answers {
+			fresh[QuestionHash(question)] = a
+		}
+		for _, sc := range surviving {
+			slog.InfoContext(ctx, "score call",
+				slog.String(logger.KeyEvent, telemetry.EventScoreCall),
+				slog.String(logger.KeyUserID, sc.UserID),
+				slog.String("model", usage.Model),
+				slog.Float64(logger.KeyCostUSD, usage.Cost),
+			)
+		}
+		return fresh, usage.Cost, nil
+	}
+	return fresh, 0, nil
+}
+
+func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto.SearchConfig, scores []dto.JobScore, saved []string) {
 	savedSet := make(map[string]bool, len(saved))
 	for _, uid := range saved {
 		savedSet[uid] = true
@@ -254,7 +266,6 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 			slog.ErrorContext(ctx, "notification send failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 		}
 	}
-	return nil
 }
 
 // Ask answers questions about jobID from the Jev answer cache, sending only
@@ -323,16 +334,16 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 // Recompute re-scores every job userID already has a score for, from their
 // current preferences and each job's cached answers. It never calls Answerer.
 func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error) {
-	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, data.ErrNotFound) {
-		return dto.RecomputeResult{}, err
-	}
-
-	options, err := s.store.ListScoringOptions(ctx)
+	cfg, err := s.searchConfigOrZero(ctx, userID)
 	if err != nil {
 		return dto.RecomputeResult{}, err
 	}
-	byID := optionsByID(options)
+
+	bk, err := s.loadBank(ctx)
+	if err != nil {
+		return dto.RecomputeResult{}, err
+	}
+	byID := bk.byID
 
 	inputs, err := s.store.ListScoringInputs(ctx, userID, jev.Model)
 	if err != nil {
@@ -354,21 +365,20 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 // FillMissingAnswers queues an answer effect, without alerting, for each of
 // userID's already-scored jobs missing an answer to a currently picked question.
 func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64, error) {
-	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !errors.Is(err, data.ErrNotFound) {
+	cfg, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
 		return 0, err
 	}
 	if len(cfg.Preferences.Picks) == 0 {
 		return 0, nil
 	}
 
-	options, err := s.store.ListScoringOptions(ctx)
+	bk, err := s.loadBank(ctx)
 	if err != nil {
 		return 0, err
 	}
-	byID := optionsByID(options)
 
-	picked := pickedQuestionHashes(cfg.Preferences.Picks, byID)
+	picked := pickedQuestionHashes(cfg.Preferences.Picks, bk.byID)
 	if len(picked) == 0 {
 		return 0, nil
 	}
@@ -380,12 +390,20 @@ func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64,
 	return s.store.QueueMissingAnswers(ctx, userID, hashes, jev.Model)
 }
 
-func optionsByID(options []dto.ScoringOption) map[string]dto.ScoringOption {
-	byID := make(map[string]dto.ScoringOption, len(options))
-	for _, o := range options {
-		byID[o.ID] = o
+func (s *Service) loadBank(ctx context.Context) (bank, error) {
+	options, err := s.store.ListScoringOptions(ctx)
+	if err != nil {
+		return bank{}, err
 	}
-	return byID
+	return newBank(options), nil
+}
+
+func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.SearchConfig, error) {
+	cfg, err := s.store.GetSearchConfig(ctx, userID)
+	if err != nil && !notFound(err) {
+		return dto.SearchConfig{}, err
+	}
+	return cfg, nil
 }
 
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer) []evaluatedPick {

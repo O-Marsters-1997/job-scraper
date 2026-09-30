@@ -87,6 +87,45 @@ func (f *fakeProfiles) GetProfile(_ context.Context, userID string) (dto.Profile
 	return dto.Profile{Email: f.emails[userID]}, nil
 }
 
+type depsOpt func(*scoring.Deps)
+
+func withAnswerer(a scoring.Answerer) depsOpt      { return func(d *scoring.Deps) { d.Answerer = a } }
+func withAlerter(a scoring.Alerter) depsOpt        { return func(d *scoring.Deps) { d.Alerter = a } }
+func withProfiles(p scoring.ProfileReader) depsOpt { return func(d *scoring.Deps) { d.Profiles = p } }
+func withCandidates(c scoring.Reconsiderer) depsOpt {
+	return func(d *scoring.Deps) { d.Candidates = c }
+}
+func withExtractor(e scoring.Extractor) depsOpt { return func(d *scoring.Deps) { d.Extractor = e } }
+func withCredentials(c scoring.Credentials) depsOpt {
+	return func(d *scoring.Deps) { d.Credentials = c }
+}
+func withTick(interval time.Duration) depsOpt {
+	return func(d *scoring.Deps) { d.TickInterval = interval }
+}
+func withKey(key string) depsOpt { return withCredentials(&fakeCredentials{key: key}) }
+
+func newDeps(t *testing.T, st scoring.Store, opts ...depsOpt) scoring.Deps {
+	t.Helper()
+	d := scoring.Deps{
+		Store:       st,
+		Answerer:    &fakeAnswerer{t: t, forbidden: true},
+		Credentials: &fakeCredentials{},
+		Alerter:     &fakeAlerter{},
+		Profiles:    &fakeProfiles{},
+		Candidates:  scoringtest.Reconsiders(),
+		Extractor:   &fakeExtractor{},
+	}
+	for _, opt := range opts {
+		opt(&d)
+	}
+	return d
+}
+
+func newService(t *testing.T, st scoring.Store, opts ...depsOpt) *scoring.Service {
+	t.Helper()
+	return scoring.NewService(newDeps(t, st, opts...))
+}
+
 func captureScoreCallLogs(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	buf := &bytes.Buffer{}
@@ -131,7 +170,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1, FirstDiscovery: true})
 
 		answerer := &fakeAnswerer{t: t, forbidden: true}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -159,7 +198,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 		answerer := &fakeAnswerer{t: t}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -191,7 +230,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedJob(job, []dto.SearchConfig{cfg})
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t}, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(&fakeAnswerer{t: t}), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -217,7 +256,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedJob(job, []dto.SearchConfig{cfg})
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call-fail", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &failingAnswerer{}, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(&failingAnswerer{}), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -241,7 +280,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-picked", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 		answerer := &fakeAnswerer{t: t}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -270,7 +309,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-union", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 		answerer := &fakeAnswerer{t: t}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -304,7 +343,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-retired", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 		answerer := &fakeAnswerer{t: t}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -321,7 +360,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedJob(job, []dto.SearchConfig{cfg})
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-nopicks", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withKey("sk-or-test"))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -347,7 +386,7 @@ func TestRunTick(t *testing.T) {
 		st.SeedEffect(dto.AnswerEffect{ID: "effect-3", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1, FirstDiscovery: true})
 
 		alerter := &fakeAlerter{}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: alerter, Profiles: &fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}})
+		svc := newService(t, st, withKey("sk-or-test"), withAlerter(alerter), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
 
 		if err := svc.RunTick(context.Background()); err != nil {
 			t.Fatalf("RunTick: %v", err)
@@ -380,7 +419,7 @@ func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.A
 
 func TestRun(t *testing.T) {
 	t.Run("returns when the context is cancelled", func(t *testing.T) {
-		svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, newFakeStore())
 
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
@@ -412,7 +451,7 @@ func TestRun(t *testing.T) {
 		inner.SeedEffect(dto.AnswerEffect{ID: "effect-4", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 
 		st := &flakyClaimStore{FakeStore: inner, failsLeft: 1, completed: make(chan struct{}, 1)}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-or-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, TickInterval: time.Millisecond})
+		svc := newService(t, st, withKey("sk-or-test"), withTick(time.Millisecond))
 
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
@@ -474,7 +513,7 @@ func TestRecompute(t *testing.T) {
 		})
 
 		alerter := &fakeAlerter{}
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: alerter, Profiles: &fakeProfiles{}})
+		svc := newService(t, st, withAlerter(alerter))
 
 		result, err := svc.Recompute(context.Background(), "user-1")
 		if err != nil {
@@ -502,7 +541,7 @@ func TestRecompute(t *testing.T) {
 			{Job: dto.Job{ID: "job-1", SalaryRaw: "£40k"}, Answers: map[string]dto.Answer{}},
 		})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		result, err := svc.Recompute(context.Background(), "user-1")
 		if err != nil {
@@ -532,7 +571,7 @@ func TestRecompute(t *testing.T) {
 			}},
 		})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		if _, err := svc.Recompute(context.Background(), "user-1"); err != nil {
 			t.Fatalf("Recompute: %v", err)
@@ -735,7 +774,7 @@ func TestRecompute(t *testing.T) {
 					{Job: dto.Job{ID: "job-1", SalaryRaw: tc.salaryRaw}, Answers: answers},
 				})
 
-				svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+				svc := newService(t, st)
 				result, err := svc.Recompute(context.Background(), "user-1")
 				if err != nil {
 					t.Fatalf("Recompute: %v", err)
@@ -776,7 +815,7 @@ func TestFillMissingAnswers(t *testing.T) {
 			}},
 		})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
 		if err != nil {
@@ -811,7 +850,7 @@ func TestFillMissingAnswers(t *testing.T) {
 		st := newFakeStore()
 		st.SeedSearchConfig(dto.SearchConfig{UserID: "user-1"})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
 		if err != nil {
@@ -824,7 +863,7 @@ func TestFillMissingAnswers(t *testing.T) {
 
 	t.Run("no search config queues nothing", func(t *testing.T) {
 		st := newFakeStore()
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
 		if err != nil {
@@ -847,7 +886,7 @@ func TestFillMissingAnswers(t *testing.T) {
 			Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice", Source: "manual"}}},
 		})
 
-		svc := scoring.NewService(scoring.Deps{Store: st, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}})
+		svc := newService(t, st)
 
 		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
 		if err != nil {
@@ -867,7 +906,7 @@ func TestAsk(t *testing.T) {
 		st := newFakeStore()
 		st.SeedJob(job, nil)
 		answerer := &fakeAnswerer{t: t}
-		return scoring.NewService(scoring.Deps{Store: st, Answerer: answerer, Credentials: &fakeCredentials{key: key}}), answerer
+		return newService(t, st, withAnswerer(answerer), withKey(key)), answerer
 	}
 
 	t.Run("second ask with the same questions makes no Jev call", func(t *testing.T) {

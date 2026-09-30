@@ -10,12 +10,13 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 )
 
 func newTestRouter(t *testing.T, st *scoringtest.FakeStore) chi.Router {
 	t.Helper()
-	m := buildModule(t, st)
+	m := scoring.Build(newDeps(t, st))
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r

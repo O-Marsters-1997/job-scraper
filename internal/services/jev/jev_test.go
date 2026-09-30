@@ -120,12 +120,12 @@ func TestClient_Answer_StatusErrors(t *testing.T) {
 		name           string
 		status         int
 		retryAfter     string
-		wantKind       jev.FailureKind
+		wantTerminal   bool
 		wantRetryAfter time.Duration
 	}{
-		{name: "401 is terminal", status: http.StatusUnauthorized, wantKind: jev.FailureTerminal},
-		{name: "402 is terminal", status: http.StatusPaymentRequired, wantKind: jev.FailureTerminal},
-		{name: "429 carries retry-after", status: http.StatusTooManyRequests, retryAfter: "30", wantKind: jev.FailureRateLimited, wantRetryAfter: 30 * time.Second},
+		{name: "401 is terminal", status: http.StatusUnauthorized, wantTerminal: true},
+		{name: "402 is terminal", status: http.StatusPaymentRequired, wantTerminal: true},
+		{name: "429 carries retry-after", status: http.StatusTooManyRequests, retryAfter: "30", wantRetryAfter: 30 * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,8 +148,8 @@ func TestClient_Answer_StatusErrors(t *testing.T) {
 			if !errors.As(err, &answerErr) {
 				t.Fatalf("error = %v, want *jev.Error", err)
 			}
-			if answerErr.Kind != tt.wantKind {
-				t.Errorf("Kind = %v, want %v", answerErr.Kind, tt.wantKind)
+			if answerErr.Terminal != tt.wantTerminal {
+				t.Errorf("Terminal = %v, want %v", answerErr.Terminal, tt.wantTerminal)
 			}
 			if answerErr.RetryAfter != tt.wantRetryAfter {
 				t.Errorf("RetryAfter = %v, want %v", answerErr.RetryAfter, tt.wantRetryAfter)

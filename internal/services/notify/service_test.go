@@ -19,12 +19,8 @@ func (n *fakeNotifier) Send(_ context.Context, to, _, _ string) error {
 }
 
 func TestNotifyNewJobUsesRecipient(t *testing.T) {
-	renderer, err := notify.NewRenderer()
-	if err != nil {
-		t.Fatal(err)
-	}
 	sender := &fakeNotifier{}
-	svc := notify.NewNotificationService(sender, renderer)
+	svc := notify.NewNotificationService(sender)
 	job := dto.Job{ID: "job-1", Title: "Engineer", URL: "https://example.com/job"}
 	for _, email := range []string{"alice@example.com", "bob@example.com", ""} {
 		if err := svc.NotifyNewJob(context.Background(), job, email); err != nil {

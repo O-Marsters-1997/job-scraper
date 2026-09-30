@@ -9,13 +9,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 )
 
 func TestUpdate_UnchangedTextSkipsExtraction(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "text"}}}
-	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: extractor})
+	svc := newService(t, newFakeStore(), withKey("sk-test"), withExtractor(extractor))
 
 	in := dto.ScoringConfigView{Preferences: dto.Preferences{PreferenceText: "I want to work with Go"}}
 
@@ -36,7 +34,7 @@ func TestUpdate_UnchangedTextSkipsExtraction(t *testing.T) {
 
 func TestUpdate_ReextractionReplacesTextPicksKeepsManual(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "text"}}}
-	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: extractor})
+	svc := newService(t, newFakeStore(), withKey("sk-test"), withExtractor(extractor))
 
 	manualPick := dto.Pick{OptionID: "seniority:senior", Stance: "nice"}
 	if _, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
@@ -64,7 +62,7 @@ func TestUpdate_ReextractionReplacesTextPicksKeepsManual(t *testing.T) {
 
 func TestUpdate_ManualOverridesText(t *testing.T) {
 	extractor := &fakeExtractor{picks: []dto.Pick{{OptionID: "tech:kubernetes", Stance: "avoid", Source: "text"}}}
-	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: extractor})
+	svc := newService(t, newFakeStore(), withKey("sk-test"), withExtractor(extractor))
 
 	got, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{
@@ -90,7 +88,7 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 		{OptionID: "tech:go", Stance: "nice", Source: "text"},
 		{OptionID: "tech:made-up", Stance: "nice", Source: "text"},
 	}}
-	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{key: "sk-test"}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: extractor})
+	svc := newService(t, newFakeStore(), withKey("sk-test"), withExtractor(extractor))
 
 	got, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{PreferenceText: "I like Go, and made-up-thing"},
@@ -106,7 +104,7 @@ func TestUpdate_DropsHallucinatedOptionID(t *testing.T) {
 }
 
 func TestUpdate_NoCredentialReturnsUnprocessable(t *testing.T) {
-	svc := scoring.NewService(scoring.Deps{Store: newFakeStore(), Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
+	svc := newService(t, newFakeStore())
 
 	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
 		Preferences: dto.Preferences{PreferenceText: "I like Go"},
