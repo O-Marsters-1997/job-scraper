@@ -2,7 +2,6 @@ package handlers_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -27,15 +26,6 @@ func serve(method, pattern string, h http.HandlerFunc, req *http.Request) *httpt
 
 func authed(method, target, body string) *http.Request {
 	return handlerstest.Authed(httptest.NewRequest(method, target, strings.NewReader(body)))
-}
-
-func decodeJSON[T any](t *testing.T, w *httptest.ResponseRecorder) T {
-	t.Helper()
-	var v T
-	if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
-		t.Fatalf("body %q is not JSON: %v", w.Body.String(), err)
-	}
-	return v
 }
 
 func TestHandle(t *testing.T) {
@@ -81,7 +71,7 @@ func TestHandle(t *testing.T) {
 		)
 		w := httptest.NewRecorder()
 		h(w, req)
-		if got := decodeJSON[string](t, w); got != "in:out" {
+		if got := handlerstest.DecodeJSON[string](t, w.Body.Bytes()); got != "in:out" {
 			t.Fatalf("body = %q, want %q", got, "in:out")
 		}
 	})
@@ -120,7 +110,7 @@ func TestErrorResponses(t *testing.T) {
 			if w.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", w.Code, tt.wantStatus)
 			}
-			if diff := cmp.Diff(tt.wantBody, decodeJSON[map[string]any](t, w)); diff != "" {
+			if diff := cmp.Diff(tt.wantBody, handlerstest.DecodeJSON[map[string]any](t, w.Body.Bytes())); diff != "" {
 				t.Errorf("body (-want +got):\n%s", diff)
 			}
 		})
@@ -142,7 +132,7 @@ func TestGetAll(t *testing.T) {
 	t.Run("nil slice is written as an empty array", func(t *testing.T) {
 		h := handlers.GetAll(func(context.Context, string) ([]string, error) { return nil, nil })
 		w := serve(http.MethodGet, "/x", h, authed(http.MethodGet, "/x", ""))
-		got := decodeJSON[[]string](t, w)
+		got := handlerstest.DecodeJSON[[]string](t, w.Body.Bytes())
 		if got == nil || len(got) != 0 {
 			t.Fatalf("body = %q, want []", w.Body.String())
 		}
@@ -157,7 +147,7 @@ func TestGetByID(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
-	if got, want := decodeJSON[string](t, w), handlerstest.UserID+":abc-123"; got != want {
+	if got, want := handlerstest.DecodeJSON[string](t, w.Body.Bytes()), handlerstest.UserID+":abc-123"; got != want {
 		t.Fatalf("body = %q, want %q", got, want)
 	}
 }
@@ -170,7 +160,7 @@ func TestQuery(t *testing.T) {
 
 	t.Run("URL params decode into the input", func(t *testing.T) {
 		w := serve(http.MethodGet, "/x", h, authed(http.MethodGet, "/x?status_id=s1", ""))
-		if got := decodeJSON[filter](t, w); got.StatusID != "s1" {
+		if got := handlerstest.DecodeJSON[filter](t, w.Body.Bytes()); got.StatusID != "s1" {
 			t.Fatalf("StatusID = %q, want s1", got.StatusID)
 		}
 	})
@@ -180,7 +170,7 @@ func TestQuery(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 		}
-		if got := decodeJSON[filter](t, w); got.StatusID != "" {
+		if got := handlerstest.DecodeJSON[filter](t, w.Body.Bytes()); got.StatusID != "" {
 			t.Fatalf("StatusID = %q, want empty", got.StatusID)
 		}
 	})
@@ -201,7 +191,7 @@ func TestCreate(t *testing.T) {
 		if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 			t.Errorf("Content-Type = %q, want application/json", ct)
 		}
-		if _, ok := decodeJSON[map[string]any](t, w)["error"]; !ok {
+		if _, ok := handlerstest.DecodeJSON[map[string]any](t, w.Body.Bytes())["error"]; !ok {
 			t.Errorf("body %q has no error field", w.Body.String())
 		}
 	})
@@ -211,7 +201,7 @@ func TestCreate(t *testing.T) {
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusCreated)
 		}
-		if diff := cmp.Diff(in{ID: "1"}, decodeJSON[in](t, w)); diff != "" {
+		if diff := cmp.Diff(in{ID: "1"}, handlerstest.DecodeJSON[in](t, w.Body.Bytes())); diff != "" {
 			t.Errorf("body (-want +got):\n%s", diff)
 		}
 	})
@@ -219,7 +209,7 @@ func TestCreate(t *testing.T) {
 	t.Run("path tag wins over the body", func(t *testing.T) {
 		w := serve(http.MethodPost, "/x/{id}", echo, authed(http.MethodPost, "/x/real-id", `{"id":"spoofed","name":"a"}`))
 		want := in{ID: "real-id", Name: "a"}
-		if diff := cmp.Diff(want, decodeJSON[in](t, w)); diff != "" {
+		if diff := cmp.Diff(want, handlerstest.DecodeJSON[in](t, w.Body.Bytes())); diff != "" {
 			t.Errorf("body (-want +got):\n%s", diff)
 		}
 	})
@@ -231,7 +221,7 @@ func TestCreate(t *testing.T) {
 		}
 		h := handlers.Create(func(_ context.Context, _ string, body twoIDs) (twoIDs, error) { return body, nil })
 		w := serve(http.MethodPost, "/x/{docId}/tabs/{tabId}", h, authed(http.MethodPost, "/x/d1/tabs/t1", ""))
-		if diff := cmp.Diff(twoIDs{DocID: "d1", TabID: "t1"}, decodeJSON[twoIDs](t, w)); diff != "" {
+		if diff := cmp.Diff(twoIDs{DocID: "d1", TabID: "t1"}, handlerstest.DecodeJSON[twoIDs](t, w.Body.Bytes())); diff != "" {
 			t.Errorf("body (-want +got):\n%s", diff)
 		}
 	})
@@ -258,7 +248,7 @@ func TestUpdate(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
 	}
-	if diff := cmp.Diff(in{ID: "app-1", Notes: "followed up"}, decodeJSON[in](t, w)); diff != "" {
+	if diff := cmp.Diff(in{ID: "app-1", Notes: "followed up"}, handlerstest.DecodeJSON[in](t, w.Body.Bytes())); diff != "" {
 		t.Errorf("body (-want +got):\n%s", diff)
 	}
 }

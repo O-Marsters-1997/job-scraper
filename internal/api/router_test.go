@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
@@ -99,9 +100,7 @@ func send[T any](a *app, wantStatus int, req *http.Request) T {
 	}
 	var v T
 	if w.Body.Len() > 0 {
-		if err := json.NewDecoder(w.Body).Decode(&v); err != nil {
-			a.t.Fatalf("decode %s %s: %v", req.Method, req.URL.Path, err)
-		}
+		v = handlerstest.DecodeJSON[T](a.t, w.Body.Bytes())
 	}
 	return v
 }
