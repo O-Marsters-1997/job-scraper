@@ -84,6 +84,8 @@ change-detector: rewrite it at the output or delete it.
   truncated. No per-package `TestMain`, no own container.
 - Serial: never `t.Parallel()` in a test that calls `pgtest.New`. Empty tables are guaranteed,
   so length assertions are safe.
+- Test transactions go through `pgtest.InTx(t, pool, commit, fn)`, never `pool.Begin`: it registers
+  the rollback as cleanup, so a `t.Fatal` can't leave locks that block the next `TRUNCATE`.
 - Run from the repo root (migrations resolve relative to CWD).
 - Beyond the contract suite, cover only what a fake can't: constraints and uniqueness,
   `ON CONFLICT`, joins onto other contexts' tables, rollback of tx-scoped ports, concurrent

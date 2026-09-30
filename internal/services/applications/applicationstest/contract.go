@@ -1,11 +1,12 @@
 package applicationstest
 
 import (
-	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -22,6 +23,25 @@ type Fixture struct {
 	JobID  string
 }
 
+func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Application {
+	t.Helper()
+	in.JobID = f.JobID
+	got, err := f.Store.CreateApplication(t.Context(), f.UserID, in)
+	if err != nil {
+		t.Fatalf("CreateApplication(%+v) err = %v", in, err)
+	}
+	return got
+}
+
+func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
+	t.Helper()
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1")
+	if err != nil {
+		t.Fatalf("CreateApplicationStatus(%q) err = %v", name, err)
+	}
+	return got
+}
+
 // RunStoreContract proves newStore's applications.Store behaves the same
 // whether it's the fake or the real store (ADR 0012). SeedDefaultStatuses is
 // a tx-scoped port, covered in store/store_test.go.
@@ -30,180 +50,158 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 
 	t.Run("create returns the application", func(t *testing.T) {
 		f := newStore(t)
-		got, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{
-			JobID:     f.JobID,
-			Notes:     "referred by a friend",
-			AppliedAt: new("2026-01-02"),
-		})
-		if err != nil {
-			t.Fatal(err)
+		got := createApp(t, f, dto.CreateApplicationInput{Notes: "referred by a friend"})
+		want := dto.Application{UserID: f.UserID, JobID: f.JobID, Notes: "referred by a friend"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Application{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
+			t.Errorf("CreateApplication(...) mismatch (-want +got):\n%s", diff)
 		}
-		if got.ID == "" || got.UserID != f.UserID || got.JobID != f.JobID || got.Notes != "referred by a friend" {
-			t.Fatalf("CreateApplication(...) = %+v", got)
+		if got.ID == "" {
+			t.Errorf("CreateApplication(...) ID is empty")
+		}
+	})
+
+	t.Run("create keeps applied_at", func(t *testing.T) {
+		f := newStore(t)
+		got := createApp(t, f, dto.CreateApplicationInput{AppliedAt: new("2026-01-02")})
+		want := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		if got.AppliedAt == nil || !got.AppliedAt.Equal(want) {
+			t.Errorf("CreateApplication(applied_at=2026-01-02) AppliedAt = %v, want %v", got.AppliedAt, want)
 		}
 	})
 
 	t.Run("list returns the user's applications", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID})
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, "")
 		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.ListApplications(context.Background(), f.UserID, "")
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ListApplications(...) err = %v", err)
 		}
 		if len(got) != 1 || got[0].ID != created.ID {
-			t.Fatalf("ListApplications(...) = %+v, want [%+v]", got, created)
+			t.Errorf("ListApplications(...) = %+v, want [%+v]", got, created)
 		}
 	})
 
 	t.Run("update changes notes", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID})
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{Notes: "followed up"})
 		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.UpdateApplication(context.Background(), f.UserID, created.ID, dto.UpdateApplicationInput{Notes: "followed up"})
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpdateApplication(...) err = %v", err)
 		}
 		if got.Notes != "followed up" {
-			t.Fatalf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
+			t.Errorf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
 		}
 	})
 
 	t.Run("update missing application returns not found", func(t *testing.T) {
 		f := newStore(t)
-		_, err := f.Store.UpdateApplication(context.Background(), f.UserID, missingID, dto.UpdateApplicationInput{})
+		_, err := f.Store.UpdateApplication(t.Context(), f.UserID, missingID, dto.UpdateApplicationInput{})
 		if !errors.Is(err, data.ErrNotFound) {
-			t.Fatalf("UpdateApplication(missing) err = %v, want ErrNotFound", err)
+			t.Errorf("UpdateApplication(missing) err = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("delete removes the application", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID})
-		if err != nil {
-			t.Fatal(err)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		if err := f.Store.DeleteApplication(t.Context(), f.UserID, created.ID); err != nil {
+			t.Fatalf("DeleteApplication(...) err = %v", err)
 		}
-		if err := f.Store.DeleteApplication(context.Background(), f.UserID, created.ID); err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.ListApplications(context.Background(), f.UserID, "")
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, "")
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ListApplications(...) err = %v", err)
 		}
 		if len(got) != 0 {
-			t.Fatalf("ListApplications after delete = %+v, want empty", got)
+			t.Errorf("ListApplications after delete = %+v, want empty", got)
 		}
 	})
 
 	t.Run("get applications for jobs keys by job id", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID})
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		got, err := f.Store.GetApplicationsForJobs(t.Context(), f.UserID, []string{f.JobID, missingID})
 		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.GetApplicationsForJobs(context.Background(), f.UserID, []string{f.JobID, missingID})
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("GetApplicationsForJobs(...) err = %v", err)
 		}
 		want := map[string]dto.JobApplicationSummary{f.JobID: {ApplicationID: created.ID}}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Fatalf("GetApplicationsForJobs(...) mismatch (-want +got):\n%s", diff)
+			t.Errorf("GetApplicationsForJobs(...) mismatch (-want +got):\n%s", diff)
 		}
 	})
 
 	t.Run("create returns the status", func(t *testing.T) {
 		f := newStore(t)
-		got, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
-		if err != nil {
-			t.Fatal(err)
+		got := createStatus(t, f, "Offer")
+		want := dto.ApplicationStatus{UserID: f.UserID, Name: "Offer", Colour: "#6366f1"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ApplicationStatus{}, "ID", "CreatedAt")); diff != "" {
+			t.Errorf("CreateApplicationStatus(...) mismatch (-want +got):\n%s", diff)
 		}
-		if got.ID == "" || got.Name != "Offer" || got.Colour != "#22c55e" {
-			t.Fatalf("CreateApplicationStatus(...) = %+v", got)
+		if got.ID == "" {
+			t.Errorf("CreateApplicationStatus(...) ID is empty")
 		}
 	})
 
 	t.Run("update changes name and colour", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
+		created := createStatus(t, f, "Offer")
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e")
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("UpdateApplicationStatus(...) err = %v", err)
 		}
-		got, err := f.Store.UpdateApplicationStatus(context.Background(), created.ID, f.UserID, "Offer!", "#22c55e")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.Name != "Offer!" {
-			t.Fatalf("UpdateApplicationStatus(...) name = %q, want %q", got.Name, "Offer!")
+		if got.Name != "Offer!" || got.Colour != "#22c55e" {
+			t.Errorf("UpdateApplicationStatus(...) = %q/%q, want Offer!/#22c55e", got.Name, got.Colour)
 		}
 	})
 
 	t.Run("list returns the created status", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		created := createStatus(t, f, "Applied")
+		got, err := f.Store.ListApplicationStatusesByUser(t.Context(), f.UserID)
 		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.ListApplicationStatusesByUser(context.Background(), f.UserID)
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ListApplicationStatusesByUser(...) err = %v", err)
 		}
 		if len(got) != 1 || got[0].ID != created.ID {
-			t.Fatalf("ListApplicationStatusesByUser(...) = %+v, want [%+v]", got, created)
+			t.Errorf("ListApplicationStatusesByUser(...) = %+v, want [%+v]", got, created)
 		}
 	})
 
 	t.Run("delete removes the status", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Offer", "#22c55e")
-		if err != nil {
-			t.Fatal(err)
+		created := createStatus(t, f, "Offer")
+		if err := f.Store.DeleteApplicationStatus(t.Context(), created.ID, f.UserID); err != nil {
+			t.Fatalf("DeleteApplicationStatus(...) err = %v", err)
 		}
-		if err := f.Store.DeleteApplicationStatus(context.Background(), created.ID, f.UserID); err != nil {
-			t.Fatal(err)
-		}
-		got, err := f.Store.ListApplicationStatusesByUser(context.Background(), f.UserID)
+		got, err := f.Store.ListApplicationStatusesByUser(t.Context(), f.UserID)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ListApplicationStatusesByUser(...) err = %v", err)
 		}
 		if len(got) != 0 {
-			t.Fatalf("ListApplicationStatusesByUser after delete = %+v, want empty", got)
+			t.Errorf("ListApplicationStatusesByUser after delete = %+v, want empty", got)
 		}
 	})
 
 	t.Run("count for unused status is zero", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		created := createStatus(t, f, "Applied")
+		count, err := f.Store.CountApplicationsUsingStatus(t.Context(), created.ID, f.UserID)
 		if err != nil {
-			t.Fatal(err)
-		}
-		count, err := f.Store.CountApplicationsUsingStatus(context.Background(), created.ID, f.UserID)
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("CountApplicationsUsingStatus(unused) err = %v", err)
 		}
 		if count != 0 {
-			t.Fatalf("CountApplicationsUsingStatus(unused) = %d, want 0", count)
+			t.Errorf("CountApplicationsUsingStatus(unused) = %d, want 0", count)
 		}
 	})
 
 	t.Run("count for a status in use is the number of applications", func(t *testing.T) {
 		f := newStore(t)
-		created, err := f.Store.CreateApplicationStatus(context.Background(), f.UserID, "Applied", "#6366f1")
+		created := createStatus(t, f, "Applied")
+		createApp(t, f, dto.CreateApplicationInput{StatusID: created.ID})
+		count, err := f.Store.CountApplicationsUsingStatus(t.Context(), created.ID, f.UserID)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID, StatusID: created.ID}); err != nil {
-			t.Fatal(err)
-		}
-		count, err := f.Store.CountApplicationsUsingStatus(context.Background(), created.ID, f.UserID)
-		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("CountApplicationsUsingStatus(in use) err = %v", err)
 		}
 		if count != 1 {
-			t.Fatalf("CountApplicationsUsingStatus(in use) = %d, want 1", count)
+			t.Errorf("CountApplicationsUsingStatus(in use) = %d, want 1", count)
 		}
 	})
 }
