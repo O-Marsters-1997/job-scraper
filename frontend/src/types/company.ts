@@ -41,7 +41,7 @@ export const companyBoardSchema = z.object({
 
 export type CompanyBoard = z.infer<typeof companyBoardSchema>;
 
-export const trackedBoardSchema = z.object({
+const trackedBoardSchema = z.object({
 	id: z.string(),
 	source: z.string(),
 	board_token: z.string(),

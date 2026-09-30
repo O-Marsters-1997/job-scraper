@@ -21,23 +21,32 @@ const trackedCompanyIds = new Set(
 	companies.filter((c) => c.Tracked).map((c) => c.ID),
 );
 
-const BOARD_URLS: Record<string, (token: string) => string> = {
-	greenhouse: (t) => `https://boards.greenhouse.io/${t}`,
-	lever: (t) => `https://jobs.lever.co/${t}`,
-	ashby: (t) => `https://jobs.ashbyhq.com/${t}`,
-	workable: (t) => `https://apply.workable.com/${t}`,
-	recruitee: (t) => `https://${t}.recruitee.com`,
-	personio: (t) => `https://${t}.jobs.personio.de`,
-};
+const ATS_BOARDS: Record<string, { host: string; url: (t: string) => string }> =
+	{
+		greenhouse: {
+			host: "greenhouse.io",
+			url: (t) => `https://boards.greenhouse.io/${t}`,
+		},
+		lever: { host: "lever.co", url: (t) => `https://jobs.lever.co/${t}` },
+		ashby: { host: "ashbyhq.com", url: (t) => `https://jobs.ashbyhq.com/${t}` },
+		workable: {
+			host: "workable.com",
+			url: (t) => `https://apply.workable.com/${t}`,
+		},
+		recruitee: {
+			host: "recruitee.com",
+			url: (t) => `https://${t}.recruitee.com`,
+		},
+		personio: {
+			host: "personio.de",
+			url: (t) => `https://${t}.jobs.personio.de`,
+		},
+	};
 
-const ATS_HOSTS: Record<string, string> = {
-	"greenhouse.io": "greenhouse",
-	"lever.co": "lever",
-	"ashbyhq.com": "ashby",
-	"workable.com": "workable",
-	"recruitee.com": "recruitee",
-	"personio.de": "personio",
-};
+const atsSourceForHost = (hostname: string) =>
+	Object.entries(ATS_BOARDS).find(([, { host }]) =>
+		hostMatches(hostname, host),
+	)?.[0];
 
 export function getCompanies(): Company[] {
 	failIfRequested("getCompanies");
@@ -52,9 +61,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 	} catch {
 		return null;
 	}
-	const atsSource = Object.entries(ATS_HOSTS).find(([host]) =>
-		hostMatches(hostname, host),
-	)?.[1];
+	const atsSource = atsSourceForHost(hostname);
 	if (!atsSource) return null;
 
 	const token = url.replace(/\/$/, "").split("/").pop() ?? hostname;
@@ -95,7 +102,7 @@ export function getTrackedCompanies(): TrackedCompany[] {
 					source: b.Source,
 					board_token: b.BoardToken,
 					status: b.Status,
-					url: BOARD_URLS[b.Source]?.(b.BoardToken) ?? "",
+					url: ATS_BOARDS[b.Source]?.url(b.BoardToken) ?? "",
 				})),
 			open_jobs: c.JobCount,
 			relevant_jobs: getJobs().filter(
@@ -128,9 +135,7 @@ export function addCompanyBoard(
 	} catch {
 		return null;
 	}
-	const source = Object.entries(ATS_HOSTS).find(([host]) =>
-		hostMatches(hostname, host),
-	)?.[1];
+	const source = atsSourceForHost(hostname);
 	if (!source) return null;
 	const token = url.replace(/\/$/, "").split("/").pop() ?? hostname;
 	const existing = companyBoards.find(

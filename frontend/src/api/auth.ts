@@ -1,44 +1,28 @@
 import { type Me, meSchema } from "../types/me";
-import { apiFetch } from "./client";
-import { API_BASE, MOCK_BUILD, mockDelay } from "./config";
+import { apiFetch, apiFetchVoid, jsonInit } from "./client";
+import { MOCK_BUILD, mocked } from "./config";
 
 export async function auth(
 	path: "/auth/login" | "/auth/signup",
 	username: string,
 	password: string,
-): Promise<Response> {
+): Promise<void> {
 	if (MOCK_BUILD) {
-		void password;
 		const { switchMockUser } = await import("../mocks/db");
 		switchMockUser(username);
-		return new Response(JSON.stringify({ ok: true }), {
-			status: 200,
-			headers: { "Content-Type": "application/json" },
-		});
+		return;
 	}
-	return fetch(`${API_BASE}${path}`, {
-		method: "POST",
-		credentials: "include",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ username, password }),
-	});
+	await apiFetchVoid(path, jsonInit("POST", { username, password }));
 }
 
-export function logout(): Promise<Response> {
-	if (MOCK_BUILD) {
-		return Promise.resolve(new Response(null, { status: 200 }));
-	}
-	return fetch(`${API_BASE}/auth/logout`, {
-		method: "POST",
-		credentials: "include",
-	});
+export async function logout(): Promise<void> {
+	if (MOCK_BUILD) return;
+	await apiFetchVoid("/auth/logout", { method: "POST" });
 }
 
 export async function fetchMe(): Promise<Me> {
-	if (MOCK_BUILD) {
-		const { mockUser } = await import("../mocks/db");
-		await mockDelay();
-		return mockUser;
-	}
-	return apiFetch("/auth/me", undefined, meSchema);
+	return mocked(
+		(db) => db.mockUser,
+		() => apiFetch("/auth/me", meSchema),
+	);
 }

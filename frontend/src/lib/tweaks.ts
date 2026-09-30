@@ -83,7 +83,7 @@ export const THEME_VAR_NAMES = [
 	"--color-accent-text",
 ];
 
-export interface ThemeVarGroup {
+interface ThemeVarGroup {
 	label: string;
 	vars: { key: string; label: string }[];
 }

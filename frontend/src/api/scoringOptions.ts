@@ -8,6 +8,6 @@ import { mocked } from "./config";
 export async function fetchScoringOptions(): Promise<ScoringOptionsView> {
 	return mocked(
 		(db) => db.getScoringOptions(),
-		() => apiFetch("/scoring-options", undefined, scoringOptionsSchema),
+		() => apiFetch("/scoring-options", scoringOptionsSchema),
 	);
 }

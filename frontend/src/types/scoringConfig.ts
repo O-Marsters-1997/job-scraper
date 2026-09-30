@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const pickSchema = z.object({
+const pickSchema = z.object({
 	optionId: z.string(),
 	stance: z.string(),
 	source: z.string(),
@@ -9,20 +9,16 @@ export const pickSchema = z.object({
 
 export type Pick = z.infer<typeof pickSchema>;
 
-export const moneySchema = z.object({
+const moneySchema = z.object({
 	amount: z.number().int().min(0),
 	currency: z.string().min(1),
 });
 
-export type Money = z.infer<typeof moneySchema>;
-
-export const preferencesSchema = z.object({
+const preferencesSchema = z.object({
 	picks: z.array(pickSchema),
 	salaryFloor: moneySchema.nullable(),
 	preferenceText: z.string(),
 });
-
-export type Preferences = z.infer<typeof preferencesSchema>;
 
 export const scoringConfigSchema = z.object({
 	preferences: preferencesSchema,

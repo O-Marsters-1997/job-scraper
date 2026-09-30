@@ -1,8 +1,5 @@
+import assert from "node:assert/strict";
 import { scoringConfigSchema } from "../types/scoringConfig";
-
-function ok(cond: boolean, msg: string) {
-	if (!cond) throw new Error(`FAIL: ${msg}`);
-}
 
 const base = {
 	notifyThreshold: 70,
@@ -25,9 +22,9 @@ const base = {
 };
 
 const valid = scoringConfigSchema.parse(base);
-ok(valid.notifyThreshold === 70, "valid config parses");
-ok(valid.excludedTitleKeywords.length === 2, "exclusion lists parse");
-ok(valid.preferences.picks.length === 1, "picks parse");
+assert.ok(valid.notifyThreshold === 70, "valid config parses");
+assert.ok(valid.excludedTitleKeywords.length === 2, "exclusion lists parse");
+assert.ok(valid.preferences.picks.length === 1, "picks parse");
 
 let threw = false;
 try {
@@ -35,7 +32,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "threshold > 100 rejected");
+assert.ok(threw, "threshold > 100 rejected");
 
 threw = false;
 try {
@@ -43,7 +40,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "threshold < 0 rejected");
+assert.ok(threw, "threshold < 0 rejected");
 
 threw = false;
 try {
@@ -51,7 +48,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "float threshold rejected");
+assert.ok(threw, "float threshold rejected");
 
 threw = false;
 try {
@@ -59,7 +56,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "non-string exclusion entry rejected");
+assert.ok(threw, "non-string exclusion entry rejected");
 
 threw = false;
 try {
@@ -70,7 +67,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "a pick missing source is rejected");
+assert.ok(threw, "a pick missing source is rejected");
 
 threw = false;
 try {
@@ -84,7 +81,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "a negative salary floor amount is rejected");
+assert.ok(threw, "a negative salary floor amount is rejected");
 
 const withFloor = scoringConfigSchema.parse({
 	...base,
@@ -93,13 +90,13 @@ const withFloor = scoringConfigSchema.parse({
 		salaryFloor: { amount: 55000, currency: "GBP" },
 	},
 });
-ok(
+assert.ok(
 	withFloor.preferences.salaryFloor?.amount === 55000,
 	"a salary floor parses",
 );
 
 const withoutBackfillQueued = scoringConfigSchema.parse(base);
-ok(
+assert.ok(
 	withoutBackfillQueued.backfillQueued === 0,
 	"backfillQueued defaults to 0 when absent",
 );
@@ -108,4 +105,4 @@ const withBackfillQueued = scoringConfigSchema.parse({
 	...base,
 	backfillQueued: 3,
 });
-ok(withBackfillQueued.backfillQueued === 3, "backfillQueued parses");
+assert.ok(withBackfillQueued.backfillQueued === 3, "backfillQueued parses");

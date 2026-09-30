@@ -3,7 +3,6 @@ import {
 	addTrackedDoc,
 	fetchCVTemplates,
 	hideTab,
-	removeTrackedDoc,
 	showTab,
 } from "../api/cvTemplates";
 import { keys } from "../api/keys";
@@ -19,17 +18,7 @@ export function useCVTemplates() {
 }
 
 export function useAddTrackedDoc() {
-	return useInvalidatingMutation(
-		(url: string) => addTrackedDoc(url),
-		[keys.cvTemplates],
-	);
-}
-
-export function useRemoveTrackedDoc() {
-	return useInvalidatingMutation(
-		(docId: string) => removeTrackedDoc(docId),
-		[keys.cvTemplates],
-	);
+	return useInvalidatingMutation(addTrackedDoc, [keys.cvTemplates]);
 }
 
 export function useHideTab() {

@@ -63,7 +63,7 @@ export function applyTheme(
 	}
 }
 
-export function applyFont(key: FontKey): void {
+function applyFont(key: FontKey): void {
 	const root = document.documentElement;
 	if (key === "jakarta") {
 		for (const v of FONT_VAR_NAMES) root.style.removeProperty(v);
@@ -73,7 +73,7 @@ export function applyFont(key: FontKey): void {
 	}
 }
 
-export function applyRadius(key: RadiusKey): void {
+function applyRadius(key: RadiusKey): void {
 	const root = document.documentElement;
 	for (const v of ALL_RADIUS_VARS) root.style.removeProperty(v);
 	for (const [v, val] of Object.entries(RADIUS_OVERRIDES[key])) {
@@ -81,7 +81,7 @@ export function applyRadius(key: RadiusKey): void {
 	}
 }
 
-export function applySidebarWidth(key: SidebarWidthKey): void {
+function applySidebarWidth(key: SidebarWidthKey): void {
 	const w = SIDEBAR_W[key];
 	if (w) {
 		document.documentElement.style.setProperty("--sidebar-w", w);
@@ -90,7 +90,7 @@ export function applySidebarWidth(key: SidebarWidthKey): void {
 	}
 }
 
-export function applySize(key: SizeKey): void {
+function applySize(key: SizeKey): void {
 	if (key === "sm") {
 		document.documentElement.removeAttribute("data-size");
 	} else {
@@ -98,7 +98,7 @@ export function applySize(key: SizeKey): void {
 	}
 }
 
-export function applyDensity(key: DensityKey): void {
+function applyDensity(key: DensityKey): void {
 	if (key === "default") {
 		document.documentElement.removeAttribute("data-density");
 	} else {
@@ -106,7 +106,7 @@ export function applyDensity(key: DensityKey): void {
 	}
 }
 
-export function applyAll(t: Tweaks): void {
+function applyAll(t: Tweaks): void {
 	applyTheme(t.theme, t.customColors);
 	applyFont(t.font);
 	applyRadius(t.radius);

@@ -3,7 +3,7 @@ import { disconnectGoogle, fetchGoogleStatus } from "../api/google";
 import { keys } from "../api/keys";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const googleStatusQueryOptions = queryOptions({
+const googleStatusQueryOptions = queryOptions({
 	queryKey: keys.google,
 	queryFn: fetchGoogleStatus,
 	retry: false,

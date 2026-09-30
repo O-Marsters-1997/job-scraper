@@ -2,7 +2,8 @@ import { createSignal, onCleanup, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { UnresolvableBoardError } from "../../../../api/companies";
 import { useAddCompany } from "../../../../hooks/useCompanies";
-import { useResolveBoard } from "../../../../hooks/useResolveBoard";
+import { useResolveUrl } from "../../../../hooks/useSources";
+import { ResolveError } from "../../../../lib/resolveError";
 import type { SourceInfo } from "../../../../types/source";
 import { SearchField } from "./parts";
 
@@ -25,7 +26,7 @@ export function TrackCompanyBox(props: {
 		timer = setTimeout(() => setUrl(value.trim()), DEBOUNCE_MS);
 	};
 
-	const resolved = useResolveBoard(url);
+	const resolved = useResolveUrl(url, () => /^https?:\/\/\S+$/i.test(url()));
 	const board = () => {
 		const r = resolved.data;
 		if (!r || url() !== raw().trim()) return undefined;
@@ -35,7 +36,7 @@ export function TrackCompanyBox(props: {
 	const unrecognised = () =>
 		url() !== "" &&
 		url() === raw().trim() &&
-		resolved.isSuccess &&
+		(resolved.isSuccess || resolved.error instanceof ResolveError) &&
 		board() === undefined;
 
 	const track = async () => {

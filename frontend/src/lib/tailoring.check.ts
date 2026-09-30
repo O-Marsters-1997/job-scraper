@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import type { CVHeading, DraftFinding, Suggestion } from "../types/tailoring";
 import {
 	allConfirmed,
@@ -16,16 +17,12 @@ const heading = (text: string, confirmed: boolean): CVHeading => ({
 	slotCount: 2,
 });
 
-function assert(cond: boolean, msg: string): void {
-	if (!cond) throw new Error(msg);
-}
-
-assert(allConfirmed([]), "no headings counts as confirmed");
-assert(
+assert.ok(allConfirmed([]), "no headings counts as confirmed");
+assert.ok(
 	allConfirmed([heading("A", true), heading("B", true)]),
 	"all confirmed skips the mapping step",
 );
-assert(
+assert.ok(
 	!allConfirmed([heading("A", true), heading("B", false)]),
 	"one unconfirmed heading keeps the mapping step",
 );
@@ -33,11 +30,11 @@ assert(
 const mappings = toMappings([heading("A", false), heading("B", false)], {
 	A: null,
 });
-assert(
+assert.ok(
 	mappings[0]?.positionId === null,
 	"a chosen none overrides the auto-match",
 );
-assert(
+assert.ok(
 	mappings[1]?.positionId === "p1",
 	"an untouched heading keeps its match",
 );
@@ -54,15 +51,15 @@ const picked = selectedAchievementIds(
 	[suggestion("a", true), suggestion("b", true), suggestion("c", false)],
 	{ b: false, c: true },
 );
-assert(
+assert.ok(
 	picked.join() === "a,c",
 	"an override beats the preselection, either way",
 );
-assert(
+assert.ok(
 	isSettled("ready") && isSettled("failed"),
 	"ready and failed stop polling",
 );
-assert(
+assert.ok(
 	!isSettled("pending") && !isSettled("running"),
 	"in-flight keeps polling",
 );
@@ -78,21 +75,21 @@ const findings = [
 	finding("skills", "info", "Terraform"),
 	finding("grounding", "block", "40%"),
 ];
-assert(
+assert.ok(
 	reviewFindings(findings)
 		.map((f) => f.message)
 		.join() === "40%,long",
 	"findings list blocking first and leave skill gaps out",
 );
-assert(
+assert.ok(
 	skillGaps(findings).join() === "Terraform",
 	"info-level skills findings are the skill gaps",
 );
-assert(
+assert.ok(
 	keptDraft([{ outcome: null }, { outcome: "kept" }])?.outcome === "kept",
 	"the kept draft is found among a job's drafts",
 );
-assert(
+assert.ok(
 	keptDraft([{ outcome: "discarded" }]) === undefined,
 	"a discarded draft is not kept",
 );

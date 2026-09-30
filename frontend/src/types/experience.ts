@@ -25,7 +25,7 @@ export interface PositionInput {
 	endDate: string | null;
 }
 
-export const importPositionSchema = z.object({
+const importPositionSchema = z.object({
 	employer: z.string(),
 	title: z.string(),
 	startDate: z.string().nullable(),

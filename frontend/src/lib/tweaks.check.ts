@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { DEFAULTS, loadTweaks, STORAGE_KEY } from "./tweaks";
 
 const saved = globalThis.localStorage;
@@ -13,10 +14,9 @@ globalThis.localStorage = {
 } as Storage;
 try {
 	const tweaks = loadTweaks();
-	if (tweaks.font !== DEFAULTS.font || tweaks.radius !== DEFAULTS.radius)
-		throw new Error("unknown saved keys must use defaults");
-	if (tweaks.customColors["--other"] !== undefined)
-		throw new Error("unknown CSS variables must be ignored");
+	assert.equal(tweaks.font, DEFAULTS.font);
+	assert.equal(tweaks.radius, DEFAULTS.radius);
+	assert.equal(tweaks.customColors["--other"], undefined);
 } finally {
 	globalThis.localStorage = saved;
 }

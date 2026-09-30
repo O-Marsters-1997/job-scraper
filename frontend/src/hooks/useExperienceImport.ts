@@ -4,7 +4,6 @@ import {
 	previewExperienceImport,
 } from "../api/experienceImport";
 import { keys } from "../api/keys";
-import type { ImportPosition } from "../types/experience";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export function usePreviewExperienceImport() {
@@ -15,8 +14,5 @@ export function usePreviewExperienceImport() {
 }
 
 export function useImportExperience() {
-	return useInvalidatingMutation(
-		(positions: ImportPosition[]) => importExperience(positions),
-		[keys.experience],
-	);
+	return useInvalidatingMutation(importExperience, [keys.experience]);
 }
