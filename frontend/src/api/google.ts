@@ -5,7 +5,7 @@ import { mocked } from "./config";
 export async function fetchGoogleStatus(): Promise<GoogleStatus> {
 	return mocked(
 		(db) => db.getGoogleStatus(),
-		() => apiFetch("/google/status", undefined, googleStatusSchema),
+		() => apiFetch("/google/status", googleStatusSchema),
 	);
 }
 

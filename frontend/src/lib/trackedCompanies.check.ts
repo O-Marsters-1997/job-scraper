@@ -1,13 +1,7 @@
+import assert from "node:assert/strict";
 import type { TrackedCompany } from "@/types/company";
 import type { SearchParams } from "./searchTargets";
 import { boardCounts, matchesCompany, sortCompanies } from "./trackedCompanies";
-
-function eq(a: unknown, b: unknown): void {
-	if (JSON.stringify(a) !== JSON.stringify(b))
-		throw new Error(
-			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
-		);
-}
 
 const company = (
 	name: string,
@@ -51,29 +45,29 @@ const all = [zed, acme];
 
 const params = (p: SearchParams): SearchParams => p;
 
-eq(matchesCompany(acme, params({ q: " ACM " })), true);
-eq(matchesCompany(acme, params({ q: "zed" })), false);
-eq(matchesCompany(zed, params({ src: "lever" })), true);
-eq(matchesCompany(acme, params({ src: "lever" })), false);
+assert.deepEqual(matchesCompany(acme, params({ q: " ACM " })), true);
+assert.deepEqual(matchesCompany(acme, params({ q: "zed" })), false);
+assert.deepEqual(matchesCompany(zed, params({ src: "lever" })), true);
+assert.deepEqual(matchesCompany(acme, params({ src: "lever" })), false);
 
-eq(
+assert.deepEqual(
 	sortCompanies(all, "company", "asc").map((c) => c.name),
 	["Acme", "Zed"],
 );
-eq(
+assert.deepEqual(
 	sortCompanies(all, "open", "desc").map((c) => c.name),
 	["Zed", "Acme"],
 );
-eq(
+assert.deepEqual(
 	sortCompanies(all, "checked", "asc").map((c) => c.name),
 	["Acme", "Zed"],
 );
-eq(
+assert.deepEqual(
 	sortCompanies(all, "search", "asc").map((c) => c.name),
 	["Zed", "Acme"],
 );
 
-eq(
+assert.deepEqual(
 	[...boardCounts(all)],
 	[
 		["lever", 1],

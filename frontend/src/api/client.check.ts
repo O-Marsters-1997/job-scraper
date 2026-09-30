@@ -1,28 +1,30 @@
+import assert from "node:assert/strict";
 import { z } from "zod";
-import { apiFetch } from "./client";
+import { ApiError, apiFetch } from "./client";
 import { API_BASE } from "./config";
 
 const originalFetch = globalThis.fetch;
 let requested = "";
 let credentials: RequestCredentials | undefined;
+let response = () => Response.json({ id: 123 });
 globalThis.fetch = async (input, init) => {
 	requested = String(input);
 	credentials = init?.credentials;
-	return Response.json({ id: 123 });
+	return response();
 };
 try {
-	let rejected = false;
-	try {
-		await apiFetch("/jobs", undefined, z.object({ id: z.string() }));
-	} catch {
-		rejected = true;
-	}
-	if (
-		!rejected ||
-		requested !== `${API_BASE}/jobs` ||
-		credentials !== "include"
-	)
-		throw new Error("apiFetch must validate responses and send credentials");
+	await assert.rejects(apiFetch("/jobs", z.object({ id: z.string() })));
+	assert.equal(requested, `${API_BASE}/jobs`);
+	assert.equal(credentials, "include");
+
+	response = () => Response.json({ error: "taken" }, { status: 409 });
+	await assert.rejects(
+		apiFetch("/jobs", z.unknown()),
+		(err) =>
+			err instanceof ApiError &&
+			err.status === 409 &&
+			(err.body as { error: string }).error === "taken",
+	);
 } finally {
 	globalThis.fetch = originalFetch;
 }

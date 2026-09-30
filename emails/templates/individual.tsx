@@ -1,5 +1,10 @@
-import { Html, Body, Container, Heading } from "@react-email/components";
-import { Tailwind } from "@react-email/tailwind";
+import {
+  Body,
+  Container,
+  Heading,
+  Html,
+  Tailwind,
+} from "@react-email/components";
 import { JobCard, type JobCardProps } from "../components/job-card";
 
 const sampleJob: JobCardProps = {

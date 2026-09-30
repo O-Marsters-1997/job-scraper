@@ -165,7 +165,7 @@ export const JOB_TITLES = [
 	"Software Development Engineer in Test",
 ];
 
-export const BREAKDOWN_PICKS: {
+const BREAKDOWN_PICKS: {
 	key: string;
 	label: string;
 	stance: "nice" | "avoid";

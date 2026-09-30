@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { queryClient } from "@/lib/queryClient";
 import { auth } from "../../api/auth";
+import { ApiError } from "../../api/client";
 import { AuthShell } from "./auth-shell";
 
 export interface AuthFormMode {
@@ -38,18 +39,16 @@ export function AuthForm(props: { mode: AuthFormMode }) {
 		setError("");
 		setLoading(true);
 		try {
-			const res = await auth(props.mode.path, username(), password());
-			if (res.ok) {
-				queryClient.clear();
-				navigate({ to: "/jobs" });
-			} else {
-				setError(
-					props.mode.statusMessages[res.status] ??
-						props.mode.defaultErrorMessage,
-				);
-			}
-		} catch {
-			setError("Could not reach the server. Please try again.");
+			await auth(props.mode.path, username(), password());
+			queryClient.clear();
+			navigate({ to: "/jobs" });
+		} catch (err) {
+			setError(
+				err instanceof ApiError
+					? (props.mode.statusMessages[err.status] ??
+							props.mode.defaultErrorMessage)
+					: "Could not reach the server. Please try again.",
+			);
 		} finally {
 			setLoading(false);
 		}

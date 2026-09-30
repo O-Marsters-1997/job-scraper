@@ -39,7 +39,7 @@ export class KeptDraftExistsError extends Error {
 	}
 }
 
-export function isSkillGap(f: DraftFinding): boolean {
+function isSkillGap(f: DraftFinding): boolean {
 	return f.check === "skills" && f.severity === "info";
 }
 

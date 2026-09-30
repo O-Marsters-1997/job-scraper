@@ -3,13 +3,13 @@ import {
 	type ScoringConfigInput,
 	scoringConfigSchema,
 } from "../types/scoringConfig";
-import { apiFetch } from "./client";
+import { apiFetch, jsonInit } from "./client";
 import { mocked } from "./config";
 
 export async function fetchScoringConfig(): Promise<ScoringConfig> {
 	return mocked(
 		(db) => db.getScoringConfig(),
-		() => apiFetch("/scoring-config", undefined, scoringConfigSchema),
+		() => apiFetch("/scoring-config", scoringConfigSchema),
 	);
 }
 
@@ -23,12 +23,8 @@ export async function updateScoringConfig(
 		() =>
 			apiFetch(
 				"/scoring-config",
-				{
-					method: "PUT",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(validated),
-				},
 				scoringConfigSchema,
+				jsonInit("PUT", validated),
 			),
 	);
 }
