@@ -1,16 +1,19 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import {
+	TrackApplicationDialog,
+	toExistingApp,
+} from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Card } from "@/components/ui/card";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
-import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { useApplications } from "../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../types/application";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
-import { EditApplicationDialog } from "./-applications/EditApplicationDialog";
 
 export const Route = createFileRoute("/_auth/applications")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -31,6 +34,16 @@ function ApplicationsPage() {
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
 
+	const editing = () => {
+		const app = editingApp();
+		return app
+			? {
+					job: { ID: app.JobID, Title: app.JobTitle },
+					existing: toExistingApp(app),
+				}
+			: undefined;
+	};
+
 	const openEdit = (app: ApplicationWithDetails) => {
 		setEditingApp(app);
 		setModalOpen(true);
@@ -42,14 +55,6 @@ function ApplicationsPage() {
 		return status?.Colour ?? STATUS_FALLBACK_COLOUR;
 	};
 
-	const chipClass = (active: boolean) =>
-		cn(
-			"inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
-			active
-				? "border-primary bg-accent-subtle text-accent-text"
-				: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
-		);
-
 	return (
 		<div class="px-7 py-6">
 			<PageHeading
@@ -58,32 +63,28 @@ function ApplicationsPage() {
 			/>
 
 			<div class="mb-4 flex flex-wrap items-center gap-1.5">
-				<button
-					type="button"
+				<ToggleChip
+					active={!search().status}
 					onClick={() =>
 						navigate({ to: "/applications", search: { status: undefined } })
 					}
-					aria-pressed={!search().status}
-					class={chipClass(!search().status)}
 				>
 					All
-				</button>
+				</ToggleChip>
 				<For each={statusesQuery.data}>
 					{(s) => (
-						<button
-							type="button"
+						<ToggleChip
+							active={search().status === s.ID}
 							onClick={() =>
 								navigate({ to: "/applications", search: { status: s.ID } })
 							}
-							aria-pressed={search().status === s.ID}
-							class={chipClass(search().status === s.ID)}
 						>
 							<span
 								class="inline-block size-2 rounded-full"
 								style={{ background: s.Colour }}
 							/>
 							{s.Name}
-						</button>
+						</ToggleChip>
 					)}
 				</For>
 			</div>
@@ -146,10 +147,11 @@ function ApplicationsPage() {
 				)}
 			</QueryBoundary>
 
-			<EditApplicationDialog
-				app={editingApp()}
+			<TrackApplicationDialog
 				open={modalOpen()}
 				onOpenChange={setModalOpen}
+				job={editing()?.job}
+				existingApp={editing()?.existing}
 			/>
 
 			<DeleteApplicationDialog

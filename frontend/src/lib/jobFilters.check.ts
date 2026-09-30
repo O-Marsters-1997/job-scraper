@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import {
 	activeFilterCount,
 	applyJobFilters,
@@ -8,32 +9,28 @@ import {
 } from "./jobFilters";
 
 // ponytail: inline assert so tsgo doesn't need @types/node
-function ok(cond: boolean, msg?: string): void {
-	if (!cond) throw new Error(msg ?? "assertion failed");
-}
-function eq(a: unknown, b: unknown): void {
-	if (JSON.stringify(a) !== JSON.stringify(b))
-		throw new Error(
-			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
-		);
-}
+assert.deepEqual(parseSalary("£80,000 to £95,000"), { min: 80000, max: 95000 });
+assert.deepEqual(parseSalary("£80k - £95k"), { min: 80000, max: 95000 });
+assert.deepEqual(parseSalary("Up to £90k"), { min: 90000, max: 90000 });
+assert.deepEqual(parseSalary("$120,000"), { min: 120000, max: 120000 });
+assert.deepEqual(parseSalary("€50k–€70k"), { min: 50000, max: 70000 });
+assert.ok(parseSalary("") === null);
+assert.ok(parseSalary(null) === null);
+assert.ok(parseSalary("competitive salary") === null);
 
-eq(parseSalary("£80,000 to £95,000"), { min: 80000, max: 95000 });
-eq(parseSalary("£80k - £95k"), { min: 80000, max: 95000 });
-eq(parseSalary("Up to £90k"), { min: 90000, max: 90000 });
-eq(parseSalary("$120,000"), { min: 120000, max: 120000 });
-eq(parseSalary("€50k–€70k"), { min: 50000, max: 70000 });
-ok(parseSalary("") === null);
-ok(parseSalary(null) === null);
-ok(parseSalary("competitive salary") === null);
-
-ok(normalizeArrangement({ WorkArrangement: "remote" } as never) === "remote");
-ok(normalizeArrangement({ WorkArrangement: "hybrid" } as never) === "hybrid");
-ok(normalizeArrangement({ WorkArrangement: "onsite" } as never) === "onsite");
-ok(normalizeArrangement({ DaysInOffice: 0 } as never) === "remote");
-ok(normalizeArrangement({ DaysInOffice: 3 } as never) === "hybrid");
-ok(normalizeArrangement({ DaysInOffice: 5 } as never) === "onsite");
-ok(normalizeArrangement({} as never) === "unknown");
+assert.ok(
+	normalizeArrangement({ WorkArrangement: "remote" } as never) === "remote",
+);
+assert.ok(
+	normalizeArrangement({ WorkArrangement: "hybrid" } as never) === "hybrid",
+);
+assert.ok(
+	normalizeArrangement({ WorkArrangement: "onsite" } as never) === "onsite",
+);
+assert.ok(normalizeArrangement({ DaysInOffice: 0 } as never) === "remote");
+assert.ok(normalizeArrangement({ DaysInOffice: 3 } as never) === "hybrid");
+assert.ok(normalizeArrangement({ DaysInOffice: 5 } as never) === "onsite");
+assert.ok(normalizeArrangement({} as never) === "unknown");
 
 const base = {
 	ID: "1",
@@ -74,12 +71,12 @@ const jobs = [
 	},
 ] as never[];
 
-ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
+assert.ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 
 {
 	const r = applyJobFilters(jobs, { ...DEFAULT_FILTERS, suit: 75 });
-	ok(r.length === 1);
-	ok((r[0] as { ID: string }).ID === "1");
+	assert.ok(r.length === 1);
+	assert.ok((r[0] as { ID: string }).ID === "1");
 }
 
 {
@@ -87,7 +84,7 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 		...DEFAULT_FILTERS,
 		src: ["LinkedIn", "Lever"],
 	});
-	ok(r.length === 2);
+	assert.ok(r.length === 2);
 }
 
 {
@@ -95,7 +92,7 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 		...DEFAULT_FILTERS,
 		work: ["remote", "hybrid"],
 	});
-	ok(r.length === 2);
+	assert.ok(r.length === 2);
 }
 
 {
@@ -105,12 +102,12 @@ ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 		salMin: 70000,
 		salMax: 90000,
 	});
-	ok(r.length === 1);
-	ok((r[0] as { ID: string }).ID === "1");
+	assert.ok(r.length === 1);
+	assert.ok((r[0] as { ID: string }).ID === "1");
 }
 
-ok(activeFilterCount(DEFAULT_FILTERS) === 0);
-ok(
+assert.ok(activeFilterCount(DEFAULT_FILTERS) === 0);
+assert.ok(
 	activeFilterCount({
 		...DEFAULT_FILTERS,
 		suit: 50,
@@ -119,7 +116,7 @@ ok(
 	}) === 3,
 );
 
-eq(
+assert.deepEqual(
 	filterCompanyJobs(
 		[
 			{ ID: "1", CompanyID: "company-a", CompanySlug: "other" },

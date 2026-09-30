@@ -3,11 +3,10 @@
 package jev
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 )
 
 const (
@@ -174,31 +174,10 @@ func (c *Client) answerBatch(ctx context.Context, apiKey string, state choiceSta
 		batchQs[q] = qs[q]
 	}
 
-	body, err := json.Marshal(choiceRequest{Model: Model, State: state, Questions: batchQs})
-	if err != nil {
-		return nil, dto.Usage{}, fmt.Errorf("marshal jev request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, dto.Usage{}, fmt.Errorf("build jev request: %w", err)
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return nil, dto.Usage{}, fmt.Errorf("jev decisions request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, dto.Usage{}, classifyStatus(resp)
-	}
-
 	var decoded choiceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, dto.Usage{}, fmt.Errorf("decode jev response: %w", err)
+	req := choiceRequest{Model: Model, State: state, Questions: batchQs}
+	if err := openrouter.Post(ctx, c.http, c.baseURL, apiKey, req, &decoded); err != nil {
+		return nil, dto.Usage{}, classifyError(err)
 	}
 
 	answers := make(map[string]dto.Answer, len(questions))
@@ -218,14 +197,17 @@ func (c *Client) answerBatch(ctx context.Context, apiKey string, state choiceSta
 	return answers, dto.Usage{Model: decoded.Model, Cost: decoded.Usage.Cost}, nil
 }
 
-func classifyStatus(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-	wrapped := fmt.Errorf("jev decisions: status %d: %s", resp.StatusCode, string(body))
-	switch resp.StatusCode {
+func classifyError(err error) error {
+	wrapped := fmt.Errorf("jev decisions: %w", err)
+	var se *openrouter.StatusError
+	if !errors.As(err, &se) {
+		return wrapped
+	}
+	switch se.Code {
 	case http.StatusUnauthorized, http.StatusPaymentRequired:
 		return TerminalError(wrapped)
 	case http.StatusTooManyRequests:
-		if retryAfter, ok := parseRetryAfter(resp); ok {
+		if retryAfter, ok := parseRetryAfter(se.Header); ok {
 			return RateLimitedError(wrapped, retryAfter)
 		}
 	}
@@ -234,8 +216,8 @@ func classifyStatus(resp *http.Response) error {
 
 // ponytail: seconds form only (RFC 9110 also allows an HTTP-date); add that
 // if OpenRouter sends one.
-func parseRetryAfter(resp *http.Response) (time.Duration, bool) {
-	secs, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+func parseRetryAfter(h http.Header) (time.Duration, bool) {
+	secs, err := strconv.Atoi(h.Get("Retry-After"))
 	if err != nil || secs < 0 {
 		return 0, false
 	}

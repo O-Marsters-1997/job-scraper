@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
 
@@ -159,7 +160,7 @@ func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
 	client := fakeServer(t, `{"positions":[]}`, 0, &captured)
 	in := baseInput()
 	in.PriorEdits = &cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: "pos-1"}}}
-	in.PriorFindings = []cvedit.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
+	in.PriorFindings = []checks.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
 	in.ShortenBullets = []string{"A very long bullet about latency"}
 
 	if _, err := client.Edit(context.Background(), "sk-or-test", in); err != nil {

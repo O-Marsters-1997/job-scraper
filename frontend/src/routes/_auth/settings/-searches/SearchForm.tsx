@@ -1,4 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,7 +10,6 @@ import {
 	SelectTrigger,
 } from "@/components/ui/select";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import { cn } from "@/lib/utils";
 import { ConflictError } from "../../../../api/sourceTargets";
 import { useCreateSourceTarget } from "../../../../hooks/useSourceTargets";
 import type { SourceFilterField, SourceInfo } from "../../../../types/source";
@@ -139,19 +139,12 @@ export function SearchForm(props: {
 					}
 				>
 					{(s) => (
-						<button
-							type="button"
-							aria-pressed={sourceName() === s.name}
+						<ToggleChip
+							active={sourceName() === s.name}
 							onClick={() => pickSource(s.name)}
-							class={cn(
-								"rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-								sourceName() === s.name
-									? "border-accent-border bg-accent-subtle text-accent-text"
-									: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
-							)}
 						>
 							{s.label}
-						</button>
+						</ToggleChip>
 					)}
 				</For>
 			</fieldset>

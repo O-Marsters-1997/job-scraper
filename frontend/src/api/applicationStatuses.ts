@@ -2,21 +2,13 @@ import {
 	type ApplicationStatus,
 	applicationStatusSchema,
 } from "../types/applicationStatus";
-import { apiFetch } from "./client";
-import { API_BASE, mockDelay, mocked } from "./config";
+import { ApiError, apiFetch, apiFetchVoid, jsonInit } from "./client";
+import { mocked } from "./config";
 
 export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
 	return mocked(
-		async (db) => {
-			await mockDelay();
-			return db.getStatuses();
-		},
-		() =>
-			apiFetch(
-				"/application-statuses",
-				undefined,
-				applicationStatusSchema.array(),
-			),
+		(db) => db.getStatuses(),
+		() => apiFetch("/application-statuses", applicationStatusSchema.array()),
 	);
 }
 
@@ -25,19 +17,12 @@ export async function createApplicationStatus(
 	colour: string,
 ): Promise<ApplicationStatus> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.createStatus(name, colour);
-		},
+		(db) => db.createStatus(name, colour),
 		() =>
 			apiFetch(
 				"/application-statuses",
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name, colour }),
-				},
 				applicationStatusSchema,
+				jsonInit("POST", { name, colour }),
 			),
 	);
 }
@@ -48,19 +33,12 @@ export async function updateApplicationStatus(
 	colour: string,
 ): Promise<ApplicationStatus> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.updateStatus(id, name, colour);
-		},
+		(db) => db.updateStatus(id, name, colour),
 		() =>
 			apiFetch(
 				`/application-statuses/${id}`,
-				{
-					method: "PATCH",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name, colour }),
-				},
 				applicationStatusSchema,
+				jsonInit("PATCH", { name, colour }),
 			),
 	);
 }
@@ -69,22 +47,16 @@ export async function deleteApplicationStatus(
 	id: string,
 ): Promise<{ count?: number }> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.deleteStatus(id);
-		},
-		async () => {
-			const response = await fetch(`${API_BASE}/application-statuses/${id}`, {
-				method: "DELETE",
-				credentials: "include",
-			});
-			if (response.status === 409) {
-				const body = await response.json();
-				return { count: body.count };
-			}
-			if (!response.ok)
-				throw new Error(`Failed to delete status: ${response.status}`);
-			return {};
-		},
+		(db) => db.deleteStatus(id),
+		() =>
+			apiFetchVoid(`/application-statuses/${id}`, { method: "DELETE" }).then(
+				(): { count?: number } => ({}),
+				(err) => {
+					if (err instanceof ApiError && err.status === 409) {
+						return { count: (err.body as { count: number }).count };
+					}
+					throw err;
+				},
+			),
 	);
 }

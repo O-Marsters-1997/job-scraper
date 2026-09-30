@@ -1,8 +1,5 @@
+import assert from "node:assert/strict";
 import { scoringOptionsSchema } from "../types/scoringOptions";
-
-function ok(cond: boolean, msg: string) {
-	if (!cond) throw new Error(`FAIL: ${msg}`);
-}
 
 const base = {
 	dimensions: [{ key: "tech", kind: "pair", stances: ["nice", "avoid"] }],
@@ -10,8 +7,8 @@ const base = {
 };
 
 const valid = scoringOptionsSchema.parse(base);
-ok(valid.dimensions.length === 1, "dimensions parse");
-ok(valid.options[0]?.id === "tech:go", "options parse");
+assert.ok(valid.dimensions.length === 1, "dimensions parse");
+assert.ok(valid.options[0]?.id === "tech:go", "options parse");
 
 let threw = false;
 try {
@@ -22,7 +19,7 @@ try {
 } catch {
 	threw = true;
 }
-ok(threw, "unknown dimension key rejected");
+assert.ok(threw, "unknown dimension key rejected");
 
 threw = false;
 try {
@@ -33,4 +30,4 @@ try {
 } catch {
 	threw = true;
 }
-ok(!threw, "extra fields on an option are ignored, not rejected");
+assert.ok(!threw, "extra fields on an option are ignored, not rejected");

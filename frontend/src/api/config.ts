@@ -1,15 +1,10 @@
-import { isDemoData } from "../lib/demoData";
+import { demoDataEnabled } from "../lib/demoData";
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export const MOCK_BUILD = import.meta.env.VITE_MOCK === "true";
 
-export function useMocks(): boolean {
-	return MOCK_BUILD || isDemoData();
-}
-
-export const mockDelay = (ms = 150): Promise<void> =>
-	new Promise((resolve) => setTimeout(resolve, ms));
+const MOCK_DELAY_MS = 150;
 
 type MocksModule = typeof import("../mocks/db");
 
@@ -19,8 +14,9 @@ export async function mocked<T>(
 	mock: (db: MocksModule) => T | Promise<T>,
 	real: () => T | Promise<T>,
 ): Promise<T> {
-	if (useMocks()) {
+	if (MOCK_BUILD || demoDataEnabled()) {
 		const db = await import("../mocks/db");
+		await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
 		return mock(db);
 	}
 	return real();

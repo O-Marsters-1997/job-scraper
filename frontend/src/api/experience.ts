@@ -5,36 +5,24 @@ import {
 	type PositionInput,
 	positionSchema,
 } from "../types/experience";
-import { apiFetch, apiFetchVoid } from "./client";
-import { mockDelay, mocked } from "./config";
-
-export const jsonInit = (method: string, body: unknown): RequestInit => ({
-	method,
-	headers: { "Content-Type": "application/json" },
-	body: JSON.stringify(body),
-});
+import { apiFetch, apiFetchVoid, jsonInit } from "./client";
+import { mocked } from "./config";
 
 export async function fetchExperience(): Promise<Position[]> {
 	return mocked(
-		async (db) => {
-			await mockDelay();
-			return db.getExperience();
-		},
-		() => apiFetch("/experience", undefined, positionSchema.array()),
+		(db) => db.getExperience(),
+		() => apiFetch("/experience", positionSchema.array()),
 	);
 }
 
 export async function createPosition(input: PositionInput): Promise<Position> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.createPosition(input);
-		},
+		(db) => db.createPosition(input),
 		() =>
 			apiFetch(
 				"/experience/positions",
-				jsonInit("POST", input),
 				positionSchema,
+				jsonInit("POST", input),
 			),
 	);
 }
@@ -44,35 +32,26 @@ export async function updatePosition(
 	input: PositionInput,
 ): Promise<Position> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.updatePosition(id, input);
-		},
+		(db) => db.updatePosition(id, input),
 		() =>
 			apiFetch(
 				`/experience/positions/${id}`,
-				jsonInit("PATCH", input),
 				positionSchema,
+				jsonInit("PATCH", input),
 			),
 	);
 }
 
 export async function deletePosition(id: string): Promise<void> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			db.deletePosition(id);
-		},
+		(db) => db.deletePosition(id),
 		() => apiFetchVoid(`/experience/positions/${id}`, { method: "DELETE" }),
 	);
 }
 
 export async function reorderPositions(ids: string[]): Promise<void> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			db.reorderPositions(ids);
-		},
+		(db) => db.reorderPositions(ids),
 		() => apiFetchVoid("/experience/positions/order", jsonInit("PUT", { ids })),
 	);
 }
@@ -82,15 +61,12 @@ export async function createAchievement(
 	text: string,
 ): Promise<Achievement> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.createAchievement(positionId, text);
-		},
+		(db) => db.createAchievement(positionId, text),
 		() =>
 			apiFetch(
 				`/experience/positions/${positionId}/achievements`,
-				jsonInit("POST", { text }),
 				achievementSchema,
+				jsonInit("POST", { text }),
 			),
 	);
 }
@@ -100,25 +76,19 @@ export async function updateAchievement(
 	text: string,
 ): Promise<Achievement> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			return db.updateAchievement(id, text);
-		},
+		(db) => db.updateAchievement(id, text),
 		() =>
 			apiFetch(
 				`/experience/achievements/${id}`,
-				jsonInit("PATCH", { text }),
 				achievementSchema,
+				jsonInit("PATCH", { text }),
 			),
 	);
 }
 
 export async function deleteAchievement(id: string): Promise<void> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			db.deleteAchievement(id);
-		},
+		(db) => db.deleteAchievement(id),
 		() => apiFetchVoid(`/experience/achievements/${id}`, { method: "DELETE" }),
 	);
 }
@@ -128,10 +98,7 @@ export async function reorderAchievements(
 	ids: string[],
 ): Promise<void> {
 	return mocked(
-		async (db) => {
-			await mockDelay(80);
-			db.reorderAchievements(positionId, ids);
-		},
+		(db) => db.reorderAchievements(positionId, ids),
 		() =>
 			apiFetchVoid(
 				`/experience/positions/${positionId}/achievements/order`,

@@ -34,8 +34,8 @@ export function useUpdateApplicationStatus() {
 }
 
 export function useDeleteApplicationStatus() {
-	return useInvalidatingMutation(
-		(id: string) => deleteApplicationStatus(id),
-		[keys.statuses, keys.applications.all],
-	);
+	return useInvalidatingMutation(deleteApplicationStatus, [
+		keys.statuses,
+		keys.applications.all,
+	]);
 }

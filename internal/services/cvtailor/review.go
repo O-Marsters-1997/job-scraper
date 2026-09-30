@@ -162,8 +162,6 @@ var stopwords = map[string]bool{
 	"into": true, "over": true, "across": true, "using": true, "through": true,
 }
 
-// markNovel splits text into segments, marking the words that appear in none
-// of the source texts. Short words and common stopwords are never novel.
 func markNovel(text string, sources []string) []dto.TextSegment {
 	known := map[string]bool{}
 	for _, src := range sources {

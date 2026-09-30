@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const scoreRowSchema = z.object({
+const scoreRowSchema = z.object({
 	key: z.string(),
 	label: z.string(),
 	stance: z.string(),
@@ -44,10 +44,3 @@ export const jobSchema = z.object({
 });
 
 export type Job = z.infer<typeof jobSchema>;
-
-export const jobPageSchema = z.object({
-	items: z.array(jobSchema),
-	next_cursor: z.string(),
-});
-
-export type JobPage = z.infer<typeof jobPageSchema>;

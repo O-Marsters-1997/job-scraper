@@ -20,16 +20,11 @@ export const headingMappingSchema = z.object({
 	positionId: z.string().nullable(),
 });
 
-export const draftStatusSchema = z.enum([
-	"pending",
-	"running",
-	"ready",
-	"failed",
-]);
+const draftStatusSchema = z.enum(["pending", "running", "ready", "failed"]);
 
-export const draftOutcomeSchema = z.enum(["kept", "discarded"]);
+const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
-export const draftFindingSchema = z.object({
+const draftFindingSchema = z.object({
 	check: z.string(),
 	severity: z.enum(["block", "warn", "info"]),
 	slotId: z.string().optional(),
@@ -37,14 +32,14 @@ export const draftFindingSchema = z.object({
 	score: z.number().optional(),
 });
 
-export const provenanceBulletSchema = z.object({
+const provenanceBulletSchema = z.object({
 	segments: z.array(z.object({ text: z.string(), novel: z.boolean() })),
 	achievements: z.array(
 		z.object({ id: z.string(), positionId: z.string(), text: z.string() }),
 	),
 });
 
-export const draftProvenanceSchema = z.object({
+const draftProvenanceSchema = z.object({
 	positions: z.array(
 		z.object({
 			positionId: z.string(),
@@ -69,7 +64,6 @@ export const draftSchema = z.object({
 
 export const draftRefSchema = z.object({ id: z.string() });
 
-export type DraftOutcome = z.infer<typeof draftOutcomeSchema>;
 export type DraftFinding = z.infer<typeof draftFindingSchema>;
 export type DraftProvenance = z.infer<typeof draftProvenanceSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;

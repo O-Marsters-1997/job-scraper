@@ -8,7 +8,7 @@ import {
 	setCompanyTracking,
 } from "../api/companies";
 import { keys } from "../api/keys";
-import type { AddCompanyPayload, CompanyBoard } from "../types/company";
+import type { CompanyBoard } from "../types/company";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const companiesQueryOptions = queryOptions({
@@ -51,10 +51,10 @@ export function useAddCompanyBoard() {
 }
 
 export function useAddCompany() {
-	return useInvalidatingMutation(
-		(payload: AddCompanyPayload) => addCompany(payload),
-		[keys.companies.all, keys.sourceTargets],
-	);
+	return useInvalidatingMutation(addCompany, [
+		keys.companies.all,
+		keys.sourceTargets,
+	]);
 }
 
 export function useSetCompanyTracking() {

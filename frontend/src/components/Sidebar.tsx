@@ -11,7 +11,6 @@ import { type Accessor, createEffect, createSignal, For, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
 import { Icon, type IconName } from "@/components/Icon";
 import { queryClient } from "@/lib/queryClient";
-import { signOut } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
@@ -94,11 +93,14 @@ export default function Sidebar(props: SidebarProps) {
 	const appsQuery = useApplications();
 	const googleStatus = useGoogleStatus();
 
-	const handleLogout = () =>
-		signOut(logout, () => {
+	const handleLogout = async () => {
+		try {
+			await logout();
+		} finally {
 			queryClient.clear();
 			navigate({ to: "/login" });
-		});
+		}
+	};
 
 	createEffect(() => {
 		location().pathname;

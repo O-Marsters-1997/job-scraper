@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import type { SourceInfo } from "@/types/source";
 import type { SourceTarget } from "@/types/sourceTarget";
 import {
@@ -8,13 +9,6 @@ import {
 	parseSearchParams,
 	sortTargets,
 } from "./searchTargets";
-
-function eq(a: unknown, b: unknown): void {
-	if (JSON.stringify(a) !== JSON.stringify(b))
-		throw new Error(
-			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
-		);
-}
 
 const info: SourceInfo = {
 	name: "linkedin",
@@ -46,19 +40,22 @@ const target = (over: Partial<SourceTarget>): SourceTarget => ({
 	...over,
 });
 
-eq(parseSearchParams({ tab: "ats", page: "3", sort: "bogus", dir: "desc" }), {
-	tab: "ats",
-	q: undefined,
-	src: undefined,
-	status: undefined,
-	sort: undefined,
-	dir: "desc",
-	page: 3,
-});
-eq(parseSearchParams({ page: "1" }).page, undefined);
-eq(parseSearchParams({ page: "x" }).page, undefined);
+assert.deepEqual(
+	parseSearchParams({ tab: "ats", page: "3", sort: "bogus", dir: "desc" }),
+	{
+		tab: "ats",
+		q: undefined,
+		src: undefined,
+		status: undefined,
+		sort: undefined,
+		dir: "desc",
+		page: 3,
+	},
+);
+assert.deepEqual(parseSearchParams({ page: "1" }).page, undefined);
+assert.deepEqual(parseSearchParams({ page: "x" }).page, undefined);
 
-eq(
+assert.deepEqual(
 	describeFilters(
 		target({ Filters: { recency: "day", other: "x", empty: "" } }),
 		info,
@@ -67,26 +64,26 @@ eq(
 );
 
 const t = target({ Filters: { recency: "day" } });
-eq(matchesSearch(t, info, { q: "past 24" }), true);
-eq(matchesSearch(t, info, { q: "nope" }), false);
-eq(matchesSearch(t, info, { src: "indeed" }), false);
-eq(matchesSearch(t, info, { status: "paused" }), false);
-eq(
+assert.deepEqual(matchesSearch(t, info, { q: "past 24" }), true);
+assert.deepEqual(matchesSearch(t, info, { q: "nope" }), false);
+assert.deepEqual(matchesSearch(t, info, { src: "indeed" }), false);
+assert.deepEqual(matchesSearch(t, info, { status: "paused" }), false);
+assert.deepEqual(
 	matchesSearch(target({ RunStatus: "failed" }), info, { status: "failed" }),
 	true,
 );
 
 const a = target({ ID: "a", Value: "b", LastRunAt: "2026-01-02T00:00:00Z" });
 const b = target({ ID: "b", Value: "a", LastRunAt: "2026-01-01T00:00:00Z" });
-eq(
+assert.deepEqual(
 	sortTargets([a, b], "search").map((x) => x.ID),
 	["b", "a"],
 );
-eq(
+assert.deepEqual(
 	sortTargets([a, b], "lastRun", "desc").map((x) => x.ID),
 	["a", "b"],
 );
-eq(
+assert.deepEqual(
 	sortTargets([a, b], undefined).map((x) => x.ID),
 	["a", "b"],
 );
@@ -95,11 +92,14 @@ const p = paginate(
 	Array.from({ length: 25 }, (_, i) => i),
 	9,
 );
-eq([p.page, p.pageCount, p.from, p.to, p.items.length], [3, 3, 21, 25, 5]);
-eq(paginate([], undefined).from, 0);
+assert.deepEqual(
+	[p.page, p.pageCount, p.from, p.to, p.items.length],
+	[3, 3, 21, 25, 5],
+);
+assert.deepEqual(paginate([], undefined).from, 0);
 
 const existing = [target({ Filters: { recency: "day", empty: "" } })];
-eq(
+assert.deepEqual(
 	isDuplicateSearch(existing, {
 		source: "linkedin",
 		value: "engineer",
@@ -107,7 +107,7 @@ eq(
 	}),
 	true,
 );
-eq(
+assert.deepEqual(
 	isDuplicateSearch(existing, {
 		source: "linkedin",
 		value: "engineer",
@@ -115,7 +115,7 @@ eq(
 	}),
 	false,
 );
-eq(
+assert.deepEqual(
 	isDuplicateSearch(existing, {
 		source: "indeed",
 		value: "engineer",

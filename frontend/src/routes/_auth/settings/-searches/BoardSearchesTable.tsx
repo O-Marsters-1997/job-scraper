@@ -1,6 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
-import { SortableTableHead } from "@/components/SortableTableHead";
+import { Pager } from "@/components/Pager";
+import { SearchField } from "@/components/SearchField";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,7 +18,6 @@ import {
 	matchesSearch,
 	paginate,
 	type SearchParams,
-	type SearchSortKey,
 	type SearchStatus,
 	sortTargets,
 } from "@/lib/searchTargets";
@@ -25,11 +25,12 @@ import { cn } from "@/lib/utils";
 import type { SourceInfo } from "../../../../types/source";
 import type { SourceTarget } from "../../../../types/sourceTarget";
 import {
+	DeleteIconButton,
+	EmptyRow,
 	EnabledSwitch,
 	FilterChips,
-	Pager,
 	RunStatus,
-	SearchField,
+	SortHead,
 } from "./parts";
 
 const ALL = "all";
@@ -72,34 +73,6 @@ export function BoardSearchesTable(props: {
 			count: props.targets.filter((t) => t.Source === s.name).length,
 		})),
 	];
-
-	const head = (key: SearchSortKey, text: string, firstDir: "asc" | "desc") => {
-		const sorted = () =>
-			props.params.sort !== key
-				? ("none" as const)
-				: props.params.dir === "desc"
-					? ("descending" as const)
-					: ("ascending" as const);
-		return (
-			<SortableTableHead
-				sorted={sorted()}
-				onToggle={() =>
-					props.onParams({
-						sort: key,
-						dir:
-							props.params.sort === key
-								? props.params.dir === "desc"
-									? "asc"
-									: "desc"
-								: firstDir,
-						page: undefined,
-					})
-				}
-			>
-				{text}
-			</SortableTableHead>
-		);
-	};
 
 	return (
 		<div class="flex flex-col gap-3">
@@ -163,9 +136,23 @@ export function BoardSearchesTable(props: {
 					<Table>
 						<TableHeader>
 							<TableRow class="hover:bg-transparent">
-								{head("search", "Search", "asc")}
+								<SortHead
+									sortKey="search"
+									firstDir="asc"
+									params={props.params}
+									onParams={props.onParams}
+								>
+									Search
+								</SortHead>
 								<TableHead>Filters</TableHead>
-								{head("lastRun", "Last run", "desc")}
+								<SortHead
+									sortKey="lastRun"
+									firstDir="desc"
+									params={props.params}
+									onParams={props.onParams}
+								>
+									Last run
+								</SortHead>
 								<TableHead class="w-24" />
 								<TableHead class="w-20">Active</TableHead>
 								<TableHead class="w-10" />
@@ -175,16 +162,11 @@ export function BoardSearchesTable(props: {
 							<For
 								each={paged().items}
 								fallback={
-									<TableRow class="hover:bg-transparent">
-										<TableCell
-											colSpan={6}
-											class="py-10 text-center text-sm text-muted"
-										>
-											{filtersActive()
-												? "No searches match these filters."
-												: "No searches yet. Use Build from fields to add one."}
-										</TableCell>
-									</TableRow>
+									<EmptyRow colSpan={6}>
+										{filtersActive()
+											? "No searches match these filters."
+											: "No searches yet. Use Build from fields to add one."}
+									</EmptyRow>
 								}
 							>
 								{(t) => {
@@ -261,15 +243,11 @@ export function BoardSearchesTable(props: {
 												/>
 											</TableCell>
 											<TableCell>
-												<button
-													type="button"
-													onClick={() => props.onDelete(t)}
-													aria-label={`Delete ${t.Value}`}
+												<DeleteIconButton
+													label={`Delete ${t.Value}`}
 													title="Delete"
-													class="grid size-7 place-items-center rounded text-faint transition hover:bg-destructive-subtle hover:text-destructive-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive"
-												>
-													<Icon name="trash" size={13} />
-												</button>
+													onClick={() => props.onDelete(t)}
+												/>
 											</TableCell>
 										</TableRow>
 									);
