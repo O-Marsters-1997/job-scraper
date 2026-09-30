@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	"github.com/robfig/cron/v3"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -82,29 +81,12 @@ func main() {
 			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
 		},
 	})
-	cr := cron.New()
-	publishBoards := func() {
-		if err := js.PublishBoardChecks(ctx, *forceBoards); err != nil {
-			slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
-		}
-	}
-	go publishBoards()
-	if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
-		fatal(ctx, "Board schedule failed", err)
-	}
-	reconcile := func() {
-		if err := js.RecoverRuns(ctx); err != nil {
-			slog.ErrorContext(ctx, "list recoverable runs failed", slog.Any(logger.KeyErr, err))
-		}
-	}
-	go reconcile()
-	if _, err := cr.AddFunc("@every 1m", reconcile); err != nil {
-		fatal(ctx, "reconcile schedule failed", err)
-	}
+	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
+		return js.PublishBoardChecks(ctx, *forceBoards)
+	})
+	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
 	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
-	cr.Start()
-	defer cr.Stop()
 
 	harvest := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards())
 	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
