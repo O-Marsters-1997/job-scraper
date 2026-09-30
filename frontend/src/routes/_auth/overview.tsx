@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createMemo } from "solid-js";
+import { PageHeading } from "@/components/PageHeading";
 import {
 	applicationStats,
 	jobStats,
@@ -52,12 +53,7 @@ function OverviewPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Overview
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">Your job search at a glance</p>
-			</div>
+			<PageHeading title="Overview" subtitle="Your job search at a glance" />
 
 			<StatCards jobs={jobSummary()} apps={appSummary()} />
 			<PipelineCard segments={segments()} />

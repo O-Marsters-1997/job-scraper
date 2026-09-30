@@ -118,11 +118,7 @@ export function JobsDataTable<TData extends Job>(
 											<SortableTableHead
 												sorted={
 													header.column.getCanSort()
-														? header.column.getIsSorted() === "asc"
-															? "ascending"
-															: header.column.getIsSorted() === "desc"
-																? "descending"
-																: "none"
+														? header.column.getIsSorted() || "none"
 														: false
 												}
 												onToggle={(e) =>

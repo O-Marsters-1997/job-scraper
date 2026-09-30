@@ -8,7 +8,6 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
-import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
@@ -31,7 +30,6 @@ export function JobHeader(props: {
 	app: ApplicationWithDetails | undefined;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
-	onEdit: () => void;
 }) {
 	const navigate = useNavigate();
 
@@ -94,10 +92,7 @@ export function JobHeader(props: {
 						<div class="mt-3 flex flex-wrap items-center gap-2">
 							<Show when={props.app?.StatusName}>
 								{(name) => (
-									<StatusBadge
-										name={name()}
-										colour={props.app?.StatusColour || STATUS_FALLBACK_COLOUR}
-									/>
+									<StatusBadge name={name()} colour={props.app?.StatusColour} />
 								)}
 							</Show>
 							<SourceBadge source={props.job.Source} />
@@ -123,7 +118,6 @@ export function JobHeader(props: {
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
-							onEdit={props.onEdit}
 						/>
 					</div>
 				</div>

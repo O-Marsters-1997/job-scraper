@@ -1,11 +1,11 @@
 import { createSignal, onCleanup, Show } from "solid-js";
+import { SearchField } from "@/components/SearchField";
 import { Button } from "@/components/ui/button";
 import { UnresolvableBoardError } from "../../../../api/companies";
 import { useAddCompany } from "../../../../hooks/useCompanies";
 import { useResolveUrl } from "../../../../hooks/useSources";
 import { ResolveError } from "../../../../lib/resolveError";
 import type { SourceInfo } from "../../../../types/source";
-import { SearchField } from "./parts";
 
 const DEBOUNCE_MS = 300;
 

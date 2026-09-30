@@ -5,6 +5,7 @@ import { JobsBySourceChart } from "@/components/insights/JobsBySourceChart";
 import { JobsOverTimeChart } from "@/components/insights/JobsOverTimeChart";
 import { ScoreAndGateChart } from "@/components/insights/ScoreAndGateChart";
 import { SourceQualityChart } from "@/components/insights/SourceQualityChart";
+import { PageHeading } from "@/components/PageHeading";
 import { registerCharts } from "@/lib/charts";
 import {
 	applicationStatusesQueryOptions,
@@ -47,12 +48,7 @@ function InsightsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<div class="mb-5">
-				<h1 class="text-lg font-bold tracking-tight text-foreground">
-					Insights
-				</h1>
-				<p class="mt-0.5 text-xs text-faint">Visualise your open jobs</p>
-			</div>
+			<PageHeading title="Insights" subtitle="Visualise your open jobs" />
 
 			<Show when={chartsReady()}>
 				<div class="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
