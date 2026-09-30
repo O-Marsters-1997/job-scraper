@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,6 +100,7 @@ func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},
 			"linkedin": detailStub{err: errors.New("page gone")},
+			"indeed":   detailStub{err: fmt.Errorf("%w: status 404", sources.ErrGone)},
 		},
 	})
 	return fixture{store: store, processor: processor, ingest: in, published: published}
@@ -157,6 +159,16 @@ func TestProcess(t *testing.T) {
 		})
 	}
 
+	t.Run("gone detail is acked without exporting", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		if err := f.processor.Process(ctx, queuetest.DetailTask("indeed")); err != nil {
+			t.Fatalf("Process() = %v, want nil so the task is acked", err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Fatalf("ingest requests = %d, want 0", got)
+		}
+	})
+
 	fails := []struct {
 		name           string
 		task           queue.Task
@@ -164,7 +176,7 @@ func TestProcess(t *testing.T) {
 		wantIngestHits int32
 	}{
 		{"unsupported task kind fails without exporting", queue.Task{Source: "wis", Kind: "bogus"}, http.StatusOK, 0},
-		{"source without a detail fetcher fails without exporting", queuetest.DetailTask("indeed"), http.StatusOK, 0},
+		{"source without a detail fetcher fails without exporting", queuetest.DetailTask("bogus"), http.StatusOK, 0},
 		{"detail fetch failure is returned for requeue", queuetest.DetailTask("linkedin"), http.StatusOK, 0},
 		{"transient ingest failure is returned for requeue", queuetest.DetailTask("wis"), http.StatusServiceUnavailable, 3},
 	}

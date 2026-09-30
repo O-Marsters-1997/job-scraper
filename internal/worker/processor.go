@@ -66,6 +66,10 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 			return fmt.Errorf("source %s cannot fetch details", task.Source)
 		}
 		job, err := fetcher.GetDetails(ctx, task.URL)
+		if errors.Is(err, sources.ErrGone) {
+			slog.WarnContext(ctx, "job is gone", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyURL, task.URL), slog.Any(logger.KeyErr, err))
+			return nil
+		}
 		if err != nil {
 			return err
 		}
