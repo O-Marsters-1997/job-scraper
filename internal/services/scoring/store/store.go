@@ -161,52 +161,38 @@ func (s *Store) ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, er
 // every non-closed job that already has a job_scores row, so the new
 // question reaches jobs already scored.
 func (s *Store) AddScoringOption(ctx context.Context, id, dimension, label, question string) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin add scoring option: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	queries := s.queries.WithTx(tx)
-
-	err = queries.InsertScoringOption(ctx, sqlc.InsertScoringOptionParams{
-		ID: id, Dimension: sqlc.ScoringDimension(dimension), Label: label, Question: question,
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		err := queries.InsertScoringOption(ctx, sqlc.InsertScoringOptionParams{
+			ID: id, Dimension: sqlc.ScoringDimension(dimension), Label: label, Question: question,
+		})
+		if err != nil {
+			return fmt.Errorf("store.AddScoringOption: %w", err)
+		}
+		if err := queries.QueueOptionBackfill(ctx); err != nil {
+			return fmt.Errorf("store.AddScoringOption: queue backfill: %w", err)
+		}
+		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("store.AddScoringOption: %w", err)
-	}
-	if err := queries.QueueOptionBackfill(ctx); err != nil {
-		return fmt.Errorf("store.AddScoringOption: queue backfill: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit add scoring option: %w", err)
-	}
-	return nil
 }
 
 // RewordScoringOption changes an option's question text, which changes its
 // question hash, and queues the same backfill as AddScoringOption.
 func (s *Store) RewordScoringOption(ctx context.Context, id, question string) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin reword scoring option: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	queries := s.queries.WithTx(tx)
-
-	rows, err := queries.RewordScoringOption(ctx, sqlc.RewordScoringOptionParams{ID: id, Question: question})
-	if err != nil {
-		return fmt.Errorf("store.RewordScoringOption: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("store.RewordScoringOption: option %q: %w", id, data.ErrNotFound)
-	}
-	if err := queries.QueueOptionBackfill(ctx); err != nil {
-		return fmt.Errorf("store.RewordScoringOption: queue backfill: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit reword scoring option: %w", err)
-	}
-	return nil
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		rows, err := queries.RewordScoringOption(ctx, sqlc.RewordScoringOptionParams{ID: id, Question: question})
+		if err != nil {
+			return fmt.Errorf("store.RewordScoringOption: %w", err)
+		}
+		if rows == 0 {
+			return fmt.Errorf("store.RewordScoringOption: option %q: %w", id, data.ErrNotFound)
+		}
+		if err := queries.QueueOptionBackfill(ctx); err != nil {
+			return fmt.Errorf("store.RewordScoringOption: queue backfill: %w", err)
+		}
+		return nil
+	})
 }
 
 // RetireScoringOption sets retired_at so the option is hidden from new
@@ -332,25 +318,19 @@ func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model strin
 	if err != nil {
 		return err
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin save answers: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	queries := s.queries.WithTx(tx)
-	for hash, a := range answers {
-		err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
-			JobID: jid, Fingerprint: fingerprint, QuestionHash: hash, Model: model,
-			PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
-		})
-		if err != nil {
-			return fmt.Errorf("store.SaveAnswers: %w", err)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := s.queries.WithTx(tx)
+		for hash, a := range answers {
+			err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
+				JobID: jid, Fingerprint: fingerprint, QuestionHash: hash, Model: model,
+				PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
+			})
+			if err != nil {
+				return fmt.Errorf("store.SaveAnswers: %w", err)
+			}
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit save answers: %w", err)
-	}
-	return nil
+		return nil
+	})
 }
 
 // CompleteAnswerEffect writes the effect's answers and every surviving
@@ -360,19 +340,25 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.pool.Begin(ctx)
+	var saved []string
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		saved, err = s.completeAnswerEffect(ctx, s.queries.WithTx(tx), effect, effectID, answers, scores)
+		return err
+	})
 	if err != nil {
-		return nil, fmt.Errorf("begin complete answer effect: %w", err)
+		return nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	queries := s.queries.WithTx(tx)
+	return saved, nil
+}
 
+func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries, effect dto.AnswerEffect, effectID pgtype.UUID, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	rows, err := queries.CompleteAnswerEffect(ctx, sqlc.CompleteAnswerEffectParams{ID: effectID, Attempts: int32(effect.Attempts)})
 	if err != nil {
 		return nil, fmt.Errorf("store.CompleteAnswerEffect: %w", err)
 	}
 	if rows == 0 {
-		return nil, tx.Commit(ctx)
+		return nil, nil
 	}
 
 	jobID, err := data.UUID(effect.JobID)
@@ -384,7 +370,7 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 		return nil, fmt.Errorf("store.CompleteAnswerEffect: reload job: %w", err)
 	}
 	if job.ContentFingerprint.String != effect.Fingerprint {
-		return nil, tx.Commit(ctx)
+		return nil, nil
 	}
 
 	for hash, a := range answers {
@@ -403,10 +389,6 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 			return nil, fmt.Errorf("store.CompleteAnswerEffect: %w", err)
 		}
 		saved = append(saved, sc.UserID)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit complete answer effect: %w", err)
 	}
 	return saved, nil
 }

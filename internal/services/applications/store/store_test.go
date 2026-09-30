@@ -44,7 +44,7 @@ func TestCreateApplicationRejectsDuplicate(t *testing.T) {
 	}
 }
 
-func TestListApplicationsByUserJoinsJobDetails(t *testing.T) {
+func TestListApplicationsJoinsJobDetails(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Staff Engineer", "Staff Engineer")
@@ -53,7 +53,7 @@ func TestListApplicationsByUserJoinsJobDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := st.ListApplicationsByUser(context.Background(), userID)
+	got, err := st.ListApplications(context.Background(), userID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestListApplicationsByUserJoinsJobDetails(t *testing.T) {
 	}
 }
 
-func TestListApplicationsByUserAndStatus(t *testing.T) {
+func TestListApplicationsFiltersByStatus(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	matching := pgtest.InsertJob(t, pool, "Match", "Match")
@@ -79,7 +79,7 @@ func TestListApplicationsByUserAndStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := st.ListApplicationsByUserAndStatus(context.Background(), userID, status.ID)
+	got, err := st.ListApplications(context.Background(), userID, status.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

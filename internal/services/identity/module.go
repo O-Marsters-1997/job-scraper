@@ -15,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 type googleClient interface {
@@ -39,38 +40,36 @@ type Deps struct {
 	Store        Store
 	Seeder       StatusSeeder
 	GoogleClient googleClient
+	Cipher       *tokencrypt.Cipher
 }
 
 type Module struct {
-	store        Store
-	service      *Service
-	google       *google.Service
-	googleClient googleClient
+	store   Store
+	service *Service
 }
 
-func Build(deps Deps) (*Module, error) {
-	credKey, err := credentialKeyFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("identity.Build: %w", err)
-	}
-	return &Module{
-		store:        deps.Store,
-		service:      NewService(deps.Store, deps.Seeder, credKey),
-		google:       google.NewService(deps.GoogleClient),
-		googleClient: deps.GoogleClient,
-	}, nil
+func Build(deps Deps) *Module {
+	return &Module{store: deps.Store, service: NewService(deps)}
 }
 
 // New wires the full identity context, including the Google Link and AI
 // credentials.
 func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+	credCipher, err := tokencrypt.FromEnv("AI_CREDENTIAL_ENC_KEY")
+	if err != nil {
+		return nil, fmt.Errorf("identity.New: %w", err)
+	}
+	googleCipher, err := tokencrypt.FromEnv("GOOGLE_TOKEN_ENC_KEY")
+	if err != nil {
+		return nil, fmt.Errorf("identity.New: %w", err)
+	}
 	st := store.New(pool)
-	googleClient := google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st)
 	return Build(Deps{
 		Store:        st,
 		Seeder:       seeder,
-		GoogleClient: googleClient,
-	})
+		GoogleClient: google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
+		Cipher:       credCipher,
+	}), nil
 }
 
 // NewFacade wires only identity's user/session store, for cmd/admin and the
@@ -78,7 +77,7 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 // facade methods panic on a Module built this way.
 func NewFacade(pool *pgxpool.Pool, seeder StatusSeeder) *Module {
 	st := store.New(pool)
-	return &Module{store: st, service: NewService(st, seeder, nil)}
+	return Build(Deps{Store: st, Seeder: seeder})
 }
 
 // Middleware authenticates requests using the session_id cookie.
@@ -109,5 +108,5 @@ func (m *Module) GetProfile(ctx context.Context, userID string) (dto.Profile, er
 }
 
 func (m *Module) DocsClient() googleClient {
-	return m.googleClient
+	return m.service.google
 }

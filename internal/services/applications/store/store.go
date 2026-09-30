@@ -75,41 +75,24 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 	return toApplicationDTO(a), nil
 }
 
-func (s *Store) ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error) {
+func (s *Store) ListApplications(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListApplicationsByUser(ctx, uid)
+	params := sqlc.ListApplicationsParams{UserID: uid}
+	if statusID != "" {
+		if params.StatusID, err = data.UUID(statusID); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.queries.ListApplications(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("store.ListApplicationsByUser: %w", err)
+		return nil, fmt.Errorf("store.ListApplications: %w", err)
 	}
 	out := make([]dto.ApplicationWithDetails, len(rows))
 	for i, row := range rows {
 		out[i] = toApplicationWithDetailsDTO(row)
-	}
-	return out, nil
-}
-
-func (s *Store) ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return nil, err
-	}
-	sid, err := data.UUID(statusID)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := s.queries.ListApplicationsByUserAndStatus(ctx, sqlc.ListApplicationsByUserAndStatusParams{
-		UserID:   uid,
-		StatusID: sid,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("store.ListApplicationsByUserAndStatus: %w", err)
-	}
-	out := make([]dto.ApplicationWithDetails, len(rows))
-	for i, row := range rows {
-		out[i] = toApplicationWithDetailsDTO(sqlc.ListApplicationsByUserRow(row))
 	}
 	return out, nil
 }

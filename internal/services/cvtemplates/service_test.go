@@ -60,7 +60,7 @@ func seedTab(t *testing.T, st cvtemplates.Store, userID, docID, tabID string, vi
 		t.Fatal(err)
 	}
 	if !visible {
-		if err := st.HideTab(ctx, userID, docID, tabID); err != nil {
+		if err := st.SetTabVisible(ctx, userID, docID, tabID, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -162,7 +162,7 @@ func TestList(t *testing.T) {
 		if err := st.EnsureTabs(context.Background(), tdID, []string{"t1"}, []string{"CV 1"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.HideTab(context.Background(), "u1", "docA", "t1"); err != nil {
+		if err := st.SetTabVisible(context.Background(), "u1", "docA", "t1", false); err != nil {
 			t.Fatal(err)
 		}
 		svc := cvtemplates.NewService(gc, st)
@@ -261,28 +261,6 @@ func TestAddDoc(t *testing.T) {
 		_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "https://docs.google.com/document/d/inaccessible123/edit"})
 		if !errors.Is(err, cvtemplates.ErrInaccessibleDoc) {
 			t.Fatalf("err = %v, want ErrInaccessibleDoc", err)
-		}
-	})
-}
-
-func TestRemoveDoc(t *testing.T) {
-	t.Run("removes a tracked doc", func(t *testing.T) {
-		st := cvtemplatestest.NewFakeStore()
-		seedDoc(t, st, "u1", "docA")
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), st)
-
-		if err := svc.RemoveDoc(context.Background(), "u1", "docA"); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	t.Run("missing doc returns not found", func(t *testing.T) {
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
-
-		err := svc.RemoveDoc(context.Background(), "u1", "docA")
-		status, ok := apperr.StatusFor(err)
-		if !ok || status != apperr.KindNotFound.Status() {
-			t.Errorf("expected a not-found error, got %v", err)
 		}
 	})
 }

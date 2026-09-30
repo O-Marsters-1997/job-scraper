@@ -27,14 +27,10 @@ func (s *Service) AddDoc(ctx context.Context, userID string, in dto.TrackedDocIn
 	return struct{}{}, s.store.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID})
 }
 
-func (s *Service) RemoveDoc(ctx context.Context, userID, docID string) error {
-	return s.store.RemoveTrackedDoc(ctx, userID, docID)
-}
-
 func (s *Service) HideTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
-	return struct{}{}, s.store.HideTab(ctx, userID, in.DocID, in.TabID)
+	return struct{}{}, s.store.SetTabVisible(ctx, userID, in.DocID, in.TabID, false)
 }
 
 func (s *Service) ShowTab(ctx context.Context, userID string, in dto.TabVisibilityInput) (struct{}, error) {
-	return struct{}{}, s.store.ShowTab(ctx, userID, in.DocID, in.TabID)
+	return struct{}{}, s.store.SetTabVisible(ctx, userID, in.DocID, in.TabID, true)
 }

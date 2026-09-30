@@ -19,7 +19,7 @@ func TestOptions(t *testing.T) {
 		{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go", Question: "Does the role use Go?"},
 		{ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retired},
 	})
-	svc := scoring.NewService(scoring.Deps{Store: store, Answerer: &fakeAnswerer{t: t, forbidden: true}, Credentials: &fakeCredentials{}, Alerter: &fakeAlerter{}, Profiles: &fakeProfiles{}, Candidates: scoringtest.Reconsiders(), Extractor: &fakeExtractor{}})
+	svc := newService(t, store)
 
 	got, err := svc.Options(context.Background(), "user-1")
 	if err != nil {

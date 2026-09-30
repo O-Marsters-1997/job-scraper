@@ -29,30 +29,6 @@ func unmarshalBreakdown(raw []byte, out *[]dto.ScoreRow) error {
 	return nil
 }
 
-func toListJobDTO(row sqlc.ListJobsRow) (dto.Job, error) {
-	j := dto.Job{
-		ID:              row.ID.String(),
-		Title:           row.Title,
-		Location:        row.Location,
-		URL:             row.Url,
-		CompanySlug:     row.CompanySlug,
-		Source:          row.Source,
-		UpdatedAt:       row.UpdatedAt.Time,
-		ScrapedAt:       row.ScrapedAt.Time,
-		SalaryRaw:       row.SalaryRaw,
-		WorkArrangement: row.WorkArrangement,
-	}
-	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
-		return dto.Job{}, err
-	}
-	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
-	j.CompanyID = row.CompanyID.String()
-	j.BoardID = row.PrimaryBoardID.String()
-	j.ProviderPostingID = row.ProviderPostingID.String
-	j.ContentFingerprint = row.ContentFingerprint.String
-	return j, nil
-}
-
 func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 	j := dto.Job{
 		ID:              row.ID.String(),

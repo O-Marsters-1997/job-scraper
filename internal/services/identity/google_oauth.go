@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
@@ -21,6 +20,8 @@ const (
 	oauthStateCookie  = "oauth_state"
 	oauthReturnCookie = "oauth_return"
 	defaultReturnPath = "/settings/integrations"
+
+	oauthCookieMaxAge = 10 * 60
 )
 
 var tailorReturnPath = regexp.MustCompile(`^/jobs/[A-Za-z0-9_-]+/tailor$`)
@@ -30,11 +31,6 @@ func safeReturnPath(p string) string {
 		return p
 	}
 	return defaultReturnPath
-}
-
-type googleAuthConnector interface {
-	AuthURL(state string, write bool) string
-	Connect(ctx context.Context, userID, code string) error
 }
 
 type oauthStart struct {
@@ -47,7 +43,7 @@ type oauthRedirect struct {
 	state, authURL, returnPath string
 }
 
-func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
+func oauthStartHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthStart, error) {
 			state, err := generateState()
@@ -69,8 +65,8 @@ func oauthStartHandler(svc googleAuthConnector) http.HandlerFunc {
 			}, nil
 		},
 		func(w http.ResponseWriter, r *http.Request, out oauthRedirect) {
-			setOAuthStateCookie(w, out.state)
-			setOAuthReturnCookie(w, out.returnPath)
+			http.SetCookie(w, newCookie(oauthStateCookie, signOAuthState(out.state), oauthCookieMaxAge))
+			http.SetCookie(w, newCookie(oauthReturnCookie, out.returnPath, oauthCookieMaxAge))
 			http.Redirect(w, r, out.authURL, http.StatusTemporaryRedirect)
 		},
 	)
@@ -80,7 +76,7 @@ type oauthConnect struct {
 	userID, code, returnPath string
 }
 
-func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
+func oauthCallbackHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthConnect, error) {
 			if !validOAuthStateCookie(r, r.URL.Query().Get("state")) {
@@ -104,8 +100,8 @@ func oauthCallbackHandler(svc googleAuthConnector) http.HandlerFunc {
 			return in.returnPath, svc.Connect(ctx, in.userID, in.code)
 		},
 		func(w http.ResponseWriter, r *http.Request, returnPath string) {
-			http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
-			http.SetCookie(w, &http.Cookie{Name: oauthReturnCookie, Value: "", MaxAge: -1, Path: "/"})
+			http.SetCookie(w, newCookie(oauthStateCookie, "", -1))
+			http.SetCookie(w, newCookie(oauthReturnCookie, "", -1))
 			http.Redirect(w, r, returnPath, http.StatusTemporaryRedirect)
 		},
 	)
@@ -117,31 +113,6 @@ func generateState() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-func setOAuthStateCookie(w http.ResponseWriter, state string) {
-	setOAuthCookie(w, oauthStateCookie, signOAuthState(state))
-}
-
-func setOAuthReturnCookie(w http.ResponseWriter, returnPath string) {
-	setOAuthCookie(w, oauthReturnCookie, returnPath)
-}
-
-func setOAuthCookie(w http.ResponseWriter, name, value string) {
-	secure := os.Getenv("COOKIE_SECURE") == "true"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Value:    value,
-		HttpOnly: true,
-		SameSite: sameSite,
-		Secure:   secure,
-		Path:     "/",
-		MaxAge:   int((10 * time.Minute).Seconds()),
-	})
 }
 
 func validOAuthStateCookie(r *http.Request, state string) bool {

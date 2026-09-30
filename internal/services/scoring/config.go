@@ -19,8 +19,8 @@ func notFound(err error) bool {
 }
 
 func (s *Service) GetConfig(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
-	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !notFound(err) {
+	cfg, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
 	return toView(cfg), nil
@@ -30,11 +30,10 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	if in.NotifyThreshold < 0 || in.NotifyThreshold > 100 {
 		return dto.ScoringConfigView{}, apperr.Invalid("notify threshold must be between 0 and 100")
 	}
-	options, err := s.store.ListScoringOptions(ctx)
+	b, err := s.loadBank(ctx)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
-	b := newBank(options)
 
 	manualPicks, err := validatedPicks(b, in.Preferences.Picks)
 	if err != nil {
@@ -45,8 +44,8 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 		return dto.ScoringConfigView{}, err
 	}
 
-	existing, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !notFound(err) {
+	existing, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
 

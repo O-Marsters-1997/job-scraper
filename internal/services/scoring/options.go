@@ -20,11 +20,11 @@ var Dimensions = []dto.DimensionSpec{
 // Options returns the dimensions and every non-retired bank option, without
 // question text.
 func (s *Service) Options(ctx context.Context, _ string) (dto.ScoringOptionsView, error) {
-	all, err := s.store.ListScoringOptions(ctx)
+	bk, err := s.loadBank(ctx)
 	if err != nil {
 		return dto.ScoringOptionsView{}, err
 	}
-	live := newBank(all).live
+	live := bk.live
 	out := make([]dto.ScoringOption, len(live))
 	for i, o := range live {
 		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label}

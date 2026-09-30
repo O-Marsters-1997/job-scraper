@@ -2,7 +2,7 @@
 SELECT pg_advisory_xact_lock(hashtextextended($1, 0));
 
 -- name: FindCanonicalJob :one
-SELECT j.id::text AS id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
+SELECT j.id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
     j.title, j.description, j.location, j.salary_raw, j.work_arrangement,
     j.primary_board_id, j.provider_posting_id
 FROM jobs j
@@ -23,7 +23,7 @@ VALUES (sqlc.arg(title), sqlc.arg(location), sqlc.arg(url), sqlc.arg(company_slu
     sqlc.arg(work_arrangement), sqlc.narg(company_id)::uuid,
     sqlc.narg(board_id)::uuid, sqlc.narg(posting_id),
     sqlc.arg(fingerprint), NOW())
-RETURNING id::text;
+RETURNING id;
 
 -- name: UpdateChangedCanonicalJob :exec
 UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
@@ -48,3 +48,15 @@ INSERT INTO job_urls (job_id, normalized_url, source)
 VALUES ($1::uuid, $2, $3)
 ON CONFLICT (normalized_url) DO UPDATE SET last_seen_at = NOW()
 WHERE job_urls.job_id = EXCLUDED.job_id;
+
+-- name: BackfillCompanyJobFingerprints :exec
+UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
+    replace(replace(replace(replace(replace(to_json(ARRAY[
+        j.title, j.description, j.location, j.salary_raw, j.work_arrangement
+    ])::text,
+    '&', chr(92) || 'u0026'), '<', chr(92) || 'u003c'),
+    '>', chr(92) || 'u003e'), chr(8232), chr(92) || 'u2028'),
+    chr(8233), chr(92) || 'u2029'), 'UTF8')), 'hex')
+FROM companies c
+WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
+    AND j.closed_at IS NULL AND j.content_fingerprint IS NULL;

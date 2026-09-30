@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 const sessionTTL = 30 * 24 * time.Hour
@@ -41,13 +42,14 @@ type StatusSeeder interface {
 }
 
 type Service struct {
-	store   Store
-	seeder  StatusSeeder
-	credKey []byte
+	store  Store
+	seeder StatusSeeder
+	cipher *tokencrypt.Cipher
+	google googleClient
 }
 
-func NewService(store Store, seeder StatusSeeder, credKey []byte) *Service {
-	return &Service{store: store, seeder: seeder, credKey: credKey}
+func NewService(deps Deps) *Service {
+	return &Service{store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient}
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {

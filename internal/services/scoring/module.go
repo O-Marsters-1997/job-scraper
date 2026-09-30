@@ -2,14 +2,12 @@ package scoring
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/extract"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/notify"
@@ -55,12 +53,7 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 
 	var alerter Alerter = noopAlerter{}
 	if notifyAPIKey != "" {
-		renderer, err := notify.NewRenderer()
-		if err != nil {
-			slog.Error("notify templates unavailable", slog.Any(logger.KeyErr, err))
-		} else {
-			alerter = notify.NewNotificationService(notify.NewResendNotifier(notifyAPIKey, notifyFrom), renderer)
-		}
+		alerter = notify.NewNotificationService(notify.NewResendNotifier(notifyAPIKey, notifyFrom))
 	}
 
 	return Build(Deps{

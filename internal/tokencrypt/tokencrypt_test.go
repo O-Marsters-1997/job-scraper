@@ -7,26 +7,61 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
-const keyEnv = "GOOGLE_TOKEN_ENC_KEY"
+func newCipher(t *testing.T, key string) *tokencrypt.Cipher {
+	t.Helper()
+	c, err := tokencrypt.New(base64.StdEncoding.EncodeToString([]byte(key)))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	return c
+}
 
-var (
-	validKey = base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012"))
-	otherKey = base64.StdEncoding.EncodeToString([]byte("99999999999999999999999999999999"))
+const (
+	validKey = "12345678901234567890123456789012"
+	otherKey = "99999999999999999999999999999999"
 )
 
-func encrypted(t *testing.T, plaintext string) string {
-	t.Helper()
-	t.Setenv(keyEnv, validKey)
-	ciphertext, err := tokencrypt.Encrypt(plaintext)
-	if err != nil {
-		t.Fatalf("Encrypt(%q) error = %v", plaintext, err)
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{"missing", ""},
+		{"not base64", "!!!"},
+		{"wrong length", base64.StdEncoding.EncodeToString(make([]byte, 16))},
 	}
-	return ciphertext
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tokencrypt.New(tt.key); err == nil {
+				t.Fatalf("New(%q) error = nil, want error", tt.key)
+			}
+		})
+	}
+}
+
+func TestFromEnv(t *testing.T) {
+	t.Setenv("TOKENCRYPT_TEST_KEY", base64.StdEncoding.EncodeToString([]byte(validKey)))
+	if _, err := tokencrypt.FromEnv("TOKENCRYPT_TEST_KEY"); err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	if _, err := tokencrypt.FromEnv("TOKENCRYPT_TEST_UNSET"); err == nil {
+		t.Fatal("FromEnv(unset) error = nil, want error")
+	}
 }
 
 func TestDecrypt(t *testing.T) {
+	c := newCipher(t, validKey)
+	encrypt := func(t *testing.T) string {
+		t.Helper()
+		ciphertext, err := c.Encrypt("hello world")
+		if err != nil {
+			t.Fatalf("Encrypt error = %v", err)
+		}
+		return ciphertext
+	}
+
 	t.Run("round trips", func(t *testing.T) {
-		got, err := tokencrypt.Decrypt(encrypted(t, "hello world"))
+		got, err := c.Decrypt(encrypt(t))
 		if err != nil {
 			t.Fatalf("Decrypt error = %v", err)
 		}
@@ -36,20 +71,18 @@ func TestDecrypt(t *testing.T) {
 	})
 
 	t.Run("rejects tampered ciphertext", func(t *testing.T) {
-		raw, err := base64.StdEncoding.DecodeString(encrypted(t, "hello world"))
+		raw, err := base64.StdEncoding.DecodeString(encrypt(t))
 		if err != nil {
 			t.Fatal(err)
 		}
 		raw[len(raw)-1] ^= 0xFF
-		if _, err := tokencrypt.Decrypt(base64.StdEncoding.EncodeToString(raw)); err == nil {
+		if _, err := c.Decrypt(base64.StdEncoding.EncodeToString(raw)); err == nil {
 			t.Fatal("Decrypt(tampered) error = nil, want error")
 		}
 	})
 
 	t.Run("rejects wrong key", func(t *testing.T) {
-		ciphertext := encrypted(t, "hello world")
-		t.Setenv(keyEnv, otherKey)
-		if _, err := tokencrypt.Decrypt(ciphertext); err == nil {
+		if _, err := newCipher(t, otherKey).Decrypt(encrypt(t)); err == nil {
 			t.Fatal("Decrypt with another key error = nil, want error")
 		}
 	})

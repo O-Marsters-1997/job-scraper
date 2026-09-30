@@ -18,7 +18,7 @@ func (m *Module) Routes(r chi.Router) {
 
 	r.Route("/tracked-docs", func(r chi.Router) {
 		r.Post("/", handlers.Create(m.svc.AddDoc))
-		r.Delete("/{id}", handlers.Delete(m.svc.RemoveDoc))
+		r.Delete("/{id}", handlers.Delete(m.store.RemoveTrackedDoc))
 		r.Post("/{docId}/tabs/{tabId}/hide", handlers.Update(m.svc.HideTab))
 		r.Post("/{docId}/tabs/{tabId}/show", handlers.Update(m.svc.ShowTab))
 	})

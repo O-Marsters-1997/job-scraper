@@ -35,6 +35,7 @@ func newApp(t *testing.T) *app {
 	t.Helper()
 	t.Setenv("INGEST_SERVICE_TOKEN", ingestToken)
 	t.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	t.Setenv("GOOGLE_TOKEN_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 
 	pool := pgtest.New(t)
 	apps := applications.New(pool)

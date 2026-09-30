@@ -11,8 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const backfillCompanyJobFingerprints = `-- name: BackfillCompanyJobFingerprints :exec
+UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
+    replace(replace(replace(replace(replace(to_json(ARRAY[
+        j.title, j.description, j.location, j.salary_raw, j.work_arrangement
+    ])::text,
+    '&', chr(92) || 'u0026'), '<', chr(92) || 'u003c'),
+    '>', chr(92) || 'u003e'), chr(8232), chr(92) || 'u2028'),
+    chr(8233), chr(92) || 'u2029'), 'UTF8')), 'hex')
+FROM companies c
+WHERE c.id = $1::uuid AND (j.company_id = c.id OR j.company_slug = c.slug)
+    AND j.closed_at IS NULL AND j.content_fingerprint IS NULL
+`
+
+func (q *Queries) BackfillCompanyJobFingerprints(ctx context.Context, dollar_1 pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, backfillCompanyJobFingerprints, dollar_1)
+	return err
+}
+
 const findCanonicalJob = `-- name: FindCanonicalJob :one
-SELECT j.id::text AS id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
+SELECT j.id, j.url, COALESCE(j.content_fingerprint, '') AS content_fingerprint,
     j.title, j.description, j.location, j.salary_raw, j.work_arrangement,
     j.primary_board_id, j.provider_posting_id
 FROM jobs j
@@ -32,7 +50,7 @@ type FindCanonicalJobParams struct {
 }
 
 type FindCanonicalJobRow struct {
-	ID                 string
+	ID                 pgtype.UUID
 	Url                string
 	ContentFingerprint string
 	Title              string
@@ -71,7 +89,7 @@ VALUES ($1, $2, $3, $4,
     $9, $10::uuid,
     $11::uuid, $12,
     $13, NOW())
-RETURNING id::text
+RETURNING id
 `
 
 type InsertCanonicalJobParams struct {
@@ -90,7 +108,7 @@ type InsertCanonicalJobParams struct {
 	Fingerprint     pgtype.Text
 }
 
-func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJobParams) (string, error) {
+func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJobParams) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, insertCanonicalJob,
 		arg.Title,
 		arg.Location,
@@ -106,7 +124,7 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.PostingID,
 		arg.Fingerprint,
 	)
-	var id string
+	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err
 }

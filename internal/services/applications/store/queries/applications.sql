@@ -3,7 +3,7 @@ INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
--- name: ListApplicationsByUser :many
+-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
     a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
@@ -17,22 +17,7 @@ FROM applications a
 JOIN jobs j ON a.job_id = j.id
 LEFT JOIN application_statuses s ON a.status_id = s.id
 WHERE a.user_id = $1
-ORDER BY a.updated_at DESC;
-
--- name: ListApplicationsByUserAndStatus :many
-SELECT
-    a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
-    j.title        AS job_title,
-    j.company_slug AS job_company_slug,
-    j.location     AS job_location,
-    j.url          AS job_url,
-    s.name         AS status_name,
-    s.colour       AS status_colour
-FROM applications a
-JOIN jobs j ON a.job_id = j.id
-LEFT JOIN application_statuses s ON a.status_id = s.id
-WHERE a.user_id = $1 AND a.status_id = $2
+  AND (sqlc.narg('status_id')::uuid IS NULL OR a.status_id = sqlc.narg('status_id'))
 ORDER BY a.updated_at DESC;
 
 -- name: UpdateApplication :one

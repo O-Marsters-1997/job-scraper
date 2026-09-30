@@ -70,14 +70,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 
 	t.Run("hide missing tab returns not found", func(t *testing.T) {
 		f := newStore(t)
-		err := f.Store.HideTab(context.Background(), f.UserID, "docA", "t-missing")
-		wantNotFound(t, "HideTab(missing)", err)
+		err := f.Store.SetTabVisible(context.Background(), f.UserID, "docA", "t-missing", false)
+		wantNotFound(t, "SetTabVisible(missing, false)", err)
 	})
 
 	t.Run("show missing tab returns not found", func(t *testing.T) {
 		f := newStore(t)
-		err := f.Store.ShowTab(context.Background(), f.UserID, "docA", "t-missing")
-		wantNotFound(t, "ShowTab(missing)", err)
+		err := f.Store.SetTabVisible(context.Background(), f.UserID, "docA", "t-missing", true)
+		wantNotFound(t, "SetTabVisible(missing, true)", err)
 	})
 
 	t.Run("list returns the tracked doc", func(t *testing.T) {

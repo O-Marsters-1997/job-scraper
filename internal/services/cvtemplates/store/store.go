@@ -104,29 +104,14 @@ func (s *Store) ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, e
 	return out, nil
 }
 
-func (s *Store) HideTab(ctx context.Context, userID, docID, tabID string) error {
+func (s *Store) SetTabVisible(ctx context.Context, userID, docID, tabID string, visible bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
-	n, err := s.queries.HideTab(ctx, sqlc.HideTabParams{UserID: uid, DocID: docID, TabID: tabID})
+	n, err := s.queries.SetTabVisible(ctx, sqlc.SetTabVisibleParams{UserID: uid, DocID: docID, TabID: tabID, Visible: visible})
 	if err != nil {
-		return fmt.Errorf("store.HideTab: %w", err)
-	}
-	if n == 0 {
-		return ErrTabNotFound
-	}
-	return nil
-}
-
-func (s *Store) ShowTab(ctx context.Context, userID, docID, tabID string) error {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return err
-	}
-	n, err := s.queries.ShowTab(ctx, sqlc.ShowTabParams{UserID: uid, DocID: docID, TabID: tabID})
-	if err != nil {
-		return fmt.Errorf("store.ShowTab: %w", err)
+		return fmt.Errorf("store.SetTabVisible: %w", err)
 	}
 	if n == 0 {
 		return ErrTabNotFound
