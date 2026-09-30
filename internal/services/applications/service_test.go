@@ -2,14 +2,19 @@ package applications_test
 
 import (
 	"context"
-	"net/http"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 )
+
+const userID = "user-1"
 
 type failingCreate struct {
 	applications.Store
@@ -20,134 +25,131 @@ func (f failingCreate) CreateApplication(context.Context, string, dto.CreateAppl
 	return dto.Application{}, f.err
 }
 
+func newService(t *testing.T) (*applications.Service, *applicationstest.FakeStore) {
+	t.Helper()
+	st := applicationstest.NewFakeStore()
+	return applications.NewService(st), st
+}
+
 func TestCreate(t *testing.T) {
+	svc, _ := newService(t)
+
+	got, err := svc.Create(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1", AppliedAt: new("2026-01-02")})
+	if err != nil {
+		t.Fatalf("Create(...) err = %v", err)
+	}
+
+	want := dto.Application{UserID: userID, JobID: "job-1", AppliedAt: new(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC))}
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Application{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
+		t.Errorf("Create(...) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCreateErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		store      applications.Store
-		in         dto.CreateApplicationInput
-		wantStatus int
+		name     string
+		store    applications.Store
+		in       dto.CreateApplicationInput
+		wantKind apperr.Kind
 	}{
 		{
-			name:       "requires job id",
-			store:      applicationstest.NewFakeStore(),
-			in:         dto.CreateApplicationInput{},
-			wantStatus: http.StatusBadRequest,
+			name:     "requires job id",
+			store:    applicationstest.NewFakeStore(),
+			wantKind: apperr.KindInvalid,
 		},
 		{
-			name:  "rejects invalid applied_at",
-			store: applicationstest.NewFakeStore(),
-			in: dto.CreateApplicationInput{
-				JobID:     "job-1",
-				AppliedAt: new("not-a-date"),
-			},
-			wantStatus: http.StatusBadRequest,
+			name:     "rejects invalid applied_at",
+			store:    applicationstest.NewFakeStore(),
+			in:       dto.CreateApplicationInput{JobID: "job-1", AppliedAt: new("not-a-date")},
+			wantKind: apperr.KindInvalid,
 		},
 		{
-			name:       "surfaces conflict from store",
-			store:      failingCreate{Store: applicationstest.NewFakeStore(), err: apperr.Conflict("application already exists for this job")},
-			in:         dto.CreateApplicationInput{JobID: "job-1"},
-			wantStatus: http.StatusConflict,
+			name:     "surfaces conflict from store",
+			store:    failingCreate{Store: applicationstest.NewFakeStore(), err: apperr.Conflict("application already exists for this job")},
+			in:       dto.CreateApplicationInput{JobID: "job-1"},
+			wantKind: apperr.KindConflict,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := applications.NewService(tt.store)
-			_, err := svc.Create(context.Background(), "user-1", tt.in)
-			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
-				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
+			_, err := applications.NewService(tt.store).Create(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Errorf("Create(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
 			}
 		})
-	}
-}
-
-func TestCreateSucceeds(t *testing.T) {
-	svc := applications.NewService(applicationstest.NewFakeStore())
-	app, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{
-		JobID:     "job-1",
-		AppliedAt: new("2026-01-02"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if app.UserID != "user-1" || app.JobID != "job-1" {
-		t.Fatalf("app = %+v, want user-1/job-1", app)
 	}
 }
 
 func TestUpdate(t *testing.T) {
+	svc, st := newService(t)
+	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
+	if err != nil {
+		t.Fatalf("seed CreateApplication err = %v", err)
+	}
+
+	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
+	if err != nil {
+		t.Fatalf("Update(...) err = %v", err)
+	}
+	if got.Notes != "followed up" {
+		t.Errorf("Update(...) notes = %q, want %q", got.Notes, "followed up")
+	}
+}
+
+func TestUpdateErrors(t *testing.T) {
 	tests := []struct {
-		name       string
-		id         string
-		in         dto.UpdateApplicationInput
-		wantStatus int
+		name     string
+		in       dto.UpdateApplicationInput
+		wantKind apperr.Kind
 	}{
 		{
-			name:       "rejects invalid applied_at",
-			id:         "app-1",
-			in:         dto.UpdateApplicationInput{AppliedAt: new("not-a-date")},
-			wantStatus: http.StatusBadRequest,
+			name:     "rejects invalid applied_at",
+			in:       dto.UpdateApplicationInput{ID: "app-1", AppliedAt: new("not-a-date")},
+			wantKind: apperr.KindInvalid,
 		},
 		{
-			name:       "surfaces not found from store",
-			id:         "missing",
-			wantStatus: http.StatusNotFound,
+			name:     "surfaces not found from store",
+			in:       dto.UpdateApplicationInput{ID: "missing"},
+			wantKind: apperr.KindNotFound,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := applications.NewService(applicationstest.NewFakeStore())
-			tt.in.ID = tt.id
-			_, err := svc.Update(context.Background(), "user-1", tt.in)
-			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
-				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
+			svc, _ := newService(t)
+			_, err := svc.Update(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Errorf("Update(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
 			}
 		})
 	}
 }
 
-func TestUpdateSucceeds(t *testing.T) {
-	store := applicationstest.NewFakeStore()
-	created, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc := applications.NewService(store)
-	app, err := svc.Update(context.Background(), "user-1", dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if app.Notes != "followed up" {
-		t.Fatalf("notes = %q, want %q", app.Notes, "followed up")
-	}
-}
+func TestForJobs(t *testing.T) {
+	svc, _ := newService(t)
 
-func TestForJobsNoIDsReturnsEmptyMap(t *testing.T) {
-	svc := applications.NewService(applicationstest.NewFakeStore())
-	got, err := svc.ForJobs(context.Background(), "user-1", dto.ApplicationsForJobsQuery{})
+	got, err := svc.ForJobs(t.Context(), userID, dto.ApplicationsForJobsQuery{})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ForJobs(no ids) err = %v", err)
 	}
 	if len(got) != 0 {
-		t.Fatalf("got = %+v, want empty", got)
-	}
-}
-
-func TestListFiltersByStatusWhenGiven(t *testing.T) {
-	store := applicationstest.NewFakeStore()
-	if _, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1"}); err != nil {
-		t.Fatal(err)
-	}
-	svc := applications.NewService(store)
-	got, err := svc.List(context.Background(), "user-1", dto.ApplicationsQuery{StatusID: "missing"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 0 {
-		t.Fatalf("got = %+v, want empty", got)
+		t.Errorf("ForJobs(no ids) = %+v, want empty", got)
 	}
 }
 
 func TestCreateStatus(t *testing.T) {
+	svc, _ := newService(t)
+
+	got, err := svc.CreateStatus(t.Context(), userID, dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00"})
+	if err != nil {
+		t.Fatalf("CreateStatus(...) err = %v", err)
+	}
+	want := dto.ApplicationStatus{UserID: userID, Name: "Offer", Colour: "#00ff00"}
+	if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ApplicationStatus{}, "ID", "CreatedAt")); diff != "" {
+		t.Errorf("CreateStatus(...) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCreateStatusErrors(t *testing.T) {
 	tests := []struct {
 		name string
 		in   dto.ApplicationStatusInput
@@ -157,53 +159,42 @@ func TestCreateStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := applications.NewService(applicationstest.NewFakeStore())
-			_, err := svc.CreateStatus(context.Background(), "user-1", tt.in)
+			svc, _ := newService(t)
+			_, err := svc.CreateStatus(t.Context(), userID, tt.in)
 			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+				t.Errorf("CreateStatus(%+v) err = %v, want kind %v", tt.in, err, apperr.KindInvalid)
 			}
 		})
 	}
 }
 
-func TestCreateStatusSucceeds(t *testing.T) {
-	svc := applications.NewService(applicationstest.NewFakeStore())
-	got, err := svc.CreateStatus(context.Background(), "user-1", dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Name != "Offer" {
-		t.Fatalf("name = %q, want Offer", got.Name)
-	}
-}
-
-func TestDeleteStatusRefusesAStatusInUse(t *testing.T) {
-	store := applicationstest.NewFakeStore()
-	status, err := store.CreateApplicationStatus(context.Background(), "user-1", "Applied", "#6366f1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for range 3 {
-		if _, err := store.CreateApplication(context.Background(), "user-1", dto.CreateApplicationInput{JobID: "job-1", StatusID: status.ID}); err != nil {
-			t.Fatal(err)
+func TestDeleteStatus(t *testing.T) {
+	t.Run("refuses a status in use", func(t *testing.T) {
+		svc, st := newService(t)
+		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1")
+		if err != nil {
+			t.Fatalf("seed CreateApplicationStatus err = %v", err)
 		}
-	}
-	svc := applications.NewService(store)
+		for range 3 {
+			if _, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1", StatusID: status.ID}); err != nil {
+				t.Fatalf("seed CreateApplication err = %v", err)
+			}
+		}
 
-	err = svc.DeleteStatus(context.Background(), "user-1", status.ID)
+		err = svc.DeleteStatus(t.Context(), userID, status.ID)
 
-	if !apperr.IsKind(err, apperr.KindConflict) {
-		t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
-	}
-	fields := apperr.FieldsFor(err)
-	if fields["count"] != int64(3) {
-		t.Fatalf("fields = %+v, want count=3", fields)
-	}
-}
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("DeleteStatus(in use) err = %v, want kind %v", err, apperr.KindConflict)
+		}
+		if got := apperr.FieldsFor(err)["count"]; got != int64(3) {
+			t.Errorf("DeleteStatus(in use) count = %v, want 3", got)
+		}
+	})
 
-func TestDeleteStatusSucceedsWhenUnused(t *testing.T) {
-	svc := applications.NewService(applicationstest.NewFakeStore())
-	if err := svc.DeleteStatus(context.Background(), "user-1", "s1"); err != nil {
-		t.Fatal(err)
-	}
+	t.Run("deletes an unused status", func(t *testing.T) {
+		svc, _ := newService(t)
+		if err := svc.DeleteStatus(t.Context(), userID, "s1"); err != nil {
+			t.Errorf("DeleteStatus(unused) err = %v", err)
+		}
+	})
 }

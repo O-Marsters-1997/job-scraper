@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -34,6 +35,7 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 		JobID:      in.JobID,
 		StatusID:   in.StatusID,
 		Notes:      in.Notes,
+		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
 	}
 	f.apps[app.ID] = app
@@ -52,6 +54,17 @@ func (f *FakeStore) ListApplications(_ context.Context, userID, statusID string)
 	return out, nil
 }
 
+func parseDate(s *string) *time.Time {
+	if s == nil {
+		return nil
+	}
+	d, err := time.Parse(time.DateOnly, *s)
+	if err != nil {
+		return nil
+	}
+	return &d
+}
+
 func toDetails(a dto.Application) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID: a.ID, UserID: a.UserID, JobID: a.JobID, StatusID: a.StatusID,
@@ -68,6 +81,7 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	}
 	app.StatusID = in.StatusID
 	app.Notes = in.Notes
+	app.AppliedAt = parseDate(in.AppliedAt)
 	app.SalaryInfo = in.SalaryInfo
 	f.apps[id] = app
 	return app, nil

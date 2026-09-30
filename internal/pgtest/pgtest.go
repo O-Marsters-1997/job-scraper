@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
@@ -45,6 +46,30 @@ func New(tb testing.TB) *pgxpool.Pool {
 	truncateAll(tb, p)
 
 	return p
+}
+
+func InTx(tb testing.TB, pool *pgxpool.Pool, commit bool, fn func(pgx.Tx) error) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		tb.Fatalf("pgtest: begin: %v", err)
+	}
+	tb.Cleanup(func() { _ = tx.Rollback(context.WithoutCancel(ctx)) })
+
+	if err := fn(tx); err != nil {
+		tb.Fatalf("pgtest: tx body: %v", err)
+	}
+	if !commit {
+		if err := tx.Rollback(ctx); err != nil {
+			tb.Fatalf("pgtest: rollback: %v", err)
+		}
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		tb.Fatalf("pgtest: commit: %v", err)
+	}
 }
 
 func start(ctx context.Context) (*pgxpool.Pool, error) {
