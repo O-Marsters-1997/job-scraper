@@ -86,6 +86,10 @@ func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 	return m.sourceTargets.Reconsider(ctx, cfg)
 }
 
+func (m *Module) PublishBoardChecks(ctx context.Context, manual bool) error {
+	return m.jobs.PublishBoardChecks(ctx, manual)
+}
+
 func (m *Module) Boards() Store { return m.store }
 
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
