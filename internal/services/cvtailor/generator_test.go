@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
@@ -24,33 +25,56 @@ func newDrive() *cvtailortest.Drive {
 	return &cvtailortest.Drive{Tabs: []google.Tab{{ID: tabID}, {ID: "t.1"}}}
 }
 
-func baseTab(t *testing.T) json.RawMessage {
+func baseTab(t *testing.T, extra ...cvLine) json.RawMessage {
 	t.Helper()
-	return tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs"))
+	lines := []cvLine{head(heading), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs")}
+	return tabJSON(t, append(lines, extra...)...)
 }
 
 func (e draftEnv) queue(t *testing.T) string {
 	t.Helper()
-	ref, err := e.svc.CreateDraft(context.Background(), user, e.input)
+	ref, err := e.svc.CreateDraft(t.Context(), userID, e.input)
 	if err != nil {
 		t.Fatalf("CreateDraft() error = %v", err)
 	}
 	return ref.ID
 }
 
+func newQueuedDraft(t *testing.T) (draftEnv, string) {
+	t.Helper()
+	e := newDraftEnv(t)
+	return e, e.queue(t)
+}
+
 func (e draftEnv) draft(t *testing.T, id string) dto.Draft {
 	t.Helper()
-	d, err := e.svc.GetDraft(context.Background(), user, dto.DraftQuery{ID: id})
+	d, err := e.svc.GetDraft(t.Context(), userID, dto.DraftQuery{ID: id})
 	if err != nil {
 		t.Fatalf("GetDraft(%s) error = %v", id, err)
 	}
 	return d
 }
 
-func (e draftEnv) run(t *testing.T, docs cvtailor.DocFetcher, drive cvtailor.Drive, editor cvtailor.Editor, creds cvtailor.Credentials) {
+type tick struct {
+	docs   cvtailor.DocFetcher
+	drive  cvtailor.Drive
+	editor cvtailor.Editor
+	creds  cvtailor.Credentials
+}
+
+func (e draftEnv) run(t *testing.T, tk tick) {
 	t.Helper()
-	m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: docs, Drive: drive, Editor: editor, Creds: creds})
-	if err := m.RunTick(context.Background()); err != nil {
+	if tk.docs == nil {
+		tk.docs = cvtailortest.Docs{TabJSON: baseTab(t)}
+	}
+	if tk.drive == nil {
+		tk.drive = e.drive
+	}
+	if tk.creds == nil {
+		tk.creds = apiKey
+	}
+	m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: tk.docs, Drive: tk.drive, Editor: tk.editor, Creds: tk.creds})
+	if err := m.RunTick(t.Context()); err != nil {
 		t.Fatalf("RunTick() error = %v", err)
 	}
 }
@@ -77,13 +101,11 @@ func findingChecks(findings []dto.DraftFinding, severity string) []string {
 
 func TestGeneratorRunTick(t *testing.T) {
 	t.Run("builds a ready Draft from a trimmed copy of the base tab", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
+		e, id := newQueuedDraft(t)
 		res := e.bulletResult("Cut p99 latency", 0.5)
 		res.Raw = `{"raw":true}`
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), apiKey)
+		e.run(t, tick{editor: cvtailortest.Editing(res)})
 
 		url := "https://docs.google.com/document/d/copy-1/edit"
 		wantDraft := dto.Draft{ID: id, JobID: jobID, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
@@ -98,28 +120,20 @@ func TestGeneratorRunTick(t *testing.T) {
 			t.Errorf("recorded result mismatch (-want +got):\n%s", diff)
 		}
 
-		if len(drive.Updates) != 2 {
-			t.Fatalf("Docs writes = %d batches, want the tab trim then the edits", len(drive.Updates))
+		if len(e.drive.Updates) != 2 {
+			t.Fatalf("Docs writes = %d batches, want the tab trim then the edits", len(e.drive.Updates))
 		}
 		var trim []map[string]map[string]string
-		for _, raw := range drive.Updates[0] {
-			var req map[string]map[string]string
-			if err := json.Unmarshal(raw, &req); err != nil {
-				t.Fatalf("decode trim request %s: %v", raw, err)
-			}
-			trim = append(trim, req)
+		for _, raw := range e.drive.Updates[0] {
+			trim = append(trim, handlerstest.DecodeJSON[map[string]map[string]string](t, raw))
 		}
 		wantTrim := []map[string]map[string]string{{"deleteTab": {"tabId": "t.1"}}}
 		if diff := cmp.Diff(wantTrim, trim); diff != "" {
 			t.Errorf("tab trim mismatch (-want +got):\n%s", diff)
 		}
 		var inserted []string
-		for _, raw := range drive.Updates[1] {
-			var req docedit.Request
-			if err := json.Unmarshal(raw, &req); err != nil {
-				t.Fatalf("decode edit request %s: %v", raw, err)
-			}
-			if req.InsertText != nil {
+		for _, raw := range e.drive.Updates[1] {
+			if req := handlerstest.DecodeJSON[docedit.Request](t, raw); req.InsertText != nil {
 				inserted = append(inserted, req.InsertText.Text)
 			}
 		}
@@ -145,94 +159,71 @@ func TestGeneratorRunTick(t *testing.T) {
 	}
 	for _, tc := range refused {
 		t.Run(tc.name, func(t *testing.T) {
-			e := newDraftEnv(t)
-			id := e.queue(t)
-			drive := newDrive()
+			e, id := newQueuedDraft(t)
 			res := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: e.pos.ID, Bullets: tc.bullets(e)}}}}
 
-			e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(res), apiKey)
+			e.run(t, tick{editor: cvtailortest.Editing(res)})
 
 			d := e.draft(t, id)
 			if d.Status == "ready" || d.LastError == "" {
 				t.Errorf("GetDraft(%s) = %+v, want the edit refused with a reason", id, d)
 			}
-			if len(drive.Copies) != 0 {
-				t.Errorf("Drive copies = %v, want none made for a refused edit", drive.Copies)
+			if len(e.drive.Copies) != 0 {
+				t.Errorf("Drive copies = %v, want none made for a refused edit", e.drive.Copies)
 			}
 		})
 	}
 
-	t.Run("deletes the copy when a Docs write fails", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
-		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
+	driveFailures := []struct {
+		name    string
+		wrap    func(cvtailor.Drive) cvtailor.Drive
+		wantErr string
+	}{
+		{"a Docs write fails", func(d cvtailor.Drive) cvtailor.Drive {
+			return cvtailortest.FailsBatchUpdate(d, context.DeadlineExceeded)
+		}, context.DeadlineExceeded.Error()},
+		{"the page count export fails", func(d cvtailor.Drive) cvtailor.Drive {
+			return cvtailortest.FailsExport(d, errors.New("export unavailable"))
+		}, "export unavailable"},
+		{"the exported PDF has no pages", cvtailortest.ExportsNoPages, "no pages"},
+	}
+	for _, tc := range driveFailures {
+		t.Run("deletes the copy when "+tc.name, func(t *testing.T) {
+			e, id := newQueuedDraft(t)
+			editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsBatchUpdate(drive, context.DeadlineExceeded), editor, apiKey)
+			e.run(t, tick{drive: tc.wrap(e.drive), editor: editor})
 
-		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
-			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
-		}
-		if d := e.draft(t, id); d.Status != "pending" || d.DraftDocURL != nil || d.DraftDocID != "" || d.LastError == "" {
-			t.Errorf("GetDraft(%s) = %+v, want a retry pending with a reason and no Doc", id, d)
-		}
-	})
-
-	t.Run("deletes the copy when the page count export fails", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
-		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
-
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.FailsExport(drive, errors.New("export unavailable")), editor, apiKey)
-
-		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
-			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
-		}
-		if d := e.draft(t, id); d.Status != "pending" || !strings.Contains(d.LastError, "export unavailable") {
-			t.Errorf("GetDraft(%s) = %+v, want a retry pending with the export error", id, d)
-		}
-	})
-
-	t.Run("deletes the copy when the exported PDF has no pages", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
-		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
-
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsNoPages(drive), editor, apiKey)
-
-		if diff := cmp.Diff([]string{"copy-1"}, drive.Deleted); diff != "" {
-			t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
-		}
-		if d := e.draft(t, id); d.Status != "pending" || !strings.Contains(d.LastError, "no pages") {
-			t.Errorf("GetDraft(%s) = %+v, want a retry pending naming the empty PDF", id, d)
-		}
-	})
+			if diff := cmp.Diff([]string{"copy-1"}, e.drive.Deleted); diff != "" {
+				t.Errorf("deleted files mismatch (-want +got):\n%s", diff)
+			}
+			d := e.draft(t, id)
+			if d.Status != "pending" || d.DraftDocURL != nil || d.DraftDocID != "" || !strings.Contains(d.LastError, tc.wantErr) {
+				t.Errorf("GetDraft(%s) = %+v, want a retry pending with %q and no Doc", id, d, tc.wantErr)
+			}
+		})
+	}
 
 	t.Run("fails for good without an OpenRouter key", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
+		e, id := newQueuedDraft(t)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, drive, cvtailortest.Editing(cvedit.Result{}), cvtailortest.NoKey{})
+		e.run(t, tick{editor: cvtailortest.Editing(cvedit.Result{}), creds: cvtailortest.NoKey{}})
 
 		d := e.draft(t, id)
 		if d.Status != "failed" || !strings.Contains(d.LastError, "OpenRouter") {
 			t.Errorf("GetDraft(%s) = %+v, want failed, naming the missing key", id, d)
 		}
-		if len(drive.Copies) != 0 {
-			t.Errorf("Drive copies = %v, want none", drive.Copies)
+		if len(e.drive.Copies) != 0 {
+			t.Errorf("Drive copies = %v, want none", e.drive.Copies)
 		}
 	})
 
 	t.Run("retries a blocked edit with its findings", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 		blocked, clean := e.bulletResult("Leveraged Postgres", 0.25), e.bulletResult("Moved queries to Postgres", 0.25)
 		editor := cvtailortest.Editing(blocked, clean)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
+		e.run(t, tick{editor: editor})
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 2", len(editor.Inputs))
@@ -258,11 +249,10 @@ func TestGeneratorRunTick(t *testing.T) {
 	})
 
 	t.Run("stops after two retries and keeps the findings", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
+		e.run(t, tick{editor: editor})
 
 		if len(editor.Inputs) != 3 {
 			t.Errorf("editor calls = %d, want 1 attempt and 2 retries", len(editor.Inputs))
@@ -273,52 +263,42 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
-	t.Run("keeps the blocked edit when a retry fails", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		editor := cvtailortest.ReplyingWith(
-			cvtailortest.Reply{Result: e.bulletResult("Leveraged Postgres", 0.25)},
-			cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5}, Err: errors.New("model unavailable")},
-		)
+	failedRetries := []struct {
+		name  string
+		retry func(e draftEnv) cvtailortest.Reply
+	}{
+		{"fails", func(draftEnv) cvtailortest.Reply {
+			return cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5}, Err: errors.New("model unavailable")}
+		}},
+		{"returns an invalid edit", func(e draftEnv) cvtailortest.Reply {
+			return cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5, Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+				PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{"nope"}, Text: "Invented"}},
+			}}}}}
+		}},
+	}
+	for _, tc := range failedRetries {
+		t.Run("keeps the blocked edit when a retry "+tc.name, func(t *testing.T) {
+			e, id := newQueuedDraft(t)
+			editor := cvtailortest.ReplyingWith(cvtailortest.Reply{Result: e.bulletResult("Leveraged Postgres", 0.25)}, tc.retry(e))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
+			e.run(t, tick{editor: editor})
 
-		d := e.draft(t, id)
-		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
-			t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
-		}
-		if got := e.store.DraftResult(id).Cost; got != 0.75 {
-			t.Errorf("recorded cost = %v, want 0.75 including the failed call", got)
-		}
-	})
-
-	t.Run("keeps the blocked edit when a retry returns an invalid edit", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		invalid := cvedit.Result{Cost: 0.5, Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
-			PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{"nope"}, Text: "Invented"}},
-		}}}}
-		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25), invalid)
-
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, newDrive(), editor, apiKey)
-
-		d := e.draft(t, id)
-		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
-			t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
-		}
-		if got := e.store.DraftResult(id).Cost; got != 0.75 {
-			t.Errorf("recorded cost = %v, want 0.75 including the invalid call", got)
-		}
-	})
+			d := e.draft(t, id)
+			if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
+				t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
+			}
+			if got := e.store.DraftResult(id).Cost; got != 0.75 {
+				t.Errorf("recorded cost = %v, want 0.75 including the failed call", got)
+			}
+		})
+	}
 
 	t.Run("shortens once when the draft runs over a page", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		drive := newDrive()
+		e, id := newQueuedDraft(t)
 		long := "Cut p99 latency by moving queries"
 		editor := cvtailortest.Editing(e.bulletResult(long, 0.25), e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(drive, 1, 2, 1), editor, apiKey)
+		e.run(t, tick{drive: cvtailortest.ExportsPages(e.drive, 1, 2, 1), editor: editor})
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -326,8 +306,8 @@ func TestGeneratorRunTick(t *testing.T) {
 		if diff := cmp.Diff([]string{long}, editor.Inputs[1].ShortenBullets); diff != "" {
 			t.Errorf("shorten request bullets mismatch (-want +got):\n%s", diff)
 		}
-		if len(drive.Copies) != 1 {
-			t.Errorf("Drive copies = %v, want the same copy edited again", drive.Copies)
+		if len(e.drive.Copies) != 1 {
+			t.Errorf("Drive copies = %v, want the same copy edited again", e.drive.Copies)
 		}
 		d := e.draft(t, id)
 		if d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
@@ -336,11 +316,10 @@ func TestGeneratorRunTick(t *testing.T) {
 	})
 
 	t.Run("records the overflow when shortening still runs over", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2), editor, apiKey)
+		e.run(t, tick{drive: cvtailortest.ExportsPages(e.drive, 1, 2), editor: editor})
 
 		if len(editor.Inputs) != 2 {
 			t.Errorf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -351,18 +330,16 @@ func TestGeneratorRunTick(t *testing.T) {
 	})
 
 	t.Run("plans the shorten retry against the original CV", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 		docs := cvtailortest.EditedCopyDocs{
 			BaseDocID: docID,
-			Base: tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), bullet("Ran on-call"), bullet("Wrote docs"),
-				head("Skills"), bullet("Go"), bullet("SQL")),
+			Base:      baseTab(t, head("Skills"), bullet("Go"), bullet("SQL")),
 			Copy: tabJSON(t, head(heading), bullet("Cut p99 latency by moving queries"), bullet("Ran on-call"), bullet("Wrote docs"),
 				head("Skills"), bullet("Go"), bullet("SQL"), bullet("Kubernetes")),
 		}
 		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by moving queries", 0.25), e.bulletResult("Cut p99 latency", 0.25))
 
-		e.run(t, docs, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, apiKey)
+		e.run(t, tick{docs: docs, drive: cvtailortest.ExportsPages(e.drive, 1, 2, 1), editor: editor})
 
 		if len(editor.Inputs) != 2 {
 			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten retry", len(editor.Inputs))
@@ -380,15 +357,14 @@ func TestGeneratorRunTick(t *testing.T) {
 	})
 
 	t.Run("retries a shortened edit that is blocked", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(
 			e.bulletResult("Cut p99 latency by moving queries", 0.25),
 			e.bulletResult("Leveraged Postgres", 0.25),
 			e.bulletResult("Cut p99 latency", 0.25),
 		)
 
-		e.run(t, cvtailortest.Docs{TabJSON: baseTab(t)}, cvtailortest.ExportsPages(newDrive(), 1, 2, 1), editor, apiKey)
+		e.run(t, tick{drive: cvtailortest.ExportsPages(e.drive, 1, 2, 1), editor: editor})
 
 		if len(editor.Inputs) != 3 {
 			t.Fatalf("editor calls = %d, want 1 attempt, 1 shorten and 1 retry of the blocked shorten", len(editor.Inputs))
@@ -403,15 +379,13 @@ func TestGeneratorRunTick(t *testing.T) {
 	})
 
 	t.Run("records skill gaps as info findings", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		tab := tabJSON(t, head(heading), bullet("Built and maintained the public APIs for the platform"), head("Skills"), bullet("Go"), bullet("SQL"))
+		e, id := newQueuedDraft(t)
 		res := e.bulletResult("Cut p99 latency", 0.25)
 		res.Edits.Skills = []string{"Go", "SQL"}
 		res.Edits.JobSkills = []string{"Go", "Kubernetes"}
 		editor := cvtailortest.Editing(res)
 
-		e.run(t, cvtailortest.Docs{TabJSON: tab}, newDrive(), editor, apiKey)
+		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), bullet("Go"), bullet("SQL"))}, editor: editor})
 
 		if !editor.Inputs[0].HasSkills {
 			t.Error("editor input HasSkills = false, want the base CV's skills section offered")

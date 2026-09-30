@@ -1,14 +1,12 @@
 package cvtailor_test
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
@@ -16,24 +14,17 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
-func newTestRouter() chi.Router {
-	m := cvtailor.Build(cvtailor.Deps{Store: cvtailortest.NewFakeStore()})
+func newRouter(deps cvtailor.Deps) chi.Router {
+	if deps.Store == nil {
+		deps.Store = cvtailortest.NewFakeStore()
+	}
 	r := chi.NewRouter()
-	m.Routes(r)
+	cvtailor.Build(deps).Routes(r)
 	return r
 }
 
-func do(t *testing.T, r http.Handler, method, path, body string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := handlerstest.Authed(httptest.NewRequest(method, path, strings.NewReader(body)))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	return w
-}
-
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
-	r := newTestRouter()
+	r := newRouter(cvtailor.Deps{})
 	handlerstest.RequiresAuth(t, r,
 		"GET /experience/",
 		"POST /experience/positions",
@@ -44,6 +35,17 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /experience/positions/{id}/achievements/order",
 		"PATCH /experience/achievements/{id}",
 		"DELETE /experience/achievements/{id}",
+		"POST /experience/import/preview",
+		"POST /experience/import",
+		"GET /tailoring/cvs/{docId}/{tabId}/headings",
+		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
+		"GET /tailoring/jobs/{jobId}/suggestions",
+		"POST /tailoring/drafts",
+		"GET /tailoring/drafts/{id}",
+		"GET /tailoring/drafts/{id}/pdf",
+		"POST /tailoring/drafts/{id}/keep",
+		"POST /tailoring/drafts/{id}/discard",
+		"GET /tailoring/jobs/{jobId}/drafts",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /experience/positions",
@@ -51,6 +53,10 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PATCH /experience/positions/{id}",
 		"POST /experience/positions/{id}/achievements",
 		"PATCH /experience/achievements/{id}",
+		"POST /experience/import/preview",
+		"POST /experience/import",
+		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
+		"POST /tailoring/drafts",
 	)
 	handlerstest.RejectsBadPathID(t, r,
 		"DELETE /experience/positions/{id}",
@@ -59,88 +65,88 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 }
 
 func TestExperienceJourney(t *testing.T) {
-	r := newTestRouter()
+	r := newRouter(cvtailor.Deps{})
 
-	w := do(t, r, http.MethodPost, "/experience/positions", `{"employer":"Acme","title":"Engineer","startDate":"2020-01-01"}`)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("create position status = %d, body %s", w.Code, w.Body)
-	}
-	var p dto.Position
-	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
-		t.Fatal(err)
-	}
+	p := handlerstest.Do[dto.Position](t, r, http.StatusCreated, "POST /experience/positions", `{"employer":"Acme","title":"Engineer","startDate":"2020-01-01"}`)
+	a := handlerstest.Do[dto.Achievement](t, r, http.StatusCreated, "POST /experience/positions/"+p.ID+"/achievements", `{"text":"cut latency"}`)
+	handlerstest.Do[dto.Achievement](t, r, http.StatusOK, "PATCH /experience/achievements/"+a.ID, `{"text":"cut p99 latency"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PUT /experience/positions/"+p.ID+"/achievements/order", `{"ids":["`+a.ID+`"]}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PUT /experience/positions/order", `{"ids":["`+p.ID+`"]}`)
 
-	w = do(t, r, http.MethodPost, "/experience/positions/"+p.ID+"/achievements", `{"text":"cut latency"}`)
-	if w.Code != http.StatusCreated {
-		t.Fatalf("create achievement status = %d, body %s", w.Code, w.Body)
-	}
-	var a dto.Achievement
-	if err := json.Unmarshal(w.Body.Bytes(), &a); err != nil {
-		t.Fatal(err)
-	}
+	got := handlerstest.Do[[]dto.Position](t, r, http.StatusOK, "GET /experience/", "")
 
-	w = do(t, r, http.MethodPatch, "/experience/achievements/"+a.ID, `{"text":"cut p99 latency"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("update achievement status = %d, body %s", w.Code, w.Body)
-	}
-
-	w = do(t, r, http.MethodPut, "/experience/positions/"+p.ID+"/achievements/order", `{"ids":["`+a.ID+`"]}`)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("reorder achievements status = %d, body %s", w.Code, w.Body)
-	}
-
-	w = do(t, r, http.MethodPut, "/experience/positions/order", `{"ids":["`+p.ID+`"]}`)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("reorder positions status = %d, body %s", w.Code, w.Body)
-	}
-
-	w = do(t, r, http.MethodGet, "/experience/", "")
-	var got []dto.Position
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
 	want := []dto.Position{{
 		ID: p.ID, Employer: "Acme", Title: "Engineer", StartDate: ptr("2020-01-01"),
 		Achievements: []dto.Achievement{{ID: a.ID, PositionID: p.ID, Text: "cut p99 latency"}},
 	}}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Fatalf("GET /experience (-want +got):\n%s", diff)
+		t.Fatalf("GET /experience/ (-want +got):\n%s", diff)
 	}
-
-	if w = do(t, r, http.MethodDelete, "/experience/positions/"+p.ID, ""); w.Code != http.StatusNoContent {
-		t.Fatalf("delete position status = %d", w.Code)
-	}
-	if w = do(t, r, http.MethodDelete, "/experience/achievements/"+a.ID, ""); w.Code != http.StatusNotFound {
-		t.Fatalf("delete cascaded achievement status = %d, want 404", w.Code)
-	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/positions/"+p.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /experience/achievements/"+a.ID, "")
 }
 
 func TestImportRoutes(t *testing.T) {
-	m := cvtailor.Build(cvtailor.Deps{
-		Store: cvtailortest.NewFakeStore(),
-		Docs:  cvtailortest.Docs{TabJSON: tabJSON(t, head("Engineer, Acme"), bullet("shipped"))},
-	})
-	r := chi.NewRouter()
-	m.Routes(r)
-	handlerstest.RequiresAuth(t, r, "POST /experience/import/preview", "POST /experience/import")
-	handlerstest.RejectsMalformedBody(t, r, "POST /experience/import/preview", "POST /experience/import")
+	r := newRouter(cvtailor.Deps{Docs: cvtailortest.Docs{TabJSON: tabJSON(t, head("Engineer, Acme"), bullet("shipped"))}})
 
-	w := do(t, r, http.MethodPost, "/experience/import/preview", `{"docId":"d","tabId":"t"}`)
-	if w.Code != http.StatusOK {
-		t.Fatalf("preview status = %d, body %s", w.Code, w.Body)
+	preview := handlerstest.Serve(t, r, "POST /experience/import/preview", `{"docId":"d","tabId":"t"}`)
+	if preview.Code != http.StatusOK {
+		t.Fatalf("POST preview = %d: %s", preview.Code, preview.Body)
 	}
+	handlerstest.Do[struct{}](t, r, http.StatusCreated, "POST /experience/import", preview.Body.String())
 
-	w = do(t, r, http.MethodPost, "/experience/import", w.Body.String())
-	if w.Code != http.StatusCreated {
-		t.Fatalf("import status = %d, body %s", w.Code, w.Body)
-	}
+	got := handlerstest.Do[[]dto.Position](t, r, http.StatusOK, "GET /experience/", "")
 
-	w = do(t, r, http.MethodGet, "/experience/", "")
-	var got []dto.Position
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
 	if len(got) != 1 || got[0].Employer != "Acme" || len(got[0].Achievements) != 1 {
-		t.Fatalf("GET /experience after import = %+v, want one Acme position with one achievement", got)
+		t.Fatalf("GET /experience/ after import = %+v, want one Acme position with one achievement", got)
 	}
+}
+
+func TestDraftRoutesQueueAndReadADraft(t *testing.T) {
+	r := newRouter(cvtailor.Deps{})
+	p := handlerstest.Do[dto.Position](t, r, http.StatusCreated, "POST /experience/positions", `{"employer":"Acme","title":"Engineer"}`)
+	a := handlerstest.Do[dto.Achievement](t, r, http.StatusCreated, "POST /experience/positions/"+p.ID+"/achievements", `{"text":"cut latency"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusOK, "PUT /tailoring/cvs/d/t/headings", `{"mappings":[{"headingText":"Acme","positionId":"`+p.ID+`"}]}`)
+
+	ref := handlerstest.Do[dto.DraftRef](t, r, http.StatusAccepted, "POST /tailoring/drafts", `{"jobId":"job-1","docId":"d","tabId":"t","achievementIds":["`+a.ID+`"]}`)
+
+	got := handlerstest.Do[dto.Draft](t, r, http.StatusOK, "GET /tailoring/drafts/"+ref.ID, "")
+	if got.ID != ref.ID || got.Status != "pending" || got.DraftDocURL != nil {
+		t.Errorf("GET draft = %+v, want the pending Draft", got)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "GET /tailoring/drafts/missing", "")
+}
+
+func TestReviewRoutes(t *testing.T) {
+	t.Run("streams the PDF of a ready Draft", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		r := newRouter(cvtailor.Deps{Store: e.store, Drive: cvtailortest.ExportsPDF(e.drive, "%PDF-fake")})
+
+		w := handlerstest.Serve(t, r, "GET /tailoring/drafts/"+id+"/pdf", "")
+
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/pdf" || w.Body.String() != "%PDF-fake" {
+			t.Errorf("GET pdf = %d %q %q, want the streamed PDF", w.Code, w.Header().Get("Content-Type"), w.Body)
+		}
+	})
+
+	t.Run("keeps, lists and discards a Job's Drafts", func(t *testing.T) {
+		e := newDraftEnv(t)
+		r := newRouter(cvtailor.Deps{Store: e.store, Drive: e.drive})
+		ids := e.readyDrafts(t, 2)
+
+		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+ids[0]+"/keep", "")
+		handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /tailoring/drafts/"+ids[1]+"/keep", "")
+
+		list := handlerstest.Do[[]dto.Draft](t, r, http.StatusOK, "GET /tailoring/jobs/"+jobID+"/drafts", "")
+		var gotIDs []string
+		for _, d := range list {
+			gotIDs = append(gotIDs, d.ID)
+		}
+		if diff := cmp.Diff(ids, gotIDs, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("listed Draft ids (-want +got):\n%s", diff)
+		}
+
+		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+ids[0]+"/discard", "")
+	})
 }

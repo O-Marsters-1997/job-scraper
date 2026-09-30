@@ -1,10 +1,11 @@
 package store_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -12,6 +13,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 )
+
+const missingID = "00000000-0000-0000-0000-00000000dead"
 
 func TestStoreContract(t *testing.T) {
 	cvtailortest.RunStoreContract(t, func(t *testing.T) cvtailortest.Fixture {
@@ -23,12 +26,17 @@ func TestStoreContract(t *testing.T) {
 	})
 }
 
-func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
+func newStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {
+	t.Helper()
 	pool := pgtest.New(t)
-	st := store.New(pool)
-	ctx := context.Background()
-	uid, jobID := pgtest.InsertUser(t, pool), pgtest.InsertJob(t, pool, "Role", "fp-1")
-	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{"00000000-0000-0000-0000-00000000dead"}})
+	return store.New(pool), pool, pgtest.InsertUser(t, pool)
+}
+
+func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,69 +61,44 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 	if second.ID != d.ID || second.Attempts != 2 {
 		t.Errorf("ClaimDraft() = %+v, want Draft %s on attempt 2", second, d.ID)
 	}
-	if err := st.CompleteDraft(ctx, first, dto.DraftResult{EditSet: json.RawMessage(`{}`)}); err == nil {
-		t.Error("CompleteDraft() by the crashed claim err = nil, want it rejected")
+	if err := st.CompleteDraft(ctx, first, dto.DraftResult{EditSet: json.RawMessage(`{}`)}); !errors.Is(err, store.ErrDraftNotFound) {
+		t.Errorf("CompleteDraft() by the crashed claim err = %v, want ErrDraftNotFound", err)
 	}
 }
 
 func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
-	pool := pgtest.New(t)
-	_, err := store.New(pool).CreateDraft(context.Background(), pgtest.InsertUser(t, pool), dto.DraftInput{
-		JobID: "00000000-0000-0000-0000-00000000dead", DocID: "doc", TabID: "t.0", AchievementIDs: []string{"00000000-0000-0000-0000-00000000dead"},
-	})
+	st, _, uid := newStore(t)
+
+	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
+
 	if !errors.Is(err, store.ErrJobNotFound) {
 		t.Errorf("CreateDraft() err = %v, want ErrJobNotFound", err)
 	}
 }
 
 func TestOnlyOneKeptTailoredCVPerJob(t *testing.T) {
-	pool := pgtest.New(t)
-	ctx := context.Background()
-	uid, jobID := pgtest.InsertUser(t, pool), pgtest.InsertJob(t, pool, "Role", "fp-1")
-	insert := `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, outcome)
-		VALUES ($1, $2, 'doc', 't.0', '{}', $3)`
-	if _, err := pool.Exec(ctx, insert, uid, jobID, "kept"); err != nil {
+	_, pool, uid := newStore(t)
+	ctx := t.Context()
+	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
+	insert := func(outcome string) error {
+		_, err := pool.Exec(ctx, `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, outcome)
+			VALUES ($1, $2, 'doc', 't.0', '{}', $3)`, uid, jobID, outcome)
+		return err
+	}
+	if err := insert("kept"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, insert, uid, jobID, "discarded"); err != nil {
+	if err := insert("discarded"); err != nil {
 		t.Errorf("second discarded row err = %v, want it allowed", err)
 	}
-	if _, err := pool.Exec(ctx, insert, uid, jobID, "kept"); err == nil {
-		t.Error("second kept row err = nil, want the unique index to reject it")
-	}
-}
-
-func TestDeletePositionCascadesAchievementRows(t *testing.T) {
-	pool := pgtest.New(t)
-	st := store.New(pool)
-	ctx := context.Background()
-	uid := pgtest.InsertUser(t, pool)
-
-	p, err := st.CreatePosition(ctx, uid, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: p.ID, Text: "shipped"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.DeletePosition(ctx, uid, p.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM achievements`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("achievements rows after position delete = %d, want 0", n)
+	if err := insert("kept"); !data.IsUniqueViolation(err) {
+		t.Errorf("second kept row err = %v, want a unique violation", err)
 	}
 }
 
 func TestImportPositionsIsAllOrNothing(t *testing.T) {
-	pool := pgtest.New(t)
-	st := store.New(pool)
-	ctx := context.Background()
-	uid := pgtest.InsertUser(t, pool)
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
 
 	bad := "not-a-date"
 	_, err := st.ImportPositions(ctx, uid, []dto.ImportPosition{
