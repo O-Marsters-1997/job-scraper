@@ -1,7 +1,6 @@
 package cvtailor_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -12,8 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
-
-const userID = "user-1"
 
 type roleBlock struct {
 	heading string
@@ -40,7 +37,7 @@ func newService(t *testing.T, docs cvtailor.DocFetcher, asker cvtailor.Asker) (*
 
 func addPosition(t *testing.T, st *cvtailortest.FakeStore, employer, title string) dto.Position {
 	t.Helper()
-	p, err := st.CreatePosition(context.Background(), userID, dto.PositionInput{Employer: employer, Title: title})
+	p, err := st.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: employer, Title: title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +45,7 @@ func addPosition(t *testing.T, st *cvtailortest.FakeStore, employer, title strin
 }
 
 func TestHeadingsAutoMatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	docs := cvtailortest.Docs{TabJSON: cvTab(t,
 		roleBlock{"Senior Engineer, ACME Corp.", 2},
 		roleBlock{"Staff Engineer - Globex", 1},
@@ -80,7 +77,7 @@ func TestHeadingsAutoMatch(t *testing.T) {
 }
 
 func TestHeadingsSkipStepOnceSaved(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	svc, st := newService(t, cvtailortest.Docs{TabJSON: cvTab(t, roleBlock{"Engineer, Acme", 1}, roleBlock{"Volunteer, Nowhere", 1})}, nil)
 	acme := addPosition(t, st, "Acme", "Engineer")
 
@@ -117,11 +114,11 @@ func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 
 func TestSaveHeadingsRejectsAnotherUsersPosition(t *testing.T) {
 	svc, st := newService(t, cvtailortest.Docs{}, nil)
-	other, err := st.CreatePosition(context.Background(), "user-2", dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	other, err := st.CreatePosition(t.Context(), otherUserID, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.SaveHeadings(context.Background(), userID, dto.HeadingMappingsInput{
+	_, err = svc.SaveHeadings(t.Context(), userID, dto.HeadingMappingsInput{
 		Mappings: []dto.HeadingMapping{{HeadingText: "Engineer, Acme", PositionID: &other.ID}},
 	})
 	if err == nil {

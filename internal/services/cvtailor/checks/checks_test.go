@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 )
 
@@ -16,26 +18,18 @@ func bulletDraft(text, base string, cited, positionAchievements []string) checks
 }
 
 type want struct {
-	severity checks.Severity
-	slotID   string
+	Severity checks.Severity
+	SlotID   string
 }
 
-func assertFindings(t *testing.T, got []checks.Finding, checkName string, wants []want) {
-	t.Helper()
-	var filtered []checks.Finding
+func findings(got []checks.Finding, checkName string) []want {
+	var out []want
 	for _, f := range got {
 		if f.Check == checkName {
-			filtered = append(filtered, f)
+			out = append(out, want{f.Severity, f.SlotID})
 		}
 	}
-	if len(filtered) != len(wants) {
-		t.Fatalf("got %d %s findings %+v, want %d", len(filtered), checkName, filtered, len(wants))
-	}
-	for i, w := range wants {
-		if filtered[i].Severity != w.severity || filtered[i].SlotID != w.slotID {
-			t.Errorf("finding %d = %+v, want severity %s slot %q", i, filtered[i], w.severity, w.slotID)
-		}
-	}
+	return out
 }
 
 func TestGroundingBullets(t *testing.T) {
@@ -102,7 +96,9 @@ func TestGroundingBullets(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertFindings(t, checks.Grounding(tt.draft), "grounding", tt.want)
+			if diff := cmp.Diff(tt.want, findings(checks.Grounding(tt.draft), "grounding")); diff != "" {
+				t.Errorf("grounding findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -121,7 +117,9 @@ func TestGroundingProfileUsesWholeBank(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := checks.Draft{Bank: bank, Profile: &checks.Slot{ID: "profile", Text: tt.text}}
-			assertFindings(t, checks.Grounding(d), "grounding", tt.want)
+			if diff := cmp.Diff(tt.want, findings(checks.Grounding(d), "grounding")); diff != "" {
+				t.Errorf("grounding findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -165,7 +163,9 @@ func TestGroundingSkills(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := checks.Draft{Skills: tt.skills, BaseSkills: tt.baseSkills, Bank: tt.bank, JobSkills: tt.jobSkills}
-			assertFindings(t, checks.Grounding(d), "skills", tt.wantSkills)
+			if diff := cmp.Diff(tt.wantSkills, findings(checks.Grounding(d), "skills")); diff != "" {
+				t.Errorf("skills findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
@@ -192,14 +192,18 @@ func TestBannedWords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := bulletDraft(tt.text, "", nil, nil)
-			assertFindings(t, checks.BannedWords(d), "banned_words", tt.want)
+			if diff := cmp.Diff(tt.want, findings(checks.BannedWords(d), "banned_words")); diff != "" {
+				t.Errorf("banned_words findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
 
 func TestBannedWordsCoverProfile(t *testing.T) {
 	d := checks.Draft{Profile: &checks.Slot{ID: "profile", Text: "A passionate engineer"}}
-	assertFindings(t, checks.BannedWords(d), "banned_words", []want{{checks.Block, "profile"}})
+	if diff := cmp.Diff([]want{{checks.Block, "profile"}}, findings(checks.BannedWords(d), "banned_words")); diff != "" {
+		t.Errorf("banned_words findings (-want +got):\n%s", diff)
+	}
 }
 
 func TestSlotLength(t *testing.T) {
@@ -216,17 +220,23 @@ func TestSlotLength(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertFindings(t, checks.SlotLength(bulletDraft(tt.text, base, nil, nil)), "slot_length", tt.want)
+			if diff := cmp.Diff(tt.want, findings(checks.SlotLength(bulletDraft(tt.text, base, nil, nil)), "slot_length")); diff != "" {
+				t.Errorf("slot_length findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }
 
 func TestSlotLengthProfileAndMultibyte(t *testing.T) {
 	d := checks.Draft{Profile: &checks.Slot{ID: "profile", BaseText: strings.Repeat("é", 100), Text: strings.Repeat("é", 120)}}
-	assertFindings(t, checks.SlotLength(d), "slot_length", []want{{checks.Block, "profile"}})
+	if diff := cmp.Diff([]want{{checks.Block, "profile"}}, findings(checks.SlotLength(d), "slot_length")); diff != "" {
+		t.Errorf("slot_length findings (-want +got):\n%s", diff)
+	}
 
 	d.Profile.Text = strings.Repeat("é", 115)
-	assertFindings(t, checks.SlotLength(d), "slot_length", nil)
+	if diff := cmp.Diff([]want(nil), findings(checks.SlotLength(d), "slot_length")); diff != "" {
+		t.Errorf("slot_length findings (-want +got):\n%s", diff)
+	}
 }
 
 func TestPageCount(t *testing.T) {
@@ -243,7 +253,9 @@ func TestPageCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := checks.PageCount(checks.Draft{BasePages: tt.base, DraftPages: tt.draft})
-			assertFindings(t, got, "page_count", tt.want)
+			if diff := cmp.Diff(tt.want, findings(got, "page_count")); diff != "" {
+				t.Errorf("page_count findings (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

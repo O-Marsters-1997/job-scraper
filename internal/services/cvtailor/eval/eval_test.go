@@ -6,19 +6,9 @@ import (
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/eval"
 )
-
-type scriptedEditor struct {
-	results []cvedit.Result
-	inputs  []cvedit.Input
-}
-
-func (e *scriptedEditor) Edit(_ context.Context, _ string, in cvedit.Input) (cvedit.Result, error) {
-	e.inputs = append(e.inputs, in)
-	r := e.results[min(len(e.inputs), len(e.results))-1]
-	return r, nil
-}
 
 func bullet(text string, ids ...string) cvedit.EditSet {
 	return cvedit.EditSet{Positions: []cvedit.PositionEdit{{
@@ -59,10 +49,10 @@ func TestFixturesCoverPRDScenarios(t *testing.T) {
 
 func TestRunRetriesOnBlockFindingAndReports(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
-	ed := &scriptedEditor{results: []cvedit.Result{
-		{Edits: bullet("Cut API latency by 40%", "a1"), Cost: 0.01},
-		{Edits: bullet("Cut API latency", "a1"), Cost: 0.01},
-	}}
+	ed := cvtailortest.Editing(
+		cvedit.Result{Edits: bullet("Cut API latency by 40%", "a1"), Cost: 0.01},
+		cvedit.Result{Edits: bullet("Cut API latency", "a1"), Cost: 0.01},
+	)
 
 	out, err := eval.Run(context.Background(), ed, "key", f)
 	if err != nil {
@@ -72,8 +62,8 @@ func TestRunRetriesOnBlockFindingAndReports(t *testing.T) {
 	if out.Retries() != 1 {
 		t.Errorf("Retries() = %d, want 1", out.Retries())
 	}
-	if len(ed.inputs[1].PriorFindings) == 0 || ed.inputs[1].PriorEdits == nil {
-		t.Errorf("retry input = %+v, want prior edits and findings", ed.inputs[1])
+	if len(ed.Inputs[1].PriorFindings) == 0 || ed.Inputs[1].PriorEdits == nil {
+		t.Errorf("retry input = %+v, want prior edits and findings", ed.Inputs[1])
 	}
 
 	report := eval.Report("v1", "m", []eval.Outcome{out})
@@ -95,7 +85,7 @@ func TestRunRetriesOnBlockFindingAndReports(t *testing.T) {
 
 func TestRunStopsAfterTwoRetries(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
-	ed := &scriptedEditor{results: []cvedit.Result{{Edits: bullet("Cut API latency by 40%", "a1")}}}
+	ed := cvtailortest.Editing(cvedit.Result{Edits: bullet("Cut API latency by 40%", "a1")})
 
 	out, err := eval.Run(context.Background(), ed, "key", f)
 	if err != nil {

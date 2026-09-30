@@ -3,12 +3,13 @@ package cvedit_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
@@ -34,14 +35,17 @@ type wireRequest struct {
 	} `json:"response_format"`
 }
 
-func fakeServer(t *testing.T, content string, cost float64, captured *wireRequest) *cvedit.Client {
+func fakeServer(t *testing.T, content string, cost float64) (*cvedit.Client, *wireRequest) {
 	t.Helper()
+	captured := new(wireRequest)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer sk-or-test" {
 			t.Errorf("Authorization = %q, want Bearer sk-or-test", got)
 		}
 		if err := json.NewDecoder(r.Body).Decode(captured); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"choices": []any{map[string]any{"message": map[string]any{"role": "assistant", "content": content}}},
@@ -49,7 +53,7 @@ func fakeServer(t *testing.T, content string, cost float64, captured *wireReques
 		})
 	}))
 	t.Cleanup(server.Close)
-	return cvedit.NewClientAt(server.URL, server.Client())
+	return cvedit.NewClientAt(server.URL, server.Client()), captured
 }
 
 func baseInput() cvedit.Input {
@@ -64,9 +68,8 @@ func baseInput() cvedit.Input {
 }
 
 func TestClient_Edit_ShapesRequest_DecodesResult(t *testing.T) {
-	var captured wireRequest
 	content := `{"positions":[{"positionId":"pos-1","bullets":[{"achievement_ids":["ach-1"],"text":"Cut p99 latency"}]}]}`
-	client := fakeServer(t, content, 0.0123, &captured)
+	client, captured := fakeServer(t, content, 0.0123)
 
 	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
 	if err != nil {
@@ -120,8 +123,7 @@ func TestClient_Edit_ProfileAndSkillsOnlyWhenSectionsExist(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var captured wireRequest
-			client := fakeServer(t, `{"positions":[]}`, 0, &captured)
+			client, captured := fakeServer(t, `{"positions":[]}`, 0)
 			in := baseInput()
 			in.HasProfile, in.BaseProfile = tc.hasProfile, "Old profile"
 			in.HasSkills, in.BaseSkills = tc.hasSkill, []string{"Go"}
@@ -156,8 +158,7 @@ func TestClient_Edit_ProfileAndSkillsOnlyWhenSectionsExist(t *testing.T) {
 }
 
 func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
-	var captured wireRequest
-	client := fakeServer(t, `{"positions":[]}`, 0, &captured)
+	client, captured := fakeServer(t, `{"positions":[]}`, 0)
 	in := baseInput()
 	in.PriorEdits = &cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: "pos-1"}}}
 	in.PriorFindings = []checks.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
@@ -176,8 +177,7 @@ func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
 }
 
 func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
-	var captured wireRequest
-	client := fakeServer(t, `{"positions":[]}`, 0, &captured)
+	client, captured := fakeServer(t, `{"positions":[]}`, 0)
 
 	if _, err := client.Edit(context.Background(), "sk-or-test", baseInput()); err != nil {
 		t.Fatalf("Edit: %v", err)
@@ -191,8 +191,7 @@ func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
 }
 
 func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
-	var captured wireRequest
-	client := fakeServer(t, `{"positions":[],"profile":"New profile","skills":["Go"],"jobSkills":["Go","Postgres"]}`, 0, &captured)
+	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":["Go"],"jobSkills":["Go","Postgres"]}`, 0)
 
 	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
 	if err != nil {
@@ -207,21 +206,22 @@ func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
 }
 
 func TestClient_Edit_StatusError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	client := cvedit.NewClientAt(server.URL, server.Client())
 
 	_, err := client.Edit(context.Background(), "sk-or-test", baseInput())
-	if want := fmt.Sprintf("status %d", http.StatusInternalServerError); err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("error = %v, want it to mention %q", err, want)
+
+	var se *openrouter.StatusError
+	if !errors.As(err, &se) || se.Code != http.StatusInternalServerError {
+		t.Errorf("Edit() err = %v, want a StatusError with code %d", err, http.StatusInternalServerError)
 	}
 }
 
 func TestClient_Edit_MalformedContent_KeepsRawAndErrors(t *testing.T) {
-	var captured wireRequest
-	client := fakeServer(t, `not json`, 0.5, &captured)
+	client, _ := fakeServer(t, `not json`, 0.5)
 
 	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
 	if err == nil {
