@@ -86,7 +86,7 @@ func Run(ctx context.Context, ed Editor, apiKey string, f Fixture) (Outcome, err
 		}
 		findings := checks.Run(draft(f, res.Edits))
 		out.Attempts = append(out.Attempts, findings)
-		blocks := blocking(findings)
+		blocks := checks.Blocking(findings)
 		if len(blocks) == 0 || len(out.Attempts) > maxRetries {
 			return out, nil
 		}
@@ -94,16 +94,6 @@ func Run(ctx context.Context, ed Editor, apiKey string, f Fixture) (Outcome, err
 		in.PriorEdits = &edits
 		in.PriorFindings = blocks
 	}
-}
-
-func blocking(findings []checks.Finding) []cvedit.Finding {
-	var out []cvedit.Finding
-	for _, f := range findings {
-		if f.Severity == checks.Block {
-			out = append(out, cvedit.Finding{Check: f.Check, SlotID: f.SlotID, Message: f.Message})
-		}
-	}
-	return out
 }
 
 func slotsUnder(f Fixture, p Position) []docparse.Slot {

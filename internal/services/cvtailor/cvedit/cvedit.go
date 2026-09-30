@@ -3,17 +3,18 @@
 package cvedit
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 )
 
 const (
@@ -67,13 +68,6 @@ type Position struct {
 	Achievements []Achievement
 }
 
-// Finding is a check failure fed back to the model on a retry.
-type Finding struct {
-	Check   string
-	SlotID  string
-	Message string
-}
-
 // Input describes one edit request. Profile and skills are asked for only
 // when HasProfile / HasSkills are set, i.e. the base CV has those sections.
 type Input struct {
@@ -85,10 +79,8 @@ type Input struct {
 	HasSkills   bool
 	BaseSkills  []string
 
-	// PriorEdits and PriorFindings make this a retry of an earlier response.
-	PriorEdits    *EditSet
-	PriorFindings []Finding
-	// ShortenBullets names bullet texts that must come back shorter.
+	PriorEdits     *EditSet
+	PriorFindings  []checks.Finding
 	ShortenBullets []string
 }
 
@@ -119,92 +111,27 @@ type Result struct {
 	Raw   string
 }
 
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type jsonSchemaFormat struct {
-	Type       string `json:"type"`
-	JSONSchema struct {
-		Name   string         `json:"name"`
-		Strict bool           `json:"strict"`
-		Schema map[string]any `json:"schema"`
-	} `json:"json_schema"`
-}
-
-type chatRequest struct {
-	Model          string           `json:"model"`
-	Messages       []chatMessage    `json:"messages"`
-	ResponseFormat jsonSchemaFormat `json:"response_format"`
-	Usage          struct {
-		Include bool `json:"include"`
-	} `json:"usage"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message chatMessage `json:"message"`
-	} `json:"choices"`
-	Usage struct {
-		Cost float64 `json:"cost"`
-	} `json:"usage"`
-}
-
 // Edit sends the rendered prompts to OpenRouter, billed to apiKey, and
 // decodes the structured response. It does not check the edits against the
 // achievements; that's the caller's job.
 func (c *Client) Edit(ctx context.Context, apiKey string, in Input) (Result, error) {
-	reqBody := chatRequest{
-		Model: Model,
-		Messages: []chatMessage{
-			{Role: "system", Content: voice + "\n" + rules},
-			{Role: "user", Content: renderTask(in)},
-		},
-	}
-	reqBody.ResponseFormat.Type = "json_schema"
-	reqBody.ResponseFormat.JSONSchema.Name = "cv_edit_set"
-	reqBody.ResponseFormat.JSONSchema.Strict = true
-	reqBody.ResponseFormat.JSONSchema.Schema = editSchema(in)
-	reqBody.Usage.Include = true
+	req := openrouter.NewRequest(
+		Model, "cv_edit_set", editSchema(in),
+		openrouter.Message{Role: "system", Content: voice + "\n" + rules},
+		openrouter.Message{Role: "user", Content: renderTask(in)},
+	)
+	req.Usage = &openrouter.UsageOptions{Include: true}
 
-	body, err := json.Marshal(reqBody)
+	reply, err := openrouter.Chat(ctx, c.http, c.baseURL, apiKey, req)
 	if err != nil {
-		return Result{}, fmt.Errorf("marshal edit request: %w", err)
+		return Result{}, fmt.Errorf("edit: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return Result{}, fmt.Errorf("build edit request: %w", err)
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return Result{}, fmt.Errorf("edit request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return Result{}, fmt.Errorf("edit: status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var decoded chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return Result{}, fmt.Errorf("decode edit response: %w", err)
-	}
-	if len(decoded.Choices) == 0 {
-		return Result{}, fmt.Errorf("edit: no choices in response")
-	}
-
-	raw := decoded.Choices[0].Message.Content
 	var edits EditSet
-	if err := json.Unmarshal([]byte(raw), &edits); err != nil {
-		return Result{Raw: raw, Cost: decoded.Usage.Cost}, fmt.Errorf("decode edit result: %w", err)
+	if err := json.Unmarshal([]byte(reply.Content), &edits); err != nil {
+		return Result{Raw: reply.Content, Cost: reply.Cost}, fmt.Errorf("decode edit result: %w", err)
 	}
-	return Result{Edits: edits, Cost: decoded.Usage.Cost, Raw: raw}, nil
+	return Result{Edits: edits, Cost: reply.Cost, Raw: reply.Content}, nil
 }
 
 func renderTask(in Input) string {

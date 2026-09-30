@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,12 +15,6 @@ import (
 
 const userID = "user-1"
 
-type fakeDocs struct{ raw json.RawMessage }
-
-func (f fakeDocs) GetDocument(context.Context, string, string, string) (json.RawMessage, error) {
-	return f.raw, nil
-}
-
 type roleBlock struct {
 	heading string
 	bullets int
@@ -29,27 +22,14 @@ type roleBlock struct {
 
 func cvTab(t *testing.T, roles ...roleBlock) json.RawMessage {
 	t.Helper()
-	var content []string
-	idx := 1
-	para := func(text, style string, bullet bool) {
-		end := idx + len(text) + 1
-		b := ""
-		if bullet {
-			b = `,"bullet":{"listId":"l"}`
-		}
-		content = append(content, fmt.Sprintf(
-			`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[{"textRun":{"content":%q}}],"paragraphStyle":{"namedStyleType":%q}%s}}`,
-			idx, end, text+"\n", style, b))
-		idx = end
-	}
-	para("Experience", "HEADING_1", false)
+	lines := []cvLine{head("Experience")}
 	for _, r := range roles {
-		para(r.heading, "HEADING_2", false)
+		lines = append(lines, head(r.heading))
 		for i := range r.bullets {
-			para(fmt.Sprintf("bullet %d of %s", i, r.heading), "NORMAL_TEXT", true)
+			lines = append(lines, bullet(fmt.Sprintf("bullet %d of %s", i, r.heading)))
 		}
 	}
-	return json.RawMessage(`{"documentTab":{"body":{"content":[` + strings.Join(content, ",") + `]}}}`)
+	return tabJSON(t, lines...)
 }
 
 func newService(t *testing.T, docs cvtailor.DocFetcher, asker cvtailor.Asker) (*cvtailor.Service, *cvtailortest.FakeStore) {
@@ -69,7 +49,7 @@ func addPosition(t *testing.T, st *cvtailortest.FakeStore, employer, title strin
 
 func TestHeadingsAutoMatch(t *testing.T) {
 	ctx := context.Background()
-	docs := fakeDocs{cvTab(t,
+	docs := cvtailortest.Docs{TabJSON: cvTab(t,
 		roleBlock{"Senior Engineer, ACME Corp.", 2},
 		roleBlock{"Staff Engineer - Globex", 1},
 		roleBlock{"Initech (2015-2018)", 1},
@@ -101,7 +81,7 @@ func TestHeadingsAutoMatch(t *testing.T) {
 
 func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 	ctx := context.Background()
-	svc, st := newService(t, fakeDocs{cvTab(t, roleBlock{"Engineer, Acme", 1}, roleBlock{"Volunteer, Nowhere", 1})}, nil)
+	svc, st := newService(t, cvtailortest.Docs{TabJSON: cvTab(t, roleBlock{"Engineer, Acme", 1}, roleBlock{"Volunteer, Nowhere", 1})}, nil)
 	acme := addPosition(t, st, "Acme", "Engineer")
 
 	first, err := svc.Headings(ctx, userID, dto.CVTabQuery{DocID: "doc", TabID: "tab"})
@@ -136,7 +116,7 @@ func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 }
 
 func TestSaveHeadingsRejectsAnotherUsersPosition(t *testing.T) {
-	svc, st := newService(t, fakeDocs{}, nil)
+	svc, st := newService(t, cvtailortest.Docs{}, nil)
 	other, err := st.CreatePosition(context.Background(), "user-2", dto.PositionInput{Employer: "Acme", Title: "Engineer"})
 	if err != nil {
 		t.Fatal(err)

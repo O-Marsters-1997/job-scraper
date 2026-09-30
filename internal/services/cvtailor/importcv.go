@@ -27,13 +27,9 @@ func (s *Service) PreviewImport(ctx context.Context, userID string, in dto.Impor
 	if in.DocID == "" || in.TabID == "" {
 		return dto.ImportPreview{}, apperr.Invalid("docId and tabId are required")
 	}
-	raw, err := s.docs.GetDocument(ctx, userID, in.DocID, in.TabID)
+	ds, err := loadTab(ctx, s.docs, userID, in.DocID, in.TabID)
 	if err != nil {
 		return dto.ImportPreview{}, err
-	}
-	ds, err := docparse.Parse(raw)
-	if err != nil {
-		return dto.ImportPreview{}, apperr.Unprocessable("could not read the CV tab")
 	}
 	existing, err := s.store.ListPositions(ctx, userID)
 	if err != nil {

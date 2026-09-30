@@ -9,6 +9,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
 const questionPrefix = "Would this job value a candidate who: "
@@ -73,7 +74,7 @@ func TestSuggestionsRankByPYesTimesConfidence(t *testing.T) {
 
 func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 	asker := &fakeAsker{answers: map[string]dto.Answer{}}
-	docs := fakeDocs{cvTab(t, roleBlock{"Engineer, Acme", 2})}
+	docs := cvtailortest.Docs{TabJSON: cvTab(t, roleBlock{"Engineer, Acme", 2})}
 	svc, st := newService(t, docs, asker)
 	acme := addPosition(t, st, "Acme", "Engineer")
 	other := addPosition(t, st, "Globex", "Engineer")

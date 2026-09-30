@@ -49,8 +49,8 @@ func (e draftEnv) draft(t *testing.T, id string) dto.Draft {
 
 func (e draftEnv) run(t *testing.T, docs cvtailor.DocFetcher, drive cvtailor.Drive, editor cvtailor.Editor, creds cvtailor.Credentials) {
 	t.Helper()
-	gen := cvtailor.NewGenerator(cvtailor.GeneratorDeps{Store: e.store, Docs: docs, Drive: drive, Editor: editor, Creds: creds})
-	if err := gen.RunTick(context.Background()); err != nil {
+	m := cvtailor.Build(cvtailor.Deps{Store: e.store, Docs: docs, Drive: drive, Editor: editor, Creds: creds})
+	if err := m.RunTick(context.Background()); err != nil {
 		t.Fatalf("RunTick() error = %v", err)
 	}
 }
