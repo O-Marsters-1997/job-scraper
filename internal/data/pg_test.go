@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -12,56 +13,86 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 )
 
+const validUUID = "11111111-2222-3333-4444-555555555555"
+
 func TestQueryErr(t *testing.T) {
 	boom := errors.New("boom")
-	if err := data.QueryErr("Get", pgx.ErrNoRows); !errors.Is(err, data.ErrNotFound) {
-		t.Errorf("QueryErr(ErrNoRows) = %v, want ErrNotFound", err)
+	tests := []struct {
+		name string
+		in   error
+		want error
+	}{
+		{name: "no rows is ErrNotFound", in: pgx.ErrNoRows, want: data.ErrNotFound},
+		{name: "other errors stay wrapped", in: boom, want: boom},
 	}
-	err := data.QueryErr("Get", boom)
-	if !errors.Is(err, boom) || err.Error() != "store.Get: boom" {
-		t.Errorf("QueryErr(boom) = %v, want wrapped store.Get: boom", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := data.QueryErr("Get", tt.in); !errors.Is(err, tt.want) {
+				t.Errorf("QueryErr(%v) = %v, want %v", tt.in, err, tt.want)
+			}
+		})
 	}
 }
 
 func TestIsUniqueViolation(t *testing.T) {
-	if !data.IsUniqueViolation(&pgconn.PgError{Code: "23505"}) {
-		t.Error("IsUniqueViolation(23505) = false, want true")
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "unique violation", err: &pgconn.PgError{Code: "23505"}, want: true},
+		{name: "foreign key violation", err: &pgconn.PgError{Code: "23503"}},
+		{name: "non-pg error", err: errors.New("x")},
 	}
-	if data.IsUniqueViolation(&pgconn.PgError{Code: "23503"}) || data.IsUniqueViolation(errors.New("x")) {
-		t.Error("IsUniqueViolation(other) = true, want false")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := data.IsUniqueViolation(tt.err); got != tt.want {
+				t.Errorf("IsUniqueViolation(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
 	}
 }
 
 func TestUUID(t *testing.T) {
-	const s = "11111111-2222-3333-4444-555555555555"
-	id, err := data.UUID(s)
-	if err != nil || id.String() != s {
-		t.Errorf("UUID(%q) = %v, %v", s, id.String(), err)
+	id, err := data.UUID(validUUID)
+	if err != nil {
+		t.Fatalf("UUID(%q) err = %v", validUUID, err)
 	}
+	if got := id.String(); got != validUUID {
+		t.Errorf("UUID(%q).String() = %q", validUUID, got)
+	}
+
 	if _, err := data.UUID("nope"); err == nil {
-		t.Error("UUID(nope) error = nil, want error")
-	}
-	if got := (pgtype.UUID{}).String(); got != "" {
-		t.Errorf("invalid UUID String() = %q, want empty", got)
+		t.Error("UUID(nope) err = nil, want error")
 	}
 }
 
 func TestUUIDs(t *testing.T) {
-	ids, err := data.UUIDs([]string{"11111111-2222-3333-4444-555555555555"})
-	if err != nil || len(ids) != 1 || !ids[0].Valid {
-		t.Errorf("UUIDs(valid) = %v, %v", ids, err)
+	ids, err := data.UUIDs([]string{validUUID})
+	if err != nil {
+		t.Fatalf("UUIDs(valid) err = %v", err)
 	}
+	if len(ids) != 1 || !ids[0].Valid {
+		t.Errorf("UUIDs(valid) = %v, want one valid ID", ids)
+	}
+
 	if _, err := data.UUIDs([]string{"nope"}); err == nil {
-		t.Error("UUIDs(nope) error = nil, want error")
+		t.Error("UUIDs(nope) err = nil, want error")
 	}
 }
 
 func TestText(t *testing.T) {
-	if got := data.Text(""); got.Valid {
-		t.Errorf("Text(\"\") = %+v, want NULL", got)
+	tests := []struct {
+		in   string
+		want pgtype.Text
+	}{
+		{in: ""},
+		{in: "a", want: pgtype.Text{String: "a", Valid: true}},
 	}
-	if got := data.Text("a"); !got.Valid || got.String != "a" {
-		t.Errorf("Text(a) = %+v", got)
+	for _, tt := range tests {
+		if diff := cmp.Diff(tt.want, data.Text(tt.in)); diff != "" {
+			t.Errorf("Text(%q) (-want +got):\n%s", tt.in, diff)
+		}
 	}
 }
 
@@ -69,8 +100,10 @@ func TestTimePtr(t *testing.T) {
 	if got := data.TimePtr(pgtype.Timestamptz{}); got != nil {
 		t.Errorf("TimePtr(NULL) = %v, want nil", got)
 	}
+
 	now := time.Now()
-	if got := data.TimePtr(pgtype.Timestamptz{Time: now, Valid: true}); got == nil || !got.Equal(now) {
-		t.Errorf("TimePtr(now) = %v", got)
+	got := data.TimePtr(pgtype.Timestamptz{Time: now, Valid: true})
+	if got == nil || !got.Equal(now) {
+		t.Errorf("TimePtr(now) = %v, want %v", got, now)
 	}
 }

@@ -85,21 +85,39 @@ func TestParse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join("testdata", tt.file))
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("ReadFile(%s) err = %v", tt.file, err)
 			}
 			got, err := docparse.Parse(raw)
 			if err != nil {
-				t.Fatalf("Parse: %v", err)
+				t.Fatalf("Parse(%s) err = %v", tt.file, err)
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("Parse mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
+
+	t.Run("invalid JSON is an error", func(t *testing.T) {
+		if _, err := docparse.Parse([]byte("{")); err == nil {
+			t.Error("Parse({) err = nil, want error")
+		}
+	})
 }
 
-func TestParseRejectsInvalidJSON(t *testing.T) {
-	if _, err := docparse.Parse([]byte("{")); err == nil {
-		t.Fatal("want error for invalid JSON")
+func FuzzParse(f *testing.F) {
+	files, err := filepath.Glob(filepath.Join("testdata", "*.json"))
+	if err != nil {
+		f.Fatalf("Glob() err = %v", err)
 	}
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			f.Fatalf("ReadFile(%s) err = %v", file, err)
+		}
+		f.Add(raw)
+	}
+	f.Add([]byte("{"))
+	f.Fuzz(func(_ *testing.T, raw []byte) {
+		_, _ = docparse.Parse(raw)
+	})
 }

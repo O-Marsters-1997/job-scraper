@@ -8,23 +8,24 @@ import (
 
 func TestDetect(t *testing.T) {
 	tests := []struct {
+		name string
 		url  string
 		want detect.ATSType
 	}{
-		{"https://boards.greenhouse.io/acme/jobs/123", detect.Greenhouse},
-		{"https://boards-api.greenhouse.io/v1/boards/acme/jobs/456", detect.Greenhouse},
-		{"https://jobs.lever.co/acme/job-slug", detect.Lever},
-		{"https://jobs.ashbyhq.com/acme/role-slug", detect.Ashby},
-		{"https://apply.workable.com/acme/j/ABC123/", detect.Workable},
-		{"https://acme.recruitee.com/o/software-engineer", detect.Recruitee},
-		{"https://acme.personio.de/job/software-engineer-123", detect.Personio},
-		{"https://www.linkedin.com/jobs/view/1234567890", detect.Aggregator},
-		{"https://indeed.com/viewjob?jk=abc123", detect.Aggregator},
-		{"https://workinstartups.com/job-board/job/12345/software-engineer", detect.UnknownHTML},
+		{"greenhouse board", "https://boards.greenhouse.io/acme/jobs/123", detect.Greenhouse},
+		{"greenhouse api", "https://boards-api.greenhouse.io/v1/boards/acme/jobs/456", detect.Greenhouse},
+		{"lever", "https://jobs.lever.co/acme/job-slug", detect.Lever},
+		{"ashby", "https://jobs.ashbyhq.com/acme/role-slug", detect.Ashby},
+		{"workable", "https://apply.workable.com/acme/j/ABC123/", detect.Workable},
+		{"recruitee", "https://acme.recruitee.com/o/software-engineer", detect.Recruitee},
+		{"personio", "https://acme.personio.de/job/software-engineer-123", detect.Personio},
+		{"linkedin is an aggregator", "https://www.linkedin.com/jobs/view/1234567890", detect.Aggregator},
+		{"indeed is an aggregator", "https://indeed.com/viewjob?jk=abc123", detect.Aggregator},
+		{"unknown host", "https://workinstartups.com/job-board/job/12345/software-engineer", detect.UnknownHTML},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.url, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			got := detect.Detect(tt.url)
 			if got != tt.want {
 				t.Errorf("Detect(%q) = %v, want %v", tt.url, got, tt.want)
