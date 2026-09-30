@@ -3,7 +3,6 @@ package scoring_test
 import (
 	"context"
 	"errors"
-	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -15,164 +14,94 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
 
-type erroringGetStore struct {
-	*scoringtest.FakeStore
-	err error
-}
+var errBoom = errors.New("boom")
+
+type erroringGetStore struct{ *scoringtest.FakeStore }
 
 func (s *erroringGetStore) GetSearchConfig(context.Context, string) (dto.SearchConfig, error) {
-	return dto.SearchConfig{}, s.err
+	return dto.SearchConfig{}, errBoom
 }
 
-type fakeExtractor struct {
-	calls int
-	picks []dto.Pick
-	err   error
-}
-
-func (f *fakeExtractor) Extract(context.Context, string, string, []dto.ScoringOption, []dto.DimensionSpec) ([]dto.Pick, error) {
-	f.calls++
-	return f.picks, f.err
-}
-
-type failingQueueStore struct {
-	*scoringtest.FakeStore
-	err error
-}
+type failingQueueStore struct{ *scoringtest.FakeStore }
 
 func (s *failingQueueStore) QueueMissingAnswers(context.Context, string, []string, string) (int64, error) {
-	return 0, s.err
+	return 0, errBoom
 }
 
-type failingInputsStore struct {
-	*scoringtest.FakeStore
-	err error
-}
+type failingInputsStore struct{ *scoringtest.FakeStore }
 
 func (s *failingInputsStore) ListScoringInputs(context.Context, string, string) ([]store.ScoringInput, error) {
-	return nil, s.err
+	return nil, errBoom
 }
 
 func TestGet(t *testing.T) {
+	empty := dto.ScoringConfigView{
+		Preferences:           dto.Preferences{Picks: []dto.Pick{}},
+		ExcludedTitleKeywords: []string{},
+		ExcludedCompanies:     []string{},
+		ExcludedLocations:     []string{},
+	}
+	saved := empty
+	saved.NotifyThreshold = 5
+
 	tests := []struct {
-		name     string
-		newStore func(t *testing.T) scoring.Store
-		check    func(t *testing.T, got dto.ScoringConfigView, err error)
+		name string
+		seed *dto.SearchConfig
+		want dto.ScoringConfigView
 	}{
-		{
-			name:     "returns empty config when none saved",
-			newStore: func(*testing.T) scoring.Store { return newFakeStore() },
-			check: wantScoringConfig(dto.ScoringConfigView{
-				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
-				ExcludedTitleKeywords: []string{},
-				ExcludedCompanies:     []string{},
-				ExcludedLocations:     []string{},
-			}),
-		},
-		{
-			name: "returns saved config",
-			newStore: func(t *testing.T) scoring.Store {
-				t.Helper()
-				st := newFakeStore()
-				if _, err := st.UpsertSearchConfig(context.Background(), dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5}); err != nil {
-					t.Fatal(err)
-				}
-				return st
-			},
-			check: wantScoringConfig(dto.ScoringConfigView{
-				NotifyThreshold:       5,
-				Preferences:           dto.Preferences{Picks: []dto.Pick{}},
-				ExcludedTitleKeywords: []string{},
-				ExcludedCompanies:     []string{},
-				ExcludedLocations:     []string{},
-			}),
-		},
-		{
-			name: "surfaces store error",
-			newStore: func(*testing.T) scoring.Store {
-				return &erroringGetStore{FakeStore: newFakeStore(), err: errors.New("db down")}
-			},
-			check: func(t *testing.T, _ dto.ScoringConfigView, err error) {
-				t.Helper()
-				if err == nil {
-					t.Fatal("want error, got nil")
-				}
-			},
-		},
+		{"returns empty config when none saved", nil, empty},
+		{"returns saved config", &dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5}, saved},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := newService(t, tt.newStore(t))
-			got, err := svc.GetConfig(context.Background(), "user-1")
-			tt.check(t, got, err)
-		})
-	}
-}
-
-func wantScoringConfig(want dto.ScoringConfigView) func(t *testing.T, got dto.ScoringConfigView, err error) {
-	return func(t *testing.T, got dto.ScoringConfigView, err error) {
-		t.Helper()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("Get() mismatch (-want +got):\n%s", diff)
-		}
-	}
-}
-
-func TestUpdate(t *testing.T) {
-	tests := []struct {
-		name       string
-		in         dto.ScoringConfigView
-		wantStatus int
-	}{
-		{
-			name:       "rejects an unknown option",
-			in:         dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice"}}}},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects a stance the dimension doesn't allow",
-			in:         dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "block"}}}},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects a notify threshold below 0",
-			in:         dto.ScoringConfigView{NotifyThreshold: -1},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects a notify threshold above 100",
-			in:         dto.ScoringConfigView{NotifyThreshold: 101},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects a negative salary floor amount",
-			in:         dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: -1, Currency: "GBP"}}},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects a salary floor with no currency",
-			in:         dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000}}},
-			wantStatus: http.StatusBadRequest,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc := newService(t, newFakeStore())
-			_, err := svc.UpdateConfig(context.Background(), "user-1", tt.in)
-			if status, ok := apperr.StatusFor(err); !ok || status != tt.wantStatus {
-				t.Fatalf("status = %v, ok = %v, want %d", status, ok, tt.wantStatus)
+			st := newFakeStore()
+			if tt.seed != nil {
+				st.SeedSearchConfig(*tt.seed)
+			}
+			got, err := newService(t, st).GetConfig(t.Context(), "user-1")
+			if err != nil {
+				t.Fatalf("GetConfig() err = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("GetConfig() (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestUpdateSucceeds(t *testing.T) {
+func TestGetErrors(t *testing.T) {
+	svc := newService(t, &erroringGetStore{newFakeStore()})
+	if _, err := svc.GetConfig(t.Context(), "user-1"); !errors.Is(err, errBoom) {
+		t.Errorf("GetConfig() err = %v, want boom", err)
+	}
+}
+
+func TestUpdateConfigRejects(t *testing.T) {
+	tests := []struct {
+		name string
+		in   dto.ScoringConfigView
+	}{
+		{"an unknown option", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice"}}}}},
+		{"a stance the dimension doesn't allow", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "block"}}}}},
+		{"a notify threshold below 0", dto.ScoringConfigView{NotifyThreshold: -1}},
+		{"a notify threshold above 100", dto.ScoringConfigView{NotifyThreshold: 101}},
+		{"a negative salary floor amount", dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: -1, Currency: "GBP"}}}},
+		{"a salary floor with no currency", dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newService(t, newFakeStore()).UpdateConfig(t.Context(), "user-1", tt.in)
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("UpdateConfig() err = %v, want an invalid apperr", err)
+			}
+		})
+	}
+}
+
+func TestUpdateConfig(t *testing.T) {
 	svc := newService(t, newFakeStore())
 
-	got, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{
+	got, err := svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
 		Preferences: dto.Preferences{
@@ -184,53 +113,48 @@ func TestUpdateSucceeds(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpdateConfig() err = %v", err)
 	}
-	if want := []string{"intern"}; len(got.ExcludedTitleKeywords) != 1 || got.ExcludedTitleKeywords[0] != want[0] {
-		t.Fatalf("excluded title keywords = %v, want %v", got.ExcludedTitleKeywords, want)
+	if diff := cmp.Diff([]string{"intern"}, got.ExcludedTitleKeywords); diff != "" {
+		t.Errorf("excluded title keywords, trimmed and lowercased (-want +got):\n%s", diff)
 	}
 	wantPicks := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
 		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
 	}
 	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
-		t.Errorf("picks mismatch, source forced to manual (-want +got):\n%s", diff)
+		t.Errorf("picks, source forced to manual (-want +got):\n%s", diff)
 	}
 	wantFloor := &dto.Money{Amount: 55000, Currency: "GBP"}
 	if diff := cmp.Diff(wantFloor, got.Preferences.SalaryFloor); diff != "" {
-		t.Errorf("salary floor mismatch, currency uppercased (-want +got):\n%s", diff)
+		t.Errorf("salary floor, currency uppercased (-want +got):\n%s", diff)
 	}
 	if got.BackfillQueued != 2 {
-		t.Fatalf("backfillQueued = %d, want 2", got.BackfillQueued)
+		t.Errorf("BackfillQueued = %d, want 2", got.BackfillQueued)
 	}
 }
 
-func TestUpdateBackfillFails(t *testing.T) {
-	svc := newService(t, &failingQueueStore{FakeStore: newFakeStore(), err: errors.New("backfill blew up")})
-
-	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}})
-	if err == nil {
-		t.Fatal("want error, got nil")
+func TestUpdateConfigFailures(t *testing.T) {
+	withGo := dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}}
+	tests := []struct {
+		name string
+		st   scoring.Store
+		opts []depsOpt
+		in   dto.ScoringConfigView
+	}{
+		{"backfill fails", &failingQueueStore{newFakeStore()}, nil, withGo},
+		{"reconsider fails", newFakeStore(), []depsOpt{withCandidates(scoringtest.ReconsiderFails(errBoom))}, dto.ScoringConfigView{}},
+		{"recompute fails", &failingInputsStore{newFakeStore()}, nil, withGo},
 	}
-}
-
-func TestUpdateReconsiderFails(t *testing.T) {
-	svc := newService(t, newFakeStore(), withCandidates(scoringtest.ReconsiderFails(errors.New("reconsideration blew up"))))
-
-	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{})
-	if err == nil {
-		t.Fatal("want error, got nil")
-	}
-	if _, ok := apperr.StatusFor(err); ok {
-		t.Fatalf("want unkinded error (mapped to 500 by the adapter), got a kinded one: %v", err)
-	}
-}
-
-func TestUpdateRecomputeFails(t *testing.T) {
-	svc := newService(t, &failingInputsStore{FakeStore: newFakeStore(), err: errors.New("recompute blew up")})
-
-	_, err := svc.UpdateConfig(context.Background(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}})
-	if err == nil {
-		t.Fatal("want error, got nil")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newService(t, tt.st, tt.opts...).UpdateConfig(t.Context(), "user-1", tt.in)
+			if !errors.Is(err, errBoom) {
+				t.Fatalf("UpdateConfig() err = %v, want boom", err)
+			}
+			if _, ok := errors.AsType[*apperr.Error](err); ok {
+				t.Errorf("UpdateConfig() err = %v, want an unkinded error (the adapter maps it to 500)", err)
+			}
+		})
 	}
 }
