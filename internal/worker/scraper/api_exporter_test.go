@@ -1,174 +1,173 @@
 package scraper_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 )
 
-func TestAPIExporter_CorrectRequestShape(t *testing.T) {
-	var gotMethod, gotPath, gotContentType, gotAuth string
-	var gotBody struct {
-		Jobs []dto.Job `json:"jobs"`
-	}
+const (
+	okBody       = `{"results":[{"status":"new","job_id":"job-1"}]}`
+	okSingleBody = `{"status":"new","job_id":"job-1"}`
+)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotMethod = r.Method
-		gotPath = r.URL.Path
-		gotContentType = r.Header.Get("Content-Type")
-		gotAuth = r.Header.Get("Authorization")
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		_, _ = w.Write([]byte(`{"results":[{"status":"new","job_id":"job-1"}]}`))
-	}))
-	defer srv.Close()
+var oneJob = []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}
 
-	pub := scraper.NewAPIExporter(srv.URL, "test-token")
-	job := dto.Job{Title: "Engineer", URL: "https://example.com/job/1"}
+func newExporter(t *testing.T, h http.HandlerFunc) *scraper.APIExporter {
+	t.Helper()
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	return scraper.NewAPIExporter(srv.URL, "test-token").WithInitialBackoff(0)
+}
 
-	if err := pub.BulkExport(context.Background(), []dto.Job{job}); err != nil {
-		t.Fatal(err)
-	}
-
-	if gotMethod != http.MethodPost {
-		t.Errorf("method = %q, want POST", gotMethod)
-	}
-	if gotPath != "/ingest/batch" {
-		t.Errorf("path = %q, want /ingest/batch", gotPath)
-	}
-	if gotContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", gotContentType)
-	}
-	if gotAuth != "Bearer test-token" {
-		t.Errorf("Authorization = %q, want Bearer test-token", gotAuth)
-	}
-	if len(gotBody.Jobs) != 1 || gotBody.Jobs[0].Title != job.Title {
-		t.Errorf("body.Jobs = %+v, want one job titled %q", gotBody.Jobs, job.Title)
+func respondWith(status int, body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
 	}
 }
 
-func TestAPIExporter_2xx_ReturnsNil(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"results":[{"status":"unchanged","job_id":"job-1"}]}`))
-	}))
-	defer srv.Close()
-
-	pub := scraper.NewAPIExporter(srv.URL, "tok")
-	if err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err != nil {
-		t.Errorf("expected nil error on 201, got %v", err)
-	}
+type recordedRequest struct {
+	Method, Path, ContentType, Auth string
+	Jobs                            []dto.Job
 }
 
-func TestAPIExporter_4xx_ReturnsError(t *testing.T) {
-	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	defer srv.Close()
+func TestBulkExport(t *testing.T) {
+	t.Run("posts the batch with auth", func(t *testing.T) {
+		got := make(chan recordedRequest, 1)
+		exporter := newExporter(t, func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Jobs []dto.Job `json:"jobs"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			got <- recordedRequest{r.Method, r.URL.Path, r.Header.Get("Content-Type"), r.Header.Get("Authorization"), body.Jobs}
+			_, _ = w.Write([]byte(okBody))
+		})
+		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+			t.Fatal(err)
+		}
+		want := recordedRequest{http.MethodPost, "/ingest/batch", "application/json", "Bearer test-token", oneJob}
+		if diff := cmp.Diff(want, <-got); diff != "" {
+			t.Errorf("request (-want +got):\n%s", diff)
+		}
+	})
 
-	pub := scraper.NewAPIExporter(srv.URL, "tok")
-	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
-	if err == nil {
-		t.Error("expected error on 400, got nil")
+	t.Run("accepts any 2xx", func(t *testing.T) {
+		exporter := newExporter(t, respondWith(http.StatusCreated, `{"results":[{"status":"unchanged"}]}`))
+		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+			t.Errorf("BulkExport() = %v, want nil on 201", err)
+		}
+	})
+
+	for _, tt := range []struct {
+		name      string
+		status    int
+		body      string
+		wantCalls int32
+	}{
+		{"4xx is not retried", http.StatusBadRequest, "", 1},
+		{"5xx retries then fails", http.StatusServiceUnavailable, "", 3},
+		{"unknown outcome", http.StatusOK, `{"results":[{"status":"pending"}]}`, 1},
+		{"rejected job", http.StatusOK, `{"results":[{"status":"rejected","reason":"bad"}]}`, 1},
+		{"result count mismatch", http.StatusOK, `{"results":[]}`, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls atomic.Int32
+			exporter := newExporter(t, func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				respondWith(tt.status, tt.body)(w, r)
+			})
+			if err := exporter.BulkExport(context.Background(), oneJob); err == nil {
+				t.Error("BulkExport() = nil, want error")
+			}
+			if got := calls.Load(); got != tt.wantCalls {
+				t.Errorf("calls = %d, want %d", got, tt.wantCalls)
+			}
+		})
 	}
-	if calls != 1 {
-		t.Errorf("4xx should not be retried: got %d calls, want 1", calls)
-	}
+
+	t.Run("retry resends the same body", func(t *testing.T) {
+		var calls atomic.Int32
+		bodies := make(chan string, 2)
+		exporter := newExporter(t, func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			bodies <- string(body)
+			if calls.Add(1) == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			_, _ = w.Write([]byte(okBody))
+		})
+		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+			t.Fatal(err)
+		}
+		if first, second := <-bodies, <-bodies; first != second {
+			t.Errorf("retry body changed: first=%s second=%s", first, second)
+		}
+	})
+
+	t.Run("splits a batch at the payload limit", func(t *testing.T) {
+		sizes := make(chan int, 4)
+		exporter := newExporter(t, func(w http.ResponseWriter, r *http.Request) {
+			var body struct {
+				Jobs []dto.Job `json:"jobs"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			sizes <- len(body.Jobs)
+			_, _ = w.Write([]byte(okBody))
+		})
+		big := strings.Repeat("x", 1100000)
+		jobs := []dto.Job{
+			{Title: "A", URL: "https://example.com/a", Description: big},
+			{Title: "B", URL: "https://example.com/b", Description: big},
+		}
+		if err := exporter.BulkExport(context.Background(), jobs); err != nil {
+			t.Fatal(err)
+		}
+		if first, second := <-sizes, <-sizes; first != 1 || second != 1 {
+			t.Errorf("batch sizes = %d, %d, want 1, 1", first, second)
+		}
+	})
 }
 
-func TestAPIExporter_5xx_RetriesAndReturnsError(t *testing.T) {
-	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}))
-	defer srv.Close()
-
-	pub := scraper.NewAPIExporter(srv.URL, "tok").WithInitialBackoff(0)
-
-	err := pub.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}})
-	if err == nil {
-		t.Error("expected error after 5xx retries, got nil")
-	}
-	if calls != 3 {
-		t.Errorf("expected 3 calls (1 + 2 retries), got %d", calls)
-	}
-}
-
-func TestAPIExporter_RetriesAmbiguousBatchWithSameIdentity(t *testing.T) {
-	var firstBody []byte
-	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Error(err)
-		}
-		calls++
-		if calls == 1 {
-			firstBody = body
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		if !bytes.Equal(body, firstBody) {
-			t.Errorf("retry body changed: first=%s second=%s", firstBody, body)
-		}
-		_, _ = w.Write([]byte(`{"results":[{"status":"unchanged","job_id":"job-1"}]}`))
-	}))
-	defer srv.Close()
-	exporter := scraper.NewAPIExporter(srv.URL, "tok").WithInitialBackoff(0)
-	job := dto.Job{Title: "Engineer", URL: "https://example.com/1", BoardID: "11111111-1111-1111-1111-111111111111", ProviderPostingID: "posting-1"}
-	if err := exporter.BulkExport(context.Background(), []dto.Job{job}); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 2 {
-		t.Fatalf("calls = %d, want 2", calls)
-	}
-}
-
-func TestAPIExporter_RequiresAcceptedOutcome(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"results":[{"status":"pending"}]}`))
-	}))
-	defer srv.Close()
-	exporter := scraper.NewAPIExporter(srv.URL, "tok")
-	if err := exporter.BulkExport(context.Background(), []dto.Job{{Title: "x", URL: "https://x.com"}}); err == nil {
-		t.Fatal("expected unknown outcome to fail")
-	}
-}
-
-func TestAPIExporter_SplitsBatchAtPayloadLimit(t *testing.T) {
-	calls := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		var request struct {
-			Jobs []dto.Job `json:"jobs"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Error(err)
-		}
-		if len(request.Jobs) != 1 {
-			t.Errorf("batch %d has %d jobs, want 1", calls, len(request.Jobs))
-		}
-		_, _ = w.Write([]byte(`{"results":[{"status":"new","job_id":"job-1"}]}`))
-	}))
-	defer srv.Close()
-	jobs := []dto.Job{
-		{Title: "A", URL: "https://example.com/a", Description: strings.Repeat("x", 1100000)},
-		{Title: "B", URL: "https://example.com/b", Description: strings.Repeat("x", 1100000)},
-	}
-	if err := scraper.NewAPIExporter(srv.URL, "tok").BulkExport(context.Background(), jobs); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 2 {
-		t.Fatalf("calls = %d, want 2", calls)
+func TestExport(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		body    string
+		wantErr bool
+	}{
+		{"new", okSingleBody, false},
+		{"rejected", `{"status":"rejected","reason":"bad"}`, true},
+		{"unknown outcome", `{"status":"pending"}`, true},
+		{"undecodable", `nope`, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var path atomic.Value
+			exporter := newExporter(t, func(w http.ResponseWriter, r *http.Request) {
+				path.Store(r.URL.Path)
+				_, _ = w.Write([]byte(tt.body))
+			})
+			err := exporter.Export(context.Background(), oneJob[0])
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Export() error = %v, wantErr %t", err, tt.wantErr)
+			}
+			if got := path.Load(); got != "/ingest" {
+				t.Errorf("path = %v, want /ingest", got)
+			}
+		})
 	}
 }

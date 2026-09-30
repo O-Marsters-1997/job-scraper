@@ -9,7 +9,13 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
 
-const proxyEnv = "BRIGHTDATA_PROXY_URL"
+const validProxyURL = "http://user:pass@brd.superproxy.io:33335"
+
+func setProxyEnv(t *testing.T, proxyURL string) {
+	t.Helper()
+	t.Setenv("BRIGHTDATA_PROXY_URL", proxyURL)
+	t.Setenv("BRIGHTDATA_CA_CERT", "")
+}
 
 func TestTransport(t *testing.T) {
 	t.Run("direct returns default transport", func(t *testing.T) {
@@ -23,8 +29,7 @@ func TestTransport(t *testing.T) {
 	})
 
 	t.Run("proxy on with valid URL uses proxy transport", func(t *testing.T) {
-		t.Setenv(proxyEnv, "http://user:pass@brd.superproxy.io:33335")
-		t.Setenv("BRIGHTDATA_CA_CERT", "")
+		setProxyEnv(t, validProxyURL)
 		tr, err := proxy.Transport(true)
 		if err != nil {
 			t.Fatal(err)
@@ -42,8 +47,7 @@ func TestTransport(t *testing.T) {
 		"proxy on with path returns error":           "http://user:pass@brd.superproxy.io:33335/path",
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv(proxyEnv, env)
-			t.Setenv("BRIGHTDATA_CA_CERT", "")
+			setProxyEnv(t, env)
 			if _, err := proxy.Transport(true); err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -52,20 +56,23 @@ func TestTransport(t *testing.T) {
 }
 
 func TestProxyConnectClassifiesZoneExhaustion(t *testing.T) {
-	t.Setenv(proxyEnv, "http://user:pass@brd.superproxy.io:33335")
-	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	setProxyEnv(t, validProxyURL)
 	tr, err := proxy.Transport(true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp := &http.Response{StatusCode: 502, Header: http.Header{"X-Brd-Err-Code": []string{"client_10100"}}}
-	if err := tr.(*http.Transport).OnProxyConnectResponse(context.Background(), &url.URL{}, &http.Request{}, resp); !proxy.IsZonePaused(err) {
+	httpTr, ok := tr.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport(true) = %T, want *http.Transport", tr)
+	}
+	if err := httpTr.OnProxyConnectResponse(context.Background(), &url.URL{}, &http.Request{}, resp); !proxy.IsZonePaused(err) {
 		t.Fatalf("CONNECT exhaustion = %v", err)
 	}
 }
 
 func TestValidateRejectsUnreadableCA(t *testing.T) {
-	t.Setenv(proxyEnv, "http://user:pass@brd.superproxy.io:33335")
+	setProxyEnv(t, validProxyURL)
 	t.Setenv("BRIGHTDATA_CA_CERT", "/does-not-exist")
 	if err := proxy.Validate(); err == nil {
 		t.Fatal("expected CA startup validation error")

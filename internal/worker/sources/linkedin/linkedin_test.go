@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
@@ -131,10 +134,12 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 		},
 	}
 
+	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
+	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	allParams := []string{"keywords", "location", "f_C", "f_TPR", "f_WT", "f_E", "f_JT", "geoId", "f_D", "f_SB2"}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
-			t.Setenv("BRIGHTDATA_CA_CERT", "")
 			src := linkedin.New(tt.keywords, tt.filters)
 			recorder := sourcetest.Respond("<html></html>")
 			src.Client().Transport = recorder
@@ -142,22 +147,14 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 				t.Fatal(err)
 			}
 			query := recorder.Last.URL.Query()
-
-			for param, want := range tt.want {
-				got := query.Get(param)
-				if got != want {
-					t.Errorf("param %q = %q, want %q", param, got, want)
+			got := map[string]string{}
+			for _, param := range allParams {
+				if v := query.Get(param); v != "" {
+					got[param] = v
 				}
 			}
-
-			allParams := []string{"f_C", "f_TPR", "f_WT", "f_E", "f_JT", "geoId", "f_D", "f_SB2"}
-			for _, param := range allParams {
-				if _, wanted := tt.want[param]; wanted {
-					continue
-				}
-				if got := query.Get(param); got != "" {
-					t.Errorf("param %q = %q, want unset", param, got)
-				}
+			if diff := cmp.Diff(tt.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("query params (-want +got):\n%s", diff)
 			}
 		})
 	}

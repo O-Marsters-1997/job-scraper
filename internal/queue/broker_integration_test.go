@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/google/go-cmp/cmp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -73,8 +73,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	defer func() { _ = ch.Close() }()
 
 	t.Run("priority and mandatory return", func(t *testing.T) {
-		detail := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}
-		listing := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
+		detail := queuetest.DetailTask("wis")
+		listing := queuetest.ListingTask("wis")
 		if err := broker.Publish(ctx, detail); err != nil {
 			t.Fatal(err)
 		}
@@ -94,21 +94,14 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			t.Fatalf("get second: %v %v", ok, err)
 		}
 		_ = second.Ack(false)
-		if err := ch.QueueUnbind("source.wis", "wis", workExchange, nil); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
-				t.Fatal(err)
-			}
-		})
+		unbindSource(t, ch, "wis")
 		if err := broker.Publish(ctx, detail); err == nil {
 			t.Fatal("unroutable publish confirmed as success")
 		}
 	})
 
 	t.Run("publish stamps timestamp", func(t *testing.T) {
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/timestamp", Card: dto.Job{Source: "wis"}}
+		task := queuetest.DetailTask("wis")
 		before := time.Now()
 		if err := broker.Publish(ctx, task); err != nil {
 			t.Fatal(err)
@@ -145,12 +138,9 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err := ch.PublishWithContext(ctx, "retry.work", "retry", true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, Body: []byte(`{"task_id":"retry-test"}`)}); err != nil {
 			t.Fatal(err)
 		}
-		deadline := time.Now().Add(8 * time.Second)
-		ticker := time.NewTicker(25 * time.Millisecond)
-		defer ticker.Stop()
 		attempts := 0
 		var counts []int64
-		for {
+		waitFor(t, 8*time.Second, func() error {
 			dead, ok, err := ch.Get(deadQueue, false)
 			if err != nil {
 				t.Fatal(err)
@@ -160,7 +150,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 					t.Fatalf("attempts=%d counts=%v headers=%v", attempts, counts, dead.Headers)
 				}
 				_ = dead.Ack(false)
-				break
+				return nil
 			}
 			delivery, ok, err := ch.Get("retry.work", false)
 			if err != nil {
@@ -173,11 +163,8 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if time.Now().After(deadline) {
-				t.Fatalf("task never reached DLQ after %d attempts", attempts)
-			}
-			<-ticker.C
-		}
+			return fmt.Errorf("task not dead-lettered after %d attempts", attempts)
+		})
 	})
 
 	t.Run("unavailable dead route retains and backpressures", func(t *testing.T) {
@@ -217,38 +204,28 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if !publish("first") {
 			t.Fatal("first publish rejected")
 		}
-		deadline := time.Now().Add(5 * time.Second)
-		ticker := time.NewTicker(25 * time.Millisecond)
-		defer ticker.Stop()
 		for range 2 {
-			for {
+			waitFor(t, 5*time.Second, func() error {
 				delivery, ok, err := channel.Get("blocked.work", false)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if ok {
-					if err := delivery.Reject(true); err != nil {
-						t.Fatal(err)
-					}
-					break
+				if !ok {
+					return errors.New("blocked task not delivered")
 				}
-				if time.Now().After(deadline) {
-					t.Fatal("blocked task not delivered")
-				}
-				<-ticker.C
-			}
+				return delivery.Reject(true)
+			})
 		}
-		for time.Now().Before(deadline) {
-			if !publish("second") {
-				return
+		waitFor(t, 5*time.Second, func() error {
+			if publish("second") {
+				return errors.New("source queue accepted work despite unavailable DLQ route")
 			}
-			<-ticker.C
-		}
-		t.Fatal("source queue accepted work despite unavailable DLQ route")
+			return nil
+		})
 	})
 
 	t.Run("inspect and replay keeps failed replay", func(t *testing.T) {
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/replay", Card: dto.Job{Source: "wis"}}
+		task := queuetest.DetailTask("wis")
 		body, err := json.Marshal(task)
 		if err != nil {
 			t.Fatal(err)
@@ -260,34 +237,19 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		if err != nil || len(letters) != 1 || letters[0].Task.ID != task.ID {
 			t.Fatalf("letters=%v err=%v", letters, err)
 		}
-		if count, err := waitForDeadLetterCount(broker, 1); err != nil || count != 1 {
-			t.Fatalf("non-destructive inspect count=%d err=%v", count, err)
-		}
-		if err := ch.QueueUnbind("source.wis", "wis", workExchange, nil); err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(func() {
-			if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
-				t.Fatal(err)
-			}
-		})
+		waitForDeadLetterCount(t, broker, 1)
+		unbindSource(t, ch, "wis")
 		if err := broker.ReplayDead(ctx, task.ID); err == nil {
 			t.Fatal("unroutable replay succeeded")
 		}
-		// Reject(requeue=true) is fire-and-forget; the dead queue is a quorum
-		// queue, so the message's reappearance is only eventually visible.
-		if count, err := waitForDeadLetterCount(broker, 1); err != nil || count != 1 {
-			t.Fatalf("failed replay count=%d err=%v", count, err)
-		}
+		waitForDeadLetterCount(t, broker, 1)
 		if err := ch.QueueBind("source.wis", "wis", workExchange, false, nil); err != nil {
 			t.Fatal(err)
 		}
 		if err := broker.ReplayDead(ctx, task.ID); err != nil {
 			t.Fatal(err)
 		}
-		if count, err := waitForDeadLetterCount(broker, 0); err != nil || count != 0 {
-			t.Fatalf("successful replay count=%d err=%v", count, err)
-		}
+		waitForDeadLetterCount(t, broker, 0)
 		replayed, ok, err := ch.Get("source.wis", false)
 		if err != nil || !ok || replayed.MessageId == task.ID {
 			t.Fatalf("replay delivery=%v ok=%v err=%v", replayed.MessageId, ok, err)
@@ -297,7 +259,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 
 	t.Run("one delivery per source with cross-source progress", func(t *testing.T) {
 		for _, source := range []string{"wis", "wis", "linkedin"} {
-			task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.DetailTask, URL: "https://example.com/job/" + uuid.NewString(), Card: dto.Job{Source: source}}
+			task := queuetest.DetailTask(source)
 			if err := broker.Publish(ctx, task); err != nil {
 				t.Fatal(err)
 			}
@@ -351,7 +313,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	})
 
 	t.Run("task.done logs one line per delivery", func(t *testing.T) {
-		runOne := func(t *testing.T, task queue.Task, handler func(context.Context, queue.Task) error) map[string]any {
+		runOne := func(t *testing.T, handler func(context.Context, queue.Task) error) map[string]any {
 			t.Helper()
 			buf := captureTaskDoneLogs(t)
 			consumeCtx, cancel := context.WithCancel(ctx)
@@ -371,70 +333,56 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			if len(lines) != 1 {
 				t.Fatalf("task.done lines = %d, want 1: %v", len(lines), lines)
 			}
-			line := lines[0]
-			if line["task_id"] != task.ID {
-				t.Fatalf("task_id = %v, want %s", line["task_id"], task.ID)
-			}
-			if line["run_id"] != task.RunID {
-				t.Fatalf("run_id = %v, want %s", line["run_id"], task.RunID)
-			}
-			if line["source"] != task.Source {
-				t.Fatalf("source = %v, want %s", line["source"], task.Source)
-			}
-			if line["kind"] != string(task.Kind) {
-				t.Fatalf("kind = %v, want %s", line["kind"], task.Kind)
-			}
-			duration, ok := line["duration_ms"].(float64)
-			if !ok || duration < 0 {
-				t.Fatalf("duration_ms = %v, want >= 0", line["duration_ms"])
-			}
-			return line
+			return lines[0]
 		}
 
-		t.Run("ok outcome carries wait_ms", func(t *testing.T) {
-			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
-			if err := broker.Publish(ctx, task); err != nil {
-				t.Fatal(err)
-			}
-			line := runOne(t, task, func(context.Context, queue.Task) error { return nil })
-			if line["outcome"] != "ok" {
-				t.Fatalf("outcome = %v, want ok", line["outcome"])
-			}
-			waitMs, ok := line["wait_ms"].(float64)
-			if !ok || waitMs < 0 {
-				t.Fatalf("wait_ms = %v, want >= 0", line["wait_ms"])
-			}
-		})
+		for _, tt := range []struct {
+			name        string
+			handlerErr  error
+			rawPublish  bool
+			wantOutcome string
+			wantWaitMs  bool
+		}{
+			{"ok outcome carries wait_ms", nil, false, "ok", true},
+			{"error outcome", errors.New("handler boom"), false, "error", true},
+			{"zero Timestamp omits wait_ms", nil, true, "ok", false},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				task := queuetest.ListingTask("indeed")
+				if tt.rawPublish {
+					body, err := json.Marshal(task)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := ch.PublishWithContext(ctx, workExchange, "indeed", true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, MessageId: task.ID, Body: body}); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := broker.Publish(ctx, task); err != nil {
+					t.Fatal(err)
+				}
+				line := runOne(t, func(context.Context, queue.Task) error { return tt.handlerErr })
 
-		t.Run("error outcome", func(t *testing.T) {
-			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
-			if err := broker.Publish(ctx, task); err != nil {
-				t.Fatal(err)
-			}
-			line := runOne(t, task, func(context.Context, queue.Task) error { return errors.New("handler boom") })
-			if line["outcome"] != "error" {
-				t.Fatalf("outcome = %v, want error", line["outcome"])
-			}
-		})
-
-		t.Run("zero Timestamp omits wait_ms", func(t *testing.T) {
-			task := queue.Task{Version: 1, Source: "indeed", ID: uuid.NewString(), Kind: queue.ListingPageTask, TargetID: uuid.NewString(), RunID: uuid.NewString()}
-			body, err := json.Marshal(task)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := ch.PublishWithContext(ctx, workExchange, "indeed", true, false, amqp.Publishing{DeliveryMode: amqp.Persistent, MessageId: task.ID, Body: body}); err != nil {
-				t.Fatal(err)
-			}
-			line := runOne(t, task, func(context.Context, queue.Task) error { return nil })
-			if _, ok := line["wait_ms"]; ok {
-				t.Fatalf("wait_ms present for zero-Timestamp delivery: %v", line)
-			}
-		})
+				want := map[string]any{"task_id": task.ID, "run_id": task.RunID, "source": task.Source, "kind": string(task.Kind), "outcome": tt.wantOutcome}
+				got := map[string]any{}
+				for key := range want {
+					got[key] = line[key]
+				}
+				if diff := cmp.Diff(want, got); diff != "" {
+					t.Errorf("task.done fields (-want +got):\n%s", diff)
+				}
+				if duration, ok := line["duration_ms"].(float64); !ok || duration < 0 {
+					t.Errorf("duration_ms = %v, want >= 0", line["duration_ms"])
+				}
+				waitMs, hasWait := line["wait_ms"].(float64)
+				if hasWait != tt.wantWaitMs || hasWait && waitMs < 0 {
+					t.Errorf("wait_ms = %v, want present=%t and >= 0", line["wait_ms"], tt.wantWaitMs)
+				}
+			})
+		}
 	})
 
 	t.Run("confirmed message survives restart", func(t *testing.T) {
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: "linkedin", Kind: queue.DetailTask, URL: "https://www.linkedin.com/jobs/view/1", Card: dto.Job{Source: "linkedin"}}
+		task := queuetest.DetailTask("linkedin")
 		if err := broker.Publish(ctx, task); err != nil {
 			t.Fatal(err)
 		}
@@ -453,37 +401,30 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 			t.Fatal(err)
 		}
 		restartedURL := fmt.Sprintf("amqp://jobs:testpass@%s:%s/", host, restartedPort.Port())
-		deadline := time.Now().Add(30 * time.Second)
-		ticker := time.NewTicker(250 * time.Millisecond)
-		defer ticker.Stop()
-		var lastErr error
-		for {
+		waitFor(t, 30*time.Second, func() error {
 			fresh, err := amqp.Dial(restartedURL)
-			lastErr = err
-			if err == nil {
-				channel, err := fresh.Channel()
-				lastErr = err
-				if err == nil {
-					delivery, ok, err := channel.Get("source.linkedin", false)
-					lastErr = err
-					if err == nil && ok {
-						if delivery.MessageId != task.ID || !delivery.Redelivered {
-							t.Fatalf("restored message = %s redelivered=%v", delivery.MessageId, delivery.Redelivered)
-						}
-						_ = delivery.Ack(false)
-						_ = channel.Close()
-						_ = fresh.Close()
-						break
-					}
-					_ = channel.Close()
-				}
-				_ = fresh.Close()
+			if err != nil {
+				return err
 			}
-			if time.Now().After(deadline) {
-				t.Fatalf("confirmed message missing after restart: %v", lastErr)
+			defer func() { _ = fresh.Close() }()
+			channel, err := fresh.Channel()
+			if err != nil {
+				return err
 			}
-			<-ticker.C
-		}
+			defer func() { _ = channel.Close() }()
+			delivery, ok, err := channel.Get("source.linkedin", false)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return errors.New("confirmed message missing after restart")
+			}
+			if delivery.MessageId != task.ID || !delivery.Redelivered {
+				t.Fatalf("restored message = %s redelivered=%v", delivery.MessageId, delivery.Redelivered)
+			}
+			_ = delivery.Ack(false)
+			return nil
+		})
 	})
 }
 
@@ -492,17 +433,47 @@ func deliveryCount(value any) int64 {
 	return count
 }
 
-func waitForDeadLetterCount(broker *queue.Broker, want int) (int, error) {
-	deadline := time.Now().Add(2 * time.Second)
+func waitFor(t *testing.T, timeout time.Duration, check func() error) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		count, err := broker.DeadLetterCount()
-		if err != nil || count == want || time.Now().After(deadline) {
-			return count, err
+		err := check()
+		if err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out after %s: %v", timeout, err)
 		}
 		<-ticker.C
 	}
+}
+
+func waitForDeadLetterCount(t *testing.T, broker *queue.Broker, want int) {
+	t.Helper()
+	waitFor(t, 2*time.Second, func() error {
+		count, err := broker.DeadLetterCount()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != want {
+			return fmt.Errorf("dead letter count = %d, want %d", count, want)
+		}
+		return nil
+	})
+}
+
+func unbindSource(t *testing.T, ch *amqp.Channel, source string) {
+	t.Helper()
+	if err := ch.QueueUnbind("source."+source, source, workExchange, nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := ch.QueueBind("source."+source, source, workExchange, false, nil); err != nil {
+			t.Errorf("rebind source.%s: %v", source, err)
+		}
+	})
 }
 
 func captureTaskDoneLogs(t *testing.T) *bytes.Buffer {
