@@ -41,7 +41,7 @@ const (
 	MaxBatchChars = tokenBudget * charsPerToken
 )
 
-var choiceOptions = []string{"yes", "no", "not_stated"}
+var choiceCriteria = map[string]any{"yes": nil, "no": nil, "not_stated": nil}
 
 // Client answers Jev choice questions over HTTP.
 type Client struct {
@@ -60,9 +60,9 @@ func NewClientAt(baseURL string, httpClient *http.Client) *Client {
 }
 
 type choiceQuestion struct {
-	Type         string   `json:"type"`
-	Instructions string   `json:"instructions"`
-	Options      []string `json:"options"`
+	Type         string         `json:"type"`
+	Instructions string         `json:"instructions"`
+	Criteria     map[string]any `json:"criteria"`
 }
 
 type choiceState struct {
@@ -112,7 +112,7 @@ func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questio
 
 	qs := make(map[string]choiceQuestion, len(questions))
 	for _, q := range questions {
-		qs[q] = choiceQuestion{Type: "choice", Instructions: q, Options: choiceOptions}
+		qs[q] = choiceQuestion{Type: "choice", Instructions: q, Criteria: choiceCriteria}
 	}
 
 	stateChars, err := marshalledChars(state)
