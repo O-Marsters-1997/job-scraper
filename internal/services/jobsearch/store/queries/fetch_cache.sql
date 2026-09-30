@@ -7,3 +7,6 @@ ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status, header = EXCLUDED.head
 
 -- name: DeleteFetchCacheURLs :exec
 DELETE FROM fetch_cache WHERE url = ANY(@urls::text[]);
+
+-- name: DeleteExpiredFetchCache :exec
+DELETE FROM fetch_cache WHERE fetched_at < NOW() - INTERVAL '7 days';

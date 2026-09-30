@@ -709,3 +709,5 @@ func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
 	}
 	return nil
 }
+
+func (f *FakeStore) DeleteExpiredFetches(context.Context) error { return nil }

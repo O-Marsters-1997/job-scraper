@@ -59,6 +59,7 @@ type Store interface {
 	LookupFetch(ctx context.Context, url string) (dto.CachedResponse, bool, error)
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
+	DeleteExpiredFetches(ctx context.Context) error
 }
 
 type Deps struct {

@@ -46,3 +46,10 @@ func (s *Store) ForgetFetches(ctx context.Context, urls []string) error {
 	}
 	return nil
 }
+
+func (s *Store) DeleteExpiredFetches(ctx context.Context) error {
+	if err := s.queries.DeleteExpiredFetchCache(ctx); err != nil {
+		return fmt.Errorf("store.DeleteExpiredFetches: %w", err)
+	}
+	return nil
+}

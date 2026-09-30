@@ -9,6 +9,15 @@ import (
 	"context"
 )
 
+const deleteExpiredFetchCache = `-- name: DeleteExpiredFetchCache :exec
+DELETE FROM fetch_cache WHERE fetched_at < NOW() - INTERVAL '7 days'
+`
+
+func (q *Queries) DeleteExpiredFetchCache(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredFetchCache)
+	return err
+}
+
 const deleteFetchCacheURLs = `-- name: DeleteFetchCacheURLs :exec
 DELETE FROM fetch_cache WHERE url = ANY($1::text[])
 `
