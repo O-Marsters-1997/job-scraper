@@ -132,6 +132,11 @@ type fixture struct {
 
 func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 	t.Helper()
+	return newCappedFixture(t, ingestStatus, nextCursor, 0)
+}
+
+func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPages int) fixture {
+	t.Helper()
 	store := jobsearchtest.NewFakeStore()
 	in := newIngest(t, ingestStatus)
 	exporter := scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0)
@@ -153,6 +158,7 @@ func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 		Orchestrator: scraper.New(allNewURLs{}, noSearchConfig{}, build, discardCards{}),
 		Boards:       scraper.NewBoardPoller(store, oneBoardJob{}, exporter),
 		Exporter:     exporter,
+		MaxPages:     maxPages,
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},
 			"indeed":   newFetchingDetailer(store),
@@ -338,6 +344,33 @@ func TestProcess(t *testing.T) {
 		}
 		if got := f.runStatus(t, target).RunStatus; got != "running" {
 			t.Fatalf("run status = %s, want running", got)
+		}
+	})
+
+	t.Run("listing page under the page cap publishes the next page", func(t *testing.T) {
+		f := newCappedFixture(t, http.StatusOK, "2:5", 2)
+		target := f.target(t, "wis")
+		task := queuetest.ListingTask("wis")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		published := f.published.Tasks()
+		if len(published) != 1 || published[0].Page != 1 {
+			t.Fatalf("published = %+v, want one task on page 1", published)
+		}
+	})
+
+	t.Run("listing page at the page cap succeeds the run without publishing", func(t *testing.T) {
+		f := newCappedFixture(t, http.StatusOK, "2:5", 2)
+		target := f.target(t, "wis")
+		task := queuetest.ListingTask("wis")
+		task.TargetID, task.RunID, task.Cursor, task.Page = target.ID, target.RunID, "1:5", 1
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "succeeded" || len(f.published.Tasks()) != 0 {
+			t.Fatalf("run status = %s, published = %d, want succeeded and none", got, len(f.published.Tasks()))
 		}
 	})
 

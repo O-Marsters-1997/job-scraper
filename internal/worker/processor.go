@@ -41,6 +41,7 @@ type Deps struct {
 	Boards       *scraper.BoardPoller
 	Detailers    map[string]sources.DetailFetcher
 	Exporter     *scraper.APIExporter
+	MaxPages     int
 }
 
 type Processor struct {
@@ -50,10 +51,11 @@ type Processor struct {
 	boards       *scraper.BoardPoller
 	detailers    map[string]sources.DetailFetcher
 	exporter     *scraper.APIExporter
+	maxPages     int
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, exporter: d.Exporter}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, exporter: d.Exporter, maxPages: d.MaxPages}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -142,7 +144,8 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return err
 	}
-	if next != "" {
+	task.Page++
+	if next != "" && (p.maxPages == 0 || task.Page < p.maxPages) {
 		task.ID, task.Cursor = uuid.NewString(), next
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return err
