@@ -14,11 +14,12 @@ type Deps struct {
 }
 
 type Module struct {
-	svc *Service
+	svc   *Service
+	store Store
 }
 
 func Build(deps Deps) *Module {
-	return &Module{svc: NewService(deps.DocsClient, deps.Store)}
+	return &Module{svc: NewService(deps.DocsClient, deps.Store), store: deps.Store}
 }
 
 func New(pool *pgxpool.Pool, gc DocsClient) *Module {

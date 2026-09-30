@@ -51,10 +51,6 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplic
 	return s.store.UpdateApplication(ctx, userID, in.ID, in)
 }
 
-func (s *Service) Delete(ctx context.Context, userID, id string) error {
-	return s.store.DeleteApplication(ctx, userID, id)
-}
-
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	return s.store.ListApplications(ctx, userID, q.StatusID)
 }

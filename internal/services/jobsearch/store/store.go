@@ -74,7 +74,7 @@ func (s *Store) ListJobs(ctx context.Context, userID string) ([]dto.Job, error) 
 	}
 	jobs := make([]dto.Job, len(rows))
 	for i, row := range rows {
-		job, err := toListJobDTO(row)
+		job, err := toPageJobDTO(sqlc.PageJobsRow(row))
 		if err != nil {
 			return nil, fmt.Errorf("store.ListJobs: %w", err)
 		}
@@ -201,9 +201,9 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 
 	status := "new"
-	var id string
+	var jobID pgtype.UUID
 	if errors.Is(err, pgx.ErrNoRows) {
-		id, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
+		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
 			Source: job.Source, UpdatedAt: updatedAt, Description: job.Description,
 			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
@@ -213,17 +213,13 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			return dto.Job{}, "", fmt.Errorf("insert canonical job: %w", err)
 		}
 	} else {
-		id = previous.ID
+		jobID = previous.ID
 		oldFingerprint := previous.ContentFingerprint
 		if oldFingerprint == "" {
 			oldFingerprint = jobFingerprint(dto.Job{
 				Title: previous.Title, Description: previous.Description, Location: previous.Location,
 				SalaryRaw: previous.SalaryRaw, WorkArrangement: previous.WorkArrangement,
 			})
-		}
-		jobID, err := data.UUID(id)
-		if err != nil {
-			return dto.Job{}, "", err
 		}
 		if oldFingerprint == job.ContentFingerprint {
 			status = "unchanged"
@@ -246,10 +242,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		job.URL = previous.Url
 	}
 
-	jobID, err := data.UUID(id)
-	if err != nil {
-		return dto.Job{}, "", err
-	}
+	id := jobID.String()
 	rows, err := queries.SaveCanonicalJobAlias(ctx, sqlc.SaveCanonicalJobAliasParams{
 		Column1: jobID, NormalizedUrl: normalizedURL, Source: job.Source,
 	})
@@ -506,43 +499,36 @@ func (s *Store) ListSourceTargetsByUser(ctx context.Context, userID string) ([]d
 }
 
 func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	uid, err := data.UUID(userID)
-	if err != nil {
-		return dto.SourceTarget{}, err
-	}
-	filtersJSON, err := json.Marshal(filters)
-	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("store.CreateSourceTarget: marshal filters: %w", err)
-	}
-	row, err := s.queries.CreateSourceTarget(ctx, sqlc.CreateSourceTargetParams{
-		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
-	})
-	if err != nil {
-		if data.IsUniqueViolation(err) {
-			return dto.SourceTarget{}, ErrSourceTargetExists
-		}
-		return dto.SourceTarget{}, fmt.Errorf("store.CreateSourceTarget: %w", err)
-	}
-	return toSourceTargetDTO(row), nil
+	return s.createSourceTarget(ctx, "CreateSourceTarget", userID, source, value, enabled, filters, s.queries.CreateSourceTarget)
 }
 
 func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
+	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters,
+		func(ctx context.Context, p sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error) {
+			return s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p))
+		})
+}
+
+func (s *Store) createSourceTarget(
+	ctx context.Context, op, userID, source, value string, enabled bool, filters map[string]string,
+	insert func(context.Context, sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error),
+) (dto.SourceTarget, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	filtersJSON, err := json.Marshal(filters)
 	if err != nil {
-		return dto.SourceTarget{}, err
+		return dto.SourceTarget{}, fmt.Errorf("store.%s: marshal filters: %w", op, err)
 	}
-	row, err := s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams{
+	row, err := insert(ctx, sqlc.CreateSourceTargetParams{
 		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
 			return dto.SourceTarget{}, ErrSourceTargetExists
 		}
-		return dto.SourceTarget{}, fmt.Errorf("create source target with run: %w", err)
+		return dto.SourceTarget{}, fmt.Errorf("store.%s: %w", op, err)
 	}
 	return toSourceTargetDTO(row), nil
 }

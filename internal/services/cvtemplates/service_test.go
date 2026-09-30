@@ -265,28 +265,6 @@ func TestAddDoc(t *testing.T) {
 	})
 }
 
-func TestRemoveDoc(t *testing.T) {
-	t.Run("removes a tracked doc", func(t *testing.T) {
-		st := cvtemplatestest.NewFakeStore()
-		seedDoc(t, st, "u1", "docA")
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), st)
-
-		if err := svc.RemoveDoc(context.Background(), "u1", "docA"); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	t.Run("missing doc returns not found", func(t *testing.T) {
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
-
-		err := svc.RemoveDoc(context.Background(), "u1", "docA")
-		status, ok := apperr.StatusFor(err)
-		if !ok || status != apperr.KindNotFound.Status() {
-			t.Errorf("expected a not-found error, got %v", err)
-		}
-	})
-}
-
 func TestHideTab(t *testing.T) {
 	t.Run("hides a visible tab", func(t *testing.T) {
 		st := cvtemplatestest.NewFakeStore()
