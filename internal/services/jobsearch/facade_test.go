@@ -33,8 +33,7 @@ func seedBoards(t *testing.T, st *jobsearchtest.FakeStore) (verified, candidate 
 	if err != nil {
 		t.Fatal(err)
 	}
-	verified, err = st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
-	if err != nil {
+	if _, err = st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
 		t.Fatal(err)
 	}
 	if verified, err = st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "user_confirmed"); err != nil {
