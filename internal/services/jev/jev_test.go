@@ -21,7 +21,7 @@ import (
 const apiKey = "sk-or-test"
 
 type wireQuestion struct {
-	Type         string   `json:"type"`
+	Type         string         `json:"type"`
 	Instructions string         `json:"instructions"`
 	Criteria     map[string]any `json:"criteria"`
 }
