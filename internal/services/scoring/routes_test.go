@@ -9,12 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 )
-
-const testUserID = "route-test-user"
 
 func newTestRouter(t *testing.T, st *scoringtest.FakeStore) chi.Router {
 	t.Helper()
@@ -22,14 +19,6 @@ func newTestRouter(t *testing.T, st *scoringtest.FakeStore) chi.Router {
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r
-}
-
-func authedRequest(method, path, body string) *http.Request {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	return req.WithContext(handlers.WithSession(req.Context(), dto.Session{UserID: testUserID}))
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
@@ -47,11 +36,11 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 
 func TestScoringConfigRoute(t *testing.T) {
 	st := newFakeStore()
-	st.SeedSearchConfig(dto.SearchConfig{UserID: testUserID, NotifyThreshold: 70})
+	st.SeedSearchConfig(dto.SearchConfig{UserID: handlerstest.UserID, NotifyThreshold: 70})
 	r := newTestRouter(t, st)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedRequest(http.MethodGet, "/scoring-config", ""))
+	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scoring-config", ""))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -67,7 +56,7 @@ func TestScoringConfigUpdateRoute(t *testing.T) {
 	body := `{"notifyThreshold":80,"excludedTitleKeywords":[],"excludedCompanies":[],"excludedLocations":[],
 		"preferences":{"picks":[{"optionId":"tech:go","stance":"nice"}]}}`
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedRequest(http.MethodPut, "/scoring-config", body))
+	r.ServeHTTP(w, handlerstest.Request(t, http.MethodPut, "/scoring-config", body))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -84,7 +73,7 @@ func TestScoringOptionsRoute(t *testing.T) {
 	r := newTestRouter(t, newFakeStore())
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedRequest(http.MethodGet, "/scoring-options", ""))
+	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scoring-options", ""))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -98,7 +87,7 @@ func TestScoresStatusRoute(t *testing.T) {
 	r := newTestRouter(t, newFakeStore())
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedRequest(http.MethodGet, "/scores/status", ""))
+	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scores/status", ""))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -110,11 +99,11 @@ func TestScoresStatusRoute(t *testing.T) {
 
 func TestScoresRecomputeRoute(t *testing.T) {
 	st := newFakeStore()
-	st.SeedSearchConfig(dto.SearchConfig{UserID: testUserID})
+	st.SeedSearchConfig(dto.SearchConfig{UserID: handlerstest.UserID})
 	r := newTestRouter(t, st)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedRequest(http.MethodPost, "/scores/recompute", ""))
+	r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/scores/recompute", ""))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", w.Code, w.Body)

@@ -21,8 +21,6 @@ type boardPollState struct {
 	leaseOwner   string
 	leaseExpires time.Time
 	version      int64
-	completedAt  *time.Time
-	emptyStreak  int
 }
 
 type FakeStore struct {
@@ -460,13 +458,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 	if !leaseHeldBy(st, poll) {
 		return store.ErrBoardClaimUnavailable
 	}
-	now := time.Now()
-	st.leaseOwner, st.completedAt = "", &now
-	if len(snapshot.Jobs) == 0 {
-		st.emptyStreak++
-	} else {
-		st.emptyStreak = 0
-	}
+	st.leaseOwner = ""
 	return nil
 }
 

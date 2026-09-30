@@ -7,7 +7,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 )
@@ -39,7 +38,7 @@ func TestCreate(t *testing.T) {
 			store: applicationstest.NewFakeStore(),
 			in: dto.CreateApplicationInput{
 				JobID:     "job-1",
-				AppliedAt: fp.Some("not-a-date"),
+				AppliedAt: new("not-a-date"),
 			},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -65,7 +64,7 @@ func TestCreateSucceeds(t *testing.T) {
 	svc := applications.NewService(applicationstest.NewFakeStore())
 	app, err := svc.Create(context.Background(), "user-1", dto.CreateApplicationInput{
 		JobID:     "job-1",
-		AppliedAt: fp.Some("2026-01-02"),
+		AppliedAt: new("2026-01-02"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +84,7 @@ func TestUpdate(t *testing.T) {
 		{
 			name:       "rejects invalid applied_at",
 			id:         "app-1",
-			in:         dto.UpdateApplicationInput{AppliedAt: fp.Some("not-a-date")},
+			in:         dto.UpdateApplicationInput{AppliedAt: new("not-a-date")},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -148,14 +147,6 @@ func TestListFiltersByStatusWhenGiven(t *testing.T) {
 	}
 }
 
-func assertKind(t *testing.T, err error, want apperr.Kind) {
-	t.Helper()
-	status, ok := apperr.StatusFor(err)
-	if !ok || status != want.Status() {
-		t.Fatalf("status = %v, ok = %v, want %d", status, ok, want.Status())
-	}
-}
-
 func TestCreateStatus(t *testing.T) {
 	tests := []struct {
 		name string
@@ -168,7 +159,9 @@ func TestCreateStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := applications.NewService(applicationstest.NewFakeStore())
 			_, err := svc.CreateStatus(context.Background(), "user-1", tt.in)
-			assertKind(t, err, apperr.KindInvalid)
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+			}
 		})
 	}
 }
@@ -199,7 +192,9 @@ func TestDeleteStatusRefusesAStatusInUse(t *testing.T) {
 
 	err = svc.DeleteStatus(context.Background(), "user-1", status.ID)
 
-	assertKind(t, err, apperr.KindConflict)
+	if !apperr.IsKind(err, apperr.KindConflict) {
+		t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
+	}
 	fields := apperr.FieldsFor(err)
 	if fields["count"] != int64(3) {
 		t.Fatalf("fields = %+v, want count=3", fields)

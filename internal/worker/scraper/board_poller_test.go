@@ -14,12 +14,6 @@ type boardStoreStub struct {
 	state string
 }
 
-func (s *boardStoreStub) ListDueBoards(context.Context) ([]dto.BoardPoll, error) {
-	return []dto.BoardPoll{s.board}, nil
-}
-func (s *boardStoreStub) ListActiveBoards(context.Context) ([]dto.BoardPoll, error) {
-	return []dto.BoardPoll{s.board}, nil
-}
 func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
 	return s.board, nil
 }
@@ -66,7 +60,7 @@ func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", Source: "greenhouse", Token: "acme"}}
 			poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, err: tc.fetchErr}, boardIngesterStub{err: tc.ingestErr})
-			_ = poller.PollDue(context.Background())
+			_ = poller.PollBoard(context.Background(), "board", false)
 			if store.state != tc.want {
 				t.Fatalf("board state = %q, want %q", store.state, tc.want)
 			}
@@ -78,7 +72,7 @@ func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", CompanySlug: "company-slug", Source: "greenhouse", Token: "regional-token"}}
 	ingester := &captureBoardIngester{}
 	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1", CompanySlug: "regional-token"}}}, ingester)
-	if err := poller.PollDue(context.Background()); err != nil {
+	if err := poller.PollBoard(context.Background(), "board", false); err != nil {
 		t.Fatal(err)
 	}
 	if len(ingester.jobs) != 1 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].CompanySlug != "company-slug" || ingester.jobs[0].BoardID != "board" {

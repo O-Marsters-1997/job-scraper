@@ -1,50 +1,50 @@
 version: "2"
 sql:
-  - engine: "postgresql"
+  - engine: &engine "postgresql"
     queries: "internal/services/applications/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: &schema "internal/data/db/sqlc/schema.sql"
     gen:
       go:
-        package: "sqlc"
+        package: &package "sqlc"
         out: "internal/services/applications/store/sqlc"
-        sql_package: "pgx/v5"
-  - engine: "postgresql"
+        sql_package: &sql_package "pgx/v5"
+  - engine: *engine
     queries: "internal/services/cvtemplates/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: *schema
     gen:
       go:
-        package: "sqlc"
+        package: *package
         out: "internal/services/cvtemplates/store/sqlc"
-        sql_package: "pgx/v5"
-  - engine: "postgresql"
+        sql_package: *sql_package
+  - engine: *engine
     queries: "internal/services/identity/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: *schema
     gen:
       go:
-        package: "sqlc"
+        package: *package
         out: "internal/services/identity/store/sqlc"
-        sql_package: "pgx/v5"
-  - engine: "postgresql"
+        sql_package: *sql_package
+  - engine: *engine
     queries: "internal/services/jobsearch/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: *schema
     gen:
       go:
-        package: "sqlc"
+        package: *package
         out: "internal/services/jobsearch/store/sqlc"
-        sql_package: "pgx/v5"
-  - engine: "postgresql"
+        sql_package: *sql_package
+  - engine: *engine
     queries: "internal/services/scoring/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: *schema
     gen:
       go:
-        package: "sqlc"
+        package: *package
         out: "internal/services/scoring/store/sqlc"
-        sql_package: "pgx/v5"
-  - engine: "postgresql"
+        sql_package: *sql_package
+  - engine: *engine
     queries: "internal/services/cvtailor/store/queries"
-    schema: "internal/data/db/sqlc/schema.sql"
+    schema: *schema
     gen:
       go:
-        package: "sqlc"
+        package: *package
         out: "internal/services/cvtailor/store/sqlc"
-        sql_package: "pgx/v5"
+        sql_package: *sql_package

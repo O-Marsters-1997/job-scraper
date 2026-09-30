@@ -5,7 +5,6 @@ package store
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -35,23 +34,11 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
 }
 
-func parseUUIDs(ids []string) ([]pgtype.UUID, error) {
-	out := make([]pgtype.UUID, len(ids))
-	for i, id := range ids {
-		uid, err := parseUUID(id)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = uid
-	}
-	return out, nil
-}
-
 // JobsChanged drops jobIDs' stale cached answers and queues a fresh answer
 // effect for each within tx (ADR 0011); firstDiscovery controls whether
 // scoring's Run loop alerts once the effect completes.
 func (s *Store) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error {
-	ids, err := parseUUIDs(jobIDs)
+	ids, err := data.UUIDs(jobIDs)
 	if err != nil {
 		return err
 	}
@@ -76,7 +63,7 @@ func (s *Store) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, fir
 
 // JobsClosed drops jobIDs' cached answers within tx (ADR 0011).
 func (s *Store) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error {
-	ids, err := parseUUIDs(jobIDs)
+	ids, err := data.UUIDs(jobIDs)
 	if err != nil {
 		return err
 	}
@@ -90,7 +77,7 @@ func (s *Store) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) erro
 // Jobs within tx, with first_discovery left false so scoring's Run loop
 // doesn't alert (ADR 0011).
 func (s *Store) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
-	cid, err := parseUUID(companyID)
+	cid, err := data.UUID(companyID)
 	if err != nil {
 		return err
 	}
@@ -98,14 +85,6 @@ func (s *Store) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID
 		return fmt.Errorf("store.CompanyTracked: %w", err)
 	}
 	return nil
-}
-
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
-	}
-	return id, nil
 }
 
 func toNumeric(f float64) (pgtype.Numeric, error) {
@@ -124,16 +103,13 @@ func nonNilStrings(s []string) []string {
 }
 
 func (s *Store) GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.SearchConfig{}, err
 	}
 	row, err := s.queries.GetSearchConfig(ctx, uid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SearchConfig{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.SearchConfig{}, fmt.Errorf("store.GetSearchConfig: %w", err)
+		return dto.SearchConfig{}, data.QueryErr("GetSearchConfig", err)
 	}
 	cfg, err := toSearchConfigDTO(row)
 	if err != nil {
@@ -143,7 +119,7 @@ func (s *Store) GetSearchConfig(ctx context.Context, userID string) (dto.SearchC
 }
 
 func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
-	uid, err := parseUUID(cfg.UserID)
+	uid, err := data.UUID(cfg.UserID)
 	if err != nil {
 		return dto.SearchConfig{}, err
 	}
@@ -249,7 +225,7 @@ func (s *Store) RetireScoringOption(ctx context.Context, id string) error {
 // QueueMissingAnswers queues an answer effect, without alerting, for each of
 // userID's open, scored, fingerprinted jobs missing any of hashes.
 func (s *Store) QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return 0, err
 	}
@@ -264,11 +240,8 @@ func (s *Store) QueueMissingAnswers(ctx context.Context, userID string, hashes [
 
 func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error) {
 	row, err := s.queries.ClaimAnswerEffect(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.AnswerEffect{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.AnswerEffect{}, fmt.Errorf("store.ClaimAnswerEffect: %w", err)
+		return dto.AnswerEffect{}, data.QueryErr("ClaimAnswerEffect", err)
 	}
 	return dto.AnswerEffect{
 		ID: row.ID.String(), JobID: row.JobID.String(), Fingerprint: row.Fingerprint,
@@ -277,7 +250,7 @@ func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 }
 
 func (s *Store) FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error {
-	effectID, err := parseUUID(id)
+	effectID, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
@@ -296,22 +269,19 @@ func (s *Store) FailAnswerEffect(ctx context.Context, id string, attempts int, f
 }
 
 func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error) {
-	jid, err := parseUUID(jobID)
+	jid, err := data.UUID(jobID)
 	if err != nil {
 		return dto.Job{}, err
 	}
 	row, err := s.queries.GetJobForScoring(ctx, jid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Job{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Job{}, fmt.Errorf("store.GetJobForScoring: %w", err)
+		return dto.Job{}, data.QueryErr("GetJobForScoring", err)
 	}
 	return toJobDTO(row), nil
 }
 
 func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error) {
-	jid, err := parseUUID(jobID)
+	jid, err := data.UUID(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +308,7 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 }
 
 func (s *Store) ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
-	jid, err := parseUUID(jobID)
+	jid, err := data.UUID(jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +328,7 @@ func (s *Store) ListAnswers(ctx context.Context, jobID, fingerprint, model strin
 
 // SaveAnswers caches answers for one job version, keeping any already stored.
 func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
-	jid, err := parseUUID(jobID)
+	jid, err := data.UUID(jobID)
 	if err != nil {
 		return err
 	}
@@ -386,7 +356,7 @@ func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model strin
 // CompleteAnswerEffect writes the effect's answers and every surviving
 // user's score, then marks it done, in one transaction.
 func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
-	effectID, err := parseUUID(effect.ID)
+	effectID, err := data.UUID(effect.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +375,7 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 		return nil, tx.Commit(ctx)
 	}
 
-	jobID, err := parseUUID(effect.JobID)
+	jobID, err := data.UUID(effect.JobID)
 	if err != nil {
 		return nil, err
 	}
@@ -442,11 +412,11 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 }
 
 func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore, fingerprint, model string) error {
-	jobID, err := parseUUID(sc.JobID)
+	jobID, err := data.UUID(sc.JobID)
 	if err != nil {
 		return err
 	}
-	userID, err := parseUUID(sc.UserID)
+	userID, err := data.UUID(sc.UserID)
 	if err != nil {
 		return err
 	}
@@ -465,7 +435,7 @@ func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore,
 }
 
 func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]ScoringInput, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -498,11 +468,11 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]
 
 func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 	for _, sc := range scores {
-		jobID, err := parseUUID(sc.JobID)
+		jobID, err := data.UUID(sc.JobID)
 		if err != nil {
 			return err
 		}
-		userID, err := parseUUID(sc.UserID)
+		userID, err := data.UUID(sc.UserID)
 		if err != nil {
 			return err
 		}
@@ -520,7 +490,7 @@ func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 }
 
 func (s *Store) GetScoringStatus(ctx context.Context, userID string) (dto.ScoringStatus, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ScoringStatus{}, err
 	}

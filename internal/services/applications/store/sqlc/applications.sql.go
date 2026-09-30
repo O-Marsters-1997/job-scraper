@@ -65,55 +65,6 @@ func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationPa
 	return err
 }
 
-const getApplicationByUserAndJob = `-- name: GetApplicationByUserAndJob :one
-SELECT
-    a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
-    s.name   AS status_name,
-    s.colour AS status_colour
-FROM applications a
-LEFT JOIN application_statuses s ON a.status_id = s.id
-WHERE a.user_id = $1 AND a.job_id = $2
-`
-
-type GetApplicationByUserAndJobParams struct {
-	UserID pgtype.UUID
-	JobID  pgtype.UUID
-}
-
-type GetApplicationByUserAndJobRow struct {
-	ID           pgtype.UUID
-	UserID       pgtype.UUID
-	JobID        pgtype.UUID
-	StatusID     pgtype.UUID
-	Notes        pgtype.Text
-	AppliedAt    pgtype.Date
-	SalaryInfo   pgtype.Text
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	StatusName   pgtype.Text
-	StatusColour pgtype.Text
-}
-
-func (q *Queries) GetApplicationByUserAndJob(ctx context.Context, arg GetApplicationByUserAndJobParams) (GetApplicationByUserAndJobRow, error) {
-	row := q.db.QueryRow(ctx, getApplicationByUserAndJob, arg.UserID, arg.JobID)
-	var i GetApplicationByUserAndJobRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.JobID,
-		&i.StatusID,
-		&i.Notes,
-		&i.AppliedAt,
-		&i.SalaryInfo,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.StatusName,
-		&i.StatusColour,
-	)
-	return i, err
-}
-
 const getApplicationsForJobs = `-- name: GetApplicationsForJobs :many
 SELECT
     a.job_id,

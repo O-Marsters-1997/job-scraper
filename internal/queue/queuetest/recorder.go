@@ -43,3 +43,14 @@ func (r *Recorder) Jobs() []dto.QueuedJob {
 	defer r.mu.Unlock()
 	return append([]dto.QueuedJob(nil), r.jobs...)
 }
+
+type publishFails struct {
+	*Recorder
+	err error
+}
+
+func (p publishFails) Publish(context.Context, queue.Task) error { return p.err }
+
+func PublishFails(err error) publishFails {
+	return publishFails{Recorder: NewRecorder(), err: err}
+}

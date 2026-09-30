@@ -90,3 +90,8 @@ func FieldsFor(err error) map[string]any {
 	}
 	return f.fields
 }
+
+func IsKind(err error, kind Kind) bool {
+	ae, ok := errors.AsType[*Error](err)
+	return ok && ae.kind == kind
+}

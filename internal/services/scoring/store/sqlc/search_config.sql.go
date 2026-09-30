@@ -32,40 +32,6 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 	return i, err
 }
 
-const listSearchConfigs = `-- name: ListSearchConfigs :many
-SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, notify_threshold, preferences, created_at, updated_at FROM search_config ORDER BY user_id
-`
-
-func (q *Queries) ListSearchConfigs(ctx context.Context) ([]SearchConfig, error) {
-	rows, err := q.db.Query(ctx, listSearchConfigs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SearchConfig
-	for rows.Next() {
-		var i SearchConfig
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.ExcludedTitleKeywords,
-			&i.ExcludedCompanies,
-			&i.ExcludedLocations,
-			&i.NotifyThreshold,
-			&i.Preferences,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const upsertSearchConfig = `-- name: UpsertSearchConfig :one
 INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, notify_threshold, preferences)
 VALUES ($1, $2, $3, $4, $5, $6)

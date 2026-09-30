@@ -29,20 +29,8 @@ func TestStoreSatisfiesContract(t *testing.T) {
 	jobsearchtest.RunStoreContract(t, func(t *testing.T) (jobsearchtest.Store, string) {
 		t.Helper()
 		st, pool := newStore(t)
-		return st, insertUser(t, pool)
+		return st, pgtest.InsertUser(t, pool)
 	})
-}
-
-func insertUser(t *testing.T, pool *pgxpool.Pool) string {
-	t.Helper()
-	var id string
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`,
-		"user-"+t.Name()).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	return id
 }
 
 var baseJob = dto.Job{
@@ -66,7 +54,7 @@ func effectCountForJob(t *testing.T, pool *pgxpool.Pool, jobID string) int {
 func TestPageJobsKeepsPositionUnderInsert(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company := "10000000-0000-0000-0000-000000000001"
 	if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,'page-jobs-test-acme','Acme')`, company); err != nil {
 		t.Fatal(err)
@@ -115,7 +103,7 @@ func TestPageJobsKeepsPositionUnderInsert(t *testing.T) {
 func TestListingsHideBlockedJob(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company := "10000000-0000-0000-0000-000000000002"
 	if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,'blocked-job-test-acme','Acme')`, company); err != nil {
 		t.Fatal(err)
@@ -200,7 +188,7 @@ func TestSaveCanonicalAliasesAndReplayKeepsOneJob(t *testing.T) {
 func TestSaveCanonicalQueuesOneAnswerEffectPerContentVersion(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "outbox-company", Name: "Outbox Company"})
 	if err != nil {
 		t.Fatal(err)
@@ -248,7 +236,7 @@ func TestSaveCanonicalConflictingBoardCannotClaimURL(t *testing.T) {
 func TestSetCompanyTrackingBackfillsFingerprintsAndQueuesScores(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "backfill-co", Name: "Backfill Co"})
 	if err != nil {
 		t.Fatal(err)
@@ -302,7 +290,7 @@ func TestCompanyBoardsRoundTrip(t *testing.T) {
 func TestSourceTargetLifecycle(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 
 	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{})
 	if err != nil {
@@ -335,7 +323,7 @@ func TestSourceTargetLifecycle(t *testing.T) {
 func TestCandidateSaveListAndAssess(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
@@ -363,7 +351,7 @@ func TestCandidateSaveListAndAssess(t *testing.T) {
 func TestDeleteExpiredCandidates(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "expiry-search", true, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
@@ -429,7 +417,7 @@ func TestListCompaniesToCrawlAndTouch(t *testing.T) {
 func TestSourceTargetRunRecovery(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
@@ -473,7 +461,7 @@ func TestSourceTargetRunRecovery(t *testing.T) {
 func boardFixture(t *testing.T, st *store.Store, pool *pgxpool.Pool) (context.Context, dto.CompanyBoard, string) {
 	t.Helper()
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "poll-co", Name: "Poll Co"})
 	if err != nil {
 		t.Fatal(err)
@@ -688,7 +676,7 @@ func TestUpsertCompanyConflictMerge(t *testing.T) {
 func TestListCompaniesForUser(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 
 	tracked, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	if err != nil {
@@ -783,7 +771,7 @@ func TestCompanyBoardConflict(t *testing.T) {
 func TestCandidateRetentionDuplicateCardsAndAssessmentFlow(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	target, err := st.CreateSourceTarget(ctx, userID, "wis", "engineer", true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1016,7 +1004,7 @@ func TestSaveCanonicalPrunesStaleOptionAnswersOnFingerprintChange(t *testing.T) 
 		t.Fatalf("reverted to A: status=%q fingerprint=%q err=%v", status, updatedA.ContentFingerprint, err)
 	}
 
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", saved.ID, userID); err != nil {
 		t.Fatal(err)
 	}
@@ -1067,7 +1055,7 @@ func TestSaveCanonicalQueuesRegardlessOfExclusionFilters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	if _, err := pool.Exec(ctx,
 		"INSERT INTO search_config (user_id, excluded_companies) VALUES ($1, $2)",
 		userID, []string{"filtered-co"}); err != nil {
@@ -1092,7 +1080,7 @@ func TestSaveCanonicalQueuesRegardlessOfExclusionFilters(t *testing.T) {
 func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	target, err := st.CreateSourceTarget(ctx, userID, "wis", "engineer", false, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -1123,7 +1111,7 @@ func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
 func TestRetireATSSourceTargetsMigration(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 	if err != nil {
 		t.Fatal(err)
@@ -1168,7 +1156,7 @@ func TestRetireATSSourceTargetsMigration(t *testing.T) {
 func TestListCompaniesForUserLastChecked(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 	if err != nil {
 		t.Fatal(err)
@@ -1197,7 +1185,7 @@ func TestListCompaniesForUserLastChecked(t *testing.T) {
 func TestPageJobsScoredOnlyFiltersToCallersScoredJobsOfCompany(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	var otherUserID string
 	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('scored-filter-other', 'hash') RETURNING id`).Scan(&otherUserID); err != nil {
 		t.Fatal(err)
@@ -1245,7 +1233,7 @@ func TestPageJobsScoredOnlyFiltersToCallersScoredJobsOfCompany(t *testing.T) {
 func TestListTrackedCompaniesCountsRelevantJobs(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	var otherID string
 	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('other-user', 'hash') RETURNING id`).Scan(&otherID); err != nil {
 		t.Fatal(err)

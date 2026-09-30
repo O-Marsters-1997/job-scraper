@@ -4,18 +4,15 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store/sqlc"
 )
 
@@ -30,37 +27,29 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
-	}
-	return id, nil
-}
-
-func parseOptionalDate(s fp.Option[string]) (pgtype.Date, error) {
-	if s.IsNone() {
+func parseOptionalDate(s *string) (pgtype.Date, error) {
+	if s == nil {
 		return pgtype.Date{}, nil
 	}
 	var d pgtype.Date
-	if err := d.Scan(s.Unwrap()); err != nil {
+	if err := d.Scan(*s); err != nil {
 		return pgtype.Date{}, fmt.Errorf("invalid applied date: %w", err)
 	}
 	return d, nil
 }
 
 func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.CreateApplicationInput) (dto.Application, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	jid, err := parseUUID(input.JobID)
+	jid, err := data.UUID(input.JobID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
 	if input.StatusID != "" {
-		sid, err = parseUUID(input.StatusID)
+		sid, err = data.UUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -73,13 +62,12 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 		UserID:     uid,
 		JobID:      jid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		Notes:      data.Text(input.Notes),
 		AppliedAt:  appliedAt,
-		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
+		SalaryInfo: data.Text(input.SalaryInfo),
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if data.IsUniqueViolation(err) {
 			return dto.Application{}, ErrApplicationExists
 		}
 		return dto.Application{}, fmt.Errorf("store.CreateApplication: %w", err)
@@ -88,7 +76,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 }
 
 func (s *Store) ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,11 +92,11 @@ func (s *Store) ListApplicationsByUser(ctx context.Context, userID string) ([]dt
 }
 
 func (s *Store) ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	sid, err := parseUUID(statusID)
+	sid, err := data.UUID(statusID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,17 +115,17 @@ func (s *Store) ListApplicationsByUserAndStatus(ctx context.Context, userID, sta
 }
 
 func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input dto.UpdateApplicationInput) (dto.Application, error) {
-	aid, err := parseUUID(id)
+	aid, err := data.UUID(id)
 	if err != nil {
 		return dto.Application{}, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Application{}, err
 	}
 	var sid pgtype.UUID
 	if input.StatusID != "" {
-		sid, err = parseUUID(input.StatusID)
+		sid, err = data.UUID(input.StatusID)
 		if err != nil {
 			return dto.Application{}, err
 		}
@@ -150,25 +138,22 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 		ID:         aid,
 		UserID:     uid,
 		StatusID:   sid,
-		Notes:      pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+		Notes:      data.Text(input.Notes),
 		AppliedAt:  appliedAt,
-		SalaryInfo: pgtype.Text{String: input.SalaryInfo, Valid: input.SalaryInfo != ""},
+		SalaryInfo: data.Text(input.SalaryInfo),
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.Application{}, data.ErrNotFound
-		}
-		return dto.Application{}, fmt.Errorf("store.UpdateApplication: %w", err)
+		return dto.Application{}, data.QueryErr("UpdateApplication", err)
 	}
 	return toApplicationDTO(a), nil
 }
 
 func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error {
-	aid, err := parseUUID(id)
+	aid, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -182,13 +167,13 @@ func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error 
 }
 
 func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
 	pgIDs := make([]pgtype.UUID, 0, len(jobIDs))
 	for _, id := range jobIDs {
-		jid, err := parseUUID(id)
+		jid, err := data.UUID(id)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +194,7 @@ func (s *Store) GetApplicationsForJobs(ctx context.Context, userID string, jobID
 }
 
 func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -220,7 +205,7 @@ func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID strin
 }
 
 func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
 	}
@@ -236,7 +221,7 @@ func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colou
 }
 
 func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -252,11 +237,11 @@ func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string
 }
 
 func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error) {
-	sid, err := parseUUID(id)
+	sid, err := data.UUID(id)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
 	}
@@ -273,11 +258,11 @@ func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, c
 }
 
 func (s *Store) DeleteApplicationStatus(ctx context.Context, id, userID string) error {
-	sid, err := parseUUID(id)
+	sid, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -291,11 +276,11 @@ func (s *Store) DeleteApplicationStatus(ctx context.Context, id, userID string) 
 }
 
 func (s *Store) CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error) {
-	sid, err := parseUUID(statusID)
+	sid, err := data.UUID(statusID)
 	if err != nil {
 		return 0, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return 0, err
 	}

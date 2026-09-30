@@ -3,8 +3,6 @@ package store_test
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,25 +19,10 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	return store.New(pool), pool
 }
 
-var seedCounter atomic.Int64
-
-func insertUser(t *testing.T, pool *pgxpool.Pool) string {
-	t.Helper()
-	var id string
-	username := fmt.Sprintf("user-%s-%d", t.Name(), seedCounter.Add(1))
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`,
-		username).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	return id
-}
-
 func seedTrackedDoc(t *testing.T, st *store.Store, pool *pgxpool.Pool, docID string) (userID, trackedDocID string) {
 	t.Helper()
 	ctx := context.Background()
-	userID = insertUser(t, pool)
+	userID = pgtest.InsertUser(t, pool)
 	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID}); err != nil {
 		t.Fatalf("AddTrackedDoc: %v", err)
 	}
@@ -60,13 +43,13 @@ func TestStoreContract(t *testing.T) {
 	cvtemplatestest.RunStoreContract(t, func(t *testing.T) cvtemplatestest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
-		return cvtemplatestest.Fixture{Store: st, UserID: insertUser(t, pool)}
+		return cvtemplatestest.Fixture{Store: st, UserID: pgtest.InsertUser(t, pool)}
 	})
 }
 
 func TestAddTrackedDoc_DuplicateIsNoOp(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	ctx := context.Background()
 
 	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
@@ -88,7 +71,7 @@ func TestAddTrackedDoc_DuplicateIsNoOp(t *testing.T) {
 func TestRemoveTrackedDoc(t *testing.T) {
 	t.Run("removes the doc", func(t *testing.T) {
 		st, pool := newStore(t)
-		userID := insertUser(t, pool)
+		userID := pgtest.InsertUser(t, pool)
 		ctx := context.Background()
 		if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: "docA"}); err != nil {
 			t.Fatal(err)
@@ -109,7 +92,7 @@ func TestRemoveTrackedDoc(t *testing.T) {
 
 	t.Run("missing doc returns sentinel", func(t *testing.T) {
 		st, pool := newStore(t)
-		userID := insertUser(t, pool)
+		userID := pgtest.InsertUser(t, pool)
 
 		err := st.RemoveTrackedDoc(context.Background(), userID, "no-such-doc")
 		if !errors.Is(err, store.ErrTrackedDocNotFound) {
@@ -184,7 +167,7 @@ func TestHideShowTab(t *testing.T) {
 	t.Run("ownership: user B cannot hide or show user A's tab", func(t *testing.T) {
 		st, pool := newStore(t)
 		_, tdID := seedTrackedDoc(t, st, pool, "docA")
-		userB := insertUser(t, pool)
+		userB := pgtest.InsertUser(t, pool)
 		if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
 			t.Fatal(err)
 		}

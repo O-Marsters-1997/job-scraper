@@ -80,15 +80,15 @@ func TestLoginWrongPassword(t *testing.T) {
 	seedUser(t, st, "alice", "secret")
 
 	_, _, err := newService(st, &seeder{}).Login(context.Background(), "alice", "wrong")
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnauthorized.Status() {
-		t.Fatalf("status = %v, ok = %v, want 401", status, ok)
+	if !apperr.IsKind(err, apperr.KindUnauthorized) {
+		t.Fatalf("err = %v, want KindUnauthorized", err)
 	}
 }
 
 func TestLoginUnknownUser(t *testing.T) {
 	_, _, err := newService(identitytest.NewFakeStore(), &seeder{}).Login(context.Background(), "nobody", "secret")
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnauthorized.Status() {
-		t.Fatalf("status = %v, ok = %v, want 401", status, ok)
+	if !apperr.IsKind(err, apperr.KindUnauthorized) {
+		t.Fatalf("err = %v, want KindUnauthorized", err)
 	}
 }
 
@@ -128,8 +128,8 @@ func TestSignupFailsWhenSeedingFails(t *testing.T) {
 
 func TestSignupRejectsMissingCredentials(t *testing.T) {
 	_, _, err := newService(identitytest.NewFakeStore(), &seeder{}).Signup(context.Background(), "", "", "")
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
-		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("err = %v, want KindInvalid", err)
 	}
 }
 
@@ -137,8 +137,8 @@ func TestSignupDuplicateUsername(t *testing.T) {
 	svc := newService(failingCreateUserTx{Store: identitytest.NewFakeStore(), err: store.ErrUsernameTaken}, &seeder{})
 
 	_, _, err := svc.Signup(context.Background(), "alice", "pass", "")
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindConflict.Status() {
-		t.Fatalf("status = %v, ok = %v, want 409", status, ok)
+	if !apperr.IsKind(err, apperr.KindConflict) {
+		t.Fatalf("err = %v, want KindConflict", err)
 	}
 }
 
@@ -163,8 +163,8 @@ func TestLogoutDeletesTheSession(t *testing.T) {
 
 func TestUpdateCredentialRequiresProvider(t *testing.T) {
 	_, err := newService(identitytest.NewFakeStore(), &seeder{}).UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{})
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
-		t.Fatalf("status = %v, ok = %v, want 400", status, ok)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("err = %v, want KindInvalid", err)
 	}
 }
 

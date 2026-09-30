@@ -9,7 +9,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/fp"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 )
 
@@ -34,7 +33,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		got, err := f.Store.CreateApplication(context.Background(), f.UserID, dto.CreateApplicationInput{
 			JobID:     f.JobID,
 			Notes:     "referred by a friend",
-			AppliedAt: fp.Some("2026-01-02"),
+			AppliedAt: new("2026-01-02"),
 		})
 		if err != nil {
 			t.Fatal(err)

@@ -25,13 +25,13 @@ func TestResolveBoard(t *testing.T) {
 	svc := jobsearch.NewService(nil, nil)
 
 	_, err := svc.ResolveBoard(context.Background(), "user-1", dto.ResolveBoardQuery{})
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
-		t.Fatalf("empty url: status = %v, ok = %v", status, ok)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("empty url: err = %v, want KindInvalid", err)
 	}
 
 	_, err = svc.ResolveBoard(context.Background(), "user-1", dto.ResolveBoardQuery{URL: "https://example.com/careers"})
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnprocessable.Status() {
-		t.Fatalf("unresolvable url: status = %v, ok = %v", status, ok)
+	if !apperr.IsKind(err, apperr.KindUnprocessable) {
+		t.Fatalf("unresolvable url: err = %v, want KindUnprocessable", err)
 	}
 
 	got, err := svc.ResolveBoard(context.Background(), "user-1", dto.ResolveBoardQuery{URL: "https://boards.greenhouse.io/acme"})
@@ -70,8 +70,8 @@ func TestResolveBoard_UnsupportedAndUnrecognisedDiffer(t *testing.T) {
 	messages := map[string]string{}
 	for _, url := range []string{"https://remoteok.com/remote-go-jobs", "https://example.com/careers"} {
 		_, err := svc.ResolveBoard(context.Background(), "user-1", dto.ResolveBoardQuery{URL: url})
-		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindUnprocessable.Status() {
-			t.Fatalf("%s: status = %v, ok = %v", url, status, ok)
+		if !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Fatalf("%s: err = %v, want KindUnprocessable", url, err)
 		}
 		messages[url] = err.Error()
 	}

@@ -11,8 +11,6 @@ import (
 )
 
 type BoardPollStore interface {
-	ListDueBoards(context.Context) ([]dto.BoardPoll, error)
-	ListActiveBoards(context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error)
 	CompleteBoard(context.Context, dto.BoardSnapshot) error
 	FailBoard(context.Context, dto.BoardPoll) error
@@ -34,29 +32,6 @@ type BoardPoller struct {
 
 func NewBoardPoller(store BoardPollStore, fetcher BoardFetcher, ingester BoardIngester) *BoardPoller {
 	return &BoardPoller{store: store, fetcher: fetcher, ingester: ingester}
-}
-
-func (p *BoardPoller) PollDue(ctx context.Context) error {
-	boards, err := p.store.ListDueBoards(ctx)
-	return p.poll(ctx, boards, false, err)
-}
-
-func (p *BoardPoller) PollAll(ctx context.Context) error {
-	boards, err := p.store.ListActiveBoards(ctx)
-	return p.poll(ctx, boards, true, err)
-}
-
-func (p *BoardPoller) poll(ctx context.Context, boards []dto.BoardPoll, manual bool, err error) error {
-	if err != nil {
-		return err
-	}
-	var errs []error
-	for _, board := range boards {
-		if err := p.PollBoard(ctx, board.ID, manual); err != nil {
-			errs = append(errs, fmt.Errorf("board %s: %w", board.ID, err))
-		}
-	}
-	return errors.Join(errs...)
 }
 
 func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) error {

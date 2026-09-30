@@ -8,18 +8,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
-
-type failingPublisher struct {
-	*queuetest.Recorder
-	err error
-}
-
-func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.err }
 
 type fakeSearchConfigReader struct{}
 
@@ -43,7 +35,7 @@ func newService(targets sourcetargets.Store, q sourcetargets.QueuePublisher) *so
 func TestCreate_RequiresSourceAndValue(t *testing.T) {
 	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{})
-	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
+	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("err = %v, want 400 apperr", err)
 	}
 }
@@ -51,7 +43,7 @@ func TestCreate_RequiresSourceAndValue(t *testing.T) {
 func TestCreate_RejectsUnsupportedSource(t *testing.T) {
 	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "unknown-ats", Value: "x"})
-	if status, ok := apperr.StatusFor(err); !ok || status != 400 {
+	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("err = %v, want 400 apperr", err)
 	}
 }
@@ -72,7 +64,7 @@ func TestCreate_DiscoverySourceQueuesOneRun(t *testing.T) {
 }
 
 func TestCreate_KeepsRecoverableRunAfterQueueFailure(t *testing.T) {
-	svc := newService(jobsearchtest.NewFakeStore(), failingPublisher{Recorder: queuetest.NewRecorder(), err: errors.New("queue unavailable")})
+	svc := newService(jobsearchtest.NewFakeStore(), queuetest.PublishFails(errors.New("queue unavailable")))
 	target, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "wis", Value: "engineer"})
 	if err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -88,8 +80,8 @@ func TestCreate_PropagatesConflict(t *testing.T) {
 	if _, err := svc.Create(context.Background(), "user-1", in); err != nil {
 		t.Fatalf("first Create() err = %v", err)
 	}
-	if _, err := svc.Create(context.Background(), "user-1", in); wantStatus(t, err) != 409 {
-		t.Fatalf("duplicate Create() err = %v, want 409", err)
+	if _, err := svc.Create(context.Background(), "user-1", in); !apperr.IsKind(err, apperr.KindConflict) {
+		t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
 	}
 }
 
@@ -104,8 +96,8 @@ func TestCreate_IndeedURLsDifferingInTrackingParamsConflict(t *testing.T) {
 	if want := "https://www.indeed.com/jobs?l=London&q=golang"; target.Value != want {
 		t.Errorf("stored value = %q, want %q", target.Value, want)
 	}
-	if _, err := svc.Create(context.Background(), "user-1", second); wantStatus(t, err) != 409 {
-		t.Fatalf("second Create() err = %v, want 409", err)
+	if _, err := svc.Create(context.Background(), "user-1", second); !apperr.IsKind(err, apperr.KindConflict) {
+		t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
 	}
 }
 
@@ -127,8 +119,8 @@ func TestList_FillsBoardURL(t *testing.T) {
 func TestCreate_RejectsATSSource(t *testing.T) {
 	svc := newService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder())
 	_, err := svc.Create(context.Background(), "user-1", dto.CreateSourceTargetInput{Source: "greenhouse", Value: "acme"})
-	if got := wantStatus(t, err); got != 400 {
-		t.Fatalf("Create(greenhouse) status = %d, want 400", got)
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("Create(greenhouse) err = %v, want KindInvalid", err)
 	}
 }
 
@@ -223,7 +215,7 @@ func TestUpdate_ReconsiderationFailureIsUnavailable(t *testing.T) {
 	svc := sourcetargets.New(failingCandidateList{FakeStore: store, err: errors.New("boom")}, fakeSearchConfigReader{}, queuetest.NewRecorder())
 
 	_, err := svc.Update(context.Background(), "user-1", dto.UpdateSourceTargetInput{ID: created.ID, Enabled: boolPtr(true)})
-	if status, ok := apperr.StatusFor(err); !ok || status != 503 {
+	if !apperr.IsKind(err, apperr.KindUnavailable) {
 		t.Fatalf("err = %v, want 503 apperr", err)
 	}
 }
@@ -233,8 +225,8 @@ func TestScrape(t *testing.T) {
 	created, _ := store.CreateSourceTarget(context.Background(), "user-1", "wis", "engineer", true, nil)
 	svc := newService(store, queuetest.NewRecorder())
 
-	if _, err := svc.Scrape(context.Background(), "user-2", created.ID); wantStatus(t, err) != 404 {
-		t.Fatalf("cross-user scrape err = %v, want 404", err)
+	if _, err := svc.Scrape(context.Background(), "user-2", created.ID); !apperr.IsKind(err, apperr.KindNotFound) {
+		t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
 	}
 
 	target, err := svc.Scrape(context.Background(), "user-1", created.ID)
@@ -245,18 +237,9 @@ func TestScrape(t *testing.T) {
 		t.Fatalf("run status = %q, want queued", target.RunStatus)
 	}
 
-	if _, err := svc.Scrape(context.Background(), "user-1", created.ID); wantStatus(t, err) != 409 {
-		t.Fatalf("rerun while queued err = %v, want 409", err)
+	if _, err := svc.Scrape(context.Background(), "user-1", created.ID); !apperr.IsKind(err, apperr.KindConflict) {
+		t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
 	}
-}
-
-func wantStatus(t *testing.T, err error) int {
-	t.Helper()
-	status, ok := apperr.StatusFor(err)
-	if !ok {
-		t.Fatalf("err = %v, has no apperr kind", err)
-	}
-	return status
 }
 
 func TestScrape_RetriesFailedRun(t *testing.T) {
