@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -15,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
@@ -55,6 +57,8 @@ func main() {
 	if err != nil {
 		fatal(ctx, "identity init failed", err)
 	}
+
+	go schedule.Every(ctx, "session cleanup", 24*time.Hour, idm.DeleteExpiredSessions)
 
 	notifyFrom := os.Getenv("NOTIFY_EMAIL_FROM")
 	if notifyFrom == "" {
