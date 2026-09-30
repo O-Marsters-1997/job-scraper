@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,11 +69,17 @@ func main() {
 	if apiBaseURL == "" {
 		fatal(ctx, "config invalid", errors.New("API_BASE_URL is required"))
 	}
+	maxPages := 0
+	if raw := os.Getenv("SCRAPE_MAX_PAGES"); raw != "" {
+		if maxPages, err = strconv.Atoi(raw); err != nil || maxPages < 0 {
+			fatal(ctx, "config invalid", fmt.Errorf("SCRAPE_MAX_PAGES must be a non-negative integer, got %q", raw))
+		}
+	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
-		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter,
+		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages,
 		Detailers: map[string]sources.DetailFetcher{
 			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
 		},

@@ -28,6 +28,7 @@ type Task struct {
 	TargetID    string   `json:"target_id,omitempty"`
 	RunID       string   `json:"run_id,omitempty"`
 	Cursor      string   `json:"page_cursor,omitempty"`
+	Page        int      `json:"page,omitempty"`
 	URL         string   `json:"url,omitempty"`
 	Card        dto.Job  `json:"card,omitempty"`
 	BoardID     string   `json:"board_id,omitempty"`
