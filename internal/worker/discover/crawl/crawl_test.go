@@ -1,11 +1,11 @@
 package crawl_test
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
@@ -76,18 +76,40 @@ func TestParseATSLinks(t *testing.T) {
 	}
 }
 
-func seedCompany(t *testing.T, store *jobsearchtest.FakeStore, domain string) dto.Company {
+const greenhouseLink = `<html><body><a href="https://boards.greenhouse.io/acmecorp">Careers</a></body></html>`
+
+func serve(body string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }
+}
+
+func crawlSite(t *testing.T, routes map[string]http.HandlerFunc) (*jobsearchtest.FakeStore, dto.Company) {
 	t.Helper()
-	company, err := store.UpsertCompany(context.Background(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: domain})
+	mux := http.NewServeMux()
+	for path, h := range routes {
+		mux.HandleFunc(path, h)
+	}
+	server := httptest.NewTLSServer(mux)
+	t.Cleanup(server.Close)
+	host, err := url.Parse(server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return company
+	store := jobsearchtest.NewFakeStore()
+	company, err := store.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: host.Host})
+	if err != nil {
+		t.Fatal(err)
+	}
+	crawl.New(store).WithClient(server.Client()).CrawlCompany(t.Context(), company)
+	got, err := store.GetCompany(t.Context(), company.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, got
 }
 
 func assertCrawled(t *testing.T, store *jobsearchtest.FakeStore) {
 	t.Helper()
-	pending, err := store.ListCompaniesToCrawl(context.Background(), 0)
+	pending, err := store.ListCompaniesToCrawl(t.Context(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,32 +119,10 @@ func assertCrawled(t *testing.T, store *jobsearchtest.FakeStore) {
 }
 
 func TestCrawlCompanyResolvesGreenhouseBoard(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("User-agent: *\nDisallow: /blocked\n"))
+	store, got := crawlSite(t, map[string]http.HandlerFunc{
+		"/robots.txt": serve("User-agent: *\nDisallow: /blocked\n"),
+		"/careers":    serve(greenhouseLink),
 	})
-	mux.HandleFunc("/careers", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`<html><body><a href="https://boards.greenhouse.io/acmecorp">Careers</a></body></html>`))
-	})
-
-	server := httptest.NewTLSServer(mux)
-	defer server.Close()
-
-	host, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse server URL: %v", err)
-	}
-
-	store := jobsearchtest.NewFakeStore()
-	company := seedCompany(t, store, host.Host)
-	crawler := crawl.New(store).WithClient(server.Client())
-
-	crawler.CrawlCompany(context.Background(), company)
-
-	got, err := store.GetCompany(context.Background(), company.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if got.ATSSource != "greenhouse" || got.ATSToken != "acmecorp" {
 		t.Errorf("company = %+v, want ats_source=greenhouse ats_token=acmecorp", got)
 	}
@@ -133,43 +133,18 @@ func TestCrawlCompanyResolvesGreenhouseBoard(t *testing.T) {
 }
 
 func TestCrawlCompanyNeverFetchesDisallowedPath(t *testing.T) {
-	var careersFetched bool
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("User-agent: *\nDisallow: /careers\n"))
+	var careersFetched atomic.Bool
+	store, got := crawlSite(t, map[string]http.HandlerFunc{
+		"/robots.txt": serve("User-agent: *\nDisallow: /careers\n"),
+		"/careers": func(w http.ResponseWriter, r *http.Request) {
+			careersFetched.Store(true)
+			serve(greenhouseLink)(w, r)
+		},
+		"/jobs": serve("<html><body>No board here.</body></html>"),
+		"/":     serve("<html><body>No board here either.</body></html>"),
 	})
-	mux.HandleFunc("/careers", func(w http.ResponseWriter, _ *http.Request) {
-		careersFetched = true
-		_, _ = w.Write([]byte(`<html><body><a href="https://boards.greenhouse.io/acmecorp">Careers</a></body></html>`))
-	})
-	mux.HandleFunc("/jobs", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`<html><body>No board here.</body></html>`))
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`<html><body>No board here either.</body></html>`))
-	})
-
-	server := httptest.NewTLSServer(mux)
-	defer server.Close()
-
-	host, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse server URL: %v", err)
-	}
-
-	store := jobsearchtest.NewFakeStore()
-	company := seedCompany(t, store, host.Host)
-	crawler := crawl.New(store).WithClient(server.Client())
-
-	crawler.CrawlCompany(context.Background(), company)
-
-	if careersFetched {
+	if careersFetched.Load() {
 		t.Error("expected /careers to never be fetched: robots.txt disallows it")
-	}
-	got, err := store.GetCompany(context.Background(), company.ID)
-	if err != nil {
-		t.Fatal(err)
 	}
 	if got.ATSSource != "" {
 		t.Errorf("expected no ATS resolution, got %+v", got)
@@ -178,29 +153,7 @@ func TestCrawlCompanyNeverFetchesDisallowedPath(t *testing.T) {
 }
 
 func TestCrawlCompanyTreatsUnreachableRobotsAsAllowAll(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/careers", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`<html><body><a href="https://boards.greenhouse.io/acmecorp">Careers</a></body></html>`))
-	})
-
-	server := httptest.NewTLSServer(mux)
-	defer server.Close()
-
-	host, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("parse server URL: %v", err)
-	}
-
-	store := jobsearchtest.NewFakeStore()
-	company := seedCompany(t, store, host.Host)
-	crawler := crawl.New(store).WithClient(server.Client())
-
-	crawler.CrawlCompany(context.Background(), company)
-
-	got, err := store.GetCompany(context.Background(), company.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, got := crawlSite(t, map[string]http.HandlerFunc{"/careers": serve(greenhouseLink)})
 	if got.ATSToken != "acmecorp" {
 		t.Fatalf("company = %+v, want the greenhouse board despite the missing robots.txt", got)
 	}

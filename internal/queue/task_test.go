@@ -5,33 +5,65 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 )
 
-func TestTaskValidate(t *testing.T) {
-	id := uuid.NewString()
-	tests := []struct {
-		name  string
-		task  queue.Task
-		valid bool
-	}{
-		{"detail", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.DetailTask, URL: "https://workinstartups.com/job/1", Card: dto.Job{Source: "wis"}}, true},
-		{"missing source", queue.Task{Version: 1, ID: id, Kind: queue.DetailTask, URL: "https://example.com"}, false},
-		{"unknown source", queue.Task{Version: 1, ID: id, Source: "other", Kind: queue.DetailTask, URL: "https://example.com"}, false},
-		{"listing", queue.Task{Version: 1, ID: id, Source: "linkedin", Kind: queue.ListingPageTask, TargetID: id, RunID: id}, true},
-		{"listing without run", queue.Task{Version: 1, ID: id, Source: "linkedin", Kind: queue.ListingPageTask, TargetID: id}, false},
-		{"board", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: id}, true},
-		{"wrong board source", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.BoardCheckTask, BoardID: id}, false},
-		{"board verify", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, true},
-		{"board verify without company", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, BoardToken: "acme"}, false},
-		{"board verify with bad token", queue.Task{Version: 1, ID: id, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "a/b"}, false},
-		{"board verify on discovery source", queue.Task{Version: 1, ID: id, Source: "wis", Kind: queue.BoardVerifyTask, CompanyID: id, BoardToken: "acme"}, false},
+func base(kind queue.TaskKind) queue.Task {
+	switch kind {
+	case queue.ListingPageTask:
+		return queuetest.ListingTask("linkedin")
+	case queue.BoardCheckTask:
+		return queue.Task{Version: 1, ID: uuid.NewString(), Source: "greenhouse", Kind: kind, BoardID: uuid.NewString()}
+	case queue.BoardVerifyTask:
+		return queue.Task{Version: 1, ID: uuid.NewString(), Source: "greenhouse", Kind: kind, CompanyID: uuid.NewString(), BoardToken: "acme"}
+	case queue.DetailTask:
+		return queuetest.DetailTask("wis")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.task.Validate() == nil; got != tt.valid {
-				t.Fatalf("Validate success = %v, want %v", got, tt.valid)
+	panic("unknown task kind " + string(kind))
+}
+
+func TestTaskValidate(t *testing.T) {
+	t.Run("accepts", func(t *testing.T) {
+		for _, kind := range []queue.TaskKind{queue.DetailTask, queue.ListingPageTask, queue.BoardCheckTask, queue.BoardVerifyTask} {
+			t.Run(string(kind), func(t *testing.T) {
+				if err := base(kind).Validate(); err != nil {
+					t.Fatalf("Validate() = %v, want nil", err)
+				}
+			})
+		}
+	})
+
+	rejects := []struct {
+		name   string
+		kind   queue.TaskKind
+		mutate func(*queue.Task)
+	}{
+		{"unsupported version", queue.DetailTask, func(k *queue.Task) { k.Version = 2 }},
+		{"non-UUID task ID", queue.DetailTask, func(k *queue.Task) { k.ID = "not-a-uuid" }},
+		{"missing source", queue.DetailTask, func(k *queue.Task) { k.Source = "" }},
+		{"unknown source", queue.DetailTask, func(k *queue.Task) { k.Source = "other" }},
+		{"unknown kind", queue.DetailTask, func(k *queue.Task) { k.Kind = "bogus" }},
+		{"non-UUID target", queue.ListingPageTask, func(k *queue.Task) { k.TargetID = "target" }},
+		{"non-UUID run", queue.ListingPageTask, func(k *queue.Task) { k.RunID = "run" }},
+		{"target without run", queue.ListingPageTask, func(k *queue.Task) { k.RunID = "" }},
+		{"listing on ATS source", queue.ListingPageTask, func(k *queue.Task) { k.Source = "greenhouse" }},
+		{"detail URL without host", queue.DetailTask, func(k *queue.Task) { k.URL = "https:///job" }},
+		{"detail URL with credentials", queue.DetailTask, func(k *queue.Task) { k.URL = "https://user:pw@example.com/job" }},
+		{"detail URL with other scheme", queue.DetailTask, func(k *queue.Task) { k.URL = "ftp://example.com/job" }},
+		{"detail card source mismatch", queue.DetailTask, func(k *queue.Task) { k.Card.Source = "linkedin" }},
+		{"board check on discovery source", queue.BoardCheckTask, func(k *queue.Task) { k.Source = "wis" }},
+		{"board check without board ID", queue.BoardCheckTask, func(k *queue.Task) { k.BoardID = "" }},
+		{"board verify without company", queue.BoardVerifyTask, func(k *queue.Task) { k.CompanyID = "" }},
+		{"board verify with bad token", queue.BoardVerifyTask, func(k *queue.Task) { k.BoardToken = "a/b" }},
+		{"board verify on discovery source", queue.BoardVerifyTask, func(k *queue.Task) { k.Source = "wis" }},
+	}
+	for _, tt := range rejects {
+		t.Run("rejects "+tt.name, func(t *testing.T) {
+			task := base(tt.kind)
+			tt.mutate(&task)
+			if err := task.Validate(); err == nil {
+				t.Fatalf("Validate(%+v) = nil, want error", task)
 			}
 		})
 	}
