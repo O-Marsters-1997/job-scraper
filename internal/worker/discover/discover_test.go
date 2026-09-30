@@ -20,7 +20,7 @@ const gateKeyPrefix = "harvest:"
 func runOnce(t *testing.T, gate *fakeGate, hs ...discover.Harvester) []dto.Company {
 	t.Helper()
 	store := jobsearchtest.NewFakeStore()
-	discover.NewRunner(hs, store, gate).RunOnce(t.Context())
+	_ = discover.NewRunner(hs, store, gate).RunOnce(t.Context())
 	companies, err := store.ListCompaniesToCrawl(t.Context(), 0)
 	if err != nil {
 		t.Fatal(err)
@@ -122,5 +122,14 @@ func TestRunner_Gate(t *testing.T) {
 				t.Errorf("harvest calls = %d, upserts = %d, want %d of each", h.calls, len(got), tt.wantHarvested)
 			}
 		})
+	}
+}
+
+func TestRunner_RunOnceReturnsHarvesterErrors(t *testing.T) {
+	boom := errors.New("boom")
+	failing := &fakeHarvester{name: "broken", err: boom}
+	err := discover.NewRunner([]discover.Harvester{failing}, jobsearchtest.NewFakeStore(), newFakeGate()).RunOnce(t.Context())
+	if !errors.Is(err, boom) {
+		t.Errorf("RunOnce() = %v, want it to wrap %v", err, boom)
 	}
 }

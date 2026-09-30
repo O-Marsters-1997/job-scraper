@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	tickInterval = 6 * time.Hour
-	batchSize    = 50
+	batchSize = 50
 
 	fetchTimeout         = 15 * time.Second
 	maxFetchesPerCompany = 5
@@ -70,26 +69,11 @@ func (c *Crawler) WithClient(client *http.Client) *Crawler {
 	return c
 }
 
-// Run ticks every 6h, crawling a bounded batch of companies each time.
-// Blocks until ctx is cancelled.
-func (c *Crawler) Run(ctx context.Context) {
-	ticker := time.NewTicker(tickInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			c.tick(ctx)
-		}
-	}
-}
-
-func (c *Crawler) tick(ctx context.Context) {
+// RunOnce crawls a bounded batch of companies.
+func (c *Crawler) RunOnce(ctx context.Context) error {
 	companies, err := c.store.ListCompaniesToCrawl(ctx, batchSize)
 	if err != nil {
-		slog.ErrorContext(ctx, "crawl: list companies failed", slog.Any(logger.KeyErr, err))
-		return
+		return fmt.Errorf("list companies to crawl: %w", err)
 	}
 	slog.InfoContext(ctx, "crawl: batch fetched", slog.Int(logger.KeyCount, len(companies)), slog.Int("limit", batchSize))
 
@@ -100,6 +84,7 @@ func (c *Crawler) tick(ctx context.Context) {
 		}
 	}
 	slog.InfoContext(ctx, "crawl: batch completed", slog.Int(logger.KeyCount, len(companies)), slog.Int("resolved", resolved))
+	return nil
 }
 
 func (c *Crawler) CrawlCompany(ctx context.Context, company dto.Company) bool {
