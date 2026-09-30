@@ -17,7 +17,7 @@ import (
 func (m *Module) PublicRoutes(r chi.Router) {
 	r.Post("/auth/login", loginHandler(m.service))
 	r.Post("/auth/signup", signupHandler(m.service))
-	r.Get("/google/oauth/start", oauthStartHandler(m.google))
+	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 }
 
 // Routes mounts logout, me, profile, AI credentials/prefs and the rest of
@@ -26,26 +26,26 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/auth/logout", logoutHandler(m.service))
 	r.Get("/auth/me", meHandler)
 
-	r.Get("/profile", handlers.GetAll(m.service.GetProfile))
+	r.Get("/profile", handlers.GetAll(m.store.GetProfile))
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
 
 	r.Get("/ai-prefs", handlers.GetAll(m.service.GetAIPrefs))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
-	r.Get("/google/oauth/callback", oauthCallbackHandler(m.google))
-	r.Get("/google/status", handlers.GetAll(m.google.Status))
-	r.Delete("/google/link", handlers.Delete(m.google.Disconnect))
+	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
+	r.Get("/google/status", handlers.GetAll(m.service.GoogleStatus))
+	r.Delete("/google/link", handlers.Delete(m.service.DisconnectGoogle))
 }
 
-func newSessionCookie(id string, maxAge int) *http.Cookie {
+func newCookie(name, value string, maxAge int) *http.Cookie {
 	secure := os.Getenv("COOKIE_SECURE") == "true"
 	sameSite := http.SameSiteLaxMode
 	if secure {
 		sameSite = http.SameSiteNoneMode
 	}
 	return &http.Cookie{
-		Name:     "session_id",
-		Value:    id,
+		Name:     name,
+		Value:    value,
 		HttpOnly: true,
 		SameSite: sameSite,
 		Secure:   secure,
@@ -61,7 +61,7 @@ type sessionUser struct {
 
 func respondSession(status int) func(http.ResponseWriter, *http.Request, sessionUser) {
 	return func(w http.ResponseWriter, _ *http.Request, out sessionUser) {
-		http.SetCookie(w, newSessionCookie(out.session.ID, 30*24*60*60))
+		http.SetCookie(w, newCookie("session_id", out.session.ID, 30*24*60*60))
 		handlers.WriteJSON(w, status, dto.AuthUserView{Username: out.user.Username})
 	}
 }
@@ -101,7 +101,7 @@ func logoutHandler(svc *Service) http.HandlerFunc {
 			return struct{}{}, nil
 		},
 		func(w http.ResponseWriter, _ *http.Request, _ struct{}) {
-			http.SetCookie(w, newSessionCookie("", -1))
+			http.SetCookie(w, newCookie("session_id", "", -1))
 			w.WriteHeader(http.StatusNoContent)
 		},
 	)

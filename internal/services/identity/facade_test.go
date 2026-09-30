@@ -2,7 +2,6 @@ package identity_test
 
 import (
 	"context"
-	"encoding/base64"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -11,31 +10,22 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
-func setEncryptionKey(t *testing.T) {
+func buildModule(t *testing.T, st *identitytest.FakeStore, gc *identitytest.DocsClient) *identity.Module {
 	t.Helper()
-	t.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
-}
-
-func buildModule(t *testing.T, st *identitytest.FakeStore, gc *fakeGoogleClient) *identity.Module {
-	t.Helper()
-	setEncryptionKey(t)
-	m, err := identity.Build(identity.Deps{
+	return identity.Build(identity.Deps{
 		Store:        st,
 		Seeder:       &seeder{},
 		GoogleClient: gc,
+		Cipher:       identitytest.NewCipher(t),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
 }
 
 func TestGetReturnsTheUsersDecryptedCredential(t *testing.T) {
 	st := identitytest.NewFakeStore()
-	m := buildModule(t, st, newFakeGoogleClient())
+	m := buildModule(t, st, identitytest.Unlinked(false))
 
 	key := `"sk-test"`
-	if _, err := newService(st, &seeder{}).UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
+	if _, err := newService(t, st, &seeder{}).UpdateCredential(context.Background(), "user-1", dto.UpsertCredentialInput{Provider: "anthropic", APIKey: &key}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,7 +40,7 @@ func TestGetReturnsTheUsersDecryptedCredential(t *testing.T) {
 
 func TestGetProfileReturnsTheStoredProfile(t *testing.T) {
 	st := identitytest.NewFakeStore()
-	m := buildModule(t, st, newFakeGoogleClient())
+	m := buildModule(t, st, identitytest.Unlinked(false))
 
 	user, err := st.CreateUser(context.Background(), "bob", "hash", "bob@example.com")
 	if err != nil {
@@ -67,8 +57,7 @@ func TestGetProfileReturnsTheStoredProfile(t *testing.T) {
 }
 
 func TestDocsClientExposesTheGoogleDocsSurface(t *testing.T) {
-	gc := newFakeGoogleClient()
-	gc.tabs = []google.Tab{{ID: "t.0", Title: "Resume"}}
+	gc := identitytest.Unlinked(false).WithDoc("doc-1", []google.Tab{{ID: "t.0", Title: "Resume"}}, google.FileMeta{})
 	m := buildModule(t, identitytest.NewFakeStore(), gc)
 
 	tabs, err := m.DocsClient().ListTabs(context.Background(), "user-1", "doc-1")

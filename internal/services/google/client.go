@@ -38,11 +38,12 @@ type FileMeta struct {
 // Client is the OAuth2 and Docs/Drive API surface, backed by a Store that
 // persists encrypted tokens.
 type Client struct {
-	cfg   *oauth2.Config
-	store Store
+	cfg    *oauth2.Config
+	store  Store
+	cipher *tokencrypt.Cipher
 }
 
-func NewClient(clientID, clientSecret, redirectURL string, store Store) *Client {
+func NewClient(clientID, clientSecret, redirectURL string, store Store, cipher *tokencrypt.Cipher) *Client {
 	cfg := &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -50,7 +51,7 @@ func NewClient(clientID, clientSecret, redirectURL string, store Store) *Client 
 		Scopes:       []string{DriveReadonlyScope},
 		Endpoint:     googleoauth.Endpoint,
 	}
-	return &Client{cfg: cfg, store: store}
+	return &Client{cfg: cfg, store: store, cipher: cipher}
 }
 
 // Google returns a refresh token only when the consent screen is forced.
@@ -81,11 +82,11 @@ func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, erro
 
 // SaveToken encrypts and persists the OAuth token for the given user.
 func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error {
-	accessEnc, err := tokencrypt.Encrypt(tok.AccessToken)
+	accessEnc, err := c.cipher.Encrypt(tok.AccessToken)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt access: %w", err)
 	}
-	refreshEnc, err := tokencrypt.Encrypt(tok.RefreshToken)
+	refreshEnc, err := c.cipher.Encrypt(tok.RefreshToken)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt refresh: %w", err)
 	}
@@ -128,11 +129,11 @@ func (c *Client) getToken(ctx context.Context, userID string) (*oauth2.Token, er
 		return nil, err
 	}
 
-	access, err := tokencrypt.Decrypt(row.AccessTokenEnc)
+	access, err := c.cipher.Decrypt(row.AccessTokenEnc)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt access: %w", ErrTokenUnusable, err)
 	}
-	refresh, err := tokencrypt.Decrypt(row.RefreshTokenEnc)
+	refresh, err := c.cipher.Decrypt(row.RefreshTokenEnc)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt refresh: %w", ErrTokenUnusable, err)
 	}
@@ -182,22 +183,6 @@ func (s *savingSource) Token() (*oauth2.Token, error) {
 }
 
 func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, error) {
-	hc, err := c.HTTPClientForUser(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("google.ListTabs: %w", err)
-	}
-
-	url := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?fields=tabs.tabProperties", docID)
-	resp, err := hc.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("google.ListTabs request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google.ListTabs: unexpected status %d", resp.StatusCode)
-	}
-
 	var body struct {
 		Tabs []struct {
 			TabProperties struct {
@@ -206,8 +191,9 @@ func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, err
 			} `json:"tabProperties"`
 		} `json:"tabs"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("google.ListTabs decode: %w", err)
+	target := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?fields=tabs.tabProperties", url.PathEscape(docID))
+	if err := c.getJSON(ctx, userID, target, &body); err != nil {
+		return nil, fmt.Errorf("google.ListTabs: %w", err)
 	}
 
 	tabs := make([]Tab, len(body.Tabs))
@@ -220,27 +206,12 @@ func (c *Client) ListTabs(ctx context.Context, userID, docID string) ([]Tab, err
 // GetDocument returns the JSON of one Tab of the Doc, child Tabs searched
 // recursively, for docparse.Parse. An empty tabID selects the first Tab.
 func (c *Client) GetDocument(ctx context.Context, userID, docID, tabID string) (json.RawMessage, error) {
-	hc, err := c.HTTPClientForUser(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("google.GetDocument: %w", err)
-	}
-
-	url := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?includeTabsContent=true&fields=tabs", docID)
-	resp, err := hc.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("google.GetDocument request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google.GetDocument: unexpected status %d", resp.StatusCode)
-	}
-
 	var body struct {
 		Tabs []json.RawMessage `json:"tabs"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("google.GetDocument decode: %w", err)
+	target := fmt.Sprintf("https://docs.googleapis.com/v1/documents/%s?includeTabsContent=true&fields=tabs", url.PathEscape(docID))
+	if err := c.getJSON(ctx, userID, target, &body); err != nil {
+		return nil, fmt.Errorf("google.GetDocument: %w", err)
 	}
 
 	tab, ok := findTab(body.Tabs, tabID)
@@ -272,28 +243,13 @@ func findTab(tabs []json.RawMessage, tabID string) (json.RawMessage, bool) {
 }
 
 func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, error) {
-	hc, err := c.HTTPClientForUser(ctx, userID)
-	if err != nil {
-		return FileMeta{}, fmt.Errorf("google.FileMeta: %w", err)
-	}
-
-	url := fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s?fields=name,modifiedTime", docID)
-	resp, err := hc.Get(url)
-	if err != nil {
-		return FileMeta{}, fmt.Errorf("google.FileMeta request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return FileMeta{}, fmt.Errorf("google.FileMeta: unexpected status %d", resp.StatusCode)
-	}
-
 	var body struct {
 		Name         string `json:"name"`
 		ModifiedTime string `json:"modifiedTime"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return FileMeta{}, fmt.Errorf("google.FileMeta decode: %w", err)
+	target := fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s?fields=name,modifiedTime", url.PathEscape(docID))
+	if err := c.getJSON(ctx, userID, target, &body); err != nil {
+		return FileMeta{}, fmt.Errorf("google.FileMeta: %w", err)
 	}
 
 	modifiedAt, err := time.Parse(time.RFC3339, body.ModifiedTime)
@@ -304,33 +260,31 @@ func (c *Client) FileMeta(ctx context.Context, userID, docID string) (FileMeta, 
 	return FileMeta{Title: body.Name, ModifiedAt: modifiedAt}, nil
 }
 
-// The caller must close the returned body.
-// tabID is the Google Docs tab id (e.g. "t.0"); the "t." prefix is normalised
-// defensively. Pass an empty string to export the whole document.
-func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
-	httpClient, err := c.HTTPClientForUser(ctx, userID)
+func (c *Client) getJSON(ctx context.Context, userID, target string, out any) error {
+	resp, err := c.do(ctx, userID, http.MethodGet, target, nil)
 	if err != nil {
-		return nil, fmt.Errorf("google.ExportPDF: %w", err)
+		return err
 	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	return nil
+}
 
-	exportURL := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=pdf", docID)
+func (c *Client) ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error) {
+	exportURL := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=pdf", url.PathEscape(docID))
 	if tabID != "" {
 		tab := tabID
 		if !strings.HasPrefix(tab, "t.") {
 			tab = "t." + tab
 		}
-		exportURL += "&tab=" + tab
+		exportURL += "&tab=" + url.QueryEscape(tab)
 	}
-	resp, err := httpClient.Get(exportURL)
+	resp, err := c.do(ctx, userID, http.MethodGet, exportURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("google.ExportPDF request: %w", err)
+		return nil, fmt.Errorf("google.ExportPDF: %w", err)
 	}
-
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("export failed: %s", resp.Status)
-	}
-
 	return resp.Body, nil
 }
 

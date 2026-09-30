@@ -17,7 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
-func newTestRouter(t *testing.T, st *identitytest.FakeStore, gc *fakeGoogleClient) (chi.Router, *identity.Module) {
+func newTestRouter(t *testing.T, st *identitytest.FakeStore, gc *identitytest.DocsClient) (chi.Router, *identity.Module) {
 	t.Helper()
 	m := buildModule(t, st, gc)
 	r := chi.NewRouter()
@@ -29,7 +29,7 @@ func newTestRouter(t *testing.T, st *identitytest.FakeStore, gc *fakeGoogleClien
 	return r, m
 }
 
-func newRoutesOnlyRouter(t *testing.T, st *identitytest.FakeStore, gc *fakeGoogleClient) chi.Router {
+func newRoutesOnlyRouter(t *testing.T, st *identitytest.FakeStore, gc *identitytest.DocsClient) chi.Router {
 	t.Helper()
 	m := buildModule(t, st, gc)
 	r := chi.NewRouter()
@@ -57,7 +57,7 @@ func signup(t *testing.T, r chi.Router, username string) *http.Cookie {
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
-	authed, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	authed, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	handlerstest.RequiresAuth(t, authed,
 		"POST /auth/logout",
 		"GET /auth/me",
@@ -70,14 +70,14 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"DELETE /google/link",
 	)
 
-	noAuth := newRoutesOnlyRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	noAuth := newRoutesOnlyRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	handlerstest.RejectsMalformedBody(t, noAuth,
 		"POST /auth/login", "POST /auth/signup", "PUT /profile", "PUT /ai-credentials",
 	)
 }
 
 func TestSignupAndLoginSetTheSessionCookie(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, jsonRequest(http.MethodPost, "/auth/signup", `{"username":"alice","password":"hunter2"}`))
@@ -106,7 +106,7 @@ func TestSignupAndLoginSetTheSessionCookie(t *testing.T) {
 }
 
 func TestSessionCookieAuthenticatesProtectedRoutes(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	cookie := signup(t, r, "bob")
 
 	w := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestSessionCookieAuthenticatesProtectedRoutes(t *testing.T) {
 }
 
 func TestProfileAndAIPrefsRoutes(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	cookie := signup(t, r, "erin")
 
 	authedReq := func(method, path, body string) *http.Request {
@@ -165,7 +165,7 @@ func TestProfileAndAIPrefsRoutes(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("get profile status = %d: %s", w.Code, w.Body)
 	}
-	var profile dto.ProfileView
+	var profile dto.Profile
 	if err := json.Unmarshal(w.Body.Bytes(), &profile); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestProfileAndAIPrefsRoutes(t *testing.T) {
 
 func TestGoogleOAuthStartSetsStateCookieAndRedirects(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
@@ -212,7 +212,7 @@ func TestGoogleOAuthStartSetsStateCookieAndRedirects(t *testing.T) {
 
 func TestGoogleOAuthCallbackConnectsAndStatusReflectsIt(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	session := signup(t, r, "carol")
 
 	w := httptest.NewRecorder()
@@ -294,7 +294,7 @@ func extractState(t *testing.T, signed string) string {
 
 func TestGoogleOAuthStartWriteVariantAsksForDriveFile(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start?write=1", http.NoBody))
@@ -322,7 +322,7 @@ func TestGoogleOAuthCallbackRedirectsToAllowListedReturnPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+			r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 			session := signup(t, r, "dave")
 
 			w := httptest.NewRecorder()
@@ -345,7 +345,7 @@ func TestGoogleOAuthCallbackRedirectsToAllowListedReturnPath(t *testing.T) {
 
 func TestGoogleOAuthCallbackIgnoresForgedReturnCookie(t *testing.T) {
 	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), newFakeGoogleClient())
+	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
 	session := signup(t, r, "erin")
 
 	w := httptest.NewRecorder()

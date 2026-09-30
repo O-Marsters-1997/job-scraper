@@ -1,6 +1,6 @@
 // Package google is the identity context's Google Link sibling feature: the
-// OAuth2 client, the Google Docs/Drive surface cvtemplates consumes, and the
-// Status/Connect/Disconnect orchestration behind /google (ADR 0011).
+// OAuth2 client and the Google Docs/Drive surface cvtemplates consumes
+// (ADR 0011).
 package google
 
 import (

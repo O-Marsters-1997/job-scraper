@@ -35,18 +35,27 @@ func (s tokenStore) UpsertGoogleToken(_ context.Context, in dto.UpsertGoogleToke
 }
 func (tokenStore) DeleteGoogleToken(context.Context, string) error { return nil }
 
+func newCipher(t *testing.T) *tokencrypt.Cipher {
+	t.Helper()
+	c, err := tokencrypt.New(base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 const docTabsJSON = `{"tabs":[
   {"tabProperties":{"tabId":"t.0"},"documentTab":{"marker":"first"},
    "childTabs":[{"tabProperties":{"tabId":"t.child"},"documentTab":{"marker":"child"}}]},
   {"tabProperties":{"tabId":"t.1"},"documentTab":{"marker":"second"}}]}`
 
 func TestGetDocument(t *testing.T) {
-	t.Setenv("GOOGLE_TOKEN_ENC_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
-	access, err := tokencrypt.Encrypt("access")
+	cipher := newCipher(t)
+	access, err := cipher.Encrypt("access")
 	if err != nil {
 		t.Fatal(err)
 	}
-	refresh, err := tokencrypt.Encrypt("refresh")
+	refresh, err := cipher.Encrypt("refresh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +69,7 @@ func TestGetDocument(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(docTabsJSON))}, nil
 	})
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: transport})
-	client := google.NewClient("id", "secret", "http://localhost/cb", store)
+	client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
 
 	tests := []struct {
 		name       string
@@ -103,7 +112,7 @@ func TestGetDocument(t *testing.T) {
 }
 
 func TestAuthURLWriteAddsDriveFileAndGrantedScopes(t *testing.T) {
-	client := google.NewClient("id", "secret", "http://localhost/cb", tokenStore{})
+	client := google.NewClient("id", "secret", "http://localhost/cb", tokenStore{}, nil)
 
 	read, err := url.Parse(client.AuthURL("s", false))
 	if err != nil {
@@ -127,7 +136,7 @@ func TestAuthURLWriteAddsDriveFileAndGrantedScopes(t *testing.T) {
 }
 
 func TestSaveTokenStoresGrantedScope(t *testing.T) {
-	t.Setenv("GOOGLE_TOKEN_ENC_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
+	cipher := newCipher(t)
 	both := google.DriveReadonlyScope + " " + google.DriveFileScope
 
 	tests := []struct {
@@ -144,7 +153,7 @@ func TestSaveTokenStoresGrantedScope(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var saved dto.UpsertGoogleTokenInput
 			client := google.NewClient("id", "secret", "http://localhost/cb",
-				tokenStore{row: dto.GoogleToken{Scope: tt.stored}, saved: &saved})
+				tokenStore{row: dto.GoogleToken{Scope: tt.stored}, saved: &saved}, cipher)
 			tok := &oauth2.Token{AccessToken: "a", RefreshToken: "r"}
 			if tt.extra != nil {
 				tok = tok.WithExtra(tt.extra)
@@ -161,7 +170,7 @@ func TestSaveTokenStoresGrantedScope(t *testing.T) {
 
 func TestHasScope(t *testing.T) {
 	client := google.NewClient("id", "secret", "http://localhost/cb",
-		tokenStore{row: dto.GoogleToken{Scope: google.DriveReadonlyScope + " " + google.DriveFileScope}})
+		tokenStore{row: dto.GoogleToken{Scope: google.DriveReadonlyScope + " " + google.DriveFileScope}}, nil)
 	if ok, err := client.HasScope(context.Background(), "u1", google.DriveFileScope); err != nil || !ok {
 		t.Errorf("HasScope(drive.file) = %v, %v", ok, err)
 	}
@@ -171,9 +180,9 @@ func TestHasScope(t *testing.T) {
 }
 
 func TestDriveWriteMethods(t *testing.T) {
-	t.Setenv("GOOGLE_TOKEN_ENC_KEY", base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
-	access, _ := tokencrypt.Encrypt("access")
-	refresh, _ := tokencrypt.Encrypt("refresh")
+	cipher := newCipher(t)
+	access, _ := cipher.Encrypt("access")
+	refresh, _ := cipher.Encrypt("refresh")
 	store := tokenStore{row: dto.GoogleToken{
 		AccessTokenEnc: access, RefreshTokenEnc: refresh, TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
 	}}
@@ -188,7 +197,7 @@ func TestDriveWriteMethods(t *testing.T) {
 		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(respBody))}, nil
 	})
 	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: transport})
-	client := google.NewClient("id", "secret", "http://localhost/cb", store)
+	client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
 
 	id, err := client.CopyFile(ctx, "u1", "src", "Tailored CV")
 	if err != nil || id != "new-doc" {
@@ -219,3 +228,7 @@ func TestDriveWriteMethods(t *testing.T) {
 		t.Error("DeleteFile on 403 = nil error")
 	}
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
