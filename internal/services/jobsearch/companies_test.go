@@ -4,8 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
-	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
@@ -13,24 +15,31 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 )
 
-func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int    { return &i }
+const (
+	userID    = "user-1"
+	acmeBoard = "https://boards.greenhouse.io/acme"
+)
 
 func newCompanyService(q jobsearch.QueuePublisher) (*jobsearch.Service, *jobsearchtest.FakeStore) {
 	st := jobsearchtest.NewFakeStore()
 	return jobsearch.NewService(st, q), st
 }
 
-func listTargets(t *testing.T, st *jobsearchtest.FakeStore) []dto.SourceTarget {
+func seedCompany(t *testing.T, st *jobsearchtest.FakeStore, in dto.CompanyUpsert) dto.Company {
 	t.Helper()
-	targets, err := st.ListSourceTargetsByUser(t.Context(), "user-1")
+	company, err := st.UpsertCompany(t.Context(), in)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("UpsertCompany(%+v) err = %v", in, err)
 	}
-	return targets
+	return company
 }
 
-func trackingFor(t *testing.T, st *jobsearchtest.FakeStore, userID, companyID string) (dto.Company, bool) {
+func seedAcme(t *testing.T, st *jobsearchtest.FakeStore) dto.Company {
+	t.Helper()
+	return seedCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+}
+
+func trackingFor(t *testing.T, st *jobsearchtest.FakeStore, companyID string) (dto.Company, bool) {
 	t.Helper()
 	companies, err := st.ListCompaniesForUser(t.Context(), userID)
 	if err != nil {
@@ -44,285 +53,280 @@ func trackingFor(t *testing.T, st *jobsearchtest.FakeStore, userID, companyID st
 	return dto.Company{}, false
 }
 
-func createCompany(t *testing.T, in dto.CreateCompanyInput) (dto.Company, *jobsearchtest.FakeStore, error) {
-	t.Helper()
-	svc, st := newCompanyService(queuetest.NewRecorder())
-	company, err := svc.CreateCompany(t.Context(), "user-1", in)
-	return company, st, err
-}
-
-func TestCreate_Rejects(t *testing.T) {
-	tests := []struct {
-		name     string
-		in       dto.CreateCompanyInput
-		wantKind apperr.Kind
-	}{
-		{name: "missing url", in: dto.CreateCompanyInput{}, wantKind: apperr.KindInvalid},
-		{name: "unresolvable url", in: dto.CreateCompanyInput{URL: "https://example.com/careers"}, wantKind: apperr.KindUnprocessable},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := createCompany(t, tt.in)
-			if !apperr.IsKind(err, tt.wantKind) {
-				t.Fatalf("err = %v, want kind %v", err, tt.wantKind)
-			}
-		})
-	}
-}
-
-func TestCreate_Resolves(t *testing.T) {
-	tests := []struct {
-		name        string
-		in          dto.CreateCompanyInput
-		wantSlug    string
-		wantTracked bool
-	}{
-		{
-			name:        "tracks a valid board url by default",
-			in:          dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp"},
-			wantSlug:    "acmecorp",
-			wantTracked: true,
-		},
-		{
-			name:     "does not track when track is false",
-			in:       dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acmecorp", Track: boolPtr(false)},
-			wantSlug: "acmecorp",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			company, st, err := createCompany(t, tt.in)
-			if err != nil {
-				t.Fatalf("CreateCompany(%+v) err = %v", tt.in, err)
-			}
-			if company.Slug != tt.wantSlug {
-				t.Errorf("CreateCompany(%+v).Slug = %q, want %q", tt.in, company.Slug, tt.wantSlug)
-			}
-			tracked, ok := trackingFor(t, st, "user-1", company.ID)
-			if got := ok && tracked.Tracked; got != tt.wantTracked {
-				t.Errorf("tracked = %v, want %v", got, tt.wantTracked)
-			}
-		})
-	}
-}
-
-func TestSetTracking(t *testing.T) {
-	t.Run("rejects a missing enabled field", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: company.ID})
-
-		if !apperr.IsKind(err, apperr.KindInvalid) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+func TestCreateCompany(t *testing.T) {
+	t.Run("resolves the board url", func(t *testing.T) {
+		tests := []struct {
+			name        string
+			in          dto.CreateCompanyInput
+			wantTracked bool
+		}{
+			{name: "tracks a valid board url by default", in: dto.CreateCompanyInput{URL: acmeBoard}, wantTracked: true},
+			{name: "does not track when track is false", in: dto.CreateCompanyInput{URL: acmeBoard, Track: new(false)}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company, err := svc.CreateCompany(t.Context(), userID, tt.in)
+				if err != nil {
+					t.Fatalf("CreateCompany(%+v) err = %v", tt.in, err)
+				}
+				if company.Slug != "acme" {
+					t.Errorf("CreateCompany(%+v).Slug = %q, want acme", tt.in, company.Slug)
+				}
+				tracked, ok := trackingFor(t, st, company.ID)
+				if got := ok && tracked.Tracked; got != tt.wantTracked {
+					t.Errorf("tracked = %v, want %v", got, tt.wantTracked)
+				}
+			})
 		}
 	})
 
-	t.Run("rejects an interval below 60 minutes", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{
-			CompanyID: company.ID, Enabled: boolPtr(true), CheckIntervalMinutes: intPtr(30),
-		})
-
-		if !apperr.IsKind(err, apperr.KindInvalid) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			in       dto.CreateCompanyInput
+			wantKind apperr.Kind
+		}{
+			{name: "missing url", in: dto.CreateCompanyInput{}, wantKind: apperr.KindInvalid},
+			{name: "unresolvable url", in: dto.CreateCompanyInput{URL: "https://example.com/careers"}, wantKind: apperr.KindUnprocessable},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, _ := newCompanyService(queuetest.NewRecorder())
+				_, err := svc.CreateCompany(t.Context(), userID, tt.in)
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("CreateCompany(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+				}
+			})
 		}
 	})
+}
 
-	t.Run("returns not found for an unknown company", func(t *testing.T) {
-		svc, _ := newCompanyService(queuetest.NewRecorder())
-
-		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: "missing", Enabled: boolPtr(true)})
-
-		if !apperr.IsKind(err, apperr.KindNotFound) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
+func TestSetCompanyTracking(t *testing.T) {
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			in       func(companyID string) dto.SetCompanyTrackingInput
+			wantKind apperr.Kind
+		}{
+			{
+				name:     "missing enabled field",
+				in:       func(id string) dto.SetCompanyTrackingInput { return dto.SetCompanyTrackingInput{CompanyID: id} },
+				wantKind: apperr.KindInvalid,
+			},
+			{
+				name: "interval below 60 minutes",
+				in: func(id string) dto.SetCompanyTrackingInput {
+					return dto.SetCompanyTrackingInput{CompanyID: id, Enabled: new(true), CheckIntervalMinutes: new(30)}
+				},
+				wantKind: apperr.KindInvalid,
+			},
+			{
+				name: "unknown company",
+				in: func(string) dto.SetCompanyTrackingInput {
+					return dto.SetCompanyTrackingInput{CompanyID: "missing", Enabled: new(true)}
+				},
+				wantKind: apperr.KindNotFound,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company := seedAcme(t, st)
+				_, err := svc.SetCompanyTracking(t.Context(), userID, tt.in(company.ID))
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("SetCompanyTracking() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
 		}
 	})
 
 	t.Run("enables tracking for an ATS company without writing a source target", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
 
-		tracking, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{
-			CompanyID: company.ID, Enabled: boolPtr(true), CheckIntervalMinutes: intPtr(180),
+		tracking, err := svc.SetCompanyTracking(t.Context(), userID, dto.SetCompanyTrackingInput{
+			CompanyID: company.ID, Enabled: new(true), CheckIntervalMinutes: new(180),
 		})
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("SetCompanyTracking() err = %v", err)
 		}
 		if !tracking.Enabled || tracking.CheckIntervalMinutes != 180 {
-			t.Errorf("tracking = %+v", tracking)
+			t.Errorf("tracking = %+v, want enabled every 180 minutes", tracking)
 		}
-		if targets := listTargets(t, companyStore); len(targets) != 0 {
+		targets, err := st.ListSourceTargetsByUser(t.Context(), userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(targets) != 0 {
 			t.Errorf("source targets = %+v, want none", targets)
 		}
 	})
 
 	t.Run("preserves the existing frequency when no interval is given", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-		if _, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: company.ID, Enabled: boolPtr(true), CheckIntervalMinutes: intPtr(180)}); err != nil {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		enable := dto.SetCompanyTrackingInput{CompanyID: company.ID, Enabled: new(true), CheckIntervalMinutes: new(180)}
+		if _, err := svc.SetCompanyTracking(t.Context(), userID, enable); err != nil {
 			t.Fatal(err)
 		}
 
-		tracking, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: company.ID, Enabled: boolPtr(false)})
+		tracking, err := svc.SetCompanyTracking(t.Context(), userID, dto.SetCompanyTrackingInput{CompanyID: company.ID, Enabled: new(false)})
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("SetCompanyTracking() err = %v", err)
 		}
 		if tracking.Enabled || tracking.CheckIntervalMinutes != 180 {
-			t.Errorf("tracking = %+v", tracking)
+			t.Errorf("tracking = %+v, want paused at 180 minutes", tracking)
 		}
 	})
 }
 
-func TestListBoards(t *testing.T) {
+func TestListCompanyBoards(t *testing.T) {
 	t.Run("returns not found for an unknown company", func(t *testing.T) {
 		svc, _ := newCompanyService(queuetest.NewRecorder())
-
-		_, err := svc.ListCompanyBoards(t.Context(), "user-1", "missing")
-
+		_, err := svc.ListCompanyBoards(t.Context(), userID, "missing")
 		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
 		}
 	})
 
 	t.Run("lists boards linked to the company", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-		_, err := companyStore.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
-		if err != nil {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		if _, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme"); err != nil {
 			t.Fatal(err)
 		}
 
-		boards, err := svc.ListCompanyBoards(t.Context(), "user-1", company.ID)
+		boards, err := svc.ListCompanyBoards(t.Context(), userID, company.ID)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("ListCompanyBoards() err = %v", err)
 		}
 		if len(boards) != 1 {
-			t.Errorf("want 1 board, got %d", len(boards))
+			t.Errorf("ListCompanyBoards() = %d boards, want 1", len(boards))
 		}
 	})
 }
 
-func TestAddBoard(t *testing.T) {
-	t.Run("returns not found for an unknown company", func(t *testing.T) {
-		svc, _ := newCompanyService(queuetest.NewRecorder())
-
-		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: "missing", URL: "https://boards.greenhouse.io/acme"})
-
-		if !apperr.IsKind(err, apperr.KindNotFound) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
+func TestAddCompanyBoard(t *testing.T) {
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			url      string
+			company  func(t *testing.T, st *jobsearchtest.FakeStore) string
+			wantKind apperr.Kind
+		}{
+			{
+				name:     "unknown company",
+				url:      acmeBoard,
+				company:  func(*testing.T, *jobsearchtest.FakeStore) string { return "missing" },
+				wantKind: apperr.KindNotFound,
+			},
+			{
+				name: "unresolvable url",
+				url:  "https://example.com/careers",
+				company: func(t *testing.T, st *jobsearchtest.FakeStore) string {
+					t.Helper()
+					return seedAcme(t, st).ID
+				},
+				wantKind: apperr.KindUnprocessable,
+			},
+			{
+				name: "board belongs to another company",
+				url:  acmeBoard,
+				company: func(t *testing.T, st *jobsearchtest.FakeStore) string {
+					t.Helper()
+					if _, err := st.UpsertCandidateBoard(t.Context(), "company-other", "greenhouse", "acme"); err != nil {
+						t.Fatal(err)
+					}
+					return seedAcme(t, st).ID
+				},
+				wantKind: apperr.KindConflict,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				in := dto.AddCompanyBoardInput{CompanyID: tt.company(t, st), URL: tt.url}
+				if _, err := svc.AddCompanyBoard(t.Context(), userID, in); !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("AddCompanyBoard() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
 		}
 	})
 
-	t.Run("rejects an unresolvable url", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://example.com/careers"})
-
-		if !apperr.IsKind(err, apperr.KindUnprocessable) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindUnprocessable)
+	t.Run("adds a candidate board and queues verification only when confirmed", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			confirm   bool
+			wantTasks int
+		}{
+			{name: "without confirming", wantTasks: 0},
+			{name: "confirmed", confirm: true, wantTasks: 1},
 		}
-	})
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				q := queuetest.NewRecorder()
+				svc, st := newCompanyService(q)
+				company := seedAcme(t, st)
 
-	t.Run("returns conflict when the board belongs to another company", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		_, _ = companyStore.UpsertCandidateBoard(t.Context(), "company-other", "greenhouse", "acme")
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme2", Name: "Acme2"})
-
-		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme"})
-
-		if !apperr.IsKind(err, apperr.KindConflict) {
-			t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
-		}
-	})
-
-	t.Run("adds a board as a candidate without confirming", func(t *testing.T) {
-		svc, companyStore := newCompanyService(queuetest.NewRecorder())
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		board, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme"})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if board.Status != dto.BoardCandidate {
-			t.Errorf("status = %v, want candidate", board.Status)
-		}
-	})
-
-	t.Run("queues verification when confirmed and leaves the board a candidate", func(t *testing.T) {
-		q := queuetest.NewRecorder()
-		svc, companyStore := newCompanyService(q)
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		board, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme", Confirm: true})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if board.Status != dto.BoardCandidate {
-			t.Errorf("status = %v, want candidate", board.Status)
-		}
-		tasks := q.Tasks()
-		if len(tasks) != 1 {
-			t.Fatalf("published %d tasks, want 1", len(tasks))
-		}
-		got := tasks[0]
-		if got.Kind != queue.BoardVerifyTask || got.Source != "greenhouse" || got.CompanyID != company.ID || got.BoardToken != "acme" {
-			t.Errorf("task = %+v", got)
-		}
-	})
-
-	t.Run("does not queue verification without confirming", func(t *testing.T) {
-		q := queuetest.NewRecorder()
-		svc, companyStore := newCompanyService(q)
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-
-		if _, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme"}); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if n := len(q.Tasks()); n != 0 {
-			t.Errorf("published %d tasks, want 0", n)
+				board, err := svc.AddCompanyBoard(t.Context(), userID, dto.AddCompanyBoardInput{CompanyID: company.ID, URL: acmeBoard, Confirm: tt.confirm})
+				if err != nil {
+					t.Fatalf("AddCompanyBoard() err = %v", err)
+				}
+				if board.Status != dto.BoardCandidate {
+					t.Errorf("status = %v, want candidate", board.Status)
+				}
+				tasks := q.Tasks()
+				if len(tasks) != tt.wantTasks {
+					t.Fatalf("published %d tasks, want %d", len(tasks), tt.wantTasks)
+				}
+				if tt.wantTasks == 0 {
+					return
+				}
+				got := tasks[0]
+				want := queue.Task{Kind: queue.BoardVerifyTask, Source: "greenhouse", CompanyID: company.ID, BoardToken: "acme"}
+				if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(queue.Task{}, "Version", "ID", "BoardID")); diff != "" {
+					t.Errorf("published task (-want +got):\n%s", diff)
+				}
+			})
 		}
 	})
 
 	t.Run("returns the publish error when the queue rejects the task", func(t *testing.T) {
 		wantErr := errors.New("broker down")
-		svc, companyStore := newCompanyService(queuetest.PublishFails(wantErr))
-		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		svc, st := newCompanyService(queuetest.PublishFails(wantErr))
+		company := seedAcme(t, st)
 
-		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme", Confirm: true})
+		_, err := svc.AddCompanyBoard(t.Context(), userID, dto.AddCompanyBoardInput{CompanyID: company.ID, URL: acmeBoard, Confirm: true})
 		if !errors.Is(err, wantErr) {
-			t.Errorf("err = %v, want broker error", err)
+			t.Errorf("err = %v, want %v", err, wantErr)
 		}
 	})
 }
 
 func TestListTrackedCompanies(t *testing.T) {
-	t.Run("fills each board's public URL", func(t *testing.T) {
-		svc, _ := newCompanyService(queuetest.NewRecorder())
-		company, err := svc.CreateCompany(t.Context(), "user-1", dto.CreateCompanyInput{URL: "https://boards.greenhouse.io/acme"})
-		if err != nil {
-			t.Fatal(err)
-		}
+	svc, _ := newCompanyService(queuetest.NewRecorder())
+	company, err := svc.CreateCompany(t.Context(), userID, dto.CreateCompanyInput{URL: acmeBoard})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		got, err := svc.ListTrackedCompanies(t.Context(), "user-1")
-		if err != nil || len(got) != 1 || len(got[0].Boards) != 1 {
-			t.Fatalf("ListTrackedCompanies(...) = %+v, %v, want one company with one board", got, err)
-		}
-		if got[0].ID != company.ID || got[0].Boards[0].URL != "https://boards.greenhouse.io/acme" {
-			t.Fatalf("ListTrackedCompanies(...) = %+v, want board URL filled", got[0])
-		}
-	})
+	got, err := svc.ListTrackedCompanies(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListTrackedCompanies() err = %v", err)
+	}
+	if len(got) != 1 || len(got[0].Boards) != 1 {
+		t.Fatalf("ListTrackedCompanies() = %+v, want one company with one board", got)
+	}
+	if got[0].ID != company.ID || got[0].Boards[0].URL != acmeBoard {
+		t.Errorf("ListTrackedCompanies() = %+v, want the board URL filled", got[0])
+	}
 }
 
 func TestUntrackCompany(t *testing.T) {
-	t.Run("unknown tracking is not found", func(t *testing.T) {
-		svc, _ := newCompanyService(queuetest.NewRecorder())
-		err := svc.UntrackCompany(t.Context(), "user-1", "missing")
-		if !errors.Is(err, data.ErrNotFound) {
-			t.Fatalf("UntrackCompany(...) err = %v, want ErrNotFound", err)
-		}
-	})
+	svc, _ := newCompanyService(queuetest.NewRecorder())
+	err := svc.UntrackCompany(t.Context(), userID, "missing")
+	if !apperr.IsKind(err, apperr.KindNotFound) {
+		t.Fatalf("UntrackCompany() err = %v, want kind %v", err, apperr.KindNotFound)
+	}
 }
