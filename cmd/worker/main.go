@@ -106,8 +106,9 @@ func main() {
 	cr.Start()
 	defer cr.Stop()
 
-	go discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards()).Run(ctx)
-	go crawl.New(js.Boards()).Run(ctx)
+	harvest := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards())
+	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
+	go schedule.Every(ctx, "crawl", 6*time.Hour, crawl.New(js.Boards()).RunOnce)
 	slog.InfoContext(ctx, "RabbitMQ source workers starting")
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))

@@ -5,6 +5,7 @@ package discover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -63,7 +64,6 @@ type CompanyUpserter interface {
 
 const (
 	harvestInterval = 24 * time.Hour
-	tickInterval    = time.Hour
 	gateKeyPrefix   = "harvest:"
 )
 
@@ -78,28 +78,18 @@ func NewRunner(hs []Harvester, companies CompanyUpserter, gate ScrapeGate) *Runn
 	return &Runner{harvesters: hs, companies: companies, gate: gate}
 }
 
-// Run ticks hourly, checking each harvester's 24h gate before harvesting.
-// Blocks until ctx is cancelled.
-func (r *Runner) Run(ctx context.Context) {
-	ticker := time.NewTicker(tickInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			r.RunOnce(ctx)
+// RunOnce harvests every due harvester and joins their failures.
+func (r *Runner) RunOnce(ctx context.Context) error {
+	var errs []error
+	for _, h := range r.harvesters {
+		if err := r.runIfDue(ctx, h); err != nil {
+			errs = append(errs, fmt.Errorf("harvest %s: %w", h.Name(), err))
 		}
 	}
+	return errors.Join(errs...)
 }
 
-func (r *Runner) RunOnce(ctx context.Context) {
-	for _, h := range r.harvesters {
-		r.runIfDue(ctx, h)
-	}
-}
-
-func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
+func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 	key := gateKeyPrefix + h.Name()
 	log := slog.With(slog.String("harvester", h.Name()))
 
@@ -109,14 +99,13 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
 	}
 	if ok && time.Since(last) < harvestInterval {
 		log.InfoContext(ctx, "skipping harvest: ran recently", slog.Duration("ago", time.Since(last)))
-		return
+		return nil
 	}
 
 	log.InfoContext(ctx, "harvest: running")
 	companies, err := h.Harvest(ctx)
 	if err != nil {
-		log.ErrorContext(ctx, "harvest failed", slog.Any(logger.KeyErr, err))
-		return
+		return err
 	}
 
 	upserted := 0
@@ -132,6 +121,7 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) {
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
 	}
+	return nil
 }
 
 func (r *Runner) upsert(ctx context.Context, c Company) error {
