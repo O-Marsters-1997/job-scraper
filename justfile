@@ -148,6 +148,11 @@ queue-list:
 queue-dead *args:
     docker compose exec worker ./queue {{args}}
 
+[doc('purge every source queue and the dead-letter queue')]
+rabbitmq-purge:
+    for q in $(docker compose exec -T rabbitmq rabbitmqctl -q list_queues name | grep '^source\.'); do docker compose exec -T rabbitmq rabbitmqctl purge_queue "$q"; done
+    docker compose exec -T rabbitmq rabbitmqctl -q list_queues name messages
+
 # ── Snapshots ─────────────────────────────────────────────────────────────────
 
 # run the snapshot CLI: just cli download wis page1 "https://..." | just cli rebase wis
