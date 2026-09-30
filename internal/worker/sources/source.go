@@ -3,6 +3,7 @@ package sources
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,9 @@ type Source interface {
 type DetailFetcher interface {
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
+
+// ErrGone is returned by Get and PostEmptyJSON for a 404 or 410 response.
+var ErrGone = errors.New("gone")
 
 type PaginatedBase struct {
 	cfg     Config
@@ -101,6 +105,9 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}
