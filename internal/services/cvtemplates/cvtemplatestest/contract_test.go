@@ -9,6 +9,6 @@ import (
 func TestFakeStoreSatisfiesContract(t *testing.T) {
 	cvtemplatestest.RunStoreContract(t, func(t *testing.T) cvtemplatestest.Fixture {
 		t.Helper()
-		return cvtemplatestest.Fixture{Store: cvtemplatestest.NewFakeStore(), UserID: "user-1"}
+		return cvtemplatestest.Fixture{Store: cvtemplatestest.NewFakeStore(), UserID: "user-1", Other: "user-2"}
 	})
 }

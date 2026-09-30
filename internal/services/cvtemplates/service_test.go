@@ -4,42 +4,40 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net/http"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
+const userID = handlerstest.UserID
+
 var modTime = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
-func seedDoc(t *testing.T, st cvtemplates.Store, userID, docID string) string {
-	t.Helper()
-	ctx := context.Background()
-	if err := st.AddTrackedDoc(ctx, dto.AddTrackedDocInput{UserID: userID, DocID: docID}); err != nil {
-		t.Fatal(err)
+func newService(gc cvtemplates.DocsClient) (*cvtemplates.Service, *cvtemplatestest.FakeStore) {
+	st := cvtemplatestest.NewFakeStore()
+	return cvtemplates.NewService(gc, st), st
+}
+
+func docsWith(docIDs ...string) *identitytest.DocsClient {
+	gc := identitytest.NewDocsClient()
+	for _, id := range docIDs {
+		gc.WithDoc(id, []google.Tab{{ID: "t1", Title: "CV 1"}}, google.FileMeta{Title: "Doc " + id, ModifiedAt: modTime})
 	}
-	docs, err := st.ListTrackedDocs(ctx, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, d := range docs {
-		if d.DocID == docID {
-			return d.ID
-		}
-	}
-	t.Fatalf("doc %q not tracked", docID)
-	return ""
+	return gc
 }
 
 func tabVisible(t *testing.T, st cvtemplates.Store, trackedDocID, tabID string) bool {
 	t.Helper()
-	tabs, err := st.ListTabs(context.Background(), trackedDocID)
+	tabs, err := st.ListTabs(t.Context(), trackedDocID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,15 +50,14 @@ func tabVisible(t *testing.T, st cvtemplates.Store, trackedDocID, tabID string) 
 	return false
 }
 
-func seedTab(t *testing.T, st cvtemplates.Store, userID, docID, tabID string, visible bool) string {
+func seedTab(t *testing.T, st cvtemplates.Store, docID, tabID string, visible bool) string {
 	t.Helper()
-	ctx := context.Background()
-	id := seedDoc(t, st, userID, docID)
-	if err := st.EnsureTabs(ctx, id, []string{tabID}, []string{tabID}); err != nil {
+	id := cvtemplatestest.Track(t, st, userID, docID)
+	if err := st.EnsureTabs(t.Context(), id, []string{tabID}, []string{tabID}); err != nil {
 		t.Fatal(err)
 	}
 	if !visible {
-		if err := st.SetTabVisible(ctx, userID, docID, tabID, false); err != nil {
+		if err := st.SetTabVisible(t.Context(), userID, docID, tabID, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -89,22 +86,32 @@ func (f failingListTabs) ListTabs(ctx context.Context, userID, docID string) ([]
 	return f.DocsClient.ListTabs(ctx, userID, docID)
 }
 
-func TestList(t *testing.T) {
-	t.Run("returns all visible tabs across docs", func(t *testing.T) {
-		gc := identitytest.NewDocsClient().
-			WithDoc("docA", []google.Tab{{ID: "t1", Title: "CV 1"}, {ID: "t2", Title: "CV 2"}}, google.FileMeta{Title: "Doc A", ModifiedAt: modTime}).
-			WithDoc("docB", []google.Tab{{ID: "t3", Title: "CV 3"}, {ID: "t4", Title: "CV 4"}}, google.FileMeta{Title: "Doc B", ModifiedAt: modTime})
-		st := cvtemplatestest.NewFakeStore()
-		seedDoc(t, st, "u1", "docA")
-		seedDoc(t, st, "u1", "docB")
-		svc := cvtemplates.NewService(gc, st)
+type failingExport struct {
+	*identitytest.DocsClient
+	err error
+}
 
-		cvs, err := svc.List(context.Background(), "u1")
+func (f failingExport) ExportPDF(context.Context, string, string, string) (io.ReadCloser, error) {
+	return nil, f.err
+}
+
+func TestList(t *testing.T) {
+	t.Run("returns a CV per tab across docs", func(t *testing.T) {
+		svc, st := newService(docsWith("docA", "docB"))
+		cvtemplatestest.Track(t, st, userID, "docA")
+		cvtemplatestest.Track(t, st, userID, "docB")
+
+		got, err := svc.List(t.Context(), userID)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("List err = %v", err)
 		}
-		if len(cvs) != 4 {
-			t.Fatalf("List(...) returned %d CVs, want 4", len(cvs))
+
+		want := []cvtemplates.CV{
+			{DocID: "docA", TabID: "t1", Title: "CV 1", SourceDoc: "Doc docA", ModifiedAt: modTime, DocURL: "https://docs.google.com/document/d/docA/edit?tab=t.t1", Visible: true},
+			{DocID: "docB", TabID: "t1", Title: "CV 1", SourceDoc: "Doc docB", ModifiedAt: modTime, DocURL: "https://docs.google.com/document/d/docB/edit?tab=t.t1", Visible: true},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("List mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -119,200 +126,173 @@ func TestList(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				gc := identitytest.NewDocsClient().WithDoc("docA", []google.Tab{{ID: tc.tabID, Title: "CV 1"}}, google.FileMeta{Title: "Doc A", ModifiedAt: modTime})
-				st := cvtemplatestest.NewFakeStore()
-				seedDoc(t, st, "u1", "docA")
-				svc := cvtemplates.NewService(gc, st)
+				gc := identitytest.NewDocsClient().WithDoc("docA", []google.Tab{{ID: tc.tabID, Title: "CV 1"}}, google.FileMeta{})
+				svc, st := newService(gc)
+				cvtemplatestest.Track(t, st, userID, "docA")
 
-				cvs, err := svc.List(context.Background(), "u1")
+				cvs, err := svc.List(t.Context(), userID)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("List err = %v", err)
 				}
 				if len(cvs) != 1 || cvs[0].DocURL != tc.want {
-					t.Fatalf("List(...) = %+v, want a single CV with DocURL %q", cvs, tc.want)
+					t.Fatalf("List = %+v, want a single CV with DocURL %q", cvs, tc.want)
 				}
 			})
 		}
 	})
 
 	t.Run("skips an inaccessible doc", func(t *testing.T) {
-		gc := failingListTabs{
-			DocsClient: identitytest.NewDocsClient().WithDoc("docB", []google.Tab{{ID: "t1", Title: "CV 1"}}, google.FileMeta{Title: "Doc B", ModifiedAt: modTime}),
-			docID:      "docA",
-			err:        errors.New("permission denied"),
-		}
-		st := cvtemplatestest.NewFakeStore()
-		seedDoc(t, st, "u1", "docA")
-		seedDoc(t, st, "u1", "docB")
-		svc := cvtemplates.NewService(gc, st)
+		gc := failingListTabs{DocsClient: docsWith("docB"), docID: "docA", err: errors.New("permission denied")}
+		svc, st := newService(gc)
+		cvtemplatestest.Track(t, st, userID, "docA")
+		cvtemplatestest.Track(t, st, userID, "docB")
 
-		cvs, err := svc.List(context.Background(), "u1")
+		cvs, err := svc.List(t.Context(), userID)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("List err = %v", err)
 		}
 		if len(cvs) != 1 || cvs[0].DocID != "docB" {
-			t.Fatalf("List(...) = %+v, want a single CV from docB", cvs)
+			t.Fatalf("List = %+v, want a single CV from docB", cvs)
 		}
 	})
 
-	t.Run("reconcile does not unhide a hidden tab", func(t *testing.T) {
-		gc := identitytest.NewDocsClient().WithDoc("docA", []google.Tab{{ID: "t1", Title: "CV 1"}}, google.FileMeta{Title: "Doc A", ModifiedAt: modTime})
-		st := cvtemplatestest.NewFakeStore()
-		tdID := seedDoc(t, st, "u1", "docA")
-		if err := st.EnsureTabs(context.Background(), tdID, []string{"t1"}, []string{"CV 1"}); err != nil {
-			t.Fatal(err)
-		}
-		if err := st.SetTabVisible(context.Background(), "u1", "docA", "t1", false); err != nil {
-			t.Fatal(err)
-		}
-		svc := cvtemplates.NewService(gc, st)
+	t.Run("hidden tab stays hidden after reconcile", func(t *testing.T) {
+		svc, st := newService(docsWith("docA"))
+		tdID := seedTab(t, st, "docA", "t1", false)
 
-		cvs, err := svc.List(context.Background(), "u1")
+		cvs, err := svc.List(t.Context(), userID)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("List err = %v", err)
 		}
 		if len(cvs) != 1 || cvs[0].Visible {
-			t.Fatalf("List(...) = %+v, want a single hidden CV", cvs)
+			t.Fatalf("List = %+v, want a single hidden CV", cvs)
 		}
-		tabs, err := st.ListTabs(context.Background(), tdID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, tab := range tabs {
-			if tab.TabID == "t1" && tab.Visible {
-				t.Error("reconcile must not un-hide a previously hidden tab")
-			}
+		if tabVisible(t, st, tdID, "t1") {
+			t.Error("tab t1 visible after List, want still hidden")
 		}
 	})
 
-	t.Run("not connected returns an error", func(t *testing.T) {
-		gc := identitytest.Disconnected(apperr.Unauthorized("google account not connected"))
-		svc := cvtemplates.NewService(gc, cvtemplatestest.NewFakeStore())
+	t.Run("not connected returns unauthorized", func(t *testing.T) {
+		svc, _ := newService(identitytest.Disconnected(apperr.Unauthorized("google account not connected")))
 
-		if _, err := svc.List(context.Background(), "u1"); err == nil {
-			t.Fatal("expected an error, got nil")
+		_, err := svc.List(t.Context(), userID)
+		if !apperr.IsKind(err, apperr.KindUnauthorized) {
+			t.Fatalf("List err = %v, want an unauthorized error", err)
 		}
 	})
-}
-
-type failingExport struct {
-	*identitytest.DocsClient
-	err error
-}
-
-func (f failingExport) ExportPDF(context.Context, string, string, string) (io.ReadCloser, error) {
-	return nil, f.err
 }
 
 func TestExportPDF(t *testing.T) {
-	t.Run("upstream failure maps to 502", func(t *testing.T) {
-		gc := failingExport{DocsClient: identitytest.NewDocsClient(), err: errors.New("google is down")}
-		svc := cvtemplates.NewService(gc, cvtemplatestest.NewFakeStore())
+	t.Run("upstream failure maps to upstream error", func(t *testing.T) {
+		svc, _ := newService(failingExport{DocsClient: identitytest.NewDocsClient(), err: errors.New("google is down")})
 
-		_, err := svc.ExportPDF(context.Background(), "u1", "docA", "t1")
-
-		status, ok := apperr.StatusFor(err)
-		if !ok || status != http.StatusBadGateway {
-			t.Fatalf("status = %v, ok = %v, want %d", status, ok, http.StatusBadGateway)
+		_, err := svc.ExportPDF(t.Context(), userID, "docA", "t1")
+		if !apperr.IsKind(err, apperr.KindUpstream) {
+			t.Fatalf("ExportPDF err = %v, want an upstream error", err)
 		}
 	})
 
 	t.Run("passes the stream through on success", func(t *testing.T) {
-		gc := identitytest.NewDocsClient()
-		svc := cvtemplates.NewService(gc, cvtemplatestest.NewFakeStore())
+		svc, _ := newService(identitytest.NewDocsClient())
 
-		body, err := svc.ExportPDF(context.Background(), "u1", "docA", "t1")
+		body, err := svc.ExportPDF(t.Context(), userID, "docA", "t1")
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("ExportPDF err = %v", err)
 		}
-		if body == nil {
-			t.Fatal("want a non-nil body")
+		defer func() { _ = body.Close() }()
+		got, err := io.ReadAll(body)
+		if err != nil {
+			t.Fatalf("ReadAll err = %v", err)
+		}
+		if string(got) != "pdf-bytes" {
+			t.Errorf("ExportPDF body = %q, want %q", got, "pdf-bytes")
 		}
 	})
 }
 
 func TestAddDoc(t *testing.T) {
-	t.Run("tracks a valid doc", func(t *testing.T) {
-		gc := identitytest.NewDocsClient().WithDoc("abc1234567890", nil, google.FileMeta{})
-		st := cvtemplatestest.NewFakeStore()
-		svc := cvtemplates.NewService(gc, st)
+	const docURL = "https://docs.google.com/document/d/abc1234567890/edit"
 
-		if _, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "https://docs.google.com/document/d/abc1234567890/edit"}); err != nil {
+	t.Run("tracks a valid doc", func(t *testing.T) {
+		svc, st := newService(docsWith("abc1234567890"))
+
+		if _, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: docURL}); err != nil {
+			t.Fatalf("AddDoc err = %v", err)
+		}
+		docs, err := st.ListTrackedDocs(t.Context(), userID)
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := st.RemoveTrackedDoc(context.Background(), "u1", "abc1234567890"); err != nil {
-			t.Errorf("doc should have been tracked: %v", err)
+		if len(docs) != 1 || docs[0].DocID != "abc1234567890" {
+			t.Errorf("ListTrackedDocs = %+v, want the added doc", docs)
 		}
 	})
 
 	t.Run("garbage URL", func(t *testing.T) {
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
+		svc, _ := newService(identitytest.NewDocsClient())
 
-		_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "not-a-url"})
-		if !errors.Is(err, cvtemplates.ErrInvalidDoc) {
-			t.Fatalf("err = %v, want ErrInvalidDoc", err)
+		_, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: "not-a-url"})
+		if !errors.Is(err, cvtemplates.ErrInvalidDoc) || !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("AddDoc err = %v, want ErrInvalidDoc", err)
 		}
 	})
 
 	t.Run("inaccessible doc", func(t *testing.T) {
-		gc := failingFileMeta{DocsClient: identitytest.NewDocsClient(), err: errors.New("permission denied")}
-		svc := cvtemplates.NewService(gc, cvtemplatestest.NewFakeStore())
+		svc, _ := newService(failingFileMeta{DocsClient: identitytest.NewDocsClient(), err: errors.New("permission denied")})
 
-		_, err := svc.AddDoc(context.Background(), "u1", dto.TrackedDocInput{URL: "https://docs.google.com/document/d/inaccessible123/edit"})
-		if !errors.Is(err, cvtemplates.ErrInaccessibleDoc) {
-			t.Fatalf("err = %v, want ErrInaccessibleDoc", err)
+		_, err := svc.AddDoc(t.Context(), userID, dto.TrackedDocInput{URL: docURL})
+		if !errors.Is(err, cvtemplates.ErrInaccessibleDoc) || !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("AddDoc err = %v, want ErrInaccessibleDoc", err)
 		}
 	})
 }
 
 func TestHideTab(t *testing.T) {
-	t.Run("hides a visible tab", func(t *testing.T) {
-		st := cvtemplatestest.NewFakeStore()
-		id := seedTab(t, st, "u1", "docA", "t1", true)
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), st)
+	in := dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}
 
-		if _, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
-			t.Fatal(err)
+	t.Run("hides a visible tab", func(t *testing.T) {
+		svc, st := newService(identitytest.NewDocsClient())
+		id := seedTab(t, st, "docA", "t1", true)
+
+		if _, err := svc.HideTab(t.Context(), userID, in); err != nil {
+			t.Fatalf("HideTab err = %v", err)
 		}
 		if tabVisible(t, st, id, "t1") {
-			t.Error("tab should be hidden")
+			t.Error("tab t1 visible after HideTab, want hidden")
 		}
 	})
 
 	t.Run("missing tab returns not found", func(t *testing.T) {
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
+		svc, _ := newService(identitytest.NewDocsClient())
 
-		_, err := svc.HideTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t-missing"})
-
-		status, ok := apperr.StatusFor(err)
-		if !ok || status != apperr.KindNotFound.Status() {
-			t.Fatalf("expected a not-found error, got %v", err)
+		_, err := svc.HideTab(t.Context(), userID, in)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("HideTab err = %v, want a not-found error", err)
 		}
 	})
 }
 
 func TestShowTab(t *testing.T) {
-	t.Run("shows a hidden tab", func(t *testing.T) {
-		st := cvtemplatestest.NewFakeStore()
-		id := seedTab(t, st, "u1", "docA", "t1", false)
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), st)
+	in := dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}
 
-		if _, err := svc.ShowTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t1"}); err != nil {
-			t.Fatal(err)
+	t.Run("shows a hidden tab", func(t *testing.T) {
+		svc, st := newService(identitytest.NewDocsClient())
+		id := seedTab(t, st, "docA", "t1", false)
+
+		if _, err := svc.ShowTab(t.Context(), userID, in); err != nil {
+			t.Fatalf("ShowTab err = %v", err)
 		}
 		if !tabVisible(t, st, id, "t1") {
-			t.Error("tab should be visible")
+			t.Error("tab t1 hidden after ShowTab, want visible")
 		}
 	})
 
 	t.Run("missing tab returns not found", func(t *testing.T) {
-		svc := cvtemplates.NewService(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
+		svc, _ := newService(identitytest.NewDocsClient())
 
-		_, err := svc.ShowTab(context.Background(), "u1", dto.TabVisibilityInput{DocID: "docA", TabID: "t-missing"})
-
-		status, ok := apperr.StatusFor(err)
-		if !ok || status != apperr.KindNotFound.Status() {
-			t.Fatalf("expected a not-found error, got %v", err)
+		_, err := svc.ShowTab(t.Context(), userID, in)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("ShowTab err = %v, want a not-found error", err)
 		}
 	})
 }
