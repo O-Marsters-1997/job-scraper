@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -16,15 +15,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
-	"github.com/ollymarsters/job-scraper/internal/worker/discover"
-	"github.com/ollymarsters/job-scraper/internal/worker/discover/crawl"
-	"github.com/ollymarsters/job-scraper/internal/worker/discover/getro"
-	"github.com/ollymarsters/job-scraper/internal/worker/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -35,7 +29,7 @@ import (
 )
 
 func main() {
-	forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
+	// forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
 	flag.Parse()
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -82,18 +76,20 @@ func main() {
 			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
 		},
 	})
-	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
-		return js.PublishBoardChecks(ctx, *forceBoards)
-	})
-	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
-	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
-	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
-	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
-	harvest := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards())
-	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
-	go schedule.Every(ctx, "crawl", 6*time.Hour, crawl.New(js.Boards()).RunOnce)
-	slog.InfoContext(ctx, "RabbitMQ source workers starting")
+	// go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
+	// 	return js.PublishBoardChecks(ctx, *forceBoards)
+	// })
+	// go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
+	// go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
+	// go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
+	// go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
+
+	// harvest := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards())
+	// go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
+	// go schedule.Every(ctx, "crawl", 6*time.Hour, crawl.New(js.Boards()).RunOnce)
+	// slog.InfoContext(ctx, "RabbitMQ source workers starting")
+
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
 	}

@@ -9,7 +9,7 @@ import { GenerateStep } from "./-tailor/GenerateStep";
 import { HeadingsStep } from "./-tailor/HeadingsStep";
 import { type Step, Stepper } from "./-tailor/Stepper";
 
-export const Route = createFileRoute("/_auth/jobs_/$id/tailor")({
+export const Route = createFileRoute("/_auth/jobs_/$id_/tailor")({
 	component: TailorPage,
 });
 
