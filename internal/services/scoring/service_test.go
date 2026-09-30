@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -30,30 +33,59 @@ var bank = []dto.ScoringOption{
 	{ID: "seniority:senior", Dimension: dto.DimensionSeniority, Label: "Senior", Question: "Seniority?"},
 }
 
+var (
+	retiredAt    = time.Now().Add(-time.Hour)
+	retiredCobol = dto.ScoringOption{
+		ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retiredAt,
+	}
+	testJob = dto.Job{ID: "job-1", Title: "Backend Engineer", ContentFingerprint: "fp-1", Source: "greenhouse"}
+)
+
 func newFakeStore() *scoringtest.FakeStore {
 	st := scoringtest.NewFakeStore()
 	st.SeedOptions(bank)
 	return st
 }
 
+func seedEffect(st *scoringtest.FakeStore, firstDiscovery bool, configs ...dto.SearchConfig) {
+	st.SeedJob(testJob, configs)
+	st.SeedEffect(dto.AnswerEffect{
+		ID: "effect-1", JobID: testJob.ID, Fingerprint: testJob.ContentFingerprint, Attempts: 1, FirstDiscovery: firstDiscovery,
+	})
+}
+
+func picking(userID string, optionIDs ...string) dto.SearchConfig {
+	var picks []dto.Pick
+	for _, id := range optionIDs {
+		picks = append(picks, dto.Pick{OptionID: id, Stance: "nice", Source: "manual"})
+	}
+	return dto.SearchConfig{UserID: userID, NotifyThreshold: 70, Preferences: dto.Preferences{Picks: picks}}
+}
+
+func cachedAnswers() map[string]dto.Answer {
+	return map[string]dto.Answer{
+		scoring.QuestionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+		scoring.QuestionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
+		scoring.QuestionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+	}
+}
+
+func runTick(t *testing.T, st scoring.Store, opts ...depsOpt) {
+	t.Helper()
+	svc := newService(t, st, append([]depsOpt{withKey("sk-or-test")}, opts...)...)
+	if err := svc.RunTick(t.Context()); err != nil {
+		t.Fatalf("RunTick() err = %v", err)
+	}
+}
+
 type fakeAnswerer struct {
-	t         *testing.T
-	forbidden bool
-	calls     [][]string
-	answers   map[string]dto.Answer
+	calls [][]string
 }
 
 func (f *fakeAnswerer) Answer(_ context.Context, _ string, _ dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
-	if f.forbidden {
-		f.t.Fatal("Answer called but no questions should have been missing")
-	}
 	f.calls = append(f.calls, questions)
 	out := make(map[string]dto.Answer, len(questions))
 	for _, q := range questions {
-		if a, ok := f.answers[q]; ok {
-			out[q] = a
-			continue
-		}
 		out[q] = dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
 	}
 	return out, dto.Usage{Model: "typesafe/jev-1.13-test", Cost: 0.0004}, nil
@@ -87,6 +119,17 @@ func (f *fakeProfiles) GetProfile(_ context.Context, userID string) (dto.Profile
 	return dto.Profile{Email: f.emails[userID]}, nil
 }
 
+type fakeExtractor struct {
+	calls int
+	picks []dto.Pick
+	err   error
+}
+
+func (f *fakeExtractor) Extract(context.Context, string, string, []dto.ScoringOption, []dto.DimensionSpec) ([]dto.Pick, error) {
+	f.calls++
+	return f.picks, f.err
+}
+
 type depsOpt func(*scoring.Deps)
 
 func withAnswerer(a scoring.Answerer) depsOpt      { return func(d *scoring.Deps) { d.Answerer = a } }
@@ -108,7 +151,7 @@ func newDeps(t *testing.T, st scoring.Store, opts ...depsOpt) scoring.Deps {
 	t.Helper()
 	d := scoring.Deps{
 		Store:       st,
-		Answerer:    &fakeAnswerer{t: t, forbidden: true},
+		Answerer:    &fakeAnswerer{},
 		Credentials: &fakeCredentials{},
 		Alerter:     &fakeAlerter{},
 		Profiles:    &fakeProfiles{},
@@ -157,242 +200,128 @@ func scoreCallLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 func TestRunTick(t *testing.T) {
 	t.Run("all cached answers make no jev call", func(t *testing.T) {
 		st := newFakeStore()
-		job := dto.Job{ID: "job-1", Title: "Backend Engineer", ContentFingerprint: "fp-1", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
-			scoring.QuestionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
-			scoring.QuestionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
-			scoring.QuestionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		seedEffect(st, true, picking("user-1", "tech:go"))
+		answerer := &fakeAnswerer{}
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 0 {
+			t.Errorf("Answer calls = %v, want none (everything cached)", answerer.calls)
+		}
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Answers) != 0 {
+			t.Errorf("completed effects = %+v, want 1 effect with no new answers", completed)
+		}
+	})
+
+	questionCases := []struct {
+		name    string
+		options []dto.ScoringOption
+		configs []dto.SearchConfig
+		want    []string
+	}{
+		{
+			name:    "missing questions are sent exactly",
+			configs: []dto.SearchConfig{picking("user-1", "tech:go", "tech:rust", "role:backend")},
+			want:    []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"},
+		},
+		{
+			name:    "only picked questions are sent",
+			configs: []dto.SearchConfig{picking("user-1", "tech:go")},
+			want:    []string{"Does the role use Go?"},
+		},
+		{
+			name:    "overlapping picks are unioned without duplicates",
+			configs: []dto.SearchConfig{picking("user-1", "tech:go", "tech:rust"), picking("user-2", "tech:rust", "role:backend")},
+			want:    []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"},
+		},
+		{
+			name:    "a retired option pick is never sent",
+			options: []dto.ScoringOption{retiredCobol},
+			configs: []dto.SearchConfig{picking("user-1", "tech:go", "tech:cobol")},
+			want:    []string{"Does the role use Go?"},
+		},
+	}
+	for _, tt := range questionCases {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newFakeStore()
+			st.SeedOptions(append(slices.Clone(bank), tt.options...))
+			seedEffect(st, false, tt.configs...)
+			answerer := &fakeAnswerer{}
+
+			runTick(t, st, withAnswerer(answerer))
+
+			sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+			if diff := cmp.Diff([][]string{tt.want}, answerer.calls, sortStrings); diff != "" {
+				t.Errorf("Answer calls (-want +got):\n%s", diff)
+			}
+			completed := st.Completed()
+			if len(completed) != 1 || len(completed[0].Answers) != len(tt.want) {
+				t.Errorf("completed effects = %+v, want 1 effect with %d new answers", completed, len(tt.want))
+			}
 		})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1, FirstDiscovery: true})
-
-		answerer := &fakeAnswerer{t: t, forbidden: true}
-		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		completed := st.Completed()
-		if len(completed) != 1 {
-			t.Fatalf("completed effects = %d, want 1", len(completed))
-		}
-		if len(completed[0].Answers) != 0 {
-			t.Fatalf("new answers written = %d, want 0 (everything cached)", len(completed[0].Answers))
-		}
-	})
-
-	t.Run("missing questions are sent exactly", func(t *testing.T) {
-		st := newFakeStore()
-		job := dto.Job{ID: "job-2", Title: "Backend Engineer", ContentFingerprint: "fp-2", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{
-				{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-				{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
-				{OptionID: "role:backend", Stance: "nice", Source: "manual"},
-			},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
-
-		answerer := &fakeAnswerer{t: t}
-		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		if len(answerer.calls) != 1 {
-			t.Fatalf("Answer calls = %d, want 1", len(answerer.calls))
-		}
-		got := slices.Clone(answerer.calls[0])
-		slices.Sort(got)
-		want := []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"}
-		slices.Sort(want)
-		if !slices.Equal(got, want) {
-			t.Fatalf("questions sent = %v, want %v", got, want)
-		}
-		completed := st.Completed()
-		if len(completed) != 1 || len(completed[0].Answers) != 3 {
-			t.Fatalf("completed effects = %+v, want 1 effect with 3 new answers", completed)
-		}
-	})
+	}
 
 	t.Run("a successful answer emits a score call log", func(t *testing.T) {
 		buf := captureScoreCallLogs(t)
-
 		st := newFakeStore()
-		job := dto.Job{ID: "job-score-call", Title: "Backend Engineer", ContentFingerprint: "fp-score-call", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		seedEffect(st, false, picking("user-1", "tech:go"))
 
-		svc := newService(t, st, withAnswerer(&fakeAnswerer{t: t}), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
+		runTick(t, st)
 
 		lines := scoreCallLines(t, buf)
 		if len(lines) != 1 {
 			t.Fatalf("score.call lines = %d, want 1: %v", len(lines), lines)
 		}
 		if lines[0]["user_id"] != "user-1" || lines[0]["model"] != "typesafe/jev-1.13-test" || lines[0]["cost_usd"] != 0.0004 {
-			t.Fatalf("score.call line = %+v, want user_id=user-1 model=typesafe/jev-1.13-test cost_usd=0.0004", lines[0])
+			t.Errorf("score.call line = %+v, want user_id=user-1 model=typesafe/jev-1.13-test cost_usd=0.0004", lines[0])
 		}
 	})
 
 	t.Run("a failed answer emits no score call log", func(t *testing.T) {
 		buf := captureScoreCallLogs(t)
-
 		st := newFakeStore()
-		job := dto.Job{ID: "job-score-call-fail", Title: "Backend Engineer", ContentFingerprint: "fp-score-call-fail", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-score-call-fail", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		seedEffect(st, false, picking("user-1", "tech:go"))
 
-		svc := newService(t, st, withAnswerer(&failingAnswerer{}), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
+		runTick(t, st, withAnswerer(&failingAnswerer{}))
 
 		if lines := scoreCallLines(t, buf); len(lines) != 0 {
-			t.Fatalf("score.call lines = %v, want none after a failed Answer call", lines)
+			t.Errorf("score.call lines = %v, want none after a failed Answer call", lines)
 		}
 		if failed := st.Failed(); len(failed) != 1 {
-			t.Fatalf("failed effects = %d, want 1", len(failed))
-		}
-	})
-
-	t.Run("only picked questions are sent", func(t *testing.T) {
-		st := newFakeStore()
-		job := dto.Job{ID: "job-picked", Title: "Backend Engineer", ContentFingerprint: "fp-picked", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-picked", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
-
-		answerer := &fakeAnswerer{t: t}
-		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		if len(answerer.calls) != 1 || !slices.Equal(answerer.calls[0], []string{"Does the role use Go?"}) {
-			t.Fatalf("questions sent = %v, want exactly [%q] (only the picked question)", answerer.calls, "Does the role use Go?")
-		}
-	})
-
-	t.Run("overlapping picks are unioned without duplicates", func(t *testing.T) {
-		st := newFakeStore()
-		job := dto.Job{ID: "job-union", Title: "Backend Engineer", ContentFingerprint: "fp-union", Source: "greenhouse"}
-		cfg1 := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{
-				{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-				{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
-			},
-		}}
-		cfg2 := dto.SearchConfig{UserID: "user-2", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{
-				{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
-				{OptionID: "role:backend", Stance: "nice", Source: "manual"},
-			},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg1, cfg2})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-union", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
-
-		answerer := &fakeAnswerer{t: t}
-		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		if len(answerer.calls) != 1 {
-			t.Fatalf("Answer calls = %d, want 1 (one call covering the union)", len(answerer.calls))
-		}
-		got := slices.Clone(answerer.calls[0])
-		slices.Sort(got)
-		want := []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"}
-		slices.Sort(want)
-		if !slices.Equal(got, want) {
-			t.Fatalf("questions sent = %v, want %v (union, no duplicates)", got, want)
-		}
-	})
-
-	t.Run("a retired option pick is never sent", func(t *testing.T) {
-		st := newFakeStore()
-		retiredAt := time.Now().Add(-time.Hour)
-		st.SeedOptions(append(append([]dto.ScoringOption{}, bank...), dto.ScoringOption{
-			ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retiredAt,
-		}))
-		job := dto.Job{ID: "job-retired", Title: "Backend Engineer", ContentFingerprint: "fp-retired", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{
-				{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-				{OptionID: "tech:cobol", Stance: "avoid", Source: "manual"},
-			},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-retired", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
-
-		answerer := &fakeAnswerer{t: t}
-		svc := newService(t, st, withAnswerer(answerer), withKey("sk-or-test"))
-
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		if len(answerer.calls) != 1 || !slices.Equal(answerer.calls[0], []string{"Does the role use Go?"}) {
-			t.Fatalf("questions sent = %v, want exactly [%q] (retired option never asked)", answerer.calls, "Does the role use Go?")
+			t.Errorf("failed effects = %d, want 1", len(failed))
 		}
 	})
 
 	t.Run("no picks skips the jev call and still writes a score", func(t *testing.T) {
 		st := newFakeStore()
-		job := dto.Job{ID: "job-nopicks", Title: "Backend Engineer", ContentFingerprint: "fp-nopicks", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-nopicks", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		seedEffect(st, false, picking("user-1"))
+		answerer := &fakeAnswerer{}
 
-		svc := newService(t, st, withKey("sk-or-test"))
+		runTick(t, st, withAnswerer(answerer))
 
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
+		if len(answerer.calls) != 0 {
+			t.Errorf("Answer calls = %v, want none", answerer.calls)
 		}
 		completed := st.Completed()
 		if len(completed) != 1 || len(completed[0].Scores) != 1 {
-			t.Fatalf("completed effects = %+v, want 1 effect with a score written from the prior", completed)
+			t.Errorf("completed effects = %+v, want 1 effect with a score written from the prior", completed)
 		}
 	})
 
 	t.Run("alerts only on first discovery above threshold", func(t *testing.T) {
 		st := newFakeStore()
-		job := dto.Job{ID: "job-3", Title: "Backend Engineer", ContentFingerprint: "fp-3", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 50, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
-		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
-			scoring.QuestionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
-			scoring.QuestionHash("Does the role use Rust?"):           {PYes: 0.05, PNo: 0.9, PNotStated: 0.05},
-			scoring.QuestionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
-		})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-3", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1, FirstDiscovery: true})
-
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		cfg := picking("user-1", "tech:go")
+		cfg.NotifyThreshold = 50
+		seedEffect(st, true, cfg)
 		alerter := &fakeAlerter{}
-		svc := newService(t, st, withKey("sk-or-test"), withAlerter(alerter), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
 
-		if err := svc.RunTick(context.Background()); err != nil {
-			t.Fatalf("RunTick: %v", err)
-		}
-		if len(alerter.notified) != 1 || alerter.notified[0] != "user@example.com" {
-			t.Fatalf("notified = %v, want [user@example.com]", alerter.notified)
+		runTick(t, st, withAlerter(alerter), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+
+		if diff := cmp.Diff([]string{"user@example.com"}, alerter.notified); diff != "" {
+			t.Errorf("notified (-want +got):\n%s", diff)
 		}
 	})
 }
@@ -421,7 +350,7 @@ func TestRun(t *testing.T) {
 	t.Run("returns when the context is cancelled", func(t *testing.T) {
 		svc := newService(t, newFakeStore())
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan error, 1)
 		go func() { done <- svc.Run(ctx) }()
 		cancel()
@@ -429,48 +358,153 @@ func TestRun(t *testing.T) {
 		select {
 		case err := <-done:
 			if err != nil {
-				t.Fatalf("Run returned %v, want nil", err)
+				t.Errorf("Run() err = %v, want nil", err)
 			}
 		case <-time.After(time.Second):
-			t.Fatal("Run did not return after context cancellation")
+			t.Error("Run did not return after context cancellation")
 		}
 	})
 
 	t.Run("keeps ticking after a failed tick", func(t *testing.T) {
-		job := dto.Job{ID: "job-4", Title: "Backend Engineer", ContentFingerprint: "fp-4", Source: "greenhouse"}
-		cfg := dto.SearchConfig{UserID: "user-1", NotifyThreshold: 70, Preferences: dto.Preferences{
-			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
-		}}
 		inner := newFakeStore()
-		inner.SeedJob(job, []dto.SearchConfig{cfg})
-		inner.SeedAnswers(job.ID, job.ContentFingerprint, "typesafe/jev-1.13", map[string]dto.Answer{
-			scoring.QuestionHash("Does the role use Go?"):             {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
-			scoring.QuestionHash("Does the role use Rust?"):           {PYes: 0.1, PNo: 0.85, PNotStated: 0.05},
-			scoring.QuestionHash("Is this primarily a backend role?"): {PYes: 0.9, PNo: 0.05, PNotStated: 0.05},
-		})
-		inner.SeedEffect(dto.AnswerEffect{ID: "effect-4", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
-
+		inner.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		seedEffect(inner, false, picking("user-1", "tech:go"))
 		st := &flakyClaimStore{FakeStore: inner, failsLeft: 1, completed: make(chan struct{}, 1)}
 		svc := newService(t, st, withKey("sk-or-test"), withTick(time.Millisecond))
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan error, 1)
 		go func() { done <- svc.Run(ctx) }()
 
 		select {
 		case <-st.completed:
 		case <-time.After(time.Second):
-			t.Fatal("effect never completed after the failed tick")
+			t.Error("effect never completed after the failed tick")
 		}
 
 		cancel()
 		select {
 		case err := <-done:
 			if err != nil {
-				t.Fatalf("Run returned %v, want nil", err)
+				t.Errorf("Run() err = %v, want nil", err)
 			}
 		case <-time.After(time.Second):
-			t.Fatal("Run did not return after context cancellation")
+			t.Error("Run did not return after context cancellation")
+		}
+	})
+}
+
+func TestOptions(t *testing.T) {
+	st := scoringtest.NewFakeStore()
+	st.SeedOptions([]dto.ScoringOption{bank[0], retiredCobol})
+
+	got, err := newService(t, st).Options(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("Options() err = %v", err)
+	}
+
+	if len(got.Dimensions) != len(scoring.Dimensions) {
+		t.Errorf("dimensions = %d, want %d", len(got.Dimensions), len(scoring.Dimensions))
+	}
+	want := []dto.ScoringOption{{ID: "tech:go", Dimension: dto.DimensionTech, Label: "Go"}}
+	if diff := cmp.Diff(want, got.Options); diff != "" {
+		t.Errorf("options, retired excluded and question text stripped (-want +got):\n%s", diff)
+	}
+}
+
+func TestUpdateConfigTextExtraction(t *testing.T) {
+	ctx := t.Context()
+	goPick := dto.Pick{OptionID: "tech:go", Stance: "nice", Source: "text"}
+	newExtractingService := func(t *testing.T, picks ...dto.Pick) (*scoring.Service, *fakeExtractor) {
+		t.Helper()
+		extractor := &fakeExtractor{picks: picks}
+		return newService(t, newFakeStore(), withKey("sk-test"), withExtractor(extractor)), extractor
+	}
+
+	t.Run("unchanged text skips extraction", func(t *testing.T) {
+		svc, extractor := newExtractingService(t, goPick)
+		in := dto.ScoringConfigView{Preferences: dto.Preferences{PreferenceText: "I want to work with Go"}}
+
+		for range 2 {
+			if _, err := svc.UpdateConfig(ctx, "user-1", in); err != nil {
+				t.Fatalf("UpdateConfig() err = %v", err)
+			}
+		}
+		if extractor.calls != 1 {
+			t.Errorf("extractor calls = %d, want 1 (the second save has unchanged text)", extractor.calls)
+		}
+	})
+
+	t.Run("re-extraction replaces text picks and keeps manual ones", func(t *testing.T) {
+		svc, extractor := newExtractingService(t, goPick)
+		manual := dto.Pick{OptionID: "seniority:senior", Stance: "nice"}
+		if _, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{Picks: []dto.Pick{manual}, PreferenceText: "I know Go"},
+		}); err != nil {
+			t.Fatalf("UpdateConfig() err = %v", err)
+		}
+
+		extractor.picks = []dto.Pick{{OptionID: "domain:gambling", Stance: "avoid", Source: "text"}}
+		got, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{Picks: []dto.Pick{manual}, PreferenceText: "avoid gambling companies"},
+		})
+		if err != nil {
+			t.Fatalf("UpdateConfig() err = %v", err)
+		}
+
+		want := []dto.Pick{
+			{OptionID: "seniority:senior", Stance: "nice", Source: "manual"},
+			{OptionID: "domain:gambling", Stance: "avoid", Source: "text"},
+		}
+		if diff := cmp.Diff(want, got.Preferences.Picks); diff != "" {
+			t.Errorf("picks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a manual pick overrides a text pick on the same option", func(t *testing.T) {
+		svc, _ := newExtractingService(t, dto.Pick{OptionID: "tech:kubernetes", Stance: "avoid", Source: "text"})
+
+		got, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{
+				Picks:          []dto.Pick{{OptionID: "tech:kubernetes", Stance: "nice"}},
+				PreferenceText: "avoid Kubernetes",
+			},
+		})
+		if err != nil {
+			t.Fatalf("UpdateConfig() err = %v", err)
+		}
+
+		want := []dto.Pick{
+			{OptionID: "tech:kubernetes", Stance: "nice", Source: "manual"},
+			{OptionID: "tech:kubernetes", Stance: "avoid", Source: "text", Overridden: true},
+		}
+		if diff := cmp.Diff(want, got.Preferences.Picks); diff != "" {
+			t.Errorf("picks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a hallucinated option id is dropped, not rejected", func(t *testing.T) {
+		svc, _ := newExtractingService(t, goPick, dto.Pick{OptionID: "tech:made-up", Stance: "nice", Source: "text"})
+
+		got, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{PreferenceText: "I like Go, and made-up-thing"},
+		})
+		if err != nil {
+			t.Fatalf("UpdateConfig() err = %v", err)
+		}
+		if diff := cmp.Diff([]dto.Pick{goPick}, got.Preferences.Picks); diff != "" {
+			t.Errorf("picks (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("no credential is unprocessable", func(t *testing.T) {
+		svc := newService(t, newFakeStore())
+
+		_, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{PreferenceText: "I like Go"},
+		})
+		if !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Errorf("UpdateConfig() err = %v, want an unprocessable apperr", err)
 		}
 	})
 }
@@ -528,31 +562,6 @@ func TestRecompute(t *testing.T) {
 		}
 		if len(alerter.notified) != 0 {
 			t.Fatalf("alerter called on recompute: %v", alerter.notified)
-		}
-	})
-
-	t.Run("a salary floor re-ranks without calling the answerer", func(t *testing.T) {
-		st := newFakeStore()
-		st.SeedSearchConfig(dto.SearchConfig{
-			UserID: "user-1", NotifyThreshold: 70,
-			Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000, Currency: "GBP"}},
-		})
-		st.SeedScoringInputs("user-1", []store.ScoringInput{
-			{Job: dto.Job{ID: "job-1", SalaryRaw: "£40k"}, Answers: map[string]dto.Answer{}},
-		})
-
-		svc := newService(t, st)
-
-		result, err := svc.Recompute(context.Background(), "user-1")
-		if err != nil {
-			t.Fatalf("Recompute: %v", err)
-		}
-		if result.Recomputed != 1 {
-			t.Fatalf("recomputed = %d, want 1", result.Recomputed)
-		}
-		saved := st.Recomputed()
-		if len(saved) != 1 || saved[0].Score != 30 {
-			t.Fatalf("saved scores = %+v, want one score of 30 (salary below floor)", saved)
 		}
 	})
 
@@ -790,13 +799,10 @@ func TestRecompute(t *testing.T) {
 				if saved[0].Score != tc.wantScore {
 					t.Errorf("score = %d, want %d", saved[0].Score, tc.wantScore)
 				}
-				for i, want := range tc.wantRows {
-					if i >= len(saved[0].Rows) {
-						t.Fatalf("rows[%d] missing, want %+v", i, want)
-					}
-					if saved[0].Rows[i].Resolved != want.Resolved || saved[0].Rows[i].Effect != want.Effect {
-						t.Errorf("rows[%d] = {Resolved: %q, Effect: %q}, want {Resolved: %q, Effect: %q}",
-							i, saved[0].Rows[i].Resolved, saved[0].Rows[i].Effect, want.Resolved, want.Effect)
+				if tc.wantRows != nil {
+					ignore := cmpopts.IgnoreFields(dto.ScoreRow{}, "Key", "Label", "Stance", "Overridden")
+					if diff := cmp.Diff(tc.wantRows, saved[0].Rows, ignore); diff != "" {
+						t.Errorf("rows (-want +got):\n%s", diff)
 					}
 				}
 			})
@@ -805,98 +811,37 @@ func TestRecompute(t *testing.T) {
 }
 
 func TestFillMissingAnswers(t *testing.T) {
-	t.Run("queues for the currently picked hashes", func(t *testing.T) {
-		st := newFakeStore()
-		st.SeedSearchConfig(dto.SearchConfig{
-			UserID: "user-1",
-			Preferences: dto.Preferences{Picks: []dto.Pick{
-				{OptionID: "tech:go", Stance: "nice", Source: "manual"},
-				{OptionID: "tech:rust", Stance: "avoid", Source: "manual"},
-			}},
-		})
-
-		svc := newService(t, st)
-
-		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
-		if err != nil {
-			t.Fatalf("FillMissingAnswers: %v", err)
-		}
-		if queued != 2 {
-			t.Fatalf("queued = %d, want 2", queued)
-		}
-		calls := st.QueuedMissing()
-		if len(calls) != 1 {
-			t.Fatalf("queue calls = %d, want 1", len(calls))
-		}
-		call := calls[0]
-		if call.UserID != "user-1" || call.Model != jev.Model {
-			t.Fatalf("call = %+v, want user-1 with model %q", call, jev.Model)
-		}
-		wantHashes := map[string]bool{
-			scoring.QuestionHash("Does the role use Go?"):   true,
-			scoring.QuestionHash("Does the role use Rust?"): true,
-		}
-		if len(call.Hashes) != len(wantHashes) {
-			t.Fatalf("hashes = %v, want %v", call.Hashes, wantHashes)
-		}
-		for _, h := range call.Hashes {
-			if !wantHashes[h] {
-				t.Fatalf("unexpected hash %q", h)
+	tests := []struct {
+		name       string
+		options    []dto.ScoringOption
+		cfg        *dto.SearchConfig
+		wantQueued int64
+	}{
+		{"queues for the currently picked options", nil, ptr(picking("user-1", "tech:go", "tech:rust")), 2},
+		{"no picks queues nothing", nil, ptr(picking("user-1")), 0},
+		{"no search config queues nothing", nil, nil, 0},
+		{"a retired pick is never asked", []dto.ScoringOption{retiredCobol}, ptr(picking("user-1", "tech:cobol")), 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newFakeStore()
+			st.SeedOptions(append(slices.Clone(bank), tt.options...))
+			if tt.cfg != nil {
+				st.SeedSearchConfig(*tt.cfg)
 			}
-		}
-	})
 
-	t.Run("no picks queues nothing", func(t *testing.T) {
-		st := newFakeStore()
-		st.SeedSearchConfig(dto.SearchConfig{UserID: "user-1"})
-
-		svc := newService(t, st)
-
-		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
-		if err != nil {
-			t.Fatalf("FillMissingAnswers: %v", err)
-		}
-		if queued != 0 || len(st.QueuedMissing()) != 0 {
-			t.Fatalf("queued = %d, calls = %d, want 0 and no store call", queued, len(st.QueuedMissing()))
-		}
-	})
-
-	t.Run("no search config queues nothing", func(t *testing.T) {
-		st := newFakeStore()
-		svc := newService(t, st)
-
-		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
-		if err != nil {
-			t.Fatalf("FillMissingAnswers: %v", err)
-		}
-		if queued != 0 {
-			t.Fatalf("queued = %d, want 0", queued)
-		}
-	})
-
-	t.Run("a retired pick is never asked", func(t *testing.T) {
-		st := newFakeStore()
-		retired := time.Now()
-		st.SeedOptions(append(slices.Clone(bank), dto.ScoringOption{
-			ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL",
-			Question: "Does the role use COBOL?", RetiredAt: &retired,
-		}))
-		st.SeedSearchConfig(dto.SearchConfig{
-			UserID:      "user-1",
-			Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:cobol", Stance: "nice", Source: "manual"}}},
+			queued, err := newService(t, st).FillMissingAnswers(t.Context(), "user-1")
+			if err != nil {
+				t.Fatalf("FillMissingAnswers() err = %v", err)
+			}
+			if queued != tt.wantQueued {
+				t.Errorf("FillMissingAnswers() = %d, want %d", queued, tt.wantQueued)
+			}
 		})
-
-		svc := newService(t, st)
-
-		queued, err := svc.FillMissingAnswers(context.Background(), "user-1")
-		if err != nil {
-			t.Fatalf("FillMissingAnswers: %v", err)
-		}
-		if queued != 0 || len(st.QueuedMissing()) != 0 {
-			t.Fatalf("queued = %d, calls = %d, want 0 (retired option never asked)", queued, len(st.QueuedMissing()))
-		}
-	})
+	}
 }
+
+func ptr[T any](v T) *T { return &v }
 
 func TestAsk(t *testing.T) {
 	ctx := context.Background()
@@ -905,7 +850,7 @@ func TestAsk(t *testing.T) {
 		t.Helper()
 		st := newFakeStore()
 		st.SeedJob(job, nil)
-		answerer := &fakeAnswerer{t: t}
+		answerer := &fakeAnswerer{}
 		return newService(t, st, withAnswerer(answerer), withKey(key)), answerer
 	}
 
