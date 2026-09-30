@@ -83,6 +83,20 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 		}
 	})
 
+	t.Run("retire an already retired option returns not found", func(t *testing.T) {
+		st := newStore(t)
+		ctx := context.Background()
+		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
+			t.Fatalf("AddScoringOption(...) = %v", err)
+		}
+		if err := st.RetireScoringOption(ctx, optionID); err != nil {
+			t.Fatalf("RetireScoringOption(...) = %v", err)
+		}
+		if err := st.RetireScoringOption(ctx, optionID); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("RetireScoringOption(...) again err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("ops state on an empty store reports nothing", func(t *testing.T) {
 		st := newStore(t)
 		state, err := st.OpsState(context.Background())

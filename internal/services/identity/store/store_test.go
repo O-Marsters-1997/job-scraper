@@ -1,10 +1,12 @@
 package store_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -27,76 +29,78 @@ func TestIdentityStoreContract(t *testing.T) {
 	})
 }
 
+func TestCreateUserTxCommits(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		_, err := st.CreateUserTx(t.Context(), tx, "carol", "hash", "")
+		return err
+	})
+
+	if _, err := st.GetUserByUsername(t.Context(), "carol"); err != nil {
+		t.Errorf("GetUserByUsername(carol) err = %v, want user after commit", err)
+	}
+}
+
 func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
-	st := newStore(t)
-	ctx := context.Background()
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := t.Context()
 
-	tx, err := st.Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin: %v", err)
-	}
-
-	if _, err := st.CreateUserTx(ctx, tx, "frank", "hash", ""); err != nil {
-		t.Fatalf("CreateUserTx: %v", err)
-	}
-
-	_, err = tx.Exec(ctx, `INSERT INTO application_statuses (user_id, name, colour) VALUES ($1, 'Draft', '#64748b')`,
-		"00000000-0000-0000-0000-000000000000")
-	if err == nil {
+	var seedErr error
+	pgtest.InTx(t, pool, false, func(tx pgx.Tx) error {
+		if _, err := st.CreateUserTx(ctx, tx, "frank", "hash", ""); err != nil {
+			return err
+		}
+		_, seedErr = tx.Exec(ctx, `INSERT INTO application_statuses (user_id, name, colour) VALUES ($1, 'Draft', '#64748b')`,
+			"00000000-0000-0000-0000-000000000000")
+		return nil
+	})
+	if seedErr == nil {
 		t.Fatal("want seeding insert to fail")
-	}
-	if err := tx.Rollback(ctx); err != nil {
-		t.Fatalf("rollback: %v", err)
 	}
 
 	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("err = %v, want ErrNotFound after rollback", err)
+		t.Errorf("GetUserByUsername(frank) err = %v, want ErrNotFound after rollback", err)
 	}
 }
 
 func TestGoogleToken(t *testing.T) {
 	st := newStore(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	user, err := st.CreateUser(ctx, "henry", "hash", "")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-
 	if _, err := st.GetGoogleToken(ctx, user.ID); !errors.Is(err, google.ErrTokenNotFound) {
-		t.Fatalf("err = %v, want google.ErrTokenNotFound", err)
+		t.Fatalf("GetGoogleToken before upsert err = %v, want google.ErrTokenNotFound", err)
 	}
 
+	scope := "https://www.googleapis.com/auth/drive.readonly"
 	expiry := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
-	if err := st.UpsertGoogleToken(ctx, dto.UpsertGoogleTokenInput{
-		UserID:          user.ID,
-		AccessTokenEnc:  "access-enc-1",
-		RefreshTokenEnc: "refresh-enc-1",
-		TokenType:       "Bearer",
-		Expiry:          expiry,
-		Scope:           "https://www.googleapis.com/auth/drive.readonly",
-	}); err != nil {
+	first := dto.UpsertGoogleTokenInput{
+		UserID: user.ID, AccessTokenEnc: "access-enc-1", RefreshTokenEnc: "refresh-enc-1",
+		TokenType: "Bearer", Expiry: expiry, Scope: scope,
+	}
+	if err := st.UpsertGoogleToken(ctx, first); err != nil {
 		t.Fatalf("UpsertGoogleToken: %v", err)
 	}
-
 	got, err := st.GetGoogleToken(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("GetGoogleToken: %v", err)
 	}
-	if got.AccessTokenEnc != "access-enc-1" || got.RefreshTokenEnc != "refresh-enc-1" {
-		t.Errorf("got = %+v", got)
-	}
-	if !got.Expiry.Equal(expiry) {
-		t.Errorf("expiry = %v, want %v", got.Expiry, expiry)
+	want := dto.GoogleToken{AccessTokenEnc: "access-enc-1", RefreshTokenEnc: "refresh-enc-1", TokenType: "Bearer", Expiry: expiry, Scope: scope}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("GetGoogleToken mismatch (-want +got):\n%s", diff)
 	}
 
-	if err := st.UpsertGoogleToken(ctx, dto.UpsertGoogleTokenInput{
-		UserID:          user.ID,
-		AccessTokenEnc:  "access-enc-2",
-		RefreshTokenEnc: "refresh-enc-2",
-		TokenType:       "Bearer",
-		Scope:           "https://www.googleapis.com/auth/drive.readonly",
-	}); err != nil {
+	second := dto.UpsertGoogleTokenInput{
+		UserID: user.ID, AccessTokenEnc: "access-enc-2", RefreshTokenEnc: "refresh-enc-2",
+		TokenType: "Bearer", Scope: scope,
+	}
+	if err := st.UpsertGoogleToken(ctx, second); err != nil {
 		t.Fatalf("UpsertGoogleToken (update): %v", err)
 	}
 	got, err = st.GetGoogleToken(ctx, user.ID)
@@ -111,6 +115,6 @@ func TestGoogleToken(t *testing.T) {
 		t.Fatalf("DeleteGoogleToken: %v", err)
 	}
 	if _, err := st.GetGoogleToken(ctx, user.ID); !errors.Is(err, google.ErrTokenNotFound) {
-		t.Fatalf("err = %v, want google.ErrTokenNotFound after delete", err)
+		t.Errorf("GetGoogleToken after delete err = %v, want google.ErrTokenNotFound", err)
 	}
 }

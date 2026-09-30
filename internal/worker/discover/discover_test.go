@@ -3,9 +3,12 @@ package discover_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
@@ -14,9 +17,11 @@ import (
 
 const gateKeyPrefix = "harvest:"
 
-func upserted(t *testing.T, store *jobsearchtest.FakeStore) []dto.Company {
+func runOnce(t *testing.T, gate *fakeGate, hs ...discover.Harvester) []dto.Company {
 	t.Helper()
-	companies, err := store.ListCompaniesToCrawl(context.Background(), 0)
+	store := jobsearchtest.NewFakeStore()
+	discover.NewRunner(hs, store, gate).RunOnce(t.Context())
+	companies, err := store.ListCompaniesToCrawl(t.Context(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,76 +72,55 @@ func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
 		{Domain: "onlydomain.io"},
 		{},
 	}}
-	companies := jobsearchtest.NewFakeStore()
-	r := discover.NewRunner([]discover.Harvester{h}, companies, newFakeGate())
+	got := runOnce(t, newFakeGate(), h)
 
-	r.RunOnce(context.Background())
-
-	got := upserted(t, companies)
-	if len(got) != 2 {
-		t.Fatalf("got %d companies, want 2: %+v", len(got), got)
-	}
-	bySlug := map[string]bool{}
+	var slugs []string
 	for _, c := range got {
-		bySlug[c.Slug] = true
+		slugs = append(slugs, c.Slug)
 	}
-	if !bySlug["acme-corp"] {
-		t.Errorf("want slug acme-corp from Name, got %+v", got)
-	}
-	if !bySlug["onlydomainio"] {
-		t.Errorf("want slug onlydomainio derived from Domain, got %+v", got)
+	slices.Sort(slugs)
+	if diff := cmp.Diff([]string{"acme-corp", "onlydomainio"}, slugs); diff != "" {
+		t.Errorf("slugs (-want +got):\n%s", diff)
 	}
 }
 
 func TestRunner_HarvesterErrorSkipsOnlyThatHarvester(t *testing.T) {
 	failing := &fakeHarvester{name: "broken", err: errors.New("boom")}
 	ok := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Good Co"}}}
-	companies := jobsearchtest.NewFakeStore()
 	gate := newFakeGate()
-	r := discover.NewRunner([]discover.Harvester{failing, ok}, companies, gate)
 
-	r.RunOnce(context.Background())
+	got := runOnce(t, gate, failing, ok)
 
-	got := upserted(t, companies)
 	if len(got) != 1 || got[0].Name != "Good Co" {
 		t.Fatalf("want only Good Co upserted, got %+v", got)
 	}
-	if _, ok, _ := gate.GetLastScraped(context.Background(), gateKeyPrefix+"broken"); ok {
+	if _, ok, _ := gate.GetLastScraped(t.Context(), gateKeyPrefix+"broken"); ok {
 		t.Error("failing harvester should not have its gate set")
 	}
-	if _, ok, _ := gate.GetLastScraped(context.Background(), gateKeyPrefix+"yc"); !ok {
+	if _, ok, _ := gate.GetLastScraped(t.Context(), gateKeyPrefix+"yc"); !ok {
 		t.Error("succeeding harvester should have its gate set")
 	}
 }
 
-func TestRunner_RespectsGate(t *testing.T) {
-	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
-	companies := jobsearchtest.NewFakeStore()
-	gate := newFakeGate()
-	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-time.Hour)
+func TestRunner_Gate(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		lastRun       time.Duration
+		wantHarvested int
+	}{
+		{"within the window is skipped", -time.Hour, 0},
+		{"after the window harvests", -25 * time.Hour, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
+			gate := newFakeGate()
+			gate.last[gateKeyPrefix+"yc"] = time.Now().Add(tt.lastRun)
 
-	r := discover.NewRunner([]discover.Harvester{h}, companies, gate)
-	r.RunOnce(context.Background())
+			got := runOnce(t, gate, h)
 
-	if h.calls != 0 {
-		t.Errorf("want Harvest not called within gate window, got %d calls", h.calls)
-	}
-	got := upserted(t, companies)
-	if len(got) != 0 {
-		t.Errorf("want no upserts while gated, got %+v", got)
-	}
-}
-
-func TestRunner_HarvestsWhenGateExpired(t *testing.T) {
-	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
-	companies := jobsearchtest.NewFakeStore()
-	gate := newFakeGate()
-	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-25 * time.Hour)
-
-	r := discover.NewRunner([]discover.Harvester{h}, companies, gate)
-	r.RunOnce(context.Background())
-
-	if h.calls != 1 {
-		t.Errorf("want Harvest called once after gate expired, got %d calls", h.calls)
+			if h.calls != tt.wantHarvested || len(got) != tt.wantHarvested {
+				t.Errorf("harvest calls = %d, upserts = %d, want %d of each", h.calls, len(got), tt.wantHarvested)
+			}
+		})
 	}
 }

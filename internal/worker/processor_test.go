@@ -5,11 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/worker"
@@ -23,6 +26,35 @@ func (d detailStub) GetDetails(_ context.Context, url string) (dto.Job, error) {
 	return dto.Job{Source: "wis", Title: "Job", URL: url}, d.err
 }
 
+type pageSource struct{ next string }
+
+func (pageSource) Cfg() sources.Config { return sources.Config{Name: "wis"} }
+func (s pageSource) FetchPage(context.Context, string) ([]dto.Job, string, error) {
+	return []dto.Job{{URL: "https://example.com/job/1"}}, s.next, nil
+}
+
+type allNewURLs struct{}
+
+func (allNewURLs) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
+
+type noSearchConfig struct{}
+
+func (noSearchConfig) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{}, data.ErrNotFound
+}
+
+type discardCards struct{}
+
+func (discardCards) CapturePage(context.Context, dto.SourceTarget, []dto.Job, dto.SearchConfig) error {
+	return nil
+}
+
+type oneBoardJob struct{}
+
+func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, error) {
+	return []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, nil
+}
+
 type ingest struct {
 	server   *httptest.Server
 	requests atomic.Int32
@@ -31,9 +63,13 @@ type ingest struct {
 func newIngest(t *testing.T, status int) *ingest {
 	t.Helper()
 	in := &ingest{}
-	in.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	in.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		in.requests.Add(1)
 		w.WriteHeader(status)
+		if strings.HasSuffix(r.URL.Path, "/batch") {
+			_, _ = w.Write([]byte(`{"results":[{"status":"new"}]}`))
+			return
+		}
 		_, _ = w.Write([]byte(`{"status":"new"}`))
 	}))
 	t.Cleanup(in.server.Close)
@@ -44,118 +80,199 @@ type fixture struct {
 	store     *jobsearchtest.FakeStore
 	processor *worker.Processor
 	ingest    *ingest
+	published *queuetest.Recorder
 }
 
-func newFixture(t *testing.T, ingestStatus int) fixture {
+func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 	t.Helper()
 	store := jobsearchtest.NewFakeStore()
-	js := jobsearch.Build(jobsearch.Deps{
-		Store: store, SourceTargets: store,
-		Scoring: jobsearchtest.NewNoopScoring(), Queue: jobsearchtest.NoopQueue{},
-	})
 	in := newIngest(t, ingestStatus)
+	exporter := scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0)
+	published := queuetest.NewRecorder()
+	build := func(dto.SourceTarget) (sources.Source, bool) { return pageSource{next: nextCursor}, true }
 	processor := worker.NewProcessor(worker.Deps{
-		JS:       js,
-		Exporter: scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0),
+		JS:           jobsearch.Build(jobsearchtest.NewDeps(store)),
+		Broker:       published,
+		Orchestrator: scraper.New(allNewURLs{}, noSearchConfig{}, build, discardCards{}),
+		Boards:       scraper.NewBoardPoller(store, oneBoardJob{}, exporter),
+		Exporter:     exporter,
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},
 			"linkedin": detailStub{err: errors.New("page gone")},
 		},
 	})
-	return fixture{store: store, processor: processor, ingest: in}
+	return fixture{store: store, processor: processor, ingest: in, published: published}
 }
 
-func detailTask(source string) queue.Task {
-	return queue.Task{Version: 1, Source: source, Kind: queue.DetailTask, URL: "https://example.com/job", Card: dto.Job{Source: source}}
-}
-
-func (f fixture) startedRun(t *testing.T) dto.SourceTarget {
+func (f fixture) target(t *testing.T, source string) dto.SourceTarget {
 	t.Helper()
-	ctx := context.Background()
-	target, err := f.store.CreateSourceTarget(ctx, "user-1", "wis", "https://example.com/search", true, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	target, err = f.store.StartSourceTargetRun(ctx, target.ID)
+	target, err := f.store.CreateSourceTargetWithRun(t.Context(), "user-1", source, "https://example.com/search", true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return target
 }
 
+func (f fixture) runStatus(t *testing.T, target dto.SourceTarget) dto.SourceTarget {
+	t.Helper()
+	got, err := f.store.GetSourceTarget(t.Context(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func (f fixture) board(t *testing.T) string {
+	t.Helper()
+	company, err := f.store.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	board, err := f.store.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return board.ID
+}
+
 func TestProcess(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("detail task exports the fetched job", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		if err := f.processor.Process(ctx, detailTask("wis")); err != nil {
-			t.Fatal(err)
-		}
-		if got := f.ingest.requests.Load(); got != 1 {
-			t.Fatalf("ingest requests = %d, want 1", got)
-		}
-	})
+	exports := []struct {
+		name string
+		task queue.Task
+	}{
+		{"detail task exports the fetched job", queuetest.DetailTask("wis")},
+		{"full feed card exports without a detail fetcher", queuetest.DetailTask("remoteok")},
+	}
+	for _, tt := range exports {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, http.StatusOK, "")
+			if err := f.processor.Process(ctx, tt.task); err != nil {
+				t.Fatal(err)
+			}
+			if got := f.ingest.requests.Load(); got != 1 {
+				t.Fatalf("ingest requests = %d, want 1", got)
+			}
+		})
+	}
 
-	t.Run("full feed card exports without a detail fetcher", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		if err := f.processor.Process(ctx, detailTask("remoteok")); err != nil {
-			t.Fatal(err)
-		}
-		if got := f.ingest.requests.Load(); got != 1 {
-			t.Fatalf("ingest requests = %d, want 1", got)
-		}
-	})
-
-	t.Run("unsupported task kind fails without exporting", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		if err := f.processor.Process(ctx, queue.Task{Source: "wis", Kind: "bogus"}); err == nil {
-			t.Fatal("poison task was acked")
-		}
-		if got := f.ingest.requests.Load(); got != 0 {
-			t.Fatalf("ingest requests = %d, want 0", got)
-		}
-	})
-
-	t.Run("source without a detail fetcher fails without exporting", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		if err := f.processor.Process(ctx, detailTask("indeed")); err == nil {
-			t.Fatal("poison task was acked")
-		}
-		if got := f.ingest.requests.Load(); got != 0 {
-			t.Fatalf("ingest requests = %d, want 0", got)
-		}
-	})
-
-	t.Run("detail fetch failure is returned for requeue", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		if err := f.processor.Process(ctx, detailTask("linkedin")); err == nil {
-			t.Fatal("failed fetch was acked")
-		}
-	})
-
-	t.Run("transient ingest failure is returned for requeue", func(t *testing.T) {
-		f := newFixture(t, http.StatusServiceUnavailable)
-		if err := f.processor.Process(ctx, detailTask("wis")); err == nil {
-			t.Fatal("failed export was acked")
-		}
-	})
+	fails := []struct {
+		name           string
+		task           queue.Task
+		ingestStatus   int
+		wantIngestHits int32
+	}{
+		{"unsupported task kind fails without exporting", queue.Task{Source: "wis", Kind: "bogus"}, http.StatusOK, 0},
+		{"source without a detail fetcher fails without exporting", queuetest.DetailTask("indeed"), http.StatusOK, 0},
+		{"detail fetch failure is returned for requeue", queuetest.DetailTask("linkedin"), http.StatusOK, 0},
+		{"transient ingest failure is returned for requeue", queuetest.DetailTask("wis"), http.StatusServiceUnavailable, 3},
+	}
+	for _, tt := range fails {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, tt.ingestStatus, "")
+			if err := f.processor.Process(ctx, tt.task); err == nil {
+				t.Fatal("Process() = nil, want error so the task is not acked")
+			}
+			if got := f.ingest.requests.Load(); got != tt.wantIngestHits {
+				t.Fatalf("ingest requests = %d, want %d", got, tt.wantIngestHits)
+			}
+		})
+	}
 
 	t.Run("redelivered page task for a finished run does not scrape again", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		target := f.startedRun(t)
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "wis")
 		if _, err := f.store.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "succeeded", ""); err != nil {
 			t.Fatal(err)
 		}
-		task := queue.Task{Version: 1, Source: "wis", Kind: queue.ListingPageTask, TargetID: target.ID, RunID: target.RunID, Redelivered: true}
+		task := queuetest.ListingTask("wis")
+		task.TargetID, task.RunID, task.Redelivered = target.ID, target.RunID, true
 		if err := f.processor.Process(ctx, task); err != nil {
 			t.Fatal(err)
 		}
-		got, err := f.store.GetSourceTarget(ctx, target.ID)
+		if got := f.runStatus(t, target).RunStatus; got != "succeeded" || len(f.published.Tasks()) != 0 {
+			t.Fatalf("run status = %s, published = %d, want succeeded and none", got, len(f.published.Tasks()))
+		}
+	})
+
+	t.Run("first delivery of the last listing page succeeds the run", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "wis")
+		task := queuetest.ListingTask("wis")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "succeeded" {
+			t.Fatalf("run status = %s, want succeeded", got)
+		}
+	})
+
+	t.Run("first delivery of a listing page with more pages publishes the next cursor", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "2:5")
+		target := f.target(t, "wis")
+		task := queuetest.ListingTask("wis")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		published := f.published.Tasks()
+		if len(published) != 1 || published[0].Cursor != "2:5" || published[0].ID == task.ID {
+			t.Fatalf("published = %+v, want one task with cursor 2:5 and a new ID", published)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "running" {
+			t.Fatalf("run status = %s, want running", got)
+		}
+	})
+
+	t.Run("board check polls the board and succeeds its run", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "greenhouse")
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), TargetID: target.ID, RunID: target.RunID, Manual: true}
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.ingest.requests.Load(); got != 1 {
+			t.Fatalf("ingest requests = %d, want 1", got)
+		}
+		if got := f.runStatus(t, target).RunStatus; got != "succeeded" {
+			t.Fatalf("run status = %s, want succeeded", got)
+		}
+	})
+
+	t.Run("board check for a missing board is acked when not manual", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: "gone"}
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Fatalf("ingest requests = %d, want 0", got)
+		}
+	})
+
+	t.Run("board verify with an unusable token is acked without verifying", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.RunStatus != "succeeded" || f.ingest.requests.Load() != 0 {
-			t.Fatalf("run status = %s, ingest requests = %d", got.RunStatus, f.ingest.requests.Load())
+		if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "a/b"); err != nil {
+			t.Fatal(err)
+		}
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardVerifyTask, CompanyID: company.ID, BoardToken: "a/b"}
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, board := range boards {
+			if board.Status == dto.BoardVerified {
+				t.Fatalf("board %+v verified despite failed verification", board)
+			}
 		}
 	})
 }
@@ -164,39 +281,32 @@ func TestFailRun(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("marks the run failed", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		target := f.startedRun(t)
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "wis")
 		task := queue.Task{Source: "wis", Kind: queue.ListingPageTask, TargetID: target.ID, RunID: target.RunID}
 		if err := f.processor.FailRun(ctx, task); err != nil {
 			t.Fatal(err)
 		}
-		got, err := f.store.GetSourceTarget(ctx, target.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
+		got := f.runStatus(t, target)
 		if got.RunStatus != "failed" || got.LastRunError == "" {
 			t.Fatalf("run status = %q, error = %q", got.RunStatus, got.LastRunError)
 		}
 	})
 
 	t.Run("detail task leaves runs alone", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
-		target := f.startedRun(t)
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "wis")
 		task := queue.Task{Source: "wis", Kind: queue.DetailTask, TargetID: target.ID, RunID: target.RunID}
 		if err := f.processor.FailRun(ctx, task); err != nil {
 			t.Fatal(err)
 		}
-		got, err := f.store.GetSourceTarget(ctx, target.ID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got.RunStatus != "queued" {
-			t.Fatalf("run status = %q, want queued", got.RunStatus)
+		if got := f.runStatus(t, target).RunStatus; got != "queued" {
+			t.Fatalf("run status = %q, want queued", got)
 		}
 	})
 
 	t.Run("run already gone is not an error", func(t *testing.T) {
-		f := newFixture(t, http.StatusOK)
+		f := newFixture(t, http.StatusOK, "")
 		task := queue.Task{Source: "wis", Kind: queue.ListingPageTask, TargetID: "gone", RunID: "gone"}
 		if err := f.processor.FailRun(ctx, task); err != nil {
 			t.Fatal(err)

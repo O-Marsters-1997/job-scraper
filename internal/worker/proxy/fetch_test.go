@@ -2,10 +2,13 @@ package proxy_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
@@ -13,6 +16,13 @@ import (
 )
 
 const maxBodyBytes = 8 << 20
+
+var hostCounter atomic.Uint32
+
+func freshURL(path string) string {
+	n := hostCounter.Add(1)
+	return fmt.Sprintf("https://8.8.%d.%d%s", n>>8&255, n&255, path)
+}
 
 func response(status int, code string) *http.Response {
 	return &http.Response{StatusCode: status, Header: http.Header{"X-Brd-Err-Code": []string{code}}, Body: io.NopCloser(strings.NewReader("ok"))}
@@ -112,61 +122,63 @@ func TestRateLimitDoesNotPauseZone(t *testing.T) {
 }
 
 func TestInFlightSuccessDoesNotResumeExhaustedZone(t *testing.T) {
-	inFlight := make(chan struct{})
-	release := make(chan struct{})
-	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == "/slow" {
-			close(inFlight)
-			<-release
-			return response(200, ""), nil
-		}
-		return response(502, "client_10100"), nil
-	}), &proxy.ZoneGate{})
-	slowDone := make(chan struct{})
-	go func() {
-		defer close(slowDone)
-		if resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/slow")); err == nil {
-			_ = resp.Body.Close()
-		}
-	}()
-	<-inFlight
-	if _, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/exhaust")); !proxy.IsZonePaused(err) {
-		t.Fatalf("exhaustion = %v", err)
-	}
-	close(release)
-	<-slowDone
-	if _, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/next")); !proxy.IsZonePaused(err) {
-		t.Fatalf("late success resumed exhausted zone: %v", err)
-	}
-}
-
-func TestFetchLimitsConcurrentRequestsPerHost(t *testing.T) {
-	entered := make(chan struct{}, 3)
-	release := make(chan struct{})
-	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
-		entered <- struct{}{}
-		<-release
-		return response(200, ""), nil
-	}), nil)
-	for range 3 {
+	synctest.Test(t, func(t *testing.T) {
+		inFlight := make(chan struct{})
+		release := make(chan struct{})
+		tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path == "/slow" {
+				close(inFlight)
+				<-release
+				return response(200, ""), nil
+			}
+			return response(502, "client_10100"), nil
+		}), &proxy.ZoneGate{})
+		slow := newRequest(t, freshURL("/slow"))
+		exhaust := newRequest(t, freshURL("/exhaust"))
+		next := newRequest(t, freshURL("/next"))
 		go func() {
-			resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/jobs"))
-			if err == nil {
+			if resp, err := tr.RoundTrip(slow); err == nil {
 				_ = resp.Body.Close()
 			}
 		}()
-	}
-	<-entered
-	<-entered
-	select {
-	case <-entered:
-		t.Fatal("third same-host request started before a slot freed")
-	case <-time.After(30 * time.Millisecond):
-	}
-	close(release)
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("third request did not start after a slot freed")
-	}
+		<-inFlight
+		if _, err := tr.RoundTrip(exhaust); !proxy.IsZonePaused(err) {
+			t.Fatalf("exhaustion = %v", err)
+		}
+		close(release)
+		synctest.Wait()
+		if _, err := tr.RoundTrip(next); !proxy.IsZonePaused(err) {
+			t.Fatalf("late success resumed exhausted zone: %v", err)
+		}
+	})
+}
+
+func TestFetchLimitsConcurrentRequestsPerHost(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var entered atomic.Int32
+		release := make(chan struct{})
+		tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
+			entered.Add(1)
+			<-release
+			return response(200, ""), nil
+		}), nil)
+		target := freshURL("/jobs")
+		requests := []*http.Request{newRequest(t, target), newRequest(t, target), newRequest(t, target)}
+		for _, req := range requests {
+			go func() {
+				if resp, err := tr.RoundTrip(req); err == nil {
+					_ = resp.Body.Close()
+				}
+			}()
+		}
+		synctest.Wait()
+		if got := entered.Load(); got != 2 {
+			t.Fatalf("started %d same-host requests before a slot freed, want 2", got)
+		}
+		close(release)
+		synctest.Wait()
+		if got := entered.Load(); got != 3 {
+			t.Errorf("started %d requests after a slot freed, want 3", got)
+		}
+	})
 }

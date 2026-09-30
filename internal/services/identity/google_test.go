@@ -1,7 +1,6 @@
 package identity_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -12,11 +11,11 @@ import (
 
 func newGoogleService(t *testing.T, gc *identitytest.DocsClient) *identity.Service {
 	t.Helper()
-	return identity.NewService(identity.Deps{Store: identitytest.NewFakeStore(), Seeder: &seeder{}, GoogleClient: gc, Cipher: identitytest.NewCipher(t)})
+	return identity.NewService(testDeps(t, identity.Deps{GoogleClient: gc}))
 }
 
 func TestGoogleStatus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("no token reads as disconnected", func(t *testing.T) {
 		got, err := newGoogleService(t, identitytest.Unlinked(false)).GoogleStatus(ctx, "user-1")
@@ -60,7 +59,7 @@ func TestConnectPropagatesExchangeError(t *testing.T) {
 	want := errors.New("exchange failed")
 	gc := identitytest.Unlinked(false)
 	gc.ExchangeErr = want
-	if err := newGoogleService(t, gc).Connect(context.Background(), "user-1", "code"); !errors.Is(err, want) {
+	if err := newGoogleService(t, gc).Connect(t.Context(), "user-1", "code"); !errors.Is(err, want) {
 		t.Fatalf("err = %v, want %v", err, want)
 	}
 }

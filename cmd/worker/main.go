@@ -8,18 +8,16 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/robfig/cron/v3"
 
 	"github.com/ollymarsters/job-scraper/internal/data/db"
-	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
-	"github.com/ollymarsters/job-scraper/internal/services/applications"
-	"github.com/ollymarsters/job-scraper/internal/services/identity"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -39,7 +37,6 @@ import (
 
 func main() {
 	forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
-	noScrape := flag.Bool("no-scrape", false, "skip new scheduled Board checks")
 	flag.Parse()
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -58,8 +55,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	apps := applications.New(pool)
-	idm := identity.NewFacade(pool, apps)
 	scoringModule := scoring.NewFacade(pool)
 
 	reg := prometheus.NewRegistry()
@@ -88,30 +83,14 @@ func main() {
 		},
 	})
 	cr := cron.New()
-	if !*noScrape {
-		publishBoards := func() {
-			var boards []dto.BoardPoll
-			var err error
-			if *forceBoards {
-				boards, err = js.Boards().ListActiveBoards(ctx)
-			} else {
-				boards, err = js.Boards().ListDueBoards(ctx)
-			}
-			if err != nil {
-				slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
-				return
-			}
-			for _, board := range boards {
-				task := queue.Task{Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardCheckTask, BoardID: board.ID, Manual: *forceBoards}
-				if err := q.Publish(ctx, task); err != nil {
-					slog.ErrorContext(ctx, "publish Board check failed", slog.String(logger.KeyBoardID, board.ID), slog.Any(logger.KeyErr, err))
-				}
-			}
+	publishBoards := func() {
+		if err := js.PublishBoardChecks(ctx, *forceBoards); err != nil {
+			slog.ErrorContext(ctx, "list Boards failed", slog.Any(logger.KeyErr, err))
 		}
-		go publishBoards()
-		if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
-			fatal(ctx, "Board schedule failed", err)
-		}
+	}
+	go publishBoards()
+	if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
+		fatal(ctx, "Board schedule failed", err)
 	}
 	reconcile := func() {
 		if err := js.RecoverRuns(ctx); err != nil {
@@ -122,19 +101,8 @@ func main() {
 	if _, err := cr.AddFunc("@every 1m", reconcile); err != nil {
 		fatal(ctx, "reconcile schedule failed", err)
 	}
-	if _, err := cr.AddFunc("@daily", func() {
-		if err := proxy.Probe(ctx); err != nil {
-			slog.WarnContext(ctx, "Web Unlocker daily probe failed", slog.Any(logger.KeyErr, err))
-		}
-		if err := idm.DeleteExpiredSessions(ctx); err != nil {
-			slog.ErrorContext(ctx, "session cleanup failed", slog.Any(logger.KeyErr, err))
-		}
-		if err := js.DeleteExpiredCandidates(ctx); err != nil {
-			slog.ErrorContext(ctx, "candidate cleanup failed", slog.Any(logger.KeyErr, err))
-		}
-	}); err != nil {
-		fatal(ctx, "daily schedule failed", err)
-	}
+	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
+	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	cr.Start()
 	defer cr.Stop()
 

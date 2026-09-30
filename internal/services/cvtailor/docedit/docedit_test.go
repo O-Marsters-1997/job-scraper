@@ -89,9 +89,18 @@ func bullets(texts ...string) []cvedit.Bullet {
 	return out
 }
 
+func requests(t *testing.T, doc fixtureDoc, positions docedit.PositionSlots, edits cvedit.EditSet) []docedit.Request {
+	t.Helper()
+	reqs, err := docedit.Requests(doc.ds, positions, edits)
+	if err != nil {
+		t.Fatalf("Requests() error = %v", err)
+	}
+	return reqs
+}
+
 func TestRequests(t *testing.T) {
+	doc := loadFixture(t, "profile_skills_list.json")
 	t.Run("replaces profile, bullets and list skills", func(t *testing.T) {
-		doc := loadFixture(t, "profile_skills_list.json")
 		positions := docedit.PositionSlots{"p1": {"s0", "s1"}, "p2": {"s2"}}
 		profile := "Go engineer."
 		edits := cvedit.EditSet{
@@ -103,10 +112,7 @@ func TestRequests(t *testing.T) {
 			Skills:  []string{"Kubernetes", "Go"},
 		}
 
-		reqs, err := docedit.Requests(doc.ds, positions, edits)
-		if err != nil {
-			t.Fatalf("Requests() error = %v", err)
-		}
+		reqs := requests(t, doc, positions, edits)
 		got := apply(t, doc.text, reqs)
 
 		want := string(doc.text[:18]) + "Go engineer.\n" +
@@ -123,10 +129,7 @@ func TestRequests(t *testing.T) {
 		doc := loadFixture(t, "table_profile_prose_skills.json")
 		edits := cvedit.EditSet{Skills: []string{"Docker", "React"}}
 
-		reqs, err := docedit.Requests(doc.ds, nil, edits)
-		if err != nil {
-			t.Fatalf("Requests() error = %v", err)
-		}
+		reqs := requests(t, doc, nil, edits)
 		got := apply(t, doc.text, reqs)
 
 		for _, want := range []string{"Docker, React\n", "Technical Skills\n"} {
@@ -137,13 +140,9 @@ func TestRequests(t *testing.T) {
 	})
 
 	t.Run("fewer bullets deletes unused slots", func(t *testing.T) {
-		doc := loadFixture(t, "profile_skills_list.json")
 		edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{{PositionID: "p1", Bullets: bullets("Only one.")}}}
 
-		reqs, err := docedit.Requests(doc.ds, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits)
-		if err != nil {
-			t.Fatalf("Requests() error = %v", err)
-		}
+		reqs := requests(t, doc, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits)
 		got := apply(t, doc.text, reqs)
 
 		want := string(doc.text[:145]) + "Only one.\n" + string(doc.text[267:])
@@ -157,17 +156,13 @@ func TestRequests(t *testing.T) {
 		profile := "New profile."
 		edits := cvedit.EditSet{Profile: &profile, Skills: []string{"Go"}}
 
-		reqs, err := docedit.Requests(doc.ds, nil, edits)
-		if err != nil {
-			t.Fatalf("Requests() error = %v", err)
-		}
+		reqs := requests(t, doc, nil, edits)
 		if len(reqs) != 0 {
 			t.Errorf("Requests() = %d requests, want none", len(reqs))
 		}
 	})
 
 	t.Run("requests descend by document index", func(t *testing.T) {
-		doc := loadFixture(t, "profile_skills_list.json")
 		profile := "x"
 		edits := cvedit.EditSet{
 			Positions: []cvedit.PositionEdit{{PositionID: "p1", Bullets: bullets("a", "b")}},
@@ -175,10 +170,7 @@ func TestRequests(t *testing.T) {
 			Skills:    []string{"Go"},
 		}
 
-		reqs, err := docedit.Requests(doc.ds, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits)
-		if err != nil {
-			t.Fatalf("Requests() error = %v", err)
-		}
+		reqs := requests(t, doc, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits)
 		last := math.MaxInt
 		for _, r := range reqs {
 			idx := 0

@@ -2,9 +2,11 @@ package sources_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
@@ -65,5 +67,19 @@ func TestBoardParserIsIndependentOfFetchMode(t *testing.T) {
 		if len(jobs) != 1 || jobs[0].Title != "Engineer" {
 			t.Fatalf("useProxy=%t jobs=%v", useProxy, jobs)
 		}
+	}
+}
+
+func TestFetchPage(t *testing.T) {
+	src := sources.NewBoardSource(sources.BoardSpec{
+		Name:  "stub",
+		URL:   "https://8.8.8.8/acme",
+		Parse: func([]byte) ([]dto.Job, error) { return nil, nil },
+	})
+	src.Client().Transport = identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusNotFound, Status: "404 Not Found", Body: http.NoBody}, nil
+	})
+	if _, _, err := src.FetchPage(context.Background(), ""); err == nil {
+		t.Fatal("FetchPage() = nil, want error for 404")
 	}
 }

@@ -2,7 +2,6 @@ package google_test
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,13 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/oauth2"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
-	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 type tokenStore struct {
@@ -36,22 +35,9 @@ func (s tokenStore) UpsertGoogleToken(_ context.Context, in dto.UpsertGoogleToke
 }
 func (tokenStore) DeleteGoogleToken(context.Context, string) error { return nil }
 
-func newCipher(t *testing.T) *tokencrypt.Cipher {
+func linkedClient(t *testing.T, rt http.RoundTripper) (context.Context, *google.Client) {
 	t.Helper()
-	c, err := tokencrypt.New(base64.StdEncoding.EncodeToString([]byte("12345678901234567890123456789012")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c
-}
-
-const docTabsJSON = `{"tabs":[
-  {"tabProperties":{"tabId":"t.0"},"documentTab":{"marker":"first"},
-   "childTabs":[{"tabProperties":{"tabId":"t.child"},"documentTab":{"marker":"child"}}]},
-  {"tabProperties":{"tabId":"t.1"},"documentTab":{"marker":"second"}}]}`
-
-func TestGetDocument(t *testing.T) {
-	cipher := newCipher(t)
+	cipher := identitytest.NewCipher(t)
 	access, err := cipher.Encrypt("access")
 	if err != nil {
 		t.Fatal(err)
@@ -63,14 +49,34 @@ func TestGetDocument(t *testing.T) {
 	store := tokenStore{row: dto.GoogleToken{
 		AccessTokenEnc: access, RefreshTokenEnc: refresh, TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
 	}}
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: rt})
+	return ctx, google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
+}
 
+func jsonResponse(status int, body string) *http.Response {
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body))}
+}
+
+func decodeJSON(t *testing.T, raw string) any {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal([]byte(raw), &v); err != nil {
+		t.Fatalf("decode %q: %v", raw, err)
+	}
+	return v
+}
+
+const docTabsJSON = `{"tabs":[
+  {"tabProperties":{"tabId":"t.0"},"documentTab":{"marker":"first"},
+   "childTabs":[{"tabProperties":{"tabId":"t.child"},"documentTab":{"marker":"child"}}]},
+  {"tabProperties":{"tabId":"t.1"},"documentTab":{"marker":"second"}}]}`
+
+func TestGetDocument(t *testing.T) {
 	var gotURL string
-	transport := identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
+	ctx, client := linkedClient(t, identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
 		gotURL = r.URL.String()
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(docTabsJSON))}, nil
-	})
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: transport})
-	client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
+		return jsonResponse(http.StatusOK, docTabsJSON), nil
+	}))
 
 	tests := []struct {
 		name       string
@@ -106,8 +112,8 @@ func TestGetDocument(t *testing.T) {
 
 	t.Run("unknown tab is not found", func(t *testing.T) {
 		_, err := client.GetDocument(ctx, "u1", "doc1", "t.nope")
-		if status, _ := apperr.StatusFor(err); status != http.StatusNotFound {
-			t.Errorf("err = %v, want not found", err)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("GetDocument(t.nope) error = %v, want not found", err)
 		}
 	})
 }
@@ -137,7 +143,7 @@ func TestAuthURLWriteAddsDriveFileAndGrantedScopes(t *testing.T) {
 }
 
 func TestSaveTokenStoresGrantedScope(t *testing.T) {
-	cipher := newCipher(t)
+	cipher := identitytest.NewCipher(t)
 	both := google.DriveReadonlyScope + " " + google.DriveFileScope
 
 	tests := []struct {
@@ -180,52 +186,73 @@ func TestHasScope(t *testing.T) {
 	}
 }
 
-func TestDriveWriteMethods(t *testing.T) {
-	cipher := newCipher(t)
-	access, _ := cipher.Encrypt("access")
-	refresh, _ := cipher.Encrypt("refresh")
-	store := tokenStore{row: dto.GoogleToken{
-		AccessTokenEnc: access, RefreshTokenEnc: refresh, TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
-	}}
+type capturedRequest struct {
+	method, target, body string
+}
 
-	var method, target, body string
-	status := http.StatusOK
-	respBody := `{"id":"new-doc"}`
-	transport := identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
-		method, target = r.Method, r.URL.String()
-		b, _ := io.ReadAll(r.Body)
-		body = string(b)
-		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(respBody))}, nil
-	})
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: transport})
-	client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
+func recordingClient(t *testing.T, status int, respBody string) (context.Context, *google.Client, *capturedRequest) {
+	t.Helper()
+	var got capturedRequest
+	ctx, client := linkedClient(t, identitytest.RoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			return nil, err
+		}
+		got = capturedRequest{r.Method, r.URL.String(), string(b)}
+		return jsonResponse(status, respBody), nil
+	}))
+	return ctx, client, &got
+}
+
+func TestCopyFile(t *testing.T) {
+	ctx, client, got := recordingClient(t, http.StatusOK, `{"id":"new-doc"}`)
 
 	id, err := client.CopyFile(ctx, "u1", "src", "Tailored CV")
-	if err != nil || id != "new-doc" {
-		t.Fatalf("CopyFile = %q, %v", id, err)
+	if err != nil {
+		t.Fatalf("CopyFile: %v", err)
 	}
-	if method != http.MethodPost || !strings.HasSuffix(target, "/files/src/copy") || body != `{"name":"Tailored CV"}` {
-		t.Errorf("CopyFile sent %s %s %s", method, target, body)
+	if id != "new-doc" {
+		t.Errorf("CopyFile id = %q, want new-doc", id)
 	}
+	if got.method != http.MethodPost || !strings.HasSuffix(got.target, "/files/src/copy") {
+		t.Errorf("sent %s %s", got.method, got.target)
+	}
+	if diff := cmp.Diff(map[string]any{"name": "Tailored CV"}, decodeJSON(t, got.body)); diff != "" {
+		t.Errorf("body (-want +got):\n%s", diff)
+	}
+}
 
-	err = client.BatchUpdate(ctx, "u1", "doc", []json.RawMessage{json.RawMessage(`{"deleteContentRange":{}}`)})
+func TestBatchUpdate(t *testing.T) {
+	ctx, client, got := recordingClient(t, http.StatusOK, `{}`)
+
+	err := client.BatchUpdate(ctx, "u1", "doc", []json.RawMessage{json.RawMessage(`{"deleteContentRange":{}}`)})
 	if err != nil {
 		t.Fatalf("BatchUpdate: %v", err)
 	}
-	if !strings.HasSuffix(target, "/documents/doc:batchUpdate") || body != `{"requests":[{"deleteContentRange":{}}]}` {
-		t.Errorf("BatchUpdate sent %s %s", target, body)
+	if got.method != http.MethodPost || !strings.HasSuffix(got.target, "/documents/doc:batchUpdate") {
+		t.Errorf("sent %s %s", got.method, got.target)
 	}
+	want := map[string]any{"requests": []any{map[string]any{"deleteContentRange": map[string]any{}}}}
+	if diff := cmp.Diff(want, decodeJSON(t, got.body)); diff != "" {
+		t.Errorf("body (-want +got):\n%s", diff)
+	}
+}
 
-	status, respBody = http.StatusNoContent, ""
-	if err := client.DeleteFile(ctx, "u1", "doc"); err != nil {
-		t.Fatalf("DeleteFile: %v", err)
-	}
-	if method != http.MethodDelete || !strings.HasSuffix(target, "/files/doc") {
-		t.Errorf("DeleteFile sent %s %s", method, target)
-	}
+func TestDeleteFile(t *testing.T) {
+	t.Run("sends delete for the file", func(t *testing.T) {
+		ctx, client, got := recordingClient(t, http.StatusNoContent, "")
+		if err := client.DeleteFile(ctx, "u1", "doc"); err != nil {
+			t.Fatalf("DeleteFile: %v", err)
+		}
+		if got.method != http.MethodDelete || !strings.HasSuffix(got.target, "/files/doc") {
+			t.Errorf("sent %s %s", got.method, got.target)
+		}
+	})
 
-	status = http.StatusForbidden
-	if err := client.DeleteFile(ctx, "u1", "doc"); err == nil {
-		t.Error("DeleteFile on 403 = nil error")
-	}
+	t.Run("forbidden response is an error", func(t *testing.T) {
+		ctx, client, _ := recordingClient(t, http.StatusForbidden, "")
+		if err := client.DeleteFile(ctx, "u1", "doc"); err == nil {
+			t.Error("DeleteFile on 403 = nil error")
+		}
+	})
 }

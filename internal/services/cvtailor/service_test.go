@@ -1,7 +1,6 @@
 package cvtailor_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -17,7 +16,7 @@ import (
 func ptr(s string) *string { return &s }
 
 func TestCreatePositionValidation(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
+	svc, _ := newService(t, nil, nil)
 	cases := []struct {
 		name string
 		in   dto.PositionInput
@@ -29,7 +28,7 @@ func TestCreatePositionValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.CreatePosition(context.Background(), "u1", tc.in)
+			_, err := svc.CreatePosition(t.Context(), userID, tc.in)
 			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Fatalf("CreatePosition() err = %v, want an invalid error", err)
 			}
@@ -38,8 +37,8 @@ func TestCreatePositionValidation(t *testing.T) {
 }
 
 func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
-	got, err := svc.CreatePosition(context.Background(), "u1", dto.PositionInput{
+	svc, _ := newService(t, nil, nil)
+	got, err := svc.CreatePosition(t.Context(), userID, dto.PositionInput{
 		Employer: " Acme ", Title: "Engineer", StartDate: ptr("2020-01-01"), EndDate: ptr(""),
 	})
 	if err != nil {
@@ -51,27 +50,28 @@ func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
 }
 
 func TestCreateAchievementRejectsBlankText(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
-	_, err := svc.CreateAchievement(context.Background(), "u1", dto.AchievementInput{PositionID: "p", Text: " "})
+	svc, _ := newService(t, nil, nil)
+	_, err := svc.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: "p", Text: " "})
 	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("CreateAchievement() err = %v, want an invalid error", err)
 	}
 }
 
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
-	_, err := svc.ReorderPositions(context.Background(), "u1", dto.ReorderInput{IDs: []string{"a", "a"}})
+	svc, _ := newService(t, nil, nil)
+	_, err := svc.ReorderPositions(t.Context(), userID, dto.ReorderInput{IDs: []string{"a", "a"}})
 	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("ReorderPositions() err = %v, want an invalid error", err)
 	}
 }
 
 const (
-	user    = handlerstest.UserID
-	jobID   = "job-1"
-	docID   = "doc-1"
-	tabID   = "t.0"
-	heading = "Engineer, Acme"
+	userID      = handlerstest.UserID
+	otherUserID = "user-2"
+	jobID       = "job-1"
+	docID       = "doc-1"
+	tabID       = "t.0"
+	heading     = "Engineer, Acme"
 )
 
 type draftEnv struct {
@@ -85,19 +85,19 @@ type draftEnv struct {
 func newDraftEnv(t *testing.T) draftEnv {
 	t.Helper()
 	store := cvtailortest.NewFakeStore()
-	ctx := context.Background()
-	pos, err := store.CreatePosition(ctx, user, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	ctx := t.Context()
+	pos, err := store.CreatePosition(ctx, userID, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, text := range []string{"Cut p99 latency by moving queries to Postgres", "Mentored four engineers"} {
-		a, err := store.CreateAchievement(ctx, user, dto.AchievementInput{PositionID: pos.ID, Text: text})
+		a, err := store.CreateAchievement(ctx, userID, dto.AchievementInput{PositionID: pos.ID, Text: text})
 		if err != nil {
 			t.Fatal(err)
 		}
 		pos.Achievements = append(pos.Achievements, a)
 	}
-	if err := store.SaveHeadingMappings(ctx, user, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
+	if err := store.SaveHeadingMappings(ctx, userID, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
 		t.Fatal(err)
 	}
 	store.SetJob(jobID, "We need a Go engineer.", "fp-1")
@@ -124,11 +124,11 @@ func TestCreateDraft(t *testing.T) {
 	})
 
 	e := newDraftEnv(t)
-	other, err := e.store.CreatePosition(context.Background(), user, dto.PositionInput{Employer: "Unmapped", Title: "Dev"})
+	other, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Unmapped", Title: "Dev"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unmapped, err := e.store.CreateAchievement(context.Background(), user, dto.AchievementInput{PositionID: other.ID, Text: "Shipped"})
+	unmapped, err := e.store.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: other.ID, Text: "Shipped"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,11 +137,11 @@ func TestCreateDraft(t *testing.T) {
 		user   string
 		mutate func(*dto.DraftInput)
 	}{
-		{"no achievements is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = nil }},
-		{"repeated achievement is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
-		{"another user's achievement is invalid", "user-2", func(*dto.DraftInput) {}},
-		{"achievement of an unmapped position is invalid", user, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
-		{"missing tab is invalid", user, func(in *dto.DraftInput) { in.TabID = "" }},
+		{"no achievements is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = nil }},
+		{"repeated achievement is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{in.AchievementIDs[0], in.AchievementIDs[0]} }},
+		{"another user's achievement is invalid", otherUserID, func(*dto.DraftInput) {}},
+		{"achievement of an unmapped position is invalid", userID, func(in *dto.DraftInput) { in.AchievementIDs = []string{unmapped.ID} }},
+		{"missing tab is invalid", userID, func(in *dto.DraftInput) { in.TabID = "" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,7 +149,7 @@ func TestCreateDraft(t *testing.T) {
 			in.AchievementIDs = append([]string(nil), in.AchievementIDs...)
 			tc.mutate(&in)
 
-			_, err := e.svc.CreateDraft(context.Background(), tc.user, in)
+			_, err := e.svc.CreateDraft(t.Context(), tc.user, in)
 
 			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", in, err)
@@ -160,13 +160,12 @@ func TestCreateDraft(t *testing.T) {
 
 func TestGetDraft(t *testing.T) {
 	t.Run("links the Doc of a ready Draft", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		claim, err := e.store.ClaimDraft(context.Background())
+		e, id := newQueuedDraft(t)
+		claim, err := e.store.ClaimDraft(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := e.store.CompleteDraft(context.Background(), claim, dto.DraftResult{DraftDocID: "copy-1"}); err != nil {
+		if err := e.store.CompleteDraft(t.Context(), claim, dto.DraftResult{DraftDocID: "copy-1"}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -179,13 +178,12 @@ func TestGetDraft(t *testing.T) {
 	})
 
 	t.Run("hides the Doc of a Draft that is not ready", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
-		claim, err := e.store.ClaimDraft(context.Background())
+		e, id := newQueuedDraft(t)
+		claim, err := e.store.ClaimDraft(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := e.store.SetDraftDoc(context.Background(), claim, "copy-1"); err != nil {
+		if err := e.store.SetDraftDoc(t.Context(), claim, "copy-1"); err != nil {
 			t.Fatal(err)
 		}
 
@@ -197,10 +195,9 @@ func TestGetDraft(t *testing.T) {
 	})
 
 	t.Run("another user's Draft is not found", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id := e.queue(t)
+		e, id := newQueuedDraft(t)
 
-		_, err := e.svc.GetDraft(context.Background(), "user-2", dto.DraftQuery{ID: id})
+		_, err := e.svc.GetDraft(t.Context(), otherUserID, dto.DraftQuery{ID: id})
 
 		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", id, err)

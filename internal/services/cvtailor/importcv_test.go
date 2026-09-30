@@ -1,7 +1,6 @@
 package cvtailor_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
@@ -45,10 +43,6 @@ func tabJSON(t *testing.T, lines ...cvLine) json.RawMessage {
 }
 
 func TestPreviewImportParsesHeadingsAndFlagsExistingEmployers(t *testing.T) {
-	store := cvtailortest.NewFakeStore()
-	if _, err := store.CreatePosition(context.Background(), "u1", dto.PositionInput{Employer: "acme ltd", Title: "Dev"}); err != nil {
-		t.Fatal(err)
-	}
 	docs := cvtailortest.Docs{TabJSON: tabJSON(t,
 		head("Senior Engineer, Acme Ltd (Jan 2021 - Present)"),
 		bullet("Cut latency."),
@@ -57,9 +51,10 @@ func TestPreviewImportParsesHeadingsAndFlagsExistingEmployers(t *testing.T) {
 		bullet("Built reports."),
 		head("Education"),
 	)}
-	svc := cvtailor.NewService(store, docs, nil, nil)
+	svc, st := newService(t, docs, nil)
+	addPosition(t, st, "acme ltd", "Dev")
 
-	got, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
+	got, err := svc.PreviewImport(t.Context(), userID, dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,9 +73,9 @@ func TestPreviewImportReadsDateRangesAndLeavesUnparseableEmpty(t *testing.T) {
 		head("Engineer, Acme (2018 - 2021)"), bullet("a"),
 		head("Lead, Globex (last summer - now-ish)"), bullet("b"),
 	)}
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), docs, nil, nil)
+	svc, _ := newService(t, docs, nil)
 
-	got, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
+	got, err := svc.PreviewImport(t.Context(), userID, dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,9 +94,9 @@ func TestPreviewImportReadsDateRangesAndLeavesUnparseableEmpty(t *testing.T) {
 
 func TestPreviewImportPropagatesDocErrors(t *testing.T) {
 	notFound := apperr.NotFound("no such doc")
-	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), cvtailortest.Docs{Err: notFound}, nil, nil)
+	svc, _ := newService(t, cvtailortest.Docs{Err: notFound}, nil)
 
-	_, err := svc.PreviewImport(context.Background(), "u1", dto.ImportPreviewInput{DocID: "d", TabID: "t"})
+	_, err := svc.PreviewImport(t.Context(), userID, dto.ImportPreviewInput{DocID: "d", TabID: "t"})
 
 	if !errors.Is(err, notFound) {
 		t.Fatalf("PreviewImport() err = %v, want %v", err, notFound)
@@ -109,19 +104,18 @@ func TestPreviewImportPropagatesDocErrors(t *testing.T) {
 }
 
 func TestImportPositionsAppendsAndRejectsInvalidPositions(t *testing.T) {
-	store := cvtailortest.NewFakeStore()
-	svc := cvtailor.NewService(store, nil, nil, nil)
-	ctx := context.Background()
+	svc, st := newService(t, nil, nil)
+	ctx := t.Context()
 
 	in := dto.ImportInput{Positions: []dto.ImportPosition{
 		{Employer: " Acme ", Title: "Engineer", Achievements: []string{"one", "  ", "two"}},
 	}}
 	for range 2 {
-		if _, err := svc.ImportPositions(ctx, "u1", in); err != nil {
+		if _, err := svc.ImportPositions(ctx, userID, in); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got, err := store.ListPositions(ctx, "u1")
+	got, err := st.ListPositions(ctx, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +124,7 @@ func TestImportPositionsAppendsAndRejectsInvalidPositions(t *testing.T) {
 	}
 
 	bad := dto.ImportInput{Positions: []dto.ImportPosition{{Employer: "Acme", Title: ""}}}
-	if _, err := svc.ImportPositions(ctx, "u1", bad); err == nil {
-		t.Fatal("ImportPositions() with blank title: err = nil, want invalid")
+	if _, err := svc.ImportPositions(ctx, userID, bad); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("ImportPositions() with blank title: err = %v, want an invalid error", err)
 	}
 }

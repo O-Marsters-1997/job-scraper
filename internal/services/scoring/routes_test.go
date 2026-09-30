@@ -2,28 +2,26 @@ package scoring_test
 
 import (
 	"net/http"
-	"net/http/httptest"
-	"strings"
+	"slices"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 )
 
-func newTestRouter(t *testing.T, st *scoringtest.FakeStore) chi.Router {
+func newTestRouter(t *testing.T) chi.Router {
 	t.Helper()
-	m := scoring.Build(newDeps(t, st))
 	r := chi.NewRouter()
-	m.Routes(r)
+	scoring.Build(newDeps(t, newFakeStore())).Routes(r)
 	return r
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
-	r := newTestRouter(t, newFakeStore())
+	r := newTestRouter(t)
 
 	handlerstest.RequiresAuth(t, r,
 		"GET /scoring-config",
@@ -35,81 +33,40 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	handlerstest.RejectsMalformedBody(t, r, "PUT /scoring-config")
 }
 
-func TestScoringConfigRoute(t *testing.T) {
-	st := newFakeStore()
-	st.SeedSearchConfig(dto.SearchConfig{UserID: handlerstest.UserID, NotifyThreshold: 70})
-	r := newTestRouter(t, st)
+func TestRoutesHappyPath(t *testing.T) {
+	r := newTestRouter(t)
 
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scoring-config", ""))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	options := handlerstest.Do[dto.ScoringOptionsView](t, r, http.StatusOK, "GET /scoring-options", "")
+	if !slices.ContainsFunc(options.Options, func(o dto.ScoringOption) bool { return o.ID == "tech:go" }) {
+		t.Errorf("GET /scoring-options options = %+v, want the seeded tech:go option", options.Options)
 	}
-	if !strings.Contains(w.Body.String(), `"notifyThreshold":70`) {
-		t.Fatalf("body = %s, want notifyThreshold 70", w.Body)
-	}
-}
-
-func TestScoringConfigUpdateRoute(t *testing.T) {
-	r := newTestRouter(t, newFakeStore())
 
 	body := `{"notifyThreshold":80,"excludedTitleKeywords":[],"excludedCompanies":[],"excludedLocations":[],
 		"preferences":{"picks":[{"optionId":"tech:go","stance":"nice"}]}}`
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, handlerstest.Request(t, http.MethodPut, "/scoring-config", body))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	updated := handlerstest.Do[dto.ScoringConfigView](t, r, http.StatusOK, "PUT /scoring-config", body)
+	wantPicks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
+	if updated.NotifyThreshold != 80 {
+		t.Errorf("PUT /scoring-config notifyThreshold = %d, want 80", updated.NotifyThreshold)
 	}
-	if !strings.Contains(w.Body.String(), `"notifyThreshold":80`) {
-		t.Fatalf("body = %s, want notifyThreshold 80", w.Body)
+	if diff := cmp.Diff(wantPicks, updated.Preferences.Picks); diff != "" {
+		t.Errorf("PUT /scoring-config picks (-want +got):\n%s", diff)
 	}
-	if !strings.Contains(w.Body.String(), `"optionId":"tech:go"`) {
-		t.Fatalf("body = %s, want the saved pick", w.Body)
+
+	saved := handlerstest.Do[dto.ScoringConfigView](t, r, http.StatusOK, "GET /scoring-config", "")
+	if saved.NotifyThreshold != 80 {
+		t.Errorf("GET /scoring-config notifyThreshold = %d, want the saved 80", saved.NotifyThreshold)
 	}
-}
-
-func TestScoringOptionsRoute(t *testing.T) {
-	r := newTestRouter(t, newFakeStore())
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scoring-options", ""))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	if diff := cmp.Diff(wantPicks, saved.Preferences.Picks); diff != "" {
+		t.Errorf("GET /scoring-config picks (-want +got):\n%s", diff)
 	}
-	if !strings.Contains(w.Body.String(), `"id":"tech:go"`) {
-		t.Fatalf("body = %s, want the seeded tech:go option", w.Body)
+
+	status := handlerstest.Do[dto.ScoringStatus](t, r, http.StatusOK, "GET /scores/status", "")
+	if status.Pending != 0 {
+		t.Errorf("GET /scores/status pending = %d, want 0", status.Pending)
 	}
-}
 
-func TestScoresStatusRoute(t *testing.T) {
-	r := newTestRouter(t, newFakeStore())
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/scores/status", ""))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
-	}
-	if !strings.Contains(w.Body.String(), `"pending":0`) {
-		t.Fatalf("body = %s, want pending 0", w.Body)
-	}
-}
-
-func TestScoresRecomputeRoute(t *testing.T) {
-	st := newFakeStore()
-	st.SeedSearchConfig(dto.SearchConfig{UserID: handlerstest.UserID})
-	r := newTestRouter(t, st)
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/scores/recompute", ""))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
-	}
-	if !strings.Contains(w.Body.String(), `"recomputed":0`) {
-		t.Fatalf("body = %s, want recomputed 0 (no scored jobs)", w.Body)
+	recomputed := handlerstest.Do[dto.RecomputeResult](t, r, http.StatusOK, "POST /scores/recompute", "")
+	if recomputed.Recomputed != 0 {
+		t.Errorf("POST /scores/recompute recomputed = %d, want 0 (no scored jobs)", recomputed.Recomputed)
 	}
 }

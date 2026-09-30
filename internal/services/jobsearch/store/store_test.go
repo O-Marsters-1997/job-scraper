@@ -1,14 +1,13 @@
 package store_test
 
 import (
-	"context"
 	"errors"
-	"os"
-	"strconv"
-	"strings"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -17,21 +16,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
-
-func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
-	t.Helper()
-	pool := pgtest.New(t)
-	return store.New(pool, scoring.NewFacade(pool)), pool
-}
-
-func TestStoreSatisfiesContract(t *testing.T) {
-	jobsearchtest.RunStoreContract(t, func(t *testing.T) (jobsearchtest.Store, string) {
-		t.Helper()
-		st, pool := newStore(t)
-		return st, pgtest.InsertUser(t, pool)
-	})
-}
 
 var baseJob = dto.Job{
 	Title:       "Software Engineer",
@@ -42,527 +28,763 @@ var baseJob = dto.Job{
 	UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 }
 
+func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
+	t.Helper()
+	pool := pgtest.New(t)
+	return store.New(pool, scoring.NewFacade(pool)), pool
+}
+
+func newUserStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {
+	t.Helper()
+	st, pool := newStore(t)
+	return st, pool, pgtest.InsertUser(t, pool)
+}
+
+func TestStoreSatisfiesContract(t *testing.T) {
+	jobsearchtest.RunStoreContract(t, func(t *testing.T) (jobsearchtest.Store, string) {
+		t.Helper()
+		st, _, userID := newUserStore(t)
+		return st, userID
+	})
+}
+
+func insertCompany(t *testing.T, pool *pgxpool.Pool, slug string) string {
+	t.Helper()
+	var id string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug,name) VALUES ($1,$1) RETURNING id`, slug).Scan(&id); err != nil {
+		t.Fatalf("insert company %q: %v", slug, err)
+	}
+	return id
+}
+
+func insertJob(t *testing.T, pool *pgxpool.Pool, companyID string, n int, scrapedAt time.Time, closed bool) string {
+	t.Helper()
+	id := fmt.Sprintf("20000000-0000-0000-0000-%012d", n)
+	_, err := pool.Exec(t.Context(),
+		`INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id,closed_at)
+		 VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'acme','test',$2::timestamptz,$2::timestamptz,'full description',$3,CASE WHEN $4 THEN $2::timestamptz END)`,
+		id, scrapedAt, companyID, closed)
+	if err != nil {
+		t.Fatalf("insert job %d: %v", n, err)
+	}
+	return id
+}
+
+func scoreJob(t *testing.T, pool *pgxpool.Pool, jobID, userID, breakdown string) {
+	t.Helper()
+	_, err := pool.Exec(t.Context(),
+		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid,$2::uuid,50,$3::jsonb)`,
+		jobID, userID, breakdown)
+	if err != nil {
+		t.Fatalf("score job %s: %v", jobID, err)
+	}
+}
+
+func upsertCompany(t *testing.T, st *store.Store, in dto.CompanyUpsert) dto.Company {
+	t.Helper()
+	company, err := st.UpsertCompany(t.Context(), in)
+	if err != nil {
+		t.Fatalf("UpsertCompany(%+v) err = %v", in, err)
+	}
+	return company
+}
+
+func saveJob(t *testing.T, st *store.Store, job dto.Job) (dto.Job, string) {
+	t.Helper()
+	saved, status, err := st.SaveCanonical(t.Context(), job)
+	if err != nil {
+		t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
+	}
+	return saved, status
+}
+
+func trackCompany(t *testing.T, st *store.Store, userID, companyID string, minutes int) {
+	t.Helper()
+	if _, err := st.SetCompanyTracking(t.Context(), userID, companyID, true, minutes); err != nil {
+		t.Fatalf("SetCompanyTracking(%s) err = %v", companyID, err)
+	}
+}
+
+func createTarget(t *testing.T, st *store.Store, userID, source, value string) dto.SourceTarget {
+	t.Helper()
+	target, err := st.CreateSourceTarget(t.Context(), userID, source, value, true, nil)
+	if err != nil {
+		t.Fatalf("CreateSourceTarget(%s, %s) err = %v", source, value, err)
+	}
+	return target
+}
+
+func saveCards(t *testing.T, st *store.Store, target dto.SourceTarget, cards ...dto.Job) []sourcetargets.Candidate {
+	t.Helper()
+	saved, err := st.SaveCards(t.Context(), target, cards)
+	if err != nil {
+		t.Fatalf("SaveCards err = %v", err)
+	}
+	return saved
+}
+
 func effectCountForJob(t *testing.T, pool *pgxpool.Pool, jobID string) int {
 	t.Helper()
 	var count int
-	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
+	if err := pool.QueryRow(t.Context(), "SELECT count(*) FROM effect_outbox WHERE job_id = $1", jobID).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	return count
 }
 
-func TestPageJobsKeepsPositionUnderInsert(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company := "10000000-0000-0000-0000-000000000001"
-	if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,'page-jobs-test-acme','Acme')`, company); err != nil {
+func jobClosed(t *testing.T, pool *pgxpool.Pool, url string) bool {
+	t.Helper()
+	var closed bool
+	if err := pool.QueryRow(t.Context(), "SELECT closed_at IS NOT NULL FROM jobs WHERE url = $1", url).Scan(&closed); err != nil {
 		t.Fatal(err)
 	}
-	insert := func(id string, day int, closed bool) {
-		t.Helper()
-		_, err := pool.Exec(ctx, `INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id,closed_at) VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'acme','test',$2::timestamptz,$2::timestamptz,'full description',$3,CASE WHEN $4 THEN $2::timestamptz ELSE NULL END)`,
-			id, time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC), company, closed)
+	return closed
+}
+
+func jobIDs(jobs []dto.Job) []string {
+	ids := make([]string, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+	}
+	return ids
+}
+
+func TestPage(t *testing.T) {
+	t.Run("keeps position when a newer job is inserted", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		day := func(d int) time.Time { return time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC) }
+		oldest := insertJob(t, pool, company, 1, day(1), false)
+		middle := insertJob(t, pool, company, 2, day(2), false)
+		closed := insertJob(t, pool, company, 3, day(3), true)
+
+		options := dto.JobPageOptions{Limit: 1, Availability: "open", CompanyID: company}
+		first, err := st.Page(ctx, userID, options)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Page(first) err = %v", err)
 		}
-	}
-	insert("20000000-0000-0000-0000-000000000001", 1, false)
-	insert("20000000-0000-0000-0000-000000000002", 2, false)
-	insert("20000000-0000-0000-0000-000000000003", 3, true)
-
-	options := dto.JobPageOptions{Limit: 1, Availability: "open", CompanyID: company}
-	first, err := st.Page(ctx, userID, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(first.Items) != 1 || first.Items[0].ID != "20000000-0000-0000-0000-000000000002" || first.Items[0].Description != "" {
-		t.Fatalf("first page: %+v", first)
-	}
-	detail, err := st.GetJob(ctx, first.Items[0].ID, userID)
-	if err != nil || detail.Description != "full description" {
-		t.Fatalf("detail: %+v, %v", detail, err)
-	}
-
-	insert("20000000-0000-0000-0000-000000000004", 4, false)
-	options.CursorTime, options.CursorID = first.Items[0].ScrapedAt, first.Items[0].ID
-	second, err := st.Page(ctx, userID, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(second.Items) != 1 || second.Items[0].ID != "20000000-0000-0000-0000-000000000001" {
-		t.Fatalf("second page: %+v", second)
-	}
-
-	closed, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "closed", CompanyID: company})
-	if err != nil || len(closed.Items) != 1 || closed.Items[0].ID != "20000000-0000-0000-0000-000000000003" {
-		t.Fatalf("closed page: %+v, %v", closed, err)
-	}
-}
-
-func TestListingsHideBlockedJob(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company := "10000000-0000-0000-0000-000000000002"
-	if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,'blocked-job-test-acme','Acme')`, company); err != nil {
-		t.Fatal(err)
-	}
-	blockedID := "30000000-0000-0000-0000-000000000001"
-	openID := "30000000-0000-0000-0000-000000000002"
-	insert := func(id string) {
-		t.Helper()
-		_, err := pool.Exec(ctx, `INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id) VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'acme','test',NOW(),NOW(),'full description',$2)`,
-			id, company)
+		if diff := cmp.Diff([]string{middle}, jobIDs(first.Items)); diff != "" {
+			t.Fatalf("first page ids (-want +got):\n%s", diff)
+		}
+		if first.Items[0].Description != "" {
+			t.Errorf("listing carried description %q, want it left to GetJob", first.Items[0].Description)
+		}
+		detail, err := st.GetJob(ctx, middle, userID)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("GetJob(%s) err = %v", middle, err)
 		}
-	}
-	insert(blockedID)
-	insert(openID)
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid, $2::uuid, 0, $3::jsonb)`,
-		blockedID, userID, `[{"key":"domain:gambling","label":"Gambling","stance":"block","resolved":"yes","effect":"blocked"}]`,
-	); err != nil {
-		t.Fatal(err)
-	}
+		if detail.Description != "full description" {
+			t.Errorf("GetJob(%s).Description = %q, want the full description", middle, detail.Description)
+		}
 
-	page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: company})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, job := range page.Items {
-		if job.ID == blockedID {
-			t.Fatalf("Page returned blocked job %s", blockedID)
+		insertJob(t, pool, company, 4, day(4), false)
+		options.CursorTime, options.CursorID = first.Items[0].ScrapedAt, first.Items[0].ID
+		second, err := st.Page(ctx, userID, options)
+		if err != nil {
+			t.Fatalf("Page(second) err = %v", err)
 		}
-	}
-	if len(page.Items) != 1 || page.Items[0].ID != openID {
-		t.Fatalf("Page items = %+v, want only %s", page.Items, openID)
-	}
+		if diff := cmp.Diff([]string{oldest}, jobIDs(second.Items)); diff != "" {
+			t.Errorf("second page ids (-want +got):\n%s", diff)
+		}
 
-	all, err := st.ListJobs(ctx, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, job := range all {
-		if job.ID == blockedID {
-			t.Fatalf("ListJobs returned blocked job %s", blockedID)
+		closedPage, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "closed", CompanyID: company})
+		if err != nil {
+			t.Fatalf("Page(closed) err = %v", err)
 		}
+		if diff := cmp.Diff([]string{closed}, jobIDs(closedPage.Items)); diff != "" {
+			t.Errorf("closed page ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("hides a blocked job from listings", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		blocked := insertJob(t, pool, company, 1, time.Now(), false)
+		open := insertJob(t, pool, company, 2, time.Now(), false)
+		scoreJob(t, pool, blocked, userID, `[{"key":"domain:gambling","label":"Gambling","stance":"block","resolved":"yes","effect":"blocked"}]`)
+
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: company})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{open}, jobIDs(page.Items)); diff != "" {
+			t.Errorf("Page() ids (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{open}, jobIDs(all)); diff != "" {
+			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("scored only keeps the caller's scored jobs of the company", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		otherUserID := pgtest.InsertUser(t, pool)
+		acme := insertCompany(t, pool, "acme")
+		other := insertCompany(t, pool, "other")
+		scored := insertJob(t, pool, acme, 1, time.Now(), false)
+		insertJob(t, pool, acme, 2, time.Now(), false)
+		scoredByOther := insertJob(t, pool, acme, 3, time.Now(), false)
+		otherCompany := insertJob(t, pool, other, 4, time.Now(), false)
+		scoreJob(t, pool, scored, userID, `[]`)
+		scoreJob(t, pool, scoredByOther, otherUserID, `[]`)
+		scoreJob(t, pool, otherCompany, userID, `[]`)
+
+		page, err := st.Page(t.Context(), userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: acme, ScoredOnly: true})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{scored}, jobIDs(page.Items)); diff != "" {
+			t.Errorf("Page(scored) ids (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestSaveCanonical(t *testing.T) {
+	const boardA = "11111111-1111-1111-1111-111111111111"
+	const boardB = "22222222-2222-2222-2222-222222222222"
+
+	t.Run("URL aliases and replays keep one job", func(t *testing.T) {
+		st, _ := newStore(t)
+		first := baseJob
+		first.BoardID = boardA
+		first.ProviderPostingID = "posting-1"
+		first.URL = "https://example.com/jobs/1?ref=board"
+		saved, status := saveJob(t, st, first)
+		if status != "new" || saved.ID == "" {
+			t.Fatalf("first save: status = %q, id = %q, want new with an id", status, saved.ID)
+		}
+
+		alias := first
+		alias.URL = "https://example.com/jobs/1?ref=partner"
+		for _, name := range []string{"alias", "replay"} {
+			got, status := saveJob(t, st, alias)
+			if status != "unchanged" || got.ID != saved.ID {
+				t.Errorf("%s: status = %q, id = %q, want unchanged with id %q", name, status, got.ID, saved.ID)
+			}
+		}
+
+		jobs, err := st.ListJobs(t.Context(), "")
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if len(jobs) != 1 {
+			t.Fatalf("ListJobs() = %d jobs, want 1", len(jobs))
+		}
+		if jobs[0].BoardID != first.BoardID || jobs[0].ProviderPostingID != first.ProviderPostingID || jobs[0].ContentFingerprint == "" {
+			t.Errorf("canonical identity missing from read: %+v", jobs[0])
+		}
+	})
+
+	t.Run("a conflicting board cannot claim the URL", func(t *testing.T) {
+		st, _ := newStore(t)
+		first := baseJob
+		first.BoardID = boardA
+		first.ProviderPostingID = "posting-1"
+		saveJob(t, st, first)
+
+		conflict := baseJob
+		conflict.BoardID = boardB
+		conflict.ProviderPostingID = "posting-2"
+		if _, _, err := st.SaveCanonical(t.Context(), conflict); !errors.Is(err, store.ErrCanonicalConflict) {
+			t.Fatalf("SaveCanonical(conflict) err = %v, want ErrCanonicalConflict", err)
+		}
+	})
+
+	t.Run("content change updates, and a distinct board is a distinct job", func(t *testing.T) {
+		st, _ := newStore(t)
+		first := baseJob
+		first.BoardID = boardA
+		first.ProviderPostingID = "posting-1"
+		saved, _ := saveJob(t, st, first)
+
+		changed := first
+		changed.Title = "Senior Engineer"
+		updated, status := saveJob(t, st, changed)
+		if status != "changed" || updated.ID != saved.ID {
+			t.Errorf("changed: status = %q, id = %q, want changed with id %q", status, updated.ID, saved.ID)
+		}
+		replayed, status := saveJob(t, st, changed)
+		if status != "unchanged" || replayed.ID != saved.ID || replayed.ContentFingerprint != updated.ContentFingerprint {
+			t.Errorf("changed replay: status = %q, job = %+v, want unchanged and the same fingerprint", status, replayed)
+		}
+
+		other := first
+		other.BoardID = boardB
+		other.URL = "https://other.example.com/jobs/1"
+		distinct, status := saveJob(t, st, other)
+		if status != "new" || distinct.ID == saved.ID {
+			t.Errorf("distinct board: status = %q, id = %q, want new with an id other than %q", status, distinct.ID, saved.ID)
+		}
+	})
+
+	t.Run("prunes stale option answers on fingerprint change", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		jobA := baseJob
+		saved, _ := saveJob(t, st, jobA)
+		fpA := saved.ContentFingerprint
+		jobB := jobA
+		jobB.Title = "Staff Engineer"
+		updatedB, status := saveJob(t, st, jobB)
+		if status != "changed" {
+			t.Fatalf("change to B: status = %q, want changed", status)
+		}
+		insertOptionAnswer(t, pool, saved.ID, fpA, "q-fpA")
+		insertOptionAnswer(t, pool, saved.ID, updatedB.ContentFingerprint, "q-fpB")
+
+		revertedA, status := saveJob(t, st, jobA)
+		if status != "changed" || revertedA.ContentFingerprint != fpA {
+			t.Fatalf("revert to A: status = %q, fingerprint = %q, want changed with %q", status, revertedA.ContentFingerprint, fpA)
+		}
+
+		if diff := cmp.Diff(map[string]int{fpA: 1}, optionAnswerFingerprints(t, pool, saved.ID)); diff != "" {
+			t.Errorf("option_answers after prune (-want +got):\n%s", diff)
+		}
+		scoreJob(t, pool, saved.ID, userID, `[]`)
+		var visible int
+		err := pool.QueryRow(t.Context(),
+			`SELECT count(*) FROM job_scores s
+			 JOIN jobs j ON j.id = s.job_id
+			 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+			 WHERE s.user_id = $1 AND a.question_hash = 'q-fpB'`, userID).Scan(&visible)
+		if err != nil {
+			t.Fatalf("count scoring-visible answers: %v", err)
+		}
+		if visible != 0 {
+			t.Errorf("pruned answer q-fpB still visible to scoring, want treated as unknown")
+		}
+	})
+}
+
+func TestSaveCanonicalQueuesAnswerEffects(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, st *store.Store, pool *pgxpool.Pool, userID, companyID string)
+		titles  []string
+		tracked bool
+		want    int
+	}{
+		{name: "one per content version", tracked: true, titles: []string{"Engineer", "Engineer", "Senior Engineer"}, want: 2},
+		{name: "none when no user tracks the company", titles: []string{"Engineer"}, want: 0},
+		{
+			name:    "regardless of the user's exclusion filters",
+			tracked: true,
+			titles:  []string{"Engineer"},
+			want:    1,
+			setup: func(t *testing.T, _ *store.Store, pool *pgxpool.Pool, userID, _ string) {
+				t.Helper()
+				if _, err := pool.Exec(t.Context(),
+					"INSERT INTO search_config (user_id, excluded_companies) VALUES ($1, $2)", userID, []string{"outbox-co"}); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, pool, userID := newUserStore(t)
+			company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "outbox-co", Name: "Outbox Co"})
+			if tt.setup != nil {
+				tt.setup(t, st, pool, userID, company.ID)
+			}
+			if tt.tracked {
+				trackCompany(t, st, userID, company.ID, 360)
+			}
+			job := baseJob
+			job.CompanySlug, job.CompanyID = company.Slug, company.ID
+			var jobID string
+			for _, title := range tt.titles {
+				job.Title = title
+				saved, _ := saveJob(t, st, job)
+				jobID = saved.ID
+			}
+			if got := effectCountForJob(t, pool, jobID); got != tt.want {
+				t.Errorf("queued answer effects = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
-func TestSaveCanonicalAliasesAndReplayKeepsOneJob(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	first := baseJob
-	first.BoardID = "11111111-1111-1111-1111-111111111111"
-	first.ProviderPostingID = "posting-1"
-	first.URL = "https://example.com/jobs/1?ref=board"
-
-	saved, status, err := st.SaveCanonical(ctx, first)
-	if err != nil || status != "new" || saved.ID == "" {
-		t.Fatalf("first save: status=%q job=%+v err=%v", status, saved, err)
-	}
-
-	alias := first
-	alias.URL = "https://example.com/jobs/1?ref=partner"
-	savedAgain, status, err := st.SaveCanonical(ctx, alias)
-	if err != nil || status != "unchanged" || savedAgain.ID != saved.ID {
-		t.Fatalf("alias: status=%q job=%+v err=%v", status, savedAgain, err)
-	}
-
-	replayed, status, err := st.SaveCanonical(ctx, alias)
-	if err != nil || status != "unchanged" || replayed.ID != saved.ID {
-		t.Fatalf("replay: status=%q job=%+v err=%v", status, replayed, err)
-	}
-
-	jobs, err := st.ListJobs(ctx, "")
-	if err != nil || len(jobs) != 1 {
-		t.Fatalf("list: count=%d err=%v", len(jobs), err)
-	}
-	if jobs[0].BoardID != first.BoardID || jobs[0].ProviderPostingID != first.ProviderPostingID || jobs[0].ContentFingerprint == "" {
-		t.Fatalf("canonical identity missing from read: %+v", jobs[0])
-	}
-}
-
-func TestSaveCanonicalQueuesOneAnswerEffectPerContentVersion(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "outbox-company", Name: "Outbox Company"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 360); err != nil {
-		t.Fatal(err)
-	}
+func TestSetCompanyTracking(t *testing.T) {
+	st, pool, userID := newUserStore(t)
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "backfill-co", Name: "Backfill Co"})
 	job := baseJob
-	job.URL = "https://example.com/jobs/outbox"
 	job.CompanySlug = company.Slug
-	job.CompanyID = company.ID
+	saved, _ := saveJob(t, st, job)
 
-	var jobID string
-	for _, title := range []string{"Engineer", "Engineer", "Senior Engineer"} {
-		job.Title = title
-		saved, _, err := st.SaveCanonical(ctx, job)
-		if err != nil {
-			t.Fatal(err)
-		}
-		jobID = saved.ID
-	}
-	if count := effectCountForJob(t, pool, jobID); count != 2 {
-		t.Fatalf("queued answer effects = %d, want 2", count)
-	}
-}
-
-func TestSaveCanonicalConflictingBoardCannotClaimURL(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	first := baseJob
-	first.BoardID = "11111111-1111-1111-1111-111111111111"
-	first.ProviderPostingID = "posting-1"
-	if _, _, err := st.SaveCanonical(ctx, first); err != nil {
-		t.Fatal(err)
-	}
-
-	conflict := baseJob
-	conflict.BoardID = "22222222-2222-2222-2222-222222222222"
-	conflict.ProviderPostingID = "posting-2"
-	if _, _, err := st.SaveCanonical(ctx, conflict); !errors.Is(err, store.ErrCanonicalConflict) {
-		t.Fatalf("err = %v, want ErrCanonicalConflict", err)
-	}
-}
-
-func TestSetCompanyTrackingBackfillsFingerprintsAndQueuesScores(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "backfill-co", Name: "Backfill Co"})
+	tracking, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 120)
 	if err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/backfill"
-	job.CompanySlug = company.Slug
-	saved, _, err := st.SaveCanonical(ctx, job)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tracking, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 120)
-	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("SetCompanyTracking() err = %v", err)
 	}
 	if !tracking.Enabled || tracking.CheckIntervalMinutes != 120 {
-		t.Fatalf("tracking = %+v", tracking)
+		t.Errorf("tracking = %+v, want enabled every 120 minutes", tracking)
 	}
 	if count := effectCountForJob(t, pool, saved.ID); count == 0 {
-		t.Fatalf("queued answer effects = %d, want > 0", count)
+		t.Errorf("queued answer effects = %d, want > 0", count)
 	}
 }
 
-func TestCompanyBoardsRoundTrip(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "board-co", Name: "Board Co"})
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestCompanyBoards(t *testing.T) {
+	t.Run("candidate board is listed but not verified", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "board-co", Name: "Board Co"})
+		board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "board-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard() err = %v", err)
+		}
+		if board.Status != dto.BoardCandidate {
+			t.Errorf("status = %q, want candidate", board.Status)
+		}
+		boards, err := st.ListCompanyBoards(ctx, company.ID)
+		if err != nil {
+			t.Fatalf("ListCompanyBoards() err = %v", err)
+		}
+		if len(boards) != 1 || boards[0].ID != board.ID {
+			t.Errorf("ListCompanyBoards() = %+v, want only %s", boards, board.ID)
+		}
+		if _, err := st.GetVerifiedBoardID(ctx, "greenhouse", "board-co"); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetVerifiedBoardID(unverified) err = %v, want ErrNotFound", err)
+		}
+	})
 
-	board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "board-co")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if board.Status != dto.BoardCandidate {
-		t.Fatalf("status = %q, want candidate", board.Status)
-	}
-
-	boards, err := st.ListCompanyBoards(ctx, company.ID)
-	if err != nil || len(boards) != 1 || boards[0].ID != board.ID {
-		t.Fatalf("boards = %+v, err = %v", boards, err)
-	}
-
-	if _, err := st.GetVerifiedBoardID(ctx, "greenhouse", "board-co"); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("unverified board: err = %v, want ErrNotFound", err)
-	}
-}
-
-func TestSourceTargetLifecycle(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-
-	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{}); !errors.Is(err, store.ErrSourceTargetExists) {
-		t.Fatalf("duplicate create: err = %v, want ErrSourceTargetExists", err)
-	}
-
-	disabled := false
-	updated, err := st.UpdateSourceTarget(ctx, target.ID, userID, &disabled, nil)
-	if err != nil || updated.Enabled {
-		t.Fatalf("update: target = %+v, err = %v", updated, err)
-	}
-
-	started, err := st.StartSourceTargetRun(ctx, target.ID)
-	if err != nil || started.RunStatus != "queued" {
-		t.Fatalf("start run: target = %+v, err = %v", started, err)
-	}
-
-	if err := st.DeleteSourceTarget(ctx, target.ID, userID); err != nil {
-		t.Fatal(err)
-	}
-	targets, err := st.ListSourceTargetsByUser(ctx, userID)
-	if err != nil || len(targets) != 0 {
-		t.Fatalf("targets after delete = %+v, err = %v", targets, err)
-	}
-}
-
-func TestCandidateSaveListAndAssess(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	saved, err := st.SaveCards(ctx, target, []dto.Job{{URL: "https://example.com/candidate/1", Title: "Engineer", CompanySlug: "acme"}})
-	if err != nil || len(saved) != 1 {
-		t.Fatalf("save cards: %+v, %v", saved, err)
-	}
-
-	listed, err := st.ListForUser(ctx, userID, "", 10)
-	if err != nil || len(listed) != 1 || listed[0].ID != saved[0].ID {
-		t.Fatalf("list for user: %+v, %v", listed, err)
-	}
-
-	queueDetail, err := st.Assess(ctx, saved[0].ID, userID, time.Now(), true)
-	if err != nil || !queueDetail {
-		t.Fatalf("assess: queueDetail=%v err=%v", queueDetail, err)
-	}
-	if err := st.MarkDetailPending(ctx, saved[0].ID); err != nil {
-		t.Fatal(err)
-	}
+	t.Run("a board token belongs to one company", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		first := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		second := upsertCompany(t, st, dto.CompanyUpsert{Slug: "other", Name: "Other"})
+		if _, err := st.UpsertCandidateBoard(ctx, first.ID, "greenhouse", "acme"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(first) err = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, second.ID, "greenhouse", "acme"); !errors.Is(err, store.ErrBoardConflict) {
+			t.Fatalf("UpsertCandidateBoard(second) err = %v, want ErrBoardConflict", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, first.ID, "ashby", "acme"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(ashby) err = %v", err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, first.ID)
+		if err != nil {
+			t.Fatalf("ListCompanyBoards() err = %v", err)
+		}
+		if len(boards) != 2 {
+			t.Errorf("ListCompanyBoards() = %+v, want two boards", boards)
+		}
+	})
 }
 
 func TestDeleteExpiredCandidates(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "expiry-search", true, map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved, err := st.SaveCards(ctx, target, []dto.Job{{URL: "https://example.com/candidate/expiring", Title: "Engineer", CompanySlug: "acme"}})
-	if err != nil || len(saved) != 1 {
-		t.Fatalf("save cards: %+v, %v", saved, err)
-	}
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	target := createTarget(t, st, userID, "linkedin", "expiry-search")
+	saved := saveCards(t, st, target, dto.Job{URL: "https://example.com/candidate/expiring", Title: "Engineer", CompanySlug: "acme"})
 	if _, err := pool.Exec(ctx, "UPDATE job_candidates SET expires_at = NOW() - INTERVAL '1 day' WHERE id = $1::uuid", saved[0].ID); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := st.DeleteExpiredCandidates(ctx); err != nil {
-		t.Fatal(err)
+		t.Fatalf("DeleteExpiredCandidates() err = %v", err)
 	}
 
 	listed, err := st.ListForUser(ctx, userID, "", 10)
-	if err != nil || len(listed) != 0 {
-		t.Fatalf("list after expiry = %+v, err = %v", listed, err)
+	if err != nil {
+		t.Fatalf("ListForUser() err = %v", err)
+	}
+	if len(listed) != 0 {
+		t.Errorf("ListForUser() after expiry = %+v, want none", listed)
 	}
 }
 
-func TestNewURLs(t *testing.T) {
+func TestListCompaniesToCrawl(t *testing.T) {
 	st, _ := newStore(t)
-	ctx := context.Background()
-	job := baseJob
-	job.URL = "https://example.com/jobs/new-urls"
-	if _, _, err := st.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-
-	newURLs, err := st.NewURLs(ctx, []string{job.URL, "https://example.com/jobs/never-seen"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(newURLs) != 1 || newURLs[0] != "https://example.com/jobs/never-seen" {
-		t.Fatalf("new URLs = %v", newURLs)
-	}
-}
-
-func TestListCompaniesToCrawlAndTouch(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "crawl-co", Name: "Crawl Co", Domain: "crawl-co.example"})
-	if err != nil {
-		t.Fatal(err)
-	}
+	ctx := t.Context()
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "crawl-co", Name: "Crawl Co", Domain: "crawl-co.example"})
 
 	due, err := st.ListCompaniesToCrawl(ctx, 10)
-	if err != nil || len(due) != 1 || due[0].ID != company.ID {
-		t.Fatalf("due for crawl = %+v, err = %v", due, err)
+	if err != nil {
+		t.Fatalf("ListCompaniesToCrawl() err = %v", err)
+	}
+	if len(due) != 1 || due[0].ID != company.ID {
+		t.Fatalf("due for crawl = %+v, want only %s", due, company.ID)
 	}
 
 	if err := st.TouchCompanyCrawled(ctx, company.ID); err != nil {
-		t.Fatal(err)
+		t.Fatalf("TouchCompanyCrawled() err = %v", err)
 	}
 	due, err = st.ListCompaniesToCrawl(ctx, 10)
-	if err != nil || len(due) != 0 {
-		t.Fatalf("after touch = %+v, err = %v", due, err)
+	if err != nil {
+		t.Fatalf("ListCompaniesToCrawl() after touch err = %v", err)
+	}
+	if len(due) != 0 {
+		t.Errorf("due for crawl after touch = %+v, want none", due)
 	}
 }
 
-func TestSourceTargetRunRecovery(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, map[string]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := st.GetSourceTarget(ctx, target.ID)
-	if err != nil || got.ID != target.ID {
-		t.Fatalf("get target = %+v, err = %v", got, err)
-	}
-	if _, err := st.GetSourceTarget(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("missing target: err = %v, want ErrNotFound", err)
-	}
-
-	running, err := st.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "running", "")
-	if err != nil || running.RunStatus != "running" {
-		t.Fatalf("transition to running = %+v, err = %v", running, err)
-	}
-
-	if _, err := pool.Exec(ctx, "UPDATE source_targets SET updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1::uuid", target.ID); err != nil {
-		t.Fatal(err)
-	}
-	recoverable, err := st.ListRecoverableSourceTargets(ctx)
-	if err != nil || len(recoverable) != 1 || recoverable[0].ID != target.ID {
-		t.Fatalf("recoverable = %+v, err = %v", recoverable, err)
-	}
-
-	claimed, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
-	if err != nil || claimed.ID != target.ID {
-		t.Fatalf("claim recoverable = %+v, err = %v", claimed, err)
-	}
-	if _, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("re-claim before stale again: err = %v, want ErrNotFound", err)
-	}
-
-	succeeded, err := st.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "succeeded", "")
-	if err != nil || succeeded.RunStatus != "succeeded" {
-		t.Fatalf("transition to succeeded = %+v, err = %v", succeeded, err)
-	}
-}
-
-func boardFixture(t *testing.T, st *store.Store, pool *pgxpool.Pool) (context.Context, dto.CompanyBoard, string) {
-	t.Helper()
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "poll-co", Name: "Poll Co"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "poll-co")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 60); err != nil {
-		t.Fatal(err)
-	}
-	return ctx, board, company.ID
-}
-
-func TestBoardPollDueClaimAndEmptyClosure(t *testing.T) {
-	st, pool := newStore(t)
-	ctx, board, companyID := boardFixture(t, st, pool)
-
-	if due, err := st.ListDueBoards(ctx); err != nil || len(due) != 0 {
-		t.Fatalf("candidate due = %v, err = %v", due, err)
-	}
-	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
-		t.Fatal(err)
-	}
-	due, err := st.ListDueBoards(ctx)
-	if err != nil || len(due) != 1 || due[0].ID != board.ID {
-		t.Fatalf("verified due = %v, err = %v", due, err)
-	}
-
-	claim, err := st.ClaimBoard(ctx, board.ID, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.ClaimBoard(ctx, board.ID, false); !errors.Is(err, store.ErrBoardClaimUnavailable) {
-		t.Fatalf("second claim = %v, want ErrBoardClaimUnavailable", err)
-	}
-
-	job := dto.Job{Title: "Engineer", URL: "https://boards.greenhouse.io/poll-co/jobs/1", Source: "greenhouse", CompanySlug: "poll-co", CompanyID: companyID, BoardID: board.ID, UpdatedAt: time.Now()}
-	if _, _, err := st.SaveCanonical(ctx, job); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
-		t.Fatalf("replay = %v, want ErrBoardClaimUnavailable", err)
-	}
-	if due, err := st.ListDueBoards(ctx); err != nil || len(due) != 0 {
-		t.Fatalf("completed due = %v, err = %v", due, err)
-	}
-
-	for n := 1; n <= 2; n++ {
-		empty, err := st.ClaimBoard(ctx, board.ID, true)
+func TestSourceTargetRuns(t *testing.T) {
+	t.Run("recovery claims a stale run once", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, nil)
 		if err != nil {
+			t.Fatalf("CreateSourceTargetWithRun() err = %v", err)
+		}
+		running, err := st.TransitionSourceTargetRun(ctx, target.ID, target.RunID, "running", "")
+		if err != nil {
+			t.Fatalf("Transition(running) err = %v", err)
+		}
+		if running.RunStatus != "running" {
+			t.Errorf("run status = %q, want running", running.RunStatus)
+		}
+
+		if _, err := pool.Exec(ctx, "UPDATE source_targets SET updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1::uuid", target.ID); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: empty, Complete: true}); err != nil {
-			t.Fatal(err)
+		recoverable, err := st.ListRecoverableSourceTargets(ctx)
+		if err != nil {
+			t.Fatalf("ListRecoverableSourceTargets() err = %v", err)
 		}
-		var closed bool
-		if err := pool.QueryRow(ctx, "SELECT closed_at IS NOT NULL FROM jobs WHERE url = $1", job.URL).Scan(&closed); err != nil {
-			t.Fatal(err)
+		if len(recoverable) != 1 || recoverable[0].ID != target.ID {
+			t.Fatalf("recoverable = %+v, want only %s", recoverable, target.ID)
 		}
-		if closed != (n == 2) {
-			t.Fatalf("after %d empty snapshots closed = %t", n, closed)
+
+		claimed, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID)
+		if err != nil {
+			t.Fatalf("ClaimRecoverableSourceTarget() err = %v", err)
 		}
-	}
+		if claimed.ID != target.ID {
+			t.Errorf("claimed id = %q, want %q", claimed.ID, target.ID)
+		}
+		if _, err := st.ClaimRecoverableSourceTarget(ctx, target.ID, target.RunID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("second claim err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("a newer run fences a stale completion", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		ctx := t.Context()
+		target := createTarget(t, st, userID, "wis", "engineer")
+		if _, err := st.UpdateSourceTarget(ctx, target.ID, userID, new(false), nil); err != nil {
+			t.Fatalf("UpdateSourceTarget() err = %v", err)
+		}
+		first, err := st.StartSourceTargetRun(ctx, target.ID)
+		if err != nil {
+			t.Fatalf("StartSourceTargetRun(first) err = %v", err)
+		}
+		if !first.Enabled {
+			t.Error("manual rerun did not enable the target")
+		}
+		second, err := st.StartSourceTargetRun(ctx, target.ID)
+		if err != nil {
+			t.Fatalf("StartSourceTargetRun(second) err = %v", err)
+		}
+		if first.RunID == "" || first.RunID == second.RunID {
+			t.Fatalf("run ids = %q, %q, want two distinct ids", first.RunID, second.RunID)
+		}
+
+		if _, err := st.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("stale completion err = %v, want ErrNotFound", err)
+		}
+		current, err := st.TransitionSourceTargetRun(ctx, target.ID, second.RunID, "succeeded", "")
+		if err != nil {
+			t.Fatalf("current completion err = %v", err)
+		}
+		if current.RunStatus != "succeeded" {
+			t.Errorf("run status = %q, want succeeded", current.RunStatus)
+		}
+	})
 }
 
-func TestFailBoardRequiresActiveLease(t *testing.T) {
-	st, pool := newStore(t)
-	ctx, board, companyID := boardFixture(t, st, pool)
-	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
-		t.Fatal(err)
-	}
-	claim, err := st.ClaimBoard(ctx, board.ID, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := st.FailBoard(ctx, claim); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.FailBoard(ctx, claim); !errors.Is(err, store.ErrBoardClaimUnavailable) {
-		t.Fatalf("stale fail = %v, want ErrBoardClaimUnavailable", err)
-	}
+type boardEnv struct {
+	st        *store.Store
+	pool      *pgxpool.Pool
+	board     dto.CompanyBoard
+	companyID string
 }
 
-func insertNamedUser(t *testing.T, pool *pgxpool.Pool, username string) string {
+func boardFixture(t *testing.T) boardEnv {
 	t.Helper()
-	var id string
-	if err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`, username).Scan(&id); err != nil {
-		t.Fatalf("insert user: %v", err)
+	st, pool, userID := newUserStore(t)
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "poll-co", Name: "Poll Co"})
+	board, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "poll-co")
+	if err != nil {
+		t.Fatalf("UpsertCandidateBoard() err = %v", err)
 	}
-	return id
+	trackCompany(t, st, userID, company.ID, 60)
+	return boardEnv{st: st, pool: pool, board: board, companyID: company.ID}
+}
+
+func verifiedBoardFixture(t *testing.T) boardEnv {
+	t.Helper()
+	env := boardFixture(t)
+	if _, err := env.st.VerifyCompanyBoard(t.Context(), env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed"); err != nil {
+		t.Fatalf("VerifyCompanyBoard() err = %v", err)
+	}
+	return env
+}
+
+func (e boardEnv) job(n int) dto.Job {
+	return dto.Job{
+		Title: fmt.Sprintf("Role %d", n), URL: fmt.Sprintf("https://boards.greenhouse.io/poll-co/jobs/%d", n), Source: "greenhouse",
+		CompanySlug: "poll-co", CompanyID: e.companyID, BoardID: e.board.ID, UpdatedAt: time.Now(),
+	}
+}
+
+func (e boardEnv) claim(t *testing.T, manual bool) dto.BoardPoll {
+	t.Helper()
+	poll, err := e.st.ClaimBoard(t.Context(), e.board.ID, manual)
+	if err != nil {
+		t.Fatalf("ClaimBoard(manual=%t) err = %v", manual, err)
+	}
+	return poll
+}
+
+func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) {
+	t.Helper()
+	if err := e.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: poll, Complete: true, Jobs: jobs}); err != nil {
+		t.Fatalf("CompleteBoard() err = %v", err)
+	}
+}
+
+func (e boardEnv) due(t *testing.T) []dto.BoardPoll {
+	t.Helper()
+	due, err := e.st.ListDueBoards(t.Context())
+	if err != nil {
+		t.Fatalf("ListDueBoards() err = %v", err)
+	}
+	return due
+}
+
+func TestBoardPolling(t *testing.T) {
+	t.Run("a board is due only once verified, and a claim is exclusive", func(t *testing.T) {
+		env := boardFixture(t)
+		ctx := t.Context()
+		if due := env.due(t); len(due) != 0 {
+			t.Fatalf("candidate board due = %v, want none", due)
+		}
+		if _, err := env.st.VerifyCompanyBoard(ctx, env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed"); err != nil {
+			t.Fatal(err)
+		}
+		if due := env.due(t); len(due) != 1 || due[0].ID != env.board.ID {
+			t.Fatalf("verified board due = %v, want %s", due, env.board.ID)
+		}
+
+		claim := env.claim(t, false)
+		if _, err := env.st.ClaimBoard(ctx, env.board.ID, false); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+			t.Errorf("second ClaimBoard() err = %v, want ErrBoardClaimUnavailable", err)
+		}
+		job := env.job(1)
+		saveJob(t, env.st, job)
+		env.complete(t, claim, job)
+		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: []dto.Job{job}}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+			t.Errorf("replayed CompleteBoard() err = %v, want ErrBoardClaimUnavailable", err)
+		}
+		if due := env.due(t); len(due) != 0 {
+			t.Errorf("completed board due = %v, want none", due)
+		}
+
+		for n := 1; n <= 2; n++ {
+			env.complete(t, env.claim(t, true))
+			if got := jobClosed(t, env.pool, job.URL); got != (n == 2) {
+				t.Errorf("after %d empty snapshots closed = %t, want %t", n, got, n == 2)
+			}
+		}
+	})
+
+	t.Run("failing a claim needs the active lease", func(t *testing.T) {
+		env := verifiedBoardFixture(t)
+		claim := env.claim(t, false)
+		if err := env.st.FailBoard(t.Context(), claim); err != nil {
+			t.Fatalf("FailBoard() err = %v", err)
+		}
+		if err := env.st.FailBoard(t.Context(), claim); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+			t.Errorf("stale FailBoard() err = %v, want ErrBoardClaimUnavailable", err)
+		}
+	})
+
+	t.Run("omitted jobs close, reappearing ones reopen, and bad snapshots are rejected", func(t *testing.T) {
+		env := verifiedBoardFixture(t)
+		ctx := t.Context()
+		jobs := []dto.Job{env.job(1), env.job(2)}
+		for _, job := range jobs {
+			saveJob(t, env.st, job)
+		}
+		claim := env.claim(t, false)
+
+		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: false, Jobs: jobs}); err == nil {
+			t.Error("partial snapshot accepted")
+		}
+		unsaved := dto.Job{URL: "https://boards.greenhouse.io/poll-co/jobs/missing"}
+		if err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: append(jobs, unsaved)}); err == nil {
+			t.Error("snapshot with a job that was never ingested accepted")
+		}
+		var completed bool
+		if err := env.pool.QueryRow(ctx, "SELECT last_completed_at IS NOT NULL FROM board_poll_state WHERE board_id = $1", env.board.ID).Scan(&completed); err != nil {
+			t.Fatal(err)
+		}
+		if completed {
+			t.Error("rejected snapshots advanced freshness")
+		}
+
+		env.complete(t, claim, jobs...)
+		env.complete(t, env.claim(t, true), jobs[0])
+		if !jobClosed(t, env.pool, jobs[1].URL) {
+			t.Error("omitted job is still open")
+		}
+		env.complete(t, env.claim(t, true), jobs...)
+		if jobClosed(t, env.pool, jobs[1].URL) {
+			t.Error("reappeared job is still closed")
+		}
+		if due := env.due(t); len(due) != 0 {
+			t.Errorf("manual checks shifted cadence: %v", due)
+		}
+	})
+
+	t.Run("a stale claim cannot overwrite a newer check", func(t *testing.T) {
+		env := verifiedBoardFixture(t)
+		old := env.claim(t, false)
+		if _, err := env.pool.Exec(t.Context(), "UPDATE board_poll_state SET lease_until = NOW() - INTERVAL '1 minute' WHERE board_id = $1", env.board.ID); err != nil {
+			t.Fatal(err)
+		}
+		env.complete(t, env.claim(t, true))
+
+		err := env.st.CompleteBoard(t.Context(), dto.BoardSnapshot{Poll: old, Complete: true})
+		if !errors.Is(err, store.ErrBoardClaimUnavailable) {
+			t.Errorf("stale CompleteBoard() err = %v, want ErrBoardClaimUnavailable", err)
+		}
+	})
+
+	t.Run("a superseded board retires after two empty checks", func(t *testing.T) {
+		env := verifiedBoardFixture(t)
+		ctx := t.Context()
+		if _, err := env.pool.Exec(ctx, "UPDATE company_boards SET superseded_at = NOW() WHERE id = $1", env.board.ID); err != nil {
+			t.Fatal(err)
+		}
+		for range 2 {
+			env.complete(t, env.claim(t, true))
+		}
+		boards, err := env.st.ListCompanyBoards(ctx, env.companyID)
+		if err != nil {
+			t.Fatalf("ListCompanyBoards() err = %v", err)
+		}
+		if len(boards) != 1 || boards[0].Status != dto.BoardRetired {
+			t.Errorf("boards = %+v, want one retired board", boards)
+		}
+		active, err := env.st.ListActiveBoards(ctx)
+		if err != nil {
+			t.Fatalf("ListActiveBoards() err = %v", err)
+		}
+		if len(active) != 0 {
+			t.Errorf("active boards = %v, want none", active)
+		}
+	})
 }
 
 func insertOptionAnswer(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint, questionHash string) {
 	t.Helper()
-	_, err := pool.Exec(context.Background(),
+	_, err := pool.Exec(t.Context(),
 		"INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence) VALUES ($1, $2, $3, 'test-model', 0.5, 0.3, 0.2, 0.9)",
 		jobID, fingerprint, questionHash)
 	if err != nil {
@@ -572,7 +794,7 @@ func insertOptionAnswer(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint, qu
 
 func optionAnswerFingerprints(t *testing.T, pool *pgxpool.Pool, jobID string) map[string]int {
 	t.Helper()
-	rows, err := pool.Query(context.Background(), "SELECT fingerprint FROM option_answers WHERE job_id = $1", jobID)
+	rows, err := pool.Query(t.Context(), "SELECT fingerprint FROM option_answers WHERE job_id = $1", jobID)
 	if err != nil {
 		t.Fatalf("query option_answers: %v", err)
 	}
@@ -588,202 +810,146 @@ func optionAnswerFingerprints(t *testing.T, pool *pgxpool.Pool, jobID string) ma
 	return counts
 }
 
-func TestUpsertCompanyConflictMerge(t *testing.T) {
-	t.Run("insert", func(t *testing.T) {
-		st, _ := newStore(t)
-		ctx := context.Background()
-		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
-		if err != nil {
-			t.Fatalf("UpsertCompany: %v", err)
-		}
-		if c.Slug != "acme" || c.Name != "Acme" || c.ATSSource != "greenhouse" || c.ATSToken != "acme" {
-			t.Errorf("unexpected company: %+v", c)
-		}
-	})
-
-	t.Run("conflict fills in missing ats fields", func(t *testing.T) {
-		st, _ := newStore(t)
-		ctx := context.Background()
-		first, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-		if err != nil {
-			t.Fatalf("first UpsertCompany: %v", err)
-		}
-		if first.ATSSource != "" {
-			t.Fatalf("expected empty ats source on discovery-first insert, got %q", first.ATSSource)
-		}
-		second, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp", ATSSource: "greenhouse", ATSToken: "acme"})
-		if err != nil {
-			t.Fatalf("second UpsertCompany: %v", err)
-		}
-		if second.ID != first.ID {
-			t.Errorf("expected same row, got different IDs")
-		}
-		if second.ATSSource != "greenhouse" || second.ATSToken != "acme" {
-			t.Errorf("expected ats fields filled in, got source=%q token=%q", second.ATSSource, second.ATSToken)
-		}
-	})
-
-	t.Run("conflict never overwrites an existing ats board", func(t *testing.T) {
-		st, _ := newStore(t)
-		ctx := context.Background()
-		if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"}); err != nil {
-			t.Fatalf("first UpsertCompany: %v", err)
-		}
-		got, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "lever", ATSToken: "acme-other"})
-		if err != nil {
-			t.Fatalf("second UpsertCompany: %v", err)
-		}
-		if got.ATSSource != "greenhouse" || got.ATSToken != "acme" {
-			t.Errorf("expected original ats board preserved, got source=%q token=%q", got.ATSSource, got.ATSToken)
-		}
-	})
-
-	t.Run("conflict fills in missing domain and linkedin id", func(t *testing.T) {
-		st, _ := newStore(t)
-		ctx := context.Background()
-		first, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-		if err != nil {
-			t.Fatalf("first UpsertCompany: %v", err)
-		}
-		second, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"})
-		if err != nil {
-			t.Fatalf("second UpsertCompany: %v", err)
-		}
-		if second.ID != first.ID {
-			t.Errorf("expected same row, got different IDs")
-		}
-		if second.Domain != "acme.com" || second.LinkedInCompanyID != "12345" {
-			t.Errorf("expected domain/linkedin id filled in, got domain=%q linkedin=%q", second.Domain, second.LinkedInCompanyID)
-		}
-	})
-
-	t.Run("conflict never overwrites an existing domain or linkedin id", func(t *testing.T) {
-		st, _ := newStore(t)
-		ctx := context.Background()
-		if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"}); err != nil {
-			t.Fatalf("first UpsertCompany: %v", err)
-		}
-		got, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "other.com", LinkedInCompanyID: "99999"})
-		if err != nil {
-			t.Fatalf("second UpsertCompany: %v", err)
-		}
-		if got.Domain != "acme.com" || got.LinkedInCompanyID != "12345" {
-			t.Errorf("expected original domain/linkedin id preserved, got domain=%q linkedin=%q", got.Domain, got.LinkedInCompanyID)
-		}
-	})
+func TestUpsertCompany(t *testing.T) {
+	tests := []struct {
+		name   string
+		first  dto.CompanyUpsert
+		second dto.CompanyUpsert
+		want   dto.Company
+	}{
+		{
+			name:   "conflict fills in missing ats fields",
+			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
+			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+		},
+		{
+			name:   "conflict never overwrites an existing ats board",
+			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "lever", ATSToken: "acme-other"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+		},
+		{
+			name:   "conflict fills in missing domain and linkedin id",
+			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
+			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+		},
+		{
+			name:   "conflict never overwrites an existing domain or linkedin id",
+			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "other.com", LinkedInCompanyID: "99999"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+		},
+	}
+	ignore := cmpopts.IgnoreFields(dto.Company{}, "ID", "LastCrawledAt", "FirstSeenAt", "LastCheckedAt")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, _ := newStore(t)
+			first := upsertCompany(t, st, tt.first)
+			got := upsertCompany(t, st, tt.second)
+			if got.ID != first.ID {
+				t.Errorf("second upsert id = %q, want the first row %q", got.ID, first.ID)
+			}
+			if diff := cmp.Diff(tt.want, got, ignore); diff != "" {
+				t.Errorf("UpsertCompany() (-want +got):\n%s", diff)
+			}
+		})
+	}
 }
 
 func TestListCompaniesForUser(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
+	t.Run("shows tracked and untracked companies", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		tracked := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		upsertCompany(t, st, dto.CompanyUpsert{Slug: "widgetco", Name: "Widgetco"})
+		trackCompany(t, st, userID, tracked.ID, 180)
 
-	tracked, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
-	if err != nil {
-		t.Fatalf("UpsertCompany tracked: %v", err)
-	}
-	if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "widgetco", Name: "Widgetco", ATSSource: "ashby", ATSToken: "widgetco"}); err != nil {
-		t.Fatalf("UpsertCompany untracked: %v", err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, userID, tracked.ID, true, 180); err != nil {
-		t.Fatalf("SetCompanyTracking: %v", err)
-	}
-
-	companies, err := st.ListCompaniesForUser(ctx, userID)
-	if err != nil {
-		t.Fatalf("ListCompaniesForUser: %v", err)
-	}
-	if len(companies) != 2 {
-		t.Fatalf("want 2 companies, got %d", len(companies))
-	}
-	for _, c := range companies {
-		if c.ID == tracked.ID {
-			if !c.Tracked || c.CheckIntervalMinutes != 180 {
-				t.Errorf("expected acme tracking with 180-minute interval, got %+v", c)
-			}
-			continue
+		companies, err := st.ListCompaniesForUser(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListCompaniesForUser() err = %v", err)
 		}
-		if c.Tracked {
-			t.Errorf("expected widgetco to show as untracked")
+		type view struct {
+			Tracked  bool
+			Interval int
 		}
-	}
-}
+		got := map[string]view{}
+		for _, c := range companies {
+			got[c.Slug] = view{c.Tracked, c.CheckIntervalMinutes}
+		}
+		want := map[string]view{"acme": {true, 180}, "widgetco": {false, 0}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("ListCompaniesForUser() (-want +got):\n%s", diff)
+		}
+	})
 
-func TestCompanyTrackingWithoutBoard(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	alice := insertNamedUser(t, pool, "tracking-alice")
-	bob := insertNamedUser(t, pool, "tracking-bob")
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "boardless", Name: "Boardless"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, alice, company.ID, true, 180); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, alice, company.ID, false, 0); err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range []struct {
-		userID       string
-		wantTracked  bool
-		wantInterval int
-	}{
-		{alice, false, 180},
-		{bob, false, 0},
-	} {
-		companies, err := st.ListCompaniesForUser(ctx, test.userID)
+	t.Run("tracking without a board is per user", func(t *testing.T) {
+		st, pool := newStore(t)
+		alice := pgtest.InsertUser(t, pool)
+		bob := pgtest.InsertUser(t, pool)
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "boardless", Name: "Boardless"})
+		trackCompany(t, st, alice, company.ID, 180)
+		if _, err := st.SetCompanyTracking(t.Context(), alice, company.ID, false, 0); err != nil {
+			t.Fatal(err)
+		}
+		tests := []struct {
+			name         string
+			userID       string
+			wantInterval int
+		}{
+			{name: "paused for the user who tracked it", userID: alice, wantInterval: 180},
+			{name: "untouched for another user", userID: bob},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				companies, err := st.ListCompaniesForUser(t.Context(), tt.userID)
+				if err != nil {
+					t.Fatalf("ListCompaniesForUser() err = %v", err)
+				}
+				if len(companies) != 1 {
+					t.Fatalf("ListCompaniesForUser() = %+v, want one company", companies)
+				}
+				if companies[0].Tracked || companies[0].CheckIntervalMinutes != tt.wantInterval {
+					t.Errorf("company = %+v, want untracked with interval %d", companies[0], tt.wantInterval)
+				}
+			})
+		}
+	})
+
+	t.Run("reports when the board was last checked", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		board, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(companies) != 1 || companies[0].Tracked != test.wantTracked || companies[0].CheckIntervalMinutes != test.wantInterval {
-			t.Errorf("user %s: got %+v", test.userID, companies)
+		if _, err := st.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "acme", "test"); err != nil {
+			t.Fatal(err)
 		}
-	}
+		completed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+		if _, err := pool.Exec(t.Context(), `INSERT INTO board_poll_state (board_id, last_completed_at) VALUES ($1, $2)`, board.ID, completed); err != nil {
+			t.Fatal(err)
+		}
+
+		companies, err := st.ListCompaniesForUser(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("ListCompaniesForUser() err = %v", err)
+		}
+		if len(companies) != 1 || companies[0].LastCheckedAt == nil || !companies[0].LastCheckedAt.Equal(completed) {
+			t.Errorf("ListCompaniesForUser() = %+v, want last check %v", companies, completed)
+		}
+	})
 }
 
-func TestCompanyBoardConflict(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	first, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "other", Name: "Other"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.UpsertCandidateBoard(ctx, first.ID, "greenhouse", "acme"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.UpsertCandidateBoard(ctx, second.ID, "greenhouse", "acme"); !errors.Is(err, store.ErrBoardConflict) {
-		t.Fatalf("want ErrBoardConflict, got %v", err)
-	}
-	if _, err := st.UpsertCandidateBoard(ctx, first.ID, "ashby", "acme"); err != nil {
-		t.Fatal(err)
-	}
-	boards, err := st.ListCompanyBoards(ctx, first.ID)
-	if err != nil || len(boards) != 2 {
-		t.Fatalf("want two boards, got %+v, err = %v", boards, err)
-	}
-}
-
-func TestCandidateRetentionDuplicateCardsAndAssessmentFlow(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	target, err := st.CreateSourceTarget(ctx, userID, "wis", "engineer", true, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func TestCandidates(t *testing.T) {
+	st, pool, userID := newUserStore(t)
+	ctx := t.Context()
+	target := createTarget(t, st, userID, "wis", "engineer")
 	card := dto.Job{URL: "https://example.com/jobs/1#details", Title: "Senior Engineer", CompanySlug: "acme", Location: "London"}
-	got, err := st.SaveCards(ctx, target, []dto.Job{card, card})
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	got := saveCards(t, st, target, card, card)
 	if len(got) != 2 || got[0].ID != got[1].ID || got[0].URL != "https://example.com/jobs/1" {
-		t.Fatalf("duplicate candidates: %+v", got)
+		t.Fatalf("duplicate cards saved as %+v, want one candidate on the canonical URL", got)
 	}
 
 	if _, err := pool.Exec(ctx, "UPDATE job_candidates SET expires_at = NOW() - INTERVAL '1 second'"); err != nil {
@@ -791,497 +957,85 @@ func TestCandidateRetentionDuplicateCardsAndAssessmentFlow(t *testing.T) {
 	}
 	retained, err := st.ListForUser(ctx, userID, "", 100)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListForUser(expired) err = %v", err)
 	}
 	if len(retained) != 0 {
 		t.Fatalf("expired candidate remained queryable: %+v", retained)
 	}
 
-	if _, err := st.SaveCards(ctx, target, []dto.Job{card}); err != nil {
-		t.Fatal(err)
-	}
+	saveCards(t, st, target, card)
 	retained, err = st.ListForUser(ctx, userID, "", 100)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListForUser(rediscovered) err = %v", err)
 	}
 	if len(retained) != 1 {
 		t.Fatalf("rediscovered candidate missing: %+v", retained)
 	}
 	if retained[0].Card.Source != target.Source {
-		t.Fatalf("candidate source=%q, want %q", retained[0].Card.Source, target.Source)
+		t.Errorf("candidate source = %q, want %q", retained[0].Card.Source, target.Source)
 	}
 
+	id := got[0].ID
 	version := time.Now().UTC()
-	requested, err := st.Assess(ctx, got[0].ID, userID, version, false)
-	if err != nil || requested {
-		t.Fatalf("rejected assessment requested detail: requested=%v err=%v", requested, err)
+	assess := []struct {
+		name          string
+		at            time.Time
+		relevant      bool
+		wantRequested bool
+		markPending   bool
+	}{
+		{name: "a rejected assessment requests no detail", at: version},
+		{name: "a newly relevant candidate requests detail", at: version.Add(time.Second), relevant: true, wantRequested: true, markPending: true},
+		{name: "a pending detail is not requested again", at: version.Add(2 * time.Second), relevant: true},
 	}
-	requested, err = st.Assess(ctx, got[0].ID, userID, version.Add(time.Second), true)
-	if err != nil || !requested {
-		t.Fatalf("newly relevant candidate not requested: requested=%v err=%v", requested, err)
-	}
-	if err := st.MarkDetailPending(ctx, got[0].ID); err != nil {
-		t.Fatal(err)
-	}
-	requested, err = st.Assess(ctx, got[0].ID, userID, version.Add(2*time.Second), true)
-	if err != nil || requested {
-		t.Fatalf("duplicate detail request: requested=%v err=%v", requested, err)
+	for _, tt := range assess {
+		requested, err := st.Assess(ctx, id, userID, tt.at, tt.relevant)
+		if err != nil {
+			t.Fatalf("%s: Assess() err = %v", tt.name, err)
+		}
+		if requested != tt.wantRequested {
+			t.Errorf("%s: Assess() = %t, want %t", tt.name, requested, tt.wantRequested)
+		}
+		if tt.markPending {
+			if err := st.MarkDetailPending(ctx, id); err != nil {
+				t.Fatalf("MarkDetailPending() err = %v", err)
+			}
+		}
 	}
 	var assessments int
-	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM candidate_assessments WHERE candidate_id = $1 AND user_id = $2", got[0].ID, userID).Scan(&assessments); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM candidate_assessments WHERE candidate_id = $1 AND user_id = $2", id, userID).Scan(&assessments); err != nil {
 		t.Fatal(err)
 	}
 	if assessments != 1 {
-		t.Fatalf("assessment rows = %d, want one latest row", assessments)
+		t.Errorf("assessment rows = %d, want one latest row", assessments)
 	}
 }
 
-func TestBoardPollOmissionReopenAndRejectedCompletion(t *testing.T) {
-	st, pool := newStore(t)
-	ctx, board, companyID := boardFixture(t, st, pool)
-	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
-		t.Fatal(err)
-	}
-	jobs := []dto.Job{
-		{Title: "Engineer", URL: "https://boards.greenhouse.io/poll-co/jobs/1", Source: "greenhouse", CompanySlug: "poll-co", CompanyID: companyID, BoardID: board.ID, UpdatedAt: time.Now()},
-		{Title: "Designer", URL: "https://boards.greenhouse.io/poll-co/jobs/2", Source: "greenhouse", CompanySlug: "poll-co", CompanyID: companyID, BoardID: board.ID, UpdatedAt: time.Now()},
-	}
-	for _, job := range jobs {
-		if _, _, err := st.SaveCanonical(ctx, job); err != nil {
-			t.Fatal(err)
-		}
-	}
-	claim, err := st.ClaimBoard(ctx, board.ID, false)
+func TestListTrackedCompaniesForUser(t *testing.T) {
+	st, pool, userID := newUserStore(t)
+	otherID := pgtest.InsertUser(t, pool)
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "relevant-co", Name: "Relevant Co"})
+	trackCompany(t, st, userID, company.ID, 180)
+
+	now := time.Now()
+	scoredOpen := insertJob(t, pool, company.ID, 1, now, false)
+	scoreJob(t, pool, scoredOpen, userID, `[]`)
+	blocked := insertJob(t, pool, company.ID, 2, now, false)
+	scoreJob(t, pool, blocked, userID, `[{"effect":"blocked"}]`)
+	closedScored := insertJob(t, pool, company.ID, 3, now, true)
+	scoreJob(t, pool, closedScored, userID, `[]`)
+	scoredByOther := insertJob(t, pool, company.ID, 4, now, false)
+	scoreJob(t, pool, scoredByOther, otherID, `[]`)
+	insertJob(t, pool, company.ID, 5, now, false)
+
+	got, err := st.ListTrackedCompaniesForUser(t.Context(), userID)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListTrackedCompaniesForUser() err = %v", err)
 	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: false, Jobs: jobs}); err == nil {
-		t.Fatal("partial snapshot accepted")
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: append(jobs, dto.Job{URL: "https://boards.greenhouse.io/poll-co/jobs/missing"})}); err == nil {
-		t.Fatal("missing ingest accepted")
-	}
-	var completed bool
-	if err := pool.QueryRow(ctx, "SELECT last_completed_at IS NOT NULL FROM board_poll_state WHERE board_id = $1", board.ID).Scan(&completed); err != nil || completed {
-		t.Fatalf("failed snapshot advanced freshness: %t, %v", completed, err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true, Jobs: jobs}); err != nil {
-		t.Fatal(err)
-	}
-	second, err := st.ClaimBoard(ctx, board.ID, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: second, Complete: true, Jobs: jobs[:1]}); err != nil {
-		t.Fatal(err)
-	}
-	var closed bool
-	if err := pool.QueryRow(ctx, "SELECT closed_at IS NOT NULL FROM jobs WHERE url = $1", jobs[1].URL).Scan(&closed); err != nil || !closed {
-		t.Fatalf("omitted job closed=%t err=%v", closed, err)
-	}
-	third, err := st.ClaimBoard(ctx, board.ID, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: third, Complete: true, Jobs: jobs}); err != nil {
-		t.Fatal(err)
-	}
-	if err := pool.QueryRow(ctx, "SELECT closed_at IS NOT NULL FROM jobs WHERE url = $1", jobs[1].URL).Scan(&closed); err != nil || closed {
-		t.Fatalf("reappeared job closed=%t err=%v", closed, err)
-	}
-	if due, err := st.ListDueBoards(ctx); err != nil || len(due) != 0 {
-		t.Fatalf("manual checks shifted cadence: %v %v", due, err)
-	}
-}
-
-func TestBoardPollStaleClaimCannotOverwriteNewerCheck(t *testing.T) {
-	st, pool := newStore(t)
-	ctx, board, companyID := boardFixture(t, st, pool)
-	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
-		t.Fatal(err)
-	}
-	old, err := st.ClaimBoard(ctx, board.ID, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE board_poll_state SET lease_until = NOW() - INTERVAL '1 minute' WHERE board_id = $1", board.ID); err != nil {
-		t.Fatal(err)
-	}
-	newer, err := st.ClaimBoard(ctx, board.ID, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: newer, Complete: true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: old, Complete: true}); !errors.Is(err, store.ErrBoardClaimUnavailable) {
-		t.Fatalf("stale completion=%v", err)
-	}
-}
-
-func TestBoardPollRetiresSupersededBoardAfterTwoEmptyChecks(t *testing.T) {
-	st, pool := newStore(t)
-	ctx, board, companyID := boardFixture(t, st, pool)
-	if _, err := st.VerifyCompanyBoard(ctx, companyID, board.Source, board.BoardToken, "user_confirmed"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE company_boards SET superseded_at = NOW() WHERE id = $1", board.ID); err != nil {
-		t.Fatal(err)
-	}
-	for range 2 {
-		claim, err := st.ClaimBoard(ctx, board.ID, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Complete: true}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	boards, err := st.ListCompanyBoards(ctx, companyID)
-	if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardRetired {
-		t.Fatalf("board retirement=%v err=%v", boards, err)
-	}
-	if due, err := st.ListActiveBoards(ctx); err != nil || len(due) != 0 {
-		t.Fatalf("retired board active=%v err=%v", due, err)
-	}
-}
-
-func TestSaveCanonicalContentChangeAndDistinctBoard(t *testing.T) {
-	st, _ := newStore(t)
-	ctx := context.Background()
-	first := baseJob
-	first.BoardID = "11111111-1111-1111-1111-111111111111"
-	first.ProviderPostingID = "posting-1"
-	first.URL = "https://example.com/jobs/change/1"
-	saved, _, err := st.SaveCanonical(ctx, first)
-	if err != nil {
-		t.Fatal(err)
-	}
-	changed := first
-	changed.Title = "Senior Engineer"
-	updated, status, err := st.SaveCanonical(ctx, changed)
-	if err != nil || status != "changed" || updated.ID != saved.ID {
-		t.Fatalf("changed: status=%q job=%+v err=%v", status, updated, err)
-	}
-	unchanged, status, err := st.SaveCanonical(ctx, changed)
-	if err != nil || status != "unchanged" || unchanged.ID != saved.ID || unchanged.ContentFingerprint != updated.ContentFingerprint {
-		t.Fatalf("changed replay: status=%q job=%+v err=%v", status, unchanged, err)
-	}
-	other := first
-	other.BoardID = "22222222-2222-2222-2222-222222222222"
-	other.URL = "https://other.example.com/jobs/change/1"
-	distinct, status, err := st.SaveCanonical(ctx, other)
-	if err != nil || status != "new" || distinct.ID == saved.ID {
-		t.Fatalf("distinct board: status=%q job=%+v err=%v", status, distinct, err)
-	}
-}
-
-func TestSaveCanonicalPrunesStaleOptionAnswersOnFingerprintChange(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-
-	jobA := baseJob
-	jobA.URL = "https://example.com/jobs/prune"
-	saved, _, err := st.SaveCanonical(ctx, jobA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fpA := saved.ContentFingerprint
-
-	jobB := jobA
-	jobB.Title = "Staff Engineer"
-	updatedB, status, err := st.SaveCanonical(ctx, jobB)
-	if err != nil || status != "changed" {
-		t.Fatalf("changed to B: status=%q err=%v", status, err)
-	}
-	fpB := updatedB.ContentFingerprint
-
-	insertOptionAnswer(t, pool, saved.ID, fpA, "q-fpA")
-	insertOptionAnswer(t, pool, saved.ID, fpB, "q-fpB")
-
-	updatedA, status, err := st.SaveCanonical(ctx, jobA)
-	if err != nil || status != "changed" || updatedA.ContentFingerprint != fpA {
-		t.Fatalf("reverted to A: status=%q fingerprint=%q err=%v", status, updatedA.ContentFingerprint, err)
-	}
-
-	userID := pgtest.InsertUser(t, pool)
-	if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", saved.ID, userID); err != nil {
-		t.Fatal(err)
-	}
-
-	remaining := optionAnswerFingerprints(t, pool, saved.ID)
-	if len(remaining) != 1 || remaining[fpA] != 1 {
-		t.Fatalf("option_answers after prune = %v, want only {%q: 1}", remaining, fpA)
-	}
-
-	var scoredAnswerCount int
-	err = pool.QueryRow(ctx,
-		`SELECT count(*) FROM job_scores s
-		 JOIN jobs j ON j.id = s.job_id
-		 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
-		 WHERE s.user_id = $1 AND a.question_hash = 'q-fpB'`, userID).Scan(&scoredAnswerCount)
-	if err != nil {
-		t.Fatalf("count scoring-visible answers: %v", err)
-	}
-	if scoredAnswerCount != 0 {
-		t.Fatalf("pruned answer q-fpB still visible to scoring (matches the job's current fingerprint), want treated as unknown")
-	}
-}
-
-func TestSaveCanonicalNoInterestedUserQueuesNoEffect(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untracked-co", Name: "Untracked Co"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/untracked"
-	job.CompanySlug = company.Slug
-	job.CompanyID = company.ID
-	saved, _, err := st.SaveCanonical(ctx, job)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := effectCountForJob(t, pool, saved.ID); count != 0 {
-		t.Fatalf("queued answer effects for an untracked company = %d, want 0", count)
-	}
-}
-
-func TestSaveCanonicalQueuesRegardlessOfExclusionFilters(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "filtered-co", Name: "Filtered Co"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	userID := pgtest.InsertUser(t, pool)
-	if _, err := pool.Exec(ctx,
-		"INSERT INTO search_config (user_id, excluded_companies) VALUES ($1, $2)",
-		userID, []string{"filtered-co"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 360); err != nil {
-		t.Fatal(err)
-	}
-	job := baseJob
-	job.URL = "https://example.com/jobs/filtered"
-	job.CompanySlug = company.Slug
-	job.CompanyID = company.ID
-	saved, _, err := st.SaveCanonical(ctx, job)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := effectCountForJob(t, pool, saved.ID); count != 1 {
-		t.Fatalf("queued answer effects = %d, want 1 (filters apply later, not at ingest)", count)
-	}
-}
-
-func TestSourceTargetRunGenerationFencesStaleCompletion(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	target, err := st.CreateSourceTarget(ctx, userID, "wis", "engineer", false, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, err := st.StartSourceTargetRun(ctx, target.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !first.Enabled {
-		t.Fatal("manual rerun did not enable target")
-	}
-	second, err := st.StartSourceTargetRun(ctx, target.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.RunID == second.RunID || first.RunID == "" {
-		t.Fatalf("run IDs = %q, %q", first.RunID, second.RunID)
-	}
-	if _, err := st.TransitionSourceTargetRun(ctx, target.ID, first.RunID, "succeeded", ""); !errors.Is(err, data.ErrNotFound) {
-		t.Fatalf("stale completion error = %v", err)
-	}
-	current, err := st.TransitionSourceTargetRun(ctx, target.ID, second.RunID, "succeeded", "")
-	if err != nil || current.RunStatus != "succeeded" {
-		t.Fatalf("current completion = %+v, %v", current, err)
-	}
-}
-
-func TestRetireATSSourceTargetsMigration(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO source_targets (user_id, source, value, enabled, filters, company_id, check_interval_minutes)
-		VALUES ($1, 'greenhouse', 'acme', false, '{}', $2, 180)`, userID, company.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO source_targets (user_id, source, value, enabled, filters)
-		VALUES ($1, 'linkedin', 'go', true, '{}')`, userID); err != nil {
-		t.Fatal(err)
-	}
-
-	raw, err := os.ReadFile("scripts/migrations/20260929150000_retire_ats_source_targets.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	up, _, _ := strings.Cut(string(raw), "-- +goose Down")
-	if _, err := pool.Exec(ctx, up); err != nil {
-		t.Fatalf("migration up: %v", err)
-	}
-
-	var enabled bool
-	var interval int
-	err = pool.QueryRow(ctx, `SELECT enabled, check_interval_minutes FROM tracked_companies WHERE user_id = $1 AND company_id = $2`,
-		userID, company.ID).Scan(&enabled, &interval)
-	if err != nil {
-		t.Fatalf("tracked company not created: %v", err)
-	}
-	if enabled || interval != 180 {
-		t.Errorf("tracked company = enabled %v, interval %d, want false, 180", enabled, interval)
-	}
-	var atsTargets, otherTargets int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FILTER (WHERE source = 'greenhouse'), COUNT(*) FILTER (WHERE source = 'linkedin') FROM source_targets`).Scan(&atsTargets, &otherTargets); err != nil {
-		t.Fatal(err)
-	}
-	if atsTargets != 0 || otherTargets != 1 {
-		t.Errorf("targets after migration = %d ATS, %d other, want 0, 1", atsTargets, otherTargets)
-	}
-}
-
-func TestListCompaniesForUserLastChecked(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "test"); err != nil {
-		t.Fatal(err)
-	}
-	completed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	if _, err := pool.Exec(ctx, `INSERT INTO board_poll_state (board_id, last_completed_at) VALUES ($1, $2)`, board.ID, completed); err != nil {
-		t.Fatal(err)
-	}
-
-	companies, err := st.ListCompaniesForUser(ctx, userID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(companies) != 1 || companies[0].LastCheckedAt == nil || !companies[0].LastCheckedAt.Equal(completed) {
-		t.Errorf("ListCompaniesForUser() = %+v, want last check %v", companies, completed)
-	}
-}
-
-func TestPageJobsScoredOnlyFiltersToCallersScoredJobsOfCompany(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	var otherUserID string
-	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('scored-filter-other', 'hash') RETURNING id`).Scan(&otherUserID); err != nil {
-		t.Fatal(err)
-	}
-	acme := "10000000-0000-0000-0000-000000000003"
-	other := "10000000-0000-0000-0000-000000000004"
-	for id, slug := range map[string]string{acme: "scored-filter-acme", other: "scored-filter-other"} {
-		if _, err := pool.Exec(ctx, `INSERT INTO companies (id,slug,name) VALUES ($1,$2,$2)`, id, slug); err != nil {
-			t.Fatal(err)
-		}
-	}
-	insert := func(id, company string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, `INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id) VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'x','test',NOW(),NOW(),'d',$2)`, id, company); err != nil {
-			t.Fatal(err)
-		}
-	}
-	score := func(jobID, user string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid, $2::uuid, 50, '[]'::jsonb)`, jobID, user); err != nil {
-			t.Fatal(err)
-		}
-	}
-	scoredID := "40000000-0000-0000-0000-000000000001"
-	unscoredID := "40000000-0000-0000-0000-000000000002"
-	scoredByOtherID := "40000000-0000-0000-0000-000000000003"
-	otherCompanyID := "40000000-0000-0000-0000-000000000004"
-	insert(scoredID, acme)
-	insert(unscoredID, acme)
-	insert(scoredByOtherID, acme)
-	insert(otherCompanyID, other)
-	score(scoredID, userID)
-	score(scoredByOtherID, otherUserID)
-	score(otherCompanyID, userID)
-
-	page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: acme, ScoredOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(page.Items) != 1 || page.Items[0].ID != scoredID {
-		t.Fatalf("Page(scored) items = %+v, want only %s", page.Items, scoredID)
-	}
-}
-
-func TestListTrackedCompaniesCountsRelevantJobs(t *testing.T) {
-	st, pool := newStore(t)
-	ctx := context.Background()
-	userID := pgtest.InsertUser(t, pool)
-	var otherID string
-	if err := pool.QueryRow(ctx, `INSERT INTO users (username, password_hash) VALUES ('other-user', 'hash') RETURNING id`).Scan(&otherID); err != nil {
-		t.Fatal(err)
-	}
-
-	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "relevant-co", Name: "Relevant Co"})
-	if err != nil {
-		t.Fatalf("UpsertCompany: %v", err)
-	}
-	if _, err := st.SetCompanyTracking(ctx, userID, company.ID, true, 180); err != nil {
-		t.Fatalf("SetCompanyTracking: %v", err)
-	}
-
-	insertJob := func(n int, closed bool) string {
-		t.Helper()
-		var id string
-		err := pool.QueryRow(ctx,
-			`INSERT INTO jobs (title,location,url,company_slug,source,updated_at,scraped_at,description,company_id,closed_at)
-			 VALUES ('Role','','https://example.com/'||$1::text,'relevant-co','test',NOW(),NOW(),'d',$2::uuid,CASE WHEN $3::bool THEN NOW() END)
-			 RETURNING id::text`, strconv.Itoa(n), company.ID, closed).Scan(&id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	score := func(jobID, user, breakdown string) {
-		t.Helper()
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1::uuid,$2::uuid,50,$3::jsonb)`,
-			jobID, user, breakdown); err != nil {
-			t.Fatal(err)
-		}
-	}
-	scoredOpen := insertJob(1, false)
-	score(scoredOpen, userID, `[]`)
-	blocked := insertJob(2, false)
-	score(blocked, userID, `[{"effect":"blocked"}]`)
-	closedScored := insertJob(3, true)
-	score(closedScored, userID, `[]`)
-	otherUsers := insertJob(4, false)
-	score(otherUsers, otherID, `[]`)
-	insertJob(5, false)
-
-	got, err := st.ListTrackedCompaniesForUser(ctx, userID)
-	if err != nil || len(got) != 1 {
-		t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want one company", got, err)
+	if len(got) != 1 {
+		t.Fatalf("ListTrackedCompaniesForUser() = %+v, want one company", got)
 	}
 	if got[0].OpenJobs != 4 || got[0].RelevantJobs != 1 {
-		t.Fatalf("open, relevant = %d, %d, want 4, 1", got[0].OpenJobs, got[0].RelevantJobs)
+		t.Errorf("open, relevant = %d, %d, want 4, 1", got[0].OpenJobs, got[0].RelevantJobs)
 	}
 }
