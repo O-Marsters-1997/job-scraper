@@ -1,26 +1,17 @@
 package sourcespec
 
-import "strings"
-
-type sourceKind int
-
-const (
-	kindBoard sourceKind = iota
-	kindURL
-	kindFilter
+import (
+	"slices"
+	"strings"
 )
 
-func (k sourceKind) string() string {
-	switch k {
-	case kindBoard:
-		return "board"
-	case kindURL:
-		return "url"
-	case kindFilter:
-		return "filter"
-	}
-	return ""
-}
+type sourceKind string
+
+const (
+	kindBoard  sourceKind = "board"
+	kindURL    sourceKind = "url"
+	kindFilter sourceKind = "filter"
+)
 
 // Source roles classify a source by purpose, orthogonal to sourceKind (which
 // describes value shape). RoleATS sources are known-company boards re-checked
@@ -33,6 +24,8 @@ const (
 // FilterField describes a structured filter parameter accepted by a kindFilter source.
 type FilterField struct {
 	Name     string         `json:"name"`
+	Param    string         `json:"-"`
+	Numeric  bool           `json:"-"`
 	Label    string         `json:"label"`
 	Required bool           `json:"required"`
 	Options  []FilterOption `json:"options,omitempty"` // non-empty for enumerated fields
@@ -71,24 +64,24 @@ var entries = []registryEntry{
 	{name: "recruitee", label: "Recruitee", kind: kindBoard, role: RoleATS, urlPrefix: "https://recruitee.com"},
 	{name: "personio", label: "Personio", kind: kindBoard, role: RoleATS, urlPrefix: "https://personio.de"},
 	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
-		{Name: "region", Label: "Region", Options: []FilterOption{
+		{Name: "region", Param: "w", Label: "Region", Options: []FilterOption{
 			{Value: "uk", Label: "United Kingdom"},
 		}},
 	}},
 	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
-		{Name: "location", Label: "Location", Required: false},
-		{Name: "company_id", Label: "Company ID", Required: false},
-		{Name: "recency", Label: "Recency", Options: []FilterOption{
+		{Name: "location", Param: "location", Label: "Location"},
+		{Name: "company_id", Param: "f_C", Label: "Company ID", Numeric: true},
+		{Name: "recency", Param: "f_TPR", Label: "Recency", Options: []FilterOption{
 			{Value: "r86400", Label: "Past 24 hours"},
 			{Value: "r604800", Label: "Past week"},
 			{Value: "r2592000", Label: "Past month"},
 		}},
-		{Name: "arrangement", Label: "Work Arrangement", Options: []FilterOption{
+		{Name: "arrangement", Param: "f_WT", Label: "Work Arrangement", Options: []FilterOption{
 			{Value: "1", Label: "On-site"},
 			{Value: "2", Label: "Remote"},
 			{Value: "3", Label: "Hybrid"},
 		}},
-		{Name: "experience", Label: "Experience Level", Options: []FilterOption{
+		{Name: "experience", Param: "f_E", Label: "Experience Level", Options: []FilterOption{
 			{Value: "1", Label: "Internship"},
 			{Value: "2", Label: "Entry level"},
 			{Value: "3", Label: "Associate"},
@@ -96,22 +89,22 @@ var entries = []registryEntry{
 			{Value: "5", Label: "Director"},
 			{Value: "6", Label: "Executive"},
 		}},
-		{Name: "job_type", Label: "Job Type", Options: []FilterOption{
+		{Name: "job_type", Param: "f_JT", Label: "Job Type", Options: []FilterOption{
 			{Value: "F", Label: "Full-time"},
 			{Value: "P", Label: "Part-time"},
 			{Value: "C", Label: "Contract"},
 			{Value: "T", Label: "Temporary"},
 			{Value: "I", Label: "Internship"},
 		}},
-		{Name: "geo_id", Label: "Geo ID", Required: false},
-		{Name: "distance", Label: "Distance", Options: []FilterOption{
+		{Name: "geo_id", Param: "geoId", Label: "Geo ID", Numeric: true},
+		{Name: "distance", Param: "f_D", Label: "Distance", Options: []FilterOption{
 			{Value: "10", Label: "10 miles"},
 			{Value: "25", Label: "25 miles"},
 			{Value: "50", Label: "50 miles"},
 			{Value: "75", Label: "75 miles"},
 			{Value: "100", Label: "100 miles"},
 		}},
-		{Name: "salary_band", Label: "Salary Band", Options: []FilterOption{
+		{Name: "salary_band", Param: "f_SB2", Label: "Salary Band", Options: []FilterOption{
 			{Value: "1", Label: "$40,000+"},
 			{Value: "2", Label: "$60,000+"},
 			{Value: "3", Label: "$80,000+"},
@@ -138,7 +131,7 @@ func Sources() []SourceInfo {
 		infos[i] = SourceInfo{
 			Name:      e.name,
 			Label:     e.label,
-			Kind:      e.kind.string(),
+			Kind:      string(e.kind),
 			Role:      e.role,
 			URLPrefix: e.urlPrefix,
 			Filters:   filters,
@@ -176,9 +169,10 @@ func LookupFilterFields(name string) ([]FilterField, bool) {
 	return e.filters, true
 }
 
-// ValidFilterOption reports whether value is a declared option of the named enumerated
-// filter on the source. It is false for unknown sources, unknown fields and free-form fields.
-func ValidFilterOption(source, field, value string) bool {
+// ValidFilterValue reports whether value is acceptable for the named filter on the source:
+// a declared option for enumerated fields, digits for numeric fields, anything for free-form
+// fields. It is false for unknown sources and unknown fields.
+func ValidFilterValue(source, field, value string) bool {
 	fields, ok := LookupFilterFields(source)
 	if !ok {
 		return false
@@ -187,11 +181,13 @@ func ValidFilterOption(source, field, value string) bool {
 		if f.Name != field {
 			continue
 		}
-		for _, o := range f.Options {
-			if o.Value == value {
-				return true
-			}
+		switch {
+		case len(f.Options) > 0:
+			return slices.ContainsFunc(f.Options, func(o FilterOption) bool { return o.Value == value })
+		case f.Numeric:
+			return value != "" && strings.Trim(value, "0123456789") == ""
 		}
+		return true
 	}
 	return false
 }

@@ -8,35 +8,19 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
 const gateKeyPrefix = "harvest:"
 
-type fakeCompanyUpserter struct {
-	mu        sync.Mutex
-	companies []dto.Company
-}
-
-func (f *fakeCompanyUpserter) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.Company, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	company := dto.Company{
-		Slug:              c.Slug,
-		Name:              c.Name,
-		ATSSource:         c.ATSSource,
-		ATSToken:          c.ATSToken,
-		Domain:            c.Domain,
-		LinkedInCompanyID: c.LinkedInCompanyID,
+func upserted(t *testing.T, store *jobsearchtest.FakeStore) []dto.Company {
+	t.Helper()
+	companies, err := store.ListCompaniesToCrawl(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	f.companies = append(f.companies, company)
-	return company, nil
-}
-
-func (f *fakeCompanyUpserter) upserted() []dto.Company {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.companies
+	return companies
 }
 
 type fakeGate struct {
@@ -83,12 +67,12 @@ func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
 		{Domain: "onlydomain.io"},
 		{},
 	}}
-	companies := &fakeCompanyUpserter{}
+	companies := jobsearchtest.NewFakeStore()
 	r := discover.NewRunner([]discover.Harvester{h}, companies, newFakeGate())
 
 	r.RunOnce(context.Background())
 
-	got := companies.upserted()
+	got := upserted(t, companies)
 	if len(got) != 2 {
 		t.Fatalf("got %d companies, want 2: %+v", len(got), got)
 	}
@@ -107,13 +91,13 @@ func TestRunner_UpsertsWithDerivedSlugs(t *testing.T) {
 func TestRunner_HarvesterErrorSkipsOnlyThatHarvester(t *testing.T) {
 	failing := &fakeHarvester{name: "broken", err: errors.New("boom")}
 	ok := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Good Co"}}}
-	companies := &fakeCompanyUpserter{}
+	companies := jobsearchtest.NewFakeStore()
 	gate := newFakeGate()
 	r := discover.NewRunner([]discover.Harvester{failing, ok}, companies, gate)
 
 	r.RunOnce(context.Background())
 
-	got := companies.upserted()
+	got := upserted(t, companies)
 	if len(got) != 1 || got[0].Name != "Good Co" {
 		t.Fatalf("want only Good Co upserted, got %+v", got)
 	}
@@ -127,7 +111,7 @@ func TestRunner_HarvesterErrorSkipsOnlyThatHarvester(t *testing.T) {
 
 func TestRunner_RespectsGate(t *testing.T) {
 	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
-	companies := &fakeCompanyUpserter{}
+	companies := jobsearchtest.NewFakeStore()
 	gate := newFakeGate()
 	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-time.Hour)
 
@@ -137,7 +121,7 @@ func TestRunner_RespectsGate(t *testing.T) {
 	if h.calls != 0 {
 		t.Errorf("want Harvest not called within gate window, got %d calls", h.calls)
 	}
-	got := companies.upserted()
+	got := upserted(t, companies)
 	if len(got) != 0 {
 		t.Errorf("want no upserts while gated, got %+v", got)
 	}
@@ -145,7 +129,7 @@ func TestRunner_RespectsGate(t *testing.T) {
 
 func TestRunner_HarvestsWhenGateExpired(t *testing.T) {
 	h := &fakeHarvester{name: "yc", companies: []discover.Company{{Name: "Acme"}}}
-	companies := &fakeCompanyUpserter{}
+	companies := jobsearchtest.NewFakeStore()
 	gate := newFakeGate()
 	gate.last[gateKeyPrefix+"yc"] = time.Now().Add(-25 * time.Hour)
 

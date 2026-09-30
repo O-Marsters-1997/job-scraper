@@ -10,6 +10,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/crawl"
 )
 
@@ -75,27 +76,24 @@ func TestParseATSLinks(t *testing.T) {
 	}
 }
 
-type fakeStore struct {
-	toCrawl []dto.Company
-	upserts []dto.CompanyUpsert
-	touched []string
-}
-
-func (f *fakeStore) ListCompaniesToCrawl(_ context.Context, limit int) ([]dto.Company, error) {
-	if len(f.toCrawl) > limit {
-		return f.toCrawl[:limit], nil
+func seedCompany(t *testing.T, store *jobsearchtest.FakeStore, domain string) dto.Company {
+	t.Helper()
+	company, err := store.UpsertCompany(context.Background(), dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: domain})
+	if err != nil {
+		t.Fatal(err)
 	}
-	return f.toCrawl, nil
+	return company
 }
 
-func (f *fakeStore) TouchCompanyCrawled(_ context.Context, id string) error {
-	f.touched = append(f.touched, id)
-	return nil
-}
-
-func (f *fakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.Company, error) {
-	f.upserts = append(f.upserts, c)
-	return dto.Company{Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken, Domain: c.Domain}, nil
+func assertCrawled(t *testing.T, store *jobsearchtest.FakeStore) {
+	t.Helper()
+	pending, err := store.ListCompaniesToCrawl(context.Background(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("pending crawl = %+v, want none: a crawl, hit or miss, touches last_crawled_at", pending)
+	}
 }
 
 func TestCrawlCompanyResolvesGreenhouseBoard(t *testing.T) {
@@ -115,26 +113,23 @@ func TestCrawlCompanyResolvesGreenhouseBoard(t *testing.T) {
 		t.Fatalf("parse server URL: %v", err)
 	}
 
-	store := &fakeStore{toCrawl: []dto.Company{
-		{ID: "co-1", Slug: "acme", Name: "Acme", Domain: host.Host},
-	}}
+	store := jobsearchtest.NewFakeStore()
+	company := seedCompany(t, store, host.Host)
 	crawler := crawl.New(store).WithClient(server.Client())
 
-	crawler.CrawlCompany(context.Background(), store.toCrawl[0])
+	crawler.CrawlCompany(context.Background(), company)
 
-	if len(store.upserts) != 1 {
-		t.Fatalf("expected 1 upsert, got %d", len(store.upserts))
+	got, err := store.GetCompany(context.Background(), company.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	got := store.upserts[0]
 	if got.ATSSource != "greenhouse" || got.ATSToken != "acmecorp" {
-		t.Errorf("upsert = %+v, want ats_source=greenhouse ats_token=acmecorp", got)
+		t.Errorf("company = %+v, want ats_source=greenhouse ats_token=acmecorp", got)
 	}
 	if got.Slug != "acme" || got.Name != "Acme" {
-		t.Errorf("upsert = %+v, want slug/name preserved from the existing company row", got)
+		t.Errorf("company = %+v, want slug/name preserved from the existing company row", got)
 	}
-	if len(store.touched) != 1 || store.touched[0] != "co-1" {
-		t.Errorf("touched = %v, want [co-1]", store.touched)
-	}
+	assertCrawled(t, store)
 }
 
 func TestCrawlCompanyNeverFetchesDisallowedPath(t *testing.T) {
@@ -163,22 +158,23 @@ func TestCrawlCompanyNeverFetchesDisallowedPath(t *testing.T) {
 		t.Fatalf("parse server URL: %v", err)
 	}
 
-	store := &fakeStore{toCrawl: []dto.Company{
-		{ID: "co-2", Slug: "blocked-co", Name: "Blocked Co", Domain: host.Host},
-	}}
+	store := jobsearchtest.NewFakeStore()
+	company := seedCompany(t, store, host.Host)
 	crawler := crawl.New(store).WithClient(server.Client())
 
-	crawler.CrawlCompany(context.Background(), store.toCrawl[0])
+	crawler.CrawlCompany(context.Background(), company)
 
 	if careersFetched {
 		t.Error("expected /careers to never be fetched: robots.txt disallows it")
 	}
-	if len(store.upserts) != 0 {
-		t.Errorf("expected no ATS resolution, got upserts: %+v", store.upserts)
+	got, err := store.GetCompany(context.Background(), company.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(store.touched) != 1 || store.touched[0] != "co-2" {
-		t.Errorf("touched = %v, want [co-2] (a miss still touches last_crawled_at)", store.touched)
+	if got.ATSSource != "" {
+		t.Errorf("expected no ATS resolution, got %+v", got)
 	}
+	assertCrawled(t, store)
 }
 
 func TestCrawlCompanyTreatsUnreachableRobotsAsAllowAll(t *testing.T) {
@@ -195,14 +191,17 @@ func TestCrawlCompanyTreatsUnreachableRobotsAsAllowAll(t *testing.T) {
 		t.Fatalf("parse server URL: %v", err)
 	}
 
-	store := &fakeStore{toCrawl: []dto.Company{
-		{ID: "co-3", Slug: "acme", Name: "Acme", Domain: host.Host},
-	}}
+	store := jobsearchtest.NewFakeStore()
+	company := seedCompany(t, store, host.Host)
 	crawler := crawl.New(store).WithClient(server.Client())
 
-	crawler.CrawlCompany(context.Background(), store.toCrawl[0])
+	crawler.CrawlCompany(context.Background(), company)
 
-	if len(store.upserts) != 1 || store.upserts[0].ATSToken != "acmecorp" {
-		t.Fatalf("upserts = %+v, want the greenhouse board despite the missing robots.txt", store.upserts)
+	got, err := store.GetCompany(context.Background(), company.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ATSToken != "acmecorp" {
+		t.Fatalf("company = %+v, want the greenhouse board despite the missing robots.txt", got)
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -29,6 +28,9 @@ var seedBoards = []string{
 	"https://jobs.generalcatalyst.com/jobs",
 	"https://jobs.accel.com/jobs",
 }
+
+// Getro's SSR path serves a stripped shell with no __NEXT_DATA__ payload to non-browser clients.
+const userAgent = "Mozilla/5.0 (compatible; job-scraper-harvester/1.0)"
 
 var nextDataRe = regexp.MustCompile(`(?s)<script id="__NEXT_DATA__" type="application/json">(.*?)</script>`)
 
@@ -54,7 +56,7 @@ func (h *Harvester) Name() string { return "getro" }
 func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 	var all []discover.Company
 	for _, board := range h.boards {
-		body, err := h.fetch(ctx, board)
+		body, err := discover.Get(ctx, h.client, board, userAgent)
 		if err != nil {
 			slog.WarnContext(ctx, "getro: board fetch failed, skipping", slog.String(logger.KeyURL, board), slog.Any(logger.KeyErr, err))
 			continue
@@ -67,26 +69,6 @@ func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 		all = append(all, companies...)
 	}
 	return all, nil
-}
-
-func (h *Harvester) fetch(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	// A browser-like UA is required: Getro's SSR path serves a stripped shell
-	// with no __NEXT_DATA__ payload to non-browser clients.
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; job-scraper-harvester/1.0)")
-
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: status %d", url, resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
 }
 
 type nextData struct {

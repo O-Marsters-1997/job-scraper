@@ -55,7 +55,7 @@ func (s Search) startURL() string {
 	v.Set("q", s.Keywords)
 	switch {
 	case s.Region == "":
-	case sourcespec.ValidFilterOption("wis", "region", s.Region):
+	case sourcespec.ValidFilterValue("wis", "region", s.Region):
 		v.Set("w", s.Region)
 	default:
 		slog.Warn("wis: dropping invalid filter value", slog.String("param", "region"), slog.String("value", s.Region))

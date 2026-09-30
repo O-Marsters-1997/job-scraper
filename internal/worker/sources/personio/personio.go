@@ -12,12 +12,11 @@ import (
 
 // New builds a Personio source for one company subdomain (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
-	return sources.NewBoardSource(token, sources.BoardSpec{
-		Name: "personio",
-		URL: func(token string) string {
-			return fmt.Sprintf("https://%s.jobs.personio.com/xml", token)
-		},
-		Parse: parse,
+	return sources.NewBoardSource(sources.BoardSpec{
+		Name:        "personio",
+		URL:         fmt.Sprintf("https://%s.jobs.personio.com/xml", token),
+		CompanySlug: token,
+		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
 	})
 }
 
@@ -53,9 +52,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Title:             p.Name,
 			Location:          p.Office,
 			URL:               fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
-			CompanySlug:       token,
 			ProviderPostingID: p.ID,
-			Source:            "personio",
 			Description:       sb.String(),
 			UpdatedAt:         time.Now().UTC(),
 		})

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -46,7 +45,7 @@ func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 			slog.WarnContext(ctx, "yc harvester: page cap reached, stopping early", slog.Int("cap", maxPages))
 			break
 		}
-		body, err := h.fetch(ctx, next)
+		body, err := discover.Get(ctx, h.client, next, "")
 		if err != nil {
 			return nil, err
 		}
@@ -58,22 +57,6 @@ func (h *Harvester) Harvest(ctx context.Context) ([]discover.Company, error) {
 		next = nextPage
 	}
 	return all, nil
-}
-
-func (h *Harvester) fetch(ctx context.Context, pageURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pageURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	resp, err := h.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch %s: %w", pageURL, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: status %d", pageURL, resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
 }
 
 type apiResponse struct {

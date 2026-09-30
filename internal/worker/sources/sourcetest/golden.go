@@ -1,12 +1,9 @@
 package sourcetest
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,10 +18,6 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files from parser output")
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
 // RunGolden serves snapshots/<fixture> as src's API response and compares the fetched jobs to
 // snapshots/<fixture minus extension>.golden.json. Run with -update to rewrite it.
 func RunGolden(t *testing.T, fixture string, src *sources.BoardSource) {
@@ -35,9 +28,7 @@ func RunGolden(t *testing.T, fixture string, src *sources.BoardSource) {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	src.Client().Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(bytes.NewReader(body))}, nil
-	})
+	src.Client().Transport = Respond(string(body))
 
 	start := time.Now()
 	got, _, err := src.FetchPage(context.Background(), "")

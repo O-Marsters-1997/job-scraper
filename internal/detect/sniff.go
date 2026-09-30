@@ -6,29 +6,16 @@ import (
 )
 
 type sniffPattern struct {
-	name    string
+	source  string
 	pattern *regexp.Regexp
-	extract func(matches []string) (source, token string)
 }
 
+// Greenhouse always puts the literal "job_board" in the embed's path segment;
+// the real token lives in the for= query param instead.
 var sniffPatterns = []sniffPattern{
-	{
-		// Greenhouse always puts the literal "job_board" in this embed's path
-		// segment; the real token lives in the for= query param instead.
-		name:    "greenhouse-embed",
-		pattern: regexp.MustCompile(`boards\.greenhouse\.io/embed/job_board\?[^\s"'<>]*for=([a-zA-Z0-9_-]+)`),
-		extract: func(m []string) (string, string) { return "greenhouse", m[1] },
-	},
-	{
-		name:    "lever",
-		pattern: regexp.MustCompile(`jobs\.lever\.co/([a-zA-Z0-9_-]+)`),
-		extract: func(m []string) (string, string) { return "lever", m[1] },
-	},
-	{
-		name:    "ashby",
-		pattern: regexp.MustCompile(`jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)`),
-		extract: func(m []string) (string, string) { return "ashby", m[1] },
-	},
+	{"greenhouse", regexp.MustCompile(`boards\.greenhouse\.io/embed/job_board\?[^\s"'<>]*for=([a-zA-Z0-9_-]+)`)},
+	{"lever", regexp.MustCompile(`jobs\.lever\.co/([a-zA-Z0-9_-]+)`)},
+	{"ashby", regexp.MustCompile(`jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)`)},
 }
 
 var workdayPattern = regexp.MustCompile(`[a-zA-Z0-9-]+\.myworkdayjobs\.com`)
@@ -40,12 +27,7 @@ func SniffATS(body []byte) (source, token string, ok bool) {
 		if m == nil {
 			continue
 		}
-		strs := make([]string, len(m))
-		for i, b := range m {
-			strs[i] = string(b)
-		}
-		source, token = p.extract(strs)
-		return source, token, true
+		return p.source, string(m[1]), true
 	}
 
 	if m := workdayPattern.Find(body); m != nil {

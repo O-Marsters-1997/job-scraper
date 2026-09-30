@@ -18,7 +18,6 @@ type Module struct {
 	store         Store
 	jobs          *Service
 	sourceTargets *sourcetargets.Service
-	ingest        *Ingester
 }
 
 type ScoringPort interface {
@@ -70,7 +69,6 @@ func Build(deps Deps) *Module {
 		store:         deps.Store,
 		jobs:          NewService(deps.Store, deps.Queue),
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
-		ingest:        newIngester(deps.Store, deps.Store),
 	}
 }
 
@@ -88,11 +86,9 @@ func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 	return m.sourceTargets.Reconsider(ctx, cfg)
 }
 
-func (m *Module) Boards() *Service { return m.jobs }
+func (m *Module) Boards() Store { return m.store }
 
 func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
-
-func (m *Module) Catalog() *Service { return m.jobs }
 
 func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
 	return m.sourceTargets.DeleteExpired(ctx)

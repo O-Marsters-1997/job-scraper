@@ -51,74 +51,43 @@ const (
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
-type Search struct {
-	Keywords string // maps to the keywords URL param
-	Location string // maps to the location URL param; empty means no filter
-
-	CompanyID   string // maps to f_C; numeric LinkedIn company ID
-	Recency     string // maps to f_TPR; one of r86400, r604800, r2592000
-	Arrangement string // maps to f_WT; 1=on-site, 2=remote, 3=hybrid
-	Experience  string // maps to f_E; 1-6
-	JobType     string // maps to f_JT; one of F, P, C, T, I
-	GeoID       string // maps to geoId; numeric
-	Distance    string // maps to f_D; numeric, miles
-	SalaryBand  string // maps to f_SB2; 1-9
-}
-
-func isNumeric(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
-}
-
-func enumerated(field string) func(string) bool {
-	return func(value string) bool { return sourcespec.ValidFilterOption("linkedin", field, value) }
-}
-
-func setFilter(v url.Values, param, value string, valid func(string) bool) {
-	if value == "" {
-		return
-	}
-	if !valid(value) {
-		slog.Warn("linkedin: dropping invalid filter value", slog.String("param", param), slog.String("value", value))
-		return
-	}
-	v.Set(param, value)
-}
-
-func (s Search) pageURL(start int) string {
+func pageURL(keywords string, filters map[string]string, start int) string {
 	v := url.Values{}
-	v.Set("keywords", s.Keywords)
-	if s.Location != "" {
-		v.Set("location", s.Location)
+	v.Set("keywords", keywords)
+	fields, _ := sourcespec.LookupFilterFields("linkedin")
+	for _, f := range fields {
+		value := filters[f.Name]
+		if value == "" {
+			continue
+		}
+		if !sourcespec.ValidFilterValue("linkedin", f.Name, value) {
+			slog.Warn("linkedin: dropping invalid filter value", slog.String("param", f.Param), slog.String("value", value))
+			continue
+		}
+		v.Set(f.Param, value)
 	}
-	setFilter(v, "f_C", s.CompanyID, isNumeric)
-	setFilter(v, "f_TPR", s.Recency, enumerated("recency"))
-	setFilter(v, "f_WT", s.Arrangement, enumerated("arrangement"))
-	setFilter(v, "f_E", s.Experience, enumerated("experience"))
-	setFilter(v, "f_JT", s.JobType, enumerated("job_type"))
-	setFilter(v, "geoId", s.GeoID, isNumeric)
-	setFilter(v, "f_D", s.Distance, enumerated("distance"))
-	setFilter(v, "f_SB2", s.SalaryBand, enumerated("salary_band"))
 	v.Set("start", strconv.Itoa(start))
 	return searchURL + "?" + v.Encode()
 }
 
 type Scraper struct {
 	sources.PaginatedBase
-	search Search
+	keywords string
+	filters  map[string]string
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(search Search) *Scraper {
+func New(keywords string, filters map[string]string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:     "linkedin",
 			UseProxy: true,
 		}),
-		search: search,
+		keywords: keywords,
+		filters:  filters,
 	}
 }
 
@@ -131,7 +100,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, s.search.pageURL(start))
+	body, err := s.Get(ctx, pageURL(s.keywords, s.filters, start))
 	if err != nil {
 		return nil, "", err
 	}

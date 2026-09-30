@@ -47,12 +47,10 @@ func main() {
 func connectDB(ctx context.Context) *pgxpool.Pool {
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "db connect: %v\n", err)
-		os.Exit(1)
+		fatal("db connect", err)
 	}
 	if err := db.RunMigrations(ctx, pool); err != nil {
-		fmt.Fprintf(os.Stderr, "run migrations: %v\n", err)
-		os.Exit(1)
+		fatal("run migrations", err)
 	}
 	return pool
 }
@@ -67,8 +65,7 @@ func runCreateUser(args []string) {
 	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "read password: %v\n", err)
-		os.Exit(1)
+		fatal("read password", err)
 	}
 	if len(passwordBytes) == 0 {
 		fmt.Fprintln(os.Stderr, "password must not be empty")
@@ -77,8 +74,7 @@ func runCreateUser(args []string) {
 
 	hash, err := bcrypt.GenerateFromPassword(passwordBytes, 12)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hash password: %v\n", err)
-		os.Exit(1)
+		fatal("hash password", err)
 	}
 
 	ctx := context.Background()
@@ -89,8 +85,7 @@ func runCreateUser(args []string) {
 	idm := identity.NewFacade(pool, apps)
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "create user: %v\n", err)
-		os.Exit(1)
+		fatal("create user", err)
 	}
 
 	fmt.Printf("User %q created (id: %s)\n", user.Username, user.ID)
@@ -100,19 +95,32 @@ func runOptions(args []string) {
 	if len(args) < 1 {
 		usage()
 	}
+	var run func(context.Context, *scoring.Module) error
+	var label, done string
 	switch args[0] {
 	case "add":
 		if len(args) != 5 {
 			usage()
 		}
+		id, dimension, optionLabel, question := args[1], args[2], args[3], args[4]
+		run = func(ctx context.Context, m *scoring.Module) error {
+			return m.AddOption(ctx, id, dimension, optionLabel, question)
+		}
+		label, done = "add option", fmt.Sprintf("Option %q added", id)
 	case "reword":
 		if len(args) != 3 {
 			usage()
 		}
+		id, question := args[1], args[2]
+		run = func(ctx context.Context, m *scoring.Module) error { return m.RewordOption(ctx, id, question) }
+		label, done = "reword option", fmt.Sprintf("Option %q reworded", id)
 	case "retire":
 		if len(args) != 2 {
 			usage()
 		}
+		id := args[1]
+		run = func(ctx context.Context, m *scoring.Module) error { return m.RetireOption(ctx, id) }
+		label, done = "retire option", fmt.Sprintf("Option %q retired", id)
 	default:
 		usage()
 	}
@@ -120,29 +128,13 @@ func runOptions(args []string) {
 	ctx := context.Background()
 	pool := connectDB(ctx)
 	defer pool.Close()
-	scoringModule := scoring.NewFacade(pool)
-
-	switch args[0] {
-	case "add":
-		id, dimension, label, question := args[1], args[2], args[3], args[4]
-		if err := scoringModule.AddOption(ctx, id, dimension, label, question); err != nil {
-			fmt.Fprintf(os.Stderr, "add option: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Option %q added\n", id)
-	case "reword":
-		id, question := args[1], args[2]
-		if err := scoringModule.RewordOption(ctx, id, question); err != nil {
-			fmt.Fprintf(os.Stderr, "reword option: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Option %q reworded\n", id)
-	case "retire":
-		id := args[1]
-		if err := scoringModule.RetireOption(ctx, id); err != nil {
-			fmt.Fprintf(os.Stderr, "retire option: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Option %q retired\n", id)
+	if err := run(ctx, scoring.NewFacade(pool)); err != nil {
+		fatal(label, err)
 	}
+	fmt.Println(done)
+}
+
+func fatal(what string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: %v\n", what, err)
+	os.Exit(1)
 }

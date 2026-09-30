@@ -32,26 +32,19 @@ func main() {
 
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "tracing init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "tracing init failed", err)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
 
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "db init failed", err)
 	}
 	defer pool.Close()
 
-	brokerURL := os.Getenv("RABBITMQ_URL")
-	if brokerURL == "" {
-		brokerURL = "amqp://guest:guest@localhost:5672/"
-	}
-	q, err := queue.NewBroker(brokerURL)
+	q, err := queue.NewBrokerFromEnv()
 	if err != nil {
-		slog.ErrorContext(ctx, "queue init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "queue init failed", err)
 	}
 	slog.InfoContext(ctx, "queue client ready")
 	defer func() { _ = q.Close() }()
@@ -60,8 +53,7 @@ func main() {
 	idm, err := identity.New(pool, apps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
-		slog.ErrorContext(ctx, "identity init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "identity init failed", err)
 	}
 
 	notifyFrom := os.Getenv("NOTIFY_EMAIL_FROM")
@@ -79,15 +71,7 @@ func main() {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	reg.MustRegister(telemetry.NewStateCollector(scoringModule))
-	metricsAddr := os.Getenv("METRICS_ADDR")
-	if metricsAddr == "" {
-		metricsAddr = ":9091"
-	}
-	go func() {
-		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
-			slog.ErrorContext(ctx, "metrics server failed", slog.Any(logger.KeyErr, err))
-		}
-	}()
+	telemetry.ServeMetrics(ctx, reg)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
@@ -112,7 +96,11 @@ func main() {
 
 	slog.InfoContext(ctx, "api server starting", slog.String("addr", port))
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		slog.ErrorContext(ctx, "server error", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "server error", err)
 	}
+}
+
+func fatal(ctx context.Context, msg string, err error) {
+	slog.ErrorContext(ctx, msg, slog.Any(logger.KeyErr, err)) //nolint:sloglint // pedantic: msg is a literal at every call site
+	os.Exit(1)
 }

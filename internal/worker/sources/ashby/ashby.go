@@ -10,12 +10,11 @@ import (
 
 // New builds an Ashby source for one company slug (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
-	return sources.NewBoardSource(token, sources.BoardSpec{
-		Name: "ashby",
-		URL: func(token string) string {
-			return fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", token)
-		},
-		Parse: parse,
+	return sources.NewBoardSource(sources.BoardSpec{
+		Name:        "ashby",
+		URL:         fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", token),
+		CompanySlug: token,
+		Parse:       parse,
 	})
 }
 
@@ -32,7 +31,7 @@ type jobPosting struct {
 	PublishedAt     string `json:"publishedAt"`
 }
 
-func parse(body []byte, token string) ([]dto.Job, error) {
+func parse(body []byte) ([]dto.Job, error) {
 	var resp boardResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
@@ -44,9 +43,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Title:             jp.Title,
 			Location:          jp.Location,
 			URL:               jp.JobURL,
-			CompanySlug:       token,
 			ProviderPostingID: jp.ID,
-			Source:            "ashby",
 			Description:       jp.DescriptionHTML,
 			UpdatedAt:         sources.RFC3339OrNow(jp.PublishedAt),
 		})

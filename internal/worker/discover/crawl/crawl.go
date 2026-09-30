@@ -20,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
 const (
@@ -157,7 +158,7 @@ func (c *Crawler) resolve(ctx context.Context, log *slog.Logger, domain string) 
 	if !found {
 		return "", "", false
 	}
-	navBody, navPageURL, fetched := s.getAbsolute(ctx, navURL)
+	navBody, navPageURL, fetched := s.fetchIfAllowed(ctx, navURL)
 	if !fetched {
 		return "", "", false
 	}
@@ -186,7 +187,7 @@ type session struct {
 
 func (s *session) fetchRobots(ctx context.Context) {
 	u := &neturl.URL{Scheme: "https", Host: s.host, Path: "/robots.txt"}
-	body, err := s.fetchURL(ctx, u.String())
+	body, err := discover.Get(ctx, s.client, u.String(), userAgent)
 	s.fetches++
 	if err != nil {
 		s.log.InfoContext(ctx, "crawl: robots.txt unreachable, treating as allow-all", slog.Any(logger.KeyErr, err))
@@ -205,10 +206,6 @@ func (s *session) get(ctx context.Context, path string) ([]byte, *neturl.URL, bo
 	return s.fetchIfAllowed(ctx, &neturl.URL{Scheme: "https", Host: s.host, Path: path})
 }
 
-func (s *session) getAbsolute(ctx context.Context, u *neturl.URL) ([]byte, *neturl.URL, bool) {
-	return s.fetchIfAllowed(ctx, u)
-}
-
 func (s *session) fetchIfAllowed(ctx context.Context, u *neturl.URL) ([]byte, *neturl.URL, bool) {
 	if s.fetches >= maxFetchesPerCompany {
 		s.log.InfoContext(ctx, "crawl: fetch budget exhausted, skipping", slog.String(logger.KeyURL, u.String()))
@@ -222,7 +219,7 @@ func (s *session) fetchIfAllowed(ctx context.Context, u *neturl.URL) ([]byte, *n
 		s.wait(ctx)
 	}
 
-	body, err := s.fetchURL(ctx, u.String())
+	body, err := discover.Get(ctx, s.client, u.String(), userAgent)
 	s.fetches++
 	if err != nil {
 		s.log.WarnContext(ctx, "crawl: fetch failed", slog.String(logger.KeyURL, u.String()), slog.Any(logger.KeyErr, err))
@@ -240,25 +237,6 @@ func (s *session) wait(ctx context.Context) {
 	case <-ctx.Done():
 	case <-time.After(delay):
 	}
-}
-
-func (s *session) fetchURL(ctx context.Context, rawURL string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status %s", resp.Status)
-	}
-	return io.ReadAll(resp.Body)
 }
 
 // ParseATSLinks extracts candidate ATS URLs from a page: anchor hrefs, iframe

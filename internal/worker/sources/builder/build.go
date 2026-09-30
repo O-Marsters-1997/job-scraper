@@ -47,18 +47,7 @@ func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
 	case "wis":
 		return wis.New(wis.Search{Keywords: t.Value, Region: t.Filters["region"]}), true
 	case "linkedin":
-		return linkedin.New(linkedin.Search{
-			Keywords:    t.Value,
-			Location:    t.Filters["location"],
-			CompanyID:   t.Filters["company_id"],
-			Recency:     t.Filters["recency"],
-			Arrangement: t.Filters["arrangement"],
-			Experience:  t.Filters["experience"],
-			JobType:     t.Filters["job_type"],
-			GeoID:       t.Filters["geo_id"],
-			Distance:    t.Filters["distance"],
-			SalaryBand:  t.Filters["salary_band"],
-		}), true
+		return linkedin.New(t.Value, t.Filters), true
 	default:
 		return nil, false
 	}

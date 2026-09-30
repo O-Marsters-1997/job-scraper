@@ -32,7 +32,7 @@ func TestSources(t *testing.T) {
 	}
 }
 
-func TestValidFilterOption(t *testing.T) {
+func TestValidFilterValue(t *testing.T) {
 	tests := []struct {
 		name                 string
 		source, field, value string
@@ -40,15 +40,17 @@ func TestValidFilterOption(t *testing.T) {
 	}{
 		{"declared option", "linkedin", "recency", "r86400", true},
 		{"undeclared value", "linkedin", "recency", "r1", false},
-		{"free-form field", "linkedin", "company_id", "123", false},
+		{"numeric field accepts digits", "linkedin", "company_id", "123", true},
+		{"numeric field rejects text", "linkedin", "company_id", "abc", false},
+		{"free-form field accepts anything", "linkedin", "location", "London", true},
 		{"unknown field", "linkedin", "nope", "1", false},
 		{"unknown source", "nope", "recency", "r86400", false},
 		{"wis region", "wis", "region", "uk", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sourcespec.ValidFilterOption(tt.source, tt.field, tt.value); got != tt.want {
-				t.Errorf("ValidFilterOption(%q, %q, %q) = %v, want %v", tt.source, tt.field, tt.value, got, tt.want)
+			if got := sourcespec.ValidFilterValue(tt.source, tt.field, tt.value); got != tt.want {
+				t.Errorf("ValidFilterValue(%q, %q, %q) = %v, want %v", tt.source, tt.field, tt.value, got, tt.want)
 			}
 		})
 	}

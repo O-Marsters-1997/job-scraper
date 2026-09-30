@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -45,6 +46,15 @@ func (b *Broker) EnqueueJobs(ctx context.Context, jobs []dto.QueuedJob) error {
 		}
 	}
 	return nil
+}
+
+// NewBrokerFromEnv connects to RABBITMQ_URL, defaulting to the local dev broker.
+func NewBrokerFromEnv() (*Broker, error) {
+	url := os.Getenv("RABBITMQ_URL")
+	if url == "" {
+		url = "amqp://guest:guest@localhost:5672/"
+	}
+	return NewBroker(url)
 }
 
 func NewBroker(url string) (*Broker, error) {

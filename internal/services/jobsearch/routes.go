@@ -47,7 +47,7 @@ func (m *Module) PublicRoutes(r chi.Router) {
 	r.Post("/ingest", handlers.Handle(
 		handlers.DecodeBody[dto.Job],
 		func(ctx context.Context, job dto.Job) (IngestResult, error) {
-			results, err := m.ingest.IngestJobs(ctx, []dto.Job{job})
+			results, err := m.jobs.IngestJobs(ctx, []dto.Job{job})
 			if err != nil {
 				return IngestResult{}, err
 			}
@@ -61,7 +61,7 @@ func (m *Module) PublicRoutes(r chi.Router) {
 	r.With(chimw.RequestSize(2<<20)).Post("/ingest/batch", handlers.Handle(
 		decodeIngestBatch,
 		func(ctx context.Context, in ingestBatchInput) (ingestBatchView, error) {
-			results, err := m.ingest.IngestJobs(ctx, in.Jobs)
+			results, err := m.jobs.IngestJobs(ctx, in.Jobs)
 			if err != nil {
 				return ingestBatchView{}, err
 			}

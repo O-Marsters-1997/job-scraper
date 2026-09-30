@@ -2,32 +2,25 @@ package sources_test
 
 import (
 	"context"
-	"io"
-	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
-
-type boardRoundTrip func(*http.Request) (*http.Response, error)
-
-func (f boardRoundTrip) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestBoardSource_FetchPage(t *testing.T) {
 	baseURL := "https://8.8.8.8"
 
-	src := sources.NewBoardSource("acme", sources.BoardSpec{
-		Name: "stub",
-		URL:  func(token string) string { return baseURL + "/" + token },
-		Parse: func(body []byte, token string) ([]dto.Job, error) {
-			return []dto.Job{{Title: token, URL: "https://example.com/" + token}}, nil
+	src := sources.NewBoardSource(sources.BoardSpec{
+		Name:        "stub",
+		CompanySlug: "acme",
+		URL:         baseURL + "/acme",
+		Parse: func([]byte) ([]dto.Job, error) {
+			return []dto.Job{{Title: "acme", URL: "https://example.com/acme"}}, nil
 		},
 	})
-	src.Client().Transport = boardRoundTrip(func(*http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("ok"))}, nil
-	})
+	src.Client().Transport = sourcetest.Respond("ok")
 
 	jobs, next, err := src.FetchPage(context.Background(), "")
 	if err != nil {
@@ -36,17 +29,17 @@ func TestBoardSource_FetchPage(t *testing.T) {
 	if next != "" {
 		t.Errorf("next = %q, want empty", next)
 	}
-	if len(jobs) != 1 || jobs[0].Title != "acme" {
-		t.Errorf("jobs = %v, want one job for acme", jobs)
+	if len(jobs) != 1 || jobs[0].Title != "acme" || jobs[0].Source != "stub" || jobs[0].CompanySlug != "acme" {
+		t.Errorf("jobs = %v, want one stub job for acme", jobs)
 	}
 }
 
 func TestBoardSource_FetchPageRejectsNonEmptyCursor(t *testing.T) {
-	src := sources.NewBoardSource("acme", sources.BoardSpec{
+	src := sources.NewBoardSource(sources.BoardSpec{
 		Name: "stub",
-		URL:  func(token string) string { return "https://8.8.8.8/" + token },
-		Parse: func(body []byte, token string) ([]dto.Job, error) {
-			return []dto.Job{{Title: token}}, nil
+		URL:  "https://8.8.8.8/acme",
+		Parse: func([]byte) ([]dto.Job, error) {
+			return []dto.Job{{Title: "acme"}}, nil
 		},
 	})
 	if _, _, err := src.FetchPage(context.Background(), "again"); err == nil {
@@ -57,16 +50,14 @@ func TestBoardSource_FetchPageRejectsNonEmptyCursor(t *testing.T) {
 func TestBoardParserIsIndependentOfFetchMode(t *testing.T) {
 	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 	for _, useProxy := range []bool{false, true} {
-		src := sources.NewBoardSource("board", sources.BoardSpec{
+		src := sources.NewBoardSource(sources.BoardSpec{
 			Name: "stub", UseProxy: useProxy,
-			URL: func(string) string { return "https://8.8.8.8/jobs" },
-			Parse: func(body []byte, _ string) ([]dto.Job, error) {
+			URL: "https://8.8.8.8/jobs",
+			Parse: func(body []byte) ([]dto.Job, error) {
 				return []dto.Job{{Title: string(body)}}, nil
 			},
 		})
-		src.Client().Transport = boardRoundTrip(func(*http.Request) (*http.Response, error) {
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("Engineer"))}, nil
-		})
+		src.Client().Transport = sourcetest.Respond("Engineer")
 		jobs, _, err := src.FetchPage(context.Background(), "")
 		if err != nil {
 			t.Fatal(err)

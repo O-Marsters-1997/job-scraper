@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -37,12 +38,17 @@ func (emptyCandidateCapturer) CapturePage(context.Context, dto.SourceTarget, []d
 	return nil
 }
 
+type noSearchConfig struct{}
+
+func (noSearchConfig) SearchConfig(context.Context, string) (dto.SearchConfig, error) {
+	return dto.SearchConfig{}, data.ErrNotFound
+}
+
 func TestScrapePageStopsAtKnownJobFrontier(t *testing.T) {
 	ctx := context.Background()
 	url := "https://workinstartups.com/job/1"
-	orch := scraper.New(knownURLs{url}).
-		WithSourceBuilder(func(dto.SourceTarget) (sources.Source, bool) { return pageSourceStub{url: url}, true }).
-		WithCandidates(emptyCandidateCapturer{})
+	build := func(dto.SourceTarget) (sources.Source, bool) { return pageSourceStub{url: url}, true }
+	orch := scraper.New(knownURLs{url}, noSearchConfig{}, build, emptyCandidateCapturer{})
 	next, err := orch.ScrapePage(ctx, dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, "")
 	if err != nil || next != "" {
 		t.Fatalf("next=%q err=%v", next, err)

@@ -22,27 +22,6 @@ func (t redirectTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(r)
 }
 
-func TestBuilderGreenhouseSource_FetchPage(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"jobs":[{"id":1,"title":"Engineer","absolute_url":"https://boards.greenhouse.io/acme/jobs/1"}]}`))
-	}))
-	t.Cleanup(server.Close)
-	serverURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	src, ok := builder.BuildSource(dto.SourceTarget{Source: "greenhouse", Value: "acme", Enabled: true})
-	if !ok {
-		t.Fatal("expected greenhouse to build")
-	}
-	src.(interface{ Client() *http.Client }).Client().Transport = redirectTransport{target: serverURL}
-
-	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
-		t.Fatalf("FetchPage() = %v, want nil", err)
-	}
-}
-
 func TestBuilderGreenhouseSource_FetchPageNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

@@ -40,19 +40,8 @@ var searchBoards = []boardSpec{
 		paths:         []string{"/jobs/search", "/jobs/search-results"},
 		canonical:     "https://www.linkedin.com/jobs/search/",
 		keywordsParam: "keywords",
-		params: []paramSpec{
-			{"location", "location"},
-			{"f_C", "company_id"},
-			{"f_TPR", "recency"},
-			{"f_WT", "arrangement"},
-			{"f_E", "experience"},
-			{"f_JT", "job_type"},
-			{"geoId", "geo_id"},
-			{"f_D", "distance"},
-			{"f_SB2", "salary_band"},
-		},
-		dropped: []string{"currentJobId", "origin", "referralSearchId", "refresh", "position", "pageNum", "trk", "trackingId"},
-		silent:  []string{"start"},
+		dropped:       []string{"currentJobId", "origin", "referralSearchId", "refresh", "position", "pageNum", "trk", "trackingId"},
+		silent:        []string{"start"},
 	},
 	{
 		source:        "wis",
@@ -60,7 +49,6 @@ var searchBoards = []boardSpec{
 		paths:         []string{"/search"},
 		canonical:     "https://workinstartups.com/search",
 		keywordsParam: "q",
-		params:        []paramSpec{{"w", "region"}},
 		silent:        []string{"p", "per_page"},
 	},
 	{
@@ -88,8 +76,6 @@ var unsupportedBoards = []struct {
 	{"Remotive", []string{"remotive.com", "remotive.io"}},
 }
 
-var numericFilters = []string{"company_id", "geo_id", "distance"}
-
 func parseHTTP(raw string) (*neturl.URL, bool) {
 	u, err := neturl.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
@@ -111,8 +97,20 @@ func (b boardSpec) matchesPath(path string) bool {
 	return slices.Contains(b.paths, strings.TrimSuffix(path, "/"))
 }
 
+func (b boardSpec) paramSpecs() []paramSpec {
+	fields, ok := sourcespec.LookupFilterFields(b.source)
+	if !ok {
+		return b.params
+	}
+	specs := make([]paramSpec, len(fields))
+	for i, f := range fields {
+		specs[i] = paramSpec{param: f.Param, filter: f.Name}
+	}
+	return specs
+}
+
 func (b boardSpec) filterName(param string) (string, bool) {
-	for _, p := range b.params {
+	for _, p := range b.paramSpecs() {
 		if p.param == param {
 			return p.filter, true
 		}
@@ -121,23 +119,10 @@ func (b boardSpec) filterName(param string) (string, bool) {
 }
 
 func validFilterValue(source, filter, value string) bool {
-	fields, ok := sourcespec.LookupFilterFields(source)
-	if !ok {
+	if !sourcespec.IsFilterSource(source) {
 		return true
 	}
-	for _, f := range fields {
-		if f.Name != filter {
-			continue
-		}
-		if len(f.Options) > 0 {
-			return sourcespec.ValidFilterOption(source, filter, value)
-		}
-		if slices.Contains(numericFilters, filter) {
-			return value != "" && strings.Trim(value, "0123456789") == ""
-		}
-		return true
-	}
-	return false
+	return sourcespec.ValidFilterValue(source, filter, value)
 }
 
 // UnsupportedBoard reports the label of a recognised board whose search URLs
@@ -232,7 +217,7 @@ func BuildSearchURL(source, value string, filters map[string]string) string {
 		if value != "" {
 			v.Set(b.keywordsParam, value)
 		}
-		for _, p := range b.params {
+		for _, p := range b.paramSpecs() {
 			if f := filters[p.filter]; f != "" {
 				v.Set(p.param, f)
 			}
