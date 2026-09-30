@@ -118,4 +118,3 @@ func (s *Store) SetTabVisible(ctx context.Context, userID, docID, tabID string, 
 	}
 	return nil
 }
-
