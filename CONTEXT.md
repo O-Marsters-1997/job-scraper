@@ -101,6 +101,10 @@ _Avoid_: filter param, filter key
 A request to run a discovery Source Target now, including when it is first created or explicitly rerun. Discovery searches do not have a recurring schedule to cover a missed request.
 _Avoid_: immediate scrape, manual scrape, trigger
 
+**Fetch Cache**:
+A proxied response Bright Data has already billed, kept by URL until the task that fetched it succeeds, so a retry replays it instead of paying again (ADR 0016).
+_Avoid_: response cache, page cache, HTTP cache
+
 ### Applications
 
 **Application**:

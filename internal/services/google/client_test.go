@@ -3,6 +3,7 @@ package google_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -21,11 +22,12 @@ import (
 
 type tokenStore struct {
 	row   dto.GoogleToken
+	err   error
 	saved *dto.UpsertGoogleTokenInput
 }
 
 func (s tokenStore) GetGoogleToken(context.Context, string) (dto.GoogleToken, error) {
-	return s.row, nil
+	return s.row, s.err
 }
 func (s tokenStore) UpsertGoogleToken(_ context.Context, in dto.UpsertGoogleTokenInput) error {
 	if s.saved != nil {
@@ -118,7 +120,7 @@ func TestGetDocument(t *testing.T) {
 	})
 }
 
-func TestAuthURLWriteAddsDriveFileAndGrantedScopes(t *testing.T) {
+func TestAuthURLForcesConsentForRefreshToken(t *testing.T) {
 	client := google.NewClient("id", "secret", "http://localhost/cb", tokenStore{}, nil)
 
 	read, err := url.Parse(client.AuthURL("s", false))
@@ -128,18 +130,86 @@ func TestAuthURLWriteAddsDriveFileAndGrantedScopes(t *testing.T) {
 	if got := read.Query().Get("scope"); got != google.DriveReadonlyScope {
 		t.Errorf("read scope = %q", got)
 	}
-	if read.Query().Has("include_granted_scopes") {
-		t.Error("read-only URL must not carry include_granted_scopes")
-	}
+	assertRefreshTokenParams(t, read.Query())
 
 	write, err := url.Parse(client.AuthURL("s", true))
 	if err != nil {
 		t.Fatal(err)
 	}
 	q := write.Query()
-	if q.Get("scope") != google.DriveFileScope || q.Get("include_granted_scopes") != "true" {
-		t.Errorf("write URL query = %v", q)
+	if q.Get("scope") != google.DriveFileScope {
+		t.Errorf("write scope = %q", q.Get("scope"))
 	}
+	assertRefreshTokenParams(t, q)
+}
+
+func assertRefreshTokenParams(t *testing.T, q url.Values) {
+	t.Helper()
+	if q.Get("access_type") != "offline" || q.Get("prompt") != "consent" || q.Get("include_granted_scopes") != "true" {
+		t.Errorf("query = %v, want access_type=offline prompt=consent include_granted_scopes=true", q)
+	}
+}
+
+func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
+	cipher := identitytest.NewCipher(t)
+	encrypt := func(v string) string {
+		t.Helper()
+		enc, err := cipher.Encrypt(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return enc
+	}
+
+	t.Run("missing refresh token keeps stored one", func(t *testing.T) {
+		var saved dto.UpsertGoogleTokenInput
+		store := tokenStore{row: dto.GoogleToken{AccessTokenEnc: encrypt("old-access"), RefreshTokenEnc: encrypt("stored-refresh")}, saved: &saved}
+		client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
+		if err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
+		if err != nil || got != "stored-refresh" {
+			t.Errorf("saved refresh token = %q, %v, want stored-refresh", got, err)
+		}
+	})
+
+	t.Run("new refresh token replaces stored one", func(t *testing.T) {
+		var saved dto.UpsertGoogleTokenInput
+		store := tokenStore{row: dto.GoogleToken{AccessTokenEnc: encrypt("old-access"), RefreshTokenEnc: encrypt("stored-refresh")}, saved: &saved}
+		client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
+		if err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a", RefreshToken: "new-refresh"}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
+		if err != nil || got != "new-refresh" {
+			t.Errorf("saved refresh token = %q, %v, want new-refresh", got, err)
+		}
+	})
+
+	t.Run("no refresh token anywhere is rejected", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			store tokenStore
+		}{
+			{"no stored row", tokenStore{err: google.ErrTokenNotFound}},
+			{"stored refresh token is empty", tokenStore{row: dto.GoogleToken{AccessTokenEnc: encrypt("old-access"), RefreshTokenEnc: encrypt("")}}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				saved := dto.UpsertGoogleTokenInput{}
+				tt.store.saved = &saved
+				client := google.NewClient("id", "secret", "http://localhost/cb", tt.store, cipher)
+				err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a"})
+				if !errors.Is(err, google.ErrNoRefreshToken) {
+					t.Errorf("SaveToken error = %v, want ErrNoRefreshToken", err)
+				}
+				if saved.UserID != "" {
+					t.Error("SaveToken persisted a token without a refresh token")
+				}
+			})
+		}
+	})
 }
 
 func TestSaveTokenStoresGrantedScope(t *testing.T) {
