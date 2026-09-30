@@ -12,8 +12,8 @@ var pageObjectRe = regexp.MustCompile(`/Type\s*/Page\b`)
 
 var errNoPages = errors.New("no pages found in the exported PDF")
 
-func (g *Generator) pageCount(ctx context.Context, userID, docID, tabID string) (int, error) {
-	body, err := g.drive.ExportPDF(ctx, userID, docID, tabID)
+func (m *Module) pageCount(ctx context.Context, userID, docID, tabID string) (int, error) {
+	body, err := m.drive.ExportPDF(ctx, userID, docID, tabID)
 	if err != nil {
 		return 0, err
 	}

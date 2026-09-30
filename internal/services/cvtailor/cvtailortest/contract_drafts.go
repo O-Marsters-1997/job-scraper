@@ -13,9 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-// RunDraftContract proves the Draft queue behaves the same in the fake and
-// the real store.
-func RunDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
+func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 	ctx := context.Background()
 

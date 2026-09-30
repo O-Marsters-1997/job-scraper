@@ -10,7 +10,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-func RunHeadingMappingContract(t *testing.T, newStore func(t *testing.T) Fixture) {
+func runHeadingMappingContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 	ctx := context.Background()
 	sortByText := cmpopts.SortSlices(func(a, b dto.HeadingMapping) bool { return a.HeadingText < b.HeadingText })

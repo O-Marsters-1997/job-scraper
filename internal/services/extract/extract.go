@@ -8,13 +8,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/openrouter"
 )
 
 const (
@@ -67,32 +67,6 @@ type extractionResult struct {
 	Picks []extractedPick `json:"picks"`
 }
 
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type jsonSchemaFormat struct {
-	Type       string `json:"type"`
-	JSONSchema struct {
-		Name   string         `json:"name"`
-		Strict bool           `json:"strict"`
-		Schema map[string]any `json:"schema"`
-	} `json:"json_schema"`
-}
-
-type chatRequest struct {
-	Model          string           `json:"model"`
-	Messages       []chatMessage    `json:"messages"`
-	ResponseFormat jsonSchemaFormat `json:"response_format"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message chatMessage `json:"message"`
-	} `json:"choices"`
-}
-
 // Extract sends the rendered prompt and the given bank to OpenRouter, billed
 // to apiKey, and parses the structured response into picks. It does not
 // check ids or stances against options; that's the caller's job.
@@ -111,48 +85,16 @@ func (c *Client) Extract(ctx context.Context, apiKey, text string, options []dto
 		return nil, fmt.Errorf("render extraction prompt: %w", err)
 	}
 
-	reqBody := chatRequest{
-		Model:    Model,
-		Messages: []chatMessage{{Role: "user", Content: prompt.String()}},
-	}
-	reqBody.ResponseFormat.Type = "json_schema"
-	reqBody.ResponseFormat.JSONSchema.Name = "preference_extraction"
-	reqBody.ResponseFormat.JSONSchema.Strict = true
-	reqBody.ResponseFormat.JSONSchema.Schema = picksSchema
-
-	body, err := json.Marshal(reqBody)
+	reply, err := openrouter.Chat(ctx, c.http, c.baseURL, apiKey, openrouter.NewRequest(
+		Model, "preference_extraction", picksSchema,
+		openrouter.Message{Role: "user", Content: prompt.String()},
+	))
 	if err != nil {
-		return nil, fmt.Errorf("marshal extraction request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("build extraction request: %w", err)
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("extraction request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return nil, fmt.Errorf("extraction: status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var decoded chatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("decode extraction response: %w", err)
-	}
-	if len(decoded.Choices) == 0 {
-		return nil, fmt.Errorf("extraction: no choices in response")
+		return nil, fmt.Errorf("extraction: %w", err)
 	}
 
 	var result extractionResult
-	if err := json.Unmarshal([]byte(decoded.Choices[0].Message.Content), &result); err != nil {
+	if err := json.Unmarshal([]byte(reply.Content), &result); err != nil {
 		return nil, fmt.Errorf("decode extraction result: %w", err)
 	}
 
