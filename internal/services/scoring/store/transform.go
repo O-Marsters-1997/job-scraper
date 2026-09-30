@@ -2,21 +2,11 @@ package store
 
 import (
 	"encoding/json"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
 )
-
-func fromOptionalTimestamptz(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	v := t.Time
-	return &v
-}
 
 func toScoringOptionDTO(row sqlc.ScoringOption) dto.ScoringOption {
 	return dto.ScoringOption{
@@ -24,7 +14,7 @@ func toScoringOptionDTO(row sqlc.ScoringOption) dto.ScoringOption {
 		Dimension: dto.Dimension(row.Dimension),
 		Label:     row.Label,
 		Question:  row.Question,
-		RetiredAt: fromOptionalTimestamptz(row.RetiredAt),
+		RetiredAt: data.TimePtr(row.RetiredAt),
 	}
 }
 
@@ -52,15 +42,8 @@ func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 		ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url,
 		CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time,
 		ScrapedAt: row.ScrapedAt.Time, Description: row.Description, SalaryRaw: row.SalaryRaw,
-		WorkArrangement: row.WorkArrangement, CompanyID: uuidString(row.CompanyID),
-		BoardID: uuidString(row.PrimaryBoardID), ProviderPostingID: row.ProviderPostingID.String,
+		WorkArrangement: row.WorkArrangement, CompanyID: row.CompanyID.String(),
+		BoardID: row.PrimaryBoardID.String(), ProviderPostingID: row.ProviderPostingID.String,
 		ContentFingerprint: row.ContentFingerprint.String,
 	}
-}
-
-func uuidString(id pgtype.UUID) string {
-	if !id.Valid {
-		return ""
-	}
-	return id.String()
 }

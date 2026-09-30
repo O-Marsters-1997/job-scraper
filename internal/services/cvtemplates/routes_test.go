@@ -4,13 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest"
@@ -18,21 +15,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
-const testUserID = "route-test-user"
-
 func newTestRouter(gc cvtemplates.DocsClient, st cvtemplates.Store) chi.Router {
 	m := cvtemplates.Build(cvtemplates.Deps{Store: st, DocsClient: gc})
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r
-}
-
-func authedRequest(method, path, body string) *http.Request {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	return req.WithContext(handlers.WithSession(req.Context(), dto.Session{UserID: testUserID}))
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
@@ -59,7 +46,7 @@ func TestExportCV(t *testing.T) {
 		r := newTestRouter(identitytest.NewDocsClient(), cvtemplatestest.NewFakeStore())
 
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -77,7 +64,7 @@ func TestExportCV(t *testing.T) {
 		r := newTestRouter(gc, cvtemplatestest.NewFakeStore())
 
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/cv-templates/docA/t1/pdf", ""))
 
 		if w.Code != http.StatusBadGateway {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
@@ -92,17 +79,17 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 
 	t.Run("add tracked doc", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodPost, "/tracked-docs/", `{"url":"https://docs.google.com/document/d/doc-1/edit"}`))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/tracked-docs/", `{"url":"https://docs.google.com/document/d/doc-1/edit"}`))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
 	})
 
 	t.Run("hide tab", func(t *testing.T) {
-		tdID := seedTab(t, st, testUserID, "doc-1", "t1", true)
+		tdID := seedTab(t, st, handlerstest.UserID, "doc-1", "t1", true)
 
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodPost, "/tracked-docs/doc-1/tabs/t1/hide", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/tracked-docs/doc-1/tabs/t1/hide", ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -112,9 +99,9 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 	})
 
 	t.Run("show tab", func(t *testing.T) {
-		tdID := seedDoc(t, st, testUserID, "doc-1")
+		tdID := seedDoc(t, st, handlerstest.UserID, "doc-1")
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodPost, "/tracked-docs/doc-1/tabs/t1/show", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/tracked-docs/doc-1/tabs/t1/show", ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -125,7 +112,7 @@ func TestTrackedDocRoutesHappyPaths(t *testing.T) {
 
 	t.Run("remove tracked doc", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(http.MethodDelete, "/tracked-docs/doc-1", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodDelete, "/tracked-docs/doc-1", ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}

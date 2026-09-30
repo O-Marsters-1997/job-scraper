@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 )
@@ -28,13 +29,6 @@ func unmarshalBreakdown(raw []byte, out *[]dto.ScoreRow) error {
 	return nil
 }
 
-func uuidString(id pgtype.UUID) string {
-	if !id.Valid {
-		return ""
-	}
-	return id.String()
-}
-
 func toListJobDTO(row sqlc.ListJobsRow) (dto.Job, error) {
 	j := dto.Job{
 		ID:              row.ID.String(),
@@ -52,8 +46,8 @@ func toListJobDTO(row sqlc.ListJobsRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
-	j.CompanyID = uuidString(row.CompanyID)
-	j.BoardID = uuidString(row.PrimaryBoardID)
+	j.CompanyID = row.CompanyID.String()
+	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j, nil
@@ -76,8 +70,8 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
-	j.CompanyID = uuidString(row.CompanyID)
-	j.BoardID = uuidString(row.PrimaryBoardID)
+	j.CompanyID = row.CompanyID.String()
+	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j, nil
@@ -101,8 +95,8 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
-	j.CompanyID = uuidString(row.CompanyID)
-	j.BoardID = uuidString(row.PrimaryBoardID)
+	j.CompanyID = row.CompanyID.String()
+	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
 	j.ContentFingerprint = row.ContentFingerprint.String
 	return j, nil
@@ -118,7 +112,7 @@ func toCompanyDTO(row sqlc.Company) dto.Company {
 		Domain:            row.Domain.String,
 		LinkedInCompanyID: row.LinkedinCompanyID.String,
 		FirstSeenAt:       row.FirstSeenAt.Time,
-		LastCrawledAt:     optionalTime(row.LastCrawledAt),
+		LastCrawledAt:     data.TimePtr(row.LastCrawledAt),
 	}
 }
 
@@ -135,8 +129,8 @@ func toCompanyForUserDTO(row sqlc.ListCompaniesForUserRow) dto.Company {
 		JobCount:             int(row.JobCount),
 		Tracked:              row.Tracked,
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes.Int32),
-		LastCheckedAt:        optionalTime(row.LastCheckedAt),
-		LastCrawledAt:        optionalTime(row.LastCrawledAt),
+		LastCheckedAt:        data.TimePtr(row.LastCheckedAt),
+		LastCrawledAt:        data.TimePtr(row.LastCrawledAt),
 	}
 }
 
@@ -150,14 +144,8 @@ func toCompanyBoardDTO(row sqlc.CompanyBoard) dto.CompanyBoard {
 		VerificationMethod: row.VerificationMethod.String,
 		CreatedAt:          row.CreatedAt.Time,
 	}
-	if row.VerifiedAt.Valid {
-		board.VerifiedAt = &row.VerifiedAt.Time
-	}
-	if row.LastLinkedAt.Valid {
-		board.LastLinkedAt = &row.LastLinkedAt.Time
-	}
-	if row.RetiredAt.Valid {
-		board.RetiredAt = &row.RetiredAt.Time
-	}
+	board.VerifiedAt = data.TimePtr(row.VerifiedAt)
+	board.LastLinkedAt = data.TimePtr(row.LastLinkedAt)
+	board.RetiredAt = data.TimePtr(row.RetiredAt)
 	return board
 }

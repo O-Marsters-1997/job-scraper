@@ -3,16 +3,6 @@ INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
--- name: GetApplicationByUserAndJob :one
-SELECT
-    a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
-    s.name   AS status_name,
-    s.colour AS status_colour
-FROM applications a
-LEFT JOIN application_statuses s ON a.status_id = s.id
-WHERE a.user_id = $1 AND a.job_id = $2;
-
 -- name: ListApplicationsByUser :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,

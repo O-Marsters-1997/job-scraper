@@ -2,7 +2,6 @@
 
 set dotenv-load
 
-DB_URL         := "postgres://" + env_var("POSTGRES_USER") + ":" + env_var("POSTGRES_PASSWORD") + "@" + env_var("POSTGRES_HOST") + ":" + env_var("POSTGRES_PORT") + "/" + env_var("POSTGRES_DB") + "?sslmode=" + env_var_or_default("POSTGRES_SSLMODE", "disable")
 MIGRATION_URL  := "postgres://" + env_var("POSTGRES_USER") + ":" + env_var("POSTGRES_PASSWORD") + "@localhost:5433/" + env_var("POSTGRES_DB") + "?sslmode=" + env_var_or_default("POSTGRES_SSLMODE", "disable")
 MIGRATIONS_DIR := "scripts/migrations"
 
@@ -123,10 +122,6 @@ db-up:
     docker compose up -d db
     docker compose exec db sh -c 'until pg_isready -U $POSTGRES_USER -d $POSTGRES_DB; do sleep 1; done'
     @echo "postgres is ready"
-
-# stop postgres
-db-down:
-    docker compose down
 
 # stop postgres and remove data volume
 db-reset:

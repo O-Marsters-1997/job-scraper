@@ -2,24 +2,22 @@ package dto
 
 import (
 	"time"
-
-	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
 type CreateApplicationInput struct {
-	JobID      string            `json:"job_id"`
-	StatusID   string            `json:"status_id"`
-	Notes      string            `json:"notes"`
-	SalaryInfo string            `json:"salary_info"`
-	AppliedAt  fp.Option[string] `json:"applied_at"`
+	JobID      string  `json:"job_id"`
+	StatusID   string  `json:"status_id"`
+	Notes      string  `json:"notes"`
+	SalaryInfo string  `json:"salary_info"`
+	AppliedAt  *string `json:"applied_at"`
 }
 
 type UpdateApplicationInput struct {
-	ID         string            `json:"-" path:"id"`
-	StatusID   string            `json:"status_id"`
-	Notes      string            `json:"notes"`
-	SalaryInfo string            `json:"salary_info"`
-	AppliedAt  fp.Option[string] `json:"applied_at"`
+	ID         string  `json:"-" path:"id"`
+	StatusID   string  `json:"status_id"`
+	Notes      string  `json:"notes"`
+	SalaryInfo string  `json:"salary_info"`
+	AppliedAt  *string `json:"applied_at"`
 }
 
 type ApplicationsQuery struct {

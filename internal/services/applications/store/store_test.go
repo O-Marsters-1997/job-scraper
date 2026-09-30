@@ -19,47 +19,22 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	return store.New(pool), pool
 }
 
-func insertUser(t *testing.T, pool *pgxpool.Pool) string {
-	t.Helper()
-	var id string
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`,
-		"user-"+t.Name()).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	return id
-}
-
-func insertJob(t *testing.T, pool *pgxpool.Pool, title string) string {
-	t.Helper()
-	var id string
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO jobs (title, location, url, company_slug, source, updated_at)
-		 VALUES ($1, 'Remote', $2, 'acme', 'greenhouse', NOW()) RETURNING id`,
-		title, "https://example.com/"+t.Name()+"/"+title).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert job: %v", err)
-	}
-	return id
-}
-
 func TestStoreContract(t *testing.T) {
 	applicationstest.RunStoreContract(t, func(t *testing.T) applicationstest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
 		return applicationstest.Fixture{
 			Store:  st,
-			UserID: insertUser(t, pool),
-			JobID:  insertJob(t, pool, "Contract Job"),
+			UserID: pgtest.InsertUser(t, pool),
+			JobID:  pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
 		}
 	})
 }
 
 func TestCreateApplicationRejectsDuplicate(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "Engineer")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
 
 	if _, err := st.CreateApplication(context.Background(), userID, dto.CreateApplicationInput{JobID: jobID}); err != nil {
 		t.Fatal(err)
@@ -71,8 +46,8 @@ func TestCreateApplicationRejectsDuplicate(t *testing.T) {
 
 func TestListApplicationsByUserJoinsJobDetails(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "Staff Engineer")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Staff Engineer", "Staff Engineer")
 
 	if _, err := st.CreateApplication(context.Background(), userID, dto.CreateApplicationInput{JobID: jobID}); err != nil {
 		t.Fatal(err)
@@ -89,9 +64,9 @@ func TestListApplicationsByUserJoinsJobDetails(t *testing.T) {
 
 func TestListApplicationsByUserAndStatus(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
-	matching := insertJob(t, pool, "Match")
-	other := insertJob(t, pool, "Other")
+	userID := pgtest.InsertUser(t, pool)
+	matching := pgtest.InsertJob(t, pool, "Match", "Match")
+	other := pgtest.InsertJob(t, pool, "Other", "Other")
 
 	status, err := st.CreateApplicationStatus(context.Background(), userID, "Applied", "#6366f1")
 	if err != nil {
@@ -115,7 +90,7 @@ func TestListApplicationsByUserAndStatus(t *testing.T) {
 
 func TestSeedDefaultStatuses(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	ctx := context.Background()
 
 	tx, err := pool.Begin(ctx)
@@ -140,7 +115,7 @@ func TestSeedDefaultStatuses(t *testing.T) {
 
 func TestSeedDefaultStatusesRollsBackWithItsTx(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 	ctx := context.Background()
 
 	tx, err := pool.Begin(ctx)

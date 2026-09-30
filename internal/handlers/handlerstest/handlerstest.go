@@ -4,7 +4,6 @@
 package handlerstest
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,15 +28,16 @@ func fillPathID(path, id string) string {
 	return strings.ReplaceAll(path, "{id}", id)
 }
 
-func authedRequest(method, path string, body *strings.Reader) *http.Request {
-	var r io.Reader = http.NoBody
-	if body != nil {
-		r = body
-	}
-	return Authed(httptest.NewRequest(method, path, r))
-}
-
 const UserID = testUserID
+
+func Request(tb testing.TB, method, path, body string) *http.Request {
+	tb.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return Authed(req)
+}
 
 func Authed(req *http.Request) *http.Request {
 	return req.WithContext(handlers.WithSession(req.Context(), dto.Session{UserID: testUserID}))
@@ -64,8 +64,7 @@ func RejectsMalformedBody(t *testing.T, h http.Handler, routes ...string) {
 	t.Helper()
 	for _, route := range routes {
 		method, path := splitRoute(t, route)
-		req := authedRequest(method, fillPathID(path, "test-id"), strings.NewReader("{invalid"))
-		req.Header.Set("Content-Type", "application/json")
+		req := Request(t, method, fillPathID(path, "test-id"), "{invalid")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
 		if w.Code != http.StatusBadRequest {
@@ -81,7 +80,7 @@ func RejectsBadPathID(t *testing.T, h http.Handler, routes ...string) {
 	t.Helper()
 	for _, route := range routes {
 		method, path := splitRoute(t, route)
-		req := authedRequest(method, fillPathID(path, "does-not-exist"), nil)
+		req := Request(t, method, fillPathID(path, "does-not-exist"), "")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
 		if w.Code != http.StatusNotFound {

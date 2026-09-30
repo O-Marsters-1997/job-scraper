@@ -9,7 +9,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/fp"
 )
 
 type Store interface {
@@ -73,10 +72,10 @@ func (s *Service) ForJobs(ctx context.Context, userID string, q dto.Applications
 	return s.store.GetApplicationsForJobs(ctx, userID, strings.Split(q.JobIDs, ","))
 }
 
-func validAppliedAt(date fp.Option[string]) bool {
-	if date.IsNone() {
+func validAppliedAt(date *string) bool {
+	if date == nil {
 		return true
 	}
-	_, err := time.Parse(time.DateOnly, date.Unwrap())
+	_, err := time.Parse(time.DateOnly, *date)
 	return err == nil
 }

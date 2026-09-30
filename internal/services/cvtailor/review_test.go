@@ -35,13 +35,6 @@ func (e draftEnv) router(drive cvtailor.Drive) chi.Router {
 	return r
 }
 
-func wantKind(t *testing.T, call string, err error, kind apperr.Kind) {
-	t.Helper()
-	if status, ok := apperr.StatusFor(err); !ok || status != kind.Status() {
-		t.Fatalf("%s err = %v, want status %d", call, err, kind.Status())
-	}
-}
-
 func TestGetDraftProvenance(t *testing.T) {
 	t.Run("marks bullet words absent from the cited achievements as novel", func(t *testing.T) {
 		e := newDraftEnv(t)
@@ -82,7 +75,9 @@ func TestKeepDraft(t *testing.T) {
 			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
 		}
 		_, err = e.svc.KeepDraft(ctx, user, second)
-		wantKind(t, "KeepDraft(second)", err, apperr.KindConflict)
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(second)", err, apperr.KindConflict)
+		}
 
 		if _, err := e.svc.DiscardDraft(ctx, user, first); err != nil {
 			t.Fatal(err)
@@ -98,7 +93,9 @@ func TestKeepDraft(t *testing.T) {
 
 		_, err := e.svc.KeepDraft(context.Background(), user, dto.DraftQuery{ID: id})
 
-		wantKind(t, "KeepDraft(pending)", err, apperr.KindConflict)
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(pending)", err, apperr.KindConflict)
+		}
 	})
 }
 
@@ -123,7 +120,9 @@ func TestDiscardDraft(t *testing.T) {
 			t.Errorf("GetDraft() = %+v, want the row to remain", got)
 		}
 		_, err = e.svc.KeepDraft(ctx, user, dto.DraftQuery{ID: id})
-		wantKind(t, "KeepDraft(discarded)", err, apperr.KindConflict)
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(discarded)", err, apperr.KindConflict)
+		}
 	})
 
 	t.Run("a Draft that is not ready conflicts", func(t *testing.T) {
@@ -132,7 +131,9 @@ func TestDiscardDraft(t *testing.T) {
 
 		_, err := e.svc.DiscardDraft(context.Background(), user, dto.DraftQuery{ID: id})
 
-		wantKind(t, "DiscardDraft(pending)", err, apperr.KindConflict)
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("%s err = %v, want kind %v", "DiscardDraft(pending)", err, apperr.KindConflict)
+		}
 	})
 }
 
@@ -143,7 +144,9 @@ func TestDraftPDF(t *testing.T) {
 
 		_, err := e.svc.DraftPDF(context.Background(), user, dto.DraftQuery{ID: id})
 
-		wantKind(t, "DraftPDF(pending)", err, apperr.KindNotFound)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("%s err = %v, want kind %v", "DraftPDF(pending)", err, apperr.KindNotFound)
+		}
 	})
 }
 

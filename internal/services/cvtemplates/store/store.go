@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates/store/sqlc"
 )
@@ -28,16 +28,8 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
-	}
-	return id, nil
-}
-
 func (s *Store) AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput) error {
-	uid, err := parseUUID(input.UserID)
+	uid, err := data.UUID(input.UserID)
 	if err != nil {
 		return err
 	}
@@ -48,7 +40,7 @@ func (s *Store) AddTrackedDoc(ctx context.Context, input dto.AddTrackedDocInput)
 }
 
 func (s *Store) RemoveTrackedDoc(ctx context.Context, userID, docID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -63,7 +55,7 @@ func (s *Store) RemoveTrackedDoc(ctx context.Context, userID, docID string) erro
 }
 
 func (s *Store) ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +74,7 @@ func (s *Store) EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, tit
 	if len(tabIDs) == 0 {
 		return nil
 	}
-	tdID, err := parseUUID(trackedDocID)
+	tdID, err := data.UUID(trackedDocID)
 	if err != nil {
 		return err
 	}
@@ -97,7 +89,7 @@ func (s *Store) EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, tit
 }
 
 func (s *Store) ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, error) {
-	tdID, err := parseUUID(trackedDocID)
+	tdID, err := data.UUID(trackedDocID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +105,7 @@ func (s *Store) ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, e
 }
 
 func (s *Store) HideTab(ctx context.Context, userID, docID, tabID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -128,7 +120,7 @@ func (s *Store) HideTab(ctx context.Context, userID, docID, tabID string) error 
 }
 
 func (s *Store) ShowTab(ctx context.Context, userID, docID, tabID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}

@@ -33,8 +33,8 @@ func TestListRejectsBadPagination(t *testing.T) {
 	} {
 		if _, err := svc.List(context.Background(), "user-1", q); err == nil {
 			t.Errorf("q = %+v: want error", q)
-		} else if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
-			t.Errorf("q = %+v: status = %v, ok = %v, want 400", q, status, ok)
+		} else if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("q = %+v: err = %v, want KindInvalid", q, err)
 		}
 	}
 }
@@ -62,7 +62,7 @@ func TestListPaginates(t *testing.T) {
 func TestGetMapsNotFound(t *testing.T) {
 	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil)
 	_, err := svc.Get(context.Background(), "user-1", "missing")
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
-		t.Fatalf("status = %v, ok = %v, want 404", status, ok)
+	if !apperr.IsKind(err, apperr.KindNotFound) {
+		t.Fatalf("err = %v, want KindNotFound", err)
 	}
 }

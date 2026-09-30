@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -48,7 +47,7 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	achievements, err := parseUUIDs(in.AchievementIDs)
+	achievements, err := data.UUIDs(in.AchievementIDs)
 	if err != nil {
 		return dto.Draft{}, apperr.Invalid("unknown achievement")
 	}
@@ -121,8 +120,7 @@ func (s *Store) SetDraftOutcome(ctx context.Context, userID, id, outcome string)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Draft{}, ErrDraftNotFound
 	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if data.IsUniqueViolation(err) {
 		return dto.Draft{}, ErrKeptDraftExists
 	}
 	if err != nil {
@@ -135,11 +133,8 @@ func (s *Store) SetDraftOutcome(ctx context.Context, userID, id, outcome string)
 // FOR UPDATE SKIP LOCKED; data.ErrNotFound when none is due.
 func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 	row, err := s.queries.ClaimDraft(ctx)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.DraftClaim{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.DraftClaim{}, fmt.Errorf("store.ClaimDraft: %w", err)
+		return dto.DraftClaim{}, data.QueryErr("ClaimDraft", err)
 	}
 	ids := make([]string, len(row.AchievementIds))
 	for i, id := range row.AchievementIds {

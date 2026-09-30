@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -53,34 +52,18 @@ func New(pool *pgxpool.Pool, scoring ScoringWriter) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool), scoring: scoring}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
-	}
-	return id, nil
-}
-
 func optionalUUID(id string) (pgtype.UUID, error) {
 	if id == "" {
 		return pgtype.UUID{}, nil
 	}
-	return parseUUID(id)
-}
-
-func optionalTime(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	v := t.Time
-	return &v
+	return data.UUID(id)
 }
 
 func (s *Store) ListJobs(ctx context.Context, userID string) ([]dto.Job, error) {
 	var uid pgtype.UUID
 	if userID != "" {
 		var err error
-		uid, err = parseUUID(userID)
+		uid, err = data.UUID(userID)
 		if err != nil {
 			return nil, fmt.Errorf("store.ListJobs: %w", err)
 		}
@@ -101,7 +84,7 @@ func (s *Store) ListJobs(ctx context.Context, userID string) ([]dto.Job, error) 
 }
 
 func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.JobPage{}, ErrInvalidID
 	}
@@ -110,14 +93,14 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 		params.Availability = "open"
 	}
 	if options.CursorID != "" {
-		params.CursorID, err = parseUUID(options.CursorID)
+		params.CursorID, err = data.UUID(options.CursorID)
 		if err != nil {
 			return dto.JobPage{}, ErrInvalidID
 		}
 		params.CursorTime = pgtype.Timestamptz{Time: options.CursorTime, Valid: true}
 	}
 	if options.CompanyID != "" {
-		params.CompanyID, err = parseUUID(options.CompanyID)
+		params.CompanyID, err = data.UUID(options.CompanyID)
 		if err != nil {
 			return dto.JobPage{}, ErrInvalidID
 		}
@@ -138,20 +121,17 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 }
 
 func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error) {
-	jid, err := parseUUID(jobID)
+	jid, err := data.UUID(jobID)
 	if err != nil {
 		return dto.Job{}, ErrInvalidID
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Job{}, ErrInvalidID
 	}
 	row, err := s.queries.GetJob(ctx, sqlc.GetJobParams{ID: jid, UserID: uid})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Job{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Job{}, fmt.Errorf("store.GetJob: %w", err)
+		return dto.Job{}, data.QueryErr("GetJob", err)
 	}
 	job, err := toGetJobDTO(row)
 	if err != nil {
@@ -190,7 +170,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if err != nil {
 		return dto.Job{}, "", fmt.Errorf("board ID: %w", err)
 	}
-	postingID := pgtype.Text{String: job.ProviderPostingID, Valid: job.ProviderPostingID != ""}
+	postingID := data.Text(job.ProviderPostingID)
 	fingerprint := pgtype.Text{String: job.ContentFingerprint, Valid: true}
 	updatedAt := pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true}
 
@@ -241,7 +221,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 				SalaryRaw: previous.SalaryRaw, WorkArrangement: previous.WorkArrangement,
 			})
 		}
-		jobID, err := parseUUID(id)
+		jobID, err := data.UUID(id)
 		if err != nil {
 			return dto.Job{}, "", err
 		}
@@ -266,7 +246,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		job.URL = previous.Url
 	}
 
-	jobID, err := parseUUID(id)
+	jobID, err := data.UUID(id)
 	if err != nil {
 		return dto.Job{}, "", err
 	}
@@ -295,10 +275,10 @@ func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Com
 	row, err := s.queries.UpsertCompany(ctx, sqlc.UpsertCompanyParams{
 		Slug:              c.Slug,
 		Name:              c.Name,
-		AtsSource:         pgtype.Text{String: c.ATSSource, Valid: c.ATSSource != ""},
-		AtsToken:          pgtype.Text{String: c.ATSToken, Valid: c.ATSToken != ""},
-		Domain:            pgtype.Text{String: c.Domain, Valid: c.Domain != ""},
-		LinkedinCompanyID: pgtype.Text{String: c.LinkedInCompanyID, Valid: c.LinkedInCompanyID != ""},
+		AtsSource:         data.Text(c.ATSSource),
+		AtsToken:          data.Text(c.ATSToken),
+		Domain:            data.Text(c.Domain),
+		LinkedinCompanyID: data.Text(c.LinkedInCompanyID),
 	})
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("store.UpsertCompany: %w", err)
@@ -307,22 +287,19 @@ func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Com
 }
 
 func (s *Store) GetCompany(ctx context.Context, id string) (dto.Company, error) {
-	cid, err := parseUUID(id)
+	cid, err := data.UUID(id)
 	if err != nil {
 		return dto.Company{}, err
 	}
 	row, err := s.queries.GetCompany(ctx, cid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Company{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Company{}, fmt.Errorf("store.GetCompany: %w", err)
+		return dto.Company{}, data.QueryErr("GetCompany", err)
 	}
 	return toCompanyDTO(row), nil
 }
 
 func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +315,7 @@ func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.
 }
 
 func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -370,19 +347,17 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 		if b, ok := boards[id]; ok {
 			out[i].Boards = b
 		}
-		if r.LastCheckedAt.Valid {
-			out[i].LastCheckedAt = &r.LastCheckedAt.Time
-		}
+		out[i].LastCheckedAt = data.TimePtr(r.LastCheckedAt)
 	}
 	return out, nil
 }
 
 func (s *Store) DeleteCompanyTracking(ctx context.Context, userID, companyID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
-	cid, err := parseUUID(companyID)
+	cid, err := data.UUID(companyID)
 	if err != nil {
 		return err
 	}
@@ -397,11 +372,11 @@ func (s *Store) DeleteCompanyTracking(ctx context.Context, userID, companyID str
 }
 
 func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, interval int) (dto.CompanyTracking, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.CompanyTracking{}, err
 	}
-	cid, err := parseUUID(companyID)
+	cid, err := data.UUID(companyID)
 	if err != nil {
 		return dto.CompanyTracking{}, err
 	}
@@ -435,7 +410,7 @@ func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string
 }
 
 func (s *Store) ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error) {
-	id, err := parseUUID(companyID)
+	id, err := data.UUID(companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +437,7 @@ func (s *Store) ListCompanyBoards(ctx context.Context, companyID string) ([]dto.
 }
 
 func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error) {
-	id, err := parseUUID(companyID)
+	id, err := data.UUID(companyID)
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
@@ -480,11 +455,8 @@ func (s *Store) UpsertCandidateBoard(ctx context.Context, companyID, source, tok
 
 func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (string, error) {
 	id, err := s.queries.GetVerifiedBoardID(ctx, sqlc.GetVerifiedBoardIDParams{Source: source, BoardToken: token})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", data.ErrNotFound
-	}
 	if err != nil {
-		return "", fmt.Errorf("store.GetVerifiedBoardID: %w", err)
+		return "", data.QueryErr("GetVerifiedBoardID", err)
 	}
 	return id.String(), nil
 }
@@ -512,19 +484,13 @@ func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 	if row.CompanyID.Valid {
 		t.CompanyID = row.CompanyID.String()
 	}
-	if row.LastCheckedAt.Valid {
-		lc := row.LastCheckedAt.Time
-		t.LastCheckedAt = &lc
-	}
-	if row.LastRunAt.Valid {
-		lastRun := row.LastRunAt.Time
-		t.LastRunAt = &lastRun
-	}
+	t.LastCheckedAt = data.TimePtr(row.LastCheckedAt)
+	t.LastRunAt = data.TimePtr(row.LastRunAt)
 	return t
 }
 
 func (s *Store) ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +506,7 @@ func (s *Store) ListSourceTargetsByUser(ctx context.Context, userID string) ([]d
 }
 
 func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -552,8 +518,7 @@ func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value st
 		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if data.IsUniqueViolation(err) {
 			return dto.SourceTarget{}, ErrSourceTargetExists
 		}
 		return dto.SourceTarget{}, fmt.Errorf("store.CreateSourceTarget: %w", err)
@@ -562,7 +527,7 @@ func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value st
 }
 
 func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -574,8 +539,7 @@ func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, v
 		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if data.IsUniqueViolation(err) {
 			return dto.SourceTarget{}, ErrSourceTargetExists
 		}
 		return dto.SourceTarget{}, fmt.Errorf("create source target with run: %w", err)
@@ -584,11 +548,11 @@ func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, v
 }
 
 func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -601,20 +565,17 @@ func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabl
 	}
 	row, err := s.queries.UpdateSourceTarget(ctx, params)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return dto.SourceTarget{}, data.ErrNotFound
-		}
-		return dto.SourceTarget{}, fmt.Errorf("store.UpdateSourceTarget: %w", err)
+		return dto.SourceTarget{}, data.QueryErr("UpdateSourceTarget", err)
 	}
 	return toSourceTargetDTO(row), nil
 }
 
 func (s *Store) DeleteSourceTarget(ctx context.Context, id, userID string) error {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -625,52 +586,43 @@ func (s *Store) DeleteSourceTarget(ctx context.Context, id, userID string) error
 }
 
 func (s *Store) StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error) {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	row, err := s.queries.StartSourceTargetRun(ctx, tid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("start source target run: %w", err)
+		return dto.SourceTarget{}, data.QueryErr("StartSourceTargetRun", err)
 	}
 	return toSourceTargetDTO(row), nil
 }
 
 func (s *Store) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	row, err := s.queries.GetSourceTarget(ctx, tid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("store.GetSourceTarget: %w", err)
+		return dto.SourceTarget{}, data.QueryErr("GetSourceTarget", err)
 	}
 	return toSourceTargetDTO(row), nil
 }
 
 func (s *Store) TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	rid, err := parseUUID(runID)
+	rid, err := data.UUID(runID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	row, err := s.queries.TransitionSourceTargetRun(ctx, sqlc.TransitionSourceTargetRunParams{
 		ID: tid, RunID: rid, RunStatus: status, LastRunError: runError,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("store.TransitionSourceTargetRun: %w", err)
+		return dto.SourceTarget{}, data.QueryErr("TransitionSourceTargetRun", err)
 	}
 	return toSourceTargetDTO(row), nil
 }
@@ -688,20 +640,17 @@ func (s *Store) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceT
 }
 
 func (s *Store) ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error) {
-	tid, err := parseUUID(id)
+	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	rid, err := parseUUID(runID)
+	rid, err := data.UUID(runID)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	row, err := s.queries.ClaimRecoverableSourceTarget(ctx, sqlc.ClaimRecoverableSourceTargetParams{ID: tid, RunID: rid})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.SourceTarget{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.SourceTarget{}, fmt.Errorf("store.ClaimRecoverableSourceTarget: %w", err)
+		return dto.SourceTarget{}, data.QueryErr("ClaimRecoverableSourceTarget", err)
 	}
 	return toSourceTargetDTO(row), nil
 }
@@ -718,7 +667,7 @@ func normalizedCandidateURL(raw string) (string, error) {
 }
 
 func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]sourcetargets.Candidate, error) {
-	targetID, err := parseUUID(target.ID)
+	targetID, err := data.UUID(target.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -761,7 +710,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 }
 
 func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit int) ([]sourcetargets.Candidate, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -771,7 +720,7 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 	if afterID == "" {
 		afterID = "00000000-0000-0000-0000-000000000000"
 	}
-	after, err := parseUUID(afterID)
+	after, err := data.UUID(afterID)
 	if err != nil {
 		return nil, err
 	}
@@ -793,11 +742,11 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 }
 
 func (s *Store) Assess(ctx context.Context, candidateID, userID string, version time.Time, passes bool) (bool, error) {
-	cid, err := parseUUID(candidateID)
+	cid, err := data.UUID(candidateID)
 	if err != nil {
 		return false, err
 	}
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return false, err
 	}
@@ -813,7 +762,7 @@ func (s *Store) Assess(ctx context.Context, candidateID, userID string, version 
 }
 
 func (s *Store) MarkDetailPending(ctx context.Context, candidateID string) error {
-	cid, err := parseUUID(candidateID)
+	cid, err := data.UUID(candidateID)
 	if err != nil {
 		return err
 	}
@@ -873,7 +822,7 @@ func (s *Store) ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Comp
 }
 
 func (s *Store) TouchCompanyCrawled(ctx context.Context, id string) error {
-	cid, err := parseUUID(id)
+	cid, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
@@ -884,7 +833,7 @@ func (s *Store) TouchCompanyCrawled(ctx context.Context, id string) error {
 }
 
 func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
-	id, err := parseUUID(companyID)
+	id, err := data.UUID(companyID)
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
@@ -892,11 +841,8 @@ func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token
 		CompanyID: id, Source: source, BoardToken: token,
 		VerificationMethod: pgtype.Text{String: method, Valid: true},
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.CompanyBoard{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.CompanyBoard{}, fmt.Errorf("store.VerifyCompanyBoard: %w", err)
+		return dto.CompanyBoard{}, data.QueryErr("VerifyCompanyBoard", err)
 	}
 	return toCompanyBoardDTO(row), nil
 }
@@ -933,7 +879,7 @@ func (s *Store) ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error) {
 }
 
 func (s *Store) ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error) {
-	boardID, err := parseUUID(id)
+	boardID, err := data.UUID(id)
 	if err != nil {
 		return dto.BoardPoll{}, err
 	}
@@ -964,7 +910,7 @@ func (s *Store) ClaimBoard(ctx context.Context, id string, manual bool) (dto.Boa
 }
 
 func (s *Store) FailBoard(ctx context.Context, poll dto.BoardPoll) error {
-	id, err := parseUUID(poll.ID)
+	id, err := data.UUID(poll.ID)
 	if err != nil {
 		return err
 	}
@@ -983,7 +929,7 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 		return errors.New("incomplete board snapshot")
 	}
 	poll := snapshot.Poll
-	id, err := parseUUID(poll.ID)
+	id, err := data.UUID(poll.ID)
 	if err != nil {
 		return err
 	}

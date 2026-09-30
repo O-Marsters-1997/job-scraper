@@ -30,7 +30,7 @@ func TestCreatePositionValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := svc.CreatePosition(context.Background(), "u1", tc.in)
-			if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Fatalf("CreatePosition() err = %v, want an invalid error", err)
 			}
 		})
@@ -53,7 +53,7 @@ func TestCreatePositionTreatsBlankDatesAsCurrent(t *testing.T) {
 func TestCreateAchievementRejectsBlankText(t *testing.T) {
 	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	_, err := svc.CreateAchievement(context.Background(), "u1", dto.AchievementInput{PositionID: "p", Text: " "})
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("CreateAchievement() err = %v, want an invalid error", err)
 	}
 }
@@ -61,7 +61,7 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	svc := cvtailor.NewService(cvtailortest.NewFakeStore(), nil, nil, nil)
 	_, err := svc.ReorderPositions(context.Background(), "u1", dto.ReorderInput{IDs: []string{"a", "a"}})
-	if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+	if !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("ReorderPositions() err = %v, want an invalid error", err)
 	}
 }
@@ -151,7 +151,7 @@ func TestCreateDraft(t *testing.T) {
 
 			_, err := e.svc.CreateDraft(context.Background(), tc.user, in)
 
-			if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindInvalid.Status() {
+			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", in, err)
 			}
 		})
@@ -202,7 +202,7 @@ func TestGetDraft(t *testing.T) {
 
 		_, err := e.svc.GetDraft(context.Background(), "user-2", dto.DraftQuery{ID: id})
 
-		if status, ok := apperr.StatusFor(err); !ok || status != apperr.KindNotFound.Status() {
+		if !apperr.IsKind(err, apperr.KindNotFound) {
 			t.Errorf("GetDraft(%s) as another user error = %v, want a not-found error", id, err)
 		}
 	})

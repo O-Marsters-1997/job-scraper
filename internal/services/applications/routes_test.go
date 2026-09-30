@@ -4,34 +4,21 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/handlers"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 )
-
-const testUserID = "route-test-user"
 
 func newTestRouter() chi.Router {
 	m := applications.Build(applications.Deps{Store: applicationstest.NewFakeStore()})
 	r := chi.NewRouter()
 	m.Routes(r)
 	return r
-}
-
-func authedRequest(t *testing.T, method, path, body string) *http.Request {
-	t.Helper()
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	return req.WithContext(handlers.WithSession(req.Context(), dto.Session{UserID: testUserID}))
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
@@ -61,7 +48,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("create status", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodPost, "/application-statuses/", `{"name":"Applied","colour":"#6366f1"}`))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/application-statuses/", `{"name":"Applied","colour":"#6366f1"}`))
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -77,7 +64,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("list statuses", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodGet, "/application-statuses/", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/application-statuses/", ""))
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -92,7 +79,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("update status", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodPatch, "/application-statuses/"+statusID, `{"name":"Applied!","colour":"#6366f1"}`))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPatch, "/application-statuses/"+statusID, `{"name":"Applied!","colour":"#6366f1"}`))
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -100,7 +87,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("create application", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodPost, "/applications/", `{"job_id":"job-1","status_id":"`+statusID+`"}`))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPost, "/applications/", `{"job_id":"job-1","status_id":"`+statusID+`"}`))
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -116,7 +103,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("list applications", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodGet, "/applications/", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/applications/", ""))
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -131,7 +118,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("update application", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodPatch, "/applications/"+appID, `{"notes":"followed up"}`))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodPatch, "/applications/"+appID, `{"notes":"followed up"}`))
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -146,7 +133,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("applications for jobs", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodGet, "/applications/for-jobs?job_ids=job-1", ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodGet, "/applications/for-jobs?job_ids=job-1", ""))
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -161,7 +148,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("delete application", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodDelete, "/applications/"+appID, ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodDelete, "/applications/"+appID, ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}
@@ -169,7 +156,7 @@ func TestRoutesHappyPaths(t *testing.T) {
 
 	t.Run("delete status", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		r.ServeHTTP(w, authedRequest(t, http.MethodDelete, "/application-statuses/"+statusID, ""))
+		r.ServeHTTP(w, handlerstest.Request(t, http.MethodDelete, "/application-statuses/"+statusID, ""))
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d: %s", w.Code, w.Body)
 		}

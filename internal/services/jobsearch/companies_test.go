@@ -1,7 +1,6 @@
 package jobsearch_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -16,13 +15,6 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 func intPtr(i int) *int    { return &i }
-
-type failingPublisher struct {
-	jobsearchtest.NoopQueue
-	err error
-}
-
-func (f failingPublisher) Publish(context.Context, queue.Task) error { return f.err }
 
 func newCompanyService(q jobsearch.QueuePublisher) (*jobsearch.Service, *jobsearchtest.FakeStore) {
 	st := jobsearchtest.NewFakeStore()
@@ -71,7 +63,9 @@ func TestCreate_Rejects(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := createCompany(t, tt.in)
-			assertKind(t, err, tt.wantKind)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Fatalf("err = %v, want kind %v", err, tt.wantKind)
+			}
 		})
 	}
 }
@@ -119,7 +113,9 @@ func TestSetTracking(t *testing.T) {
 
 		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: company.ID})
 
-		assertKind(t, err, apperr.KindInvalid)
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+		}
 	})
 
 	t.Run("rejects an interval below 60 minutes", func(t *testing.T) {
@@ -130,7 +126,9 @@ func TestSetTracking(t *testing.T) {
 			CompanyID: company.ID, Enabled: boolPtr(true), CheckIntervalMinutes: intPtr(30),
 		})
 
-		assertKind(t, err, apperr.KindInvalid)
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindInvalid)
+		}
 	})
 
 	t.Run("returns not found for an unknown company", func(t *testing.T) {
@@ -138,7 +136,9 @@ func TestSetTracking(t *testing.T) {
 
 		_, err := svc.SetCompanyTracking(t.Context(), "user-1", dto.SetCompanyTrackingInput{CompanyID: "missing", Enabled: boolPtr(true)})
 
-		assertKind(t, err, apperr.KindNotFound)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
+		}
 	})
 
 	t.Run("enables tracking for an ATS company without writing a source target", func(t *testing.T) {
@@ -182,7 +182,9 @@ func TestListBoards(t *testing.T) {
 
 		_, err := svc.ListCompanyBoards(t.Context(), "user-1", "missing")
 
-		assertKind(t, err, apperr.KindNotFound)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
+		}
 	})
 
 	t.Run("lists boards linked to the company", func(t *testing.T) {
@@ -209,7 +211,9 @@ func TestAddBoard(t *testing.T) {
 
 		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: "missing", URL: "https://boards.greenhouse.io/acme"})
 
-		assertKind(t, err, apperr.KindNotFound)
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindNotFound)
+		}
 	})
 
 	t.Run("rejects an unresolvable url", func(t *testing.T) {
@@ -218,7 +222,9 @@ func TestAddBoard(t *testing.T) {
 
 		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://example.com/careers"})
 
-		assertKind(t, err, apperr.KindUnprocessable)
+		if !apperr.IsKind(err, apperr.KindUnprocessable) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindUnprocessable)
+		}
 	})
 
 	t.Run("returns conflict when the board belongs to another company", func(t *testing.T) {
@@ -228,7 +234,9 @@ func TestAddBoard(t *testing.T) {
 
 		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme"})
 
-		assertKind(t, err, apperr.KindConflict)
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("err = %v, want kind %v", err, apperr.KindConflict)
+		}
 	})
 
 	t.Run("adds a board as a candidate without confirming", func(t *testing.T) {
@@ -281,7 +289,7 @@ func TestAddBoard(t *testing.T) {
 
 	t.Run("returns the publish error when the queue rejects the task", func(t *testing.T) {
 		wantErr := errors.New("broker down")
-		svc, companyStore := newCompanyService(failingPublisher{err: wantErr})
+		svc, companyStore := newCompanyService(queuetest.PublishFails(wantErr))
 		company, _ := companyStore.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 
 		_, err := svc.AddCompanyBoard(t.Context(), "user-1", dto.AddCompanyBoardInput{CompanyID: company.ID, URL: "https://boards.greenhouse.io/acme", Confirm: true})
@@ -289,17 +297,6 @@ func TestAddBoard(t *testing.T) {
 			t.Errorf("err = %v, want broker error", err)
 		}
 	})
-}
-
-func assertKind(t *testing.T, err error, want apperr.Kind) {
-	t.Helper()
-	status, ok := apperr.StatusFor(err)
-	if !ok {
-		t.Fatalf("want kinded error, got %v", err)
-	}
-	if wantStatus := want.Status(); status != wantStatus {
-		t.Errorf("status = %d, want %d", status, wantStatus)
-	}
 }
 
 func TestListTrackedCompanies(t *testing.T) {

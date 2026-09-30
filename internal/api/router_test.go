@@ -23,7 +23,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
-const ingestToken = "router-test-ingest-token" //nolint:gosec // test-only static token, not a credential
+const ingestToken = "router-test-ingest-token"
 
 type app struct {
 	t      *testing.T

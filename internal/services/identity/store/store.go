@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -31,21 +30,10 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool, queries: sqlc.New(pool)}
 }
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return pgtype.UUID{}, fmt.Errorf("invalid uuid %q: %w", s, err)
-	}
-	return id, nil
-}
-
 func (s *Store) GetUserByUsername(ctx context.Context, username string) (dto.User, error) {
 	u, err := s.queries.GetUserByUsername(ctx, username)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.User{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.User{}, fmt.Errorf("store.GetUserByUsername: %w", err)
+		return dto.User{}, data.QueryErr("GetUserByUsername", err)
 	}
 	return toUserDTO(u), nil
 }
@@ -64,11 +52,10 @@ func createUser(ctx context.Context, q *sqlc.Queries, username, passwordHash, em
 	u, err := q.CreateUser(ctx, sqlc.CreateUserParams{
 		Username:     username,
 		PasswordHash: passwordHash,
-		Email:        pgtype.Text{String: email, Valid: email != ""},
+		Email:        data.Text(email),
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if data.IsUniqueViolation(err) {
 			return dto.User{}, ErrUsernameTaken
 		}
 		return dto.User{}, fmt.Errorf("store.CreateUser: %w", err)
@@ -83,7 +70,7 @@ func (s *Store) Begin(ctx context.Context) (pgx.Tx, error) {
 }
 
 func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Session{}, err
 	}
@@ -98,22 +85,19 @@ func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time
 }
 
 func (s *Store) GetSession(ctx context.Context, id string) (dto.Session, error) {
-	sid, err := parseUUID(id)
+	sid, err := data.UUID(id)
 	if err != nil {
 		return dto.Session{}, err
 	}
 	row, err := s.queries.GetSession(ctx, sid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Session{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Session{}, fmt.Errorf("store.GetSession: %w", err)
+		return dto.Session{}, data.QueryErr("GetSession", err)
 	}
 	return toSessionRowDTO(row), nil
 }
 
 func (s *Store) DeleteSession(ctx context.Context, id string) error {
-	sid, err := parseUUID(id)
+	sid, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
@@ -131,40 +115,34 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 func (s *Store) GetProfile(ctx context.Context, userID string) (dto.Profile, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Profile{}, err
 	}
 	row, err := s.queries.GetUserProfile(ctx, uid)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Profile{}, fmt.Errorf("store.GetProfile: %w", err)
+		return dto.Profile{}, data.QueryErr("GetProfile", err)
 	}
 	return toProfileDTO(row.Username, row.Email), nil
 }
 
 func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Profile{}, err
 	}
 	row, err := s.queries.UpdateUserEmail(ctx, sqlc.UpdateUserEmailParams{
 		ID:    uid,
-		Email: pgtype.Text{String: email, Valid: email != ""},
+		Email: data.Text(email),
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Profile{}, data.ErrNotFound
-	}
 	if err != nil {
-		return dto.Profile{}, fmt.Errorf("store.UpdateEmail: %w", err)
+		return dto.Profile{}, data.QueryErr("UpdateEmail", err)
 	}
 	return toProfileDTO(row.Username, row.Email), nil
 }
 
 func (s *Store) UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -179,7 +157,7 @@ func (s *Store) UpsertUserAICredential(ctx context.Context, userID, provider, en
 }
 
 func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string) (string, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return "", err
 	}
@@ -187,17 +165,14 @@ func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string
 		UserID:   uid,
 		Provider: provider,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", data.ErrNotFound
-	}
 	if err != nil {
-		return "", fmt.Errorf("store.GetUserAICredential: %w", err)
+		return "", data.QueryErr("GetUserAICredential", err)
 	}
 	return row.ApiKeyEnc, nil
 }
 
 func (s *Store) DeleteUserAICredential(ctx context.Context, userID, provider string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
@@ -211,7 +186,7 @@ func (s *Store) DeleteUserAICredential(ctx context.Context, userID, provider str
 }
 
 func (s *Store) ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +198,7 @@ func (s *Store) ListUserAICredentialProviders(ctx context.Context, userID string
 }
 
 func (s *Store) GetGoogleToken(ctx context.Context, userID string) (dto.GoogleToken, error) {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.GoogleToken{}, err
 	}
@@ -238,7 +213,7 @@ func (s *Store) GetGoogleToken(ctx context.Context, userID string) (dto.GoogleTo
 }
 
 func (s *Store) UpsertGoogleToken(ctx context.Context, input dto.UpsertGoogleTokenInput) error {
-	uid, err := parseUUID(input.UserID)
+	uid, err := data.UUID(input.UserID)
 	if err != nil {
 		return err
 	}
@@ -260,7 +235,7 @@ func (s *Store) UpsertGoogleToken(ctx context.Context, input dto.UpsertGoogleTok
 }
 
 func (s *Store) DeleteGoogleToken(ctx context.Context, userID string) error {
-	uid, err := parseUUID(userID)
+	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}

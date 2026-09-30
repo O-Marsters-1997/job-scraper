@@ -28,32 +28,6 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
 	return store.New(pool), pool
 }
 
-func insertUser(t *testing.T, pool *pgxpool.Pool) string {
-	t.Helper()
-	var id string
-	username := fmt.Sprintf("user-%s-%d", t.Name(), seedCounter.Add(1))
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash) VALUES ($1, 'hash') RETURNING id`, username).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert user: %v", err)
-	}
-	return id
-}
-
-func insertJob(t *testing.T, pool *pgxpool.Pool, fingerprint string) string {
-	t.Helper()
-	var id string
-	url := fmt.Sprintf("https://example.com/%s/%d", t.Name(), seedCounter.Add(1))
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, content_fingerprint)
-		 VALUES ('Engineer', 'Remote', $1, 'acme', 'greenhouse', NOW(), $2) RETURNING id`,
-		url, fingerprint).Scan(&id)
-	if err != nil {
-		t.Fatalf("insert job: %v", err)
-	}
-	return id
-}
-
 func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) string {
 	t.Helper()
 	var id string
@@ -76,7 +50,7 @@ func TestScoringStoreContract(t *testing.T) {
 
 func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 
 	saved, err := st.UpsertSearchConfig(context.Background(), dto.SearchConfig{
 		UserID: userID, NotifyThreshold: 70,
@@ -100,7 +74,7 @@ func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
 
 func TestGetSearchConfig_MissingReturnsErrNotFound(t *testing.T) {
 	st, pool := newStore(t)
-	userID := insertUser(t, pool)
+	userID := pgtest.InsertUser(t, pool)
 
 	_, err := st.GetSearchConfig(context.Background(), userID)
 	if !errors.Is(err, data.ErrNotFound) {
@@ -180,10 +154,10 @@ func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
 
-	userID := insertUser(t, pool)
-	scored := insertJob(t, pool, "fp-scored")
-	closed := insertJob(t, pool, "fp-closed")
-	unscored := insertJob(t, pool, "fp-unscored")
+	userID := pgtest.InsertUser(t, pool)
+	scored := pgtest.InsertJob(t, pool, "Engineer", "fp-scored")
+	closed := pgtest.InsertJob(t, pool, "Engineer", "fp-closed")
+	unscored := pgtest.InsertJob(t, pool, "Engineer", "fp-unscored")
 	for _, jobID := range []string{scored, closed} {
 		if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userID); err != nil {
 			t.Fatalf("seed job_scores: %v", err)
@@ -211,8 +185,8 @@ func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 
 	var companyID string
 	if err := pool.QueryRow(ctx, `INSERT INTO companies (slug, name) VALUES ('acme', 'Acme') RETURNING id`).Scan(&companyID); err != nil {
@@ -234,8 +208,8 @@ func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(ctx)
@@ -277,9 +251,9 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	alice := insertUser(t, pool)
-	bob := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	alice := pgtest.InsertUser(t, pool)
+	bob := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(ctx)
@@ -311,8 +285,8 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(ctx)
@@ -366,7 +340,7 @@ func TestClaimAnswerEffect_EmptyQueueReturnsErrNotFound(t *testing.T) {
 func TestFailAnswerEffect_ReschedulesForRetry(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(ctx)
@@ -390,8 +364,8 @@ func TestFailAnswerEffect_ReschedulesForRetry(t *testing.T) {
 func TestListScoringInputsThenSaveScores(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1, $2, 50, '[]')`,
@@ -427,8 +401,8 @@ func TestListScoringInputsThenSaveScores(t *testing.T) {
 func TestListScoringInputs_IgnoresAnswersUnderAnotherModel(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1, $2, 50, '[]')`,
@@ -456,7 +430,7 @@ func insertTrackedCompany(t *testing.T, pool *pgxpool.Pool, slug string) (compan
 	if err := pool.QueryRow(ctx, `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
 		t.Fatalf("insert company: %v", err)
 	}
-	userID = insertUser(t, pool)
+	userID = pgtest.InsertUser(t, pool)
 	if _, err := pool.Exec(ctx, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, true)`, userID, companyID); err != nil {
 		t.Fatalf("insert tracked company: %v", err)
 	}
@@ -480,7 +454,7 @@ func insertJobForCompany(t *testing.T, pool *pgxpool.Pool, companySlug, companyI
 func TestJobsChanged_DropsStaleAnswersAndQueuesEffect(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-new")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-new")
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
 		 VALUES ($1, 'fp-old', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
@@ -519,7 +493,7 @@ func TestJobsChanged_DropsStaleAnswersAndQueuesEffect(t *testing.T) {
 func TestJobsChanged_RollbackAlsoRollsBackQueuedEffect(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertTrackedCompany(t, pool, "acme")
 
 	tx, err := pool.Begin(ctx)
@@ -545,7 +519,7 @@ func TestJobsChanged_RollbackAlsoRollsBackQueuedEffect(t *testing.T) {
 func TestJobsClosed_DropsAnswers(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
 		 VALUES ($1, 'fp-1', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
@@ -575,7 +549,7 @@ func TestJobsClosed_DropsAnswers(t *testing.T) {
 func TestJobsClosed_RollbackKeepsAnswers(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
 		 VALUES ($1, 'fp-1', 'hash-1', 'typesafe/jev-1.13', 0.9, 0.05, 0.05, 0.9)`, jobID); err != nil {
@@ -688,11 +662,11 @@ func TestOpsState(t *testing.T) {
 	t.Run("counts pending, running and failed effects", func(t *testing.T) {
 		st, pool := newStore(t)
 		now := time.Now()
-		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-1"), "pending", now.Add(-2*time.Hour))
-		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-2"), "running", now.Add(-10*time.Minute))
-		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-3"), "failed", now)
-		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-4"), "failed", now)
-		insertEffectOutbox(t, pool, insertJob(t, pool, "fp-5"), "done", now)
+		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-1"), "pending", now.Add(-2*time.Hour))
+		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-2"), "running", now.Add(-10*time.Minute))
+		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-3"), "failed", now)
+		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-4"), "failed", now)
+		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-5"), "done", now)
 
 		state, err := st.OpsState(context.Background())
 		if err != nil {
@@ -761,7 +735,7 @@ func TestOpsState(t *testing.T) {
 
 	t.Run("counts source targets whose last run failed", func(t *testing.T) {
 		st, pool := newStore(t)
-		userID := insertUser(t, pool)
+		userID := pgtest.InsertUser(t, pool)
 		for i, status := range []string{"failed", "failed", "succeeded", "idle"} {
 			if _, err := pool.Exec(context.Background(),
 				`INSERT INTO source_targets (user_id, source, value, run_status) VALUES ($1, 'linkedin', $2, $3)`,
@@ -808,12 +782,12 @@ func TestQueueMissingAnswers_QueuesOnlyOpenScoredFingerprintedJobsMissingHash(t 
 	st, pool := newStore(t)
 	ctx := context.Background()
 
-	userA := insertUser(t, pool)
-	userB := insertUser(t, pool)
-	missing := insertJob(t, pool, "fp-missing")
-	closed := insertJob(t, pool, "fp-closed")
-	answered := insertJob(t, pool, "fp-answered")
-	otherUsers := insertJob(t, pool, "fp-other-user")
+	userA := pgtest.InsertUser(t, pool)
+	userB := pgtest.InsertUser(t, pool)
+	missing := pgtest.InsertJob(t, pool, "Engineer", "fp-missing")
+	closed := pgtest.InsertJob(t, pool, "Engineer", "fp-closed")
+	answered := pgtest.InsertJob(t, pool, "Engineer", "fp-answered")
+	otherUsers := pgtest.InsertJob(t, pool, "Engineer", "fp-other-user")
 
 	for _, jobID := range []string{missing, closed, answered} {
 		if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userA); err != nil {
@@ -864,8 +838,8 @@ func TestQueueMissingAnswers_QuiescesWhenNoGapOrEffectPending(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
 
-	userID := insertUser(t, pool)
-	jobID := insertJob(t, pool, "fp-1")
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	if _, err := pool.Exec(ctx, "INSERT INTO job_scores (job_id, user_id) VALUES ($1, $2)", jobID, userID); err != nil {
 		t.Fatalf("seed job_scores: %v", err)
 	}
@@ -908,7 +882,7 @@ func TestQueueMissingAnswers_QuiescesWhenNoGapOrEffectPending(t *testing.T) {
 func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
 	const claimers = 8
@@ -943,7 +917,7 @@ func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := context.Background()
-	jobID := insertJob(t, pool, "fp-1")
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 
 	if err := st.SaveAnswers(ctx, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.5}}); err != nil {
 		t.Fatal(err)

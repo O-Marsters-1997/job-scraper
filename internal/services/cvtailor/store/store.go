@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store/sqlc"
 )
@@ -40,18 +41,6 @@ func parseID(s string, notFound error) (pgtype.UUID, error) {
 		return pgtype.UUID{}, notFound
 	}
 	return id, nil
-}
-
-func parseUUIDs(ids []string) ([]pgtype.UUID, error) {
-	out := make([]pgtype.UUID, len(ids))
-	for i, s := range ids {
-		id, err := parseID(s, ErrIncompleteOrder)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = id
-	}
-	return out, nil
 }
 
 func parseDate(s *string) (pgtype.Date, error) {
@@ -210,7 +199,7 @@ func (s *Store) ReorderPositions(ctx context.Context, userID string, ids []strin
 	if err != nil {
 		return err
 	}
-	uuids, err := parseUUIDs(ids)
+	uuids, err := data.UUIDs(ids)
 	if err != nil {
 		return err
 	}
@@ -302,7 +291,7 @@ func (s *Store) ReorderAchievements(ctx context.Context, userID, positionID stri
 	if err != nil {
 		return err
 	}
-	uuids, err := parseUUIDs(ids)
+	uuids, err := data.UUIDs(ids)
 	if err != nil {
 		return err
 	}
