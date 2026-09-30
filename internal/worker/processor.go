@@ -81,7 +81,12 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		p.forgetFetches(ctx, fetches)
 		return nil
 	case queue.ListingPageTask:
-		return p.processPage(ctx, task)
+		ctx, fetches := proxy.WithCollector(ctx)
+		if err := p.processPage(ctx, task); err != nil {
+			return err
+		}
+		p.forgetFetches(ctx, fetches)
+		return nil
 	case queue.BoardCheckTask:
 		return p.processBoard(ctx, task)
 	case queue.BoardVerifyTask:
