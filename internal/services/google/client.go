@@ -56,11 +56,10 @@ func NewClient(clientID, clientSecret, redirectURL string, store Store, cipher *
 
 // Google returns a refresh token only when the consent screen is forced.
 func (c *Client) AuthURL(state string, write bool) string {
-	if !write {
-		return c.cfg.AuthCodeURL(state, oauth2.AccessTypeOffline)
-	}
 	cfg := *c.cfg
-	cfg.Scopes = []string{DriveFileScope}
+	if write {
+		cfg.Scopes = []string{DriveFileScope}
+	}
 	return cfg.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,
 		oauth2.ApprovalForce,
@@ -80,8 +79,18 @@ func (c *Client) Exchange(ctx context.Context, code string) (*oauth2.Token, erro
 	return c.cfg.Exchange(ctx, code)
 }
 
-// SaveToken encrypts and persists the OAuth token for the given user.
+// SaveToken encrypts and persists the OAuth token for the given user, keeping
+// the stored refresh token when tok carries none.
 func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token) error {
+	if tok.RefreshToken == "" {
+		stored, err := c.getToken(ctx, userID)
+		if err != nil || stored.RefreshToken == "" {
+			return ErrNoRefreshToken
+		}
+		kept := *tok
+		kept.RefreshToken = stored.RefreshToken
+		tok = &kept
+	}
 	accessEnc, err := c.cipher.Encrypt(tok.AccessToken)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt access: %w", err)

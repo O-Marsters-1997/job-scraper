@@ -17,6 +17,8 @@ var ErrTokenNotFound = apperr.Unauthorized("google account not connected")
 // bad or rotated GOOGLE_TOKEN_ENC_KEY).
 var ErrTokenUnusable = errors.New("google token unusable")
 
+var ErrNoRefreshToken = apperr.Upstream("google did not grant offline access, reconnect Google")
+
 // Store is the identity store's google_oauth_tokens CRUD; identity's store
 // implements it and returns ErrTokenNotFound when userID has no row
 // (ADR 0011).
