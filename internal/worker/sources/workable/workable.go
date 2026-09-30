@@ -11,13 +11,12 @@ import (
 
 // New builds a Workable source for one company slug (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
-	return sources.NewBoardSource(token, sources.BoardSpec{
-		Name: "workable",
-		Post: true, // Workable's list API 404s on GET; only POST responds.
-		URL: func(token string) string {
-			return fmt.Sprintf("https://apply.workable.com/api/v3/accounts/%s/jobs", token)
-		},
-		Parse: parse,
+	return sources.NewBoardSource(sources.BoardSpec{
+		Name:        "workable",
+		Post:        true, // Workable's list API 404s on GET; only POST responds.
+		URL:         fmt.Sprintf("https://apply.workable.com/api/v3/accounts/%s/jobs", token),
+		CompanySlug: token,
+		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
 	})
 }
 
@@ -49,9 +48,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Title:             r.Title,
 			Location:          r.Location.City,
 			URL:               fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
-			CompanySlug:       token,
 			ProviderPostingID: r.Shortcode,
-			Source:            "workable",
 			UpdatedAt:         time.Now().UTC(),
 		})
 	}

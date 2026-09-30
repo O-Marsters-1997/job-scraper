@@ -93,26 +93,16 @@ func RewriteToATS(rawURL string) (string, ATSType, bool) {
 	}
 	host := strings.ToLower(u.Host)
 
-	if strings.Contains(host, "linkedin.com") {
-		if ext := u.Query().Get("externalUrl"); ext != "" {
-			t := Detect(ext)
-			if t != Aggregator && t != UnknownHTML {
-				return ext, t, true
-			}
-		}
+	var dest string
+	switch {
+	case strings.Contains(host, "linkedin.com"):
+		dest = u.Query().Get("externalUrl")
+	case strings.Contains(host, "indeed.com"):
+		dest, _ = neturl.QueryUnescape(u.Query().Get("url"))
 	}
-
-	if strings.Contains(host, "indeed.com") {
-		if dest := u.Query().Get("url"); dest != "" {
-			if unescaped, err := neturl.QueryUnescape(dest); err == nil {
-				t := Detect(unescaped)
-				if t != Aggregator && t != UnknownHTML {
-					return unescaped, t, true
-				}
-			}
-		}
+	if t := Detect(dest); dest != "" && t != Aggregator && t != UnknownHTML {
+		return dest, t, true
 	}
-
 	return "", UnknownHTML, false
 }
 

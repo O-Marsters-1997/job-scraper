@@ -2,19 +2,11 @@ package linkedin_test
 
 import (
 	"context"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestSnapshots(t *testing.T) {
 	sourcetest.RunSnapshotTests(t, linkedin.New("", nil))
@@ -143,16 +135,13 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 			t.Setenv("BRIGHTDATA_CA_CERT", "")
-			var requested *url.URL
 			src := linkedin.New(tt.keywords, tt.filters)
-			src.Client().Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-				requested = r.URL
-				return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader("<html></html>"))}, nil
-			})
+			recorder := sourcetest.Respond("<html></html>")
+			src.Client().Transport = recorder
 			if _, _, err := src.FetchPage(context.Background(), ""); err != nil {
 				t.Fatal(err)
 			}
-			query := requested.Query()
+			query := recorder.Last.URL.Query()
 
 			for param, want := range tt.want {
 				got := query.Get(param)

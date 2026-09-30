@@ -14,11 +14,7 @@ func main() {
 	if len(os.Args) < 2 {
 		fail("usage: queue count | list [limit] | inspect <task-id> | replay <task-id>")
 	}
-	brokerURL := os.Getenv("RABBITMQ_URL")
-	if brokerURL == "" {
-		brokerURL = "amqp://guest:guest@localhost:5672/"
-	}
-	q, err := queue.NewBroker(brokerURL)
+	q, err := queue.NewBrokerFromEnv()
 	if err != nil {
 		fail(err.Error())
 	}

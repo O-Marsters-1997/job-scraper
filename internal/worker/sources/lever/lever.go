@@ -11,12 +11,11 @@ import (
 
 // New builds a Lever source for one company slug (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
-	return sources.NewBoardSource(token, sources.BoardSpec{
-		Name: "lever",
-		URL: func(token string) string {
-			return fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token)
-		},
-		Parse: parse,
+	return sources.NewBoardSource(sources.BoardSpec{
+		Name:        "lever",
+		URL:         fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token),
+		CompanySlug: token,
+		Parse:       parse,
 	})
 }
 
@@ -33,7 +32,7 @@ type postingCategories struct {
 	Location string `json:"location"`
 }
 
-func parse(body []byte, token string) ([]dto.Job, error) {
+func parse(body []byte) ([]dto.Job, error) {
 	var postings []posting
 	if err := json.Unmarshal(body, &postings); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
@@ -50,9 +49,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Title:             p.Text,
 			Location:          p.Categories.Location,
 			URL:               p.HostedURL,
-			CompanySlug:       token,
 			ProviderPostingID: p.ID,
-			Source:            "lever",
 			Description:       p.DescriptionPlain,
 			UpdatedAt:         updatedAt,
 		})

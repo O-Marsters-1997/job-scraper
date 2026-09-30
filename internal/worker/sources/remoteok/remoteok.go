@@ -11,10 +11,10 @@ import (
 
 // New builds a RemoteOK source filtered to one keyword (empty means no filter).
 func New(keyword string) *sources.BoardSource {
-	return sources.NewBoardSource("", sources.BoardSpec{
+	return sources.NewBoardSource(sources.BoardSpec{
 		Name: "remoteok",
-		URL:  func(string) string { return "https://remoteok.com/api" },
-		Parse: func(body []byte, _ string) ([]dto.Job, error) {
+		URL:  "https://remoteok.com/api",
+		Parse: func(body []byte) ([]dto.Job, error) {
 			jobs, err := parse(body)
 			return sources.FilterByKeywords(jobs, keywordList(keyword)), err
 		},
@@ -58,7 +58,6 @@ func parse(body []byte) ([]dto.Job, error) {
 			Location:        fj.Location,
 			URL:             fj.URL,
 			CompanySlug:     slug.Make(fj.Company),
-			Source:          "remoteok",
 			Description:     fj.Description,
 			SalaryRaw:       formatSalary(fj.SalaryMin, fj.SalaryMax),
 			WorkArrangement: "remote",

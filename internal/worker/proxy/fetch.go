@@ -130,7 +130,7 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			}
 		}
 		if resp.StatusCode != http.StatusTooManyRequests || attempt == 1 {
-			resp.Body = &limitedBody{ReadCloser: resp.Body, release: release}
+			resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
 			held = false
 			return resp, nil
 		}
@@ -156,35 +156,18 @@ func zoneExhausted(resp *http.Response) bool {
 	return resp.Header.Get("X-Brd-Err-Code") == "client_10100" || strings.Contains(resp.Header.Get("Proxy-Status"), "client_10100")
 }
 
-type limitedBody struct {
+type releasingBody struct {
 	io.ReadCloser
-	n       int64
 	release func()
 	once    sync.Once
 }
 
-func (b *limitedBody) Close() error {
+func (b *releasingBody) Close() error {
 	err := b.ReadCloser.Close()
 	if b.release != nil {
 		b.once.Do(b.release)
 	}
 	return err
-}
-
-func (b *limitedBody) Read(p []byte) (int, error) {
-	if b.n > maxBodyBytes {
-		return 0, errors.New("response exceeds 8 MiB")
-	}
-	remaining := maxBodyBytes + 1 - b.n
-	if int64(len(p)) > remaining {
-		p = p[:remaining]
-	}
-	n, err := b.ReadCloser.Read(p)
-	b.n += int64(n)
-	if b.n > maxBodyBytes {
-		return n, errors.New("response exceeds 8 MiB")
-	}
-	return n, err
 }
 
 func ValidateURL(ctx context.Context, u *url.URL) error {

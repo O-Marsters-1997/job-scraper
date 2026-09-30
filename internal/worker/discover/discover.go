@@ -5,7 +5,10 @@ package discover
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -16,6 +19,27 @@ import (
 // Company is a harvested catalog candidate. Zero-value fields are unknown.
 type Company struct {
 	Name, Domain, ATSSource, ATSToken, LinkedInCompanyID string
+}
+
+// Get fetches url with client and returns the body of a 200 response. A non-empty
+// userAgent is sent as the User-Agent header.
+func Get(ctx context.Context, client *http.Client, url, userAgent string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if userAgent != "" {
+		req.Header.Set("User-Agent", userAgent)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch %s: status %s", url, resp.Status)
+	}
+	return io.ReadAll(resp.Body)
 }
 
 // Harvester yields company catalog candidates from one external source.

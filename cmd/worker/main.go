@@ -47,19 +47,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if err := proxy.Validate(); err != nil {
-		slog.ErrorContext(ctx, "Web Unlocker config invalid", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "Web Unlocker config invalid", err)
 	}
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "tracing init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "tracing init failed", err)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "db init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "db init failed", err)
 	}
 	defer pool.Close()
 
@@ -69,24 +66,11 @@ func main() {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	metricsAddr := os.Getenv("METRICS_ADDR")
-	if metricsAddr == "" {
-		metricsAddr = ":9091"
-	}
-	go func() {
-		if err := telemetry.Serve(ctx, metricsAddr, reg); err != nil {
-			slog.ErrorContext(ctx, "metrics server failed", slog.Any(logger.KeyErr, err))
-		}
-	}()
+	telemetry.ServeMetrics(ctx, reg)
 
-	brokerURL := os.Getenv("RABBITMQ_URL")
-	if brokerURL == "" {
-		brokerURL = "amqp://guest:guest@localhost:5672/"
-	}
-	q, err := queue.NewBroker(brokerURL)
+	q, err := queue.NewBrokerFromEnv()
 	if err != nil {
-		slog.ErrorContext(ctx, "queue init failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "queue init failed", err)
 	}
 	defer func() { _ = q.Close() }()
 
@@ -94,8 +78,7 @@ func main() {
 
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {
-		slog.ErrorContext(ctx, "API_BASE_URL is required")
-		os.Exit(1)
+		fatal(ctx, "config invalid", errors.New("API_BASE_URL is required"))
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
@@ -129,8 +112,7 @@ func main() {
 		}
 		go publishBoards()
 		if _, err := cr.AddFunc(sources.DefaultSchedule, publishBoards); err != nil {
-			slog.ErrorContext(ctx, "Board schedule failed", slog.Any(logger.KeyErr, err))
-			os.Exit(1)
+			fatal(ctx, "Board schedule failed", err)
 		}
 	}
 	reconcile := func() {
@@ -166,8 +148,7 @@ func main() {
 	}
 	go reconcile()
 	if _, err := cr.AddFunc("@every 1m", reconcile); err != nil {
-		slog.ErrorContext(ctx, "reconcile schedule failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "reconcile schedule failed", err)
 	}
 	if _, err := cr.AddFunc("@daily", func() {
 		if err := proxy.Probe(ctx); err != nil {
@@ -180,8 +161,7 @@ func main() {
 			slog.ErrorContext(ctx, "candidate cleanup failed", slog.Any(logger.KeyErr, err))
 		}
 	}); err != nil {
-		slog.ErrorContext(ctx, "daily schedule failed", slog.Any(logger.KeyErr, err))
-		os.Exit(1)
+		fatal(ctx, "daily schedule failed", err)
 	}
 	cr.Start()
 	defer cr.Stop()
@@ -192,4 +172,9 @@ func main() {
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
 	}
+}
+
+func fatal(ctx context.Context, msg string, err error) {
+	slog.ErrorContext(ctx, msg, slog.Any(logger.KeyErr, err)) //nolint:sloglint // pedantic: msg is a literal at every call site
+	os.Exit(1)
 }

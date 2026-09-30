@@ -11,12 +11,11 @@ import (
 
 // New builds a Greenhouse source for one board token (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
-	return sources.NewBoardSource(token, sources.BoardSpec{
-		Name: "greenhouse",
-		URL: func(token string) string {
-			return fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token)
-		},
-		Parse: parse,
+	return sources.NewBoardSource(sources.BoardSpec{
+		Name:        "greenhouse",
+		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token),
+		CompanySlug: token,
+		Parse:       parse,
 	})
 }
 
@@ -38,7 +37,7 @@ type jobLocation struct {
 	Name string `json:"name"`
 }
 
-func parse(body []byte, token string) ([]dto.Job, error) {
+func parse(body []byte) ([]dto.Job, error) {
 	var resp boardResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("parse json: %w", err)
@@ -50,9 +49,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Title:             bj.Title,
 			Location:          bj.Location.Name,
 			URL:               bj.AbsoluteURL,
-			CompanySlug:       token,
 			ProviderPostingID: strconv.FormatInt(bj.ID, 10),
-			Source:            "greenhouse",
 			Description:       bj.Content,
 			UpdatedAt:         sources.RFC3339OrNow(bj.UpdatedAt),
 		})

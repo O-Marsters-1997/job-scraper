@@ -5,25 +5,13 @@ import (
 	"strings"
 )
 
-type sourceKind int
+type sourceKind string
 
 const (
-	kindBoard sourceKind = iota
-	kindURL
-	kindFilter
+	kindBoard  sourceKind = "board"
+	kindURL    sourceKind = "url"
+	kindFilter sourceKind = "filter"
 )
-
-func (k sourceKind) string() string {
-	switch k {
-	case kindBoard:
-		return "board"
-	case kindURL:
-		return "url"
-	case kindFilter:
-		return "filter"
-	}
-	return ""
-}
 
 // Source roles classify a source by purpose, orthogonal to sourceKind (which
 // describes value shape). RoleATS sources are known-company boards re-checked
@@ -143,7 +131,7 @@ func Sources() []SourceInfo {
 		infos[i] = SourceInfo{
 			Name:      e.name,
 			Label:     e.label,
-			Kind:      e.kind.string(),
+			Kind:      string(e.kind),
 			Role:      e.role,
 			URLPrefix: e.urlPrefix,
 			Filters:   filters,
