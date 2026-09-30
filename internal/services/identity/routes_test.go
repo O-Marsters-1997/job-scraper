@@ -1,11 +1,9 @@
 package identity_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -14,51 +12,77 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
-	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 )
 
-func newTestRouter(t *testing.T, st *identitytest.FakeStore, gc *identitytest.DocsClient) (chi.Router, *identity.Module) {
+func newTestRouter(t *testing.T) chi.Router {
 	t.Helper()
-	m := buildModule(t, st, gc)
+	t.Setenv("SESSION_SECRET", "test-secret")
+	m := identity.Build(testDeps(t, identity.Deps{}))
 	r := chi.NewRouter()
 	m.PublicRoutes(r)
 	r.Group(func(r chi.Router) {
 		r.Use(m.Middleware())
 		m.Routes(r)
 	})
-	return r, m
-}
-
-func newRoutesOnlyRouter(t *testing.T, st *identitytest.FakeStore, gc *identitytest.DocsClient) chi.Router {
-	t.Helper()
-	m := buildModule(t, st, gc)
-	r := chi.NewRouter()
-	m.PublicRoutes(r)
-	m.Routes(r)
 	return r
 }
 
-func jsonRequest(method, path, body string) *http.Request {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
+func serve(t *testing.T, r http.Handler, route, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	method, path, _ := strings.Cut(route, " ")
+	req := handlerstest.Request(t, method, path, body)
+	for _, c := range cookies {
+		req.AddCookie(c)
 	}
-	return req
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func wantStatus(t *testing.T, w *httptest.ResponseRecorder, status int) {
+	t.Helper()
+	if w.Code != status {
+		t.Fatalf("status = %d, want %d: %s", w.Code, status, w.Body)
+	}
+}
+
+func cookie(t *testing.T, w *httptest.ResponseRecorder, name string) *http.Cookie {
+	t.Helper()
+	for _, c := range w.Result().Cookies() {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("no %s cookie set", name)
+	return nil
 }
 
 func signup(t *testing.T, r chi.Router, username string) *http.Cookie {
 	t.Helper()
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, jsonRequest(http.MethodPost, "/auth/signup", `{"username":"`+username+`","password":"hunter2"}`))
-	if w.Code != http.StatusCreated {
-		t.Fatalf("signup status = %d: %s", w.Code, w.Body)
+	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"`+username+`","password":"hunter2"}`)
+	wantStatus(t, w, http.StatusCreated)
+	return cookie(t, w, "session_id")
+}
+
+func startOAuth(t *testing.T, r chi.Router, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := handlerstest.Serve(t, r, "GET /google/oauth/start?"+query, "")
+	wantStatus(t, w, http.StatusTemporaryRedirect)
+	return w
+}
+
+func oauthCallback(t *testing.T, r chi.Router, query string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+	t.Helper()
+	for _, c := range cookies {
+		if state, _, ok := strings.Cut(c.Value, ":"); ok && c.Name == "oauth_state" {
+			query = "state=" + state + "&" + query
+		}
 	}
-	return sessionCookie(t, w)
+	return serve(t, r, "GET /google/oauth/callback?"+query, "", cookies...)
 }
 
 func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
-	authed, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-	handlerstest.RequiresAuth(t, authed,
+	handlerstest.RequiresAuth(t, newTestRouter(t),
 		"POST /auth/logout",
 		"GET /auth/me",
 		"GET /profile",
@@ -70,247 +94,110 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"DELETE /google/link",
 	)
 
-	noAuth := newRoutesOnlyRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
+	m := identity.Build(testDeps(t, identity.Deps{}))
+	noAuth := chi.NewRouter()
+	m.PublicRoutes(noAuth)
+	m.Routes(noAuth)
 	handlerstest.RejectsMalformedBody(t, noAuth,
 		"POST /auth/login", "POST /auth/signup", "PUT /profile", "PUT /ai-credentials",
 	)
 }
 
-func TestSignupAndLoginSetTheSessionCookie(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
+func TestSessionCookieJourney(t *testing.T) {
+	r := newTestRouter(t)
 
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, jsonRequest(http.MethodPost, "/auth/signup", `{"username":"alice","password":"hunter2"}`))
-	if w.Code != http.StatusCreated {
-		t.Fatalf("signup status = %d: %s", w.Code, w.Body)
-	}
-	if sessionCookie(t, w).Value == "" {
+	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"alice","password":"hunter2"}`)
+	wantStatus(t, w, http.StatusCreated)
+	session := cookie(t, w, "session_id")
+	if session.Value == "" {
 		t.Fatal("signup: want a session_id cookie")
 	}
-	var signedUp dto.AuthUserView
-	if err := json.Unmarshal(w.Body.Bytes(), &signedUp); err != nil {
-		t.Fatal(err)
-	}
-	if signedUp.Username != "alice" {
-		t.Fatalf("signup body = %+v, want username alice", signedUp)
+	if got := handlerstest.DecodeJSON[dto.AuthUserView](t, w.Body.Bytes()); got.Username != "alice" {
+		t.Errorf("signup body = %+v, want username alice", got)
 	}
 
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, jsonRequest(http.MethodPost, "/auth/login", `{"username":"alice","password":"hunter2"}`))
-	if w.Code != http.StatusOK {
-		t.Fatalf("login status = %d: %s", w.Code, w.Body)
-	}
-	if sessionCookie(t, w).Value == "" {
-		t.Fatal("login: want a session_id cookie")
-	}
-}
-
-func TestSessionCookieAuthenticatesProtectedRoutes(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-	cookie := signup(t, r, "bob")
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/auth/me", http.NoBody)
-	req.AddCookie(cookie)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("me status = %d: %s", w.Code, w.Body)
-	}
-	var me dto.MeView
-	if err := json.Unmarshal(w.Body.Bytes(), &me); err != nil {
-		t.Fatal(err)
-	}
-	if me.Username != "bob" {
-		t.Fatalf("me body = %+v, want username bob", me)
+	w = handlerstest.Serve(t, r, "POST /auth/login", `{"username":"alice","password":"hunter2"}`)
+	wantStatus(t, w, http.StatusOK)
+	if cookie(t, w, "session_id").Value == "" {
+		t.Error("login: want a session_id cookie")
 	}
 
-	w = httptest.NewRecorder()
-	logoutReq := httptest.NewRequest(http.MethodPost, "/auth/logout", http.NoBody)
-	logoutReq.AddCookie(cookie)
-	r.ServeHTTP(w, logoutReq)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("logout status = %d: %s", w.Code, w.Body)
-	}
-	if cleared := sessionCookie(t, w); cleared.MaxAge >= 0 {
-		t.Fatalf("logout cookie MaxAge = %d, want negative", cleared.MaxAge)
+	w = serve(t, r, "GET /auth/me", "", session)
+	wantStatus(t, w, http.StatusOK)
+	if got := handlerstest.DecodeJSON[dto.MeView](t, w.Body.Bytes()); got.Username != "alice" {
+		t.Errorf("me body = %+v, want username alice", got)
 	}
 
-	w = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/auth/me", http.NoBody)
-	req.AddCookie(cookie)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("me after logout status = %d, want 401", w.Code)
+	w = serve(t, r, "POST /auth/logout", "", session)
+	wantStatus(t, w, http.StatusNoContent)
+	if cleared := cookie(t, w, "session_id"); cleared.MaxAge >= 0 {
+		t.Errorf("logout cookie MaxAge = %d, want negative", cleared.MaxAge)
 	}
+
+	wantStatus(t, serve(t, r, "GET /auth/me", "", session), http.StatusUnauthorized)
 }
 
 func TestProfileAndAIPrefsRoutes(t *testing.T) {
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-	cookie := signup(t, r, "erin")
+	r := newTestRouter(t)
+	session := signup(t, r, "erin")
 
-	authedReq := func(method, path, body string) *http.Request {
-		req := jsonRequest(method, path, body)
-		req.AddCookie(cookie)
-		return req
-	}
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, authedReq(http.MethodPut, "/profile", `{"email":"new@example.com"}`))
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("update profile status = %d: %s", w.Code, w.Body)
+	wantStatus(t, serve(t, r, "PUT /profile", `{"email":"new@example.com"}`, session), http.StatusNoContent)
+	w := serve(t, r, "GET /profile", "", session)
+	wantStatus(t, w, http.StatusOK)
+	if got := handlerstest.DecodeJSON[dto.Profile](t, w.Body.Bytes()); got.Email != "new@example.com" {
+		t.Errorf("profile = %+v, want email new@example.com", got)
 	}
 
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authedReq(http.MethodGet, "/profile", ""))
-	if w.Code != http.StatusOK {
-		t.Fatalf("get profile status = %d: %s", w.Code, w.Body)
-	}
-	var profile dto.Profile
-	if err := json.Unmarshal(w.Body.Bytes(), &profile); err != nil {
-		t.Fatal(err)
-	}
-	if profile.Email != "new@example.com" {
-		t.Fatalf("profile = %+v, want email new@example.com", profile)
-	}
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authedReq(http.MethodPut, "/ai-credentials", `{"provider":"anthropic","apiKey":"sk-test"}`))
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("update ai-credentials status = %d: %s", w.Code, w.Body)
-	}
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, authedReq(http.MethodGet, "/ai-prefs", ""))
-	if w.Code != http.StatusOK {
-		t.Fatalf("get ai-prefs status = %d: %s", w.Code, w.Body)
-	}
-	var prefs dto.AIPrefsView
-	if err := json.Unmarshal(w.Body.Bytes(), &prefs); err != nil {
-		t.Fatal(err)
-	}
-	if len(prefs.ConfiguredProviders) != 1 || prefs.ConfiguredProviders[0] != "anthropic" {
-		t.Fatalf("ai-prefs = %+v, want [anthropic]", prefs)
+	wantStatus(t, serve(t, r, "PUT /ai-credentials", `{"provider":"anthropic","apiKey":"sk-test"}`, session), http.StatusNoContent)
+	w = serve(t, r, "GET /ai-prefs", "", session)
+	wantStatus(t, w, http.StatusOK)
+	got := handlerstest.DecodeJSON[dto.AIPrefsView](t, w.Body.Bytes())
+	if len(got.ConfiguredProviders) != 1 || got.ConfiguredProviders[0] != "anthropic" {
+		t.Errorf("ai-prefs = %+v, want [anthropic]", got)
 	}
 }
 
-func TestGoogleOAuthStartSetsStateCookieAndRedirects(t *testing.T) {
-	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
+func TestGoogleOAuthStart(t *testing.T) {
+	r := newTestRouter(t)
 
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
-	if w.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("status = %d: %s", w.Code, w.Body)
+	w := startOAuth(t, r, "")
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "accounts.google.com") {
+		t.Errorf("Location = %q, want a Google auth URL", loc)
 	}
-	if loc := w.Header().Get("Location"); !strings.Contains(loc, "accounts.google.com") {
-		t.Fatalf("Location = %q, want a Google auth URL", loc)
+	if strings.Contains(loc, "drive.file") {
+		t.Errorf("plain start Location = %q, must not request write scope", loc)
 	}
-	if stateCookie(t, w) == nil {
-		t.Fatal("want an oauth_state cookie")
-	}
-}
+	cookie(t, w, "oauth_state")
 
-func TestGoogleOAuthCallbackConnectsAndStatusReflectsIt(t *testing.T) {
-	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-	session := signup(t, r, "carol")
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
-	state := stateCookie(t, w)
-
-	w = httptest.NewRecorder()
-	callbackReq := httptest.NewRequest(http.MethodGet, "/google/oauth/callback?state="+extractState(t, state.Value)+"&code=auth-code", http.NoBody)
-	callbackReq.AddCookie(session)
-	callbackReq.AddCookie(state)
-	r.ServeHTTP(w, callbackReq)
-	if w.Code != http.StatusTemporaryRedirect {
-		t.Fatalf("callback status = %d: %s", w.Code, w.Body)
-	}
-
-	getStatus := func() dto.GoogleStatus {
-		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/google/status", http.NoBody)
-		req.AddCookie(session)
-		r.ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			t.Fatalf("status = %d: %s", w.Code, w.Body)
-		}
-		var status dto.GoogleStatus
-		if err := json.Unmarshal(w.Body.Bytes(), &status); err != nil {
-			t.Fatal(err)
-		}
-		return status
-	}
-
-	if status := getStatus(); !status.Connected {
-		t.Fatalf("status = %+v, want connected", status)
-	}
-
-	w = httptest.NewRecorder()
-	linkReq := httptest.NewRequest(http.MethodDelete, "/google/link", http.NoBody)
-	linkReq.AddCookie(session)
-	r.ServeHTTP(w, linkReq)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("delete link status = %d: %s", w.Code, w.Body)
-	}
-
-	if status := getStatus(); status.Connected {
-		t.Fatal("status after unlink = connected, want disconnected")
-	}
-}
-
-func sessionCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
-	t.Helper()
-	for _, c := range w.Result().Cookies() {
-		if c.Name == "session_id" {
-			return c
-		}
-	}
-	t.Fatal("no session_id cookie set")
-	return nil
-}
-
-func stateCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
-	t.Helper()
-	for _, c := range w.Result().Cookies() {
-		if c.Name == "oauth_state" {
-			return c
-		}
-	}
-	return nil
-}
-
-var stateValuePattern = regexp.MustCompile(`^([0-9a-f]+):`)
-
-func extractState(t *testing.T, signed string) string {
-	t.Helper()
-	m := stateValuePattern.FindStringSubmatch(signed)
-	if m == nil {
-		t.Fatalf("oauth_state cookie %q doesn't look like state:signature", signed)
-	}
-	return m[1]
-}
-
-func TestGoogleOAuthStartWriteVariantAsksForDriveFile(t *testing.T) {
-	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start?write=1", http.NoBody))
+	w = startOAuth(t, r, "write=1")
 	if loc := w.Header().Get("Location"); !strings.Contains(loc, "include_granted_scopes=true") {
-		t.Fatalf("Location = %q, want write consent URL", loc)
-	}
-
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
-	if loc := w.Header().Get("Location"); strings.Contains(loc, "drive.file") {
-		t.Fatalf("plain start Location = %q, must not request write scope", loc)
+		t.Errorf("write start Location = %q, want write consent URL", loc)
 	}
 }
 
-func TestGoogleOAuthCallbackRedirectsToAllowListedReturnPath(t *testing.T) {
-	t.Setenv("SESSION_SECRET", "test-secret")
+func TestGoogleOAuthConnectJourney(t *testing.T) {
+	r := newTestRouter(t)
+	session := signup(t, r, "carol")
+	googleStatus := func() dto.GoogleStatus {
+		w := serve(t, r, "GET /google/status", "", session)
+		wantStatus(t, w, http.StatusOK)
+		return handlerstest.DecodeJSON[dto.GoogleStatus](t, w.Body.Bytes())
+	}
+
+	start := startOAuth(t, r, "")
+	wantStatus(t, oauthCallback(t, r, "code=auth-code", session, cookie(t, start, "oauth_state")), http.StatusTemporaryRedirect)
+	if !googleStatus().Connected {
+		t.Fatal("status after callback = disconnected, want connected")
+	}
+
+	wantStatus(t, serve(t, r, "DELETE /google/link", "", session), http.StatusNoContent)
+	if googleStatus().Connected {
+		t.Error("status after unlink = connected, want disconnected")
+	}
+}
+
+func TestGoogleOAuthCallbackReturnPath(t *testing.T) {
 	tests := []struct {
 		name, ret, want string
 	}{
@@ -322,43 +209,26 @@ func TestGoogleOAuthCallbackRedirectsToAllowListedReturnPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
+			r := newTestRouter(t)
 			session := signup(t, r, "dave")
+			start := startOAuth(t, r, "write=1&return="+url.QueryEscape(tt.ret))
 
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start?write=1&return="+url.QueryEscape(tt.ret), http.NoBody))
-			state := stateCookie(t, w)
-
-			cb := httptest.NewRequest(http.MethodGet, "/google/oauth/callback?state="+extractState(t, state.Value)+"&code=c", http.NoBody)
-			cb.AddCookie(session)
-			for _, c := range w.Result().Cookies() {
-				cb.AddCookie(c)
-			}
-			w = httptest.NewRecorder()
-			r.ServeHTTP(w, cb)
+			w := oauthCallback(t, r, "code=c", append(start.Result().Cookies(), session)...)
 			if got := w.Header().Get("Location"); got != tt.want {
-				t.Fatalf("Location = %q, want %q", got, tt.want)
+				t.Errorf("Location = %q, want %q", got, tt.want)
 			}
 		})
 	}
-}
 
-func TestGoogleOAuthCallbackIgnoresForgedReturnCookie(t *testing.T) {
-	t.Setenv("SESSION_SECRET", "test-secret")
-	r, _ := newTestRouter(t, identitytest.NewFakeStore(), identitytest.Unlinked(false))
-	session := signup(t, r, "erin")
+	t.Run("forged return cookie", func(t *testing.T) {
+		r := newTestRouter(t)
+		session := signup(t, r, "erin")
+		state := cookie(t, startOAuth(t, r, ""), "oauth_state")
+		forged := &http.Cookie{Name: "oauth_return", Value: "https://evil.example"}
 
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/google/oauth/start", http.NoBody))
-	state := stateCookie(t, w)
-
-	cb := httptest.NewRequest(http.MethodGet, "/google/oauth/callback?state="+extractState(t, state.Value)+"&code=c", http.NoBody)
-	cb.AddCookie(session)
-	cb.AddCookie(state)
-	cb.AddCookie(&http.Cookie{Name: "oauth_return", Value: "https://evil.example"})
-	w = httptest.NewRecorder()
-	r.ServeHTTP(w, cb)
-	if got := w.Header().Get("Location"); got != "/settings/integrations" {
-		t.Fatalf("Location = %q", got)
-	}
+		w := oauthCallback(t, r, "code=c", session, state, forged)
+		if got := w.Header().Get("Location"); got != "/settings/integrations" {
+			t.Errorf("Location = %q, want /settings/integrations", got)
+		}
+	})
 }
