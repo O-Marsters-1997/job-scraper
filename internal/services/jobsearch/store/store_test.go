@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -1037,5 +1038,31 @@ func TestListTrackedCompaniesForUser(t *testing.T) {
 	}
 	if got[0].OpenJobs != 4 || got[0].RelevantJobs != 1 {
 		t.Errorf("open, relevant = %d, %d, want 4, 1", got[0].OpenJobs, got[0].RelevantJobs)
+	}
+}
+
+func TestDeleteExpiredFetches(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := t.Context()
+	stale := dto.CachedResponse{URL: "https://example.com/stale", Status: 200, Header: http.Header{}, Body: []byte("a")}
+	fresh := dto.CachedResponse{URL: "https://example.com/fresh", Status: 200, Header: http.Header{}, Body: []byte("b")}
+	for _, resp := range []dto.CachedResponse{stale, fresh} {
+		if err := st.PutFetch(ctx, resp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := pool.Exec(ctx, "UPDATE fetch_cache SET fetched_at = NOW() - INTERVAL '8 days' WHERE url = $1", stale.URL); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.DeleteExpiredFetches(ctx); err != nil {
+		t.Fatalf("DeleteExpiredFetches() err = %v", err)
+	}
+
+	if _, ok, _ := st.LookupFetch(ctx, stale.URL); ok {
+		t.Error("LookupFetch(stale) hit, want miss")
+	}
+	if _, ok, _ := st.LookupFetch(ctx, fresh.URL); !ok {
+		t.Error("LookupFetch(fresh) miss, want hit")
 	}
 }
