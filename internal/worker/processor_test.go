@@ -61,6 +61,25 @@ func (s pageSource) FetchPage(context.Context, string) ([]dto.Job, string, error
 	return []dto.Job{{URL: "https://example.com/job/1"}}, s.next, nil
 }
 
+type fetchingPage struct {
+	client *http.Client
+	err    error
+}
+
+func (fetchingPage) Cfg() sources.Config { return sources.Config{Name: "fetching"} }
+func (s fetchingPage) FetchPage(ctx context.Context, _ string) ([]dto.Job, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchedURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	_ = resp.Body.Close()
+	return []dto.Job{{URL: "https://example.com/job/1"}}, "", s.err
+}
+
 type allNewURLs struct{}
 
 func (allNewURLs) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
@@ -117,7 +136,17 @@ func newFixture(t *testing.T, ingestStatus int, nextCursor string) fixture {
 	in := newIngest(t, ingestStatus)
 	exporter := scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0)
 	published := queuetest.NewRecorder()
-	build := func(dto.SourceTarget) (sources.Source, bool) { return pageSource{next: nextCursor}, true }
+	page := fetchingPage{client: newFetchingDetailer(store).client}
+	build := func(target dto.SourceTarget) (sources.Source, bool) {
+		switch target.Source {
+		case "fetching":
+			return page, true
+		case "fetchfail":
+			page.err = errors.New("page failed after fetch")
+			return page, true
+		}
+		return pageSource{next: nextCursor}, true
+	}
 	processor := worker.NewProcessor(worker.Deps{
 		JS:           jobsearch.Build(jobsearchtest.NewDeps(store)),
 		Broker:       published,
@@ -237,6 +266,32 @@ func TestProcess(t *testing.T) {
 		}
 		if _, ok, _ := f.store.LookupFetch(ctx, fetchedURL); !ok {
 			t.Fatal("cached fetch missing after a failed task, want it kept for the retry")
+		}
+	})
+
+	t.Run("listing page task forgets its cached fetches once it succeeds", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "fetching")
+		task := queuetest.ListingTask("fetching")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok, _ := f.store.LookupFetch(ctx, fetchedURL); ok {
+			t.Fatal("cached fetch still present after a successful page")
+		}
+	})
+
+	t.Run("listing page task keeps its cached fetches when it fails after fetching", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "fetchfail")
+		task := queuetest.ListingTask("fetchfail")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		if err := f.processor.Process(ctx, task); err == nil {
+			t.Fatal("Process() = nil, want page error")
+		}
+		if _, ok, _ := f.store.LookupFetch(ctx, fetchedURL); !ok {
+			t.Fatal("cached fetch missing after a failed page, want it kept for the retry")
 		}
 	})
 
