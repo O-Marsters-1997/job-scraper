@@ -28,28 +28,6 @@ func (q *Queries) EnsureTabs(ctx context.Context, arg EnsureTabsParams) error {
 	return err
 }
 
-const hideTab = `-- name: HideTab :execrows
-UPDATE tracked_doc_tabs t
-SET visible = FALSE
-FROM tracked_docs d
-WHERE t.tracked_doc_id = d.id
-  AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3
-`
-
-type HideTabParams struct {
-	UserID pgtype.UUID
-	DocID  string
-	TabID  string
-}
-
-func (q *Queries) HideTab(ctx context.Context, arg HideTabParams) (int64, error) {
-	result, err := q.db.Exec(ctx, hideTab, arg.UserID, arg.DocID, arg.TabID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const listTabs = `-- name: ListTabs :many
 SELECT id, tracked_doc_id, tab_id, title, visible, created_at
 FROM tracked_doc_tabs
@@ -84,22 +62,28 @@ func (q *Queries) ListTabs(ctx context.Context, trackedDocID pgtype.UUID) ([]Tra
 	return items, nil
 }
 
-const showTab = `-- name: ShowTab :execrows
+const setTabVisible = `-- name: SetTabVisible :execrows
 UPDATE tracked_doc_tabs t
-SET visible = TRUE
+SET visible = $4
 FROM tracked_docs d
 WHERE t.tracked_doc_id = d.id
   AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3
 `
 
-type ShowTabParams struct {
-	UserID pgtype.UUID
-	DocID  string
-	TabID  string
+type SetTabVisibleParams struct {
+	UserID  pgtype.UUID
+	DocID   string
+	TabID   string
+	Visible bool
 }
 
-func (q *Queries) ShowTab(ctx context.Context, arg ShowTabParams) (int64, error) {
-	result, err := q.db.Exec(ctx, showTab, arg.UserID, arg.DocID, arg.TabID)
+func (q *Queries) SetTabVisible(ctx context.Context, arg SetTabVisibleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTabVisible,
+		arg.UserID,
+		arg.DocID,
+		arg.TabID,
+		arg.Visible,
+	)
 	if err != nil {
 		return 0, err
 	}

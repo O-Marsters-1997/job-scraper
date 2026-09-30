@@ -49,12 +49,12 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := f.Store.ListApplicationsByUser(context.Background(), f.UserID)
+		got, err := f.Store.ListApplications(context.Background(), f.UserID, "")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(got) != 1 || got[0].ID != created.ID {
-			t.Fatalf("ListApplicationsByUser(...) = %+v, want [%+v]", got, created)
+			t.Fatalf("ListApplications(...) = %+v, want [%+v]", got, created)
 		}
 	})
 
@@ -90,12 +90,12 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err := f.Store.DeleteApplication(context.Background(), f.UserID, created.ID); err != nil {
 			t.Fatal(err)
 		}
-		got, err := f.Store.ListApplicationsByUser(context.Background(), f.UserID)
+		got, err := f.Store.ListApplications(context.Background(), f.UserID, "")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(got) != 0 {
-			t.Fatalf("ListApplicationsByUser after delete = %+v, want empty", got)
+			t.Fatalf("ListApplications after delete = %+v, want empty", got)
 		}
 	})
 

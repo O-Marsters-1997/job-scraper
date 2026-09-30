@@ -109,7 +109,7 @@ func TestEnsureTabsOnConflict_DoesNotUnhideAPreviouslyHiddenTab(t *testing.T) {
 	if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
+	if err := st.SetTabVisible(ctx, userID, "docA", "t1", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.EnsureTabs(ctx, tdID, []string{"t1"}, []string{"Tab 1"}); err != nil {
@@ -127,7 +127,7 @@ func TestEnsureTabsOnConflict_DoesNotUnhideAPreviouslyHiddenTab(t *testing.T) {
 	}
 }
 
-func TestHideShowTab(t *testing.T) {
+func TestSetTabVisible(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("hide then show restores visibility", func(t *testing.T) {
@@ -137,7 +137,7 @@ func TestHideShowTab(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := st.HideTab(ctx, userID, "docA", "t1"); err != nil {
+		if err := st.SetTabVisible(ctx, userID, "docA", "t1", false); err != nil {
 			t.Fatal(err)
 		}
 		rows, err := st.ListTabs(ctx, tdID)
@@ -146,11 +146,11 @@ func TestHideShowTab(t *testing.T) {
 		}
 		for _, r := range rows {
 			if r.TabID == "t1" && r.Visible {
-				t.Error("tab t1 should be hidden after HideTab")
+				t.Error("tab t1 should be hidden after SetTabVisible(false)")
 			}
 		}
 
-		if err := st.ShowTab(ctx, userID, "docA", "t1"); err != nil {
+		if err := st.SetTabVisible(ctx, userID, "docA", "t1", true); err != nil {
 			t.Fatal(err)
 		}
 		rows, err = st.ListTabs(ctx, tdID)
@@ -159,7 +159,7 @@ func TestHideShowTab(t *testing.T) {
 		}
 		for _, r := range rows {
 			if r.TabID == "t1" && !r.Visible {
-				t.Error("tab t1 should be visible after ShowTab")
+				t.Error("tab t1 should be visible after SetTabVisible(true)")
 			}
 		}
 	})
@@ -172,11 +172,11 @@ func TestHideShowTab(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := st.HideTab(ctx, userB, "docA", "t1"); !errors.Is(err, store.ErrTabNotFound) {
-			t.Errorf("HideTab: expected ErrTabNotFound, got %v", err)
+		if err := st.SetTabVisible(ctx, userB, "docA", "t1", false); !errors.Is(err, store.ErrTabNotFound) {
+			t.Errorf("SetTabVisible(false): expected ErrTabNotFound, got %v", err)
 		}
-		if err := st.ShowTab(ctx, userB, "docA", "t1"); !errors.Is(err, store.ErrTabNotFound) {
-			t.Errorf("ShowTab: expected ErrTabNotFound, got %v", err)
+		if err := st.SetTabVisible(ctx, userB, "docA", "t1", true); !errors.Is(err, store.ErrTabNotFound) {
+			t.Errorf("SetTabVisible(true): expected ErrTabNotFound, got %v", err)
 		}
 	})
 }

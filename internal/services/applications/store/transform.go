@@ -31,7 +31,7 @@ func toApplicationDTO(a sqlc.Application) dto.Application {
 	}
 }
 
-func toApplicationWithDetailsDTO(r sqlc.ListApplicationsByUserRow) dto.ApplicationWithDetails {
+func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID:             r.ID.String(),
 		UserID:         r.UserID.String(),

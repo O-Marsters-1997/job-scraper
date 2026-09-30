@@ -60,7 +60,7 @@ func seedTab(t *testing.T, st cvtemplates.Store, userID, docID, tabID string, vi
 		t.Fatal(err)
 	}
 	if !visible {
-		if err := st.HideTab(ctx, userID, docID, tabID); err != nil {
+		if err := st.SetTabVisible(ctx, userID, docID, tabID, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -162,7 +162,7 @@ func TestList(t *testing.T) {
 		if err := st.EnsureTabs(context.Background(), tdID, []string{"t1"}, []string{"CV 1"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.HideTab(context.Background(), "u1", "docA", "t1"); err != nil {
+		if err := st.SetTabVisible(context.Background(), "u1", "docA", "t1", false); err != nil {
 			t.Fatal(err)
 		}
 		svc := cvtemplates.NewService(gc, st)

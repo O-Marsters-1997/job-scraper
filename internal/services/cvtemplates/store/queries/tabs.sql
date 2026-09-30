@@ -9,16 +9,9 @@ FROM tracked_doc_tabs
 WHERE tracked_doc_id = $1
 ORDER BY created_at;
 
--- name: HideTab :execrows
+-- name: SetTabVisible :execrows
 UPDATE tracked_doc_tabs t
-SET visible = FALSE
-FROM tracked_docs d
-WHERE t.tracked_doc_id = d.id
-  AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3;
-
--- name: ShowTab :execrows
-UPDATE tracked_doc_tabs t
-SET visible = TRUE
+SET visible = $4
 FROM tracked_docs d
 WHERE t.tracked_doc_id = d.id
   AND d.user_id = $1 AND d.doc_id = $2 AND t.tab_id = $3;

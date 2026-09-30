@@ -13,8 +13,7 @@ import (
 
 type Store interface {
 	CreateApplication(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error)
-	ListApplicationsByUser(ctx context.Context, userID string) ([]dto.ApplicationWithDetails, error)
-	ListApplicationsByUserAndStatus(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
+	ListApplications(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
 	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
 	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
@@ -56,12 +55,8 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 	return s.store.DeleteApplication(ctx, userID, id)
 }
 
-// List returns the caller's applications, optionally filtered to one status.
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
-	if q.StatusID != "" {
-		return s.store.ListApplicationsByUserAndStatus(ctx, userID, q.StatusID)
-	}
-	return s.store.ListApplicationsByUser(ctx, userID)
+	return s.store.ListApplications(ctx, userID, q.StatusID)
 }
 
 // ForJobs returns each of q.JobIDs's application summary, keyed by job ID.

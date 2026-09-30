@@ -116,7 +116,7 @@ func (q *Queries) GetApplicationsForJobs(ctx context.Context, arg GetApplication
 	return items, nil
 }
 
-const listApplicationsByUser = `-- name: ListApplicationsByUser :many
+const listApplications = `-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
     a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
@@ -130,86 +130,16 @@ FROM applications a
 JOIN jobs j ON a.job_id = j.id
 LEFT JOIN application_statuses s ON a.status_id = s.id
 WHERE a.user_id = $1
+  AND ($2::uuid IS NULL OR a.status_id = $2)
 ORDER BY a.updated_at DESC
 `
 
-type ListApplicationsByUserRow struct {
-	ID             pgtype.UUID
-	UserID         pgtype.UUID
-	JobID          pgtype.UUID
-	StatusID       pgtype.UUID
-	Notes          pgtype.Text
-	AppliedAt      pgtype.Date
-	SalaryInfo     pgtype.Text
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	JobTitle       string
-	JobCompanySlug string
-	JobLocation    string
-	JobUrl         string
-	StatusName     pgtype.Text
-	StatusColour   pgtype.Text
-}
-
-func (q *Queries) ListApplicationsByUser(ctx context.Context, userID pgtype.UUID) ([]ListApplicationsByUserRow, error) {
-	rows, err := q.db.Query(ctx, listApplicationsByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListApplicationsByUserRow
-	for rows.Next() {
-		var i ListApplicationsByUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.JobID,
-			&i.StatusID,
-			&i.Notes,
-			&i.AppliedAt,
-			&i.SalaryInfo,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.JobTitle,
-			&i.JobCompanySlug,
-			&i.JobLocation,
-			&i.JobUrl,
-			&i.StatusName,
-			&i.StatusColour,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listApplicationsByUserAndStatus = `-- name: ListApplicationsByUserAndStatus :many
-SELECT
-    a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
-    j.title        AS job_title,
-    j.company_slug AS job_company_slug,
-    j.location     AS job_location,
-    j.url          AS job_url,
-    s.name         AS status_name,
-    s.colour       AS status_colour
-FROM applications a
-JOIN jobs j ON a.job_id = j.id
-LEFT JOIN application_statuses s ON a.status_id = s.id
-WHERE a.user_id = $1 AND a.status_id = $2
-ORDER BY a.updated_at DESC
-`
-
-type ListApplicationsByUserAndStatusParams struct {
+type ListApplicationsParams struct {
 	UserID   pgtype.UUID
 	StatusID pgtype.UUID
 }
 
-type ListApplicationsByUserAndStatusRow struct {
+type ListApplicationsRow struct {
 	ID             pgtype.UUID
 	UserID         pgtype.UUID
 	JobID          pgtype.UUID
@@ -227,15 +157,15 @@ type ListApplicationsByUserAndStatusRow struct {
 	StatusColour   pgtype.Text
 }
 
-func (q *Queries) ListApplicationsByUserAndStatus(ctx context.Context, arg ListApplicationsByUserAndStatusParams) ([]ListApplicationsByUserAndStatusRow, error) {
-	rows, err := q.db.Query(ctx, listApplicationsByUserAndStatus, arg.UserID, arg.StatusID)
+func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsParams) ([]ListApplicationsRow, error) {
+	rows, err := q.db.Query(ctx, listApplications, arg.UserID, arg.StatusID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListApplicationsByUserAndStatusRow
+	var items []ListApplicationsRow
 	for rows.Next() {
-		var i ListApplicationsByUserAndStatusRow
+		var i ListApplicationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,

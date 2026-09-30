@@ -33,8 +33,7 @@ type Store interface {
 	ListTrackedDocs(ctx context.Context, userID string) ([]dto.TrackedDoc, error)
 	EnsureTabs(ctx context.Context, trackedDocID string, tabIDs, titles []string) error
 	ListTabs(ctx context.Context, trackedDocID string) ([]dto.Tab, error)
-	HideTab(ctx context.Context, userID, docID, tabID string) error
-	ShowTab(ctx context.Context, userID, docID, tabID string) error
+	SetTabVisible(ctx context.Context, userID, docID, tabID string, visible bool) error
 }
 
 type CV struct {

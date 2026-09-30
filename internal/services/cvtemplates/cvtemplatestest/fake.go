@@ -94,15 +94,7 @@ func (f *FakeStore) ListTabs(_ context.Context, trackedDocID string) ([]dto.Tab,
 	return append([]dto.Tab(nil), f.tabs[trackedDocID]...), nil
 }
 
-func (f *FakeStore) HideTab(_ context.Context, userID, docID, tabID string) error {
-	return f.setVisible(userID, docID, tabID, false)
-}
-
-func (f *FakeStore) ShowTab(_ context.Context, userID, docID, tabID string) error {
-	return f.setVisible(userID, docID, tabID, true)
-}
-
-func (f *FakeStore) setVisible(userID, docID, tabID string, visible bool) error {
+func (f *FakeStore) SetTabVisible(_ context.Context, userID, docID, tabID string, visible bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	d, ok := f.docFor(userID, docID)

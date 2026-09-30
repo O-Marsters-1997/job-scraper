@@ -40,24 +40,12 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 	return app, nil
 }
 
-func (f *FakeStore) ListApplicationsByUser(_ context.Context, userID string) ([]dto.ApplicationWithDetails, error) {
+func (f *FakeStore) ListApplications(_ context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := []dto.ApplicationWithDetails{}
 	for _, a := range f.apps {
-		if a.UserID == userID {
-			out = append(out, toDetails(a))
-		}
-	}
-	return out, nil
-}
-
-func (f *FakeStore) ListApplicationsByUserAndStatus(_ context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := []dto.ApplicationWithDetails{}
-	for _, a := range f.apps {
-		if a.UserID == userID && a.StatusID == statusID {
+		if a.UserID == userID && (statusID == "" || a.StatusID == statusID) {
 			out = append(out, toDetails(a))
 		}
 	}
