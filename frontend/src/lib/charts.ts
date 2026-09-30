@@ -218,8 +218,6 @@ export function verticalBarOptions(): ChartOptions<"bar"> {
 	};
 }
 
-export const destructiveHex = () => cssVarHex("--color-destructive");
-
 export function hexAlpha(hex: string, alpha: string): string {
 	return `${hex}${alpha}`;
 }

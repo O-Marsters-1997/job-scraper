@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn, plural } from "@/lib/utils";
 
 interface FeatureStatProps {
 	label: string;
@@ -57,8 +57,6 @@ function MiniStat(props: MiniStatProps) {
 
 const ctaClass =
 	"shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary-hover";
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export function StatCards(props: {
 	jobs: {

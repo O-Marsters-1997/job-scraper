@@ -8,7 +8,7 @@ export interface SettingsSection {
 	children?: { to: string; label: string }[];
 }
 
-export interface SettingsGroup {
+interface SettingsGroup {
 	heading: string;
 	sections: SettingsSection[];
 }

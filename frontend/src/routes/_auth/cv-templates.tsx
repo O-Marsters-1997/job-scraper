@@ -3,6 +3,7 @@ import { createMemo, createSignal, Show } from "solid-js";
 import { AddDocDialog } from "@/components/cv/AddDocDialog";
 import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
+import type { SortDir } from "@/components/SortableTableHead";
 import { Button } from "@/components/ui/button";
 import {
 	cvTemplatesQueryOptions,
@@ -50,10 +51,8 @@ function CVTemplatesPage() {
 
 	const { sortKey, sortDir, handleSort } = useTableSort<SortKey>("Title");
 
-	const ariaSort = (key: SortKey): "ascending" | "descending" | "none" => {
-		if (sortKey() !== key) return "none";
-		return sortDir() === "asc" ? "ascending" : "descending";
-	};
+	const ariaSort = (key: SortKey): SortDir =>
+		sortKey() === key ? sortDir() : "none";
 
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();

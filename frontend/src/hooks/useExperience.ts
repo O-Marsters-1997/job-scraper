@@ -26,10 +26,7 @@ export function useExperience() {
 const invalidate = [keys.experience] as const;
 
 export function useCreatePosition() {
-	return useInvalidatingMutation(
-		(input: PositionInput) => createPosition(input),
-		invalidate,
-	);
+	return useInvalidatingMutation(createPosition, invalidate);
 }
 
 export function useUpdatePosition() {
@@ -41,17 +38,11 @@ export function useUpdatePosition() {
 }
 
 export function useDeletePosition() {
-	return useInvalidatingMutation(
-		(id: string) => deletePosition(id),
-		invalidate,
-	);
+	return useInvalidatingMutation(deletePosition, invalidate);
 }
 
 export function useReorderPositions() {
-	return useInvalidatingMutation(
-		(ids: string[]) => reorderPositions(ids),
-		invalidate,
-	);
+	return useInvalidatingMutation(reorderPositions, invalidate);
 }
 
 export function useCreateAchievement() {
@@ -70,10 +61,7 @@ export function useUpdateAchievement() {
 }
 
 export function useDeleteAchievement() {
-	return useInvalidatingMutation(
-		(id: string) => deleteAchievement(id),
-		invalidate,
-	);
+	return useInvalidatingMutation(deleteAchievement, invalidate);
 }
 
 export function useReorderAchievements() {

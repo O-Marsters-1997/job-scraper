@@ -6,6 +6,7 @@ import {
 	updateApplication,
 } from "../api/applications";
 import { keys } from "../api/keys";
+import type { UpdateApplicationPayload } from "../types/application";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const applicationsQueryOptions = (statusId?: string) =>
@@ -27,13 +28,8 @@ export function useCreateApplication() {
 
 export function useUpdateApplication() {
 	return useInvalidatingMutation(
-		({
-			id,
-			data,
-		}: {
-			id: string;
-			data: Parameters<typeof updateApplication>[1];
-		}) => updateApplication(id, data),
+		({ id, data }: { id: string; data: UpdateApplicationPayload }) =>
+			updateApplication(id, data),
 		[keys.applications.all, keys.jobs.all],
 	);
 }

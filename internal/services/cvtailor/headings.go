@@ -2,7 +2,6 @@ package cvtailor
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -20,7 +19,7 @@ func (s *Service) Headings(ctx context.Context, userID string, q dto.CVTabQuery)
 }
 
 func (s *Service) headings(ctx context.Context, userID string, q dto.CVTabQuery, positions []dto.Position) ([]dto.CVHeading, error) {
-	doc, err := s.parseTab(ctx, userID, q.DocID, q.TabID)
+	doc, err := loadTab(ctx, s.docs, userID, q.DocID, q.TabID)
 	if err != nil {
 		return nil, err
 	}
@@ -69,18 +68,6 @@ func (s *Service) SaveHeadings(ctx context.Context, userID string, in dto.Headin
 		return nil, err
 	}
 	return in.Mappings, nil
-}
-
-func (s *Service) parseTab(ctx context.Context, userID, docID, tabID string) (docparse.DocStructure, error) {
-	raw, err := s.docs.GetDocument(ctx, userID, docID, tabID)
-	if err != nil {
-		return docparse.DocStructure{}, fmt.Errorf("tailoring: load CV tab: %w", err)
-	}
-	doc, err := docparse.Parse(raw)
-	if err != nil {
-		return docparse.DocStructure{}, fmt.Errorf("tailoring: parse CV tab: %w", err)
-	}
-	return doc, nil
 }
 
 type roleHeading struct {

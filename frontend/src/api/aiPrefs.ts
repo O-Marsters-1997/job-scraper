@@ -5,6 +5,6 @@ import { mocked } from "./config";
 export async function fetchAiPrefs(): Promise<AiPrefs> {
 	return mocked(
 		(db) => db.getAiPrefs(),
-		() => apiFetch("/ai-prefs", undefined, aiPrefsSchema),
+		() => apiFetch("/ai-prefs", aiPrefsSchema),
 	);
 }

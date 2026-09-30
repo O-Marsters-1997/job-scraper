@@ -3,7 +3,7 @@ import { keys } from "../api/keys";
 import { fetchProfile, updateProfile } from "../api/profile";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const profileQueryOptions = queryOptions({
+const profileQueryOptions = queryOptions({
 	queryKey: keys.profile,
 	queryFn: fetchProfile,
 });
@@ -13,8 +13,5 @@ export function useProfile() {
 }
 
 export function useUpdateProfile() {
-	return useInvalidatingMutation(
-		(payload: { email: string }) => updateProfile(payload),
-		[keys.profile],
-	);
+	return useInvalidatingMutation(updateProfile, [keys.profile]);
 }

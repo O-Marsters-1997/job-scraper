@@ -1,10 +1,11 @@
 package checks
 
+import "slices"
+
 type Severity string
 
 const (
 	Block Severity = "block"
-	Warn  Severity = "warn"
 	Info  Severity = "info"
 )
 
@@ -45,14 +46,10 @@ type Draft struct {
 	DraftPages int
 }
 
-type Check func(Draft) []Finding
-
-var All = []Check{Grounding, BannedWords, SlotLength, PageCount}
-
 func Run(d Draft) []Finding {
-	var out []Finding
-	for _, c := range All {
-		out = append(out, c(d)...)
-	}
-	return out
+	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d))
+}
+
+func Blocking(findings []Finding) []Finding {
+	return slices.DeleteFunc(slices.Clone(findings), func(f Finding) bool { return f.Severity != Block })
 }

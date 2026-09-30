@@ -1,6 +1,6 @@
 export const MATCHED_COLOUR = "#059669";
 export const MISSING_COLOUR = "#dc2626";
-export const WARNING_COLOUR = "#d97706";
+const WARNING_COLOUR = "#d97706";
 
 export function scoreColour(n: number): string {
 	if (n >= 80) return MATCHED_COLOUR;

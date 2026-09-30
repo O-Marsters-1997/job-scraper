@@ -36,3 +36,6 @@ export function titleCase(slug: string): string {
 		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
 		.join(" ");
 }
+
+export const plural = (n: number, word: string) =>
+	`${n} ${word}${n === 1 ? "" : "s"}`;

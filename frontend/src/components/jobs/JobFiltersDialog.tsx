@@ -8,6 +8,7 @@ import {
 } from "@kobalte/core/dialog";
 import { For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,19 +43,9 @@ function FilterChip(props: {
 	onClick: () => void;
 }) {
 	return (
-		<button
-			type="button"
-			onClick={() => props.onClick()}
-			aria-pressed={props.active}
-			class={cn(
-				"rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-				props.active
-					? "border-primary bg-primary text-primary-foreground"
-					: "border-border bg-surface text-muted hover:border-border-strong hover:text-foreground",
-			)}
-		>
+		<ToggleChip solid active={props.active} onClick={props.onClick}>
 			{props.label}
-		</button>
+		</ToggleChip>
 	);
 }
 

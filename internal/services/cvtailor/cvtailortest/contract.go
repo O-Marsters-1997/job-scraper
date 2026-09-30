@@ -11,8 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 )
 
-// missingID is a well-formed but nonexistent UUID, valid input for both the
-// fake and a real store that parses ids as UUIDs.
 const missingID = "00000000-0000-0000-0000-00000000dead"
 
 // Fixture is what RunStoreContract needs: a store and two users it can
@@ -29,6 +27,13 @@ type Fixture struct {
 // RunStoreContract proves newStore's cvtailor.Store behaves the same
 // whether it's the fake or the real store (ADR 0012).
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
+	t.Helper()
+	t.Run("positions", func(t *testing.T) { runPositionContract(t, newStore) })
+	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
+	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
+}
+
+func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 	ctx := context.Background()
 

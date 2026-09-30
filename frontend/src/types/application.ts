@@ -42,9 +42,6 @@ export interface CreateApplicationPayload {
 	salary_info?: string | undefined;
 }
 
-export interface UpdateApplicationPayload {
-	status_id?: string | undefined;
-	notes?: string | undefined;
-	applied_at?: string | null | undefined;
-	salary_info?: string | undefined;
-}
+export type UpdateApplicationPayload = Partial<
+	Omit<CreateApplicationPayload, "job_id">
+>;

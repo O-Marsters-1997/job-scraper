@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
-import { DetailBoundary } from "@/components/DetailBoundary";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,9 +58,9 @@ function CompanyDetailPage() {
 	const track = useTrackJobs(() => jobsQuery.data ?? []);
 
 	return (
-		<DetailBoundary
+		<QueryBoundary
 			query={companiesQuery}
-			data={company()}
+			select={(list) => list.find((c) => c.ID === params().id)}
 			notFound={
 				<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
 					<div>
@@ -166,6 +166,6 @@ function CompanyDetailPage() {
 					/>
 				</div>
 			)}
-		</DetailBoundary>
+		</QueryBoundary>
 	);
 }

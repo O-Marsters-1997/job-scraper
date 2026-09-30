@@ -26,10 +26,6 @@ export function useTrackJobs(jobs: () => Job[]) {
 		setTrackingJobId(jobId);
 		setModalOpen(true);
 	};
-	const openEdit = (jobId: string) => {
-		if (!appsForJobs()[jobId]) return;
-		openTrack(jobId);
-	};
 
 	const currentJob = () => jobs().find((j) => j.ID === trackingJobId());
 	const existingApp = () => {
@@ -40,8 +36,16 @@ export function useTrackJobs(jobs: () => Job[]) {
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
-		onEdit: openEdit,
 	});
 
-	return { columns, modalOpen, setModalOpen, currentJob, existingApp };
+	return {
+		columns,
+		applications,
+		appsForJobs,
+		openTrack,
+		modalOpen,
+		setModalOpen,
+		currentJob,
+		existingApp,
+	};
 }

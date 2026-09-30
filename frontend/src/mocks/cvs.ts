@@ -26,10 +26,6 @@ export function addTrackedDoc(url: string): void {
 	];
 }
 
-export function removeTrackedDoc(docId: string): void {
-	cvs = cvs.filter((cv) => cv.DocID !== docId);
-}
-
 export function setTabVisibility(
 	docId: string,
 	tabId: string,

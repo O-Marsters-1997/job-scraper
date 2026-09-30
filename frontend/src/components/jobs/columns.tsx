@@ -4,7 +4,6 @@ import { Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRelative } from "@/lib/datetime";
-import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
@@ -14,7 +13,6 @@ import { ScoreCircle } from "./ScoreCircle";
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
-	onEdit: (jobId: string) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -155,7 +153,7 @@ export function createJobColumns(
 						>
 							<StatusBadge
 								name={summary().StatusName}
-								colour={summary().StatusColour || STATUS_FALLBACK_COLOUR}
+								colour={summary().StatusColour}
 							/>
 						</Show>
 					)}
@@ -172,7 +170,6 @@ export function createJobColumns(
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}
 						onTrack={() => ctx.onTrack(info.row.original.ID)}
-						onEdit={() => ctx.onEdit(info.row.original.ID)}
 					/>
 				</div>
 			),

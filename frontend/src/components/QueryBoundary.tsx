@@ -3,26 +3,40 @@ import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonList } from "@/components/ui/skeleton";
 
-type Props<T> = {
+type Props<Q, T> = {
 	query: {
 		isPending: boolean;
 		isError: boolean;
 		error: unknown;
 		refetch: () => unknown;
-		data: T | undefined;
+		data: Q | undefined;
 	};
+	select?: (data: Q) => T | undefined;
+	notFound?: JSX.Element;
 	fallbackRows?: number;
 	children: (data: Accessor<NonNullable<T>>) => JSX.Element;
 };
 
-export function QueryBoundary<T>(props: Props<T>): JSX.Element {
+export function QueryBoundary<Q, T = Q>(props: Props<Q, T>): JSX.Element {
+	const data = () => {
+		const d = props.query.data;
+		if (d === undefined) return undefined;
+		return props.select ? props.select(d) : (d as unknown as T);
+	};
 	return (
 		<Show
-			when={props.query.data}
+			when={data()}
 			fallback={
 				<Show
 					when={props.query.isError}
-					fallback={<SkeletonList rows={props.fallbackRows} />}
+					fallback={
+						<Show
+							when={props.notFound && !props.query.isPending}
+							fallback={<SkeletonList rows={props.fallbackRows} />}
+						>
+							{props.notFound}
+						</Show>
+					}
 				>
 					<ErrorState
 						error={props.query.error}
@@ -31,7 +45,7 @@ export function QueryBoundary<T>(props: Props<T>): JSX.Element {
 				</Show>
 			}
 		>
-			{(data) => props.children(data)}
+			{(d) => props.children(d as Accessor<NonNullable<T>>)}
 		</Show>
 	);
 }

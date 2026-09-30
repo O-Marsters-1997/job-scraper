@@ -17,22 +17,6 @@ func TestStoreContract(t *testing.T) {
 	cvtailortest.RunStoreContract(t, func(t *testing.T) cvtailortest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)
-		return cvtailortest.Fixture{Store: store.New(pool), UserID: pgtest.InsertUser(t, pool), Other: pgtest.InsertUser(t, pool)}
-	})
-}
-
-func TestStoreHeadingMappingContract(t *testing.T) {
-	cvtailortest.RunHeadingMappingContract(t, func(t *testing.T) cvtailortest.Fixture {
-		t.Helper()
-		pool := pgtest.New(t)
-		return cvtailortest.Fixture{Store: store.New(pool), UserID: pgtest.InsertUser(t, pool), Other: pgtest.InsertUser(t, pool)}
-	})
-}
-
-func TestStoreDraftContract(t *testing.T) {
-	cvtailortest.RunDraftContract(t, func(t *testing.T) cvtailortest.Fixture {
-		t.Helper()
-		pool := pgtest.New(t)
 		return cvtailortest.Fixture{
 			Store: store.New(pool), UserID: pgtest.InsertUser(t, pool), Other: pgtest.InsertUser(t, pool), JobID: pgtest.InsertJob(t, pool, "Role", "fp-1"),
 		}

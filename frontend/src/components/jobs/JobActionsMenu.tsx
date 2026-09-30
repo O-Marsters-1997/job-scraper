@@ -15,7 +15,6 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
-	onEdit: () => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
@@ -50,7 +49,7 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 					}
 				>
 					{(summary) => (
-						<DropdownMenuItem onSelect={props.onEdit}>
+						<DropdownMenuItem onSelect={props.onTrack}>
 							<span
 								class="size-2 shrink-0 rounded-full"
 								style={{

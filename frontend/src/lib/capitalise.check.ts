@@ -1,16 +1,10 @@
+import assert from "node:assert/strict";
 import { capitalise, uniqueCapitalised } from "./capitalise";
 
-function eq(a: unknown, b: unknown): void {
-	if (JSON.stringify(a) !== JSON.stringify(b))
-		throw new Error(
-			`expected ${JSON.stringify(a)} to equal ${JSON.stringify(b)}`,
-		);
-}
-
-eq(capitalise("  acme corp "), "Acme Corp");
-eq(capitalise("openAI"), "OpenAI");
-eq(capitalise("são paulo"), "São Paulo");
-eq(uniqueCapitalised(["acme", "Acme", " ", "united states"]), [
+assert.deepEqual(capitalise("  acme corp "), "Acme Corp");
+assert.deepEqual(capitalise("openAI"), "OpenAI");
+assert.deepEqual(capitalise("são paulo"), "São Paulo");
+assert.deepEqual(uniqueCapitalised(["acme", "Acme", " ", "united states"]), [
 	"Acme",
 	"United States",
 ]);

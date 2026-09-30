@@ -5,7 +5,7 @@ import { mocked } from "./config";
 export async function fetchScoringStatus() {
 	return mocked(
 		(db) => db.getScoringStatus(),
-		() => apiFetch("/scores/status", undefined, scoringStatusSchema),
+		() => apiFetch("/scores/status", scoringStatusSchema),
 	);
 }
 
@@ -13,6 +13,6 @@ export async function recomputeScores() {
 	return mocked(
 		(db) => db.recomputeScores(),
 		() =>
-			apiFetch("/scores/recompute", { method: "POST" }, recomputeResultSchema),
+			apiFetch("/scores/recompute", recomputeResultSchema, { method: "POST" }),
 	);
 }

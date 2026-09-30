@@ -1,7 +1,7 @@
 import { createRoot, createSignal } from "solid-js";
 import { queryClient } from "./queryClient";
 
-export const DEMO_DATA_STORAGE_KEY = "job-scraper-demo-data";
+const DEMO_DATA_STORAGE_KEY = "job-scraper-demo-data";
 
 function load(): boolean {
 	try {
@@ -16,11 +16,6 @@ const [demoData, setDemoDataSignal] = createRoot(() => createSignal(load()));
 
 // Reactive accessor — use in components: checked={demoDataEnabled()}
 export { demoData as demoDataEnabled };
-
-// Non-reactive read — safe to call inside async API functions.
-export function isDemoData(): boolean {
-	return demoData();
-}
 
 export function setDemoData(value: boolean): void {
 	setDemoDataSignal(value);
