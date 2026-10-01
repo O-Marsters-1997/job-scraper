@@ -55,11 +55,13 @@ type Store interface {
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
 	TouchCompanyCrawled(ctx context.Context, id string) error
+	RenameCompany(ctx context.Context, id, name string) error
 	ListDueBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ListActiveBoards(ctx context.Context) ([]dto.BoardPoll, error)
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
 	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
+	ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error)
 	ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)

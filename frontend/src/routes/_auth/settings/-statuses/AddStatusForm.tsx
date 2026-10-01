@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusColourPicker } from "./StatusColourPicker";
 
@@ -23,20 +24,24 @@ export function AddStatusForm(props: {
 				value={props.name}
 				onInput={(e) => props.onName(e.currentTarget.value)}
 			/>
-			<button
+			<Button
 				type="submit"
 				disabled={props.pending || !props.name.trim()}
-				class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+				variant="ghost"
+				size="sm"
+				class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"
 			>
 				Add
-			</button>
-			<button
+			</Button>
+			<Button
 				type="button"
 				onClick={() => props.onCancel()}
-				class="rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground"
+				variant="ghost"
+				size="sm"
+				class="h-auto px-2 py-1 text-xs"
 			>
 				Cancel
-			</button>
+			</Button>
 		</form>
 	);
 }

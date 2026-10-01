@@ -617,6 +617,18 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 	return id.String(), nil
 }
 
+func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
+	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListUntrackedDiscoveredBoards: %w", err)
+	}
+	boards := make([]dto.CompanyBoard, len(rows))
+	for i, row := range rows {
+		boards[i] = toCompanyBoardDTO(row)
+	}
+	return boards, nil
+}
+
 func (s *Store) ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
 	out, err := s.queries.ListPolledCompanySlugs(ctx, slugs)
 	if err != nil {
@@ -985,6 +997,17 @@ func (s *Store) TouchCompanyCrawled(ctx context.Context, id string) error {
 	}
 	if err := s.queries.TouchCompanyCrawled(ctx, cid); err != nil {
 		return fmt.Errorf("store.TouchCompanyCrawled: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
+	cid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.RenameCompany(ctx, sqlc.RenameCompanyParams{ID: cid, Name: name}); err != nil {
+		return fmt.Errorf("store.RenameCompany: %w", err)
 	}
 	return nil
 }

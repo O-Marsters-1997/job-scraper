@@ -34,10 +34,11 @@ and worker both read; it must not import any adapter):
 
 ## 3. Wire instantiation
 
-Add the source to `BuildSource` in `internal/worker/sources/builder/build.go`, following
-the pattern for the existing board/URL/filter sources there. This file has no
-compile-time safety net — skip this step and the source is registered but
-silently never runs.
+Add one entry to `registry` in `internal/worker/sources/builder/build.go`: `build` makes the
+listing Source; `detail` is its `DetailFetcher` if it has one; `cardComplete: true` means the
+listing card is already the full job and no detail fetch is needed. `cmd/worker` and the
+Processor read the registry, so nothing else lists sources. Skip this step and the source is
+registered but silently never runs; `TestBuildSource_EveryRegisteredSourceInstantiates` catches it.
 
 ATS sources: save a real API response to `snapshots/<name>.json` and test `parse` with
 `sourcetest.RunGolden(t, "<name>.json", "<token>", parse)`. Create or refresh the
@@ -45,8 +46,7 @@ ATS sources: save a real API response to `snapshots/<name>.json` and test `parse
 
 ## 4. HTML sources only
 
-- Add the source to the `detailers` map in `cmd/worker/main.go` — detail fetching
-  isn't automatic.
+- Set `detail` on its registry entry (step 3) so the worker can fetch details.
 - Add it to the `parsers` map in `cmd/snapshot/main.go` so the snapshot CLI knows
   how to parse its fixtures.
 - Add snapshot tests under `internal/worker/sources/<name>/snapshots/`. See
@@ -57,7 +57,3 @@ ATS sources: save a real API response to `snapshots/<name>.json` and test `parse
 ```
 go test ./internal/worker/sources/...
 ```
-
-`TestBuildSource_EveryRegisteredSourceInstantiates`
-(`internal/worker/sources/builder/build_test.go`) is what catches a missing step 3 —
-it fails if a registered source never gets built by `BuildSource`.

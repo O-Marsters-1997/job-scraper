@@ -15,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
@@ -105,7 +106,7 @@ func (s *Service) upsertCompany(ctx context.Context, j dto.Job) {
 	if j.CompanySlug == "" {
 		return
 	}
-	upsert := dto.CompanyUpsert{Slug: j.CompanySlug, Name: humanizeSlug(j.CompanySlug)}
+	upsert := dto.CompanyUpsert{Slug: j.CompanySlug, Name: slug.Humanize(j.CompanySlug)}
 	if role, _ := sourcespec.SourceRole(j.Source); role == sourcespec.RoleATS {
 		upsert.ATSSource, upsert.ATSToken = j.Source, j.CompanySlug
 	}
@@ -113,15 +114,4 @@ func (s *Service) upsertCompany(ctx context.Context, j dto.Job) {
 		slog.WarnContext(ctx, "ingest: could not upsert company",
 			slog.String(logger.KeyCompanySlug, j.CompanySlug), slog.Any(logger.KeyErr, err))
 	}
-}
-
-func humanizeSlug(slug string) string {
-	words := strings.Split(slug, "-")
-	for idx, w := range words {
-		if w == "" {
-			continue
-		}
-		words[idx] = strings.ToUpper(w[:1]) + w[1:]
-	}
-	return strings.Join(words, " ")
 }

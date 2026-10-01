@@ -296,6 +296,20 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 	return items, nil
 }
 
+const renameCompany = `-- name: RenameCompany :exec
+UPDATE companies SET name = $2, updated_at = NOW() WHERE id = $1
+`
+
+type RenameCompanyParams struct {
+	ID   pgtype.UUID
+	Name string
+}
+
+func (q *Queries) RenameCompany(ctx context.Context, arg RenameCompanyParams) error {
+	_, err := q.db.Exec(ctx, renameCompany, arg.ID, arg.Name)
+	return err
+}
+
 const setCompanyReviewState = `-- name: SetCompanyReviewState :one
 UPDATE tracked_companies
 SET review_state = $3::text,

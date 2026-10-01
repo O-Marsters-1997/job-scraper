@@ -164,6 +164,45 @@ func (q *Queries) ListTrackedCompanyBoards(ctx context.Context, userID pgtype.UU
 	return items, nil
 }
 
+const listUntrackedDiscoveredBoards = `-- name: ListUntrackedDiscoveredBoards :many
+SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.created_at FROM company_boards cb
+WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
+  AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+ORDER BY cb.created_at, cb.id
+`
+
+func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyBoard, error) {
+	rows, err := q.db.Query(ctx, listUntrackedDiscoveredBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CompanyBoard
+	for rows.Next() {
+		var i CompanyBoard
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.Source,
+			&i.BoardToken,
+			&i.Status,
+			&i.VerificationMethod,
+			&i.VerifiedAt,
+			&i.LastLinkedAt,
+			&i.RetiredAt,
+			&i.SupersededAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertCandidateBoard = `-- name: UpsertCandidateBoard :one
 INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)

@@ -26,13 +26,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
+	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 func main() {
@@ -81,13 +79,11 @@ func main() {
 		}
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
-	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
+	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
 		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: scraper.DiscoverBoard,
-		Detailers: map[string]sources.DetailFetcher{
-			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
-		},
+		Detailers: builder.Detailers(), CardComplete: builder.CardComplete(),
 	})
 
 	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
@@ -98,7 +94,12 @@ func main() {
 	// go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	// go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
-	harvest := discover.NewRunner([]discover.Harvester{commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL)}, q, js.Boards())
+	harvesters := []discover.Harvester{
+		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
+		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL),
+		untracked.New(js.Boards()),
+	}
+	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
 	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
 	// slog.InfoContext(ctx, "RabbitMQ source workers starting")
 

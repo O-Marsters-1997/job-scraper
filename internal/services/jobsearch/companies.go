@@ -9,6 +9,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
 const defaultCheckIntervalMinutes = 360
@@ -24,7 +25,7 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 
 	company, err := s.store.UpsertCompany(ctx, dto.CompanyUpsert{
 		Slug: token,
-		Name: humanizeSlug(token),
+		Name: slug.Humanize(token),
 	})
 	if err != nil {
 		return dto.Company{}, err

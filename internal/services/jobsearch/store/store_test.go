@@ -524,6 +524,24 @@ func TestListCompaniesToCrawl(t *testing.T) {
 	}
 }
 
+func TestRenameCompany(t *testing.T) {
+	st, _ := newStore(t)
+	ctx := t.Context()
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})
+
+	if err := st.RenameCompany(ctx, company.ID, "Faculty AI"); err != nil {
+		t.Fatalf("RenameCompany() err = %v", err)
+	}
+
+	got, err := st.GetCompany(ctx, company.ID)
+	if err != nil {
+		t.Fatalf("GetCompany() err = %v", err)
+	}
+	if got.Name != "Faculty AI" || got.Slug != "faculty" {
+		t.Errorf("company = {%q %q}, want name %q slug %q", got.Name, got.Slug, "Faculty AI", "faculty")
+	}
+}
+
 func TestSourceTargetRuns(t *testing.T) {
 	t.Run("recovery claims a stale run once", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)

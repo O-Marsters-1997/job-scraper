@@ -424,6 +424,35 @@ func (f *FakeStore) TouchCompanyCrawled(_ context.Context, id string) error {
 	return nil
 }
 
+func (f *FakeStore) RenameCompany(_ context.Context, id, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[id]
+	if !ok {
+		return data.ErrNotFound
+	}
+	c.Name = name
+	f.companies[id] = c
+	return nil
+}
+
+func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context) ([]dto.CompanyBoard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tracked := make(map[string]bool, len(f.tracking))
+	for _, t := range f.tracking {
+		tracked[t.CompanyID] = true
+	}
+	out := make([]dto.CompanyBoard, 0)
+	for _, b := range f.boards {
+		if b.Status == dto.BoardVerified && b.VerificationMethod == "discovered" && !tracked[b.CompanyID] {
+			out = append(out, b)
+		}
+	}
+	slices.SortFunc(out, func(a, b dto.CompanyBoard) int { return cmp.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
 func (f *FakeStore) ListCompanyBoards(_ context.Context, companyID string) ([]dto.CompanyBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
