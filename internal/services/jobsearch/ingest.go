@@ -9,8 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
@@ -26,6 +29,7 @@ type IngestResult struct {
 // canonical Job per posting.
 func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResult, error) {
 	results := make([]IngestResult, len(jobs))
+	discovered := make(map[string]bool)
 	for idx, job := range jobs {
 		if strings.TrimSpace(job.Title) == "" || strings.TrimSpace(job.URL) == "" {
 			results[idx] = IngestResult{Status: "rejected", Reason: "title and url are required"}
@@ -54,11 +58,39 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 			continue
 		}
 		s.upsertCompany(ctx, saved)
+		s.discoverBoard(ctx, saved, parsedURL.Hostname(), discovered)
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		slog.DebugContext(ctx, "ingest jobs", slog.Int(logger.KeyCount, len(jobs)), slog.Any("by_status", countByStatus(results)))
 	}
 	return results, nil
+}
+
+func (s *Service) discoverBoard(ctx context.Context, j dto.Job, host string, seen map[string]bool) {
+	source, token, ok := detect.ResolveBoard(j.URL)
+	if !ok {
+		if !strings.Contains(host, j.Source) {
+			slog.InfoContext(ctx, "ingest: unresolved external host",
+				slog.String("host", host), slog.String(logger.KeySource, j.Source))
+		}
+		return
+	}
+	key := source + "/" + token
+	if source == j.Source || seen[key] {
+		return
+	}
+	if _, err := s.store.GetVerifiedBoardID(ctx, source, token); !errors.Is(err, data.ErrNotFound) {
+		if err != nil {
+			slog.WarnContext(ctx, "ingest: could not look up board", slog.Any(logger.KeyErr, err))
+		}
+		return
+	}
+	seen[key] = true
+	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.BoardDiscoverTask, BoardToken: token}
+	if err := s.queue.Publish(ctx, task); err != nil {
+		slog.WarnContext(ctx, "ingest: could not publish board discover",
+			slog.String(logger.KeySource, source), slog.Any(logger.KeyErr, err))
+	}
 }
 
 func countByStatus(results []IngestResult) map[string]int {
