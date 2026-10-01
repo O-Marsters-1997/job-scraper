@@ -16,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 type boardPollState struct {
@@ -831,8 +832,11 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		}
 		card.Source = target.Source
 		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
-		f.candidates[id] = cand
 		out = append(out, cand)
+		if !sourcespec.CardComplete(target.Source) {
+			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source}
+		}
+		f.candidates[id] = cand
 	}
 	return out, nil
 }

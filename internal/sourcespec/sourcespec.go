@@ -48,12 +48,13 @@ type SourceInfo struct {
 }
 
 type registryEntry struct {
-	name      string
-	label     string
-	kind      sourceKind
-	role      string
-	urlPrefix string
-	filters   []FilterField
+	name         string
+	label        string
+	kind         sourceKind
+	role         string
+	urlPrefix    string
+	filters      []FilterField
+	cardComplete bool
 }
 
 var entries = []registryEntry{
@@ -118,8 +119,8 @@ var entries = []registryEntry{
 		}},
 	}},
 	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
-	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com"},
-	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com"},
+	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com", cardComplete: true},
+	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com", cardComplete: true},
 }
 
 func Sources() []SourceInfo {
@@ -219,4 +220,10 @@ func ValidBoardToken(token string) bool {
 		}
 	}
 	return true
+}
+
+// CardComplete reports whether the source's listing card is already the full job.
+func CardComplete(name string) bool {
+	e, _ := findEntry(name)
+	return e.cardComplete
 }

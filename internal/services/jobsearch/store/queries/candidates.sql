@@ -1,11 +1,12 @@
 -- name: UpsertCandidate :one
-INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, card)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (normalized_url) DO UPDATE SET
     source = EXCLUDED.source,
     card_title = EXCLUDED.card_title,
     card_company = EXCLUDED.card_company,
     card_location = EXCLUDED.card_location,
+    card = EXCLUDED.card,
     last_seen_at = NOW(),
     expires_at = NOW() + INTERVAL '60 days'
 RETURNING id;
@@ -16,7 +17,7 @@ VALUES ($1, $2)
 ON CONFLICT (candidate_id, source_target_id) DO UPDATE SET last_seen_at = NOW();
 
 -- name: ListCandidatesForUser :many
-SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.source
+SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.source
 FROM job_candidates c
 WHERE c.id > $2 AND c.expires_at > NOW()
   AND EXISTS (

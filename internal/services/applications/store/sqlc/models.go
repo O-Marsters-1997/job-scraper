@@ -233,6 +233,7 @@ type JobCandidate struct {
 	CardTitle     string
 	CardCompany   string
 	CardLocation  string
+	Card          []byte
 	FirstSeenAt   pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
