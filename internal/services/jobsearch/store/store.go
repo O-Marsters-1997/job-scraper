@@ -470,6 +470,14 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 	return id.String(), nil
 }
 
+func (s *Store) ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
+	out, err := s.queries.ListPolledCompanySlugs(ctx, slugs)
+	if err != nil {
+		return nil, data.QueryErr("ListPolledCompanySlugs", err)
+	}
+	return out, nil
+}
+
 func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 	filters := map[string]string{}
 	if len(row.Filters) > 0 {

@@ -49,6 +49,30 @@ func TestCapturePage(t *testing.T) {
 		}
 	})
 
+	t.Run("drops LinkedIn cards for polled companies before detail fetch", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		q := queuetest.NewRecorder()
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, polledSlugs{"polled-co"})
+		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
+		polled := dto.Job{URL: "https://linkedin.com/jobs/view/1", Title: "Engineer", CompanySlug: "polled-co"}
+		unpolled := dto.Job{URL: "https://linkedin.com/jobs/view/2", Title: "Engineer", CompanySlug: "other-co"}
+		config := dto.SearchConfig{UserID: userID, UpdatedAt: time.Now().UTC()}
+		if err := svc.CapturePage(t.Context(), linkedin, []dto.Job{polled, unpolled}, config); err != nil {
+			t.Fatalf("CapturePage(linkedin) err = %v", err)
+		}
+		if jobs := q.Jobs(); len(jobs) != 1 || jobs[0].URL != unpolled.URL {
+			t.Errorf("queued after linkedin page = %+v, want only %s", jobs, unpolled.URL)
+		}
+
+		other := dto.Job{URL: "https://example.com/3", Title: "Engineer", CompanySlug: "polled-co"}
+		if err := svc.CapturePage(t.Context(), captureTarget, []dto.Job{other}, config); err != nil {
+			t.Fatalf("CapturePage(wis) err = %v", err)
+		}
+		if got := len(q.Jobs()); got != 2 {
+			t.Errorf("queued %d details after non-linkedin card, want 2", got)
+		}
+	})
+
 	t.Run("retains a rejected card and reconsideration queues it once", func(t *testing.T) {
 		svc, _, q := newService(t)
 		card := captureCard

@@ -3,6 +3,7 @@ package sourcetargets
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -25,12 +26,39 @@ type CandidateStore interface {
 	DeleteExpiredCandidates(context.Context) error
 }
 
+// PolledCompanies reports which Company slugs are already polled through a
+// verified Board that some User tracks.
+type PolledCompanies interface {
+	PolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
+}
+
 func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error {
+	cards, err := s.dropBoardCards(ctx, target, cards)
+	if err != nil {
+		return err
+	}
 	candidates, err := s.targets.SaveCards(ctx, target, cards)
 	if err != nil {
 		return fmt.Errorf("save candidate cards: %w", err)
 	}
 	return s.assess(ctx, candidates, config)
+}
+
+func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]dto.Job, error) {
+	if target.Source != "linkedin" || len(cards) == 0 {
+		return cards, nil
+	}
+	slugs := make([]string, len(cards))
+	for i, card := range cards {
+		slugs[i] = card.CompanySlug
+	}
+	polled, err := s.polled.PolledCompanySlugs(ctx, slugs)
+	if err != nil {
+		return nil, fmt.Errorf("look up polled companies: %w", err)
+	}
+	return slices.DeleteFunc(slices.Clone(cards), func(card dto.Job) bool {
+		return slices.Contains(polled, card.CompanySlug)
+	}), nil
 }
 
 func (s *Service) Reconsider(ctx context.Context, config dto.SearchConfig) error {

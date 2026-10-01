@@ -28,3 +28,10 @@ FROM company_boards cb
 JOIN tracked_companies tc ON tc.company_id = cb.company_id
 WHERE tc.user_id = $1
 ORDER BY cb.created_at, cb.id;
+
+-- name: ListPolledCompanySlugs :many
+SELECT DISTINCT c.slug
+FROM companies c
+JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
+JOIN tracked_companies tc ON tc.company_id = c.id AND tc.enabled
+WHERE c.slug = ANY($1::text[]);

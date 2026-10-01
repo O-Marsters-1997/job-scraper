@@ -53,6 +53,7 @@ type Store interface {
 	ClaimBoard(ctx context.Context, id string, manual bool) (dto.BoardPoll, error)
 	CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) error
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
+	ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 	SetLastScraped(ctx context.Context, source string) error
@@ -70,10 +71,11 @@ type Deps struct {
 }
 
 func Build(deps Deps) *Module {
+	jobs := NewService(deps.Store, deps.Queue)
 	return &Module{
 		store:         deps.Store,
-		jobs:          NewService(deps.Store, deps.Queue),
-		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue),
+		jobs:          jobs,
+		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs),
 		queue:         deps.Queue,
 	}
 }
