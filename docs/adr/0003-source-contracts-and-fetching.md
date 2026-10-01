@@ -6,6 +6,9 @@
 
 ## Bright Data Web Unlocker for protected sources
 
+> Superseded by [ADR 0018](0018-hostile-sources-fetch-residential-first.md): hostile Sources now go
+> residential-first, with Unlocker as the counted fallback.
+
 Hostile sources (LinkedIn, Indeed) fetch through Bright Data Web Unlocker; everything else (ATS APIs, cooperative boards) goes direct. Web Unlocker handles IP rotation, fingerprinting and CAPTCHAs and bills only successful responses. Datacenter IPs are pre-flagged on the aggregators, so there is no datacenter tier.
 
 - Proxy use is a static property of each source, not user config.

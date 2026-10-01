@@ -105,7 +105,7 @@ func TestHeadingsSkipStepOnceSaved(t *testing.T) {
 	}
 	want := []dto.CVHeading{
 		{Text: "Engineer, Acme", PositionID: &acme.ID, Confirmed: true, SlotCount: 1},
-		{Text: "Volunteer, Nowhere", Confirmed: true, SlotCount: 1},
+		{Text: "Volunteer, Nowhere", SlotCount: 1},
 	}
 	if diff := cmp.Diff(want, second); diff != "" {
 		t.Errorf("Headings() after save (-want +got):\n%s", diff)
