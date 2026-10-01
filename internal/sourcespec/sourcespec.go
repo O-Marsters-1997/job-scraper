@@ -63,6 +63,7 @@ var entries = []registryEntry{
 	{name: "workable", label: "Workable", kind: kindBoard, role: RoleATS, urlPrefix: "https://apply.workable.com"},
 	{name: "recruitee", label: "Recruitee", kind: kindBoard, role: RoleATS, urlPrefix: "https://recruitee.com"},
 	{name: "personio", label: "Personio", kind: kindBoard, role: RoleATS, urlPrefix: "https://personio.de"},
+	{name: "wttj", label: "Welcome to the Jungle", kind: kindBoard, role: RoleATS, urlPrefix: "https://app.welcometothejungle.com/companies"},
 	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "region", Param: "w", Label: "Region", Options: []FilterOption{
 			{Value: "uk", Label: "United Kingdom"},
