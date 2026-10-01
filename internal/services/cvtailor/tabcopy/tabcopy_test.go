@@ -104,7 +104,7 @@ func TestRequests(t *testing.T) {
 }
 
 func TestRequestsUnsupported(t *testing.T) {
-	for _, fixture := range []string{"table.json", "image.json", "columns.json", "header.json"} {
+	for _, fixture := range []string{"table.json", "image.json", "columns.json", "header.json", "sections.json"} {
 		t.Run(fixture, func(t *testing.T) {
 			if _, err := tabcopy.Requests(readFixture(t, fixture), "t.1"); !errors.Is(err, tabcopy.ErrUnsupported) {
 				t.Errorf("Requests(%s) error = %v, want ErrUnsupported", fixture, err)
