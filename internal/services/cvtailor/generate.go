@@ -163,8 +163,12 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("marshal edit set: %w", err)
 	}
+	baseContent, err := json.Marshal(pl.baseContent())
+	if err != nil {
+		return docID, dto.DraftResult{}, fmt.Errorf("marshal base content: %w", err)
+	}
 	return docID, dto.DraftResult{
-		EditSet: editSet, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
+		EditSet: editSet, BaseContent: baseContent, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
 		JobFingerprint: claim.JobFingerprint, Cost: cost,
 		Findings: toDraftFindings(checks.Run(finalDraft)),
 	}, nil

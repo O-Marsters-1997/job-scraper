@@ -81,6 +81,30 @@ function mockProvenance(): DraftProvenance {
 	};
 }
 
+function mockContent(): Pick<Draft, "content" | "base"> {
+	const p = getExperience()[0];
+	const texts = p?.achievements.slice(0, 3).map((a) => a.text) ?? [];
+	const bullet = (text: string) => ({ text, achievementIds: [] });
+	const content = (bullets: string[], skills: string[], profile: string) => ({
+		profile,
+		skills,
+		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
+	});
+	const [first = "", second = "", third = ""] = texts;
+	return {
+		base: content(
+			[first, second, third],
+			["Go", "SQL"],
+			"Backend engineer with six years of experience.",
+		),
+		content: content(
+			[third, `${first} using Kubernetes`, "Led the on-call rota"],
+			["Go", "Kubernetes"],
+			"Backend engineer with six years of experience in platform work.",
+		),
+	};
+}
+
 export function createDraft(input: DraftInput): DraftRef {
 	const id = `draft-${mockDrafts.size + 1}`;
 	mockDrafts.set(id, {
@@ -94,6 +118,8 @@ export function createDraft(input: DraftInput): DraftRef {
 			createdAt: new Date().toISOString(),
 			findings: [],
 			provenance: null,
+			content: null,
+			base: null,
 		},
 		polls: 0,
 	});
@@ -115,6 +141,7 @@ export function getDraft(id: string): Draft {
 			status: "ready",
 			draftDocUrl: MOCK_DOC_URL,
 			provenance: mockProvenance(),
+			...mockContent(),
 			findings: [
 				{
 					check: "grounding",

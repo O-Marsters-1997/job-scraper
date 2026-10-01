@@ -107,6 +107,24 @@ func (pl plan) input(jobDescription string) cvedit.Input {
 	return in
 }
 
+func (pl plan) baseContent() dto.DraftContent {
+	c := dto.DraftContent{Skills: []string{}, Positions: []dto.DraftPosition{}}
+	if pl.structure.Profile != nil {
+		c.Profile = &pl.structure.Profile.Text
+	}
+	if pl.structure.Skills != nil {
+		c.Skills = pl.structure.Skills.Items
+	}
+	for _, p := range pl.positions {
+		dp := dto.DraftPosition{PositionID: p.ID, Bullets: []dto.DraftBullet{}}
+		for _, text := range p.SlotTexts {
+			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: text, AchievementIDs: []string{}})
+		}
+		c.Positions = append(c.Positions, dp)
+	}
+	return c
+}
+
 func (pl plan) slotIDs() docedit.PositionSlots {
 	out := make(docedit.PositionSlots, len(pl.positions))
 	for _, p := range pl.positions {
