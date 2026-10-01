@@ -95,7 +95,7 @@ func TestNew(t *testing.T) {
 		pool := pgtest.New(t)
 
 		var version int64
-		if err := pool.QueryRow(context.Background(), "SELECT max(version_id) FROM goose_db_version").Scan(&version); err != nil {
+		if err := pool.QueryRow(t.Context(), "SELECT max(version_id) FROM goose_db_version").Scan(&version); err != nil {
 			t.Fatalf("query goose_db_version: %v", err)
 		}
 		if version == 0 {
@@ -112,7 +112,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("truncates tables between calls", func(t *testing.T) {
-		ctx := context.Background()
+		ctx := t.Context()
 		pool := pgtest.New(t)
 
 		if _, err := pool.Exec(ctx, "INSERT INTO companies (slug, name) VALUES ('pgtest-check', 'Pgtest Check')"); err != nil {

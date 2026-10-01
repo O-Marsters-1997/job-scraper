@@ -1,7 +1,6 @@
 package cvedit_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -76,7 +75,7 @@ func TestClient_Edit_ShapesRequest_DecodesResult(t *testing.T) {
 	content := `{"positions":[{"positionId":"pos-1","bullets":[{"achievement_ids":["ach-1"],"text":"Cut p99 latency"}]}]}`
 	client, captured := fakeServer(t, content, 0.0123)
 
-	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -123,7 +122,7 @@ func TestClient_Edit_KeptBulletTakesItsSlotText(t *testing.T) {
 		`{"keep":false,"achievement_ids":["ach-1"],"text":"Cut p99 latency"}]}]}`
 	client, _ := fakeServer(t, content, 0)
 
-	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -156,7 +155,7 @@ func TestClient_Edit_ProfileAndSkillsOnlyWhenSectionsExist(t *testing.T) {
 			in.HasProfile, in.BaseProfile = tc.hasProfile, "Old profile"
 			in.HasSkills, in.BaseSkills = tc.hasSkill, []string{"Go"}
 
-			if _, err := client.Edit(context.Background(), "sk-or-test", in); err != nil {
+			if _, err := client.Edit(t.Context(), "sk-or-test", in); err != nil {
 				t.Fatalf("Edit: %v", err)
 			}
 
@@ -192,7 +191,7 @@ func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
 	in.PriorFindings = []checks.Finding{{Check: "grounding", SlotID: "s1", Message: "40% is not in the achievement"}}
 	in.ShortenBullets = []string{"A very long bullet about latency"}
 
-	if _, err := client.Edit(context.Background(), "sk-or-test", in); err != nil {
+	if _, err := client.Edit(t.Context(), "sk-or-test", in); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
 
@@ -207,7 +206,7 @@ func TestClient_Edit_RetryIncludesFindingsAndShorten(t *testing.T) {
 func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
 	client, captured := fakeServer(t, `{"positions":[]}`, 0)
 
-	if _, err := client.Edit(context.Background(), "sk-or-test", baseInput()); err != nil {
+	if _, err := client.Edit(t.Context(), "sk-or-test", baseInput()); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
 	user := captured.Messages[1].Content
@@ -221,7 +220,7 @@ func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
 func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
 	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":["Go"],"jobSkills":["Go","Postgres"]}`, 0)
 
-	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -240,7 +239,7 @@ func TestClient_Edit_StatusError(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := cvedit.NewClientAt(server.URL, server.Client())
 
-	_, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	_, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 
 	var se *openrouter.StatusError
 	if !errors.As(err, &se) || se.Code != http.StatusInternalServerError {
@@ -251,7 +250,7 @@ func TestClient_Edit_StatusError(t *testing.T) {
 func TestClient_Edit_MalformedContent_KeepsRawAndErrors(t *testing.T) {
 	client, _ := fakeServer(t, `not json`, 0.5)
 
-	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err == nil {
 		t.Fatal("Edit: want error, got nil")
 	}

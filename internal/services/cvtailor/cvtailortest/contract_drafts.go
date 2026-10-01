@@ -1,7 +1,6 @@
 package cvtailortest
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -15,7 +14,7 @@ import (
 
 func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	input := func(f Fixture) dto.DraftInput {
 		return dto.DraftInput{JobID: f.JobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}

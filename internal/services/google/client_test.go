@@ -51,7 +51,7 @@ func linkedClient(t *testing.T, rt http.RoundTripper) (context.Context, *google.
 	store := tokenStore{row: dto.GoogleToken{
 		AccessTokenEnc: access, RefreshTokenEnc: refresh, TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
 	}}
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, &http.Client{Transport: rt})
+	ctx := context.WithValue(t.Context(), oauth2.HTTPClient, &http.Client{Transport: rt})
 	return ctx, google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
 }
 
@@ -165,7 +165,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 		var saved dto.UpsertGoogleTokenInput
 		store := tokenStore{row: dto.GoogleToken{AccessTokenEnc: encrypt("old-access"), RefreshTokenEnc: encrypt("stored-refresh")}, saved: &saved}
 		client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
-		if err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a"}); err != nil {
+		if err := client.SaveToken(t.Context(), "u1", &oauth2.Token{AccessToken: "a"}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
@@ -178,7 +178,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 		var saved dto.UpsertGoogleTokenInput
 		store := tokenStore{row: dto.GoogleToken{AccessTokenEnc: encrypt("old-access"), RefreshTokenEnc: encrypt("stored-refresh")}, saved: &saved}
 		client := google.NewClient("id", "secret", "http://localhost/cb", store, cipher)
-		if err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a", RefreshToken: "new-refresh"}); err != nil {
+		if err := client.SaveToken(t.Context(), "u1", &oauth2.Token{AccessToken: "a", RefreshToken: "new-refresh"}); err != nil {
 			t.Fatal(err)
 		}
 		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
@@ -200,7 +200,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 				saved := dto.UpsertGoogleTokenInput{}
 				tt.store.saved = &saved
 				client := google.NewClient("id", "secret", "http://localhost/cb", tt.store, cipher)
-				err := client.SaveToken(context.Background(), "u1", &oauth2.Token{AccessToken: "a"})
+				err := client.SaveToken(t.Context(), "u1", &oauth2.Token{AccessToken: "a"})
 				if !errors.Is(err, google.ErrNoRefreshToken) {
 					t.Errorf("SaveToken error = %v, want ErrNoRefreshToken", err)
 				}
@@ -235,7 +235,7 @@ func TestSaveTokenStoresGrantedScope(t *testing.T) {
 			if tt.extra != nil {
 				tok = tok.WithExtra(tt.extra)
 			}
-			if err := client.SaveToken(context.Background(), "u1", tok); err != nil {
+			if err := client.SaveToken(t.Context(), "u1", tok); err != nil {
 				t.Fatal(err)
 			}
 			if saved.Scope != tt.wantSave {
@@ -248,10 +248,10 @@ func TestSaveTokenStoresGrantedScope(t *testing.T) {
 func TestHasScope(t *testing.T) {
 	client := google.NewClient("id", "secret", "http://localhost/cb",
 		tokenStore{row: dto.GoogleToken{Scope: google.DriveReadonlyScope + " " + google.DriveFileScope}}, nil)
-	if ok, err := client.HasScope(context.Background(), "u1", google.DriveFileScope); err != nil || !ok {
+	if ok, err := client.HasScope(t.Context(), "u1", google.DriveFileScope); err != nil || !ok {
 		t.Errorf("HasScope(drive.file) = %v, %v", ok, err)
 	}
-	if ok, _ := client.HasScope(context.Background(), "u1", "other"); ok {
+	if ok, _ := client.HasScope(t.Context(), "u1", "other"); ok {
 		t.Error("HasScope(other) = true")
 	}
 }

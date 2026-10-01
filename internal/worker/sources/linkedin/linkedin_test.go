@@ -1,7 +1,6 @@
 package linkedin_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -143,7 +142,7 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 			src := linkedin.New(tt.keywords, tt.filters)
 			recorder := sourcetest.Respond("<html></html>")
 			src.Client().Transport = recorder
-			if _, _, err := src.FetchPage(context.Background(), ""); err != nil {
+			if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
 				t.Fatal(err)
 			}
 			query := recorder.Last.URL.Query()

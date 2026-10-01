@@ -1,7 +1,6 @@
 package eval_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -54,7 +53,7 @@ func TestRunRetriesOnBlockFindingAndReports(t *testing.T) {
 		cvedit.Result{Edits: bullet("Cut API latency", "a1"), Cost: 0.01},
 	)
 
-	out, err := eval.Run(context.Background(), ed, "key", f)
+	out, err := eval.Run(t.Context(), ed, "key", f)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -87,7 +86,7 @@ func TestRunStopsAfterTwoRetries(t *testing.T) {
 	f := fixture(t, "embellish-temptation")
 	ed := cvtailortest.Editing(cvedit.Result{Edits: bullet("Cut API latency by 40%", "a1")})
 
-	out, err := eval.Run(context.Background(), ed, "key", f)
+	out, err := eval.Run(t.Context(), ed, "key", f)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

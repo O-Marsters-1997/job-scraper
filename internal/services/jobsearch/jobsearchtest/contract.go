@@ -1,7 +1,6 @@
 package jobsearchtest
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,7 +35,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		want := dto.CachedResponse{URL: "https://x.test/a", Status: 302, Header: http.Header{"Location": {"https://x.test/b"}}, Body: []byte("body")}
 		if _, ok, err := st.LookupFetch(ctx, want.URL); ok || err != nil {
 			t.Fatalf("LookupFetch(empty) = %v, %v, want miss", ok, err)
@@ -61,7 +60,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
 		st, _ := newStore(t)
-		_, err := st.GetJob(context.Background(), missingID, missingID)
+		_, err := st.GetJob(t.Context(), missingID, missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetJob(...) err = %v, want ErrNotFound", err)
 		}
@@ -69,7 +68,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("save then get a canonical job round trips", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		saved, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/1"})
 		if err != nil || status != "new" || saved.ID == "" {
 			t.Fatalf("SaveCanonical(...) = %+v, %q, %v, want a new job", saved, status, err)
@@ -82,7 +81,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("resaving the same content is unchanged, changed content is changed", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		job := dto.Job{Title: "Engineer", URL: "https://example.com/jobs/2"}
 		saved, _, err := st.SaveCanonical(ctx, job)
 		if err != nil {
@@ -103,7 +102,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("urls differing only by tracking parameters are one job", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/9?gh_jid=7&utm_source=x&team=a"})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -119,7 +118,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("new urls filters out known ones", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		if _, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/3"}); err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
 		}
@@ -131,7 +130,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("upsert company then get round trips", func(t *testing.T) {
 		st, _ := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 		if err != nil || c.Slug != "acme" {
 			t.Fatalf("UpsertCompany(...) = %+v, %v", c, err)
@@ -144,7 +143,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("get an unknown company returns not found", func(t *testing.T) {
 		st, _ := newStore(t)
-		_, err := st.GetCompany(context.Background(), missingID)
+		_, err := st.GetCompany(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetCompany(...) err = %v, want ErrNotFound", err)
 		}
@@ -152,7 +151,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("set company tracking then list for user shows it", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -168,7 +167,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("list tracked companies returns only this user's, paused included, with boards", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		active, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "active-co", Name: "Active Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -211,7 +210,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("polled company slugs need a verified board and an enabled tracker", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		for _, tc := range []struct {
 			slug     string
 			verified bool
@@ -241,7 +240,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("delete company tracking removes it and keeps the company", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "untrack-co", Name: "Untrack Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -266,7 +265,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("dismiss keeps the row disabled, undo re-enables it as new", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "review-co", Name: "Review Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -293,7 +292,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("track discovered company inserts as new once and never overwrites", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -315,7 +314,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		cases := []struct {
 			slug, method string
 			verify       bool
@@ -353,7 +352,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "keep-co", Name: "Keep Co"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -369,7 +368,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("saving a profile twice keeps one, shown on the new company card", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "profiled", Name: "Profiled"})
 		if err != nil {
 			t.Fatalf("UpsertCompany(...) = %v", err)
@@ -397,7 +396,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("new companies list only review state new, newest first, with their open jobs", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		var ids []string
 		for _, slug := range []string{"older-co", "newer-co", "kept-co"} {
 			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
@@ -446,7 +445,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("create then list source targets for a user", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{})
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
@@ -459,7 +458,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("create a duplicate source target returns already exists", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}); err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
@@ -470,7 +469,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("restarting a failed run clears its error", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{})
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
@@ -490,7 +489,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("update then delete a source target", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "update-me", true, map[string]string{})
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
@@ -511,7 +510,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("get an unknown source target returns not found", func(t *testing.T) {
 		st, _ := newStore(t)
-		_, err := st.GetSourceTarget(context.Background(), missingID)
+		_, err := st.GetSourceTarget(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetSourceTarget(...) err = %v, want ErrNotFound", err)
 		}
@@ -519,7 +518,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("save cards then list for user round trips", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{})
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
@@ -536,7 +535,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "assess-search", true, map[string]string{})
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)

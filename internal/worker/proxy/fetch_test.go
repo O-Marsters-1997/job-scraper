@@ -1,7 +1,6 @@
 package proxy_test
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,7 +29,7 @@ func response(status int, code string) *http.Response {
 
 func newRequest(t *testing.T, target string) *http.Request {
 	t.Helper()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, target, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

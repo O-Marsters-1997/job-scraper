@@ -23,7 +23,7 @@ func TestNotifyNewJobUsesRecipient(t *testing.T) {
 	svc := notify.NewNotificationService(sender)
 	job := dto.Job{ID: "job-1", Title: "Engineer", URL: "https://example.com/job"}
 	for _, email := range []string{"alice@example.com", "bob@example.com", ""} {
-		if err := svc.NotifyNewJob(context.Background(), job, email); err != nil {
+		if err := svc.NotifyNewJob(t.Context(), job, email); err != nil {
 			t.Fatal(err)
 		}
 	}

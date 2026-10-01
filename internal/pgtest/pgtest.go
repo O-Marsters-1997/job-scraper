@@ -115,7 +115,7 @@ func chdirToRepoRoot() error {
 
 func truncateAll(tb testing.TB, pool *pgxpool.Pool) {
 	tb.Helper()
-	ctx := context.Background()
+	ctx := tb.Context()
 
 	rows, err := pool.Query(ctx, `
 		SELECT table_name FROM information_schema.tables

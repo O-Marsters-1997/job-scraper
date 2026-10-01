@@ -18,7 +18,7 @@ func TestEvery(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	calls := make(chan struct{})
 	done := make(chan struct{})

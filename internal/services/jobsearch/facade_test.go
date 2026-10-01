@@ -33,7 +33,7 @@ func (q *recordingQueue) Publish(_ context.Context, task queue.Task) error {
 
 func seedBoards(t *testing.T, st *jobsearchtest.FakeStore) (verified, candidate dto.CompanyBoard) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Name: "Acme", Slug: "acme"})
 	if err != nil {
 		t.Fatal(err)
@@ -65,7 +65,7 @@ func TestPublishBoardChecks(t *testing.T) {
 		verified, _ := seedBoards(t, st)
 		m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: q})
 
-		if err := m.PublishBoardChecks(context.Background(), false); err != nil {
+		if err := m.PublishBoardChecks(t.Context(), false); err != nil {
 			t.Fatal(err)
 		}
 		if got := ids(q); !slices.Equal(got, []string{verified.ID}) || q.tasks[0].Manual {
@@ -78,7 +78,7 @@ func TestPublishBoardChecks(t *testing.T) {
 		verified, candidate := seedBoards(t, st)
 		m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: q})
 
-		if err := m.PublishBoardChecks(context.Background(), true); err != nil {
+		if err := m.PublishBoardChecks(t.Context(), true); err != nil {
 			t.Fatal(err)
 		}
 		want := []string{verified.ID, candidate.ID}
@@ -99,7 +99,7 @@ func TestPublishBoardChecks(t *testing.T) {
 		q.failFor = min(verified.ID, candidate.ID)
 		m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: q})
 
-		if err := m.PublishBoardChecks(context.Background(), true); err != nil {
+		if err := m.PublishBoardChecks(t.Context(), true); err != nil {
 			t.Fatal(err)
 		}
 		if len(q.tasks) != 1 || q.tasks[0].BoardID == q.failFor {

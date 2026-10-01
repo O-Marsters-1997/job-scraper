@@ -1,7 +1,6 @@
 package scraper_test
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -55,7 +54,7 @@ func TestBulkExport(t *testing.T) {
 			got <- recordedRequest{r.Method, r.URL.Path, r.Header.Get("Content-Type"), r.Header.Get("Authorization"), body.Jobs}
 			_, _ = w.Write([]byte(okBody))
 		})
-		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Fatal(err)
 		}
 		want := recordedRequest{http.MethodPost, "/ingest/batch", "application/json", "Bearer test-token", oneJob}
@@ -66,7 +65,7 @@ func TestBulkExport(t *testing.T) {
 
 	t.Run("accepts any 2xx", func(t *testing.T) {
 		exporter := newExporter(t, respondWith(http.StatusCreated, `{"results":[{"status":"unchanged"}]}`))
-		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Errorf("BulkExport() = %v, want nil on 201", err)
 		}
 	})
@@ -89,7 +88,7 @@ func TestBulkExport(t *testing.T) {
 				calls.Add(1)
 				respondWith(tt.status, tt.body)(w, r)
 			})
-			if err := exporter.BulkExport(context.Background(), oneJob); err == nil {
+			if err := exporter.BulkExport(t.Context(), oneJob); err == nil {
 				t.Error("BulkExport() = nil, want error")
 			}
 			if got := calls.Load(); got != tt.wantCalls {
@@ -110,7 +109,7 @@ func TestBulkExport(t *testing.T) {
 			}
 			_, _ = w.Write([]byte(okBody))
 		})
-		if err := exporter.BulkExport(context.Background(), oneJob); err != nil {
+		if err := exporter.BulkExport(t.Context(), oneJob); err != nil {
 			t.Fatal(err)
 		}
 		if first, second := <-bodies, <-bodies; first != second {
@@ -135,7 +134,7 @@ func TestBulkExport(t *testing.T) {
 			{Title: "A", URL: "https://example.com/a", Description: big},
 			{Title: "B", URL: "https://example.com/b", Description: big},
 		}
-		if err := exporter.BulkExport(context.Background(), jobs); err != nil {
+		if err := exporter.BulkExport(t.Context(), jobs); err != nil {
 			t.Fatal(err)
 		}
 		if first, second := <-sizes, <-sizes; first != 1 || second != 1 {
@@ -161,7 +160,7 @@ func TestExport(t *testing.T) {
 				path.Store(r.URL.Path)
 				_, _ = w.Write([]byte(tt.body))
 			})
-			err := exporter.Export(context.Background(), oneJob[0])
+			err := exporter.Export(t.Context(), oneJob[0])
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Export() error = %v, wantErr %t", err, tt.wantErr)
 			}

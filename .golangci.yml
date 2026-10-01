@@ -18,6 +18,9 @@ linters:
     - usetesting # prefer testing package helpers over manual equivalents
     - sloglint # consistent slog usage: *Context calls, attrs, snake_case keys (ADR 0013)
   settings:
+    usetesting:
+      context-background: true
+      context-todo: true
     forbidigo:
       forbid:
         - pattern: '^reflect\.DeepEqual$'
