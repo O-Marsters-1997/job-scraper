@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
+import { googleWriteHref } from "@/components/GoogleWriteConsent";
 import { Icon } from "@/components/Icon";
 import { PdfPreview } from "@/components/PdfPreview";
 import { ProvenanceDiff } from "@/components/tailoring/ProvenanceDiff";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { KeptDraftExistsError, keptDraft } from "@/lib/tailoring";
 import type { Draft } from "@/types/tailoring";
 import { fetchDraftPdf } from "../../api/tailoring";
+import { useGoogleStatus } from "../../hooks/useGoogle";
 import { usePdfUrl } from "../../hooks/usePdfUrl";
 import {
 	useDiscardDraft,
@@ -39,11 +41,34 @@ function DraftReviewPage() {
 	);
 }
 
+const SHOW_CHANGES_KEY = "draft.showChanges";
+
+function readShowChanges(): boolean {
+	try {
+		return localStorage.getItem(SHOW_CHANGES_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
 function DraftReview(props: { draft: Draft }) {
 	const keep = useKeepDraft();
+	const google = useGoogleStatus();
 	const discard = useDiscardDraft();
 	const jobDrafts = useJobDrafts(() => props.draft.jobId);
 	const [blockedByKept, setBlockedByKept] = createSignal(false);
+	const [showChanges, setShowChanges] = createSignal(readShowChanges());
+	const toggleChanges = () => {
+		const next = !showChanges();
+		setShowChanges(next);
+		try {
+			localStorage.setItem(SHOW_CHANGES_KEY, next ? "1" : "0");
+		} catch {}
+	};
+	const changes = () => {
+		const { base, content } = props.draft;
+		return base && content ? { base, content } : null;
+	};
 	const isKeeping = () => props.draft.status === "keeping";
 	const isReviewable = () => props.draft.status === "ready" || isKeeping();
 	const hasDoc = () => isReviewable() && props.draft.outcome !== "discarded";
@@ -137,6 +162,30 @@ function DraftReview(props: { draft: Draft }) {
 				</Show>
 			</div>
 
+			<Show
+				when={
+					props.draft.status === "ready" &&
+					props.draft.outcome === null &&
+					google.data?.connected &&
+					!google.data.canEditDocs
+				}
+			>
+				<div class="mb-4 rounded-xl border border-border bg-surface p-4 text-sm">
+					<p class="mb-3 text-foreground">
+						Allow FastTrack to edit your CV Doc so a kept draft is added as a
+						Tab. Without it, kept drafts land as separate Docs.
+					</p>
+					<Button
+						as="a"
+						href={googleWriteHref(`/tailoring/drafts/${props.draft.id}`)}
+						variant="outline"
+						size="sm"
+					>
+						Reconnect Google
+					</Button>
+				</div>
+			</Show>
+
 			<Show when={blockedByKept()}>
 				<div
 					role="alert"
@@ -222,6 +271,17 @@ function DraftReview(props: { draft: Draft }) {
 						</Show>
 					</div>
 					<div class="min-w-0">
+						<Show when={changes()}>
+							<Button
+								variant="outline"
+								size="sm"
+								class="mb-4"
+								aria-pressed={showChanges()}
+								onClick={toggleChanges}
+							>
+								Show changes
+							</Button>
+						</Show>
 						<ProvenanceDiff
 							draftId={props.draft.id}
 							editable={
@@ -230,6 +290,7 @@ function DraftReview(props: { draft: Draft }) {
 							onSaved={() => setPdfRevision((n) => n + 1)}
 							provenance={props.draft.provenance}
 							findings={props.draft.findings}
+							changes={showChanges() ? changes() : null}
 						/>
 					</div>
 				</div>

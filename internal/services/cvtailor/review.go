@@ -35,6 +35,21 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 		return dto.Draft{}, fmt.Errorf("decode edit set: %w", err)
 	}
 	draft.Provenance = provenance(edits, positions)
+	content := editedContent(edits)
+	draft.Content = &content
+	if len(draft.BaseContent) == 0 {
+		return draft, nil
+	}
+	draft.Base = new(dto.DraftContent)
+	if err := json.Unmarshal(draft.BaseContent, draft.Base); err != nil {
+		return dto.Draft{}, fmt.Errorf("decode base content: %w", err)
+	}
+	if content.Profile == nil {
+		content.Profile = draft.Base.Profile
+	}
+	if len(content.Skills) == 0 {
+		content.Skills = draft.Base.Skills
+	}
 	return draft, nil
 }
 
@@ -138,6 +153,25 @@ func withDocURL(d dto.Draft) dto.Draft {
 		d.DraftDocURL = &url
 	}
 	return d
+}
+
+func editedContent(edits cvedit.EditSet) dto.DraftContent {
+	c := dto.DraftContent{Profile: edits.Profile, Skills: edits.Skills, Positions: []dto.DraftPosition{}}
+	if c.Skills == nil {
+		c.Skills = []string{}
+	}
+	for _, pe := range edits.Positions {
+		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
+		for _, b := range pe.Bullets {
+			ids := b.AchievementIDs
+			if ids == nil {
+				ids = []string{}
+			}
+			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: b.Text, AchievementIDs: ids})
+		}
+		c.Positions = append(c.Positions, dp)
+	}
+	return c
 }
 
 func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance {

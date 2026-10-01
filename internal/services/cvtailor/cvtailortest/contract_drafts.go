@@ -72,13 +72,17 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		d := create(t, f)
 		c := claim(t, f)
 		finding := dto.DraftFinding{Check: "skills", Severity: "info", Message: "the job asks for Rust"}
-		res := dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), Model: "m", PromptVersion: "p", DraftDocID: "doc-copy", Cost: 0.5, Findings: []dto.DraftFinding{finding}}
+		res := dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), BaseContent: json.RawMessage(`{"profile":"hi"}`), Model: "m", PromptVersion: "p", DraftDocID: "doc-copy", Cost: 0.5, Findings: []dto.DraftFinding{finding}}
 		if err := f.Store.CompleteDraft(ctx, c, res); err != nil {
 			t.Fatal(err)
 		}
 		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
 		if got.Status != "ready" || got.DraftDocID != "doc-copy" {
 			t.Errorf("GetDraft() = %+v, want ready with the Doc", got)
+		}
+		var base dto.DraftContent
+		if err := json.Unmarshal(got.BaseContent, &base); err != nil || base.Profile == nil || *base.Profile != "hi" {
+			t.Errorf("GetDraft().BaseContent = %s, %v, want the recorded base content", got.BaseContent, err)
 		}
 		if diff := cmp.Diff([]dto.DraftFinding{finding}, got.Findings); diff != "" {
 			t.Errorf("GetDraft().Findings mismatch (-want +got):\n%s", diff)

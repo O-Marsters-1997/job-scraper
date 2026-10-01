@@ -57,6 +57,19 @@ const draftProvenanceSchema = z.object({
 	),
 });
 
+const draftContentSchema = z.object({
+	profile: z.string().nullable(),
+	skills: z.array(z.string()),
+	positions: z.array(
+		z.object({
+			positionId: z.string(),
+			bullets: z.array(
+				z.object({ text: z.string(), achievementIds: z.array(z.string()) }),
+			),
+		}),
+	),
+});
+
 export const draftSchema = z.object({
 	id: z.string(),
 	jobId: z.string(),
@@ -68,6 +81,8 @@ export const draftSchema = z.object({
 	createdAt: z.string(),
 	findings: z.array(draftFindingSchema),
 	provenance: draftProvenanceSchema.nullable(),
+	content: draftContentSchema.nullable(),
+	base: draftContentSchema.nullable(),
 });
 
 export const draftRefSchema = z.object({ id: z.string() });
@@ -75,6 +90,7 @@ export const draftRefSchema = z.object({ id: z.string() });
 export type SlotEdit = { slotId: string; text: string };
 export type DraftFinding = z.infer<typeof draftFindingSchema>;
 export type DraftProvenance = z.infer<typeof draftProvenanceSchema>;
+export type DraftContent = z.infer<typeof draftContentSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;
 export type Draft = z.infer<typeof draftSchema>;
 export type DraftRef = z.infer<typeof draftRefSchema>;

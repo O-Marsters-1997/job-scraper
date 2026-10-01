@@ -149,6 +149,7 @@ CREATE TABLE tailored_cvs (
     base_tab_id     TEXT        NOT NULL,
     achievement_ids UUID[]      NOT NULL,
     edit_set        JSONB,
+    base_content    JSONB,
     findings        JSONB       NOT NULL DEFAULT '[]',
     raw_output      TEXT        NOT NULL DEFAULT '',
     model           TEXT        NOT NULL DEFAULT '',

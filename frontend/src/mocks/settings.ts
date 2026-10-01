@@ -18,14 +18,19 @@ export function setAiCredential(provider: string, apiKey: string | null): void {
 	aiPrefs = { ...aiPrefs, configuredProviders: [...providers] };
 }
 
-let googleStatus: GoogleStatus = { connected: false, canWrite: false };
+const disconnectedGoogle: GoogleStatus = {
+	connected: false,
+	canWrite: false,
+	canEditDocs: false,
+};
+let googleStatus = disconnectedGoogle;
 
 export function getGoogleStatus(): GoogleStatus {
 	return structuredClone(googleStatus);
 }
 
 export function disconnectGoogle(): void {
-	googleStatus = { connected: false, canWrite: false };
+	googleStatus = disconnectedGoogle;
 }
 
 let profile: Profile = { username: "demo", email: "demo@example.com" };

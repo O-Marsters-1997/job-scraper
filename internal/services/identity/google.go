@@ -55,7 +55,11 @@ func (s *Service) GoogleStatus(ctx context.Context, userID string) (dto.GoogleSt
 	if err != nil {
 		return dto.GoogleStatus{}, err
 	}
-	return dto.GoogleStatus{Connected: true, Email: info.Email, CanWrite: canWrite}, nil
+	canEditDocs, err := s.google.HasScope(ctx, userID, google.DocumentsScope)
+	if err != nil {
+		return dto.GoogleStatus{}, err
+	}
+	return dto.GoogleStatus{Connected: true, Email: info.Email, CanWrite: canWrite, CanEditDocs: canEditDocs}, nil
 }
 
 func (s *Service) DisconnectGoogle(ctx context.Context, userID, _ string) error {

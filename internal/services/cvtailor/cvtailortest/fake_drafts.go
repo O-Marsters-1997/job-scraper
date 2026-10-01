@@ -180,7 +180,7 @@ func (f *FakeStore) CompleteDraft(_ context.Context, claim dto.DraftClaim, res d
 	if err != nil {
 		return err
 	}
-	d.Status, d.LastError, d.DraftDocID, d.Findings, d.result, d.EditSet = "ready", "", res.DraftDocID, slices.Clone(res.Findings), res, res.EditSet
+	d.Status, d.LastError, d.DraftDocID, d.Findings, d.result, d.EditSet, d.BaseContent = "ready", "", res.DraftDocID, slices.Clone(res.Findings), res, res.EditSet, res.BaseContent
 	return nil
 }
 

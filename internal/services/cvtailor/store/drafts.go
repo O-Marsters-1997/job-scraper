@@ -36,7 +36,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	}
 	return dto.Draft{
 		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
-		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet,
+		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
 	}, nil
 }
@@ -178,7 +178,7 @@ func (s *Store) CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto
 		return fmt.Errorf("store.CompleteDraft: encode findings: %w", err)
 	}
 	n, err := s.queries.CompleteDraft(ctx, sqlc.CompleteDraftParams{
-		ID: id, Attempts: int32(claim.Attempts), EditSet: res.EditSet, RawOutput: res.RawOutput,
+		ID: id, Attempts: int32(claim.Attempts), EditSet: res.EditSet, BaseContent: res.BaseContent, RawOutput: res.RawOutput,
 		Model: res.Model, PromptVersion: res.PromptVersion, JobFingerprint: res.JobFingerprint,
 		Cost: float32(res.Cost), DraftDocID: res.DraftDocID, Findings: findings,
 	})

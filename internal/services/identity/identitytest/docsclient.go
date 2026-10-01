@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 
@@ -81,7 +82,7 @@ func (d *DocsClient) HTTPClientForUser(_ context.Context, userID string) (*http.
 func (d *DocsClient) AuthURL(state string, write bool) string {
 	u := "https://accounts.google.com/o?state=" + state
 	if write {
-		u += "&scope=drive.file&include_granted_scopes=true"
+		u += "&scope=drive.file+documents&include_granted_scopes=true"
 	}
 	return u
 }
@@ -97,7 +98,7 @@ func (d *DocsClient) SaveToken(_ context.Context, userID string, _ *oauth2.Token
 		d.linked[userID] = true
 	}
 	if d.writeGranted {
-		d.scopes[userID] = google.DriveFileScope
+		d.scopes[userID] = google.DriveFileScope + " " + google.DocumentsScope
 	}
 	return nil
 }
@@ -146,7 +147,7 @@ func (d *DocsClient) GetDocument(_ context.Context, _, docID, _ string) (json.Ra
 func (d *DocsClient) HasScope(_ context.Context, userID, scope string) (bool, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.scopes[userID] == scope, nil
+	return slices.Contains(strings.Fields(d.scopes[userID]), scope), nil
 }
 
 func (d *DocsClient) CopyFile(context.Context, string, string, string) (string, error) {

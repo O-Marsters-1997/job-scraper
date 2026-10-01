@@ -72,15 +72,16 @@ func (q *Queries) ClaimDraft(ctx context.Context) (ClaimDraftRow, error) {
 
 const completeDraft = `-- name: CompleteDraft :execrows
 UPDATE tailored_cvs SET status = 'ready', lease_until = NULL, last_error = '',
-    edit_set = $1::jsonb, raw_output = $2::text,
-    model = $3::text, prompt_version = $4::text,
-    job_fingerprint = $5::text, cost = $6::real,
-    draft_doc_id = $7::text, findings = $8::jsonb
-WHERE id = $9::uuid AND attempts = $10::int AND status = 'running'
+    edit_set = $1::jsonb, base_content = $2::jsonb, raw_output = $3::text,
+    model = $4::text, prompt_version = $5::text,
+    job_fingerprint = $6::text, cost = $7::real,
+    draft_doc_id = $8::text, findings = $9::jsonb
+WHERE id = $10::uuid AND attempts = $11::int AND status = 'running'
 `
 
 type CompleteDraftParams struct {
 	EditSet        []byte
+	BaseContent    []byte
 	RawOutput      string
 	Model          string
 	PromptVersion  string
@@ -95,6 +96,7 @@ type CompleteDraftParams struct {
 func (q *Queries) CompleteDraft(ctx context.Context, arg CompleteDraftParams) (int64, error) {
 	result, err := q.db.Exec(ctx, completeDraft,
 		arg.EditSet,
+		arg.BaseContent,
 		arg.RawOutput,
 		arg.Model,
 		arg.PromptVersion,
@@ -195,7 +197,7 @@ func (q *Queries) FailKeep(ctx context.Context, arg FailKeepParams) (int64, erro
 }
 
 const getDraft = `-- name: GetDraft :one
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE id = $1 AND user_id = $2
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE id = $1 AND user_id = $2
 `
 
 type GetDraftParams struct {
@@ -214,6 +216,7 @@ func (q *Queries) GetDraft(ctx context.Context, arg GetDraftParams) (TailoredCv,
 		&i.BaseTabID,
 		&i.AchievementIds,
 		&i.EditSet,
+		&i.BaseContent,
 		&i.Findings,
 		&i.RawOutput,
 		&i.Model,
@@ -238,7 +241,7 @@ const insertDraft = `-- name: InsertDraft :one
 INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids)
 SELECT $1::uuid, j.id, $2::text, $3::text, $4::uuid[]
 FROM jobs j WHERE j.id = $5::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
 `
 
 type InsertDraftParams struct {
@@ -266,6 +269,7 @@ func (q *Queries) InsertDraft(ctx context.Context, arg InsertDraftParams) (Tailo
 		&i.BaseTabID,
 		&i.AchievementIds,
 		&i.EditSet,
+		&i.BaseContent,
 		&i.Findings,
 		&i.RawOutput,
 		&i.Model,
@@ -287,7 +291,7 @@ func (q *Queries) InsertDraft(ctx context.Context, arg InsertDraftParams) (Tailo
 }
 
 const listJobDrafts = `-- name: ListJobDrafts :many
-SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
+SELECT id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at FROM tailored_cvs WHERE job_id = $1 AND user_id = $2 ORDER BY created_at DESC, id
 `
 
 type ListJobDraftsParams struct {
@@ -312,6 +316,7 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 			&i.BaseTabID,
 			&i.AchievementIds,
 			&i.EditSet,
+			&i.BaseContent,
 			&i.Findings,
 			&i.RawOutput,
 			&i.Model,
@@ -342,7 +347,7 @@ func (q *Queries) ListJobDrafts(ctx context.Context, arg ListJobDraftsParams) ([
 const queueKeep = `-- name: QueueKeep :one
 UPDATE tailored_cvs SET status = 'keeping', attempts = 0, due_at = NOW(), lease_until = NULL, last_error = ''
 WHERE id = $1 AND user_id = $2 AND status = 'ready' AND outcome IS NULL
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
 `
 
 type QueueKeepParams struct {
@@ -361,6 +366,7 @@ func (q *Queries) QueueKeep(ctx context.Context, arg QueueKeepParams) (TailoredC
 		&i.BaseTabID,
 		&i.AchievementIds,
 		&i.EditSet,
+		&i.BaseContent,
 		&i.Findings,
 		&i.RawOutput,
 		&i.Model,
@@ -426,7 +432,7 @@ const setDraftOutcome = `-- name: SetDraftOutcome :one
 UPDATE tailored_cvs SET outcome = $1::text,
     draft_doc_id = CASE WHEN $1::text = 'discarded' THEN NULL ELSE draft_doc_id END
 WHERE id = $2::uuid AND user_id = $3::uuid
-RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
+RETURNING id, user_id, job_id, base_doc_id, base_tab_id, achievement_ids, edit_set, base_content, findings, raw_output, model, prompt_version, job_fingerprint, cost, draft_doc_id, status, outcome, kept_as, keep_note, attempts, due_at, lease_until, last_error, created_at
 `
 
 type SetDraftOutcomeParams struct {
@@ -446,6 +452,7 @@ func (q *Queries) SetDraftOutcome(ctx context.Context, arg SetDraftOutcomeParams
 		&i.BaseTabID,
 		&i.AchievementIds,
 		&i.EditSet,
+		&i.BaseContent,
 		&i.Findings,
 		&i.RawOutput,
 		&i.Model,

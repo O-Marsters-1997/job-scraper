@@ -11,9 +11,10 @@ type GoogleToken struct {
 }
 
 type GoogleStatus struct {
-	Connected bool   `json:"connected"`
-	Email     string `json:"email,omitempty"`
-	CanWrite  bool   `json:"canWrite"`
+	Connected   bool   `json:"connected"`
+	Email       string `json:"email,omitempty"`
+	CanWrite    bool   `json:"canWrite"`
+	CanEditDocs bool   `json:"canEditDocs"`
 }
 
 type UpsertGoogleTokenInput struct {

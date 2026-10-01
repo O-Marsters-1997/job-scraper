@@ -2,8 +2,13 @@ import { createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { reviewFindings, skillGaps } from "@/lib/tailoring";
-import type { DraftFinding, DraftProvenance } from "@/types/tailoring";
+import type {
+	DraftContent,
+	DraftFinding,
+	DraftProvenance,
+} from "@/types/tailoring";
 import { useSaveDraftSlots } from "../../hooks/useTailoring";
+import { ChangesDiff } from "./ChangesDiff";
 
 const SEVERITY_LABEL: Record<DraftFinding["severity"], string> = {
 	block: "Blocking",
@@ -139,6 +144,7 @@ export function ProvenanceDiff(props: {
 	draftId: string;
 	provenance: DraftProvenance | null;
 	findings: DraftFinding[];
+	changes: { base: DraftContent; content: DraftContent } | null;
 	editable: boolean;
 	onSaved: () => void;
 }) {
@@ -208,37 +214,55 @@ export function ProvenanceDiff(props: {
 				</Show>
 			</section>
 
-			<section aria-labelledby="draft-bullets">
-				<h2 id="draft-bullets" class="mb-1 text-sm font-semibold">
-					Rewritten bullets
-				</h2>
-				<p class="mb-3 text-xs text-faint">
-					Highlighted words do not appear in the Achievements the bullet cites.
-					Check each one against your own experience.
-				</p>
-				<For each={props.provenance?.positions ?? []}>
-					{(p) => (
-						<div class="mb-4">
-							<h3 class="mb-2 text-xs font-medium text-muted">
-								{p.title}, {p.employer}
-							</h3>
-							<ul class="space-y-2">
-								<For each={p.bullets}>
-									{(b) => (
-										<Bullet
-											bullet={b}
-											editable={props.editable}
-											pending={save.isPending && savingSlot() === b.slotId}
-											failed={save.isError && savingSlot() === b.slotId}
-											onSave={saveBullet}
-										/>
-									)}
-								</For>
-							</ul>
-						</div>
-					)}
-				</For>
-			</section>
+			<Show
+				when={props.changes}
+				fallback={
+					<section aria-labelledby="draft-bullets">
+						<h2 id="draft-bullets" class="mb-1 text-sm font-semibold">
+							Rewritten bullets
+						</h2>
+						<p class="mb-3 text-xs text-faint">
+							Highlighted words do not appear in the Achievements the bullet
+							cites. Check each one against your own experience.
+						</p>
+						<For each={props.provenance?.positions ?? []}>
+							{(p) => (
+								<div class="mb-4">
+									<h3 class="mb-2 text-xs font-medium text-muted">
+										{p.title}, {p.employer}
+									</h3>
+									<ul class="space-y-2">
+										<For each={p.bullets}>
+											{(b) => (
+												<Bullet
+													bullet={b}
+													editable={props.editable}
+													pending={save.isPending && savingSlot() === b.slotId}
+													failed={save.isError && savingSlot() === b.slotId}
+													onSave={saveBullet}
+												/>
+											)}
+										</For>
+									</ul>
+								</div>
+							)}
+						</For>
+					</section>
+				}
+			>
+				{(c) => (
+					<section aria-labelledby="draft-changes">
+						<h2 id="draft-changes" class="mb-3 text-sm font-semibold">
+							Changes from your base CV
+						</h2>
+						<ChangesDiff
+							base={c().base}
+							content={c().content}
+							provenance={props.provenance}
+						/>
+					</section>
+				)}
+			</Show>
 		</div>
 	);
 }

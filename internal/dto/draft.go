@@ -49,10 +49,32 @@ type Draft struct {
 	Provenance  *DraftProvenance `json:"provenance"`
 	DraftDocID  string           `json:"-"`
 	EditSet     json.RawMessage  `json:"-"`
+	Content     *DraftContent    `json:"content"`
+	Base        *DraftContent    `json:"base"`
+	BaseContent json.RawMessage  `json:"-"`
 
 	BaseDocID      string   `json:"-"`
 	BaseTabID      string   `json:"-"`
 	AchievementIDs []string `json:"-"`
+}
+
+// DraftContent is the editable part of a Draft: the Profile, Skills and each
+// Position's bullets in CV order. Base holds the base CV Tab's content as it
+// was at generation, with no AchievementIDs.
+type DraftContent struct {
+	Profile   *string         `json:"profile"`
+	Skills    []string        `json:"skills"`
+	Positions []DraftPosition `json:"positions"`
+}
+
+type DraftPosition struct {
+	PositionID string        `json:"positionId"`
+	Bullets    []DraftBullet `json:"bullets"`
+}
+
+type DraftBullet struct {
+	Text           string   `json:"text"`
+	AchievementIDs []string `json:"achievementIds"`
 }
 
 const (
@@ -106,6 +128,7 @@ type DraftClaim struct {
 // DraftResult is what a finished generation records on its Draft.
 type DraftResult struct {
 	EditSet        json.RawMessage
+	BaseContent    json.RawMessage
 	RawOutput      string
 	Model          string
 	PromptVersion  string
