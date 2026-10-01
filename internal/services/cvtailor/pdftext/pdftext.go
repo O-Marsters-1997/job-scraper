@@ -43,6 +43,8 @@ func Lines(data []byte) (lines []string, err error) {
 
 const glyphGap = 0.5
 
+const sameLine = 2.0
+
 // Run is one string of text drawn at a single position, size and font.
 type Run struct {
 	Page int
@@ -80,12 +82,16 @@ func Runs(data []byte) (runs []Run, err error) {
 			prevEnd = t.X + t.W
 		}
 		page := runs[start:]
-		sort.SliceStable(page, func(i, j int) bool {
-			if page[i].Y != page[j].Y {
-				return page[i].Y > page[j].Y
+		sort.SliceStable(page, func(i, j int) bool { return page[i].Y > page[j].Y })
+		for lo := 0; lo < len(page); {
+			hi := lo + 1
+			for hi < len(page) && page[lo].Y-page[hi].Y <= sameLine {
+				hi++
 			}
-			return page[i].X < page[j].X
-		})
+			row := page[lo:hi]
+			sort.SliceStable(row, func(i, j int) bool { return row[i].X < row[j].X })
+			lo = hi
+		}
 	}
 	return runs, nil
 }
@@ -96,21 +102,26 @@ func Runs(data []byte) (runs []Run, err error) {
 func Match(a, b []Run, tol float64) (ok bool, diff string) {
 	line, lastY, lastPage := 0, 0.0, 0
 	for i := 0; i < max(len(a), len(b)); i++ {
-		switch {
-		case i >= len(a):
-			return false, fmt.Sprintf("page %d, %q: extra text only in the second PDF", b[i].Page, b[i].Text)
-		case i >= len(b):
-			return false, fmt.Sprintf("page %d, %q: missing from the second PDF", a[i].Page, a[i].Text)
+		var x, y Run
+		ref := b[min(i, len(b)-1)]
+		if i < len(a) {
+			x, ref = a[i], a[i]
 		}
-		x, y := a[i], b[i]
-		if x.Page != lastPage {
+		if i < len(b) {
+			y = b[i]
+		}
+		if ref.Page != lastPage {
 			line = 1
-		} else if math.Abs(x.Y-lastY) > tol {
+		} else if math.Abs(ref.Y-lastY) > tol {
 			line++
 		}
-		lastPage, lastY = x.Page, x.Y
-		where := fmt.Sprintf("page %d, line %d, %q", x.Page, line, x.Text)
+		lastPage, lastY = ref.Page, ref.Y
+		where := fmt.Sprintf("page %d, line %d, %q", ref.Page, line, ref.Text)
 		switch {
+		case i >= len(a):
+			return false, where + ": extra text only in the second PDF"
+		case i >= len(b):
+			return false, where + ": missing from the second PDF"
 		case x.Page != y.Page || x.Text != y.Text:
 			return false, fmt.Sprintf("%s: text reflowed, second PDF has %q on page %d", where, y.Text, y.Page)
 		case x.Font != y.Font:

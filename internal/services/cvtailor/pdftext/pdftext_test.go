@@ -121,4 +121,13 @@ func TestMatch(t *testing.T) {
 			t.Error("Match(tol 0.1) = true, want false")
 		}
 	})
+
+	t.Run("missing and extra runs name the line", func(t *testing.T) {
+		if _, diff := pdftext.Match(base, base[:2], 0.5); !strings.HasPrefix(diff, `page 1, line 3, "Cut deploy time by half": missing`) {
+			t.Errorf("Match(missing) diff = %q", diff)
+		}
+		if _, diff := pdftext.Match(base[:2], base, 0.5); !strings.HasPrefix(diff, `page 1, line 3, "Cut deploy time by half": extra`) {
+			t.Errorf("Match(extra) diff = %q", diff)
+		}
+	})
 }
