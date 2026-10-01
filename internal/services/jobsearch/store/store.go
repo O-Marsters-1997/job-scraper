@@ -617,6 +617,14 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 	return id.String(), nil
 }
 
+func (s *Store) GetBoardCompanyID(ctx context.Context, source, token string) (string, error) {
+	id, err := s.queries.GetBoardCompanyID(ctx, sqlc.GetBoardCompanyIDParams{Source: source, BoardToken: token})
+	if err != nil {
+		return "", data.QueryErr("GetBoardCompanyID", err)
+	}
+	return id.String(), nil
+}
+
 func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
 	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
 	if err != nil {

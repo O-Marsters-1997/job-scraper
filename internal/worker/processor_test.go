@@ -172,7 +172,13 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 }
 
 func (f fixture) discoverProcessor(discover worker.DiscoverFunc, scoring worker.IncludeFilterConfigs) *worker.Processor {
-	return worker.NewProcessor(worker.Deps{JS: jobsearch.Build(jobsearchtest.NewDeps(f.store)), Scoring: scoring, Discover: discover})
+	exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+	return worker.NewProcessor(worker.Deps{
+		JS:       jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+		Boards:   scraper.NewBoardPoller(f.store, oneBoardJob{}, exporter),
+		Scoring:  scoring,
+		Discover: discover,
+	})
 }
 
 func (f fixture) target(t *testing.T, source string) dto.SourceTarget {
@@ -481,11 +487,63 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a tracked board's fetched jobs are ingested in the same task", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		if err := f.discoverProcessor(discover, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if got := f.ingest.requests.Load(); got != 1 {
+			t.Errorf("ingest requests = %d, want 1", got)
+		}
+		due, err := f.store.ListDueBoards(ctx)
+		if err != nil || len(due) != 1 {
+			t.Fatalf("ListDueBoards() = %+v, %v, want the completed board released", due, err)
+		}
+	})
+
+	t.Run("a task company attaches the board without upserting by name", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "harvest-slug", Name: "Harvest Slug"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		withCompany := task
+		withCompany.CompanyID = company.ID
+		if err := f.discoverProcessor(discover, configsStub{match}).Process(ctx, withCompany); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+		if err != nil || len(tracked) != 1 || tracked[0].ID != company.ID {
+			t.Fatalf("ListTrackedCompaniesForUser(match) = %+v, %v, want only the task's company %s", tracked, err, company.ID)
+		}
+	})
+
+	t.Run("rediscovery reuses the company already owning the board", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "harvest-slug", Name: "Harvest Slug"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.discoverProcessor(discover, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+		if err != nil || len(tracked) != 1 || tracked[0].ID != company.ID {
+			t.Fatalf("ListTrackedCompaniesForUser(match) = %+v, %v, want the owning company %s", tracked, err, company.ID)
+		}
+	})
+
 	t.Run("a board matching nobody stays verified and untracked", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		p := f.discoverProcessor(discover, configsStub{miss})
 		if err := p.Process(ctx, task); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Errorf("ingest requests = %d, want 0", got)
 		}
 		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "miss")
 		if err != nil || len(tracked) != 0 {

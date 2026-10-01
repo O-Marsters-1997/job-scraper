@@ -110,3 +110,20 @@ func TestBoardPollPassesNextPollHintOnSuccessOnly(t *testing.T) {
 		t.Errorf("failed poll state = %q, hint = %v, want failed and no hint", failed.state, failed.snapshot.NextPollIn)
 	}
 }
+
+func TestPollPrefetchedCompletesTheFullListWithHint(t *testing.T) {
+	hint := 72 * time.Hour
+	store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", CompanySlug: "company-slug"}}
+	ingester := &boardIngesterStub{}
+	poller := scraper.NewBoardPoller(store, boardFetcherStub{err: errPartial}, ingester)
+	jobs := []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}, {Title: "Designer", URL: "https://example.com/2"}}
+	if err := poller.PollPrefetched(t.Context(), "board", jobs, hint); err != nil {
+		t.Fatal(err)
+	}
+	if len(ingester.jobs) != 2 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].BoardID != "board" {
+		t.Errorf("ingested jobs = %+v, want both stamped with the board's identity", ingester.jobs)
+	}
+	if store.state != "completed" || !store.snapshot.Complete || store.snapshot.NextPollIn != hint {
+		t.Errorf("state = %q, snapshot = %+v, want a complete snapshot with hint %v", store.state, store.snapshot, hint)
+	}
+}

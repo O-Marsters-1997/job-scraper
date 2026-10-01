@@ -48,7 +48,10 @@ function InsightsPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<PageHeading title="Insights" subtitle="Visualise your open jobs" />
+			<PageHeading
+				title="Insights"
+				subtitle="Visualise your scored, open jobs from the last 90 days"
+			/>
 
 			<Show when={chartsReady()}>
 				<div class="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
