@@ -543,6 +543,24 @@ func (f *FakeStore) ListPolledCompanySlugs(_ context.Context, slugs []string) ([
 	return out, nil
 }
 
+func (f *FakeStore) ListVerifiedCompanySlugs(_ context.Context, slugs []string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	verified := map[string]bool{}
+	for _, b := range f.boards {
+		if b.Status == dto.BoardVerified {
+			verified[b.CompanyID] = true
+		}
+	}
+	var out []string
+	for _, c := range f.companies {
+		if verified[c.ID] && slices.Contains(slugs, c.Slug) {
+			out = append(out, c.Slug)
+		}
+	}
+	return out, nil
+}
+
 func (f *FakeStore) GetLastScraped(_ context.Context, source string) (time.Time, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

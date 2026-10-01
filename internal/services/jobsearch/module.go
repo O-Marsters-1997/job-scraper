@@ -64,6 +64,7 @@ type Store interface {
 	FailBoard(ctx context.Context, poll dto.BoardPoll) error
 	ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error)
 	ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
+	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	GetBoardCompanyID(ctx context.Context, source, token string) (string, error)
 	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)

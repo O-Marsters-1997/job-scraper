@@ -219,6 +219,33 @@ func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyB
 	return items, nil
 }
 
+const listVerifiedCompanySlugs = `-- name: ListVerifiedCompanySlugs :many
+SELECT DISTINCT c.slug
+FROM companies c
+JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
+WHERE c.slug = ANY($1::text[])
+`
+
+func (q *Queries) ListVerifiedCompanySlugs(ctx context.Context, dollar_1 []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, listVerifiedCompanySlugs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertCandidateBoard = `-- name: UpsertCandidateBoard :one
 INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)
