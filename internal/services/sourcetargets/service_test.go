@@ -100,6 +100,29 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("linkedin recency", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			filters map[string]string
+			want    string
+		}{
+			{"defaults to past week", nil, "r604800"},
+			{"keeps an explicit value", map[string]string{"recency": "r86400"}, "r86400"},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, _, _ := newService(t)
+				target, err := svc.Create(t.Context(), userID, dto.CreateSourceTargetInput{Source: "linkedin", Value: "engineer", Filters: tt.filters})
+				if err != nil {
+					t.Fatalf("Create() err = %v", err)
+				}
+				if got := target.Filters["recency"]; got != tt.want {
+					t.Errorf("Create().Filters[recency] = %q, want %q", got, tt.want)
+				}
+			})
+		}
+	})
+
 	t.Run("keeps a recoverable run after a queue failure", func(t *testing.T) {
 		svc := serviceOver(jobsearchtest.NewFakeStore(), queuetest.PublishFails(errors.New("queue unavailable")))
 		target, err := svc.Create(t.Context(), userID, wisTarget)

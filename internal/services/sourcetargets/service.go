@@ -83,6 +83,9 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	if filters == nil {
 		filters = map[string]string{}
 	}
+	if in.Source == "linkedin" && filters["recency"] == "" {
+		filters["recency"] = "r604800"
+	}
 
 	enabled := true
 	if in.Enabled != nil {
