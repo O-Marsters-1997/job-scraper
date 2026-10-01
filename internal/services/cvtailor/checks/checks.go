@@ -44,10 +44,17 @@ type Draft struct {
 	BasePages  int
 	// DraftPages of zero means the page count was not measured.
 	DraftPages int
+	// Contact nil means the Doc was not parsed.
+	Contact *ContactInput
+}
+
+type ContactInput struct {
+	InBody         bool
+	InHeaderFooter bool
 }
 
 func Run(d Draft) []Finding {
-	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d))
+	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d))
 }
 
 func Blocking(findings []Finding) []Finding {

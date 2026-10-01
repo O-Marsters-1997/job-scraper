@@ -285,3 +285,25 @@ func TestRunCollectsEveryCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestContact(t *testing.T) {
+	tests := []struct {
+		name  string
+		input *checks.ContactInput
+		want  []want
+	}{
+		{name: "not measured emits nothing"},
+		{name: "in body emits nothing", input: &checks.ContactInput{InBody: true}},
+		{name: "in body and header emits nothing", input: &checks.ContactInput{InBody: true, InHeaderFooter: true}},
+		{name: "only in header or footer is info", input: &checks.ContactInput{InHeaderFooter: true}, want: []want{{Severity: checks.Info}}},
+		{name: "nowhere is info", input: &checks.ContactInput{}, want: []want{{Severity: checks.Info}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := findings(checks.Contact(checks.Draft{Contact: tt.input}), "contact")
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("Contact() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
