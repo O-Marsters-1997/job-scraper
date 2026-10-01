@@ -16,7 +16,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
-const defaultJobPageLimit = 50
+const (
+	defaultJobPageLimit = 50
+	defaultSinceDays    = 90
+	maxSinceDays        = 36500
+)
 
 type jobCursor struct {
 	Time time.Time `json:"time"`
@@ -45,7 +49,16 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		return dto.JobPage{}, apperr.Invalid("invalid availability")
 	}
 
-	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID, ScoredOnly: q.Scored == "1"}
+	sinceDays := int32(defaultSinceDays)
+	if q.SinceDays != "" {
+		d, err := strconv.ParseInt(q.SinceDays, 10, 32)
+		if err != nil || d < 0 || d > maxSinceDays {
+			return dto.JobPage{}, apperr.Invalid("since_days must be between 0 and 36500")
+		}
+		sinceDays = int32(d)
+	}
+
+	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID, ScoredOnly: q.Scored == "1", SinceDays: sinceDays}
 	if q.Cursor != "" {
 		decoded, err := decodeJobCursor(q.Cursor)
 		if err != nil {

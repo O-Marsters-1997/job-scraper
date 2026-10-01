@@ -15,6 +15,7 @@ WHERE (sqlc.narg(cursor_time)::timestamptz IS NULL OR (j.scraped_at, j.id) < (sq
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (sqlc.arg(availability)::text = 'all' OR (sqlc.arg(availability)::text = 'open' AND j.closed_at IS NULL) OR (sqlc.arg(availability)::text = 'closed' AND j.closed_at IS NOT NULL))
   AND (NOT sqlc.arg(scored_only)::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = sqlc.arg(user_id)::uuid))
+  AND (sqlc.arg(since_days)::int = 0 OR j.updated_at >= now() - make_interval(days => sqlc.arg(since_days)::int))
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
 ORDER BY j.scraped_at DESC, j.id DESC
 LIMIT sqlc.arg(page_limit)::int;

@@ -45,7 +45,11 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		salMax: coerceNum(raw.salMax),
 		company:
 			typeof raw.company === "string" && raw.company ? raw.company : undefined,
-		scored: raw.scored === true || raw.scored === "1" || raw.scored === 1,
+		scored:
+			raw.scored === undefined ||
+			raw.scored === true ||
+			raw.scored === "1" ||
+			raw.scored === 1,
 	};
 }
 

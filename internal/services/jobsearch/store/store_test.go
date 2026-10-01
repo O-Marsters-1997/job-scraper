@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -220,6 +221,46 @@ func TestPage(t *testing.T) {
 		}
 		if diff := cmp.Diff([]string{open}, jobIDs(all)); diff != "" {
 			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("since days windows on updated_at and composes with the cursor", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		now := time.Now()
+		stale := insertJob(t, pool, company, 1, now.AddDate(0, 0, -91), false)
+		recent := []string{
+			insertJob(t, pool, company, 2, now.AddDate(0, 0, -3), false),
+			insertJob(t, pool, company, 3, now.AddDate(0, 0, -2), false),
+			insertJob(t, pool, company, 4, now.AddDate(0, 0, -1), false),
+		}
+
+		all, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page(no window) err = %v", err)
+		}
+		if got := len(all.Items); got != 4 {
+			t.Errorf("Page(no window) = %d jobs, want 4 including %s", got, stale)
+		}
+
+		var seen []string
+		options := dto.JobPageOptions{Limit: 2, Availability: "open", SinceDays: 90}
+		for {
+			page, err := st.Page(ctx, userID, options)
+			if err != nil {
+				t.Fatalf("Page(since 90) err = %v", err)
+			}
+			seen = append(seen, jobIDs(page.Items)...)
+			if len(page.Items) < int(options.Limit) {
+				break
+			}
+			last := page.Items[len(page.Items)-1]
+			options.CursorTime, options.CursorID = last.ScrapedAt, last.ID
+		}
+		slices.Sort(seen)
+		if diff := cmp.Diff(recent, seen); diff != "" {
+			t.Errorf("paged ids within 90 days (-want +got):\n%s", diff)
 		}
 	})
 

@@ -9,6 +9,7 @@ type JobPageOptions struct {
 	Availability string
 	CompanyID    string
 	ScoredOnly   bool
+	SinceDays    int32
 }
 
 type JobPage struct {
