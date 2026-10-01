@@ -1,6 +1,7 @@
 package jobsearch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -59,7 +60,7 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 			continue
 		}
 		s.upsertCompany(ctx, saved)
-		s.discoverBoard(ctx, saved, parsedURL.Hostname(), discovered)
+		s.discoverBoard(ctx, job, discovered)
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		slog.DebugContext(ctx, "ingest jobs", slog.Int(logger.KeyCount, len(jobs)), slog.Any("by_status", countByStatus(results)))
@@ -67,9 +68,14 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 	return results, nil
 }
 
-func (s *Service) discoverBoard(ctx context.Context, j dto.Job, host string, seen map[string]bool) {
-	source, token, ok := detect.ResolveBoard(j.URL)
+func (s *Service) discoverBoard(ctx context.Context, j dto.Job, seen map[string]bool) {
+	target := cmp.Or(j.ApplyURL, j.URL)
+	source, token, ok := detect.ResolveBoard(target)
 	if !ok {
+		var host string
+		if u, err := url.Parse(target); err == nil {
+			host = u.Hostname()
+		}
 		if !strings.Contains(host, j.Source) {
 			slog.InfoContext(ctx, "ingest: unresolved external host",
 				slog.String("host", host), slog.String(logger.KeySource, j.Source))

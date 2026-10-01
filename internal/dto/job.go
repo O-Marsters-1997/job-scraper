@@ -7,6 +7,7 @@ type Job struct {
 	Title              string
 	Location           string
 	URL                string
+	ApplyURL           string
 	CompanySlug        string
 	CompanyID          string
 	BoardID            string

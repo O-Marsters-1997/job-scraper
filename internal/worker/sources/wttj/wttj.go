@@ -293,6 +293,9 @@ type jobPosting struct {
 	HiringOrg        struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
+	Identifier struct {
+		Value string `json:"value"`
+	} `json:"identifier"`
 	Locations []struct {
 		Address struct {
 			Locality string `json:"addressLocality"`
@@ -322,6 +325,7 @@ func parseJobPosting(body []byte, id string) (dto.Job, error) {
 		Title:             strings.TrimSpace(p.Title),
 		Location:          strings.Join(places, "; "),
 		URL:               baseURL + "/jobs/" + id,
+		ApplyURL:          p.Identifier.Value,
 		CompanySlug:       slug.Make(p.HiringOrg.Name),
 		ProviderPostingID: id,
 		Source:            name,
