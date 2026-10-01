@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
@@ -22,11 +23,18 @@ type Board struct {
 	Source, Token string
 }
 
+// Company is a company a harvester found, with the candidate Board it would be polled through.
+type Company struct {
+	Slug, Name string
+	Board      Board
+}
+
 // Harvest is what one harvester run found. Skipped counts candidates that
 // resolved to no board or an unsupported source.
 type Harvest struct {
-	Boards  []Board
-	Skipped int
+	Boards    []Board
+	Companies []Company
+	Skipped   int
 }
 
 // Get fetches url with client and returns the body of a 200 response. A non-empty
@@ -70,17 +78,26 @@ type Publisher interface {
 	Publish(ctx context.Context, task queue.Task) error
 }
 
+// Catalog is the Company and Board store a harvested Company is written to.
+type Catalog interface {
+	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
+	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
+	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
+}
+
 const gateKeyPrefix = "harvest:"
 
-// Runner publishes a board_discover task per harvested board.
+// Runner publishes a board_discover task per harvested board, and records each
+// harvested Company with a board_verify task for its candidate Board.
 type Runner struct {
 	harvesters []Harvester
 	publisher  Publisher
 	gate       ScrapeGate
+	catalog    Catalog
 }
 
-func NewRunner(hs []Harvester, publisher Publisher, gate ScrapeGate) *Runner {
-	return &Runner{harvesters: hs, publisher: publisher, gate: gate}
+func NewRunner(hs []Harvester, publisher Publisher, gate ScrapeGate, catalog Catalog) *Runner {
+	return &Runner{harvesters: hs, publisher: publisher, gate: gate, catalog: catalog}
 }
 
 // RunOnce harvests every due harvester and joins their failures.
@@ -122,11 +139,52 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 		}
 		published++
 	}
+	recorded := r.recordCompanies(ctx, log, found.Companies)
 	log.InfoContext(ctx, "harvest: completed",
-		slog.Int(logger.KeyCount, len(found.Boards)), slog.Int("published", published), slog.Int("skipped", found.Skipped))
+		slog.Int(logger.KeyCount, len(found.Boards)+len(found.Companies)), slog.Int("published", published),
+		slog.Int("recorded", recorded), slog.Int("skipped", found.Skipped))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
 	}
 	return nil
+}
+
+func (r *Runner) recordCompanies(ctx context.Context, log *slog.Logger, companies []Company) int {
+	recorded := 0
+	for _, c := range companies {
+		if err := r.recordCompany(ctx, c); err != nil {
+			log.WarnContext(ctx, "harvest: could not record company", slog.String(logger.KeyCompanySlug, c.Slug), slog.Any(logger.KeyErr, err))
+			continue
+		}
+		recorded++
+	}
+	return recorded
+}
+
+func (r *Runner) recordCompany(ctx context.Context, c Company) error {
+	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name})
+	if err != nil {
+		return err
+	}
+	boards, err := r.catalog.ListCompanyBoards(ctx, company.ID)
+	if err != nil {
+		return err
+	}
+	for _, b := range boards {
+		if b.Status == dto.BoardVerified && b.Source != c.Board.Source {
+			return nil
+		}
+	}
+	board, err := r.catalog.UpsertCandidateBoard(ctx, company.ID, c.Board.Source, c.Board.Token)
+	if err != nil {
+		return err
+	}
+	if board.Status != dto.BoardCandidate {
+		return nil
+	}
+	return r.publisher.Publish(ctx, queue.Task{
+		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardVerifyTask,
+		CompanyID: company.ID, BoardToken: board.BoardToken,
+	})
 }

@@ -119,12 +119,29 @@ func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
 }
 
 func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
-	if err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken); err != nil {
+	verified, err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken)
+	if err != nil {
 		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	_, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
-	return err
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method); err != nil {
+		return err
+	}
+	return p.nameCompany(ctx, task.CompanyID, verified.CompanyName)
+}
+
+func (p *Processor) nameCompany(ctx context.Context, companyID, name string) error {
+	if name == "" {
+		return nil
+	}
+	company, err := p.js.Boards().GetCompany(ctx, companyID)
+	if err != nil {
+		return err
+	}
+	if company.Name != slug.Humanize(company.Slug) {
+		return nil
+	}
+	return p.js.Boards().RenameCompany(ctx, companyID, name)
 }
 
 func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
