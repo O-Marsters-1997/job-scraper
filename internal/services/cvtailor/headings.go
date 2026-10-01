@@ -29,7 +29,9 @@ func (s *Service) headings(ctx context.Context, userID string, q dto.CVTabQuery,
 	}
 	savedByText := make(map[string]*string, len(saved))
 	for _, m := range saved {
-		savedByText[m.HeadingText] = m.PositionID
+		if m.PositionID != nil {
+			savedByText[m.HeadingText] = m.PositionID
+		}
 	}
 
 	out := []dto.CVHeading{}
