@@ -18,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
@@ -98,16 +99,24 @@ func (m *Module) process(ctx context.Context, claim dto.DraftClaim) error {
 }
 
 func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
+	if claim.Attempts > dto.MaxDraftAttempts {
+		return m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
+	}
 	name := claim.CompanyName + " \u2014 " + claim.JobTitle
-	if err := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name); err != nil {
-		cause := fmt.Errorf("rename kept doc: %w", err)
-		_, terminal := apperr.StatusFor(cause)
-		if ferr := m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: cause.Error(), Terminal: terminal}); ferr != nil {
-			return errors.Join(cause, ferr)
-		}
+	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
+	if cause != nil {
+		cause = fmt.Errorf("rename kept doc: %w", cause)
+	} else if cause = m.store.CompleteKeep(ctx, claim); cause == nil {
+		return nil
+	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
 		return cause
 	}
-	return m.store.CompleteKeep(ctx, claim)
+	_, terminal := apperr.StatusFor(cause)
+	failure := dto.DraftFailure{Reason: cause.Error(), Terminal: terminal || errors.Is(cause, store.ErrKeptDraftExists)}
+	if err := m.store.FailKeep(ctx, claim, failure); err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
 }
 
 func (m *Module) deleteCopy(userID, docID string) bool {

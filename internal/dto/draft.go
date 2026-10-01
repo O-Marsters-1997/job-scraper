@@ -33,9 +33,9 @@ type DraftFinding struct {
 }
 
 // Draft is a Tailored CV's generation state. Status is pending, running,
-// keeping, ready or failed; DraftDocURL is set while the Doc exists. Outcome is nil
-// until the User keeps or discards a ready Draft. Provenance is set by
-// GetDraft only.
+// keeping, ready or failed; DraftDocURL is set while the Doc exists. Outcome
+// is nil until the User keeps or discards a ready Draft. Provenance is set
+// by GetDraft only.
 type Draft struct {
 	ID          string           `json:"id"`
 	JobID       string           `json:"jobId"`

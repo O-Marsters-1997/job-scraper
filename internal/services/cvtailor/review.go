@@ -57,7 +57,7 @@ func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if draft.Status == statusKeeping || outcome(draft) == dto.OutcomeKept {
+	if holdsKeep(draft) {
 		return withDocURL(draft), nil
 	}
 	if draft.Status != statusReady {
@@ -71,7 +71,7 @@ func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery
 		return dto.Draft{}, err
 	}
 	for _, other := range siblings {
-		if other.ID != draft.ID && (other.Status == statusKeeping || outcome(other) == dto.OutcomeKept) {
+		if other.ID != draft.ID && holdsKeep(other) {
 			return dto.Draft{}, apperr.Conflict("this job already has a kept draft")
 		}
 	}
@@ -80,6 +80,11 @@ func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery
 		return dto.Draft{}, err
 	}
 	return withDocURL(draft), nil
+}
+
+// holdsKeep reports whether the Draft is being kept or already kept.
+func holdsKeep(d dto.Draft) bool {
+	return d.Status == statusKeeping || outcome(d) == dto.OutcomeKept
 }
 
 // DiscardDraft deletes the Draft's Drive file and marks it discarded; the
@@ -110,7 +115,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if err != nil {
 		return nil, err
 	}
-	if draft.Status != statusReady || draft.DraftDocID == "" {
+	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
 	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")
