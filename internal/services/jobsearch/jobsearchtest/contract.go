@@ -314,7 +314,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 
 	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
 		st, userID := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		cases := []struct {
 			slug, method string
 			verify       bool
