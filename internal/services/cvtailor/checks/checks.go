@@ -46,6 +46,8 @@ type Draft struct {
 	DraftPages int
 	// Contact nil means the Doc was not parsed.
 	Contact *ContactInput
+	// Parse of nil means the PDF text was not extracted.
+	Parse *ParseInput
 }
 
 type ContactInput struct {
@@ -54,7 +56,7 @@ type ContactInput struct {
 }
 
 func Run(d Draft) []Finding {
-	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d))
+	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d), Parse(d))
 }
 
 func Blocking(findings []Finding) []Finding {

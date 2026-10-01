@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -397,6 +398,38 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 		if diff := cmp.Diff([]string{"info"}, got); diff != "" {
 			t.Errorf("contact findings mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("flags a layout the PDF text extractor reads badly", func(t *testing.T) {
+		tests := []struct {
+			name, file string
+			want       []string
+		}{
+			{"single column draft has no parse findings", "draft-single-column.pdf", nil},
+			{"heading sharing a row is flagged", "draft-table.pdf", []string{"parse"}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				pdf, err := os.ReadFile("testdata/" + tt.file)
+				if err != nil {
+					t.Fatal(err)
+				}
+				e, id := newQueuedDraft(t)
+				editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.25))
+
+				e.run(t, tick{drive: cvtailortest.ExportsPDF(e.drive, string(pdf)), editor: editor})
+
+				var got []string
+				for _, c := range findingChecks(e.draft(t, id).Findings, "info") {
+					if c == "parse" {
+						got = append(got, c)
+					}
+				}
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("parse findings mismatch (-want +got):\n%s", diff)
+				}
+			})
 		}
 	})
 }
