@@ -100,6 +100,22 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("urls differing only by tracking parameters are one job", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := context.Background()
+		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/9?gh_jid=7&utm_source=x&team=a"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		second, status, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/9?ref=y&gh_jid=7&team=a&gh_src=z"})
+		if err != nil || status != "unchanged" || second.ID != first.ID {
+			t.Fatalf("SaveCanonical(...) = %+v, %q, %v, want unchanged with ID %s", second, status, err, first.ID)
+		}
+		if want := "https://example.com/jobs/9?gh_jid=7&team=a"; second.URL != want {
+			t.Fatalf("URL = %q, want %q", second.URL, want)
+		}
+	})
+
 	t.Run("new urls filters out known ones", func(t *testing.T) {
 		st, _ := newStore(t)
 		ctx := context.Background()

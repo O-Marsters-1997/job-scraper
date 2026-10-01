@@ -147,7 +147,23 @@ func normalizeJobURL(raw string) (string, error) {
 	}
 	u.Host = strings.ToLower(u.Host)
 	u.Fragment = ""
+	u.RawQuery = StripTrackingParams(u.RawQuery)
 	return u.String(), nil
+}
+
+// StripTrackingParams drops utm_*, gh_src, lever-source, lever-origin and ref
+// from a raw query string, keeping the remaining parameters in order.
+func StripTrackingParams(rawQuery string) string {
+	var kept []string
+	for _, pair := range strings.Split(rawQuery, "&") {
+		key, _, _ := strings.Cut(pair, "=")
+		switch {
+		case pair == "", strings.HasPrefix(key, "utm_"), key == "gh_src", key == "lever-source", key == "lever-origin", key == "ref":
+		default:
+			kept = append(kept, pair)
+		}
+	}
+	return strings.Join(kept, "&")
 }
 
 func jobFingerprint(job dto.Job) string {
