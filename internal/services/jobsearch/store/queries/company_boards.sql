@@ -11,6 +11,9 @@ RETURNING *;
 -- name: GetVerifiedBoardID :one
 SELECT id FROM company_boards WHERE source = $1 AND board_token = $2 AND status = 'verified';
 
+-- name: GetBoardCompanyID :one
+SELECT company_id FROM company_boards WHERE source = $1 AND board_token = $2;
+
 -- name: ListBoardChecks :many
 SELECT b.id, s.last_completed_at FROM company_boards b
 LEFT JOIN board_poll_state s ON s.board_id = b.id

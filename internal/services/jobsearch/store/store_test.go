@@ -475,6 +475,21 @@ func TestCompanyBoards(t *testing.T) {
 			t.Errorf("ListCompanyBoards() = %+v, want two boards", boards)
 		}
 	})
+
+	t.Run("a board resolves to its owning company", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+			t.Fatalf("UpsertCandidateBoard() err = %v", err)
+		}
+		if got, err := st.GetBoardCompanyID(ctx, "greenhouse", "acme"); err != nil || got != company.ID {
+			t.Errorf("GetBoardCompanyID(known) = %q, %v, want %q", got, err, company.ID)
+		}
+		if _, err := st.GetBoardCompanyID(ctx, "greenhouse", "nobody"); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetBoardCompanyID(unknown) err = %v, want ErrNotFound", err)
+		}
+	})
 }
 
 func TestDeleteExpiredCandidates(t *testing.T) {
