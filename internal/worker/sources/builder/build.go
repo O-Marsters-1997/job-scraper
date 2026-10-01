@@ -4,6 +4,8 @@
 package builder
 
 import (
+	"time"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/ashby"
@@ -17,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remotive"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
 // BuildSource builds the Source for one enabled target. It returns false when
@@ -38,6 +41,8 @@ func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
 		return recruitee.New(t.Value), true
 	case "personio":
 		return personio.New(t.Value), true
+	case "wttj":
+		return wttj.New(t.Value, time.Now), true
 	case "indeed":
 		return indeed.New(t.Value), true
 	case "remoteok":
