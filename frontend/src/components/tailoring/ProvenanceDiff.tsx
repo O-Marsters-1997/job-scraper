@@ -143,7 +143,9 @@ export function ProvenanceDiff(props: {
 	onSaved: () => void;
 }) {
 	const save = useSaveDraftSlots();
-	const saveBullet = (slotId: string, text: string, done: () => void) =>
+	const [savingSlot, setSavingSlot] = createSignal<string>();
+	const saveBullet = (slotId: string, text: string, done: () => void) => {
+		setSavingSlot(slotId);
 		save.mutate(
 			{ id: props.draftId, slots: [{ slotId, text }] },
 			{
@@ -153,6 +155,7 @@ export function ProvenanceDiff(props: {
 				},
 			},
 		);
+	};
 	const flagged = () => reviewFindings(props.findings);
 	const gaps = () => skillGaps(props.findings);
 	return (
@@ -225,8 +228,8 @@ export function ProvenanceDiff(props: {
 										<Bullet
 											bullet={b}
 											editable={props.editable}
-											pending={save.isPending}
-											failed={save.isError}
+											pending={save.isPending && savingSlot() === b.slotId}
+											failed={save.isError && savingSlot() === b.slotId}
 											onSave={saveBullet}
 										/>
 									)}
