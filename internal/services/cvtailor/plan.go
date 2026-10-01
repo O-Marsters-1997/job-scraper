@@ -142,6 +142,36 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 	return nil
 }
 
+func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
+	blocks := checks.Blocking(checks.Run(pl.draft(edits, 0, 0)))
+	blocked := make(map[string]bool, len(blocks))
+	var names []string
+	for _, f := range blocks {
+		names = append(names, f.Check)
+		if f.Check == checks.CheckSkills {
+			edits.Skills = nil
+			continue
+		}
+		blocked[f.SlotID] = true
+	}
+	if pl.structure.Profile != nil && blocked[pl.structure.Profile.ID] {
+		edits.Profile = nil
+	}
+	byID := make(map[string]planned, len(pl.positions))
+	for _, p := range pl.positions {
+		byID[p.ID] = p
+	}
+	for _, pe := range edits.Positions {
+		p := byID[pe.PositionID]
+		for i := range pe.Bullets {
+			if blocked[p.slotIDs[i]] {
+				pe.Bullets[i] = cvedit.Bullet{Keep: true, Text: p.SlotTexts[i]}
+			}
+		}
+	}
+	return edits, names
+}
+
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
 	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
 	if pl.structure.Skills != nil {

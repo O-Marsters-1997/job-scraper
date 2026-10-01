@@ -13,8 +13,7 @@ Rules:
   Order the bullets by relevance to the job, most relevant first.
 - Do not change headings, employers, titles, dates or contact details. You
   only write bullet text.
-- Keep each bullet no longer than 1.15 times the length of the slot text it
-  replaces.
+- Keep each bullet no longer than the slot text it replaces.
 - Do not use these words: leverage, spearheaded, synergy, passionate,
   dynamic, results-driven, utilize, responsible for.
 - Use the job description to decide what to emphasise. Do not copy its wording

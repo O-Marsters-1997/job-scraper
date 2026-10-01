@@ -12,7 +12,7 @@ const (
 	checkLength = "slot_length"
 	checkPages  = "page_count"
 
-	maxLengthPercent = 115
+	maxLengthPercent = 100
 )
 
 var bannedRe = regexp.MustCompile(`(?i)\b(leverag(?:e|es|ed|ing)|spearhead(?:s|ed|ing)?|synerg(?:y|ies)|passionate|results-driven|cutting-edge|utili[sz](?:e|es|ed|ing)|delv(?:e|es|ed|ing)|seamless(?:ly)?|game-chang(?:er|ing)|best-in-class|rockstar|ninja|go-getter)\b`)
@@ -20,6 +20,9 @@ var bannedRe = regexp.MustCompile(`(?i)\b(leverag(?:e|es|ed|ing)|spearhead(?:s|e
 func BannedWords(d Draft) []Finding {
 	var out []Finding
 	for _, s := range allSlots(d) {
+		if s.Text == s.BaseText {
+			continue
+		}
 		seen := map[string]bool{}
 		for _, w := range bannedRe.FindAllString(s.Text, -1) {
 			key := strings.ToLower(w)
@@ -36,7 +39,7 @@ func BannedWords(d Draft) []Finding {
 	return out
 }
 
-// SlotLength blocks any slot longer than 1.15 times its original text.
+// SlotLength blocks any slot longer than its original text.
 func SlotLength(d Draft) []Finding {
 	var out []Finding
 	for _, s := range allSlots(d) {
