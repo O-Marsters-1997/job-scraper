@@ -1,15 +1,19 @@
 package worker
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -166,6 +170,10 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
 	}
+	pivoted, err := p.pivotToATS(ctx, task.Source, companyID, found.Jobs)
+	if err != nil || pivoted {
+		return err
+	}
 	configs, err := p.scoring.IncludeFilterConfigs(ctx)
 	if err != nil {
 		return err
@@ -191,6 +199,51 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
+}
+
+func (p *Processor) pivotToATS(ctx context.Context, source, companyID string, jobs []dto.Job) (bool, error) {
+	pivoted := false
+	seen := map[string]bool{}
+	for _, job := range jobs {
+		target := cmp.Or(job.ApplyURL, job.URL)
+		atsSource, token, ok := detect.ResolveBoard(target)
+		if !ok {
+			logUnresolvedHost(ctx, source, target)
+			continue
+		}
+		if atsSource == source {
+			continue
+		}
+		pivoted = true
+		key := atsSource + "/" + token
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		_, err := p.js.Boards().GetVerifiedBoardID(ctx, atsSource, token)
+		switch {
+		case err == nil:
+			continue
+		case !errors.Is(err, data.ErrNotFound):
+			return false, err
+		}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID}
+		if err := p.broker.Publish(ctx, task); err != nil {
+			return false, err
+		}
+	}
+	return pivoted, nil
+}
+
+func logUnresolvedHost(ctx context.Context, source, target string) {
+	var host string
+	if u, err := url.Parse(target); err == nil {
+		host = u.Hostname()
+	}
+	if strings.Contains(host, source) {
+		return
+	}
+	slog.InfoContext(ctx, "ingest: unresolved external host", slog.String("host", host), slog.String(logger.KeySource, source))
 }
 
 func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, name string) (string, error) {
