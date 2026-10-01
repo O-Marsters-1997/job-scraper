@@ -89,6 +89,7 @@ type Bullet struct {
 	Keep           bool     `json:"keep,omitempty"`
 	AchievementIDs []string `json:"achievement_ids"`
 	Text           string   `json:"text"`
+	SlotID         string   `json:"slotId,omitempty"`
 }
 
 type PositionEdit struct {
