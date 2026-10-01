@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -32,6 +33,55 @@ func NewDeps(st Store) jobsearch.Deps {
 
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
+
+	t.Run("sitemap sync reports new and gone jobs, and a reappearing job is new only once", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := context.Background()
+		sync := func(ids []string) dto.SitemapDiff {
+			t.Helper()
+			diff, err := st.SyncWTTJSitemap(ctx, ids, []string{"acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return diff
+		}
+		first := sync([]string{"a", "b", "a"})
+		if diff := cmp.Diff([]string{"a", "b"}, sortedCopy(first.New)); diff != "" || len(first.Gone) != 0 {
+			t.Errorf("first sync New (-want +got):\n%s\nGone = %v", diff, first.Gone)
+		}
+		if diff := cmp.Diff([]string{"acme"}, first.NewCompanies); diff != "" {
+			t.Errorf("first sync NewCompanies (-want +got):\n%s", diff)
+		}
+		second := sync([]string{"a", "b"})
+		if len(second.New) != 0 || len(second.Gone) != 0 || len(second.NewCompanies) != 0 {
+			t.Errorf("repeat sync = %+v, want empty diff", second)
+		}
+		if diff := cmp.Diff([]string{"a"}, sync([]string{"b"}).Gone); diff != "" {
+			t.Errorf("Gone (-want +got):\n%s", diff)
+		}
+		back := sync([]string{"a", "b"})
+		if len(back.New) != 0 || len(back.Gone) != 0 {
+			t.Errorf("reappearing job sync = %+v, want empty diff", back)
+		}
+		if gone := sync([]string{"a"}).Gone; len(gone) != 1 || gone[0] != "b" {
+			t.Errorf("Gone after reappearance = %v, want [b]", gone)
+		}
+	})
+
+	t.Run("sitemap sync under half the live jobs marks nothing gone", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := context.Background()
+		if _, err := st.SyncWTTJSitemap(ctx, []string{"a", "b", "c", "d"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		diff, err := st.SyncWTTJSitemap(ctx, []string{"a"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(diff.Gone) != 0 || !diff.GoneSkipped {
+			t.Errorf("truncated sync = %+v, want no Gone and GoneSkipped", diff)
+		}
+	})
 
 	t.Run("fetch cache round trips a redirect and forgets by url", func(t *testing.T) {
 		st, _ := newStore(t)
@@ -423,3 +473,9 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 }
 
 const missingID = "00000000-0000-0000-0000-000000000000"
+
+func sortedCopy(in []string) []string {
+	out := slices.Clone(in)
+	slices.Sort(out)
+	return out
+}

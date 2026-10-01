@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -1064,5 +1065,39 @@ func TestDeleteExpiredFetches(t *testing.T) {
 	}
 	if _, ok, _ := st.LookupFetch(ctx, fresh.URL); !ok {
 		t.Error("LookupFetch(fresh) miss, want hit")
+	}
+}
+
+func TestSyncWTTJSitemap(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := context.Background()
+	if _, err := st.SyncWTTJSitemap(ctx, []string{"a"}, []string{"acme"}); err != nil {
+		t.Fatal(err)
+	}
+	type stamps struct{ JobFirstSeen, CompanyNextFetch time.Time }
+	read := func() (got stamps) {
+		t.Helper()
+		err := pool.QueryRow(ctx, `SELECT j.first_seen_at, c.next_fetch_at FROM wttj_jobs j, wttj_companies c`).
+			Scan(&got.JobFirstSeen, &got.CompanyNextFetch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	before := read()
+	if _, err := pool.Exec(ctx, `UPDATE wttj_companies SET next_fetch_at = next_fetch_at + INTERVAL '5 days'`); err != nil {
+		t.Fatal(err)
+	}
+	before.CompanyNextFetch = before.CompanyNextFetch.Add(120 * time.Hour)
+
+	diff, err := st.SyncWTTJSitemap(ctx, []string{"a"}, []string{"acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diff.New) != 0 || len(diff.NewCompanies) != 0 {
+		t.Errorf("repeat SyncWTTJSitemap = %+v, want empty New and NewCompanies", diff)
+	}
+	if d := cmp.Diff(before, read(), cmpopts.EquateApproxTime(time.Millisecond)); d != "" {
+		t.Errorf("timestamps changed on repeat sync (-want +got):\n%s", d)
 	}
 }

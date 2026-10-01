@@ -43,6 +43,8 @@ type FakeStore struct {
 
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
+	wttjJobs    map[string]bool
+	wttjCompany map[string]bool
 
 	sourceTargets map[string]dto.SourceTarget
 	targetByKey   map[string]string
@@ -751,3 +753,46 @@ func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
 }
 
 func (f *FakeStore) DeleteExpiredFetches(context.Context) error { return nil }
+
+func (f *FakeStore) SyncWTTJSitemap(_ context.Context, jobIDs, companyNames []string) (dto.SitemapDiff, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.wttjJobs == nil {
+		f.wttjJobs, f.wttjCompany = map[string]bool{}, map[string]bool{}
+	}
+	live := 0
+	for _, isLive := range f.wttjJobs {
+		if isLive {
+			live++
+		}
+	}
+	var diff dto.SitemapDiff
+	seen := map[string]bool{}
+	for _, id := range jobIDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if _, known := f.wttjJobs[id]; !known {
+			diff.New = append(diff.New, id)
+		}
+		f.wttjJobs[id] = true
+	}
+	for _, name := range companyNames {
+		if !f.wttjCompany[name] {
+			f.wttjCompany[name] = true
+			diff.NewCompanies = append(diff.NewCompanies, name)
+		}
+	}
+	if len(seen)*2 < live {
+		diff.GoneSkipped = true
+		return diff, nil
+	}
+	for id, isLive := range f.wttjJobs {
+		if isLive && !seen[id] {
+			f.wttjJobs[id] = false
+			diff.Gone = append(diff.Gone, id)
+		}
+	}
+	return diff, nil
+}

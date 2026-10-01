@@ -396,3 +396,22 @@ type UserAiCredential struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
+
+type WttjCompany struct {
+	UrlSafeName string
+	CompanyID   pgtype.UUID
+	Uk          bool
+	LiveJobs    int32
+	FetchedAt   pgtype.Timestamptz
+	NextFetchAt pgtype.Timestamptz
+	FirstSeenAt pgtype.Timestamptz
+}
+
+type WttjJob struct {
+	JobID       string
+	WttjCompany pgtype.Text
+	FirstSeenAt pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
+	GoneAt      pgtype.Timestamptz
+	State       string
+}

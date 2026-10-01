@@ -62,6 +62,7 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	SyncWTTJSitemap(ctx context.Context, jobIDs, companyNames []string) (dto.SitemapDiff, error)
 }
 
 type Deps struct {

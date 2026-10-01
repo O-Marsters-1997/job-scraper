@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -17,10 +18,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -97,6 +100,8 @@ func main() {
 	// go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
 	// go schedule.Every(ctx, "crawl", 6*time.Hour, crawl.New(js.Boards()).RunOnce)
 	// slog.InfoContext(ctx, "RabbitMQ source workers starting")
+
+	go schedule.Every(ctx, "wttj sitemap", 24*time.Hour, wttj.NewTracker(js).RunOnce)
 
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
