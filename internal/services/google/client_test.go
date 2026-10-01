@@ -308,6 +308,20 @@ func TestBatchUpdate(t *testing.T) {
 	}
 }
 
+func TestRenameFile(t *testing.T) {
+	ctx, client, got := recordingClient(t, http.StatusOK, `{}`)
+
+	if err := client.RenameFile(ctx, "u1", "doc", "Acme \u2014 Engineer"); err != nil {
+		t.Fatalf("RenameFile: %v", err)
+	}
+	if got.method != http.MethodPatch || !strings.HasSuffix(got.target, "/files/doc") {
+		t.Errorf("sent %s %s", got.method, got.target)
+	}
+	if want := `{"name":"Acme — Engineer"}`; got.body != want {
+		t.Errorf("body = %s, want %s", got.body, want)
+	}
+}
+
 func TestDeleteFile(t *testing.T) {
 	t.Run("sends delete for the file", func(t *testing.T) {
 		ctx, client, got := recordingClient(t, http.StatusNoContent, "")

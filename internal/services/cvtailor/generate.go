@@ -24,6 +24,7 @@ import (
 
 const (
 	statusReady    = "ready"
+	statusKeeping  = "keeping"
 	cleanupTimeout = 30 * time.Second
 
 	shortenBullets = 3
@@ -46,6 +47,7 @@ type Drive interface {
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
+	RenameFile(ctx context.Context, userID, fileID, name string) error
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
@@ -71,6 +73,9 @@ func (m *Module) RunTick(ctx context.Context) error {
 }
 
 func (m *Module) process(ctx context.Context, claim dto.DraftClaim) error {
+	if claim.Keeping {
+		return m.keep(ctx, claim)
+	}
 	if claim.Attempts > dto.MaxDraftAttempts {
 		return m.store.FailDraft(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
 	}
@@ -90,6 +95,19 @@ func (m *Module) process(ctx context.Context, claim dto.DraftClaim) error {
 	}
 	res.DraftDocID = docID
 	return m.store.CompleteDraft(ctx, claim, res)
+}
+
+func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
+	name := claim.CompanyName + " \u2014 " + claim.JobTitle
+	if err := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name); err != nil {
+		cause := fmt.Errorf("rename kept doc: %w", err)
+		_, terminal := apperr.StatusFor(cause)
+		if ferr := m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: cause.Error(), Terminal: terminal}); ferr != nil {
+			return errors.Join(cause, ferr)
+		}
+		return cause
+	}
+	return m.store.CompleteKeep(ctx, claim)
 }
 
 func (m *Module) deleteCopy(userID, docID string) bool {

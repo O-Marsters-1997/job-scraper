@@ -158,3 +158,5 @@ func (d *DocsClient) BatchUpdate(context.Context, string, string, []json.RawMess
 }
 
 func (d *DocsClient) DeleteFile(context.Context, string, string) error { return nil }
+
+func (d *DocsClient) RenameFile(context.Context, string, string, string) error { return nil }

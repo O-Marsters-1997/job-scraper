@@ -32,6 +32,7 @@ type googleClient interface {
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
+	RenameFile(ctx context.Context, userID, fileID, name string) error
 }
 
 // Deps are Build's collaborators; New builds the real ones and calls Build.

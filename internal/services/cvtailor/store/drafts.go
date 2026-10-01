@@ -31,7 +31,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 		outcome = &t.Outcome.String
 	}
 	return dto.Draft{
-		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, LastError: t.LastError,
+		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet,
 	}, nil
 }
@@ -145,6 +145,7 @@ func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 		DocID: row.BaseDocID, TabID: row.BaseTabID, AchievementIDs: ids,
 		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID,
 		JobDescription: row.JobDescription, JobFingerprint: row.JobFingerprint,
+		Keeping: row.Keeping, JobTitle: row.JobTitle, CompanyName: row.CompanyName,
 	}, nil
 }
 
@@ -198,6 +199,67 @@ func (s *Store) FailDraft(ctx context.Context, claim dto.DraftClaim, failure dto
 	})
 	if err != nil {
 		return fmt.Errorf("store.FailDraft: %w", err)
+	}
+	if n == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}
+
+// QueueKeep moves a ready, undecided Draft to keeping; ErrDraftNotFound when
+// it is missing, another User's or no longer ready and undecided.
+func (s *Store) QueueKeep(ctx context.Context, userID, id string) (dto.Draft, error) {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	did, err := parseID(id, ErrDraftNotFound)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	row, err := s.queries.QueueKeep(ctx, sqlc.QueueKeepParams{ID: did, UserID: uid})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dto.Draft{}, ErrDraftNotFound
+	}
+	if err != nil {
+		return dto.Draft{}, fmt.Errorf("store.QueueKeep: %w", err)
+	}
+	return toDraft(row)
+}
+
+// CompleteKeep marks the claimed Draft kept as a Doc. A stale claim is
+// ErrDraftNotFound; a second kept Draft of the Job is ErrKeptDraftExists.
+func (s *Store) CompleteKeep(ctx context.Context, claim dto.DraftClaim) error {
+	id, err := parseID(claim.ID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.CompleteKeep(ctx, sqlc.CompleteKeepParams{ID: id, Attempts: int32(claim.Attempts)})
+	if data.IsUniqueViolation(err) {
+		return ErrKeptDraftExists
+	}
+	if err != nil {
+		return fmt.Errorf("store.CompleteKeep: %w", err)
+	}
+	if n == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}
+
+// FailKeep releases the claimed Draft for a backed-off retry, or returns it
+// to ready, unkept, when terminal or out of attempts.
+func (s *Store) FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error {
+	id, err := parseID(claim.ID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.FailKeep(ctx, sqlc.FailKeepParams{
+		ID: id, Attempts: int32(claim.Attempts), Terminal: failure.Terminal, MaxAttempts: dto.MaxDraftAttempts,
+		LastError: failure.Reason,
+	})
+	if err != nil {
+		return fmt.Errorf("store.FailKeep: %w", err)
 	}
 	if n == 0 {
 		return ErrDraftNotFound

@@ -1,6 +1,8 @@
 package cvtailor_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -70,24 +72,45 @@ func TestGetDraftProvenance(t *testing.T) {
 }
 
 func TestKeepDraft(t *testing.T) {
+	t.Run("queues at once and the next tick renames the Doc and marks it kept", func(t *testing.T) {
+		e := newDraftEnv(t)
+		ctx := t.Context()
+		id := e.readyDrafts(t, 1)[0]
+
+		queued, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id})
+		if err != nil || queued.Status != "keeping" || queued.Outcome != nil {
+			t.Fatalf("KeepDraft() = %+v, %v, want keeping and undecided", queued, err)
+		}
+		e.run(t, tick{})
+
+		got := e.draft(t, id)
+		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "doc" {
+			t.Errorf("GetDraft() = %+v, want ready, kept as a doc", got)
+		}
+		want := map[string]string{"copy-1": "Acme \u2014 Platform Engineer"}
+		if diff := cmp.Diff(want, e.drive.Renamed); diff != "" {
+			t.Errorf("renamed Docs (-want +got):\n%s", diff)
+		}
+		if _, err := e.svc.KeepDraft(ctx, userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
+		}
+	})
+
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
 		ctx := t.Context()
 		ids := e.readyDrafts(t, 2)
 		first, second := dto.DraftQuery{ID: ids[0]}, dto.DraftQuery{ID: ids[1]}
-
-		kept, err := e.svc.KeepDraft(ctx, userID, first)
-		if err != nil || kept.Outcome == nil || *kept.Outcome != dto.OutcomeKept || kept.DraftDocURL == nil {
-			t.Fatalf("KeepDraft() = %+v, %v, want kept with its Doc URL", kept, err)
-		}
 		if _, err := e.svc.KeepDraft(ctx, userID, first); err != nil {
-			t.Errorf("KeepDraft() again err = %v, want it idempotent", err)
+			t.Fatal(err)
 		}
-		_, err = e.svc.KeepDraft(ctx, userID, second)
+
+		_, err := e.svc.KeepDraft(ctx, userID, second)
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(second)", err, apperr.KindConflict)
 		}
 
+		e.run(t, tick{})
 		if _, err := e.svc.DiscardDraft(ctx, userID, first); err != nil {
 			t.Fatal(err)
 		}
@@ -103,6 +126,39 @@ func TestKeepDraft(t *testing.T) {
 
 		if !apperr.IsKind(err, apperr.KindConflict) {
 			t.Fatalf("%s err = %v, want kind %v", "KeepDraft(pending)", err, apperr.KindConflict)
+		}
+	})
+
+	t.Run("a Draft being kept cannot be discarded", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := e.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: id})
+
+		if !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("%s err = %v, want kind %v", "DiscardDraft(keeping)", err, apperr.KindConflict)
+		}
+	})
+
+	t.Run("repeated Drive failures leave the Draft ready, unkept, with the error", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		if _, err := e.svc.KeepDraft(t.Context(), userID, dto.DraftQuery{ID: id}); err != nil {
+			t.Fatal(err)
+		}
+		drive := &cvtailortest.Drive{RenameErr: errors.New("drive down")}
+
+		for range dto.MaxDraftAttempts {
+			e.store.MakeDraftDue(id)
+			e.run(t, tick{drive: drive})
+		}
+
+		got := e.draft(t, id)
+		if got.Status != "ready" || got.Outcome != nil || !strings.Contains(got.LastError, "drive down") {
+			t.Errorf("GetDraft() = %+v, want ready, unkept, last error set", got)
 		}
 	})
 }

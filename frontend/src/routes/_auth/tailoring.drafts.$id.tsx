@@ -44,8 +44,9 @@ function DraftReview(props: { draft: Draft }) {
 	const discard = useDiscardDraft();
 	const jobDrafts = useJobDrafts(() => props.draft.jobId);
 	const [blockedByKept, setBlockedByKept] = createSignal(false);
-	const hasDoc = () =>
-		props.draft.status === "ready" && props.draft.outcome !== "discarded";
+	const isKeeping = () => props.draft.status === "keeping";
+	const isReviewable = () => props.draft.status === "ready" || isKeeping();
+	const hasDoc = () => isReviewable() && props.draft.outcome !== "discarded";
 	const pdfURL = usePdfUrl(
 		() => (hasDoc() ? props.draft.id : undefined),
 		fetchDraftPdf,
@@ -55,15 +56,9 @@ function DraftReview(props: { draft: Draft }) {
 		return kept?.id === props.draft.id ? undefined : kept;
 	};
 
-	const openDoc = (url: string | null) => {
-		if (url) window.open(url, "_blank", "noopener,noreferrer");
-	};
 	const doKeep = () =>
 		keep.mutate(props.draft.id, {
-			onSuccess: (kept) => {
-				setBlockedByKept(false);
-				openDoc(kept.draftDocUrl);
-			},
+			onSuccess: () => setBlockedByKept(false),
 			onError: (err) => setBlockedByKept(err instanceof KeptDraftExistsError),
 		});
 	const replaceKept = () => {
@@ -93,6 +88,11 @@ function DraftReview(props: { draft: Draft }) {
 					</p>
 				</div>
 
+				<Show when={isKeeping()}>
+					<span class="text-sm text-muted" aria-live="polite">
+						Keeping…
+					</span>
+				</Show>
 				<Show when={props.draft.status === "ready"}>
 					<div class="flex flex-wrap items-center gap-2">
 						<Show when={props.draft.outcome === "kept"}>
@@ -170,6 +170,17 @@ function DraftReview(props: { draft: Draft }) {
 					Could not keep the draft. Try again.
 				</p>
 			</Show>
+			<Show
+				when={
+					props.draft.status === "ready" &&
+					props.draft.outcome === null &&
+					props.draft.lastError
+				}
+			>
+				<p role="alert" class="mb-4 text-sm text-destructive-strong">
+					Keeping the draft failed: {props.draft.lastError}
+				</p>
+			</Show>
 			<Show when={discard.isError}>
 				<p role="alert" class="mb-4 text-sm text-destructive-strong">
 					Could not discard the draft. Try again.
@@ -177,7 +188,7 @@ function DraftReview(props: { draft: Draft }) {
 			</Show>
 
 			<Show
-				when={props.draft.status === "ready"}
+				when={isReviewable()}
 				fallback={
 					<Show
 						when={props.draft.status === "failed"}

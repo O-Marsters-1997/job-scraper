@@ -173,4 +173,77 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Error("SetDraftOutcome(other user) err = nil, want not found")
 		}
 	})
+
+	ready := func(t *testing.T, f Fixture) dto.Draft {
+		t.Helper()
+		d := create(t, f)
+		c := claim(t, f)
+		if err := f.Store.CompleteDraft(ctx, c, dto.DraftResult{EditSet: json.RawMessage(`{}`), DraftDocID: "doc-copy"}); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+
+	t.Run("keeping a ready Draft queues it and the claim completes the keep", func(t *testing.T) {
+		f := newStore(t)
+		d := ready(t, f)
+		queued, err := f.Store.QueueKeep(ctx, f.UserID, d.ID)
+		if err != nil || queued.Status != "keeping" || queued.Outcome != nil {
+			t.Fatalf("QueueKeep() = %+v, %v, want keeping and undecided", queued, err)
+		}
+		if _, err := f.Store.QueueKeep(ctx, f.Other, d.ID); err == nil {
+			t.Error("QueueKeep(other user) err = nil, want not found")
+		}
+		c := claim(t, f)
+		if !c.Keeping || c.ID != d.ID || c.DraftDocID != "doc-copy" || c.Attempts != 1 {
+			t.Fatalf("ClaimDraft() = %+v, want the keeping Draft on attempt 1", c)
+		}
+		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("ClaimDraft() while leased err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.CompleteKeep(ctx, c); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if got.Status != "ready" || got.Outcome == nil || *got.Outcome != dto.OutcomeKept || got.KeptAs != "doc" {
+			t.Errorf("GetDraft() = %+v, want ready, kept as a doc", got)
+		}
+		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err == nil {
+			t.Error("QueueKeep(kept) err = nil, want not found")
+		}
+	})
+
+	t.Run("a failed keep backs off instead of being re-claimed at once", func(t *testing.T) {
+		f := newStore(t)
+		d := ready(t, f)
+		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		c := claim(t, f)
+		if err := f.Store.FailKeep(ctx, c, dto.DraftFailure{Reason: "flaky"}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if got.Status != "keeping" || got.LastError != "flaky" {
+			t.Errorf("GetDraft() = %+v, want keeping with the error while backing off", got)
+		}
+		if _, err := f.Store.ClaimDraft(ctx); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("ClaimDraft() err = %v, want ErrNotFound while backing off", err)
+		}
+	})
+
+	t.Run("a terminal keep failure returns the Draft to ready unkept with the error", func(t *testing.T) {
+		f := newStore(t)
+		d := ready(t, f)
+		if _, err := f.Store.QueueKeep(ctx, f.UserID, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.Store.FailKeep(ctx, claim(t, f), dto.DraftFailure{Reason: "gone", Terminal: true}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if got.Status != "ready" || got.Outcome != nil || got.LastError != "gone" {
+			t.Errorf("GetDraft() = %+v, want ready, unkept, last error set", got)
+		}
+	})
 }

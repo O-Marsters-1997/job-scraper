@@ -50,23 +50,32 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 	return drafts, nil
 }
 
-// KeepDraft marks a ready Draft kept. A Job holds one kept Draft, so keeping
-// a second is a conflict.
+// KeepDraft queues a ready Draft to be kept as a named Doc on the next tick.
+// A Job holds one kept Draft, so keeping a second is a conflict.
 func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
+	if draft.Status == statusKeeping || outcome(draft) == dto.OutcomeKept {
+		return withDocURL(draft), nil
+	}
 	if draft.Status != statusReady {
 		return dto.Draft{}, apperr.Conflict("only a ready draft can be kept")
 	}
-	switch outcome(draft) {
-	case dto.OutcomeDiscarded:
+	if outcome(draft) == dto.OutcomeDiscarded {
 		return dto.Draft{}, apperr.Conflict("this draft was discarded")
-	case dto.OutcomeKept:
-		return withDocURL(draft), nil
 	}
-	draft, err = s.store.SetDraftOutcome(ctx, userID, q.ID, dto.OutcomeKept)
+	siblings, err := s.store.ListJobDrafts(ctx, userID, draft.JobID)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	for _, other := range siblings {
+		if other.ID != draft.ID && (other.Status == statusKeeping || outcome(other) == dto.OutcomeKept) {
+			return dto.Draft{}, apperr.Conflict("this job already has a kept draft")
+		}
+	}
+	draft, err = s.store.QueueKeep(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
