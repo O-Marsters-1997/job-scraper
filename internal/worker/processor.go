@@ -40,7 +40,7 @@ type IncludeFilterConfigs interface {
 	IncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
 }
 
-type DiscoverFunc func(ctx context.Context, source, token string) (name string, jobs []dto.Job, err error)
+type DiscoverFunc func(ctx context.Context, source, token string) (scraper.Discovery, error)
 
 type Deps struct {
 	JS           *jobsearch.Module
@@ -147,19 +147,23 @@ func (p *Processor) nameCompany(ctx context.Context, companyID, name string) err
 }
 
 func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
-	name, jobs, err := p.discover(ctx, task.Source, task.BoardToken)
+	found, err := p.discover(ctx, task.Source, task.BoardToken)
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	companyID, err := p.discoveryCompanyID(ctx, task, name)
+	companyID, err := p.discoveryCompanyID(ctx, task, found.Name)
 	if err != nil {
 		return err
 	}
 	if _, err := p.js.Boards().UpsertCandidateBoard(ctx, companyID, task.Source, task.BoardToken); err != nil {
 		return err
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, "discovered"); err != nil && !errors.Is(err, data.ErrNotFound) {
+	method := "discovered"
+	if !found.Recheck {
+		method = scraper.MethodWTTJOrigin
+	}
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
 	}
 	configs, err := p.scoring.IncludeFilterConfigs(ctx)
@@ -168,7 +172,7 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	}
 	tracked := false
 	for _, cfg := range configs {
-		if !anyPasses(jobs, cfg) {
+		if !anyPasses(found.Jobs, cfg) {
 			continue
 		}
 		if _, err := p.js.TrackDiscoveredCompany(ctx, cfg.UserID, companyID); err != nil {
@@ -186,7 +190,7 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return err
 	}
-	return p.boards.PollPrefetched(ctx, boardID, jobs, 0)
+	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
 }
 
 func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, name string) (string, error) {

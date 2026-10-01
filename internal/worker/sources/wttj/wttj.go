@@ -138,16 +138,40 @@ func (s *Source) get(ctx context.Context, url string) ([]byte, error) {
 }
 
 func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
+	res, _, err := s.poll(ctx)
+	return res, err
+}
+
+// DiscoverTimeout fits a company page plus its eligible job pages at the 2s request gap.
+const DiscoverTimeout = 3 * time.Minute
+
+// Discovery is what a first look at a company yields: its real name, its Jobs, and
+// whether the company is in the UK.
+type Discovery struct {
+	Name string
+	Jobs []dto.Job
+	UK   bool
+}
+
+func (s *Source) Discover(ctx context.Context) (Discovery, error) {
+	res, company, err := s.poll(ctx)
+	if err != nil {
+		return Discovery{}, err
+	}
+	return Discovery{Name: company.Name, Jobs: res.Jobs, UK: company.inUK()}, nil
+}
+
+func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error) {
 	body, err := s.get(ctx, baseURL+"/companies/"+url.PathEscape(s.token))
 	if err != nil {
-		return sources.BoardResult{}, err
+		return sources.BoardResult{}, company{}, err
 	}
 	company, err := parseCompanyState(body)
 	if err != nil {
-		return sources.BoardResult{}, err
+		return sources.BoardResult{}, company, err
 	}
 	if !company.inUK() {
-		return sources.BoardResult{NextPollIn: otherPollIn, Profile: company.Profile}, nil
+		return sources.BoardResult{NextPollIn: otherPollIn, Profile: company.Profile}, company, nil
 	}
 
 	known := postings.get(s.token)
@@ -161,7 +185,7 @@ func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
 		if !ok {
 			job, err = s.fetchPosting(ctx, cj.ID)
 			if err != nil {
-				return sources.BoardResult{}, err
+				return sources.BoardResult{}, company, err
 			}
 			if job != nil && s.now().Sub(job.UpdatedAt) > maxAge {
 				job = nil
@@ -173,7 +197,7 @@ func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
 		}
 	}
 	postings.put(s.token, seen)
-	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: company.Profile}, nil
+	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: company.Profile}, company, nil
 }
 
 // fetchPosting returns nil for a job whose page is gone or unparseable.
