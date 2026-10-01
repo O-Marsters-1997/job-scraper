@@ -129,7 +129,7 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 			return fmt.Errorf("%w: %d bullets for %d slots", errInvalidEdit, len(pe.Bullets), len(p.slotIDs))
 		}
 		for _, b := range pe.Bullets {
-			if strings.TrimSpace(b.Text) == "" || len(b.AchievementIDs) == 0 {
+			if strings.TrimSpace(b.Text) == "" || (!b.Keep && len(b.AchievementIDs) == 0) {
 				return fmt.Errorf("%w: bullet with no text or citation", errInvalidEdit)
 			}
 			for _, id := range b.AchievementIDs {
@@ -140,6 +140,36 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 		}
 	}
 	return nil
+}
+
+func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
+	blocks := checks.Blocking(checks.Run(pl.draft(edits, 0, 0)))
+	blocked := make(map[string]bool, len(blocks))
+	var names []string
+	for _, f := range blocks {
+		names = append(names, f.Check)
+		if f.Check == checks.CheckSkills {
+			edits.Skills = nil
+			continue
+		}
+		blocked[f.SlotID] = true
+	}
+	if pl.structure.Profile != nil && blocked[pl.structure.Profile.ID] {
+		edits.Profile = nil
+	}
+	byID := make(map[string]planned, len(pl.positions))
+	for _, p := range pl.positions {
+		byID[p.ID] = p
+	}
+	for _, pe := range edits.Positions {
+		p := byID[pe.PositionID]
+		for i := range pe.Bullets {
+			if blocked[p.slotIDs[i]] {
+				pe.Bullets[i] = cvedit.Bullet{Keep: true, Text: p.SlotTexts[i]}
+			}
+		}
+	}
+	return edits, names
 }
 
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {

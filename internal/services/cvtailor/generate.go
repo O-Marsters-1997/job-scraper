@@ -26,8 +26,7 @@ const (
 	statusReady    = "ready"
 	cleanupTimeout = 30 * time.Second
 
-	maxCheckRetries = 2
-	shortenBullets  = 3
+	shortenBullets = 3
 )
 
 var errInvalidEdit = errors.New("model returned an invalid edit")
@@ -125,10 +124,11 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
-	res, cost, err := m.editUntilClean(ctx, key, pl, pl.input(claim.JobDescription))
+	res, err := m.editClean(ctx, key, pl, pl.input(claim.JobDescription))
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
+	cost := res.Cost
 
 	docID, err := m.copyTab(ctx, claim)
 	if err != nil {
@@ -147,11 +147,13 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 	}
 	if draftPages > basePages {
-		short, shortCost, err := m.shorten(ctx, claim, key, docID, pl, res)
+		slog.InfoContext(ctx, "draft runs over the base CV, shortening",
+			slog.Int("base_pages", basePages), slog.Int("draft_pages", draftPages))
+		short, err := m.shorten(ctx, claim, key, docID, pl, res)
 		if err != nil {
 			return docID, dto.DraftResult{}, err
 		}
-		res, cost = short, cost+shortCost
+		res, cost = short, cost+short.Cost
 		if draftPages, err = m.pageCount(ctx, claim.UserID, docID, claim.TabID); err != nil {
 			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 		}
@@ -168,45 +170,34 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	}, nil
 }
 
-func (m *Module) editUntilClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, float64, error) {
+func (m *Module) editClean(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {
 	res, err := m.editValid(ctx, key, pl, in)
 	if err != nil {
-		return cvedit.Result{}, res.Cost, err
+		return cvedit.Result{}, err
 	}
-	cost := res.Cost
-	for range maxCheckRetries {
-		blocks := checks.Blocking(checks.Run(pl.draft(res.Edits, 0, 0)))
-		if len(blocks) == 0 {
-			break
-		}
-		prior := res.Edits
-		in.PriorEdits, in.PriorFindings = &prior, blocks
-		retry, err := m.editValid(ctx, key, pl, in)
-		cost += retry.Cost
-		if err != nil {
-			slog.WarnContext(ctx, "draft retry failed, keeping the blocked edit", slog.Any(logger.KeyErr, err))
-			break
-		}
-		res = retry
+	var reverted []string
+	res.Edits, reverted = pl.revertBlocked(res.Edits)
+	if len(reverted) > 0 {
+		slog.InfoContext(ctx, "reverted blocked draft slots", slog.Any("checks", reverted))
 	}
-	return res, cost, nil
+	return res, nil
 }
 
-func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, float64, error) {
+func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID string, pl plan, prior cvedit.Result) (cvedit.Result, error) {
 	in := pl.input(claim.JobDescription)
 	in.PriorEdits, in.ShortenBullets = &prior.Edits, longestBullets(prior.Edits, shortenBullets)
-	res, cost, err := m.editUntilClean(ctx, key, pl, in)
+	res, err := m.editClean(ctx, key, pl, in)
 	if err != nil {
-		return cvedit.Result{}, cost, err
+		return cvedit.Result{}, err
 	}
 	copyPlan, err := m.plan(ctx, claim, docID)
 	if err != nil {
-		return cvedit.Result{}, cost, err
+		return cvedit.Result{}, err
 	}
 	if err := m.applyEdits(ctx, claim, docID, copyPlan, res.Edits); err != nil {
-		return cvedit.Result{}, cost, err
+		return cvedit.Result{}, err
 	}
-	return res, cost, nil
+	return res, nil
 }
 
 func (m *Module) editValid(ctx context.Context, key string, pl plan, in cvedit.Input) (cvedit.Result, error) {

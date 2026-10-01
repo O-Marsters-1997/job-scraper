@@ -84,7 +84,9 @@ type Input struct {
 	ShortenBullets []string
 }
 
+// Bullet is one slot's new text; a kept bullet carries its slot's current text.
 type Bullet struct {
+	Keep           bool     `json:"keep,omitempty"`
 	AchievementIDs []string `json:"achievement_ids"`
 	Text           string   `json:"text"`
 }
@@ -121,6 +123,7 @@ func (c *Client) Edit(ctx context.Context, apiKey string, in Input) (Result, err
 		openrouter.Message{Role: "user", Content: renderTask(in)},
 	)
 	req.Usage = &openrouter.UsageOptions{Include: true}
+	req.Reasoning = &openrouter.ReasoningOptions{Effort: "low"}
 
 	reply, err := openrouter.Chat(ctx, c.http, c.baseURL, apiKey, req)
 	if err != nil {
@@ -131,7 +134,23 @@ func (c *Client) Edit(ctx context.Context, apiKey string, in Input) (Result, err
 	if err := json.Unmarshal([]byte(reply.Content), &edits); err != nil {
 		return Result{Raw: reply.Content, Cost: reply.Cost}, fmt.Errorf("decode edit result: %w", err)
 	}
+	fillKept(edits, in.Positions)
 	return Result{Edits: edits, Cost: reply.Cost, Raw: reply.Content}, nil
+}
+
+func fillKept(edits EditSet, positions []Position) {
+	slots := make(map[string][]string, len(positions))
+	for _, p := range positions {
+		slots[p.ID] = p.SlotTexts
+	}
+	for _, pe := range edits.Positions {
+		texts := slots[pe.PositionID]
+		for i := range pe.Bullets {
+			if pe.Bullets[i].Keep && i < len(texts) {
+				pe.Bullets[i].Text = texts[i]
+			}
+		}
+	}
 }
 
 func renderTask(in Input) string {
@@ -178,10 +197,11 @@ func editSchema(in Input) map[string]any {
 	bullet := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"keep":            map[string]any{"type": "boolean"},
 			"achievement_ids": stringArray,
 			"text":            map[string]any{"type": "string"},
 		},
-		"required":             []string{"achievement_ids", "text"},
+		"required":             []string{"keep", "achievement_ids", "text"},
 		"additionalProperties": false,
 	}
 	slots := 0

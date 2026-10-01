@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
@@ -20,8 +22,11 @@ type wireMessage struct {
 }
 
 type wireRequest struct {
-	Model          string        `json:"model"`
-	Messages       []wireMessage `json:"messages"`
+	Model     string        `json:"model"`
+	Messages  []wireMessage `json:"messages"`
+	Reasoning struct {
+		Effort string `json:"effort"`
+	} `json:"reasoning"`
 	ResponseFormat struct {
 		Type       string `json:"type"`
 		JSONSchema struct {
@@ -79,6 +84,9 @@ func TestClient_Edit_ShapesRequest_DecodesResult(t *testing.T) {
 	if captured.Model != cvedit.Model {
 		t.Errorf("model = %q, want %q", captured.Model, cvedit.Model)
 	}
+	if captured.Reasoning.Effort != "low" {
+		t.Errorf("reasoning effort = %q, want low", captured.Reasoning.Effort)
+	}
 	if len(captured.Messages) != 2 || captured.Messages[0].Role != "system" || captured.Messages[1].Role != "user" {
 		t.Fatalf("messages = %+v, want system then user", captured.Messages)
 	}
@@ -106,6 +114,26 @@ func TestClient_Edit_ShapesRequest_DecodesResult(t *testing.T) {
 	}
 	if res.Raw != content {
 		t.Errorf("raw = %q, want %q", res.Raw, content)
+	}
+}
+
+func TestClient_Edit_KeptBulletTakesItsSlotText(t *testing.T) {
+	content := `{"positions":[{"positionId":"pos-1","bullets":[` +
+		`{"keep":true,"achievement_ids":[],"text":""},` +
+		`{"keep":false,"achievement_ids":["ach-1"],"text":"Cut p99 latency"}]}]}`
+	client, _ := fakeServer(t, content, 0)
+
+	res, err := client.Edit(context.Background(), "sk-or-test", baseInput())
+	if err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	want := []cvedit.Bullet{
+		{Keep: true, AchievementIDs: []string{}, Text: "Built APIs"},
+		{AchievementIDs: []string{"ach-1"}, Text: "Cut p99 latency"},
+	}
+	if diff := cmp.Diff(want, res.Edits.Positions[0].Bullets); diff != "" {
+		t.Errorf("bullets (-want +got):\n%s", diff)
 	}
 }
 

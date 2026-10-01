@@ -7,6 +7,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
 
@@ -16,7 +17,7 @@ func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
 	for i := range ids {
 		ids[i] = e.queue(t)
 	}
-	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by moving Redis queries to Postgres", 0))
+	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))
 	for range n {
 		e.run(t, tick{editor: editor})
 	}
@@ -35,15 +36,35 @@ func TestGetDraftProvenance(t *testing.T) {
 		}
 		bullet := d.Provenance.Positions[0].Bullets[0]
 		want := []dto.TextSegment{
-			{Text: "Cut p99 latency by moving ", Novel: false},
-			{Text: "Redis", Novel: true},
-			{Text: " queries to Postgres", Novel: false},
+			{Text: "Cut p99 latency by ", Novel: false},
+			{Text: "quickly", Novel: true},
+			{Text: " moving queries to Postgres", Novel: false},
 		}
 		if diff := cmp.Diff(want, bullet.Segments); diff != "" {
 			t.Errorf("segments (-want +got):\n%s", diff)
 		}
 		if len(bullet.Achievements) != 1 || bullet.Achievements[0].ID != e.pos.Achievements[0].ID {
 			t.Errorf("achievements = %+v, want the cited one", bullet.Achievements)
+		}
+	})
+
+	t.Run("shows a kept bullet as the user's own text", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.queue(t)
+		kept := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID,
+			Bullets:    []cvedit.Bullet{{Keep: true, Text: "Built and maintained the public APIs for the platform"}},
+		}}}}
+		e.run(t, tick{editor: cvtailortest.Editing(kept)})
+
+		d := e.draft(t, id)
+
+		if d.Provenance == nil || len(d.Provenance.Positions) != 1 || len(d.Provenance.Positions[0].Bullets) != 1 {
+			t.Fatalf("GetDraft().Provenance = %+v, want one position with one bullet", d.Provenance)
+		}
+		want := []dto.TextSegment{{Text: "Built and maintained the public APIs for the platform"}}
+		if diff := cmp.Diff(want, d.Provenance.Positions[0].Bullets[0].Segments); diff != "" {
+			t.Errorf("segments (-want +got):\n%s", diff)
 		}
 	})
 }

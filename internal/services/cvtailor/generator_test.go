@@ -218,80 +218,64 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
-	t.Run("retries a blocked edit with its findings", func(t *testing.T) {
+	t.Run("leaves a kept slot untouched", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
-		blocked, clean := e.bulletResult("Leveraged Postgres", 0.25), e.bulletResult("Moved queries to Postgres", 0.25)
-		editor := cvtailortest.Editing(blocked, clean)
+		kept := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID,
+			Bullets:    []cvedit.Bullet{{Keep: true, Text: "Built and maintained the public APIs for the platform"}},
+		}}}}
 
-		e.run(t, tick{editor: editor})
+		e.run(t, tick{editor: cvtailortest.Editing(kept)})
 
-		if len(editor.Inputs) != 2 {
-			t.Fatalf("editor calls = %d, want 2", len(editor.Inputs))
-		}
-		retry := editor.Inputs[1]
-		if diff := cmp.Diff(&blocked.Edits, retry.PriorEdits); diff != "" {
-			t.Errorf("retry PriorEdits mismatch (-want +got):\n%s", diff)
-		}
-		var priorChecks []string
-		for _, f := range retry.PriorFindings {
-			priorChecks = append(priorChecks, f.Check)
-		}
-		if diff := cmp.Diff([]string{"banned_words"}, priorChecks); diff != "" {
-			t.Errorf("retry PriorFindings checks mismatch (-want +got):\n%s", diff)
-		}
-		d := e.draft(t, id)
-		if d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
+		if d := e.draft(t, id); d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
 			t.Errorf("GetDraft(%s) = %+v, want ready with no block findings", id, d)
 		}
-		if got := e.store.DraftResult(id).Cost; got != 0.5 {
-			t.Errorf("recorded cost = %v, want 0.5 for both calls", got)
+		for _, raw := range e.drive.Updates[1] {
+			if req := handlerstest.DecodeJSON[docedit.Request](t, raw); req.InsertText != nil {
+				t.Errorf("inserted %q, want the kept slot left as it is", req.InsertText.Text)
+			}
 		}
 	})
 
-	t.Run("stops after two retries and keeps the findings", func(t *testing.T) {
+	t.Run("puts a blocked bullet back to its original text without another call", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25))
 
 		e.run(t, tick{editor: editor})
 
-		if len(editor.Inputs) != 3 {
-			t.Errorf("editor calls = %d, want 1 attempt and 2 retries", len(editor.Inputs))
+		if len(editor.Inputs) != 1 {
+			t.Errorf("editor calls = %d, want 1", len(editor.Inputs))
 		}
 		d := e.draft(t, id)
-		if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
-			t.Errorf("GetDraft(%s) = %+v, want ready with the surviving banned-word finding; block checks (-want +got):\n%s", id, d, diff)
+		if d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
+			t.Errorf("GetDraft(%s) = %+v, want ready with no block findings", id, d)
+		}
+		for _, raw := range e.drive.Updates[1] {
+			if req := handlerstest.DecodeJSON[docedit.Request](t, raw); req.InsertText != nil {
+				t.Errorf("inserted %q, want the blocked slot left as it was", req.InsertText.Text)
+			}
+		}
+		if got := e.store.DraftResult(id).Cost; got != 0.25 {
+			t.Errorf("recorded cost = %v, want 0.25", got)
 		}
 	})
 
-	failedRetries := []struct {
-		name  string
-		retry func(e draftEnv) cvtailortest.Reply
-	}{
-		{"fails", func(draftEnv) cvtailortest.Reply {
-			return cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5}, Err: errors.New("model unavailable")}
-		}},
-		{"returns an invalid edit", func(e draftEnv) cvtailortest.Reply {
-			return cvtailortest.Reply{Result: cvedit.Result{Cost: 0.5, Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
-				PositionID: e.pos.ID, Bullets: []cvedit.Bullet{{AchievementIDs: []string{"nope"}, Text: "Invented"}},
-			}}}}}
-		}},
-	}
-	for _, tc := range failedRetries {
-		t.Run("keeps the blocked edit when a retry "+tc.name, func(t *testing.T) {
-			e, id := newQueuedDraft(t)
-			editor := cvtailortest.ReplyingWith(cvtailortest.Reply{Result: e.bulletResult("Leveraged Postgres", 0.25)}, tc.retry(e))
+	t.Run("drops a skills reorder that names an unsupported skill", func(t *testing.T) {
+		e, id := newQueuedDraft(t)
+		res := e.bulletResult("Cut p99 latency", 0.25)
+		res.Edits.Skills = []string{"Rust", "Go"}
 
-			e.run(t, tick{editor: editor})
+		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), bullet("Go"), bullet("SQL"))}, editor: cvtailortest.Editing(res)})
 
-			d := e.draft(t, id)
-			if diff := cmp.Diff([]string{"banned_words"}, findingChecks(d.Findings, "block")); d.Status != "ready" || diff != "" {
-				t.Errorf("GetDraft(%s) = %+v, want ready with the blocked edit's finding kept; block checks (-want +got):\n%s", id, d, diff)
+		if d := e.draft(t, id); d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
+			t.Errorf("GetDraft(%s) = %+v, want ready with no block findings", id, d)
+		}
+		for _, raw := range e.drive.Updates[1] {
+			if req := handlerstest.DecodeJSON[docedit.Request](t, raw); req.InsertText != nil && strings.Contains(req.InsertText.Text, "Rust") {
+				t.Errorf("inserted %q, want the original skills kept", req.InsertText.Text)
 			}
-			if got := e.store.DraftResult(id).Cost; got != 0.75 {
-				t.Errorf("recorded cost = %v, want 0.75 including the failed call", got)
-			}
-		})
-	}
+		}
+	})
 
 	t.Run("shortens once when the draft runs over a page", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
@@ -356,21 +340,17 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
-	t.Run("retries a shortened edit that is blocked", func(t *testing.T) {
+	t.Run("puts a blocked shortened bullet back without another call", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(
 			e.bulletResult("Cut p99 latency by moving queries", 0.25),
 			e.bulletResult("Leveraged Postgres", 0.25),
-			e.bulletResult("Cut p99 latency", 0.25),
 		)
 
 		e.run(t, tick{drive: cvtailortest.ExportsPages(e.drive, 1, 2, 1), editor: editor})
 
-		if len(editor.Inputs) != 3 {
-			t.Fatalf("editor calls = %d, want 1 attempt, 1 shorten and 1 retry of the blocked shorten", len(editor.Inputs))
-		}
-		if len(editor.Inputs[2].ShortenBullets) == 0 {
-			t.Errorf("retry input = %+v, want it to keep the shorten request", editor.Inputs[2])
+		if len(editor.Inputs) != 2 {
+			t.Fatalf("editor calls = %d, want 1 attempt and 1 shorten", len(editor.Inputs))
 		}
 		d := e.draft(t, id)
 		if d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {

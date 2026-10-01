@@ -88,6 +88,11 @@ func TestGroundingBullets(t *testing.T) {
 			want: []want{{checks.Block, "s1"}, {checks.Block, "s1"}},
 		},
 		{
+			name: "unchanged slot text is not checked",
+			draft: bulletDraft("Ran 40 Kubernetes clusters", "Ran 40 Kubernetes clusters", nil,
+				[]string{"Wrote Go"}),
+		},
+		{
 			name: "substring of another term does not ground",
 			draft: bulletDraft("Wrote Java services", "", []string{"Wrote JavaScript services"},
 				[]string{"Wrote JavaScript services"}),
@@ -199,6 +204,13 @@ func TestBannedWords(t *testing.T) {
 	}
 }
 
+func TestBannedWordsSkipUnchangedText(t *testing.T) {
+	d := bulletDraft("Leveraged Kafka", "Leveraged Kafka", nil, nil)
+	if got := findings(checks.BannedWords(d), "banned_words"); len(got) != 0 {
+		t.Errorf("banned_words findings = %v, want none for the user's own text", got)
+	}
+}
+
 func TestBannedWordsCoverProfile(t *testing.T) {
 	d := checks.Draft{Profile: &checks.Slot{ID: "profile", Text: "A passionate engineer"}}
 	if diff := cmp.Diff([]want{{checks.Block, "profile"}}, findings(checks.BannedWords(d), "banned_words")); diff != "" {
@@ -214,9 +226,8 @@ func TestSlotLength(t *testing.T) {
 		want []want
 	}{
 		{"shorter", strings.Repeat("a", 60), nil},
-		{"exactly 1.15x", strings.Repeat("a", 115), nil},
-		{"just over 1.15x", strings.Repeat("a", 116), []want{{checks.Block, "s1"}}},
-		{"1.2x", strings.Repeat("a", 120), []want{{checks.Block, "s1"}}},
+		{"same length", strings.Repeat("a", 100), nil},
+		{"one character over", strings.Repeat("a", 101), []want{{checks.Block, "s1"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -233,7 +244,7 @@ func TestSlotLengthProfileAndMultibyte(t *testing.T) {
 		t.Errorf("slot_length findings (-want +got):\n%s", diff)
 	}
 
-	d.Profile.Text = strings.Repeat("é", 115)
+	d.Profile.Text = strings.Repeat("é", 100)
 	if diff := cmp.Diff([]want(nil), findings(checks.SlotLength(d), "slot_length")); diff != "" {
 		t.Errorf("slot_length findings (-want +got):\n%s", diff)
 	}
