@@ -1,6 +1,5 @@
-// Package discover drains code-registered Harvesters into the shared companies
-// catalog on a fixed cadence, deduplicating candidates and gating each
-// harvester to one run per interval.
+// Package discover turns code-registered Harvesters into board_discover tasks
+// on a per-harvester cadence, gating each harvester to one run per interval.
 package discover
 
 import (
@@ -12,14 +11,22 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/logger"
-	"github.com/ollymarsters/job-scraper/internal/slug"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
-// Company is a harvested catalog candidate. Zero-value fields are unknown.
-type Company struct {
-	Name, Domain, ATSSource, ATSToken, LinkedInCompanyID string
+// Board is an ATS board a harvester found, identified by source and token.
+type Board struct {
+	Source, Token string
+}
+
+// Harvest is what one harvester run found. Skipped counts candidates that
+// resolved to no board or an unsupported source.
+type Harvest struct {
+	Boards  []Board
+	Skipped int
 }
 
 // Get fetches url with client and returns the body of a 200 response. A non-empty
@@ -43,11 +50,13 @@ func Get(ctx context.Context, client *http.Client, url, userAgent string) ([]byt
 	return io.ReadAll(resp.Body)
 }
 
-// Harvester yields company catalog candidates from one external source.
+// Harvester yields ATS boards from one external source.
 type Harvester interface {
 	// Name identifies the harvester in logs and as its gate key ("harvest:" + Name()).
 	Name() string
-	Harvest(ctx context.Context) ([]Company, error)
+	// Interval is the minimum time between successful runs.
+	Interval() time.Duration
+	Harvest(ctx context.Context) (Harvest, error)
 }
 
 // ScrapeGate persists each harvester's successful run time.
@@ -56,26 +65,22 @@ type ScrapeGate interface {
 	GetLastScraped(ctx context.Context, source string) (time.Time, bool, error)
 }
 
-// CompanyUpserter is the narrow subset of jobsearch's Boards() the harvest
-// loop needs to write catalog candidates.
-type CompanyUpserter interface {
-	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
+// Publisher is the subset of the queue broker the Runner needs.
+type Publisher interface {
+	Publish(ctx context.Context, task queue.Task) error
 }
 
-const (
-	harvestInterval = 24 * time.Hour
-	gateKeyPrefix   = "harvest:"
-)
+const gateKeyPrefix = "harvest:"
 
-// Runner drains harvesters into the companies catalog on a fixed cadence.
+// Runner publishes a board_discover task per harvested board.
 type Runner struct {
 	harvesters []Harvester
-	companies  CompanyUpserter
+	publisher  Publisher
 	gate       ScrapeGate
 }
 
-func NewRunner(hs []Harvester, companies CompanyUpserter, gate ScrapeGate) *Runner {
-	return &Runner{harvesters: hs, companies: companies, gate: gate}
+func NewRunner(hs []Harvester, publisher Publisher, gate ScrapeGate) *Runner {
+	return &Runner{harvesters: hs, publisher: publisher, gate: gate}
 }
 
 // RunOnce harvests every due harvester and joins their failures.
@@ -97,49 +102,31 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 	if err != nil {
 		log.WarnContext(ctx, "could not read last harvested, proceeding", slog.Any(logger.KeyErr, err))
 	}
-	if ok && time.Since(last) < harvestInterval {
+	if ok && time.Since(last) < h.Interval() {
 		log.InfoContext(ctx, "skipping harvest: ran recently", slog.Duration("ago", time.Since(last)))
 		return nil
 	}
 
 	log.InfoContext(ctx, "harvest: running")
-	companies, err := h.Harvest(ctx)
+	found, err := h.Harvest(ctx)
 	if err != nil {
 		return err
 	}
 
-	upserted := 0
-	for _, c := range companies {
-		if err := r.upsert(ctx, c); err != nil {
-			log.ErrorContext(ctx, "upsert failed", slog.String("name", c.Name), slog.Any(logger.KeyErr, err))
+	published := 0
+	for _, b := range found.Boards {
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token}
+		if err := r.publisher.Publish(ctx, task); err != nil {
+			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			continue
 		}
-		upserted++
+		published++
 	}
-	log.InfoContext(ctx, "harvest: completed", slog.Int(logger.KeyCount, len(companies)), slog.Int("upserted", upserted))
+	log.InfoContext(ctx, "harvest: completed",
+		slog.Int(logger.KeyCount, len(found.Boards)), slog.Int("published", published), slog.Int("skipped", found.Skipped))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
 	}
 	return nil
-}
-
-func (r *Runner) upsert(ctx context.Context, c Company) error {
-	slugSource := c.Name
-	if slugSource == "" {
-		slugSource = c.Domain
-	}
-	if slugSource == "" {
-		return nil
-	}
-
-	_, err := r.companies.UpsertCompany(ctx, dto.CompanyUpsert{
-		Slug:              slug.Make(slugSource),
-		Name:              c.Name,
-		ATSSource:         c.ATSSource,
-		ATSToken:          c.ATSToken,
-		Domain:            c.Domain,
-		LinkedInCompanyID: c.LinkedInCompanyID,
-	})
-	return err
 }
