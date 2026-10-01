@@ -424,6 +424,18 @@ func (f *FakeStore) TouchCompanyCrawled(_ context.Context, id string) error {
 	return nil
 }
 
+func (f *FakeStore) RenameCompany(_ context.Context, id, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[id]
+	if !ok {
+		return data.ErrNotFound
+	}
+	c.Name = name
+	f.companies[id] = c
+	return nil
+}
+
 func (f *FakeStore) ListCompanyBoards(_ context.Context, companyID string) ([]dto.CompanyBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

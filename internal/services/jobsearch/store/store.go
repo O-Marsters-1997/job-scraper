@@ -989,6 +989,17 @@ func (s *Store) TouchCompanyCrawled(ctx context.Context, id string) error {
 	return nil
 }
 
+func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
+	cid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.RenameCompany(ctx, sqlc.RenameCompanyParams{ID: cid, Name: name}); err != nil {
+		return fmt.Errorf("store.RenameCompany: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
 	id, err := data.UUID(companyID)
 	if err != nil {

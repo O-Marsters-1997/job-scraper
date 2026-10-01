@@ -9,7 +9,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
@@ -61,8 +63,13 @@ func (h *fakeHarvester) Harvest(context.Context) (discover.Harvest, error) {
 
 func runOnce(t *testing.T, gate *fakeGate, hs ...discover.Harvester) (*recordingPublisher, error) {
 	t.Helper()
+	return runOnceWith(t, jobsearchtest.NewFakeStore(), gate, hs...)
+}
+
+func runOnceWith(t *testing.T, catalog discover.Catalog, gate *fakeGate, hs ...discover.Harvester) (*recordingPublisher, error) {
+	t.Helper()
 	pub := &recordingPublisher{}
-	err := discover.NewRunner(hs, pub, gate).RunOnce(t.Context())
+	err := discover.NewRunner(hs, pub, gate, catalog).RunOnce(t.Context())
 	return pub, err
 }
 
@@ -136,5 +143,72 @@ func TestRunner_GateUsesEachHarvesterInterval(t *testing.T) {
 				t.Errorf("harvest calls = %d, want %d", h.calls, tt.wantCalls)
 			}
 		})
+	}
+}
+
+func wttjCompany(token string) discover.Company {
+	return discover.Company{Slug: token, Name: "Derived", Board: discover.Board{Source: "wttj", Token: token}}
+}
+
+func TestRunner_RecordsCompaniesWithCandidateBoards(t *testing.T) {
+	catalog := jobsearchtest.NewFakeStore()
+	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
+
+	for range 2 {
+		gate := newFakeGate()
+		pub, err := runOnceWith(t, catalog, gate, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pub.tasks) != 1 || pub.tasks[0].Kind != queue.BoardVerifyTask || pub.tasks[0].BoardToken != "faculty" {
+			t.Fatalf("published = %+v, want one board_verify for faculty", pub.tasks)
+		}
+	}
+
+	company, err := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Derived"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	boards, _ := catalog.ListCompanyBoards(t.Context(), company.ID)
+	if len(boards) != 1 || boards[0].Status != dto.BoardCandidate {
+		t.Errorf("boards after two runs = %+v, want one candidate", boards)
+	}
+}
+
+func TestRunner_VerifiedBoardIsNotQueuedAgain(t *testing.T) {
+	catalog := jobsearchtest.NewFakeStore()
+	company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})
+	_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "wttj", "faculty")
+	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "wttj", "faculty", "wttj-origin")
+	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
+
+	pub, err := runOnceWith(t, catalog, newFakeGate(), h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(pub.tasks) != 0 {
+		t.Errorf("published = %+v, want none", pub.tasks)
+	}
+}
+
+func TestRunner_CompanyWithVerifiedOtherBoardGetsNoCandidate(t *testing.T) {
+	catalog := jobsearchtest.NewFakeStore()
+	company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})
+	_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "faculty")
+	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "faculty", "discovered")
+	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
+
+	pub, err := runOnceWith(t, catalog, newFakeGate(), h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	boards, _ := catalog.ListCompanyBoards(t.Context(), company.ID)
+	if len(boards) != 1 || boards[0].Source != "greenhouse" {
+		t.Errorf("boards = %+v, want only the greenhouse board", boards)
+	}
+	if len(pub.tasks) != 0 {
+		t.Errorf("published = %+v, want none", pub.tasks)
 	}
 }
