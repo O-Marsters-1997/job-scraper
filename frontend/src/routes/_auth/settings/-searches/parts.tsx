@@ -53,7 +53,7 @@ export function SegmentedTabs(props: {
 						<Icon name={t.icon} size={13} />
 						{t.label}
 						<Show when={count(t.key) !== undefined}>
-							<span class="font-mono tabular-nums opacity-70">
+							<span class="font-mono tabular-nums">
 								{count(t.key)}
 							</span>
 						</Show>
@@ -82,7 +82,7 @@ export function FilterChips(props: {
 					>
 						{o.label}
 						<Show when={o.count !== undefined}>
-							<span class="font-mono tabular-nums opacity-70">{o.count}</span>
+							<span class="font-mono tabular-nums">{o.count}</span>
 						</Show>
 					</ToggleChip>
 				)}
