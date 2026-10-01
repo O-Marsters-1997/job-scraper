@@ -32,6 +32,9 @@ func Grounding(d Draft) []Finding {
 }
 
 func groundSlot(s Slot, numberSource, termSource []string) []Finding {
+	if s.Text == s.BaseText {
+		return nil
+	}
 	var out []Finding
 	numbers := normalise(strings.Join(numberSource, " "))
 	for _, n := range numberRe.FindAllString(s.Text, -1) {

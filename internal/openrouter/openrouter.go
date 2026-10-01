@@ -42,11 +42,16 @@ type UsageOptions struct {
 	Include bool `json:"include"`
 }
 
+type ReasoningOptions struct {
+	Effort string `json:"effort"`
+}
+
 type Request struct {
-	Model          string         `json:"model"`
-	Messages       []Message      `json:"messages"`
-	ResponseFormat ResponseFormat `json:"response_format"`
-	Usage          *UsageOptions  `json:"usage,omitempty"`
+	Model          string            `json:"model"`
+	Messages       []Message         `json:"messages"`
+	ResponseFormat ResponseFormat    `json:"response_format"`
+	Usage          *UsageOptions     `json:"usage,omitempty"`
+	Reasoning      *ReasoningOptions `json:"reasoning,omitempty"`
 }
 
 type Reply struct {

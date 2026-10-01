@@ -72,6 +72,9 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 				return nil, fmt.Errorf("%w: slot %q not in document", ErrUnknownPosition, id)
 			}
 			if i < len(pe.Bullets) {
+				if pe.Bullets[i].Text == slot.Text {
+					continue
+				}
 				all = append(all, replace(slot.StartIndex, slot.EndIndex-1, pe.Bullets[i].Text))
 				continue
 			}

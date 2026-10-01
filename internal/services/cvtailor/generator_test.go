@@ -218,6 +218,25 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("leaves a kept slot untouched", func(t *testing.T) {
+		e, id := newQueuedDraft(t)
+		kept := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID,
+			Bullets:    []cvedit.Bullet{{Keep: true, Text: "Built and maintained the public APIs for the platform"}},
+		}}}}
+
+		e.run(t, tick{editor: cvtailortest.Editing(kept)})
+
+		if d := e.draft(t, id); d.Status != "ready" || len(findingChecks(d.Findings, "block")) != 0 {
+			t.Errorf("GetDraft(%s) = %+v, want ready with no block findings", id, d)
+		}
+		for _, raw := range e.drive.Updates[1] {
+			if req := handlerstest.DecodeJSON[docedit.Request](t, raw); req.InsertText != nil {
+				t.Errorf("inserted %q, want the kept slot left as it is", req.InsertText.Text)
+			}
+		}
+	})
+
 	t.Run("retries a blocked edit with its findings", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		blocked, clean := e.bulletResult("Leveraged Postgres", 0.25), e.bulletResult("Moved queries to Postgres", 0.25)

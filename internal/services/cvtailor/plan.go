@@ -129,7 +129,7 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 			return fmt.Errorf("%w: %d bullets for %d slots", errInvalidEdit, len(pe.Bullets), len(p.slotIDs))
 		}
 		for _, b := range pe.Bullets {
-			if strings.TrimSpace(b.Text) == "" || len(b.AchievementIDs) == 0 {
+			if strings.TrimSpace(b.Text) == "" || (!b.Keep && len(b.AchievementIDs) == 0) {
 				return fmt.Errorf("%w: bullet with no text or citation", errInvalidEdit)
 			}
 			for _, id := range b.AchievementIDs {

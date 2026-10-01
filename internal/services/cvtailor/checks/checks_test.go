@@ -88,6 +88,11 @@ func TestGroundingBullets(t *testing.T) {
 			want: []want{{checks.Block, "s1"}, {checks.Block, "s1"}},
 		},
 		{
+			name: "unchanged slot text is not checked",
+			draft: bulletDraft("Ran 40 Kubernetes clusters", "Ran 40 Kubernetes clusters", nil,
+				[]string{"Wrote Go"}),
+		},
+		{
 			name: "substring of another term does not ground",
 			draft: bulletDraft("Wrote Java services", "", []string{"Wrote JavaScript services"},
 				[]string{"Wrote JavaScript services"}),

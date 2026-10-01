@@ -148,7 +148,11 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 					citedText = append(citedText, a.Text)
 				}
 			}
-			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{Segments: markNovel(b.Text, citedText), Achievements: cited})
+			segments := markNovel(b.Text, citedText)
+			if b.Keep {
+				segments = []dto.TextSegment{{Text: b.Text}}
+			}
+			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{Segments: segments, Achievements: cited})
 		}
 		out.Positions = append(out.Positions, pp)
 	}

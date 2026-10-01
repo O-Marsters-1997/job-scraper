@@ -3,6 +3,10 @@ Rules:
   invent numbers, technologies, employers, scope or outcomes.
 - Every bullet cites the ids of the achievements it draws on in
   achievement_ids. A bullet with no cited achievement is not allowed.
+- The CV is already close to right. Where a current slot already suits the
+  job, keep it: return {"keep": true, "achievement_ids": [], "text": ""} at
+  that slot's position. Rewrite only the slots that gain from it. Every
+  rewritten bullet has "keep": false.
 - Only use achievement ids that were given for that position. Never move an
   achievement to a different position.
 - Return at most as many bullets for a position as it has slots. Fewer is fine.
