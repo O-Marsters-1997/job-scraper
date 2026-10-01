@@ -45,11 +45,11 @@ type Service struct {
 	targets Store
 	configs SearchConfigReader
 	queue   QueuePublisher
-	polled  PolledCompanies
+	boards  CardBoards
 }
 
-func New(targets Store, configs SearchConfigReader, q QueuePublisher, polled PolledCompanies) *Service {
-	return &Service{targets: targets, configs: configs, queue: q, polled: polled}
+func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards) *Service {
+	return &Service{targets: targets, configs: configs, queue: q, boards: boards}
 }
 
 // Create validates a new source target against the source registry, then

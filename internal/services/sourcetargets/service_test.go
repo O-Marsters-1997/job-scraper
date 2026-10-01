@@ -33,20 +33,16 @@ func (f failingCandidateList) ListForUser(context.Context, string, string, int) 
 	return nil, f.err
 }
 
-type polledSlugs []string
+type verifiedBoards []dto.CardBoard
 
-func (p polledSlugs) PolledCompanySlugs(_ context.Context, slugs []string) ([]string, error) {
-	var out []string
-	for _, slug := range slugs {
-		if slices.Contains(p, slug) {
-			out = append(out, slug)
-		}
-	}
-	return out, nil
+func (v verifiedBoards) VerifiedBoardsBySlug(_ context.Context, slugs []string) ([]dto.CardBoard, error) {
+	return slices.DeleteFunc(slices.Clone(v), func(b dto.CardBoard) bool {
+		return !slices.Contains(slugs, b.CompanySlug)
+	}), nil
 }
 
 func serviceOver(targets sourcetargets.Store, q sourcetargets.QueuePublisher) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, polledSlugs(nil))
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, verifiedBoards(nil))
 }
 
 func newService(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore, *queuetest.Recorder) {

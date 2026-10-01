@@ -661,12 +661,16 @@ func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.Compan
 	return boards, nil
 }
 
-func (s *Store) ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
-	out, err := s.queries.ListPolledCompanySlugs(ctx, slugs)
+func (s *Store) ListVerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error) {
+	rows, err := s.queries.ListVerifiedBoardsBySlug(ctx, slugs)
 	if err != nil {
-		return nil, data.QueryErr("ListPolledCompanySlugs", err)
+		return nil, data.QueryErr("ListVerifiedBoardsBySlug", err)
 	}
-	return out, nil
+	boards := make([]dto.CardBoard, len(rows))
+	for i, row := range rows {
+		boards[i] = dto.CardBoard{CompanySlug: row.Slug, Source: row.Source, BoardToken: row.BoardToken, Tracked: row.Tracked}
+	}
+	return boards, nil
 }
 
 func (s *Store) ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {

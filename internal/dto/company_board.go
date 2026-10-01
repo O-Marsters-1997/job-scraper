@@ -23,3 +23,11 @@ type CompanyBoard struct {
 	LastCompletedAt    *time.Time
 	CreatedAt          time.Time
 }
+
+// CardBoard is a verified Board of the Company a discovery card names.
+type CardBoard struct {
+	CompanySlug string
+	Source      string
+	BoardToken  string
+	Tracked     bool
+}

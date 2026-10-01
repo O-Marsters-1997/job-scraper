@@ -6,14 +6,14 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
-// PolledCompanySlugs returns those of slugs whose Company has a verified Board
-// that at least one User tracks.
-func (s *Service) PolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
-	return s.store.ListPolledCompanySlugs(ctx, slugs)
+// VerifiedBoardsBySlug returns every verified Board of the Companies in slugs.
+func (s *Service) VerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error) {
+	return s.store.ListVerifiedBoardsBySlug(ctx, slugs)
 }
 
 // PublishBoardChecks queues a check per active Board when manual, else per due

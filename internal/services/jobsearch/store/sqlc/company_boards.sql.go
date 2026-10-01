@@ -110,34 +110,6 @@ func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) 
 	return items, nil
 }
 
-const listPolledCompanySlugs = `-- name: ListPolledCompanySlugs :many
-SELECT DISTINCT c.slug
-FROM companies c
-JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
-JOIN tracked_companies tc ON tc.company_id = c.id AND tc.enabled
-WHERE c.slug = ANY($1::text[])
-`
-
-func (q *Queries) ListPolledCompanySlugs(ctx context.Context, dollar_1 []string) ([]string, error) {
-	rows, err := q.db.Query(ctx, listPolledCompanySlugs, dollar_1)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
-			return nil, err
-		}
-		items = append(items, slug)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTrackedCompanyBoards = `-- name: ListTrackedCompanyBoards :many
 SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status
 FROM company_boards cb
@@ -208,6 +180,47 @@ func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyB
 			&i.RetiredAt,
 			&i.SupersededAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVerifiedBoardsBySlug = `-- name: ListVerifiedBoardsBySlug :many
+SELECT c.slug, cb.source, cb.board_token,
+  EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = c.id AND tc.enabled) AS tracked
+FROM companies c
+JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
+WHERE c.slug = ANY($1::text[])
+ORDER BY c.slug, cb.created_at, cb.id
+`
+
+type ListVerifiedBoardsBySlugRow struct {
+	Slug       string
+	Source     string
+	BoardToken string
+	Tracked    bool
+}
+
+func (q *Queries) ListVerifiedBoardsBySlug(ctx context.Context, dollar_1 []string) ([]ListVerifiedBoardsBySlugRow, error) {
+	rows, err := q.db.Query(ctx, listVerifiedBoardsBySlug, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVerifiedBoardsBySlugRow
+	for rows.Next() {
+		var i ListVerifiedBoardsBySlugRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Source,
+			&i.BoardToken,
+			&i.Tracked,
 		); err != nil {
 			return nil, err
 		}

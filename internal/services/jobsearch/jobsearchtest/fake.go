@@ -535,22 +535,21 @@ func (f *FakeStore) GetVerifiedBoardID(_ context.Context, source, token string) 
 	return "", data.ErrNotFound
 }
 
-func (f *FakeStore) ListPolledCompanySlugs(_ context.Context, slugs []string) ([]string, error) {
+func (f *FakeStore) ListVerifiedBoardsBySlug(_ context.Context, slugs []string) ([]dto.CardBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	var out []string
+	var out []dto.CardBoard
 	for _, c := range f.companies {
 		if !slices.Contains(slugs, c.Slug) {
 			continue
 		}
-		verified := slices.ContainsFunc(slices.Collect(maps.Values(f.boards)), func(b dto.CompanyBoard) bool {
-			return b.CompanyID == c.ID && b.Status == dto.BoardVerified
-		})
 		tracked := slices.ContainsFunc(slices.Collect(maps.Values(f.tracking)), func(t dto.CompanyTracking) bool {
 			return t.CompanyID == c.ID && t.Enabled
 		})
-		if verified && tracked {
-			out = append(out, c.Slug)
+		for _, b := range f.boards {
+			if b.CompanyID == c.ID && b.Status == dto.BoardVerified {
+				out = append(out, dto.CardBoard{CompanySlug: c.Slug, Source: b.Source, BoardToken: b.BoardToken, Tracked: tracked})
+			}
 		}
 	}
 	return out, nil
