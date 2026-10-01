@@ -56,7 +56,11 @@ function CompaniesPage() {
 			<PageHeading
 				title="Companies"
 				subtitle="Every company we've encountered. Track a company to follow its current and future boards."
-			/>
+			>
+				<Link to="/companies/new" class="text-xs text-muted hover:underline">
+					Review new
+				</Link>
+			</PageHeading>
 
 			<div class="mb-4 max-w-xs">
 				<Label for="companies-search" class="sr-only">

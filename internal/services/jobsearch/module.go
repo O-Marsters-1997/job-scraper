@@ -19,6 +19,7 @@ type Module struct {
 	jobs          *Service
 	sourceTargets *sourcetargets.Service
 	queue         QueuePublisher
+	scoring       ScoringPort
 }
 
 type ScoringPort interface {
@@ -39,6 +40,8 @@ type Store interface {
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error)
 	ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error)
+	ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error)
+	ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error)
 	DeleteCompanyTracking(ctx context.Context, userID, companyID string) error
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	GetCompany(ctx context.Context, id string) (dto.Company, error)
@@ -78,6 +81,7 @@ func Build(deps Deps) *Module {
 		jobs:          jobs,
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs),
 		queue:         deps.Queue,
+		scoring:       deps.Scoring,
 	}
 }
 

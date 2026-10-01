@@ -3,6 +3,7 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyTracking,
+	NewCompany,
 	ReviewState,
 	TrackedCompany,
 } from "@/types/company";
@@ -114,6 +115,25 @@ export function getTrackedCompanies(): TrackedCompany[] {
 			last_checked_at: c.LastCheckedAt,
 		}))
 		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getNewCompanies(): NewCompany[] {
+	failIfRequested("getNewCompanies");
+	return getTrackedCompanies()
+		.filter((c) => c.review_state === "new")
+		.map((c) => {
+			const scores = getJobs()
+				.filter((j) => j.CompanyID === c.id && j.SuitabilityScore != null)
+				.map((j) => j.SuitabilityScore as number);
+			return {
+				id: c.id,
+				name: c.name,
+				slug: c.slug,
+				boards: c.boards,
+				matching_roles: c.open_jobs,
+				best_suitability: scores.length ? Math.max(...scores) : null,
+			};
+		});
 }
 
 export function untrackCompany(id: string): void {

@@ -361,6 +361,56 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 	return out, nil
 }
 
+func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListNewCompaniesForUser(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNewCompanies: %w", err)
+	}
+	boardRows, err := s.queries.ListTrackedCompanyBoards(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNewCompanies boards: %w", err)
+	}
+	boards := make(map[string][]dto.TrackedBoard, len(rows))
+	for _, b := range boardRows {
+		companyID := b.CompanyID.String()
+		boards[companyID] = append(boards[companyID], dto.TrackedBoard{
+			ID: b.ID.String(), Source: b.Source, BoardToken: b.BoardToken, Status: dto.BoardStatus(b.Status),
+		})
+	}
+	out := make([]dto.NewCompany, len(rows))
+	for i, r := range rows {
+		id := r.ID.String()
+		out[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}}
+		if b, ok := boards[id]; ok {
+			out[i].Boards = b
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListNewCompanyJobs(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNewCompanyJobs: %w", err)
+	}
+	out := make([]dto.Job, len(rows))
+	for i, r := range rows {
+		out[i] = dto.Job{
+			CompanyID: r.CompanyID.String(), CompanySlug: r.CompanySlug, Title: r.Title, Location: r.Location,
+			SuitabilityScore: optionalInt32(r.SuitabilityScore),
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) DeleteCompanyTracking(ctx context.Context, userID, companyID string) error {
 	uid, err := data.UUID(userID)
 	if err != nil {

@@ -29,6 +29,7 @@ import { Route as AuthSettingsProfileRouteImport } from './routes/_auth/settings
 import { Route as AuthSettingsIntegrationsRouteImport } from './routes/_auth/settings/integrations'
 import { Route as AuthSettingsAiRouteImport } from './routes/_auth/settings/ai'
 import { Route as AuthJobsIdRouteImport } from './routes/_auth/jobs_.$id'
+import { Route as AuthCompaniesNewRouteImport } from './routes/_auth/companies_.new'
 import { Route as AuthCompaniesIdRouteImport } from './routes/_auth/companies_.$id'
 import { Route as AuthSettingsScoringIndexRouteImport } from './routes/_auth/settings/scoring/index'
 import { Route as AuthTailoringDraftsIdRouteImport } from './routes/_auth/tailoring.drafts.$id'
@@ -136,6 +137,11 @@ const AuthJobsIdRoute = AuthJobsIdRouteImport.update({
   path: '/jobs/$id',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthCompaniesNewRoute = AuthCompaniesNewRouteImport.update({
+  id: '/companies_/new',
+  path: '/companies/new',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthCompaniesIdRoute = AuthCompaniesIdRouteImport.update({
   id: '/companies_/$id',
   path: '/companies/$id',
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/companies/$id': typeof AuthCompaniesIdRoute
+  '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
+  '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
   '/settings/ai': typeof AuthSettingsAiRoute
   '/settings/integrations': typeof AuthSettingsIntegrationsRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/companies_/$id': typeof AuthCompaniesIdRoute
+  '/_auth/companies_/new': typeof AuthCompaniesNewRoute
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
   '/_auth/settings/ai': typeof AuthSettingsAiRoute
   '/_auth/settings/integrations': typeof AuthSettingsIntegrationsRoute
@@ -266,6 +275,7 @@ export interface FileRouteTypes {
     | '/overview'
     | '/settings'
     | '/companies/$id'
+    | '/companies/new'
     | '/jobs/$id'
     | '/settings/ai'
     | '/settings/integrations'
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/overview'
     | '/companies/$id'
+    | '/companies/new'
     | '/jobs/$id'
     | '/settings/ai'
     | '/settings/integrations'
@@ -319,6 +330,7 @@ export interface FileRouteTypes {
     | '/_auth/overview'
     | '/_auth/settings'
     | '/_auth/companies_/$id'
+    | '/_auth/companies_/new'
     | '/_auth/jobs_/$id'
     | '/_auth/settings/ai'
     | '/_auth/settings/integrations'
@@ -483,6 +495,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AuthJobsIdRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/companies_/new': {
+      id: '/_auth/companies_/new'
+      path: '/companies/new'
+      fullPath: '/companies/new'
+      preLoaderRoute: typeof AuthCompaniesNewRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/companies_/$id': {
       id: '/_auth/companies_/$id'
       path: '/companies/$id'
@@ -575,6 +594,7 @@ interface AuthRouteChildren {
   AuthOverviewRoute: typeof AuthOverviewRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
   AuthCompaniesIdRoute: typeof AuthCompaniesIdRoute
+  AuthCompaniesNewRoute: typeof AuthCompaniesNewRoute
   AuthJobsIdRoute: typeof AuthJobsIdRoute
   AuthCvTemplatesDocIdTabIdRoute: typeof AuthCvTemplatesDocIdTabIdRoute
   AuthJobsIdTailorRoute: typeof AuthJobsIdTailorRoute
@@ -591,6 +611,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthOverviewRoute: AuthOverviewRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
   AuthCompaniesIdRoute: AuthCompaniesIdRoute,
+  AuthCompaniesNewRoute: AuthCompaniesNewRoute,
   AuthJobsIdRoute: AuthJobsIdRoute,
   AuthCvTemplatesDocIdTabIdRoute: AuthCvTemplatesDocIdTabIdRoute,
   AuthJobsIdTailorRoute: AuthJobsIdTailorRoute,

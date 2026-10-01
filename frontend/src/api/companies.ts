@@ -3,6 +3,7 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyTracking,
+	NewCompany,
 	ReviewState,
 	TrackedCompany,
 } from "../types/company";
@@ -10,6 +11,7 @@ import {
 	companyBoardSchema,
 	companySchema,
 	companyTrackingSchema,
+	newCompanySchema,
 	trackedCompanySchema,
 } from "../types/company";
 import { apiFetch, apiFetchVoid, jsonInit, rethrowStatus } from "./client";
@@ -112,6 +114,13 @@ export async function fetchTrackedCompanies(): Promise<TrackedCompany[]> {
 	return mocked(
 		(db) => db.getTrackedCompanies(),
 		() => apiFetch("/companies/tracked", trackedCompanySchema.array()),
+	);
+}
+
+export async function fetchNewCompanies(): Promise<NewCompany[]> {
+	return mocked(
+		(db) => db.getNewCompanies(),
+		() => apiFetch("/companies/new", newCompanySchema.array()),
 	);
 }
 

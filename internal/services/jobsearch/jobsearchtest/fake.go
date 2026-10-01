@@ -284,6 +284,39 @@ func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string
 	return out, nil
 }
 
+func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.NewCompany, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]dto.NewCompany, 0)
+	for _, c := range f.companies {
+		if f.tracking[trackingKey(userID, c.ID)].ReviewState != "new" {
+			continue
+		}
+		nc := dto.NewCompany{ID: c.ID, Name: c.Name, Slug: c.Slug, Boards: []dto.TrackedBoard{}}
+		for _, b := range f.boards {
+			if b.CompanyID == c.ID {
+				nc.Boards = append(nc.Boards, dto.TrackedBoard{ID: b.ID, Source: b.Source, BoardToken: b.BoardToken, Status: b.Status})
+			}
+		}
+		slices.SortFunc(nc.Boards, func(a, b dto.TrackedBoard) int { return cmp.Compare(a.ID, b.ID) })
+		out = append(out, nc)
+	}
+	slices.SortFunc(out, func(a, b dto.NewCompany) int { return cmp.Compare(b.ID, a.ID) })
+	return out, nil
+}
+
+func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string) ([]dto.Job, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []dto.Job
+	for _, j := range f.jobs {
+		if f.tracking[trackingKey(userID, j.CompanyID)].ReviewState == "new" {
+			out = append(out, j)
+		}
+	}
+	return out, nil
+}
+
 func (f *FakeStore) DeleteCompanyTracking(_ context.Context, userID, companyID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
