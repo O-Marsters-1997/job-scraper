@@ -17,6 +17,13 @@ export const companySchema = z.object({
 
 export type Company = z.infer<typeof companySchema>;
 
+export const companyPageSchema = z.object({
+	items: z.array(companySchema),
+	next_cursor: z.string(),
+});
+
+export type CompanyPage = z.infer<typeof companyPageSchema>;
+
 export const companyTrackingSchema = z.object({
 	CompanyID: z.string(),
 	UserID: z.string(),

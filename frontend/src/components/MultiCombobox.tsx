@@ -41,6 +41,7 @@ export function MultiCombobox(props: {
 	placeholder?: string;
 	chipClass?: string;
 	creatable?: boolean;
+	onSearch?: (query: string) => void;
 }) {
 	const [query, setQuery] = createSignal("");
 	const known = createMemo(
@@ -61,7 +62,11 @@ export function MultiCombobox(props: {
 				? [{ id: q, label: q, created: true }]
 				: [];
 		const matches = props.options
-			.filter((o) => !picked.has(o.id) && o.label.toLowerCase().includes(lower))
+			.filter(
+				(o) =>
+					!picked.has(o.id) &&
+					(props.onSearch || o.label.toLowerCase().includes(lower)),
+			)
 			.slice(0, MAX_RENDERED);
 		return [...created, ...selected(), ...matches];
 	});
@@ -70,14 +75,17 @@ export function MultiCombobox(props: {
 			multiple
 			options={shown()}
 			value={selected()}
-			onInputChange={setQuery}
+			onInputChange={(value) => {
+				setQuery(value);
+				props.onSearch?.(value);
+			}}
 			onChange={(opts) => props.onChange(opts.map((o) => o.id))}
 			optionValue="id"
 			optionTextValue="label"
 			optionLabel="label"
 			triggerMode="focus"
 			closeOnSelection={false}
-			defaultFilter="contains"
+			defaultFilter={props.onSearch ? () => true : "contains"}
 			placeholder={props.placeholder ?? "Search…"}
 			gutter={4}
 			sameWidth

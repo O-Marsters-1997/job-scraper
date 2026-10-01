@@ -307,20 +307,28 @@ func (s *Store) GetCompany(ctx context.Context, id string) (dto.Company, error) 
 	return toCompanyDTO(row), nil
 }
 
-func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.Company, error) {
+func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
-		return nil, err
+		return dto.CompanyPage{}, ErrInvalidID
 	}
-	rows, err := s.queries.ListCompaniesForUser(ctx, uid)
+	params := sqlc.PageCompaniesForUserParams{UserID: uid, Search: options.Search, TrackedOnly: options.TrackedOnly, PageLimit: options.Limit}
+	if options.CursorID != "" {
+		params.CursorID, err = data.UUID(options.CursorID)
+		if err != nil {
+			return dto.CompanyPage{}, ErrInvalidID
+		}
+		params.CursorName = pgtype.Text{String: options.CursorName, Valid: true}
+	}
+	rows, err := s.queries.PageCompaniesForUser(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("store.ListCompaniesForUser: %w", err)
+		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser: %w", err)
 	}
-	out := make([]dto.Company, len(rows))
+	page := dto.CompanyPage{Items: make([]dto.Company, len(rows))}
 	for i, r := range rows {
-		out[i] = toCompanyForUserDTO(r)
+		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow(r))
 	}
-	return out, nil
+	return page, nil
 }
 
 func (s *Store) GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error) {
@@ -336,7 +344,7 @@ func (s *Store) GetCompanyForUser(ctx context.Context, userID, id string) (dto.C
 	if err != nil {
 		return dto.Company{}, data.QueryErr("GetCompanyForUser", err)
 	}
-	return toCompanyForUserDTO(sqlc.ListCompaniesForUserRow(row)), nil
+	return toCompanyForUserDTO(row), nil
 }
 
 func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error) {

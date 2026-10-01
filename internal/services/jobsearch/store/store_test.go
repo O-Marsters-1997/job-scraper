@@ -987,17 +987,45 @@ func TestGetCompanyForUser(t *testing.T) {
 	}
 }
 
-func TestListCompaniesForUser(t *testing.T) {
+func pageCompanies(t *testing.T, st *store.Store, userID string) []dto.Company {
+	t.Helper()
+	page, err := st.PageCompaniesForUser(t.Context(), userID, dto.CompanyPageOptions{Limit: 100})
+	if err != nil {
+		t.Fatalf("PageCompaniesForUser() err = %v", err)
+	}
+	return page.Items
+}
+
+func TestPageCompaniesForUser(t *testing.T) {
+	t.Run("job count is the user's open jobs that are scored and not blocked", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		otherUserID := pgtest.InsertUser(t, pool)
+		acme := insertCompany(t, pool, "acme")
+		relevant := insertJob(t, pool, acme, 1, time.Now(), false)
+		blocked := insertJob(t, pool, acme, 2, time.Now(), false)
+		closed := insertJob(t, pool, acme, 3, time.Now(), true)
+		insertJob(t, pool, acme, 4, time.Now(), false)
+		scoredByOther := insertJob(t, pool, acme, 5, time.Now(), false)
+		scoreJob(t, pool, relevant, userID, `[]`)
+		scoreJob(t, pool, blocked, userID, `[{"effect":"blocked"}]`)
+		scoreJob(t, pool, closed, userID, `[]`)
+		scoreJob(t, pool, scoredByOther, otherUserID, `[]`)
+
+		if got := pageCompanies(t, st, userID); len(got) != 1 || got[0].JobCount != 1 {
+			t.Errorf("PageCompaniesForUser() = %+v, want one company with job count 1", got)
+		}
+		if got, err := st.GetCompanyForUser(t.Context(), userID, acme); err != nil || got.JobCount != 1 {
+			t.Errorf("GetCompanyForUser() = %+v, %v, want job count 1", got, err)
+		}
+	})
+
 	t.Run("shows tracked and untracked companies", func(t *testing.T) {
 		st, _, userID := newUserStore(t)
 		tracked := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
 		upsertCompany(t, st, dto.CompanyUpsert{Slug: "widgetco", Name: "Widgetco"})
 		trackCompany(t, st, userID, tracked.ID, 180)
 
-		companies, err := st.ListCompaniesForUser(t.Context(), userID)
-		if err != nil {
-			t.Fatalf("ListCompaniesForUser() err = %v", err)
-		}
+		companies := pageCompanies(t, st, userID)
 		type view struct {
 			Tracked  bool
 			Interval int
@@ -1008,7 +1036,7 @@ func TestListCompaniesForUser(t *testing.T) {
 		}
 		want := map[string]view{"acme": {true, 180}, "widgetco": {false, 0}}
 		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("ListCompaniesForUser() (-want +got):\n%s", diff)
+			t.Errorf("PageCompaniesForUser() (-want +got):\n%s", diff)
 		}
 	})
 
@@ -1031,12 +1059,9 @@ func TestListCompaniesForUser(t *testing.T) {
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				companies, err := st.ListCompaniesForUser(t.Context(), tt.userID)
-				if err != nil {
-					t.Fatalf("ListCompaniesForUser() err = %v", err)
-				}
+				companies := pageCompanies(t, st, tt.userID)
 				if len(companies) != 1 {
-					t.Fatalf("ListCompaniesForUser() = %+v, want one company", companies)
+					t.Fatalf("PageCompaniesForUser() = %+v, want one company", companies)
 				}
 				if companies[0].Tracked || companies[0].CheckIntervalMinutes != tt.wantInterval {
 					t.Errorf("company = %+v, want untracked with interval %d", companies[0], tt.wantInterval)
@@ -1060,12 +1085,9 @@ func TestListCompaniesForUser(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		companies, err := st.ListCompaniesForUser(t.Context(), userID)
-		if err != nil {
-			t.Fatalf("ListCompaniesForUser() err = %v", err)
-		}
+		companies := pageCompanies(t, st, userID)
 		if len(companies) != 1 || companies[0].LastCheckedAt == nil || !companies[0].LastCheckedAt.Equal(completed) {
-			t.Errorf("ListCompaniesForUser() = %+v, want last check %v", companies, completed)
+			t.Errorf("PageCompaniesForUser() = %+v, want last check %v", companies, completed)
 		}
 	})
 }

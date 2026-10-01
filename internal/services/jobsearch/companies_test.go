@@ -3,6 +3,7 @@ package jobsearch_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -44,11 +45,11 @@ func seedAcme(t *testing.T, st *jobsearchtest.FakeStore) dto.Company {
 
 func trackingFor(t *testing.T, st *jobsearchtest.FakeStore, companyID string) (dto.Company, bool) {
 	t.Helper()
-	companies, err := st.ListCompaniesForUser(t.Context(), userID)
+	page, err := st.PageCompaniesForUser(t.Context(), userID, dto.CompanyPageOptions{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range companies {
+	for _, c := range page.Items {
 		if c.ID == companyID {
 			return c, true
 		}
@@ -139,6 +140,51 @@ func TestGetCompany(t *testing.T) {
 				_, err := tt.svc.GetCompany(t.Context(), userID, "x")
 				if !apperr.IsKind(err, tt.wantKind) {
 					t.Fatalf("GetCompany() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
+		}
+	})
+}
+
+func TestListCompanies(t *testing.T) {
+	t.Run("pages through every company via next_cursor", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		for _, name := range []string{"Alpha", "Beta", "Gamma"} {
+			seedCompany(t, st, dto.CompanyUpsert{Slug: strings.ToLower(name), Name: name})
+		}
+
+		first, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Limit: "2"})
+		if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
+			t.Fatalf("ListCompanies(limit 2) = %+v, %v, want two items and a cursor", first, err)
+		}
+		second, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Limit: "2", Cursor: first.NextCursor})
+		if err != nil || len(second.Items) != 1 || second.Items[0].Name != "Gamma" || second.NextCursor != "" {
+			t.Fatalf("ListCompanies(cursor) = %+v, %v, want Gamma and no cursor", second, err)
+		}
+	})
+
+	t.Run("an empty result is an empty list", func(t *testing.T) {
+		svc, _ := newCompanyService(queuetest.NewRecorder())
+		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Q: "nothing"})
+		if err != nil || page.Items == nil || len(page.Items) != 0 {
+			t.Fatalf("ListCompanies() = %+v, %v, want empty non-nil items", page, err)
+		}
+	})
+
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			query dto.CompaniesQuery
+		}{
+			{"limit above the maximum", dto.CompaniesQuery{Limit: "101"}},
+			{"non-numeric limit", dto.CompaniesQuery{Limit: "x"}},
+			{"malformed cursor", dto.CompaniesQuery{Cursor: "!!"}},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, _ := newCompanyService(queuetest.NewRecorder())
+				if _, err := svc.ListCompanies(t.Context(), userID, tt.query); !apperr.IsKind(err, apperr.KindInvalid) {
+					t.Fatalf("ListCompanies(%+v) err = %v, want invalid", tt.query, err)
 				}
 			})
 		}

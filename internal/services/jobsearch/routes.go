@@ -30,7 +30,7 @@ func (m *Module) Routes(r chi.Router) {
 	})
 
 	r.Route("/companies", func(r chi.Router) {
-		r.Get("/", handlers.GetAll(m.store.ListCompaniesForUser))
+		r.Get("/", handlers.Query(m.jobs.ListCompanies))
 		r.Post("/", handlers.Create(m.jobs.CreateCompany))
 		r.Get("/{id}", handlers.GetByID(m.jobs.GetCompany))
 		r.Get("/new", handlers.GetAll(m.ListNewCompanies))

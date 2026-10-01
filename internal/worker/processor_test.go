@@ -581,9 +581,9 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err := f.discoverProcessor(failing, configsStub{match}).Process(ctx, task); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
 		}
-		companies, err := f.store.ListCompaniesForUser(ctx, "match")
-		if err != nil || len(companies) != 0 {
-			t.Fatalf("ListCompaniesForUser() = %+v, %v, want none", companies, err)
+		page, err := f.store.PageCompaniesForUser(ctx, "match", dto.CompanyPageOptions{Limit: 100})
+		if err != nil || len(page.Items) != 0 {
+			t.Fatalf("PageCompaniesForUser() = %+v, %v, want none", page, err)
 		}
 	})
 }

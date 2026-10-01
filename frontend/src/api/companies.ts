@@ -2,6 +2,7 @@ import type {
 	AddCompanyPayload,
 	Company,
 	CompanyBoard,
+	CompanyPage,
 	CompanyTracking,
 	NewCompany,
 	ReviewState,
@@ -9,6 +10,7 @@ import type {
 } from "../types/company";
 import {
 	companyBoardSchema,
+	companyPageSchema,
 	companySchema,
 	companyTrackingSchema,
 	newCompanySchema,
@@ -29,10 +31,26 @@ export class UnresolvableBoardError extends Error {
 	}
 }
 
-export async function fetchCompanies(): Promise<Company[]> {
+export type CompanyPageParams = {
+	q?: string;
+	tracked?: boolean;
+	cursor?: string;
+	limit?: number;
+};
+
+export async function fetchCompanyPage(
+	params: CompanyPageParams,
+): Promise<CompanyPage> {
 	return mocked(
-		(db) => db.getCompanies(),
-		() => apiFetch("/companies", companySchema.array()),
+		(db) => db.getCompanyPage(params),
+		() => {
+			const query = new URLSearchParams();
+			if (params.q) query.set("q", params.q);
+			if (params.tracked) query.set("tracked", "1");
+			if (params.cursor) query.set("cursor", params.cursor);
+			if (params.limit) query.set("limit", String(params.limit));
+			return apiFetch(`/companies?${query}`, companyPageSchema);
+		},
 	);
 }
 

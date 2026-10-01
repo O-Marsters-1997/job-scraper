@@ -3,12 +3,14 @@ import { Field } from "@/components/Field";
 import { MultiCombobox } from "@/components/MultiCombobox";
 import { Input } from "@/components/ui/input";
 import { uniqueCapitalised } from "@/lib/capitalise";
-import { useCompanies } from "../../../../hooks/useCompanies";
+import { useCompanySearch } from "../../../../hooks/useCompanies";
+import { useDebouncedTerm } from "../../../../hooks/useDebouncedTerm";
 import { STANCE_TONE } from "./stance";
 import type { ExclusionFilters } from "./useExclusionFilters";
 
 export function FiltersSection(props: { filters: ExclusionFilters }) {
-	const companiesQuery = useCompanies();
+	const [term, searchCompanies] = useDebouncedTerm();
+	const companiesQuery = useCompanySearch(term);
 	const companyOptions = createMemo(() =>
 		(companiesQuery.data ?? []).map((c) => ({ id: c.Name, label: c.Name })),
 	);
@@ -31,6 +33,7 @@ export function FiltersSection(props: { filters: ExclusionFilters }) {
 			<MultiCombobox
 				label="Excluded companies"
 				options={companyOptions()}
+				onSearch={searchCompanies}
 				value={props.filters.companies()}
 				onChange={(names) =>
 					props.filters.setCompanies(uniqueCapitalised(names))

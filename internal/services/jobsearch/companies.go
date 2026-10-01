@@ -3,6 +3,7 @@ package jobsearch
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -43,6 +44,44 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 		}
 	}
 	return company, nil
+}
+
+type companyCursor struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+}
+
+func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.CompaniesQuery) (dto.CompanyPage, error) {
+	limit, err := parsePageLimit(q.Limit)
+	if err != nil {
+		return dto.CompanyPage{}, err
+	}
+	options := dto.CompanyPageOptions{Limit: int32(limit + 1), Search: strings.TrimSpace(q.Q), TrackedOnly: q.Tracked == "1"}
+	if q.Cursor != "" {
+		var decoded companyCursor
+		if err := decodeCursor(q.Cursor, &decoded); err != nil || decoded.ID == "" {
+			return dto.CompanyPage{}, apperr.Invalid("invalid cursor")
+		}
+		options.CursorName, options.CursorID = decoded.Name, decoded.ID
+	}
+
+	page, err := s.store.PageCompaniesForUser(ctx, userID, options)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidID) {
+			return dto.CompanyPage{}, apperr.Invalid("invalid cursor ID")
+		}
+		return dto.CompanyPage{}, err
+	}
+
+	if len(page.Items) > limit {
+		page.Items = page.Items[:limit]
+		last := page.Items[limit-1]
+		page.NextCursor = encodeCursor(companyCursor{Name: last.Name, ID: last.ID})
+	}
+	if page.Items == nil {
+		page.Items = []dto.Company{}
+	}
+	return page, nil
 }
 
 func (s *Service) GetCompany(ctx context.Context, userID, id string) (dto.Company, error) {

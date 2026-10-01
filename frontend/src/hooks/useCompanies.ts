@@ -1,10 +1,15 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import {
+	createInfiniteQuery,
+	createQuery,
+	keepPreviousData,
+	queryOptions,
+} from "@tanstack/solid-query";
 import {
 	addCompany,
 	addCompanyBoard,
-	fetchCompanies,
 	fetchCompany,
 	fetchCompanyBoards,
+	fetchCompanyPage,
 	fetchNewCompanies,
 	fetchTrackedCompanies,
 	setCompanyReview,
@@ -14,13 +19,25 @@ import { keys } from "../api/keys";
 import type { CompanyBoard, ReviewState } from "../types/company";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const companiesQueryOptions = queryOptions({
-	queryKey: keys.companies.all,
-	queryFn: fetchCompanies,
-});
+export function useCompanyPages(q: () => string) {
+	return createInfiniteQuery(() => ({
+		queryKey: keys.companies.list(q()),
+		queryFn: ({ pageParam }) => fetchCompanyPage({ q: q(), cursor: pageParam }),
+		initialPageParam: "",
+		getNextPageParam: (last) => last.next_cursor || undefined,
+		placeholderData: keepPreviousData,
+	}));
+}
 
-export function useCompanies() {
-	return createQuery(() => companiesQueryOptions);
+const PICKER_LIMIT = 20;
+
+export function useCompanySearch(q: () => string) {
+	return createQuery(() => ({
+		queryKey: keys.companies.search(q()),
+		queryFn: () => fetchCompanyPage({ q: q(), limit: PICKER_LIMIT }),
+		select: (page) => page.items,
+		placeholderData: keepPreviousData,
+	}));
 }
 
 export const companyQueryOptions = (id: string) =>
