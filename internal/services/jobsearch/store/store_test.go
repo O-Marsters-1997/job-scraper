@@ -903,6 +903,13 @@ func TestUpsertCompany(t *testing.T) {
 	}
 }
 
+func TestGetCompanyForUser(t *testing.T) {
+	st, _, userID := newUserStore(t)
+	if _, err := st.GetCompanyForUser(t.Context(), userID, "not-a-uuid"); !errors.Is(err, store.ErrInvalidID) {
+		t.Fatalf("GetCompanyForUser(malformed) err = %v, want ErrInvalidID", err)
+	}
+}
+
 func TestListCompaniesForUser(t *testing.T) {
 	t.Run("shows tracked and untracked companies", func(t *testing.T) {
 		st, _, userID := newUserStore(t)

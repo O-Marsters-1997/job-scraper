@@ -2,13 +2,16 @@ package jobsearch
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
@@ -40,6 +43,18 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 		}
 	}
 	return company, nil
+}
+
+func (s *Service) GetCompany(ctx context.Context, userID, id string) (dto.Company, error) {
+	company, err := s.store.GetCompanyForUser(ctx, userID, id)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		return dto.Company{}, apperr.NotFound("company not found")
+	case errors.Is(err, store.ErrInvalidID):
+		return dto.Company{}, apperr.Invalid("invalid company ID")
+	default:
+		return company, err
+	}
 }
 
 func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.SetCompanyTrackingInput) (dto.CompanyTracking, error) {

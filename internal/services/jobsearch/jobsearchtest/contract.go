@@ -149,6 +149,30 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("get company for user carries that user's tracking", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "tracked-co", Name: "Tracked Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Name != "Tracked Co" || !got.Tracked || got.CheckIntervalMinutes != 180 {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want tracked Tracked Co", got, err)
+		}
+	})
+
+	t.Run("get an unknown company for user returns not found", func(t *testing.T) {
+		st, userID := newStore(t)
+		_, err := st.GetCompanyForUser(t.Context(), userID, missingID)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("GetCompanyForUser(...) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("set company tracking then list for user shows it", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

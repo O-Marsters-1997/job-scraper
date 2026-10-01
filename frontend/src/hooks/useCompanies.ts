@@ -3,6 +3,7 @@ import {
 	addCompany,
 	addCompanyBoard,
 	fetchCompanies,
+	fetchCompany,
 	fetchCompanyBoards,
 	fetchNewCompanies,
 	fetchTrackedCompanies,
@@ -20,6 +21,19 @@ export const companiesQueryOptions = queryOptions({
 
 export function useCompanies() {
 	return createQuery(() => companiesQueryOptions);
+}
+
+export const companyQueryOptions = (id: string) =>
+	queryOptions({
+		queryKey: keys.companies.detail(id),
+		queryFn: () => fetchCompany(id),
+	});
+
+export function useCompany(id: () => string) {
+	return createQuery(() => ({
+		...companyQueryOptions(id()),
+		enabled: Boolean(id()),
+	}));
 }
 
 export function useTrackedCompanies(poll: () => boolean = () => false) {

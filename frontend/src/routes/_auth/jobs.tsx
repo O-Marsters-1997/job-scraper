@@ -9,7 +9,7 @@ import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
-import { useCompanies } from "../../hooks/useCompanies";
+import { useCompany } from "../../hooks/useCompanies";
 import { useAllJobs } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -28,12 +28,10 @@ function JobsPage() {
 	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();
 	const jobs = () => query.data ?? [];
-	const companies = useCompanies();
-	const companyName = () =>
-		companies.data?.find((c) => c.ID === filters().company)?.Name ??
-		"Selected company";
 
 	const filters = () => parseSearch(search() as Record<string, unknown>);
+	const company = useCompany(() => filters().company ?? "");
+	const companyName = () => company.data?.Name ?? "Selected company";
 	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
 	const srcOptions = () => sourceOptions(jobs());
 

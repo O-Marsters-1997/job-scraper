@@ -19,8 +19,8 @@ import {
 	sourceOptions,
 } from "@/lib/jobFilters";
 import {
-	companiesQueryOptions,
-	useCompanies,
+	companyQueryOptions,
+	useCompany,
 	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
@@ -31,18 +31,19 @@ import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
 import { CompanyDetailsCard } from "./-companies-detail/CompanyDetailsCard";
 
 export const Route = createFileRoute("/_auth/companies_/$id")({
-	loader: () => queryClient.prefetchQuery(companiesQueryOptions),
+	loader: ({ params }) =>
+		queryClient.prefetchQuery(companyQueryOptions(params.id)),
 	component: CompanyDetailPage,
 });
 
 function CompanyDetailPage() {
 	const params = Route.useParams();
-	const companiesQuery = useCompanies();
+	const companyQuery = useCompany(() => params().id);
 	const jobsQuery = useAllJobs();
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
 
-	const company = () => companiesQuery.data?.find((c) => c.ID === params().id);
+	const company = () => companyQuery.data ?? undefined;
 
 	const [filters, setFilters] = createSignal(DEFAULT_FILTERS);
 	const setFilterPatch = (patch: Partial<typeof DEFAULT_FILTERS>) =>
@@ -61,8 +62,7 @@ function CompanyDetailPage() {
 
 	return (
 		<QueryBoundary
-			query={companiesQuery}
-			select={(list) => list.find((c) => c.ID === params().id)}
+			query={companyQuery}
 			notFound={
 				<div class="flex h-[calc(100vh-14rem)] flex-col items-center justify-center gap-4 text-center">
 					<div>

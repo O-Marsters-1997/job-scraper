@@ -26,6 +26,20 @@ FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
 ORDER BY c.name;
 
+-- name: GetCompanyForUser :one
+SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+    c.last_crawled_at, c.first_seen_at,
+    (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
+    COALESCE(tc.enabled, FALSE) AS tracked,
+    COALESCE(tc.review_state, '')::text AS review_state,
+    tc.check_interval_minutes,
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
+FROM companies c
+LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
+WHERE c.id = $2;
+
 -- name: SetCompanyTracking :one
 INSERT INTO tracked_companies (user_id, company_id, enabled, check_interval_minutes)
 VALUES ($1, $2, $3, COALESCE(NULLIF(sqlc.arg(check_interval_minutes)::int, 0), 360))

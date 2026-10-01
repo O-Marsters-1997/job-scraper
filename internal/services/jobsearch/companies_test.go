@@ -1,6 +1,7 @@
 package jobsearch_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
 const (
@@ -97,6 +99,46 @@ func TestCreateCompany(t *testing.T) {
 				_, err := svc.CreateCompany(t.Context(), userID, tt.in)
 				if !apperr.IsKind(err, tt.wantKind) {
 					t.Fatalf("CreateCompany(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+				}
+			})
+		}
+	})
+}
+
+type invalidIDStore struct{ jobsearch.Store }
+
+func (invalidIDStore) GetCompanyForUser(context.Context, string, string) (dto.Company, error) {
+	return dto.Company{}, store.ErrInvalidID
+}
+
+func TestGetCompany(t *testing.T) {
+	t.Run("returns the company with this user's tracking", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		if _, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 180); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := svc.GetCompany(t.Context(), userID, company.ID)
+		if err != nil || got.Name != "Acme" || !got.Tracked {
+			t.Fatalf("GetCompany() = %+v, %v, want tracked Acme", got, err)
+		}
+	})
+
+	t.Run("maps store errors to kinds", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			svc      *jobsearch.Service
+			wantKind apperr.Kind
+		}{
+			{"unknown company", jobsearch.NewService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder()), apperr.KindNotFound},
+			{"malformed id", jobsearch.NewService(invalidIDStore{}, queuetest.NewRecorder()), apperr.KindInvalid},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				_, err := tt.svc.GetCompany(t.Context(), userID, "x")
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("GetCompany() err = %v, want kind %v", err, tt.wantKind)
 				}
 			})
 		}
