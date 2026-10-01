@@ -1,6 +1,7 @@
 package cvtailor_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -372,12 +373,30 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 		var gaps []dto.DraftFinding
 		for _, f := range e.draft(t, id).Findings {
-			if f.Severity == "info" {
+			if f.Severity == "info" && f.Check == "skills" {
 				gaps = append(gaps, f)
 			}
 		}
 		if len(gaps) != 1 || !strings.Contains(gaps[0].Message, "Kubernetes") {
 			t.Errorf("info findings = %+v, want the Kubernetes gap", gaps)
+		}
+	})
+
+	t.Run("warns when contact details are only in the Doc header", func(t *testing.T) {
+		e, id := newQueuedDraft(t)
+		tab := bytes.Replace(baseTab(t), []byte(`{"documentTab":{`),
+			[]byte(`{"documentTab":{"headers":{"h":{"content":[{"paragraph":{"elements":[{"textRun":{"content":"jo@example.com\n"}}]}}]}},`), 1)
+
+		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: tab}, editor: cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.25))})
+
+		var got []string
+		for _, f := range e.draft(t, id).Findings {
+			if f.Check == "contact" {
+				got = append(got, f.Severity)
+			}
+		}
+		if diff := cmp.Diff([]string{"info"}, got); diff != "" {
+			t.Errorf("contact findings mismatch (-want +got):\n%s", diff)
 		}
 	})
 }

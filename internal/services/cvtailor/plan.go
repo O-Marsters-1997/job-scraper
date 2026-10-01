@@ -174,6 +174,7 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
 	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
+	d.Contact = &checks.ContactInput{InBody: pl.structure.Contact.InBody, InHeaderFooter: pl.structure.Contact.InHeaderFooter}
 	if pl.structure.Skills != nil {
 		d.BaseSkills = pl.structure.Skills.Items
 	}

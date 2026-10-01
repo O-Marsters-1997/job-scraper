@@ -121,3 +121,35 @@ func FuzzParse(f *testing.F) {
 		_, _ = docparse.Parse(raw)
 	})
 }
+
+func TestParseContact(t *testing.T) {
+	para := func(text string) string {
+		return `{"paragraph":{"elements":[{"textRun":{"content":"` + text + `\n"}}],"paragraphStyle":{"namedStyleType":"NORMAL_TEXT"}}}`
+	}
+	tab := func(body, header, footer string) []byte {
+		return []byte(`{"documentTab":{"body":{"content":[` + para(body) + `]},` +
+			`"headers":{"h":{"content":[` + para(header) + `]}},"footers":{"f":{"content":[` + para(footer) + `]}}}}`)
+	}
+	tests := []struct {
+		name string
+		raw  []byte
+		want docparse.Contact
+	}{
+		{"email in body", tab("jo@example.com", "", ""), docparse.Contact{InBody: true}},
+		{"phone in body", tab("+44 7700 900123", "", ""), docparse.Contact{InBody: true}},
+		{"email only in header", tab("Jo", "jo@example.com", ""), docparse.Contact{InHeaderFooter: true}},
+		{"phone only in footer", tab("Jo", "", "07700 900123"), docparse.Contact{InHeaderFooter: true}},
+		{"absent", tab("Jo", "", ""), docparse.Contact{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := docparse.Parse(tt.raw)
+			if err != nil {
+				t.Fatalf("Parse() err = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got.Contact); diff != "" {
+				t.Errorf("Parse().Contact mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

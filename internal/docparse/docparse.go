@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -12,6 +13,8 @@ var (
 	skillsHeading  = regexp.MustCompile(`(?i)\b(skills|technologies)\b`)
 	skillSplit     = regexp.MustCompile(`\s*[,;|•·]\s*`)
 	separators     = []string{" | ", " • ", " · ", "; ", ", "}
+	emailRe        = regexp.MustCompile(`[\w.+-]+@[\w-]+(?:\.[\w-]+)+`)
+	phoneRe        = regexp.MustCompile(`\+?\d[\d\s().-]{7,}\d`)
 )
 
 // Heading is a heading paragraph. Index is its start index in the Doc body.
@@ -41,9 +44,16 @@ type SkillsSlot struct {
 	EndIndex   int
 }
 
+// Contact records where an email address or phone number appears in the Tab.
+type Contact struct {
+	InBody         bool
+	InHeaderFooter bool
+}
+
 // DocStructure is the parsed shape of one Docs Tab. Profile and Skills are nil
 // when the CV has no such section.
 type DocStructure struct {
+	Contact  Contact
 	Headings []Heading
 	Slots    []Slot
 	Profile  *Slot
@@ -55,7 +65,13 @@ type tab struct {
 		Body struct {
 			Content []element `json:"content"`
 		} `json:"body"`
+		Headers map[string]segment `json:"headers"`
+		Footers map[string]segment `json:"footers"`
 	} `json:"documentTab"`
+}
+
+type segment struct {
+	Content []element `json:"content"`
 }
 
 type element struct {
@@ -99,7 +115,35 @@ func Parse(tabJSON []byte) (DocStructure, error) {
 	}
 	var paras []para
 	flatten(t.DocumentTab.Body.Content, &paras)
-	return build(paras), nil
+	ds := build(paras)
+	ds.Contact = Contact{InBody: hasContact(paras), InHeaderFooter: hasContact(segmentParas(t))}
+	return ds, nil
+}
+
+func segmentParas(t tab) []para {
+	var paras []para
+	for _, segs := range []map[string]segment{t.DocumentTab.Headers, t.DocumentTab.Footers} {
+		for _, seg := range segs {
+			flatten(seg.Content, &paras)
+		}
+	}
+	return paras
+}
+
+func hasContact(paras []para) bool {
+	return slices.ContainsFunc(paras, func(p para) bool {
+		return emailRe.MatchString(p.text) || slices.ContainsFunc(phoneRe.FindAllString(p.text, -1), isPhone)
+	})
+}
+
+func isPhone(s string) bool {
+	digits := 0
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	return digits >= 9
 }
 
 func flatten(content []element, out *[]para) {
