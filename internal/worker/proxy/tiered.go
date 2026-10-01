@@ -68,21 +68,16 @@ func (t *tieredTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func (t *tieredTransport) fetch(req *http.Request) (*http.Response, error) {
 	for range residentialAttempts {
 		resp, err := t.residentialAttempt(req)
-		if err == nil && !blocked(req, resp) {
+		switch {
+		case err == nil && !blocked(req, resp):
 			return resp, nil
-		}
-		if err == nil {
+		case err == nil:
 			_ = resp.Body.Close()
-		} else if ctxErr := req.Context().Err(); ctxErr != nil {
-			return nil, ctxErr
+		case req.Context().Err() != nil:
+			return nil, req.Context().Err()
 		}
-		if req.GetBody != nil {
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, err
-			}
-			req = req.Clone(req.Context())
-			req.Body = body
+		if req, err = rewound(req); err != nil {
+			return nil, err
 		}
 	}
 	return t.unlocker.RoundTrip(req)
@@ -106,7 +101,6 @@ func (t *tieredTransport) residentialAttempt(req *http.Request) (*http.Response,
 	return resp, nil
 }
 
-// blocked reports a LinkedIn anti-bot response; 404 and 410 are the Job being gone and never count.
 func blocked(req *http.Request, resp *http.Response) bool {
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests, http.StatusForbidden, 999:

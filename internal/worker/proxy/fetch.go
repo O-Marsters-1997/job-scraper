@@ -215,16 +215,24 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, req.Context().Err()
 		case <-time.After(200 * time.Millisecond):
 		}
-		if req.GetBody != nil {
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, err
-			}
-			req = req.Clone(req.Context())
-			req.Body = body
+		if req, err = rewound(req); err != nil {
+			return nil, err
 		}
 	}
 	return nil, errors.New("unreachable")
+}
+
+func rewound(req *http.Request) (*http.Request, error) {
+	if req.GetBody == nil {
+		return req, nil
+	}
+	body, err := req.GetBody()
+	if err != nil {
+		return nil, err
+	}
+	req = req.Clone(req.Context())
+	req.Body = body
+	return req, nil
 }
 
 func zoneExhausted(resp *http.Response) bool {
