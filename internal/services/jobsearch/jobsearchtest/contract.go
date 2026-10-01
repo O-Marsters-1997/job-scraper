@@ -313,6 +313,44 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		cases := []struct {
+			slug, method string
+			verify       bool
+			track        bool
+		}{
+			{"untracked-co", "discovered", true, false},
+			{"tracked-co", "discovered", true, true},
+			{"candidate-co", "", false, false},
+			{"confirmed-co", "user_confirmed", true, false},
+		}
+		for _, tc := range cases {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: tc.slug, Name: tc.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%s) = %v", tc.slug, err)
+			}
+			if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug); err != nil {
+				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
+			}
+			if tc.verify {
+				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, tc.method); err != nil {
+					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
+				}
+			}
+			if tc.track {
+				if _, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil {
+					t.Fatalf("TrackDiscoveredCompany(%s) = %v", tc.slug, err)
+				}
+			}
+		}
+		got, err := st.ListUntrackedDiscoveredBoards(ctx)
+		if err != nil || len(got) != 1 || got[0].BoardToken != "untracked-co" {
+			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want only untracked-co", got, err)
+		}
+	})
+
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

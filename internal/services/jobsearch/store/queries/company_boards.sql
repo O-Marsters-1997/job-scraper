@@ -35,3 +35,9 @@ FROM companies c
 JOIN company_boards cb ON cb.company_id = c.id AND cb.status = 'verified'
 JOIN tracked_companies tc ON tc.company_id = c.id AND tc.enabled
 WHERE c.slug = ANY($1::text[]);
+
+-- name: ListUntrackedDiscoveredBoards :many
+SELECT cb.* FROM company_boards cb
+WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
+  AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+ORDER BY cb.created_at, cb.id;
