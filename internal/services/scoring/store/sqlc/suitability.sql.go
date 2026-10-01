@@ -126,6 +126,54 @@ func (q *Queries) InsertOptionAnswer(ctx context.Context, arg InsertOptionAnswer
 	return err
 }
 
+const listCompanyJobAnswers = `-- name: ListCompanyJobAnswers :many
+SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
+FROM jobs j
+JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+WHERE j.company_id = ANY($1::uuid[]) AND j.closed_at IS NULL AND a.model = $2::text
+`
+
+type ListCompanyJobAnswersParams struct {
+	CompanyIds []pgtype.UUID
+	Model      string
+}
+
+type ListCompanyJobAnswersRow struct {
+	JobID        pgtype.UUID
+	QuestionHash string
+	PYes         float32
+	PNo          float32
+	PNotStated   float32
+	Confidence   float32
+}
+
+func (q *Queries) ListCompanyJobAnswers(ctx context.Context, arg ListCompanyJobAnswersParams) ([]ListCompanyJobAnswersRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyJobAnswers, arg.CompanyIds, arg.Model)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCompanyJobAnswersRow
+	for rows.Next() {
+		var i ListCompanyJobAnswersRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.QuestionHash,
+			&i.PYes,
+			&i.PNo,
+			&i.PNotStated,
+			&i.Confidence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listInterestedConfigs = `-- name: ListInterestedConfigs :many
 SELECT u.id AS user_id,
     COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
@@ -183,6 +231,36 @@ func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) 
 			&i.Preferences,
 			&i.CompanyIsNew,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenCompanyJobs = `-- name: ListOpenCompanyJobs :many
+SELECT id, company_id FROM jobs
+WHERE company_id = ANY($1::uuid[]) AND closed_at IS NULL
+`
+
+type ListOpenCompanyJobsRow struct {
+	ID        pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) ListOpenCompanyJobs(ctx context.Context, companyIds []pgtype.UUID) ([]ListOpenCompanyJobsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenCompanyJobs, companyIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenCompanyJobsRow
+	for rows.Next() {
+		var i ListOpenCompanyJobsRow
+		if err := rows.Scan(&i.ID, &i.CompanyID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

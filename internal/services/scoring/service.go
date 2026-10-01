@@ -45,6 +45,7 @@ type Store interface {
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
+	ListCompanyAnswers(ctx context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error)
 
 	OpsState(ctx context.Context) (dto.OpsState, error)
 	GetScoringStatus(ctx context.Context, userID string) (dto.ScoringStatus, error)

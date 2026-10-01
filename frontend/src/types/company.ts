@@ -63,6 +63,14 @@ export const trackedCompanySchema = z.object({
 	last_checked_at: z.string().nullable(),
 });
 
+const companyProfileEntrySchema = z.object({
+	dimension: z.string(),
+	label: z.string(),
+	yes: z.number(),
+	known: z.number(),
+	total: z.number(),
+});
+
 export const companyProfileSchema = z.object({
 	sectors: z.array(z.string()).nullable(),
 	size: z.string(),
@@ -86,9 +94,11 @@ export const newCompanySchema = z.object({
 	boards: z.array(trackedBoardSchema),
 	matching_roles: z.number(),
 	best_suitability: z.number().nullable(),
+	rollup: z.array(companyProfileEntrySchema),
 	profile: companyProfileSchema.nullable(),
 });
 
+export type CompanyProfileEntry = z.infer<typeof companyProfileEntrySchema>;
 export type NewCompany = z.infer<typeof newCompanySchema>;
 export type TrackedBoard = z.infer<typeof trackedBoardSchema>;
 export type TrackedCompany = z.infer<typeof trackedCompanySchema>;

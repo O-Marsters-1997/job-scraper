@@ -6,6 +6,7 @@ package scoringtest
 import (
 	"context"
 	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -360,6 +361,21 @@ func (f *FakeStore) RetireScoringOption(_ context.Context, id string) error {
 		return nil
 	}
 	return data.ErrNotFound
+}
+
+func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string][]map[string]dto.Answer)
+	for _, job := range f.jobs {
+		if !slices.Contains(companyIDs, job.CompanyID) {
+			continue
+		}
+		answers := make(map[string]dto.Answer)
+		maps.Copy(answers, f.answers[answerKey(job.ID, job.ContentFingerprint, model)])
+		out[job.CompanyID] = append(out[job.CompanyID], answers)
+	}
+	return out, nil
 }
 
 var _ scoring.Store = (*FakeStore)(nil)

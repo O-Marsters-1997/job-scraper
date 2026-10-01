@@ -11,11 +11,12 @@ import (
 )
 
 type NoopScoring struct {
-	configs map[string]dto.SearchConfig
+	configs  map[string]dto.SearchConfig
+	profiles map[string][]dto.CompanyProfileEntry
 }
 
 func NewNoopScoring() *NoopScoring {
-	return &NoopScoring{configs: make(map[string]dto.SearchConfig)}
+	return &NoopScoring{configs: make(map[string]dto.SearchConfig), profiles: make(map[string][]dto.CompanyProfileEntry)}
 }
 
 func (s *NoopScoring) SeedSearchConfig(cfg dto.SearchConfig) {
@@ -24,6 +25,18 @@ func (s *NoopScoring) SeedSearchConfig(cfg dto.SearchConfig) {
 
 func (s *NoopScoring) SearchConfig(_ context.Context, userID string) (dto.SearchConfig, error) {
 	return s.configs[userID], nil
+}
+
+func (s *NoopScoring) CompanyProfiles(_ context.Context, _ string, companyIDs []string) (map[string][]dto.CompanyProfileEntry, error) {
+	out := make(map[string][]dto.CompanyProfileEntry, len(companyIDs))
+	for _, id := range companyIDs {
+		out[id] = s.profiles[id]
+	}
+	return out, nil
+}
+
+func (s *NoopScoring) SeedProfile(companyID string, profile []dto.CompanyProfileEntry) {
+	s.profiles[companyID] = profile
 }
 
 func (s *NoopScoring) JobsChanged(context.Context, pgx.Tx, []string, bool) error { return nil }
