@@ -25,11 +25,10 @@ func (m *Module) CompanyProfiles(ctx context.Context, userID string, companyIDs 
 		return nil, err
 	}
 
-	var picked []dto.ScoringOption
-	for _, p := range dedupeBySource(cfg.Preferences.Picks) {
-		if opt, ok := byID[p.OptionID]; ok && opt.RetiredAt == nil {
-			picked = append(picked, opt)
-		}
+	picked := pickedOptions(cfg.Preferences.Picks, byID)
+	hashes := make([]string, len(picked))
+	for i, opt := range picked {
+		hashes[i] = QuestionHash(opt.Question)
 	}
 
 	out := make(map[string][]dto.CompanyProfileEntry, len(companyIDs))
@@ -37,24 +36,37 @@ func (m *Module) CompanyProfiles(ctx context.Context, userID string, companyIDs 
 		jobs := answersByCompany[companyID]
 		entries := make([]dto.CompanyProfileEntry, len(picked))
 		for i, opt := range picked {
-			e := dto.CompanyProfileEntry{Dimension: opt.Dimension, Label: opt.Label, Total: len(jobs)}
-			hash := QuestionHash(opt.Question)
-			for _, answers := range jobs {
-				a, ok := answers[hash]
-				if !ok {
-					continue
-				}
-				switch resolveAnswer(a) {
-				case "yes":
-					e.Known++
-					e.Yes++
-				case "no":
-					e.Known++
-				}
-			}
-			entries[i] = e
+			entries[i] = profileEntry(opt, hashes[i], jobs)
 		}
 		out[companyID] = entries
 	}
 	return out, nil
+}
+
+func pickedOptions(picks []dto.Pick, byID map[string]dto.ScoringOption) []dto.ScoringOption {
+	var picked []dto.ScoringOption
+	for _, p := range dedupeBySource(picks) {
+		if opt, ok := byID[p.OptionID]; ok && opt.RetiredAt == nil {
+			picked = append(picked, opt)
+		}
+	}
+	return picked
+}
+
+func profileEntry(opt dto.ScoringOption, hash string, jobs []map[string]dto.Answer) dto.CompanyProfileEntry {
+	e := dto.CompanyProfileEntry{Dimension: opt.Dimension, Label: opt.Label, Total: len(jobs)}
+	for _, answers := range jobs {
+		a, ok := answers[hash]
+		if !ok {
+			continue
+		}
+		switch resolveAnswer(a) {
+		case "yes":
+			e.Known++
+			e.Yes++
+		case "no":
+			e.Known++
+		}
+	}
+	return e
 }

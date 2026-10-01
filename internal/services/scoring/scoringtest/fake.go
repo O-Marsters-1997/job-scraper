@@ -363,8 +363,6 @@ func (f *FakeStore) RetireScoringOption(_ context.Context, id string) error {
 	return data.ErrNotFound
 }
 
-var _ scoring.Store = (*FakeStore)(nil)
-
 func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -379,3 +377,5 @@ func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, m
 	}
 	return out, nil
 }
+
+var _ scoring.Store = (*FakeStore)(nil)
