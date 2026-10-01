@@ -3,6 +3,8 @@ package pdftext
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 
 	"github.com/ledongthuc/pdf"
@@ -37,4 +39,87 @@ func Lines(data []byte) (lines []string, err error) {
 		}
 	}
 	return lines, nil
+}
+
+const glyphGap = 0.5
+
+// Run is one string of text drawn at a single position, size and font.
+type Run struct {
+	Page int
+	X, Y float64
+	Size float64
+	Font string
+	Text string
+}
+
+// Runs returns every text run of the PDF in reading order: page by page,
+// top to bottom, then left to right.
+func Runs(data []byte) (runs []Run, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			runs, err = nil, fmt.Errorf("malformed PDF: %v", r)
+		}
+	}()
+	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	for n := 1; n <= r.NumPage(); n++ {
+		start := len(runs)
+		var prevEnd float64
+		for _, t := range r.Page(n).Content().Text {
+			if last := len(runs) - 1; last >= start {
+				p := &runs[last]
+				if p.Font == t.Font && p.Size == t.FontSize && p.Y == t.Y && math.Abs(t.X-prevEnd) < glyphGap {
+					p.Text += t.S
+					prevEnd = t.X + t.W
+					continue
+				}
+			}
+			runs = append(runs, Run{Page: n, X: t.X, Y: t.Y, Size: t.FontSize, Font: t.Font, Text: t.S})
+			prevEnd = t.X + t.W
+		}
+		page := runs[start:]
+		sort.SliceStable(page, func(i, j int) bool {
+			if page[i].Y != page[j].Y {
+				return page[i].Y > page[j].Y
+			}
+			return page[i].X < page[j].X
+		})
+	}
+	return runs, nil
+}
+
+// Match reports whether a and b draw the same text in the same fonts, with
+// every position and size within tol points. When they differ, diff names the
+// page, line and text of the first mismatching run.
+func Match(a, b []Run, tol float64) (ok bool, diff string) {
+	line, lastY, lastPage := 0, 0.0, 0
+	for i := 0; i < max(len(a), len(b)); i++ {
+		switch {
+		case i >= len(a):
+			return false, fmt.Sprintf("page %d, %q: extra text only in the second PDF", b[i].Page, b[i].Text)
+		case i >= len(b):
+			return false, fmt.Sprintf("page %d, %q: missing from the second PDF", a[i].Page, a[i].Text)
+		}
+		x, y := a[i], b[i]
+		if x.Page != lastPage {
+			line = 1
+		} else if math.Abs(x.Y-lastY) > tol {
+			line++
+		}
+		lastPage, lastY = x.Page, x.Y
+		where := fmt.Sprintf("page %d, line %d, %q", x.Page, line, x.Text)
+		switch {
+		case x.Page != y.Page || x.Text != y.Text:
+			return false, fmt.Sprintf("%s: text reflowed, second PDF has %q on page %d", where, y.Text, y.Page)
+		case x.Font != y.Font:
+			return false, fmt.Sprintf("%s: font changed from %s to %s", where, x.Font, y.Font)
+		case math.Abs(x.Size-y.Size) > tol:
+			return false, fmt.Sprintf("%s: font size changed from %g to %g", where, x.Size, y.Size)
+		case math.Abs(x.X-y.X) > tol || math.Abs(x.Y-y.Y) > tol:
+			return false, fmt.Sprintf("%s: moved from (%.1f, %.1f) to (%.1f, %.1f)", where, x.X, x.Y, y.X, y.Y)
+		}
+	}
+	return true, ""
 }
