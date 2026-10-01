@@ -5,7 +5,7 @@ import { mocked } from "./config";
 
 export async function fetchAllJobs(): Promise<Job[]> {
 	return mocked(
-		(db) => db.getJobs(),
+		(db) => db.getJobs().filter((job) => job.SuitabilityScore != null),
 		() => apiFetch("/jobs/all", jobSchema.array()),
 	);
 }

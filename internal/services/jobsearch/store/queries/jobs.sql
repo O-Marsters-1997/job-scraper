@@ -1,10 +1,11 @@
 -- name: ListJobs :many
 SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
 FROM jobs j
-LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 WHERE j.closed_at IS NULL
-  AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
-ORDER BY COALESCE(js.suitability_score, -1) DESC, j.scraped_at DESC;
+  AND j.updated_at > now() - interval '90 days'
+  AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+ORDER BY js.suitability_score DESC, j.scraped_at DESC;
 
 -- name: PageJobs :many
 SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
