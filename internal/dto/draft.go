@@ -85,6 +85,14 @@ const (
 // DraftProvenance shows where each bullet of a Draft came from.
 type DraftProvenance struct {
 	Positions []ProvenancePosition `json:"positions"`
+	Profile   *ProvenanceProfile   `json:"profile"`
+}
+
+// ProvenanceProfile is the Profile text split so words absent from the
+// Achievement bank are marked Novel.
+type ProvenanceProfile struct {
+	SlotID   string        `json:"slotId"`
+	Segments []TextSegment `json:"segments"`
 }
 
 type ProvenancePosition struct {

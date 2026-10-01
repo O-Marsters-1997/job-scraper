@@ -12,7 +12,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
 
-// SaveDraftSlots writes the User's bullet edits into the Draft's Doc and
+const profileSlotID = "profile"
+
+// SaveDraftSlots writes the User's bullet and profile edits into the Draft's Doc and
 // re-runs the checks. Findings never block a save.
 func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.DraftSlotsInput) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, in.ID)
@@ -39,11 +41,16 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
+	before := edits.Profile
 	edits, err = basePlan.overlay(edits, in.Slots)
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	if err := s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, cvedit.EditSet{Positions: edits.Positions}); err != nil {
+	docEdits := cvedit.EditSet{Positions: edits.Positions}
+	if edits.Profile != before {
+		docEdits.Profile = edits.Profile
+	}
+	if err := s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits); err != nil {
 		return dto.Draft{}, err
 	}
 
@@ -69,9 +76,22 @@ func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditS
 	for _, e := range slots {
 		text := strings.TrimSpace(e.Text)
 		if text == "" || strings.ContainsAny(text, "\r\n") {
-			return edits, apperr.Invalid("a bullet must be one non-empty line")
+			return edits, apperr.Invalid("an edit must be one non-empty line")
 		}
 		texts[e.SlotID] = text
+	}
+	if text, ok := texts[profileSlotID]; ok {
+		if pl.structure.Profile == nil {
+			return edits, apperr.Invalid("unknown slot")
+		}
+		current := pl.structure.Profile.Text
+		if edits.Profile != nil {
+			current = *edits.Profile
+		}
+		if text != current {
+			edits.Profile = &text
+		}
+		delete(texts, profileSlotID)
 	}
 	slotIDs := pl.slotIDs()
 	for _, pe := range edits.Positions {
