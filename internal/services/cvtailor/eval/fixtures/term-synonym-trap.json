@@ -1,0 +1,92 @@
+{
+ "Name": "term-synonym-trap",
+ "Scenario": "The ad names a tool the achievements do not support, next to one they do",
+ "JobDescription": "Data engineer. You will write dbt models on Snowflake and orchestrate with Airflow. Spark is a bonus.",
+ "JobTerms": [
+  "Snowflake",
+  "Airflow",
+  "dbt",
+  "Spark"
+ ],
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Acme",
+   "Title": "Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Orchestrated nightly data jobs with Airflow, replacing cron scripts"
+    },
+    {
+     "ID": "a2",
+     "Text": "Modelled sales data in Snowflake for the finance team"
+    },
+    {
+     "ID": "a3",
+     "Text": "Wrote SQL transformations that cut report build time by 60%"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Acme - Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Scheduled data jobs",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Built warehouse tables",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Wrote reports",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Software engineer.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "SQL",
+    "Python"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}

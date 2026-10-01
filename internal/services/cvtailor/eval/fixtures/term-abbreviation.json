@@ -1,0 +1,92 @@
+{
+ "Name": "term-abbreviation",
+ "Scenario": "The ad uses abbreviations; the base CV spells them out",
+ "JobDescription": "Platform engineer. Experience with CI/CD, IaC and AWS required. SRE practices a plus.",
+ "JobTerms": [
+  "CI/CD",
+  "IaC",
+  "AWS",
+  "SRE"
+ ],
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Acme",
+   "Title": "Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Built CI/CD pipelines for twelve services in GitHub Actions"
+    },
+    {
+     "ID": "a2",
+     "Text": "Managed IaC for AWS accounts across three environments"
+    },
+    {
+     "ID": "a3",
+     "Text": "Ran the on-call rota and wrote runbooks as part of SRE work"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Acme - Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Automated continuous integration and delivery",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Managed infrastructure as code on AWS",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Supported site reliability",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Software engineer.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "Go",
+    "Bash"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}

@@ -89,10 +89,10 @@ func main() {
 	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
 		return js.PublishBoardChecks(ctx, *forceBoards)
 	})
-	// go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
-	// go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
-	// go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
-	// go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
+	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
+	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
+	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
+	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
@@ -101,7 +101,7 @@ func main() {
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
 	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
-	// slog.InfoContext(ctx, "RabbitMQ source workers starting")
+	slog.InfoContext(ctx, "RabbitMQ source workers starting")
 
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "worker failed", slog.Any(logger.KeyErr, err))
