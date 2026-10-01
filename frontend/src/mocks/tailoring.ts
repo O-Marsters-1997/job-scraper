@@ -113,6 +113,7 @@ export function createDraft(input: DraftInput): DraftRef {
 			jobId: input.jobId,
 			status: "pending",
 			outcome: null,
+			keptAs: "",
 			draftDocUrl: null,
 			lastError: "",
 			createdAt: new Date().toISOString(),
@@ -135,7 +136,15 @@ function mockEntry(id: string) {
 export function getDraft(id: string): Draft {
 	const entry = mockEntry(id);
 	entry.polls += 1;
-	if (entry.polls >= 3 && entry.draft.status !== "ready") {
+	if (entry.polls >= 2 && entry.draft.status === "keeping") {
+		entry.draft = {
+			...entry.draft,
+			status: "ready",
+			outcome: "kept",
+			keptAs: "doc",
+		};
+	}
+	if (entry.polls >= 3 && ["pending", "running"].includes(entry.draft.status)) {
 		entry.draft = {
 			...entry.draft,
 			status: "ready",
@@ -174,7 +183,8 @@ export function keepDraft(id: string): Draft {
 		(d) => d.outcome === "kept" && d.id !== id,
 	);
 	if (other) throw new KeptDraftExistsError();
-	entry.draft = { ...entry.draft, outcome: "kept" };
+	entry.polls = 0;
+	entry.draft = { ...entry.draft, status: "keeping" };
 	return entry.draft;
 }
 

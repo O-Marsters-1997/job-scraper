@@ -355,6 +355,8 @@ type TailoredCv struct {
 	DraftDocID     pgtype.Text
 	Status         string
 	Outcome        pgtype.Text
+	KeptAs         pgtype.Text
+	KeepNote       string
 	Attempts       int32
 	DueAt          pgtype.Timestamptz
 	LeaseUntil     pgtype.Timestamptz

@@ -18,12 +18,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/store"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
 const (
 	statusReady    = "ready"
+	statusKeeping  = "keeping"
 	cleanupTimeout = 30 * time.Second
 
 	shortenBullets = 3
@@ -46,6 +48,7 @@ type Drive interface {
 	CopyFile(ctx context.Context, userID, fileID, name string) (string, error)
 	BatchUpdate(ctx context.Context, userID, docID string, requests []json.RawMessage) error
 	DeleteFile(ctx context.Context, userID, fileID string) error
+	RenameFile(ctx context.Context, userID, fileID, name string) error
 	ExportPDF(ctx context.Context, userID, docID, tabID string) (io.ReadCloser, error)
 }
 
@@ -71,6 +74,9 @@ func (m *Module) RunTick(ctx context.Context) error {
 }
 
 func (m *Module) process(ctx context.Context, claim dto.DraftClaim) error {
+	if claim.Keeping {
+		return m.keep(ctx, claim)
+	}
 	if claim.Attempts > dto.MaxDraftAttempts {
 		return m.store.FailDraft(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
 	}
@@ -90,6 +96,27 @@ func (m *Module) process(ctx context.Context, claim dto.DraftClaim) error {
 	}
 	res.DraftDocID = docID
 	return m.store.CompleteDraft(ctx, claim, res)
+}
+
+func (m *Module) keep(ctx context.Context, claim dto.DraftClaim) error {
+	if claim.Attempts > dto.MaxDraftAttempts {
+		return m.store.FailKeep(ctx, claim, dto.DraftFailure{Reason: "gave up after repeated crashes", Terminal: true})
+	}
+	name := claim.CompanyName + " \u2014 " + claim.JobTitle
+	cause := m.drive.RenameFile(ctx, claim.UserID, claim.DraftDocID, name)
+	if cause != nil {
+		cause = fmt.Errorf("rename kept doc: %w", cause)
+	} else if cause = m.store.CompleteKeep(ctx, claim); cause == nil {
+		return nil
+	} else if !errors.Is(cause, store.ErrKeptDraftExists) {
+		return cause
+	}
+	_, terminal := apperr.StatusFor(cause)
+	failure := dto.DraftFailure{Reason: cause.Error(), Terminal: terminal || errors.Is(cause, store.ErrKeptDraftExists)}
+	if err := m.store.FailKeep(ctx, claim, failure); err != nil {
+		return errors.Join(cause, err)
+	}
+	return cause
 }
 
 func (m *Module) deleteCopy(userID, docID string) bool {

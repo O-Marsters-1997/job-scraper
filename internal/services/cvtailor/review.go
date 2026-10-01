@@ -65,27 +65,41 @@ func (s *Service) ListJobDrafts(ctx context.Context, userID string, q dto.DraftJ
 	return drafts, nil
 }
 
-// KeepDraft marks a ready Draft kept. A Job holds one kept Draft, so keeping
-// a second is a conflict.
+// KeepDraft queues a ready Draft to be kept as a named Doc on the next tick.
+// A Job holds one kept Draft, so keeping a second is a conflict.
 func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery) (dto.Draft, error) {
 	draft, err := s.store.GetDraft(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
+	if holdsKeep(draft) {
+		return withDocURL(draft), nil
+	}
 	if draft.Status != statusReady {
 		return dto.Draft{}, apperr.Conflict("only a ready draft can be kept")
 	}
-	switch outcome(draft) {
-	case dto.OutcomeDiscarded:
+	if outcome(draft) == dto.OutcomeDiscarded {
 		return dto.Draft{}, apperr.Conflict("this draft was discarded")
-	case dto.OutcomeKept:
-		return withDocURL(draft), nil
 	}
-	draft, err = s.store.SetDraftOutcome(ctx, userID, q.ID, dto.OutcomeKept)
+	siblings, err := s.store.ListJobDrafts(ctx, userID, draft.JobID)
+	if err != nil {
+		return dto.Draft{}, err
+	}
+	for _, other := range siblings {
+		if other.ID != draft.ID && holdsKeep(other) {
+			return dto.Draft{}, apperr.Conflict("this job already has a kept draft")
+		}
+	}
+	draft, err = s.store.QueueKeep(ctx, userID, q.ID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
 	return withDocURL(draft), nil
+}
+
+// holdsKeep reports whether the Draft is being kept or already kept.
+func holdsKeep(d dto.Draft) bool {
+	return d.Status == statusKeeping || outcome(d) == dto.OutcomeKept
 }
 
 // DiscardDraft deletes the Draft's Drive file and marks it discarded; the
@@ -116,7 +130,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	if err != nil {
 		return nil, err
 	}
-	if draft.Status != statusReady || draft.DraftDocID == "" {
+	if (draft.Status != statusReady && draft.Status != statusKeeping) || draft.DraftDocID == "" {
 		return nil, apperr.NotFound("draft has no document")
 	}
 	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")

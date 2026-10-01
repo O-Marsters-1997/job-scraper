@@ -20,7 +20,13 @@ export const headingMappingSchema = z.object({
 	positionId: z.string().nullable(),
 });
 
-const draftStatusSchema = z.enum(["pending", "running", "ready", "failed"]);
+const draftStatusSchema = z.enum([
+	"pending",
+	"running",
+	"keeping",
+	"ready",
+	"failed",
+]);
 
 const draftOutcomeSchema = z.enum(["kept", "discarded"]);
 
@@ -69,6 +75,7 @@ export const draftSchema = z.object({
 	jobId: z.string(),
 	status: draftStatusSchema,
 	outcome: draftOutcomeSchema.nullable(),
+	keptAs: z.string(),
 	draftDocUrl: z.string().nullable(),
 	lastError: z.string(),
 	createdAt: z.string(),

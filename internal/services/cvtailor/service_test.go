@@ -100,7 +100,7 @@ func newDraftEnv(t *testing.T) draftEnv {
 	if err := store.SaveHeadingMappings(ctx, userID, docID, tabID, []dto.HeadingMapping{{HeadingText: heading, PositionID: &pos.ID}}); err != nil {
 		t.Fatal(err)
 	}
-	store.SetJob(jobID, "We need a Go engineer.", "fp-1")
+	store.SetJob(dto.Job{ID: jobID, Title: "Platform Engineer", CompanySlug: "Acme", Description: "We need a Go engineer.", ContentFingerprint: "fp-1"})
 	drive := newDrive()
 	return draftEnv{
 		store: store,

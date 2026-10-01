@@ -39,11 +39,13 @@ var (
 )
 
 type Drive struct {
-	mu      sync.Mutex
-	Tabs    []google.Tab
-	Copies  []string
-	Deleted []string
-	Updates [][]json.RawMessage
+	mu        sync.Mutex
+	Tabs      []google.Tab
+	Copies    []string
+	Deleted   []string
+	Renamed   map[string]string
+	RenameErr error
+	Updates   [][]json.RawMessage
 }
 
 func (d *Drive) ListTabs(context.Context, string, string) ([]google.Tab, error) {
@@ -73,6 +75,19 @@ func (d *Drive) DeleteFile(_ context.Context, _, fileID string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.Deleted = append(d.Deleted, fileID)
+	return nil
+}
+
+func (d *Drive) RenameFile(_ context.Context, _, fileID, name string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.RenameErr != nil {
+		return d.RenameErr
+	}
+	if d.Renamed == nil {
+		d.Renamed = map[string]string{}
+	}
+	d.Renamed[fileID] = name
 	return nil
 }
 

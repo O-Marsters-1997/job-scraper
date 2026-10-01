@@ -343,6 +343,21 @@ func (c *Client) DeleteFile(ctx context.Context, userID, fileID string) error {
 	return nil
 }
 
+// RenameFile sets the Drive file's name.
+func (c *Client) RenameFile(ctx context.Context, userID, fileID, name string) error {
+	body, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return fmt.Errorf("google.RenameFile: %w", err)
+	}
+	resp, err := c.do(ctx, userID, http.MethodPatch,
+		fmt.Sprintf("https://www.googleapis.com/drive/v3/files/%s", url.PathEscape(fileID)), body)
+	if err != nil {
+		return fmt.Errorf("google.RenameFile: %w", err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
 func (c *Client) do(ctx context.Context, userID, method, target string, body []byte) (*http.Response, error) {
 	hc, err := c.HTTPClientForUser(ctx, userID)
 	if err != nil {

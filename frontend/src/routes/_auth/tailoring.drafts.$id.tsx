@@ -69,8 +69,9 @@ function DraftReview(props: { draft: Draft }) {
 		const { base, content } = props.draft;
 		return base && content ? { base, content } : null;
 	};
-	const hasDoc = () =>
-		props.draft.status === "ready" && props.draft.outcome !== "discarded";
+	const isKeeping = () => props.draft.status === "keeping";
+	const isReviewable = () => props.draft.status === "ready" || isKeeping();
+	const hasDoc = () => isReviewable() && props.draft.outcome !== "discarded";
 	const [pdfRevision, setPdfRevision] = createSignal(0);
 	const pdfSource = createMemo(
 		() => (hasDoc() ? { id: props.draft.id, rev: pdfRevision() } : undefined),
@@ -83,15 +84,9 @@ function DraftReview(props: { draft: Draft }) {
 		return kept?.id === props.draft.id ? undefined : kept;
 	};
 
-	const openDoc = (url: string | null) => {
-		if (url) window.open(url, "_blank", "noopener,noreferrer");
-	};
 	const doKeep = () =>
 		keep.mutate(props.draft.id, {
-			onSuccess: (kept) => {
-				setBlockedByKept(false);
-				openDoc(kept.draftDocUrl);
-			},
+			onSuccess: () => setBlockedByKept(false),
 			onError: (err) => setBlockedByKept(err instanceof KeptDraftExistsError),
 		});
 	const replaceKept = () => {
@@ -121,6 +116,11 @@ function DraftReview(props: { draft: Draft }) {
 					</p>
 				</div>
 
+				<Show when={isKeeping()}>
+					<span class="text-sm text-muted" aria-live="polite">
+						Keeping…
+					</span>
+				</Show>
 				<Show when={props.draft.status === "ready"}>
 					<div class="flex flex-wrap items-center gap-2">
 						<Show when={props.draft.outcome === "kept"}>
@@ -222,6 +222,17 @@ function DraftReview(props: { draft: Draft }) {
 					Could not keep the draft. Try again.
 				</p>
 			</Show>
+			<Show
+				when={
+					props.draft.status === "ready" &&
+					props.draft.outcome === null &&
+					props.draft.lastError
+				}
+			>
+				<p role="alert" class="mb-4 text-sm text-destructive-strong">
+					Keeping the draft failed: {props.draft.lastError}
+				</p>
+			</Show>
 			<Show when={discard.isError}>
 				<p role="alert" class="mb-4 text-sm text-destructive-strong">
 					Could not discard the draft. Try again.
@@ -229,7 +240,7 @@ function DraftReview(props: { draft: Draft }) {
 			</Show>
 
 			<Show
-				when={props.draft.status === "ready"}
+				when={isReviewable()}
 				fallback={
 					<Show
 						when={props.draft.status === "failed"}
@@ -273,7 +284,9 @@ function DraftReview(props: { draft: Draft }) {
 						</Show>
 						<ProvenanceDiff
 							draftId={props.draft.id}
-							editable={hasDoc()}
+							editable={
+								hasDoc() && !isKeeping() && props.draft.outcome !== "kept"
+							}
 							onSaved={() => setPdfRevision((n) => n + 1)}
 							provenance={props.draft.provenance}
 							findings={props.draft.findings}

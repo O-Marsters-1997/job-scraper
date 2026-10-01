@@ -29,6 +29,9 @@ type Store interface {
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
 	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)
+	QueueKeep(ctx context.Context, userID, id string) (dto.Draft, error)
+	CompleteKeep(ctx context.Context, claim dto.DraftClaim) error
+	FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
 	SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error
 	ClaimDraft(ctx context.Context) (dto.DraftClaim, error)
 	SetDraftDoc(ctx context.Context, claim dto.DraftClaim, docID string) error

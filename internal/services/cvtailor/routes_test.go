@@ -137,6 +137,7 @@ func TestReviewRoutes(t *testing.T) {
 
 		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+ids[0]+"/keep", "")
 		handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /tailoring/drafts/"+ids[1]+"/keep", "")
+		e.run(t, tick{})
 
 		list := handlerstest.Do[[]dto.Draft](t, r, http.StatusOK, "GET /tailoring/jobs/"+jobID+"/drafts", "")
 		var gotIDs []string
