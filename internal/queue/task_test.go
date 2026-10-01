@@ -17,6 +17,8 @@ func base(kind queue.TaskKind) queue.Task {
 		return queue.Task{Version: 1, ID: uuid.NewString(), Source: "greenhouse", Kind: kind, BoardID: uuid.NewString()}
 	case queue.BoardVerifyTask:
 		return queue.Task{Version: 1, ID: uuid.NewString(), Source: "greenhouse", Kind: kind, CompanyID: uuid.NewString(), BoardToken: "acme"}
+	case queue.BoardDiscoverTask:
+		return queue.Task{Version: 1, ID: uuid.NewString(), Source: "greenhouse", Kind: kind, BoardToken: "acme"}
 	case queue.DetailTask:
 		return queuetest.DetailTask("wis")
 	}
@@ -25,7 +27,7 @@ func base(kind queue.TaskKind) queue.Task {
 
 func TestTaskValidate(t *testing.T) {
 	t.Run("accepts", func(t *testing.T) {
-		for _, kind := range []queue.TaskKind{queue.DetailTask, queue.ListingPageTask, queue.BoardCheckTask, queue.BoardVerifyTask} {
+		for _, kind := range []queue.TaskKind{queue.DetailTask, queue.ListingPageTask, queue.BoardCheckTask, queue.BoardVerifyTask, queue.BoardDiscoverTask} {
 			t.Run(string(kind), func(t *testing.T) {
 				if err := base(kind).Validate(); err != nil {
 					t.Fatalf("Validate() = %v, want nil", err)
@@ -56,6 +58,8 @@ func TestTaskValidate(t *testing.T) {
 		{"board check without board ID", queue.BoardCheckTask, func(k *queue.Task) { k.BoardID = "" }},
 		{"board verify without company", queue.BoardVerifyTask, func(k *queue.Task) { k.CompanyID = "" }},
 		{"board verify with bad token", queue.BoardVerifyTask, func(k *queue.Task) { k.BoardToken = "a/b" }},
+		{"board discover with bad token", queue.BoardDiscoverTask, func(k *queue.Task) { k.BoardToken = "a/b" }},
+		{"board discover on discovery source", queue.BoardDiscoverTask, func(k *queue.Task) { k.Source = "wis" }},
 		{"board verify on discovery source", queue.BoardVerifyTask, func(k *queue.Task) { k.Source = "wis" }},
 	}
 	for _, tt := range rejects {

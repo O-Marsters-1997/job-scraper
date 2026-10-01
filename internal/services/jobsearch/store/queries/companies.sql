@@ -35,6 +35,11 @@ ON CONFLICT (user_id, company_id) DO UPDATE SET
     updated_at = NOW()
 RETURNING user_id, company_id, enabled, review_state, check_interval_minutes;
 
+-- name: TrackDiscoveredCompany :execrows
+INSERT INTO tracked_companies (user_id, company_id, review_state)
+VALUES ($1, $2, 'new')
+ON CONFLICT (user_id, company_id) DO NOTHING;
+
 -- name: SetCompanyReviewState :one
 UPDATE tracked_companies
 SET review_state = sqlc.arg(review_state)::text,

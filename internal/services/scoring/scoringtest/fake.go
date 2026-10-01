@@ -225,6 +225,18 @@ func (f *FakeStore) GetSearchConfig(_ context.Context, userID string) (dto.Searc
 	return cfg, nil
 }
 
+func (f *FakeStore) ListIncludeFilterConfigs(_ context.Context) ([]dto.SearchConfig, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []dto.SearchConfig
+	for _, cfg := range f.search {
+		if len(cfg.RequiredLocations) > 0 || len(cfg.RequiredTitleKeywords) > 0 {
+			out = append(out, cfg)
+		}
+	}
+	return out, nil
+}
+
 func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

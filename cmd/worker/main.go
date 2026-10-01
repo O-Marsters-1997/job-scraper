@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -17,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data/db"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
@@ -31,7 +33,7 @@ import (
 )
 
 func main() {
-	// forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
+	forceBoards := flag.Bool("scrape-now", false, "check active verified Boards without shifting cadence")
 	flag.Parse()
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -79,15 +81,15 @@ func main() {
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
-		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages,
+		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: scraper.DiscoverBoard,
 		Detailers: map[string]sources.DetailFetcher{
 			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
 		},
 	})
 
-	// go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
-	// 	return js.PublishBoardChecks(ctx, *forceBoards)
-	// })
+	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
+		return js.PublishBoardChecks(ctx, *forceBoards)
+	})
 	// go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
 	// go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
 	// go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)

@@ -118,6 +118,22 @@ func (s *Store) GetSearchConfig(ctx context.Context, userID string) (dto.SearchC
 	return cfg, nil
 }
 
+func (s *Store) ListIncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error) {
+	rows, err := s.queries.ListIncludeFilterConfigs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListIncludeFilterConfigs: %w", err)
+	}
+	configs := make([]dto.SearchConfig, 0, len(rows))
+	for _, row := range rows {
+		cfg, err := toSearchConfigDTO(row)
+		if err != nil {
+			return nil, fmt.Errorf("store.ListIncludeFilterConfigs: %w", err)
+		}
+		configs = append(configs, cfg)
+	}
+	return configs, nil
+}
+
 func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error) {
 	uid, err := data.UUID(cfg.UserID)
 	if err != nil {

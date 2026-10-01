@@ -418,6 +418,40 @@ func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string
 	}, nil
 }
 
+func (s *Store) TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return false, err
+	}
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return false, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin discovered tracking: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+	n, err := queries.TrackDiscoveredCompany(ctx, sqlc.TrackDiscoveredCompanyParams{UserID: uid, CompanyID: cid})
+	if err != nil {
+		return false, fmt.Errorf("store.TrackDiscoveredCompany: %w", err)
+	}
+	if n == 0 {
+		return false, nil
+	}
+	if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+		return false, fmt.Errorf("backfill tracked company jobs: %w", err)
+	}
+	if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+		return false, fmt.Errorf("scoring.CompanyTracked: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit discovered tracking: %w", err)
+	}
+	return true, nil
+}
+
 func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {

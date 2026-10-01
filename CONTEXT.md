@@ -38,6 +38,10 @@ _Avoid_: Company page, account
 A Board successfully read from its ATS and associated with a Company through its careers site or explicit User confirmation.
 _Avoid_: Detected Board, guessed Board
 
+**Discovered Board**:
+A Board found from its token alone rather than through a Company the User named. The worker reads its name, verifies it with method `discovered`, and tracks its Company as `new` for each User whose include filters match at least one of its Jobs; a Board matching nobody stays verified and untracked.
+_Avoid_: Auto-added Board, guessed Board
+
 **Retired Board**:
 A formerly verified Board no longer polled after its Company stops linking to it and two complete empty checks close its remaining Jobs.
 _Avoid_: Closed Job, failed Board

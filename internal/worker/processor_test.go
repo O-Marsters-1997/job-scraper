@@ -169,6 +169,10 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 	return fixture{store: store, processor: processor, ingest: in, published: published}
 }
 
+func (f fixture) discoverProcessor(discover worker.DiscoverFunc, scoring worker.IncludeFilterConfigs) *worker.Processor {
+	return worker.NewProcessor(worker.Deps{JS: jobsearch.Build(jobsearchtest.NewDeps(f.store)), Scoring: scoring, Discover: discover})
+}
+
 func (f fixture) target(t *testing.T, source string) dto.SourceTarget {
 	t.Helper()
 	target, err := f.store.CreateSourceTargetWithRun(t.Context(), "user-1", source, "https://example.com/search", true, nil)
@@ -421,6 +425,83 @@ func TestProcess(t *testing.T) {
 			if board.Status == dto.BoardVerified {
 				t.Fatalf("board %+v verified despite failed verification", board)
 			}
+		}
+	})
+}
+
+type configsStub []dto.SearchConfig
+
+func (c configsStub) IncludeFilterConfigs(context.Context) ([]dto.SearchConfig, error) { return c, nil }
+
+func TestProcessBoardDiscover(t *testing.T) {
+	ctx := context.Background()
+	jobs := []dto.Job{{Title: "Go Engineer", Location: "London"}}
+	discover := func(context.Context, string, string) (string, []dto.Job, error) {
+		return "Acme Corp", jobs, nil
+	}
+	task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+	match := dto.SearchConfig{UserID: "match", RequiredTitleKeywords: []string{"go"}}
+	miss := dto.SearchConfig{UserID: "miss", RequiredTitleKeywords: []string{"rust"}}
+	prior := dto.SearchConfig{UserID: "prior", RequiredTitleKeywords: []string{"go"}}
+
+	t.Run("tracks matching users as new and leaves existing rows alone", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.SetCompanyTracking(ctx, "prior", company.ID, true, 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.SetCompanyReviewState(ctx, "prior", company.ID, "dismissed"); err != nil {
+			t.Fatal(err)
+		}
+		p := f.discoverProcessor(discover, configsStub{match, miss, prior})
+		if err := p.Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+		if err != nil || len(boards) != 1 || boards[0].Status != dto.BoardVerified || boards[0].VerificationMethod != "discovered" {
+			t.Fatalf("ListCompanyBoards(%s) = %+v, %v, want one board verified as discovered", company.ID, boards, err)
+		}
+		for user, want := range map[string]string{"match": "new", "prior": "dismissed", "miss": ""} {
+			tracked, err := f.store.ListTrackedCompaniesForUser(ctx, user)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := ""
+			if len(tracked) == 1 {
+				got = tracked[0].ReviewState
+			}
+			if got != want {
+				t.Errorf("review state for %s = %q, want %q", user, got, want)
+			}
+		}
+	})
+
+	t.Run("a board matching nobody stays verified and untracked", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		p := f.discoverProcessor(discover, configsStub{miss})
+		if err := p.Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "miss")
+		if err != nil || len(tracked) != 0 {
+			t.Fatalf("ListTrackedCompaniesForUser(miss) = %+v, %v, want none", tracked, err)
+		}
+	})
+
+	t.Run("a failed fetch is acked without creating a company", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		failing := func(context.Context, string, string) (string, []dto.Job, error) {
+			return "", nil, errors.New("board gone")
+		}
+		if err := f.discoverProcessor(failing, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		companies, err := f.store.ListCompaniesForUser(ctx, "match")
+		if err != nil || len(companies) != 0 {
+			t.Fatalf("ListCompaniesForUser() = %+v, %v, want none", companies, err)
 		}
 	})
 }
