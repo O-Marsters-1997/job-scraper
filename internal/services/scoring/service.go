@@ -251,7 +251,8 @@ func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto
 		configByUser[cfg.UserID] = cfg
 	}
 	for _, sc := range scores {
-		if !savedSet[sc.UserID] || sc.Score < configByUser[sc.UserID].NotifyThreshold {
+		cfg := configByUser[sc.UserID]
+		if !savedSet[sc.UserID] || cfg.CompanyIsNew || sc.Score < cfg.NotifyThreshold {
 			continue
 		}
 		profile, err := s.profiles.GetProfile(ctx, sc.UserID)

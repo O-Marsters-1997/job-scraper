@@ -134,7 +134,12 @@ SELECT u.id AS user_id,
     COALESCE(sc.required_locations, '{}')::text[] AS required_locations,
     COALESCE(sc.required_title_keywords, '{}')::text[] AS required_title_keywords,
     COALESCE(sc.notify_threshold, 70) AS notify_threshold,
-    COALESCE(sc.preferences, '{}'::jsonb) AS preferences
+    COALESCE(sc.preferences, '{}'::jsonb) AS preferences,
+    EXISTS (
+        SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+        WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'
+          AND (c.id = j.company_id OR c.slug = j.company_slug)
+    ) AS company_is_new
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
 JOIN jobs j ON j.id = $1::uuid
@@ -155,6 +160,7 @@ type ListInterestedConfigsRow struct {
 	RequiredTitleKeywords []string
 	NotifyThreshold       int32
 	Preferences           []byte
+	CompanyIsNew          bool
 }
 
 func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) ([]ListInterestedConfigsRow, error) {
@@ -175,6 +181,7 @@ func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) 
 			&i.RequiredTitleKeywords,
 			&i.NotifyThreshold,
 			&i.Preferences,
+			&i.CompanyIsNew,
 		); err != nil {
 			return nil, err
 		}

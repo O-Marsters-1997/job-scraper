@@ -347,7 +347,7 @@ func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) 
 	for i, r := range rows {
 		id := r.ID.String()
 		out[i] = dto.TrackedCompany{
-			ID: id, Name: r.Name, Slug: r.Slug, Enabled: r.Enabled,
+			ID: id, Name: r.Name, Slug: r.Slug, Enabled: r.Enabled, ReviewState: r.ReviewState,
 			CheckIntervalMinutes: int(r.CheckIntervalMinutes),
 			Boards:               []dto.TrackedBoard{},
 			OpenJobs:             int(r.OpenJobs),
@@ -414,7 +414,43 @@ func (s *Store) SetCompanyTracking(ctx context.Context, userID, companyID string
 	}
 	return dto.CompanyTracking{
 		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
-		Enabled: row.Enabled, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
+		Enabled: row.Enabled, ReviewState: row.ReviewState, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
+	}, nil
+}
+
+func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return dto.CompanyTracking{}, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return dto.CompanyTracking{}, fmt.Errorf("begin company review: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+	row, err := queries.SetCompanyReviewState(ctx, sqlc.SetCompanyReviewStateParams{UserID: uid, CompanyID: cid, ReviewState: state})
+	if err != nil {
+		return dto.CompanyTracking{}, data.QueryErr("SetCompanyReviewState", err)
+	}
+	if row.Enabled {
+		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
+		}
+		if err := s.scoring.CompanyTracked(ctx, tx, userID, companyID); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("scoring.CompanyTracked: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return dto.CompanyTracking{}, fmt.Errorf("commit company review: %w", err)
+	}
+	return dto.CompanyTracking{
+		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
+		Enabled: row.Enabled, ReviewState: row.ReviewState, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 	}, nil
 }
 

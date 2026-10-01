@@ -11,6 +11,11 @@ type SetCompanyTrackingInput struct {
 	CheckIntervalMinutes *int   `json:"check_interval_minutes"`
 }
 
+type SetCompanyReviewInput struct {
+	CompanyID string `json:"-" path:"id"`
+	State     string `json:"state"`
+}
+
 type AddCompanyBoardInput struct {
 	CompanyID string `json:"-" path:"id"`
 	URL       string `json:"url"`

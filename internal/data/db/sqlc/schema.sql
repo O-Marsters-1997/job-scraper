@@ -260,6 +260,7 @@ CREATE TABLE IF NOT EXISTS tracked_companies (
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     check_interval_minutes INT NOT NULL DEFAULT 360 CHECK (check_interval_minutes >= 60),
+    review_state TEXT NOT NULL DEFAULT 'kept' CHECK (review_state IN ('new', 'kept', 'dismissed')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, company_id)

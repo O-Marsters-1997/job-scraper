@@ -15,6 +15,7 @@ type Company struct {
 
 	JobCount             int
 	Tracked              bool
+	ReviewState          string
 	TargetID             string
 	CheckIntervalMinutes int
 	LastCheckedAt        *time.Time
@@ -23,6 +24,7 @@ type Company struct {
 type CompanyTracking struct {
 	CompanyID            string
 	UserID               string
+	ReviewState          string
 	Enabled              bool
 	CheckIntervalMinutes int
 }

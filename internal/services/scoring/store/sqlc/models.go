@@ -359,6 +359,7 @@ type TrackedCompany struct {
 	CompanyID            pgtype.UUID
 	Enabled              bool
 	CheckIntervalMinutes int32
+	ReviewState          string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 }

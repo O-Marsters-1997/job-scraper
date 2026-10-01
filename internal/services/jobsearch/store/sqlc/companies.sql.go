@@ -56,6 +56,7 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
     c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
+    COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
      JOIN board_poll_state bps ON bps.board_id = cb.id
@@ -77,6 +78,7 @@ type ListCompaniesForUserRow struct {
 	FirstSeenAt          pgtype.Timestamptz
 	JobCount             int64
 	Tracked              bool
+	ReviewState          string
 	CheckIntervalMinutes pgtype.Int4
 	LastCheckedAt        pgtype.Timestamptz
 }
@@ -102,6 +104,7 @@ func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) 
 			&i.FirstSeenAt,
 			&i.JobCount,
 			&i.Tracked,
+			&i.ReviewState,
 			&i.CheckIntervalMinutes,
 			&i.LastCheckedAt,
 		); err != nil {
@@ -155,7 +158,7 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 }
 
 const listTrackedCompaniesForUser = `-- name: ListTrackedCompaniesForUser :many
-SELECT c.id, c.name, c.slug, tc.enabled, tc.check_interval_minutes,
+SELECT c.id, c.name, c.slug, tc.enabled, tc.review_state, tc.check_interval_minutes,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
      WHERE j.company_id = c.id AND j.closed_at IS NULL
@@ -174,6 +177,7 @@ type ListTrackedCompaniesForUserRow struct {
 	Name                 string
 	Slug                 string
 	Enabled              bool
+	ReviewState          string
 	CheckIntervalMinutes int32
 	OpenJobs             int64
 	RelevantJobs         int64
@@ -194,6 +198,7 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 			&i.Name,
 			&i.Slug,
 			&i.Enabled,
+			&i.ReviewState,
 			&i.CheckIntervalMinutes,
 			&i.OpenJobs,
 			&i.RelevantJobs,
@@ -209,6 +214,42 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 	return items, nil
 }
 
+const setCompanyReviewState = `-- name: SetCompanyReviewState :one
+UPDATE tracked_companies
+SET review_state = $3::text,
+    enabled = $3::text <> 'dismissed',
+    updated_at = NOW()
+WHERE user_id = $1 AND company_id = $2
+RETURNING user_id, company_id, enabled, review_state, check_interval_minutes
+`
+
+type SetCompanyReviewStateParams struct {
+	UserID      pgtype.UUID
+	CompanyID   pgtype.UUID
+	ReviewState string
+}
+
+type SetCompanyReviewStateRow struct {
+	UserID               pgtype.UUID
+	CompanyID            pgtype.UUID
+	Enabled              bool
+	ReviewState          string
+	CheckIntervalMinutes int32
+}
+
+func (q *Queries) SetCompanyReviewState(ctx context.Context, arg SetCompanyReviewStateParams) (SetCompanyReviewStateRow, error) {
+	row := q.db.QueryRow(ctx, setCompanyReviewState, arg.UserID, arg.CompanyID, arg.ReviewState)
+	var i SetCompanyReviewStateRow
+	err := row.Scan(
+		&i.UserID,
+		&i.CompanyID,
+		&i.Enabled,
+		&i.ReviewState,
+		&i.CheckIntervalMinutes,
+	)
+	return i, err
+}
+
 const setCompanyTracking = `-- name: SetCompanyTracking :one
 INSERT INTO tracked_companies (user_id, company_id, enabled, check_interval_minutes)
 VALUES ($1, $2, $3, COALESCE(NULLIF($4::int, 0), 360))
@@ -216,7 +257,7 @@ ON CONFLICT (user_id, company_id) DO UPDATE SET
     enabled = EXCLUDED.enabled,
     check_interval_minutes = COALESCE(NULLIF($4::int, 0), tracked_companies.check_interval_minutes),
     updated_at = NOW()
-RETURNING user_id, company_id, enabled, check_interval_minutes
+RETURNING user_id, company_id, enabled, review_state, check_interval_minutes
 `
 
 type SetCompanyTrackingParams struct {
@@ -230,6 +271,7 @@ type SetCompanyTrackingRow struct {
 	UserID               pgtype.UUID
 	CompanyID            pgtype.UUID
 	Enabled              bool
+	ReviewState          string
 	CheckIntervalMinutes int32
 }
 
@@ -245,6 +287,7 @@ func (q *Queries) SetCompanyTracking(ctx context.Context, arg SetCompanyTracking
 		&i.UserID,
 		&i.CompanyID,
 		&i.Enabled,
+		&i.ReviewState,
 		&i.CheckIntervalMinutes,
 	)
 	return i, err

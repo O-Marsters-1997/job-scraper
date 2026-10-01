@@ -341,6 +341,25 @@ func TestRunTick(t *testing.T) {
 			t.Errorf("notified (-want +got):\n%s", diff)
 		}
 	})
+
+	t.Run("does not alert a user whose company is new", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		cfg := picking("user-1", "tech:go")
+		cfg.NotifyThreshold = 50
+		cfg.CompanyIsNew = true
+		seedEffect(st, true, cfg)
+		alerter := &fakeAlerter{}
+
+		runTick(t, st, withAlerter(alerter), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+
+		if len(alerter.notified) != 0 {
+			t.Errorf("notified = %v, want none", alerter.notified)
+		}
+		if completed := st.Completed(); len(completed) != 1 || len(completed[0].Scores) != 1 {
+			t.Errorf("completed = %+v, want the job still scored once", completed)
+		}
+	})
 }
 
 type flakyClaimStore struct {

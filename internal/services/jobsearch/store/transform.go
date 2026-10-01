@@ -104,6 +104,7 @@ func toCompanyForUserDTO(row sqlc.ListCompaniesForUserRow) dto.Company {
 		FirstSeenAt:          row.FirstSeenAt.Time,
 		JobCount:             int(row.JobCount),
 		Tracked:              row.Tracked,
+		ReviewState:          row.ReviewState,
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes.Int32),
 		LastCheckedAt:        data.TimePtr(row.LastCheckedAt),
 		LastCrawledAt:        data.TimePtr(row.LastCrawledAt),

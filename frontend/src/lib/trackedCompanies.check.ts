@@ -11,6 +11,7 @@ const company = (
 	name,
 	slug: name.toLowerCase(),
 	enabled: true,
+	review_state: "kept",
 	check_interval_minutes: 360,
 	boards: [
 		{

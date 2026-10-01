@@ -3,6 +3,7 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyTracking,
+	ReviewState,
 	TrackedCompany,
 } from "../types/company";
 import {
@@ -56,6 +57,21 @@ export async function setCompanyTracking(
 					enabled,
 					check_interval_minutes: checkIntervalMinutes,
 				}),
+			),
+	);
+}
+
+export async function setCompanyReview(
+	id: string,
+	state: ReviewState,
+): Promise<CompanyTracking> {
+	return mocked(
+		(db) => db.setCompanyReview(id, state),
+		() =>
+			apiFetch(
+				`/companies/${id}/review`,
+				companyTrackingSchema,
+				jsonInit("PUT", { state }),
 			),
 	);
 }
