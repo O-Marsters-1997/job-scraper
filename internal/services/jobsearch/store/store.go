@@ -1121,7 +1121,7 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 			return fmt.Errorf("retire board: %w", err)
 		}
 	}
-	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: int32(poll.IntervalMinutes), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
+	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
 		return fmt.Errorf("complete board state: %w", err)
 	}
@@ -1132,4 +1132,11 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 		return fmt.Errorf("commit board completion: %w", err)
 	}
 	return nil
+}
+
+func pollIntervalMinutes(poll dto.BoardPoll, hint time.Duration) int32 {
+	if hint > 0 {
+		return int32(max(1, int(hint/time.Minute)))
+	}
+	return int32(poll.IntervalMinutes)
 }
