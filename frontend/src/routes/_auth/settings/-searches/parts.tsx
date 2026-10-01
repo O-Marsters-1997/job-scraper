@@ -53,9 +53,7 @@ export function SegmentedTabs(props: {
 						<Icon name={t.icon} size={13} />
 						{t.label}
 						<Show when={count(t.key) !== undefined}>
-							<span class="font-mono tabular-nums">
-								{count(t.key)}
-							</span>
+							<span class="font-mono tabular-nums">{count(t.key)}</span>
 						</Show>
 					</button>
 				)}
