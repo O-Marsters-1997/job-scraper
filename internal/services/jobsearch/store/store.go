@@ -323,6 +323,22 @@ func (s *Store) ListCompaniesForUser(ctx context.Context, userID string) ([]dto.
 	return out, nil
 }
 
+func (s *Store) GetCompanyForUser(ctx context.Context, userID, id string) (dto.Company, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Company{}, ErrInvalidID
+	}
+	cid, err := data.UUID(id)
+	if err != nil {
+		return dto.Company{}, ErrInvalidID
+	}
+	row, err := s.queries.GetCompanyForUser(ctx, sqlc.GetCompanyForUserParams{UserID: uid, ID: cid})
+	if err != nil {
+		return dto.Company{}, data.QueryErr("GetCompanyForUser", err)
+	}
+	return toCompanyForUserDTO(sqlc.ListCompaniesForUserRow(row)), nil
+}
+
 func (s *Store) ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {

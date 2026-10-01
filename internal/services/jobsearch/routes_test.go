@@ -31,7 +31,7 @@ func TestRoutesRequireAuth(t *testing.T) {
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
-		"GET /companies", "GET /companies/new", "GET /companies/tracked", "POST /companies",
+		"GET /companies", "GET /companies/{id}", "GET /companies/new", "GET /companies/tracked", "POST /companies",
 		"PUT /companies/{id}/tracking", "PUT /companies/{id}/review", "DELETE /companies/{id}/tracking",
 		"GET /companies/{id}/boards", "POST /companies/{id}/boards",
 	)
@@ -96,5 +96,13 @@ func TestIngestBatchHandler(t *testing.T) {
 	}
 	if view.Results[0].Status != "new" || view.Results[1].Status != "rejected" {
 		t.Errorf("statuses = %q, %q, want new, rejected", view.Results[0].Status, view.Results[1].Status)
+	}
+}
+
+func TestGetCompanyHandlerUnknownIDIs404(t *testing.T) {
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
+	if w := handlerstest.Serve(t, r, "GET /companies/missing", ""); w.Code != http.StatusNotFound {
+		t.Errorf("GET /companies/missing = %d, want %d", w.Code, http.StatusNotFound)
 	}
 }

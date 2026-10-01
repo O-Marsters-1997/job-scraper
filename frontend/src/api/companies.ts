@@ -14,7 +14,13 @@ import {
 	newCompanySchema,
 	trackedCompanySchema,
 } from "../types/company";
-import { apiFetch, apiFetchVoid, jsonInit, rethrowStatus } from "./client";
+import {
+	ApiError,
+	apiFetch,
+	apiFetchVoid,
+	jsonInit,
+	rethrowStatus,
+} from "./client";
 import { mocked } from "./config";
 
 export class UnresolvableBoardError extends Error {
@@ -27,6 +33,21 @@ export async function fetchCompanies(): Promise<Company[]> {
 	return mocked(
 		(db) => db.getCompanies(),
 		() => apiFetch("/companies", companySchema.array()),
+	);
+}
+
+export async function fetchCompany(id: string): Promise<Company | null> {
+	return mocked(
+		(db) => db.getCompanies().find((c) => c.ID === id) ?? null,
+		() =>
+			apiFetch(`/companies/${encodeURIComponent(id)}`, companySchema).catch(
+				(err) => {
+					if (err instanceof ApiError && [400, 404].includes(err.status)) {
+						return null;
+					}
+					throw err;
+				},
+			),
 	);
 }
 

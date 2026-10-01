@@ -260,6 +260,19 @@ func (f *FakeStore) ListCompaniesForUser(_ context.Context, userID string) ([]dt
 	return out, nil
 }
 
+func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto.Company, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, err := lookup(f.companies, id)
+	if err != nil {
+		return dto.Company{}, err
+	}
+	if tr, ok := f.tracking[trackingKey(userID, c.ID)]; ok {
+		c.Tracked, c.ReviewState, c.CheckIntervalMinutes = tr.Enabled, tr.ReviewState, tr.CheckIntervalMinutes
+	}
+	return c, nil
+}
+
 func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string) ([]dto.TrackedCompany, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

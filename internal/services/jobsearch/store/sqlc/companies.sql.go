@@ -51,6 +51,65 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 	return i, err
 }
 
+const getCompanyForUser = `-- name: GetCompanyForUser :one
+SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+    c.last_crawled_at, c.first_seen_at,
+    (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
+    COALESCE(tc.enabled, FALSE) AS tracked,
+    COALESCE(tc.review_state, '')::text AS review_state,
+    tc.check_interval_minutes,
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
+FROM companies c
+LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
+WHERE c.id = $2
+`
+
+type GetCompanyForUserParams struct {
+	UserID pgtype.UUID
+	ID     pgtype.UUID
+}
+
+type GetCompanyForUserRow struct {
+	ID                   pgtype.UUID
+	Slug                 string
+	Name                 string
+	AtsSource            pgtype.Text
+	AtsToken             pgtype.Text
+	Domain               pgtype.Text
+	LinkedinCompanyID    pgtype.Text
+	LastCrawledAt        pgtype.Timestamptz
+	FirstSeenAt          pgtype.Timestamptz
+	JobCount             int64
+	Tracked              bool
+	ReviewState          string
+	CheckIntervalMinutes pgtype.Int4
+	LastCheckedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) GetCompanyForUser(ctx context.Context, arg GetCompanyForUserParams) (GetCompanyForUserRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyForUser, arg.UserID, arg.ID)
+	var i GetCompanyForUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.AtsSource,
+		&i.AtsToken,
+		&i.Domain,
+		&i.LinkedinCompanyID,
+		&i.LastCrawledAt,
+		&i.FirstSeenAt,
+		&i.JobCount,
+		&i.Tracked,
+		&i.ReviewState,
+		&i.CheckIntervalMinutes,
+		&i.LastCheckedAt,
+	)
+	return i, err
+}
+
 const listCompaniesForUser = `-- name: ListCompaniesForUser :many
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,

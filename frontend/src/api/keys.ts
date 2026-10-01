@@ -23,6 +23,7 @@ export const keys = {
 	statuses: ["application-statuses"] as const,
 	companies: {
 		all: companiesAll,
+		detail: (id: string) => [...companiesAll, "detail", id] as const,
 		tracked: [...companiesAll, "tracked"] as const,
 		new: [...companiesAll, "new"] as const,
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
