@@ -1,6 +1,7 @@
 package linkedin_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -156,5 +157,31 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 				t.Errorf("query params (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestGetDetails_FetchesGuestFragment(t *testing.T) {
+	html, err := os.ReadFile("snapshots/detail_details.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
+	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	src := linkedin.New("", nil)
+	recorder := sourcetest.Respond(string(html))
+	src.Client().Transport = recorder
+
+	job, err := src.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/4335312853")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantFetched := "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4335312853"
+	if got := recorder.Last.URL.String(); got != wantFetched {
+		t.Errorf("fetched URL = %q, want %q", got, wantFetched)
+	}
+	wantURL := "https://www.linkedin.com/jobs/view/4335312853"
+	if job.URL != wantURL {
+		t.Errorf("Job.URL = %q, want %q", job.URL, wantURL)
 	}
 }
