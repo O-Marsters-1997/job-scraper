@@ -111,14 +111,14 @@ func TestGeneratorRunTick(t *testing.T) {
 
 		url := "https://docs.google.com/document/d/copy-1/edit"
 		wantDraft := dto.Draft{ID: id, JobID: jobID, Status: "ready", DraftDocURL: &url, DraftDocID: "copy-1"}
-		if diff := cmp.Diff(wantDraft, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "Findings", "CreatedAt", "EditSet", "Provenance")); diff != "" {
+		if diff := cmp.Diff(wantDraft, e.draft(t, id), cmpopts.IgnoreFields(dto.Draft{}, "Findings", "CreatedAt", "EditSet", "Provenance", "Content", "Base", "BaseContent")); diff != "" {
 			t.Errorf("GetDraft(%s) mismatch (-want +got):\n%s", id, diff)
 		}
 		wantResult := dto.DraftResult{
 			RawOutput: `{"raw":true}`, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
 			JobFingerprint: "fp-1", Cost: 0.5, DraftDocID: "copy-1",
 		}
-		if diff := cmp.Diff(wantResult, e.store.DraftResult(id), cmpopts.IgnoreFields(dto.DraftResult{}, "EditSet", "Findings")); diff != "" {
+		if diff := cmp.Diff(wantResult, e.store.DraftResult(id), cmpopts.IgnoreFields(dto.DraftResult{}, "EditSet", "BaseContent", "Findings")); diff != "" {
 			t.Errorf("recorded result mismatch (-want +got):\n%s", diff)
 		}
 

@@ -39,11 +39,35 @@ function DraftReviewPage() {
 	);
 }
 
+const SHOW_CHANGES_KEY = "draft.showChanges";
+
+function readShowChanges(): boolean {
+	try {
+		return localStorage.getItem(SHOW_CHANGES_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
 function DraftReview(props: { draft: Draft }) {
 	const keep = useKeepDraft();
 	const discard = useDiscardDraft();
 	const jobDrafts = useJobDrafts(() => props.draft.jobId);
 	const [blockedByKept, setBlockedByKept] = createSignal(false);
+	const [showChanges, setShowChanges] = createSignal(readShowChanges());
+	const toggleChanges = () => {
+		const next = !showChanges();
+		setShowChanges(next);
+		try {
+			localStorage.setItem(SHOW_CHANGES_KEY, next ? "1" : "0");
+		} catch {
+			// the toggle still works for this visit
+		}
+	};
+	const changes = () => {
+		const { base, content } = props.draft;
+		return base && content ? { base, content } : null;
+	};
 	const hasDoc = () =>
 		props.draft.status === "ready" && props.draft.outcome !== "discarded";
 	const pdfURL = usePdfUrl(
@@ -208,9 +232,21 @@ function DraftReview(props: { draft: Draft }) {
 						</Show>
 					</div>
 					<div class="min-w-0">
+						<Show when={changes()}>
+							<Button
+								variant="outline"
+								size="sm"
+								class="mb-4"
+								aria-pressed={showChanges()}
+								onClick={toggleChanges}
+							>
+								Show changes
+							</Button>
+						</Show>
 						<ProvenanceDiff
 							provenance={props.draft.provenance}
 							findings={props.draft.findings}
+							changes={showChanges() ? changes() : null}
 						/>
 					</div>
 				</div>

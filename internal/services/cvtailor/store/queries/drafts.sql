@@ -29,7 +29,7 @@ WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status 
 
 -- name: CompleteDraft :execrows
 UPDATE tailored_cvs SET status = 'ready', lease_until = NULL, last_error = '',
-    edit_set = sqlc.arg(edit_set)::jsonb, raw_output = sqlc.arg(raw_output)::text,
+    edit_set = sqlc.arg(edit_set)::jsonb, base_content = sqlc.arg(base_content)::jsonb, raw_output = sqlc.arg(raw_output)::text,
     model = sqlc.arg(model)::text, prompt_version = sqlc.arg(prompt_version)::text,
     job_fingerprint = sqlc.arg(job_fingerprint)::text, cost = sqlc.arg(cost)::real,
     draft_doc_id = sqlc.arg(draft_doc_id)::text, findings = sqlc.arg(findings)::jsonb

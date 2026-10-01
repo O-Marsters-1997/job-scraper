@@ -69,6 +69,31 @@ func TestGetDraftProvenance(t *testing.T) {
 	})
 }
 
+func TestGetDraftBase(t *testing.T) {
+	t.Run("returns the base CV's bullets as they were at generation beside the Draft's", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+
+		d := e.draft(t, id)
+
+		if d.Base == nil || d.Content == nil {
+			t.Fatalf("GetDraft() base = %+v, content = %+v, want both", d.Base, d.Content)
+		}
+		wantBase := []dto.DraftBullet{
+			{Text: "Built and maintained the public APIs for the platform", AchievementIDs: []string{}},
+			{Text: "Ran on-call", AchievementIDs: []string{}},
+			{Text: "Wrote docs", AchievementIDs: []string{}},
+		}
+		if diff := cmp.Diff(wantBase, d.Base.Positions[0].Bullets); diff != "" {
+			t.Errorf("base bullets (-want +got):\n%s", diff)
+		}
+		want := []dto.DraftBullet{{Text: "Cut p99 latency by quickly moving queries to Postgres", AchievementIDs: []string{e.pos.Achievements[0].ID}}}
+		if diff := cmp.Diff(want, d.Content.Positions[0].Bullets); diff != "" {
+			t.Errorf("content bullets (-want +got):\n%s", diff)
+		}
+	})
+}
+
 func TestKeepDraft(t *testing.T) {
 	t.Run("a second Draft of a Job conflicts until the first is discarded", func(t *testing.T) {
 		e := newDraftEnv(t)
