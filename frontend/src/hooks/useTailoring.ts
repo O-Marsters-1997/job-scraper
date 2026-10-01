@@ -9,10 +9,11 @@ import {
 	fetchJobDrafts,
 	fetchSuggestions,
 	keepDraft,
+	saveDraftSlots,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping } from "../types/tailoring";
+import type { HeadingMapping, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
@@ -87,4 +88,12 @@ export function useKeepDraft() {
 
 export function useDiscardDraft() {
 	return useInvalidatingMutation(discardDraft, [keys.tailoring.all]);
+}
+
+export function useSaveDraftSlots() {
+	return useInvalidatingMutation(
+		({ id, slots }: { id: string; slots: SlotEdit[] }) =>
+			saveDraftSlots(id, slots),
+		[keys.tailoring.all],
+	);
 }

@@ -1,0 +1,199 @@
+{
+ "documentTab": {
+  "documentStyle": {
+   "pageSize": {
+    "width": {
+     "magnitude": 595,
+     "unit": "PT"
+    },
+    "height": {
+     "magnitude": 842,
+     "unit": "PT"
+    }
+   },
+   "marginTop": {
+    "magnitude": 36,
+    "unit": "PT"
+   },
+   "marginBottom": {
+    "magnitude": 36,
+    "unit": "PT"
+   },
+   "marginLeft": {
+    "magnitude": 40,
+    "unit": "PT"
+   },
+   "marginRight": {
+    "magnitude": 40,
+    "unit": "PT"
+   }
+  },
+  "namedStyles": {
+   "styles": [
+    {
+     "namedStyleType": "NORMAL_TEXT",
+     "paragraphStyle": {
+      "namedStyleType": "NORMAL_TEXT",
+      "lineSpacing": 115
+     },
+     "textStyle": {
+      "fontSize": {
+       "magnitude": 10,
+       "unit": "PT"
+      }
+     }
+    },
+    {
+     "namedStyleType": "HEADING_1",
+     "paragraphStyle": {
+      "namedStyleType": "HEADING_1",
+      "spaceAbove": {
+       "magnitude": 12,
+       "unit": "PT"
+      }
+     },
+     "textStyle": {
+      "bold": true,
+      "fontSize": {
+       "magnitude": 14,
+       "unit": "PT"
+      }
+     }
+    }
+   ]
+  },
+  "lists": {
+   "kix.l1": {
+    "listProperties": {
+     "nestingLevels": [
+      {
+       "glyphType": "GLYPH_TYPE_UNSPECIFIED",
+       "indentFirstLine": {
+        "magnitude": 18,
+        "unit": "PT"
+       },
+       "indentStart": {
+        "magnitude": 36,
+        "unit": "PT"
+       }
+      },
+      {
+       "glyphType": "GLYPH_TYPE_UNSPECIFIED",
+       "indentFirstLine": {
+        "magnitude": 54,
+        "unit": "PT"
+       },
+       "indentStart": {
+        "magnitude": 72,
+        "unit": "PT"
+       }
+      }
+     ]
+    }
+   }
+  },
+  "body": {
+   "content": [
+    {
+     "endIndex": 1,
+     "sectionBreak": {
+      "sectionStyle": {
+       "columnProperties": [
+        {}
+       ]
+      }
+     }
+    },
+    {
+     "startIndex": 1,
+     "endIndex": 8,
+     "paragraph": {
+      "elements": [
+       {
+        "startIndex": 1,
+        "endIndex": 8,
+        "textRun": {
+         "content": "Skills\n"
+        }
+       }
+      ],
+      "paragraphStyle": {
+       "namedStyleType": "HEADING_1"
+      }
+     }
+    },
+    {
+     "startIndex": 8,
+     "endIndex": 15,
+     "paragraph": {
+      "elements": [
+       {
+        "startIndex": 8,
+        "endIndex": 15,
+        "textRun": {
+         "content": "Go dev\n",
+         "textStyle": {
+          "italic": true
+         }
+        }
+       },
+       {
+        "startIndex": 14,
+        "endIndex": 15,
+        "inlineObjectElement": {
+         "inlineObjectId": "x"
+        }
+       }
+      ],
+      "paragraphStyle": {
+       "namedStyleType": "NORMAL_TEXT"
+      }
+     }
+    },
+    {
+     "startIndex": 15,
+     "endIndex": 19,
+     "paragraph": {
+      "elements": [
+       {
+        "startIndex": 15,
+        "endIndex": 19,
+        "textRun": {
+         "content": "One\n"
+        }
+       }
+      ],
+      "paragraphStyle": {
+       "namedStyleType": "NORMAL_TEXT"
+      },
+      "bullet": {
+       "listId": "kix.l1"
+      }
+     }
+    },
+    {
+     "startIndex": 19,
+     "endIndex": 23,
+     "paragraph": {
+      "elements": [
+       {
+        "startIndex": 19,
+        "endIndex": 23,
+        "textRun": {
+         "content": "Two\n"
+        }
+       }
+      ],
+      "paragraphStyle": {
+       "namedStyleType": "NORMAL_TEXT"
+      },
+      "bullet": {
+       "listId": "kix.l1",
+       "nestingLevel": 1
+      }
+     }
+    }
+   ]
+  }
+ }
+}
