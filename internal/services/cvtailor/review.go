@@ -37,11 +37,18 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	draft.Provenance = provenance(edits, positions)
 	content := editedContent(edits)
 	draft.Content = &content
-	if len(draft.BaseContent) > 0 {
-		draft.Base = new(dto.DraftContent)
-		if err := json.Unmarshal(draft.BaseContent, draft.Base); err != nil {
-			return dto.Draft{}, fmt.Errorf("decode base content: %w", err)
-		}
+	if len(draft.BaseContent) == 0 {
+		return draft, nil
+	}
+	draft.Base = new(dto.DraftContent)
+	if err := json.Unmarshal(draft.BaseContent, draft.Base); err != nil {
+		return dto.Draft{}, fmt.Errorf("decode base content: %w", err)
+	}
+	if content.Profile == nil {
+		content.Profile = draft.Base.Profile
+	}
+	if len(content.Skills) == 0 {
+		content.Skills = draft.Base.Skills
 	}
 	return draft, nil
 }
