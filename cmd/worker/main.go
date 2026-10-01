@@ -82,7 +82,7 @@ func main() {
 		}
 	}
 	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
-	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{}, exporter)
+	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
 		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: scraper.DiscoverBoard,

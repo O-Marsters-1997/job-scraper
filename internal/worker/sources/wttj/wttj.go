@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -23,6 +24,10 @@ const (
 	name    = "wttj"
 	baseURL = "https://app.welcometothejungle.com"
 	maxAge  = 90 * 24 * time.Hour
+
+	ukPollIn    = 7 * 24 * time.Hour
+	otherPollIn = 90 * 24 * time.Hour
+	blockFor    = 24 * time.Hour
 )
 
 var (
@@ -36,7 +41,49 @@ var (
 	}
 
 	postings = &postingCache{byToken: map[string]map[string]*dto.Job{}}
+	limiter  = &gate{gap: 2 * time.Second, now: time.Now}
 )
+
+// ErrDeferred is returned without sending a request while WTTJ has blocked us.
+var ErrDeferred = errors.New("wttj: deferred after 403/429")
+
+type gate struct {
+	mu           sync.Mutex
+	gap          time.Duration
+	now          func() time.Time
+	next         time.Time
+	blockedUntil time.Time
+}
+
+func (g *gate) wait(ctx context.Context) error {
+	g.mu.Lock()
+	now := g.now()
+	if now.Before(g.blockedUntil) {
+		g.mu.Unlock()
+		return ErrDeferred
+	}
+	slot := g.next
+	if slot.Before(now) {
+		slot = now
+	}
+	g.next = slot.Add(g.gap)
+	g.mu.Unlock()
+
+	timer := time.NewTimer(slot.Sub(now))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (g *gate) block(d time.Duration) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.blockedUntil = g.now().Add(d)
+}
 
 // postingCache remembers, per Board token, every job page already fetched, so a repeat poll
 // re-reads only the company page. A nil entry is a page that failed the age gate.
@@ -74,16 +121,33 @@ func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, strin
 	if cursor != "" {
 		return nil, "", fmt.Errorf("%s: unexpected cursor %q", name, cursor)
 	}
-	body, err := s.Get(ctx, baseURL+"/companies/"+url.PathEscape(s.token))
+	res, err := s.PollBoard(ctx)
+	return res.Jobs, "", err
+}
+
+func (s *Source) get(ctx context.Context, url string) ([]byte, error) {
+	if err := limiter.wait(ctx); err != nil {
+		return nil, err
+	}
+	body, err := s.Get(ctx, url)
+	var statusErr *sources.StatusError
+	if errors.As(err, &statusErr) && (statusErr.Code == http.StatusForbidden || statusErr.Code == http.StatusTooManyRequests) {
+		limiter.block(blockFor)
+	}
+	return body, err
+}
+
+func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
+	body, err := s.get(ctx, baseURL+"/companies/"+url.PathEscape(s.token))
 	if err != nil {
-		return nil, "", err
+		return sources.BoardResult{}, err
 	}
 	company, err := parseCompanyState(body)
 	if err != nil {
-		return nil, "", err
+		return sources.BoardResult{}, err
 	}
 	if !company.inUK() {
-		return nil, "", nil
+		return sources.BoardResult{NextPollIn: otherPollIn, Profile: company.Profile}, nil
 	}
 
 	known := postings.get(s.token)
@@ -97,7 +161,7 @@ func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, strin
 		if !ok {
 			job, err = s.fetchPosting(ctx, cj.ID)
 			if err != nil {
-				return nil, "", err
+				return sources.BoardResult{}, err
 			}
 			if job != nil && s.now().Sub(job.UpdatedAt) > maxAge {
 				job = nil
@@ -109,12 +173,12 @@ func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, strin
 		}
 	}
 	postings.put(s.token, seen)
-	return jobs, "", nil
+	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: company.Profile}, nil
 }
 
 // fetchPosting returns nil for a job whose page is gone or unparseable.
 func (s *Source) fetchPosting(ctx context.Context, id string) (*dto.Job, error) {
-	page, err := s.Get(ctx, baseURL+"/jobs/"+url.PathEscape(id))
+	page, err := s.get(ctx, baseURL+"/jobs/"+url.PathEscape(id))
 	if errors.Is(err, sources.ErrGone) {
 		return nil, nil
 	}
@@ -133,6 +197,7 @@ type company struct {
 	Name         string
 	JobLocations []string
 	Jobs         []companyJob
+	Profile      *dto.CompanyProfile
 }
 
 type companyJob struct {
@@ -194,11 +259,15 @@ func parseCompanyState(body []byte) (company, error) {
 	if err := json.Unmarshal(raw, &state); err != nil {
 		return company{}, fmt.Errorf("wttj: parse state: %w", err)
 	}
-	for _, e := range state {
+	var rawState map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rawState); err != nil {
+		return company{}, fmt.Errorf("wttj: parse state: %w", err)
+	}
+	for key, e := range state {
 		if e.Typename != "Company" {
 			continue
 		}
-		c := company{Name: e.Name, JobLocations: e.JobLocations}
+		c := company{Name: e.Name, JobLocations: e.JobLocations, Profile: parseProfile(rawState, key)}
 		for _, ref := range e.LiveJobs {
 			j := state[ref.Ref]
 			cj := companyJob{ID: j.ExternalID, Title: j.Title}

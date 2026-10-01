@@ -1,12 +1,15 @@
 package wttj_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
@@ -82,6 +86,7 @@ func newSite(t *testing.T, company string) *site {
 
 func poll(t *testing.T, token string, s *site) ([]dto.Job, error) {
 	t.Helper()
+	wttj.ResetLimiter()
 	src := wttj.New(token, func() time.Time { return now })
 	src.Client().Transport = s
 	jobs, _, err := src.FetchPage(t.Context(), "")
@@ -174,4 +179,101 @@ func TestFetchPage(t *testing.T) {
 			}
 		}
 	})
+}
+
+func pollBoard(t *testing.T, token string, s *site) (sources.BoardResult, error) {
+	t.Helper()
+	wttj.ResetLimiter()
+	src := wttj.New(token, func() time.Time { return now })
+	src.Client().Transport = s
+	return src.PollBoard(t.Context())
+}
+
+func TestPollBoard(t *testing.T) {
+	t.Run("a UK company is next due in 7 days and a non-UK one in 90", func(t *testing.T) {
+		for company, want := range map[string]time.Duration{
+			"company_faculty.html": 7 * 24 * time.Hour,
+			"company_us_only.html": 90 * 24 * time.Hour,
+		} {
+			res, err := pollBoard(t, "cadence", newSite(t, company))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.NextPollIn != want {
+				t.Errorf("PollBoard(%s).NextPollIn = %v, want %v", company, res.NextPollIn, want)
+			}
+		}
+	})
+
+	t.Run("the company state becomes a profile", func(t *testing.T) {
+		res, err := pollBoard(t, "faculty-profile", newSite(t, "company_faculty.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := &dto.CompanyProfile{
+			Sectors:       []string{"B2B", "Artificial Intelligence", "Big data", "Machine Learning"},
+			Size:          "201-500",
+			Growth:        "+19%",
+			FundingTotal:  "$56.0M",
+			FundingRounds: 4,
+			HQ:            "Old Street, London, UK",
+			UKVisa:        "yes",
+			Glassdoor:     "3.90",
+			Mission:       "The safe, widespread adoption of AI.",
+		}
+		if diff := cmp.Diff(want, res.Profile); diff != "" {
+			t.Errorf("PollBoard profile mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("an unparseable profile leaves no profile and still returns jobs", func(t *testing.T) {
+		s := newSite(t, "company_faculty.html")
+		s.company = breakProfile(t, s.company)
+		res, err := pollBoard(t, "faculty-broken", s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Profile != nil || len(res.Jobs) == 0 {
+			t.Errorf("PollBoard = profile %v, %d jobs, want no profile and some jobs", res.Profile, len(res.Jobs))
+		}
+	})
+
+	t.Run("a 429 defers every later wttj request until the next day", func(t *testing.T) {
+		s := newSite(t, "company_faculty.html")
+		s.status = http.StatusTooManyRequests
+		if _, err := pollBoard(t, "limited", s); err == nil {
+			t.Fatal("PollBoard on 429 = nil error, want error")
+		}
+		other := newSite(t, "company_faculty.html")
+		src := wttj.New("other", func() time.Time { return now })
+		src.Client().Transport = other
+		if _, err := src.PollBoard(t.Context()); !errors.Is(err, wttj.ErrDeferred) || len(other.requests) != 0 {
+			t.Errorf("PollBoard after 429 = %v with %d requests, want ErrDeferred and none", err, len(other.requests))
+		}
+	})
+}
+
+var apolloStateRe = regexp.MustCompile(`__APOLLO_STATE__=__b64dec\("([^"]+)"\)`)
+
+func breakProfile(t *testing.T, page string) string {
+	t.Helper()
+	m := apolloStateRe.FindStringSubmatch(page)
+	raw, err := base64.StdEncoding.DecodeString(m[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var state map[string]map[string]any
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range state {
+		if e["__typename"] == "Company" {
+			e["mission"] = 42
+		}
+	}
+	out, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Replace(page, m[1], base64.StdEncoding.EncodeToString(out), 1)
 }
