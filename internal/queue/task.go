@@ -14,10 +14,11 @@ import (
 type TaskKind string
 
 const (
-	ListingPageTask TaskKind = "listing_page"
-	DetailTask      TaskKind = "detail"
-	BoardCheckTask  TaskKind = "board_check"
-	BoardVerifyTask TaskKind = "board_verify"
+	ListingPageTask   TaskKind = "listing_page"
+	DetailTask        TaskKind = "detail"
+	BoardCheckTask    TaskKind = "board_check"
+	BoardVerifyTask   TaskKind = "board_verify"
+	BoardDiscoverTask TaskKind = "board_discover"
 )
 
 type Task struct {
@@ -70,6 +71,10 @@ func (t Task) Validate() error {
 	case BoardVerifyTask:
 		if role != sourcespec.RoleATS || uuid.Validate(t.CompanyID) != nil || !sourcespec.ValidBoardToken(t.BoardToken) {
 			return errors.New("board verify requires ATS source, company ID and board token")
+		}
+	case BoardDiscoverTask:
+		if role != sourcespec.RoleATS || !sourcespec.ValidBoardToken(t.BoardToken) {
+			return errors.New("board discover requires ATS source and board token")
 		}
 	default:
 		return fmt.Errorf("unknown task kind %q", t.Kind)

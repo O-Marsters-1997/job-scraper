@@ -41,6 +41,7 @@ type Store interface {
 	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
+	ListIncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)

@@ -45,6 +45,7 @@ type Store interface {
 	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
+	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
@@ -97,6 +98,12 @@ func (m *Module) Reconsider(ctx context.Context, cfg dto.SearchConfig) error {
 
 func (m *Module) PublishBoardChecks(ctx context.Context, manual bool) error {
 	return m.jobs.PublishBoardChecks(ctx, manual)
+}
+
+// TrackDiscoveredCompany tracks the Company for userID as `new`, reporting
+// whether it did; an existing row of any review state is left untouched.
+func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error) {
+	return m.store.TrackDiscoveredCompany(ctx, userID, companyID)
 }
 
 func (m *Module) Boards() Store { return m.store }

@@ -290,6 +290,28 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("track discovered company inserts as new once and never overwrites", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if tracked, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil || !tracked {
+			t.Fatalf("TrackDiscoveredCompany(...) = %v, %v, want true", tracked, err)
+		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "dismissed"); err != nil {
+			t.Fatalf("SetCompanyReviewState(...) = %v", err)
+		}
+		if tracked, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil || tracked {
+			t.Fatalf("second TrackDiscoveredCompany(...) = %v, %v, want false", tracked, err)
+		}
+		got, err := st.ListTrackedCompaniesForUser(ctx, userID)
+		if err != nil || len(got) != 1 || got[0].ReviewState != "dismissed" || got[0].Enabled {
+			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want one dismissed disabled company", got, err)
+		}
+	})
+
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

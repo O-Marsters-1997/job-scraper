@@ -310,6 +310,17 @@ func (f *FakeStore) SetCompanyTracking(_ context.Context, userID, companyID stri
 	return t, nil
 }
 
+func (f *FakeStore) TrackDiscoveredCompany(_ context.Context, userID, companyID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := trackingKey(userID, companyID)
+	if _, ok := f.tracking[key]; ok {
+		return false, nil
+	}
+	f.tracking[key] = dto.CompanyTracking{UserID: userID, CompanyID: companyID, Enabled: true, ReviewState: "new", CheckIntervalMinutes: 360}
+	return true, nil
+}
+
 func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, state string) (dto.CompanyTracking, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

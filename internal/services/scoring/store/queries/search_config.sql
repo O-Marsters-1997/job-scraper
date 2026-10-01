@@ -1,6 +1,10 @@
 -- name: GetSearchConfig :one
 SELECT * FROM search_config WHERE user_id = $1 LIMIT 1;
 
+-- name: ListIncludeFilterConfigs :many
+SELECT * FROM search_config
+WHERE cardinality(required_locations) > 0 OR cardinality(required_title_keywords) > 0;
+
 -- name: UpsertSearchConfig :one
 INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

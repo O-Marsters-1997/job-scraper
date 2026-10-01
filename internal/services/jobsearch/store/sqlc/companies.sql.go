@@ -302,6 +302,25 @@ func (q *Queries) TouchCompanyCrawled(ctx context.Context, id pgtype.UUID) error
 	return err
 }
 
+const trackDiscoveredCompany = `-- name: TrackDiscoveredCompany :execrows
+INSERT INTO tracked_companies (user_id, company_id, review_state)
+VALUES ($1, $2, 'new')
+ON CONFLICT (user_id, company_id) DO NOTHING
+`
+
+type TrackDiscoveredCompanyParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) TrackDiscoveredCompany(ctx context.Context, arg TrackDiscoveredCompanyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, trackDiscoveredCompany, arg.UserID, arg.CompanyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const upsertCompany = `-- name: UpsertCompany :one
 INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id)
 VALUES ($1, $2, $3, $4, $5, $6)

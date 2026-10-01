@@ -78,6 +78,12 @@ func (m *Module) SearchConfig(ctx context.Context, userID string) (dto.SearchCon
 	return m.store.GetSearchConfig(ctx, userID)
 }
 
+// IncludeFilterConfigs returns the Search Config of every User with at least
+// one include filter set; Users without one never match a Discovered Board.
+func (m *Module) IncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error) {
+	return m.store.ListIncludeFilterConfigs(ctx)
+}
+
 // OpsState satisfies telemetry.StateReader.
 func (m *Module) OpsState(ctx context.Context) (dto.OpsState, error) {
 	return m.store.OpsState(ctx)

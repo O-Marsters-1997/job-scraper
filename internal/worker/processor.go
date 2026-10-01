@@ -11,9 +11,11 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/filter"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -34,6 +36,12 @@ type Publisher interface {
 	Publish(ctx context.Context, task queue.Task) error
 }
 
+type IncludeFilterConfigs interface {
+	IncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
+}
+
+type DiscoverFunc func(ctx context.Context, source, token string) (name string, jobs []dto.Job, err error)
+
 type Deps struct {
 	JS           *jobsearch.Module
 	Broker       Publisher
@@ -42,6 +50,8 @@ type Deps struct {
 	Detailers    map[string]sources.DetailFetcher
 	Exporter     *scraper.APIExporter
 	MaxPages     int
+	Scoring      IncludeFilterConfigs
+	Discover     DiscoverFunc
 }
 
 type Processor struct {
@@ -52,10 +62,12 @@ type Processor struct {
 	detailers    map[string]sources.DetailFetcher
 	exporter     *scraper.APIExporter
 	maxPages     int
+	scoring      IncludeFilterConfigs
+	discover     DiscoverFunc
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, exporter: d.Exporter, maxPages: d.MaxPages}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -93,6 +105,8 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		return p.processBoard(ctx, task)
 	case queue.BoardVerifyTask:
 		return p.verifyBoard(ctx, task)
+	case queue.BoardDiscoverTask:
+		return p.discoverBoard(ctx, task)
 	default:
 		return fmt.Errorf("unsupported task kind %s", task.Kind)
 	}
@@ -111,6 +125,46 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 	}
 	_, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, "user_confirmed")
 	return err
+}
+
+func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
+	name, jobs, err := p.discover(ctx, task.Source, task.BoardToken)
+	if err != nil {
+		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
+		return nil
+	}
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(name), Name: name})
+	if err != nil {
+		return err
+	}
+	if _, err := p.js.Boards().UpsertCandidateBoard(ctx, company.ID, task.Source, task.BoardToken); err != nil {
+		return err
+	}
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, company.ID, task.Source, task.BoardToken, "discovered"); err != nil && !errors.Is(err, data.ErrNotFound) {
+		return err
+	}
+	configs, err := p.scoring.IncludeFilterConfigs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, cfg := range configs {
+		if !anyPasses(jobs, cfg) {
+			continue
+		}
+		if _, err := p.js.TrackDiscoveredCompany(ctx, cfg.UserID, company.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func anyPasses(jobs []dto.Job, cfg dto.SearchConfig) bool {
+	for _, job := range jobs {
+		if _, rejected := filter.Reject(job, cfg); !rejected {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Processor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
