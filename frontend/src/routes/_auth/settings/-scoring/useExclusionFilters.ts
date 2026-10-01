@@ -7,6 +7,12 @@ export function useExclusionFilters(initial: ScoringConfig) {
 	);
 	const [companies, setCompanies] = createSignal(initial.excludedCompanies);
 	const [locations, setLocations] = createSignal(initial.excludedLocations);
+	const [requiredLocations, setRequiredLocations] = createSignal(
+		initial.requiredLocations,
+	);
+	const [requiredTitleKeywords, setRequiredTitleKeywords] = createSignal(
+		initial.requiredTitleKeywords,
+	);
 	const [threshold, setThreshold] = createSignal(initial.notifyThreshold);
 	return {
 		titleKeywords,
@@ -15,6 +21,10 @@ export function useExclusionFilters(initial: ScoringConfig) {
 		setCompanies,
 		locations,
 		setLocations,
+		requiredLocations,
+		setRequiredLocations,
+		requiredTitleKeywords,
+		setRequiredTitleKeywords,
 		threshold,
 		setThreshold,
 	};

@@ -40,6 +40,8 @@ func TestGet(t *testing.T) {
 		ExcludedTitleKeywords: []string{},
 		ExcludedCompanies:     []string{},
 		ExcludedLocations:     []string{},
+		RequiredLocations:     []string{},
+		RequiredTitleKeywords: []string{},
 	}
 	saved := empty
 	saved.NotifyThreshold = 5

@@ -121,6 +121,8 @@ function ScoringForm(props: {
 				excludedTitleKeywords: filters.titleKeywords(),
 				excludedCompanies: uniqueCapitalised(filters.companies()),
 				excludedLocations: uniqueCapitalised(filters.locations()),
+				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
+				requiredTitleKeywords: filters.requiredTitleKeywords(),
 				preferences: {
 					picks: Object.entries(stances)
 						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))

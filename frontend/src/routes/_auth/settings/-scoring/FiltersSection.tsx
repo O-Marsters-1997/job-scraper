@@ -50,6 +50,28 @@ export function FiltersSection(props: { filters: ExclusionFilters }) {
 				chipClass={STANCE_TONE.avoid}
 				creatable
 			/>
+			<p class="text-xs text-faint">
+				When a list below is set, jobs matching none of it are dropped. Remote
+				or blank locations always pass the location list.
+			</p>
+			<MultiCombobox
+				label="Required title keywords"
+				options={[]}
+				value={props.filters.requiredTitleKeywords()}
+				onChange={props.filters.setRequiredTitleKeywords}
+				placeholder="e.g. engineer, then Enter"
+				creatable
+			/>
+			<MultiCombobox
+				label="Required locations"
+				options={[]}
+				value={props.filters.requiredLocations()}
+				onChange={(names) =>
+					props.filters.setRequiredLocations(uniqueCapitalised(names))
+				}
+				placeholder="e.g. London, then Enter"
+				creatable
+			/>
 			<Field label="Notify me at a score of" for="threshold" hint="Out of 100.">
 				<Input
 					id="threshold"

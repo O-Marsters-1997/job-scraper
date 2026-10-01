@@ -8,6 +8,8 @@ type SearchConfig struct {
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
 	ExcludedLocations     []string
+	RequiredLocations     []string
+	RequiredTitleKeywords []string
 	NotifyThreshold       int
 	Preferences           Preferences
 	UpdatedAt             time.Time

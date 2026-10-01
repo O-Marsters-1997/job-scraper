@@ -204,6 +204,8 @@ CREATE TABLE IF NOT EXISTS search_config (
     excluded_title_keywords TEXT[]      NOT NULL DEFAULT '{}',
     excluded_companies      TEXT[]      NOT NULL DEFAULT '{}',
     excluded_locations      TEXT[]      NOT NULL DEFAULT '{}',
+    required_locations      TEXT[]      NOT NULL DEFAULT '{}',
+    required_title_keywords TEXT[]      NOT NULL DEFAULT '{}',
     notify_threshold        INT         NOT NULL DEFAULT 70,
     preferences             JSONB       NOT NULL DEFAULT '{}',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),

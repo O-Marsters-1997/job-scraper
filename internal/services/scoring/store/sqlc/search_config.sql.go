@@ -12,7 +12,7 @@ import (
 )
 
 const getSearchConfig = `-- name: GetSearchConfig :one
-SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, notify_threshold, preferences, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
+SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (SearchConfig, error) {
@@ -24,6 +24,8 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 		&i.ExcludedTitleKeywords,
 		&i.ExcludedCompanies,
 		&i.ExcludedLocations,
+		&i.RequiredLocations,
+		&i.RequiredTitleKeywords,
 		&i.NotifyThreshold,
 		&i.Preferences,
 		&i.CreatedAt,
@@ -33,16 +35,18 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 }
 
 const upsertSearchConfig = `-- name: UpsertSearchConfig :one
-INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, notify_threshold, preferences)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (user_id) DO UPDATE SET
     excluded_title_keywords = EXCLUDED.excluded_title_keywords,
     excluded_companies      = EXCLUDED.excluded_companies,
     excluded_locations      = EXCLUDED.excluded_locations,
+    required_locations      = EXCLUDED.required_locations,
+    required_title_keywords = EXCLUDED.required_title_keywords,
     notify_threshold        = EXCLUDED.notify_threshold,
     preferences             = EXCLUDED.preferences,
     updated_at              = NOW()
-RETURNING id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, notify_threshold, preferences, created_at, updated_at
+RETURNING id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at
 `
 
 type UpsertSearchConfigParams struct {
@@ -50,6 +54,8 @@ type UpsertSearchConfigParams struct {
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
 	ExcludedLocations     []string
+	RequiredLocations     []string
+	RequiredTitleKeywords []string
 	NotifyThreshold       int32
 	Preferences           []byte
 }
@@ -60,6 +66,8 @@ func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfig
 		arg.ExcludedTitleKeywords,
 		arg.ExcludedCompanies,
 		arg.ExcludedLocations,
+		arg.RequiredLocations,
+		arg.RequiredTitleKeywords,
 		arg.NotifyThreshold,
 		arg.Preferences,
 	)
@@ -70,6 +78,8 @@ func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfig
 		&i.ExcludedTitleKeywords,
 		&i.ExcludedCompanies,
 		&i.ExcludedLocations,
+		&i.RequiredLocations,
+		&i.RequiredTitleKeywords,
 		&i.NotifyThreshold,
 		&i.Preferences,
 		&i.CreatedAt,

@@ -6,6 +6,8 @@ const base = {
 	excludedTitleKeywords: ["java", "sales"],
 	excludedCompanies: ["acme corp"],
 	excludedLocations: ["united states"],
+	requiredLocations: ["london"],
+	requiredTitleKeywords: ["engineer"],
 	preferences: {
 		picks: [
 			{

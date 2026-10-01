@@ -49,6 +49,18 @@ func TestReject(t *testing.T) {
 				cfg:        dto.SearchConfig{ExcludedLocations: []string{"united states"}},
 				wantReason: "location: united states",
 			},
+			{
+				name:       "no required title keyword matches",
+				job:        dto.Job{Title: "Product Manager"},
+				cfg:        dto.SearchConfig{RequiredTitleKeywords: []string{"engineer", "developer"}},
+				wantReason: "title: no required keyword",
+			},
+			{
+				name:       "no required location matches",
+				job:        dto.Job{Title: "Engineer", Location: "New York, United States"},
+				cfg:        dto.SearchConfig{RequiredLocations: []string{"london", "united kingdom"}},
+				wantReason: "location: no required location",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -73,6 +85,26 @@ func TestReject(t *testing.T) {
 			job  dto.Job
 			cfg  dto.SearchConfig
 		}{
+			{
+				name: "required title keyword matches",
+				job:  dto.Job{Title: "Backend Developer"},
+				cfg:  dto.SearchConfig{RequiredTitleKeywords: []string{"engineer", "developer"}},
+			},
+			{
+				name: "required location matches",
+				job:  dto.Job{Title: "Engineer", Location: "London, UK"},
+				cfg:  dto.SearchConfig{RequiredLocations: []string{"london"}},
+			},
+			{
+				name: "empty location passes required locations",
+				job:  dto.Job{Title: "Engineer"},
+				cfg:  dto.SearchConfig{RequiredLocations: []string{"london"}},
+			},
+			{
+				name: "bare remote passes required locations",
+				job:  dto.Job{Title: "Engineer", Location: "Remote"},
+				cfg:  dto.SearchConfig{RequiredLocations: []string{"london"}},
+			},
 			{
 				name: "empty config passes",
 				job:  dto.Job{Title: "Senior Software Engineer"},

@@ -310,6 +310,23 @@ func TestRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("a job failing every include filter is never sent to jev", func(t *testing.T) {
+		st := newFakeStore()
+		cfg := picking("user-1", "tech:go")
+		cfg.RequiredTitleKeywords = []string{"designer"}
+		seedEffect(st, false, cfg)
+		answerer := &fakeAnswerer{}
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 0 {
+			t.Errorf("Answer calls = %v, want none (job rejected by include filter)", answerer.calls)
+		}
+		if completed := st.Completed(); len(completed) != 1 {
+			t.Errorf("completed effects = %d, want 1", len(completed))
+		}
+	})
+
 	t.Run("alerts only on first discovery above threshold", func(t *testing.T) {
 		st := newFakeStore()
 		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())

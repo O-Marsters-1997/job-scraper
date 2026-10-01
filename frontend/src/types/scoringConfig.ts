@@ -25,6 +25,8 @@ export const scoringConfigSchema = z.object({
 	excludedTitleKeywords: z.array(z.string()),
 	excludedCompanies: z.array(z.string()),
 	excludedLocations: z.array(z.string()),
+	requiredLocations: z.array(z.string()),
+	requiredTitleKeywords: z.array(z.string()),
 	notifyThreshold: z.number().int().min(0).max(100),
 	updatedAt: z.string(),
 	backfillQueued: z.number().int().nonnegative().default(0),
