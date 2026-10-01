@@ -6,6 +6,7 @@ import {
 	filterCompanyJobs,
 	normalizeArrangement,
 	parseSalary,
+	parseSearch,
 } from "./jobFilters";
 
 // ponytail: inline assert so tsgo doesn't need @types/node
@@ -127,5 +128,9 @@ assert.deepEqual(
 	).map((job) => job.ID),
 	["1", "2"],
 );
+
+assert.equal(parseSearch({}).scored, true, "Jobs page defaults scored on");
+assert.equal(parseSearch({ scored: false }).scored, false);
+assert.equal(parseSearch({ scored: "1" }).scored, true);
 
 console.log("✓ jobFilters checks passed");

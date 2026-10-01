@@ -169,7 +169,11 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 			}
 			continue
 		}
-		items = append(items, f.jobs[id])
+		job := f.jobs[id]
+		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
+			continue
+		}
+		items = append(items, job)
 	}
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
