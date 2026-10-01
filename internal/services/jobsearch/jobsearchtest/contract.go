@@ -329,6 +329,34 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("saving a profile twice keeps one, shown on the new company card", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "profiled", Name: "Profiled"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 0); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "new"); err != nil {
+			t.Fatalf("SetCompanyReviewState(...) = %v", err)
+		}
+		got, err := st.ListNewCompanies(ctx, userID)
+		if err != nil || len(got) != 1 || got[0].Profile != nil {
+			t.Fatalf("ListNewCompanies(no profile) = %+v, %v, want nil profile", got, err)
+		}
+		for _, hq := range []string{"Paris", "London"} {
+			if err := st.SaveCompanyProfile(ctx, c.ID, "wttj", dto.CompanyProfile{HQ: hq, Sectors: []string{"fintech"}}); err != nil {
+				t.Fatalf("SaveCompanyProfile(%s) = %v", hq, err)
+			}
+		}
+		got, err = st.ListNewCompanies(ctx, userID)
+		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
+			t.Fatalf("ListNewCompanies(profiled) = %+v, %v, want the London profile", got, err)
+		}
+	})
+
 	t.Run("new companies list only review state new, newest first, with their open jobs", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

@@ -43,6 +43,7 @@ type FakeStore struct {
 
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
+	profiles    map[string]dto.CompanyProfile
 
 	sourceTargets map[string]dto.SourceTarget
 	targetByKey   map[string]string
@@ -64,6 +65,7 @@ func NewFakeStore() *FakeStore {
 		pollState:      make(map[string]*boardPollState),
 		lastScraped:    make(map[string]time.Time),
 		fetches:        make(map[string]dto.CachedResponse),
+		profiles:       make(map[string]dto.CompanyProfile),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
 		candidates:     make(map[string]sourcetargets.Candidate),
@@ -293,6 +295,9 @@ func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.Ne
 			continue
 		}
 		nc := dto.NewCompany{ID: c.ID, Name: c.Name, Slug: c.Slug, Boards: []dto.TrackedBoard{}}
+		if p, ok := f.profiles[c.ID]; ok {
+			nc.Profile = &p
+		}
 		for _, b := range f.boards {
 			if b.CompanyID == c.ID {
 				nc.Boards = append(nc.Boards, dto.TrackedBoard{ID: b.ID, Source: b.Source, BoardToken: b.BoardToken, Status: b.Status})
@@ -303,6 +308,13 @@ func (f *FakeStore) ListNewCompanies(_ context.Context, userID string) ([]dto.Ne
 	}
 	slices.SortFunc(out, func(a, b dto.NewCompany) int { return cmp.Compare(b.ID, a.ID) })
 	return out, nil
+}
+
+func (f *FakeStore) SaveCompanyProfile(_ context.Context, companyID, _ string, profile dto.CompanyProfile) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.profiles[companyID] = profile
+	return nil
 }
 
 func (f *FakeStore) ListNewCompanyJobs(_ context.Context, userID string) ([]dto.Job, error) {
