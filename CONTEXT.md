@@ -192,10 +192,25 @@ A native Google Docs tab. One Tracked Doc has one or more Tabs; each Tab is exac
 A Tab whose persisted `visible` flag is `false`. It remains in the Google Doc and in `tracked_doc_tabs` but is filtered from the CV list. The visibility row is created automatically on the first `List` call for that doc (reconcile-on-list). Removing a hidden tab row from the DB is only needed when the whole Tracked Doc is removed (handled by FK cascade).
 _Avoid_: Deleted tab, removed CV — the tab still exists in Google Docs.
 
+### CV tailoring
+
+**Draft**:
+A CV tailored for one Job from a base CV, edited and reviewed in the app until the user keeps or discards it. Its content is owned by the app; once kept it becomes a Tab nested under its base CV and can no longer be edited in the app.
+_Avoid_: Tailored CV, copy, version
+
+**Profile**:
+The free-text paragraph at the top of a CV introducing the candidate, found under a heading such as Profile, Summary or About.
+_Avoid_: Summary, About, bio
+
+**Skills**:
+The list section of a CV naming the candidate's skills and tools.
+_Avoid_: Keywords, tech stack
+
 ## Relationships
 
 - A **User** owns at most one **Google Link** and many **Tracked Docs**
 - A **Tracked Doc** contains one or more **Tabs**; each **Tab** is exactly one **CV**
+- A **Draft** is tailored from exactly one base **CV** for exactly one **Job**; a kept **Draft** is nested under its base **CV** and is not itself a **CV**, so it cannot be the base of another **Draft**
 - A **Job** is pursued via at most one **Application** per user
 - A **Job** has one or more **Job URLs**; matching trusted ATS posting IDs can establish that different URLs refer to the same **Job**
 - A **Provisional Job** becomes part of an established **Job** when a trusted ATS posting ID confirms they are the same opportunity
