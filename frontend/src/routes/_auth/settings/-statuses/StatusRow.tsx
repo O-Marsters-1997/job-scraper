@@ -1,10 +1,8 @@
 import { Show } from "solid-js";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import { StatusColourPicker } from "./StatusColourPicker";
-
-const ghostButton =
-	"rounded px-2 py-1 text-xs font-medium text-muted transition hover:bg-surface-muted hover:text-foreground";
 
 export function StatusRow(props: {
 	status: ApplicationStatus;
@@ -35,20 +33,24 @@ export function StatusRow(props: {
 						<span class="flex-1 text-sm font-medium text-foreground">
 							{props.status.Name}
 						</span>
-						<button
+						<Button
 							type="button"
 							onClick={() => props.onEdit()}
-							class={ghostButton}
+							variant="ghost"
+							size="sm"
+							class="h-auto px-2 py-1 text-xs"
 						>
 							Edit
-						</button>
-						<button
+						</Button>
+						<Button
 							type="button"
 							onClick={() => props.onDelete()}
-							class="rounded px-2 py-1 text-xs font-medium text-destructive-strong transition hover:bg-destructive-subtle"
+							variant="ghost"
+							size="sm"
+							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
 						>
 							Delete
-						</button>
+						</Button>
 					</>
 				}
 			>
@@ -61,20 +63,24 @@ export function StatusRow(props: {
 						onInput={(e) => props.onName(e.currentTarget.value)}
 					/>
 				</div>
-				<button
+				<Button
 					type="submit"
 					disabled={props.pending}
-					class="rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+					variant="ghost"
+					size="sm"
+					class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"
 				>
 					Save
-				</button>
-				<button
+				</Button>
+				<Button
 					type="button"
 					onClick={() => props.onCancel()}
-					class={ghostButton}
+					variant="ghost"
+					size="sm"
+					class="h-auto px-2 py-1 text-xs"
 				>
 					Cancel
-				</button>
+				</Button>
 			</Show>
 		</form>
 	);

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { isSettled } from "@/lib/tailoring";
 import { GoogleWriteConsent } from "../../../components/GoogleWriteConsent";
 import { useGoogleStatus } from "../../../hooks/useGoogle";
@@ -9,7 +10,6 @@ import {
 	useCreateDraft,
 	useDraft,
 } from "../../../hooks/useTailoring";
-import { Panel } from "./Panel";
 
 export function GenerateStep(props: {
 	jobId: () => string;
@@ -42,7 +42,7 @@ export function GenerateStep(props: {
 	return (
 		<div class="space-y-4">
 			<GoogleWriteConsent returnTo={`/jobs/${props.jobId()}/tailor`} />
-			<Panel>
+			<Card class="block p-5">
 				<Show
 					when={draftId()}
 					fallback={
@@ -111,7 +111,7 @@ export function GenerateStep(props: {
 						</p>
 					</Show>
 				</Show>
-			</Panel>
+			</Card>
 		</div>
 	);
 }
