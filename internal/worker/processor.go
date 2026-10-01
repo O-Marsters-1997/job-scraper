@@ -48,6 +48,7 @@ type Deps struct {
 	Orchestrator *scraper.Orchestrator
 	Boards       *scraper.BoardPoller
 	Detailers    map[string]sources.DetailFetcher
+	CardComplete map[string]bool
 	Exporter     *scraper.APIExporter
 	MaxPages     int
 	Scoring      IncludeFilterConfigs
@@ -60,6 +61,7 @@ type Processor struct {
 	orchestrator *scraper.Orchestrator
 	boards       *scraper.BoardPoller
 	detailers    map[string]sources.DetailFetcher
+	cardComplete map[string]bool
 	exporter     *scraper.APIExporter
 	maxPages     int
 	scoring      IncludeFilterConfigs
@@ -67,13 +69,13 @@ type Processor struct {
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 	switch task.Kind {
 	case queue.DetailTask:
-		if task.Source == "remoteok" || task.Source == "remotive" {
+		if p.cardComplete[task.Source] {
 			return p.exporter.Export(ctx, task.Card)
 		}
 		fetcher := p.detailers[task.Source]

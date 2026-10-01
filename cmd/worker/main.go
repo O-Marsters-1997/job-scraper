@@ -29,11 +29,7 @@ import (
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
 func main() {
@@ -86,9 +82,7 @@ func main() {
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
 		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: scraper.DiscoverBoard,
-		Detailers: map[string]sources.DetailFetcher{
-			"wis": wis.New(wis.Search{}), "linkedin": linkedin.New("", nil), "indeed": indeed.New(""),
-		},
+		Detailers: builder.Detailers(), CardComplete: builder.CardComplete(),
 	})
 
 	go schedule.Every(ctx, "board checks", time.Hour, func(ctx context.Context) error {
