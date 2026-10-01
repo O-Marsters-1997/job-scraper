@@ -7,6 +7,8 @@ type ScoringConfigView struct {
 	ExcludedTitleKeywords []string    `json:"excludedTitleKeywords"`
 	ExcludedCompanies     []string    `json:"excludedCompanies"`
 	ExcludedLocations     []string    `json:"excludedLocations"`
+	RequiredLocations     []string    `json:"requiredLocations"`
+	RequiredTitleKeywords []string    `json:"requiredTitleKeywords"`
 	NotifyThreshold       int         `json:"notifyThreshold"`
 	UpdatedAt             time.Time   `json:"updatedAt"`
 	BackfillQueued        int64       `json:"backfillQueued"`

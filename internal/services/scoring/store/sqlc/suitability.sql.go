@@ -131,6 +131,8 @@ SELECT u.id AS user_id,
     COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
     COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
     COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
+    COALESCE(sc.required_locations, '{}')::text[] AS required_locations,
+    COALESCE(sc.required_title_keywords, '{}')::text[] AS required_title_keywords,
     COALESCE(sc.notify_threshold, 70) AS notify_threshold,
     COALESCE(sc.preferences, '{}'::jsonb) AS preferences
 FROM users u
@@ -149,6 +151,8 @@ type ListInterestedConfigsRow struct {
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
 	ExcludedLocations     []string
+	RequiredLocations     []string
+	RequiredTitleKeywords []string
 	NotifyThreshold       int32
 	Preferences           []byte
 }
@@ -167,6 +171,8 @@ func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) 
 			&i.ExcludedTitleKeywords,
 			&i.ExcludedCompanies,
 			&i.ExcludedLocations,
+			&i.RequiredLocations,
+			&i.RequiredTitleKeywords,
 			&i.NotifyThreshold,
 			&i.Preferences,
 		); err != nil {

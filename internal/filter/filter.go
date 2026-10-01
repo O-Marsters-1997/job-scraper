@@ -9,7 +9,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
-// Reject reports whether job trips any of cfg's exclusion filters.
+// Reject reports whether job trips any of cfg's exclusion filters or matches
+// none of a non-empty include list. A blank or bare "Remote" location passes
+// the location include list.
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
 		for _, excluded := range cfg.ExcludedCompanies {
@@ -33,7 +35,29 @@ func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 		}
 	}
 
+	if len(cfg.RequiredTitleKeywords) > 0 && !hasAnyPhrase(titleTokens, cfg.RequiredTitleKeywords) {
+		return "title: no required keyword", true
+	}
+
+	if len(cfg.RequiredLocations) > 0 && !isUnspecifiedLocation(locationTokens) &&
+		!hasAnyPhrase(locationTokens, cfg.RequiredLocations) {
+		return "location: no required location", true
+	}
+
 	return "", false
+}
+
+func isUnspecifiedLocation(tokens []string) bool {
+	return len(tokens) == 0 || (len(tokens) == 1 && tokens[0] == "remote")
+}
+
+func hasAnyPhrase(tokens []string, phrases []string) bool {
+	for _, p := range phrases {
+		if hasPhrase(tokens, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func tokenize(s string) []string {

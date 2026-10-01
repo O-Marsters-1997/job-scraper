@@ -297,6 +297,8 @@ type SearchConfig struct {
 	ExcludedTitleKeywords []string
 	ExcludedCompanies     []string
 	ExcludedLocations     []string
+	RequiredLocations     []string
+	RequiredTitleKeywords []string
 	NotifyThreshold       int32
 	Preferences           []byte
 	CreatedAt             pgtype.Timestamptz

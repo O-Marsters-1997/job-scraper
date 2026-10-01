@@ -31,6 +31,8 @@ func toSearchConfigDTO(row sqlc.SearchConfig) (dto.SearchConfig, error) {
 		ExcludedTitleKeywords: row.ExcludedTitleKeywords,
 		ExcludedCompanies:     row.ExcludedCompanies,
 		ExcludedLocations:     row.ExcludedLocations,
+		RequiredLocations:     row.RequiredLocations,
+		RequiredTitleKeywords: row.RequiredTitleKeywords,
 		NotifyThreshold:       int(row.NotifyThreshold),
 		Preferences:           prefs,
 		UpdatedAt:             row.UpdatedAt.Time,

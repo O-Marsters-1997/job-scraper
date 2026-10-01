@@ -132,6 +132,8 @@ func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (d
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
+		RequiredLocations:     nonNilStrings(cfg.RequiredLocations),
+		RequiredTitleKeywords: nonNilStrings(cfg.RequiredTitleKeywords),
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
 		Preferences:           prefs,
 	})
@@ -286,6 +288,8 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 			ExcludedTitleKeywords: row.ExcludedTitleKeywords,
 			ExcludedCompanies:     row.ExcludedCompanies,
 			ExcludedLocations:     row.ExcludedLocations,
+			RequiredLocations:     row.RequiredLocations,
+			RequiredTitleKeywords: row.RequiredTitleKeywords,
 			NotifyThreshold:       int(row.NotifyThreshold),
 			Preferences:           prefs,
 		}

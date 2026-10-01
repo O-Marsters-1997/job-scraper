@@ -11,6 +11,8 @@ let scoringConfig: ScoringConfig = {
 	excludedTitleKeywords: [],
 	excludedCompanies: [],
 	excludedLocations: [],
+	requiredLocations: [],
+	requiredTitleKeywords: [],
 	preferences: {
 		picks: [
 			{

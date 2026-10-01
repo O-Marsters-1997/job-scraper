@@ -61,6 +61,8 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
+		RequiredLocations:     cleanList(in.RequiredLocations),
+		RequiredTitleKeywords: cleanList(in.RequiredTitleKeywords),
 		Preferences: dto.Preferences{
 			Picks:              append(manualPicks, textPicks...),
 			SalaryFloor:        floor,
@@ -202,6 +204,8 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		ExcludedTitleKeywords: nonNilStrings(cfg.ExcludedTitleKeywords),
 		ExcludedCompanies:     nonNilStrings(cfg.ExcludedCompanies),
 		ExcludedLocations:     nonNilStrings(cfg.ExcludedLocations),
+		RequiredLocations:     nonNilStrings(cfg.RequiredLocations),
+		RequiredTitleKeywords: nonNilStrings(cfg.RequiredTitleKeywords),
 		NotifyThreshold:       cfg.NotifyThreshold,
 		UpdatedAt:             cfg.UpdatedAt,
 	}
