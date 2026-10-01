@@ -22,38 +22,70 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
+type entry struct {
+	build        func(dto.SourceTarget) sources.Source
+	detail       sources.DetailFetcher
+	cardComplete bool
+}
+
+func boardEntry(newSource func(token string) sources.Source) entry {
+	return entry{build: func(t dto.SourceTarget) sources.Source { return newSource(t.Value) }}
+}
+
+var registry = map[string]entry{
+	"greenhouse": boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
+	"lever":      boardEntry(func(v string) sources.Source { return lever.New(v) }),
+	"ashby":      boardEntry(func(v string) sources.Source { return ashby.New(v) }),
+	"workable":   boardEntry(func(v string) sources.Source { return workable.New(v) }),
+	"recruitee":  boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
+	"personio":   boardEntry(func(v string) sources.Source { return personio.New(v) }),
+	"wttj":       {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
+	"indeed": {
+		build:  func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value) },
+		detail: indeed.New(""),
+	},
+	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }, cardComplete: true},
+	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }, cardComplete: true},
+	"wis": {
+		build: func(t dto.SourceTarget) sources.Source {
+			return wis.New(wis.Search{Keywords: t.Value, Region: t.Filters["region"]})
+		},
+		detail: wis.New(wis.Search{}),
+	},
+	"linkedin": {
+		build:  func(t dto.SourceTarget) sources.Source { return linkedin.New(t.Value, t.Filters) },
+		detail: linkedin.New("", nil),
+	},
+}
+
 // BuildSource builds the Source for one enabled target. It returns false when
 // the target is disabled or its source is unknown.
 func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
-	if !t.Enabled {
+	e, ok := registry[t.Source]
+	if !ok || !t.Enabled {
 		return nil, false
 	}
-	switch t.Source {
-	case "greenhouse":
-		return greenhouse.New(t.Value), true
-	case "lever":
-		return lever.New(t.Value), true
-	case "ashby":
-		return ashby.New(t.Value), true
-	case "workable":
-		return workable.New(t.Value), true
-	case "recruitee":
-		return recruitee.New(t.Value), true
-	case "personio":
-		return personio.New(t.Value), true
-	case "wttj":
-		return wttj.New(t.Value, time.Now), true
-	case "indeed":
-		return indeed.New(t.Value), true
-	case "remoteok":
-		return remoteok.New(t.Value), true
-	case "remotive":
-		return remotive.New(t.Value), true
-	case "wis":
-		return wis.New(wis.Search{Keywords: t.Value, Region: t.Filters["region"]}), true
-	case "linkedin":
-		return linkedin.New(t.Value, t.Filters), true
-	default:
-		return nil, false
+	return e.build(t), true
+}
+
+// Detailers returns the detail fetcher of every source that has one.
+func Detailers() map[string]sources.DetailFetcher {
+	out := map[string]sources.DetailFetcher{}
+	for name, e := range registry {
+		if e.detail != nil {
+			out[name] = e.detail
+		}
 	}
+	return out
+}
+
+// CardComplete returns the sources whose listing card is already the full job.
+func CardComplete() map[string]bool {
+	out := map[string]bool{}
+	for name, e := range registry {
+		if e.cardComplete {
+			out[name] = true
+		}
+	}
+	return out
 }
