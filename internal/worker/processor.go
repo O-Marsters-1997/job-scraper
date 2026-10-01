@@ -152,29 +152,53 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(name), Name: name})
+	companyID, err := p.discoveryCompanyID(ctx, task, name)
 	if err != nil {
 		return err
 	}
-	if _, err := p.js.Boards().UpsertCandidateBoard(ctx, company.ID, task.Source, task.BoardToken); err != nil {
+	if _, err := p.js.Boards().UpsertCandidateBoard(ctx, companyID, task.Source, task.BoardToken); err != nil {
 		return err
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, company.ID, task.Source, task.BoardToken, "discovered"); err != nil && !errors.Is(err, data.ErrNotFound) {
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, "discovered"); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
 	}
 	configs, err := p.scoring.IncludeFilterConfigs(ctx)
 	if err != nil {
 		return err
 	}
+	tracked := false
 	for _, cfg := range configs {
 		if !anyPasses(jobs, cfg) {
 			continue
 		}
-		if _, err := p.js.TrackDiscoveredCompany(ctx, cfg.UserID, company.ID); err != nil {
+		if _, err := p.js.TrackDiscoveredCompany(ctx, cfg.UserID, companyID); err != nil {
 			return err
 		}
+		tracked = true
 	}
-	return nil
+	if !tracked {
+		return nil
+	}
+	boardID, err := p.js.Boards().GetVerifiedBoardID(ctx, task.Source, task.BoardToken)
+	if err != nil {
+		return err
+	}
+	return p.boards.PollPrefetched(ctx, boardID, jobs, 0)
+}
+
+func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, name string) (string, error) {
+	if task.CompanyID != "" {
+		return task.CompanyID, nil
+	}
+	id, err := p.js.Boards().GetBoardCompanyID(ctx, task.Source, task.BoardToken)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, data.ErrNotFound) {
+		return "", err
+	}
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(name), Name: name})
+	return company.ID, err
 }
 
 func anyPasses(jobs []dto.Job, cfg dto.SearchConfig) bool {
