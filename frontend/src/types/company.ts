@@ -9,6 +9,7 @@ export const companySchema = z.object({
 	FirstSeenAt: z.string(),
 	JobCount: z.number(),
 	Tracked: z.boolean(),
+	ReviewState: z.enum(["", "new", "kept", "dismissed"]),
 	TargetID: z.string(),
 	CheckIntervalMinutes: z.number(),
 	LastCheckedAt: z.string().nullable(),
@@ -54,6 +55,7 @@ export const trackedCompanySchema = z.object({
 	name: z.string(),
 	slug: z.string(),
 	enabled: z.boolean(),
+	review_state: z.enum(["new", "kept", "dismissed"]),
 	check_interval_minutes: z.number(),
 	boards: z.array(trackedBoardSchema),
 	open_jobs: z.number(),
@@ -63,6 +65,8 @@ export const trackedCompanySchema = z.object({
 
 export type TrackedBoard = z.infer<typeof trackedBoardSchema>;
 export type TrackedCompany = z.infer<typeof trackedCompanySchema>;
+
+export type ReviewState = "new" | "kept" | "dismissed";
 
 export interface AddCompanyPayload {
 	url: string;

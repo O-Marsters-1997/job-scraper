@@ -150,6 +150,23 @@ func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 	}
 }
 
+func TestListInterestedConfigs_FlagsNewCompany(t *testing.T) {
+	st, pool := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	companyID, _ := insertTrackedCompany(t, pool, "acme")
+
+	for state, want := range map[string]bool{"kept": false, "new": true} {
+		exec(t, pool, `UPDATE tracked_companies SET review_state = $1 WHERE company_id = $2`, state, companyID)
+		configs, err := st.ListInterestedConfigs(t.Context(), jobID)
+		if err != nil || len(configs) != 1 {
+			t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+		}
+		if configs[0].CompanyIsNew != want {
+			t.Errorf("CompanyIsNew with review_state %q = %v, want %v", state, configs[0].CompanyIsNew, want)
+		}
+	}
+}
+
 func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := t.Context()

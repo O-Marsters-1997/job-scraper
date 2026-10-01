@@ -11,6 +11,7 @@ type SearchConfig struct {
 	RequiredLocations     []string
 	RequiredTitleKeywords []string
 	NotifyThreshold       int
+	CompanyIsNew          bool
 	Preferences           Preferences
 	UpdatedAt             time.Time
 }

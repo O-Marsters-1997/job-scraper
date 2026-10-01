@@ -246,7 +246,7 @@ func (f *FakeStore) ListCompaniesForUser(_ context.Context, userID string) ([]dt
 	out := make([]dto.Company, 0, len(f.companies))
 	for _, c := range f.companies {
 		if tr, ok := f.tracking[trackingKey(userID, c.ID)]; ok {
-			c.Tracked, c.CheckIntervalMinutes = tr.Enabled, tr.CheckIntervalMinutes
+			c.Tracked, c.ReviewState, c.CheckIntervalMinutes = tr.Enabled, tr.ReviewState, tr.CheckIntervalMinutes
 		}
 		out = append(out, c)
 	}
@@ -264,7 +264,7 @@ func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string
 			continue
 		}
 		tc := dto.TrackedCompany{
-			ID: c.ID, Name: c.Name, Slug: c.Slug, Enabled: tr.Enabled,
+			ID: c.ID, Name: c.Name, Slug: c.Slug, Enabled: tr.Enabled, ReviewState: tr.ReviewState,
 			CheckIntervalMinutes: tr.CheckIntervalMinutes, Boards: []dto.TrackedBoard{},
 		}
 		for _, b := range f.boards {
@@ -302,7 +302,24 @@ func (f *FakeStore) SetCompanyTracking(_ context.Context, userID, companyID stri
 	if checkIntervalMinutes == 0 {
 		checkIntervalMinutes = cmp.Or(f.tracking[key].CheckIntervalMinutes, 360)
 	}
-	t := dto.CompanyTracking{UserID: userID, CompanyID: companyID, Enabled: enabled, CheckIntervalMinutes: checkIntervalMinutes}
+	t := dto.CompanyTracking{
+		UserID: userID, CompanyID: companyID, Enabled: enabled,
+		ReviewState: cmp.Or(f.tracking[key].ReviewState, "kept"), CheckIntervalMinutes: checkIntervalMinutes,
+	}
+	f.tracking[key] = t
+	return t, nil
+}
+
+func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, state string) (dto.CompanyTracking, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := trackingKey(userID, companyID)
+	t, ok := f.tracking[key]
+	if !ok {
+		return dto.CompanyTracking{}, data.ErrNotFound
+	}
+	t.Enabled = state != "dismissed"
+	t.ReviewState = state
 	f.tracking[key] = t
 	return t, nil
 }

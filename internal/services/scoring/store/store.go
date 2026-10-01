@@ -291,6 +291,7 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 			RequiredLocations:     row.RequiredLocations,
 			RequiredTitleKeywords: row.RequiredTitleKeywords,
 			NotifyThreshold:       int(row.NotifyThreshold),
+			CompanyIsNew:          row.CompanyIsNew,
 			Preferences:           prefs,
 		}
 	}

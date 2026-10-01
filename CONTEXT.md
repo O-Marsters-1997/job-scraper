@@ -50,6 +50,10 @@ _Avoid_: Employer, org, account
 A Company a User has chosen to monitor, including Boards verified after the choice was made.
 _Avoid_: Followed company, watched company, subscription
 
+**Review state**:
+Where a Tracked Company stands with the User: `new` (discovery tracked it and the User has not reviewed it; Jobs are scored and listed but no new-Job notification is sent), `kept` (notifies; the state for manual tracking and existing rows) or `dismissed` (the row stays with tracking disabled, so discovery cannot re-track it). Undoing a dismiss returns it to `new`.
+_Avoid_: Approval status, triage state
+
 **Check Frequency**:
 A User's requested interval for checking a Tracked Company's verified Boards, shared across that Company's Boards.
 _Avoid_: Schedule, cron, polling interval

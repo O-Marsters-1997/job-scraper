@@ -21,6 +21,7 @@ import {
 import {
 	companiesQueryOptions,
 	useCompanies,
+	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { useAllJobs } from "../../hooks/useJobs";
@@ -39,6 +40,7 @@ function CompanyDetailPage() {
 	const companiesQuery = useCompanies();
 	const jobsQuery = useAllJobs();
 	const trackMutation = useSetCompanyTracking();
+	const reviewMutation = useSetCompanyReview();
 
 	const company = () => companiesQuery.data?.find((c) => c.ID === params().id);
 
@@ -76,6 +78,25 @@ function CompanyDetailPage() {
 		>
 			{(c) => (
 				<div class="px-7 py-6 pb-16">
+					<Show when={c().ReviewState === "dismissed"}>
+						<Card class="mb-4">
+							<CardContent class="flex items-center justify-between gap-4 pt-5">
+								<p class="text-sm text-muted">
+									You dismissed this company. It is no longer polled.
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={reviewMutation.isPending}
+									onClick={() =>
+										reviewMutation.mutate({ id: c().ID, state: "new" })
+									}
+								>
+									Undo
+								</Button>
+							</CardContent>
+						</Card>
+					</Show>
 					<Card class="mb-4">
 						<CardContent class="pt-5">
 							<div class="flex items-start gap-4">

@@ -3,6 +3,7 @@ import type {
 	Company,
 	CompanyBoard,
 	CompanyTracking,
+	ReviewState,
 	TrackedCompany,
 } from "@/types/company";
 import type {
@@ -75,6 +76,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		FirstSeenAt: new Date().toISOString(),
 		JobCount: 0,
 		Tracked: track,
+		ReviewState: track ? "kept" : "",
 		TargetID: track ? faker.string.uuid() : "",
 		CheckIntervalMinutes: 360,
 		LastCheckedAt: null,
@@ -94,6 +96,7 @@ export function getTrackedCompanies(): TrackedCompany[] {
 			name: c.Name,
 			slug: c.Slug,
 			enabled: c.Tracked,
+			review_state: c.ReviewState || "kept",
 			check_interval_minutes: c.CheckIntervalMinutes,
 			boards: companyBoards
 				.filter((b) => b.CompanyID === c.ID)
@@ -118,6 +121,27 @@ export function untrackCompany(id: string): void {
 	companies = companies.map((c) =>
 		c.ID === id ? { ...c, Tracked: false, TargetID: "" } : c,
 	);
+}
+
+export function setCompanyReview(
+	id: string,
+	state: ReviewState,
+): CompanyTracking {
+	const company = companies.find((c) => c.ID === id);
+	if (!company || !trackedCompanyIds.has(id))
+		throw new Error("Company not tracked");
+	const updated: Company = {
+		...company,
+		Tracked: state !== "dismissed",
+		ReviewState: state,
+	};
+	companies = companies.map((c) => (c.ID === id ? updated : c));
+	return {
+		CompanyID: id,
+		UserID: mockUser.id,
+		Enabled: updated.Tracked,
+		CheckIntervalMinutes: updated.CheckIntervalMinutes,
+	};
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {

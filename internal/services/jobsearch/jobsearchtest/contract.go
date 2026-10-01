@@ -263,6 +263,33 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("dismiss keeps the row disabled, undo re-enables it as new", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "review-co", Name: "Review Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "kept"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetCompanyReviewState(untracked) err = %v, want ErrNotFound", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		for _, tt := range []struct {
+			state       string
+			wantEnabled bool
+		}{{"dismissed", false}, {"new", true}} {
+			if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, tt.state); err != nil {
+				t.Fatalf("SetCompanyReviewState(%s) = %v", tt.state, err)
+			}
+			tracked, err := st.ListTrackedCompaniesForUser(ctx, userID)
+			if err != nil || len(tracked) != 1 || tracked[0].ReviewState != tt.state || tracked[0].Enabled != tt.wantEnabled {
+				t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want one %s company enabled=%v", tracked, err, tt.state, tt.wantEnabled)
+			}
+		}
+	})
+
 	t.Run("set company tracking without an interval keeps the existing one", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := context.Background()

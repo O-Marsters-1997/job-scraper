@@ -74,6 +74,15 @@ func (s *Service) ListTrackedCompanies(ctx context.Context, userID string) ([]dt
 	return companies, nil
 }
 
+func (s *Service) SetCompanyReview(ctx context.Context, userID string, in dto.SetCompanyReviewInput) (dto.CompanyTracking, error) {
+	switch in.State {
+	case "new", "kept", "dismissed":
+	default:
+		return dto.CompanyTracking{}, apperr.Invalid("state must be new, kept or dismissed")
+	}
+	return s.store.SetCompanyReviewState(ctx, userID, in.CompanyID, in.State)
+}
+
 func (s *Service) UntrackCompany(ctx context.Context, userID, companyID string) error {
 	return s.store.DeleteCompanyTracking(ctx, userID, companyID)
 }

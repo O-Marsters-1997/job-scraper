@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
@@ -329,4 +330,44 @@ func TestUntrackCompany(t *testing.T) {
 	if !apperr.IsKind(err, apperr.KindNotFound) {
 		t.Fatalf("UntrackCompany() err = %v, want kind %v", err, apperr.KindNotFound)
 	}
+}
+
+func TestSetCompanyReview(t *testing.T) {
+	t.Run("rejects an unknown state", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		_, err := svc.SetCompanyReview(t.Context(), userID, dto.SetCompanyReviewInput{CompanyID: company.ID, State: "bogus"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("SetCompanyReview() err = %v, want kind invalid", err)
+		}
+	})
+
+	t.Run("untracked company is not found", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		_, err := svc.SetCompanyReview(t.Context(), userID, dto.SetCompanyReviewInput{CompanyID: company.ID, State: "kept"})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetCompanyReview() err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("dismiss keeps the row disabled and undo re-enables it as new", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		company := seedAcme(t, st)
+		if _, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 0); err != nil {
+			t.Fatal(err)
+		}
+		for _, tt := range []struct {
+			state       string
+			wantEnabled bool
+		}{{"dismissed", false}, {"new", true}, {"kept", true}} {
+			got, err := svc.SetCompanyReview(t.Context(), userID, dto.SetCompanyReviewInput{CompanyID: company.ID, State: tt.state})
+			if err != nil {
+				t.Fatalf("SetCompanyReview(%s) err = %v", tt.state, err)
+			}
+			if got.ReviewState != tt.state || got.Enabled != tt.wantEnabled {
+				t.Errorf("SetCompanyReview(%s) = %+v, want enabled %v", tt.state, got, tt.wantEnabled)
+			}
+		}
+	})
 }

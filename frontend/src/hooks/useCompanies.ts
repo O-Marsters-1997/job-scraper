@@ -5,10 +5,11 @@ import {
 	fetchCompanies,
 	fetchCompanyBoards,
 	fetchTrackedCompanies,
+	setCompanyReview,
 	setCompanyTracking,
 } from "../api/companies";
 import { keys } from "../api/keys";
-import type { CompanyBoard } from "../types/company";
+import type { CompanyBoard, ReviewState } from "../types/company";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const companiesQueryOptions = queryOptions({
@@ -69,5 +70,13 @@ export function useSetCompanyTracking() {
 			checkIntervalMinutes?: number;
 		}) => setCompanyTracking(id, enabled, checkIntervalMinutes),
 		[keys.companies.all, keys.sourceTargets],
+	);
+}
+
+export function useSetCompanyReview() {
+	return useInvalidatingMutation(
+		({ id, state }: { id: string; state: ReviewState }) =>
+			setCompanyReview(id, state),
+		[keys.companies.all, keys.companies.tracked],
 	);
 }

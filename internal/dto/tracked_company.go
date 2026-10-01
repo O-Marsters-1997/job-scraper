@@ -15,6 +15,7 @@ type TrackedCompany struct {
 	Name                 string         `json:"name"`
 	Slug                 string         `json:"slug"`
 	Enabled              bool           `json:"enabled"`
+	ReviewState          string         `json:"review_state"`
 	CheckIntervalMinutes int            `json:"check_interval_minutes"`
 	Boards               []TrackedBoard `json:"boards"`
 	OpenJobs             int            `json:"open_jobs"`

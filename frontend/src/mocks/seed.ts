@@ -93,6 +93,7 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
 		Tracked: tracked,
+		ReviewState: tracked ? "kept" : "",
 		TargetID: tracked ? `target-${i + 1}` : "",
 		CheckIntervalMinutes: 360,
 		LastCheckedAt: tracked
