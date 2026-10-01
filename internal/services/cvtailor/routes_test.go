@@ -42,6 +42,8 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /tailoring/jobs/{jobId}/suggestions",
 		"POST /tailoring/drafts",
 		"GET /tailoring/drafts/{id}",
+		"GET /tailoring/drafts/{id}/layout",
+		"POST /tailoring/drafts/{id}/slots/{slotId}/suggest",
 		"GET /tailoring/drafts/{id}/pdf",
 		"POST /tailoring/drafts/{id}/keep",
 		"POST /tailoring/drafts/{id}/discard",
@@ -57,6 +59,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /experience/import",
 		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
 		"POST /tailoring/drafts",
+		"POST /tailoring/drafts/{id}/slots/{slotId}/suggest",
 	)
 	handlerstest.RejectsBadPathID(t, r,
 		"DELETE /experience/positions/{id}",

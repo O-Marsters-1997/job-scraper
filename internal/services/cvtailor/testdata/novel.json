@@ -1,0 +1,74 @@
+[
+	{
+		"name": "every word backed",
+		"text": "Cut p99 latency of the billing API from 900ms to 240ms.",
+		"sources": ["Cut p99 latency of the billing API from 900ms to 240ms."],
+		"want": [
+			{ "text": "Cut p99 latency of the billing API from 900ms to 240ms.", "novel": false }
+		]
+	},
+	{
+		"name": "stopwords and unbacked words",
+		"text": "Led the migration of twelve services to Kubernetes using Terraform",
+		"sources": ["Led the migration of twelve services"],
+		"want": [
+			{ "text": "Led the migration of twelve services to ", "novel": false },
+			{ "text": "Kubernetes", "novel": true },
+			{ "text": " using ", "novel": false },
+			{ "text": "Terraform", "novel": true }
+		]
+	},
+	{
+		"name": "words of one or two characters are never novel",
+		"text": "Cut 40% of AWS spend",
+		"sources": ["Cut spend"],
+		"want": [
+			{ "text": "Cut 40% of ", "novel": false },
+			{ "text": "AWS", "novel": true },
+			{ "text": " spend", "novel": false }
+		]
+	},
+	{
+		"name": "empty text has no segments",
+		"text": "",
+		"sources": [],
+		"want": []
+	},
+	{
+		"name": "unicode letters, case-insensitive match",
+		"text": "Café résumé naïve",
+		"sources": ["CAFÉ au lait"],
+		"want": [
+			{ "text": "Café ", "novel": false },
+			{ "text": "résumé", "novel": true },
+			{ "text": " ", "novel": false },
+			{ "text": "naïve", "novel": true }
+		]
+	},
+	{
+		"name": "punctuation stays with the neighbouring non-novel text",
+		"text": "Built, tested and shipped (fast)!",
+		"sources": ["built tested shipped"],
+		"want": [
+			{ "text": "Built, tested and shipped (", "novel": false },
+			{ "text": "fast", "novel": true },
+			{ "text": ")!", "novel": false }
+		]
+	},
+	{
+		"name": "whole words only",
+		"text": "Scaling",
+		"sources": ["Scale scalable"],
+		"want": [{ "text": "Scaling", "novel": true }]
+	},
+	{
+		"name": "alphanumeric tokens match as one word",
+		"text": "Cut p99 latency",
+		"sources": ["p99"],
+		"want": [
+			{ "text": "Cut", "novel": true },
+			{ "text": " p99 ", "novel": false },
+			{ "text": "latency", "novel": true }
+		]
+	}
+]

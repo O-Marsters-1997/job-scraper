@@ -30,6 +30,10 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 	if err != nil {
 		return plan{}, err
 	}
+	return s.planOf(ctx, claim, ds)
+}
+
+func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure) (plan, error) {
 	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
 		return plan{}, err

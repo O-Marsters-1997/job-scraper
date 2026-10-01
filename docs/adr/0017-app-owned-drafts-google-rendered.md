@@ -1,5 +1,9 @@
 # ADR 0017 — App-owned Drafts, rendered by Google, kept as verified child Tabs
 
+Amended by [ADR 0019](0019-in-app-page-edits-google-renders-record.md): the in-app page is the editing
+surface and an instant estimate. Google stays the renderer of record. The "Rejected: our own renderer"
+paragraph and the first consequence below are superseded.
+
 ## Context
 
 ADR 0002 makes a CV a Google Docs Tab rendered by Drive's PDF export, because only Google's export

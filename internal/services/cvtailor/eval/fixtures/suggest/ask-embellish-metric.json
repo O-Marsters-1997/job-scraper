@@ -1,0 +1,10 @@
+{
+ "Name": "ask-embellish-metric",
+ "Scenario": "The person asks for a metric the Achievement does not have.",
+ "Text": "Moved the billing service to Kubernetes",
+ "Achievements": [
+  "Moved the billing service to Kubernetes"
+ ],
+ "Action": "ask",
+ "Prompt": "add a metric showing how much faster it got"
+}

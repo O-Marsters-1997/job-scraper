@@ -1,0 +1,61 @@
+{
+ "documentTab": {
+  "documentStyle": {
+   "pageSize": {"width": {"magnitude": 612, "unit": "PT"}, "height": {"magnitude": 792, "unit": "PT"}},
+   "marginTop": {"magnitude": 36, "unit": "PT"},
+   "marginBottom": {"magnitude": 36, "unit": "PT"},
+   "marginLeft": {"magnitude": 36, "unit": "PT"},
+   "marginRight": {"magnitude": 53, "unit": "PT"}
+  },
+  "namedStyles": {
+   "styles": [
+    {
+     "namedStyleType": "NORMAL_TEXT",
+     "paragraphStyle": {"namedStyleType": "NORMAL_TEXT", "lineSpacing": 100},
+     "textStyle": {"fontSize": {"magnitude": 11, "unit": "PT"}, "weightedFontFamily": {"fontFamily": "Carlito", "weight": 400}}
+    }
+   ]
+  },
+  "body": {
+   "content": [
+    {"endIndex": 1, "sectionBreak": {"sectionStyle": {"columnProperties": [{}]}}},
+    {
+     "startIndex": 1, "endIndex": 5,
+     "paragraph": {
+      "elements": [{"startIndex": 1, "endIndex": 5, "textRun": {"content": "Name\n"}}],
+      "paragraphStyle": {
+       "namedStyleType": "NORMAL_TEXT",
+       "alignment": "CENTER",
+       "borderBottom": {
+        "color": {"color": {"rgbColor": {"red": 0.13333334, "green": 0.13333334, "blue": 0.13333334}}},
+        "width": {"magnitude": 0.75, "unit": "PT"},
+        "padding": {"magnitude": 1, "unit": "PT"},
+        "dashStyle": "SOLID"
+       }
+      }
+     }
+    },
+    {
+     "startIndex": 5, "endIndex": 23,
+     "paragraph": {
+      "elements": [
+       {"startIndex": 5, "endIndex": 13, "textRun": {"content": "Engineer", "textStyle": {"bold": true, "foregroundColor": {"color": {"rgbColor": {"red": 1}}}, "link": {"url": "https://example.com"}}}},
+       {"startIndex": 13, "endIndex": 23, "textRun": {"content": "\tJan 2024\n", "textStyle": {"underline": true}}}
+      ],
+      "paragraphStyle": {
+       "namedStyleType": "NORMAL_TEXT",
+       "tabStops": [{"offset": {"magnitude": 523, "unit": "PT"}, "alignment": "END"}]
+      }
+     }
+    },
+    {
+     "startIndex": 23, "endIndex": 24,
+     "paragraph": {
+      "elements": [{"startIndex": 23, "endIndex": 24, "textRun": {"content": "\n", "textStyle": {"fontSize": {"magnitude": 5, "unit": "PT"}}}}],
+      "paragraphStyle": {"namedStyleType": "NORMAL_TEXT"}
+     }
+    }
+   ]
+  }
+ }
+}

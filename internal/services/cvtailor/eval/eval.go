@@ -48,6 +48,9 @@ func Fixtures() ([]Fixture, error) {
 	}
 	var out []Fixture
 	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
 		raw, err := fixtureFS.ReadFile(path.Join("fixtures", e.Name()))
 		if err != nil {
 			return nil, err

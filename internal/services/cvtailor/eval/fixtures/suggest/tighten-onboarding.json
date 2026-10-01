@@ -1,0 +1,9 @@
+{
+ "Name": "tighten-onboarding",
+ "Scenario": "Tighten a wordy bullet without losing facts.",
+ "Text": "Mentored four junior engineers through their very first on-call rotation, and also wrote the runbook that they used",
+ "Achievements": [
+  "Mentored four junior engineers through their first on-call rotation and wrote the runbook they used"
+ ],
+ "Action": "tighten"
+}

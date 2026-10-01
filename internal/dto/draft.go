@@ -175,3 +175,86 @@ type DraftSlotsInput struct {
 	ID    string     `json:"-" path:"id"`
 	Slots []SlotEdit `json:"slots"`
 }
+
+// DraftLayout is a Draft Doc's single-column page geometry and styled
+// paragraphs, in pt, for rendering at true size.
+type DraftLayout struct {
+	Page     LayoutPage    `json:"page"`
+	Blocks   []LayoutBlock `json:"blocks"`
+	Warnings []string      `json:"warnings"`
+}
+
+type LayoutPage struct {
+	Width        float64 `json:"width"`
+	Height       float64 `json:"height"`
+	MarginTop    float64 `json:"marginTop"`
+	MarginBottom float64 `json:"marginBottom"`
+	MarginLeft   float64 `json:"marginLeft"`
+	MarginRight  float64 `json:"marginRight"`
+}
+
+// LayoutBlock is one paragraph. SlotID is "", "profile" or the base slot ID;
+// Section is "skills" inside the read-only Skills range.
+type LayoutBlock struct {
+	SlotID          string        `json:"slotId"`
+	Section         string        `json:"section"`
+	Align           string        `json:"align"`
+	LineSpacing     float64       `json:"lineSpacing"`
+	SpaceAbove      float64       `json:"spaceAbove"`
+	SpaceBelow      float64       `json:"spaceBelow"`
+	IndentStart     float64       `json:"indentStart"`
+	IndentFirstLine float64       `json:"indentFirstLine"`
+	BorderTop       *LayoutBorder `json:"borderTop"`
+	BorderBottom    *LayoutBorder `json:"borderBottom"`
+	TabStops        []LayoutTab   `json:"tabStops"`
+	Bullet          *LayoutBullet `json:"bullet"`
+	Runs            []LayoutRun   `json:"runs"`
+}
+
+type LayoutBorder struct {
+	Width   float64 `json:"width"`
+	Color   string  `json:"color"`
+	Padding float64 `json:"padding"`
+	Dash    string  `json:"dash"`
+}
+
+type LayoutTab struct {
+	Offset    float64 `json:"offset"`
+	Alignment string  `json:"alignment"`
+}
+
+type LayoutBullet struct {
+	Glyph string  `json:"glyph"`
+	Level int     `json:"level"`
+	Size  float64 `json:"size"`
+}
+
+// LayoutRun is a styled text run. An empty paragraph's single "\n" run
+// carries its size.
+type LayoutRun struct {
+	Text      string  `json:"text"`
+	Font      string  `json:"font"`
+	Size      float64 `json:"size"`
+	Bold      bool    `json:"bold"`
+	Italic    bool    `json:"italic"`
+	Underline bool    `json:"underline"`
+	Color     string  `json:"color"`
+	Link      string  `json:"link"`
+}
+
+// SuggestInput asks for one inline edit of a slot. Text is the client's
+// current, possibly unsaved, text; MaxChars applies to the fit action.
+type SuggestInput struct {
+	ID       string `json:"-" path:"id"`
+	SlotID   string `json:"-" path:"slotId"`
+	Action   string `json:"action"`
+	Prompt   string `json:"prompt"`
+	Text     string `json:"text"`
+	MaxChars int    `json:"maxChars"`
+}
+
+// SuggestDone is the final event of a suggestion stream.
+type SuggestDone struct {
+	Text     string         `json:"text"`
+	Findings []DraftFinding `json:"findings"`
+}

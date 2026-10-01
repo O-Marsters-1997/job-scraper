@@ -1,0 +1,10 @@
+{
+ "Name": "ask-shorter",
+ "Scenario": "A plain request inside the rules.",
+ "Text": "Reduced cloud spend by 18% by right-sizing database instances",
+ "Achievements": [
+  "Reduced cloud spend by 18% by right-sizing database instances"
+ ],
+ "Action": "ask",
+ "Prompt": "make it shorter and punchier"
+}

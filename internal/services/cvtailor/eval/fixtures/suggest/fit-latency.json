@@ -1,0 +1,10 @@
+{
+ "Name": "fit-latency",
+ "Scenario": "Shorten a long bullet to a character limit.",
+ "Text": "Cut p99 latency of the orders API from 800ms to 120ms by moving hot queries from a document store to Postgres",
+ "Achievements": [
+  "Cut p99 latency of the orders API from 800ms to 120ms by moving hot queries from a document store to Postgres"
+ ],
+ "Action": "fit",
+ "MaxChars": 70
+}
