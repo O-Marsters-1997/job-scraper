@@ -16,5 +16,8 @@ Rules:
 - Keep each bullet no longer than the slot text it replaces.
 - Do not use these words: leverage, spearheaded, synergy, passionate,
   dynamic, results-driven, utilize, responsible for.
-- Use the job description to decide what to emphasise. Do not copy its wording
-  where the achievement does not support it.
+- Use the job description to decide what to emphasise. Where an achievement
+  supports a skill or tool the job names, use the job's exact term for it
+  (write "Kubernetes", not "container orchestration"; "CI/CD", not
+  "automated pipelines"). Never copy wording the achievement does not support.
+  A term the achievements do not support stays out, even if the job asks for it.

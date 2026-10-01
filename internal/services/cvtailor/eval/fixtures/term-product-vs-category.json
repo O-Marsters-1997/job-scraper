@@ -1,0 +1,91 @@
+{
+ "Name": "term-product-vs-category",
+ "Scenario": "The ad names the product; the achievement names only the category",
+ "JobDescription": "Backend engineer. You will run services on Kubernetes, build event pipelines with Kafka, and keep PostgreSQL healthy.",
+ "JobTerms": [
+  "Kubernetes",
+  "Kafka",
+  "PostgreSQL"
+ ],
+ "Positions": [
+  {
+   "ID": "p1",
+   "Employer": "Acme",
+   "Title": "Engineer",
+   "HeadingIndex": 2,
+   "Achievements": [
+    {
+     "ID": "a1",
+     "Text": "Moved services onto Kubernetes and cut deploy time from 30 to 8 minutes"
+    },
+    {
+     "ID": "a2",
+     "Text": "Built Kafka event pipelines handling 5k messages a second"
+    },
+    {
+     "ID": "a3",
+     "Text": "Tuned PostgreSQL queries and halved p95 latency"
+    }
+   ]
+  }
+ ],
+ "Structure": {
+  "Headings": [
+   {
+    "Text": "Profile",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Skills",
+    "Level": 1,
+    "Index": 0
+   },
+   {
+    "Text": "Acme - Engineer",
+    "Level": 2,
+    "Index": 0
+   }
+  ],
+  "Slots": [
+   {
+    "ID": "s0",
+    "HeadingIndex": 2,
+    "Text": "Ran container workloads",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s1",
+    "HeadingIndex": 2,
+    "Text": "Built streaming pipelines",
+    "StartIndex": 0,
+    "EndIndex": 0
+   },
+   {
+    "ID": "s2",
+    "HeadingIndex": 2,
+    "Text": "Improved database speed",
+    "StartIndex": 0,
+    "EndIndex": 0
+   }
+  ],
+  "Profile": {
+   "ID": "profile",
+   "HeadingIndex": 0,
+   "Text": "Software engineer.",
+   "StartIndex": 0,
+   "EndIndex": 0
+  },
+  "Skills": {
+   "Items": [
+    "Go",
+    "SQL"
+   ],
+   "List": false,
+   "Separator": ", ",
+   "StartIndex": 0,
+   "EndIndex": 0
+  }
+ }
+}

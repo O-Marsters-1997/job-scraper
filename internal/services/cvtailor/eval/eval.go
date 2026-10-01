@@ -36,6 +36,7 @@ type Fixture struct {
 	Name           string
 	Scenario       string
 	JobDescription string
+	JobTerms       []string
 	Positions      []Position
 	Structure      docparse.DocStructure
 }
@@ -71,6 +72,9 @@ type Outcome struct {
 	Fixture  string
 	Attempts [][]checks.Finding
 	Cost     float64
+
+	TermsSupported int
+	TermsUsed      int
 }
 
 func (o Outcome) Retries() int { return len(o.Attempts) - 1 }
@@ -88,12 +92,43 @@ func Run(ctx context.Context, ed Editor, apiKey string, f Fixture) (Outcome, err
 		out.Attempts = append(out.Attempts, findings)
 		blocks := checks.Blocking(findings)
 		if len(blocks) == 0 || len(out.Attempts) > maxRetries {
+			out.TermsSupported, out.TermsUsed = termCoverage(f, res.Edits)
 			return out, nil
 		}
 		edits := res.Edits
 		in.PriorEdits = &edits
 		in.PriorFindings = blocks
 	}
+}
+
+func termCoverage(f Fixture, edits cvedit.EditSet) (supported, used int) {
+	var bank, output strings.Builder
+	for _, p := range f.Positions {
+		for _, a := range p.Achievements {
+			bank.WriteString(a.Text + "\n")
+		}
+	}
+	for _, pe := range edits.Positions {
+		for _, b := range pe.Bullets {
+			output.WriteString(b.Text + "\n")
+		}
+	}
+	if edits.Profile != nil {
+		output.WriteString(*edits.Profile + "\n")
+	}
+	output.WriteString(strings.Join(edits.Skills, "\n"))
+	bankText, outputText := strings.ToLower(bank.String()), strings.ToLower(output.String())
+	for _, term := range f.JobTerms {
+		term = strings.ToLower(term)
+		if !strings.Contains(bankText, term) {
+			continue
+		}
+		supported++
+		if strings.Contains(outputText, term) {
+			used++
+		}
+	}
+	return supported, used
 }
 
 func slotsUnder(f Fixture, p Position) []docparse.Slot {
@@ -167,6 +202,7 @@ func Report(promptVersion, model string, outcomes []Outcome) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "prompt_version=%s model=%s runs=%d\n\n", promptVersion, model, len(outcomes))
 	writeCheckTable(&b, outcomes)
+	writeTermCoverage(&b, outcomes)
 	writeRetrySummary(&b, outcomes)
 	return b.String()
 }
@@ -189,6 +225,26 @@ func writeCheckTable(b *strings.Builder, outcomes []Outcome) {
 	tw := tabwriter.NewWriter(b, 0, 4, 2, ' ', 0)
 	_, _ = tw.Write([]byte(rows.String()))
 	_ = tw.Flush()
+}
+
+func writeTermCoverage(b *strings.Builder, outcomes []Outcome) {
+	supported, used := 0, 0
+	perFixture := map[string][2]int{}
+	for _, o := range outcomes {
+		supported += o.TermsSupported
+		used += o.TermsUsed
+		c := perFixture[o.Fixture]
+		perFixture[o.Fixture] = [2]int{c[0] + o.TermsUsed, c[1] + o.TermsSupported}
+	}
+	if supported == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\nterm_coverage %s\n", rate(used, supported))
+	for _, name := range slices.Sorted(maps.Keys(perFixture)) {
+		if c := perFixture[name]; c[1] > 0 {
+			fmt.Fprintf(b, "  %s: %s\n", name, rate(c[0], c[1]))
+		}
+	}
 }
 
 func writeRetrySummary(b *strings.Builder, outcomes []Outcome) {

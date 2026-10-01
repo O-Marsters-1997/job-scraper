@@ -36,8 +36,8 @@ func TestFixturesCoverPRDScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fixtures: %v", err)
 	}
-	if len(all) != 4 {
-		t.Fatalf("Fixtures() = %d fixtures, want the four PRD scenarios", len(all))
+	if len(all) != 7 {
+		t.Fatalf("Fixtures() = %d fixtures, want the four PRD scenarios and three term fixtures", len(all))
 	}
 	for _, f := range all {
 		if f.Scenario == "" || f.JobDescription == "" || len(f.Positions) == 0 {
@@ -92,5 +92,22 @@ func TestRunStopsAfterTwoRetries(t *testing.T) {
 	}
 	if out.Retries() != 2 {
 		t.Errorf("Retries() = %d, want 2", out.Retries())
+	}
+}
+
+func TestRunReportsTermCoverage(t *testing.T) {
+	f := fixture(t, "term-synonym-trap")
+	ed := cvtailortest.Editing(cvedit.Result{Edits: bullet("Ran nightly jobs on Airflow", "a1")})
+
+	out, err := eval.Run(t.Context(), ed, "key", f)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if out.TermsSupported != 2 || out.TermsUsed != 1 {
+		t.Errorf("terms supported/used = %d/%d, want 2/1 (dbt and Spark are not in the bank)", out.TermsSupported, out.TermsUsed)
+	}
+	if report := eval.Report("v1", "m", []eval.Outcome{out}); !strings.Contains(report, "term_coverage 1/2 (50%)") {
+		t.Errorf("report missing term_coverage:\n%s", report)
 	}
 }
