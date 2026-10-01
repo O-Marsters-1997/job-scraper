@@ -3,6 +3,8 @@ package jobsearch_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
@@ -12,6 +14,7 @@ func TestListNewCompanies(t *testing.T) {
 	st := jobsearchtest.NewFakeStore()
 	scoring := jobsearchtest.NewNoopScoring()
 	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, RequiredTitleKeywords: []string{"go"}})
+	profile := []dto.CompanyProfileEntry{{Dimension: dto.DimensionTech, Label: "Go", Yes: 2, Known: 2, Total: 3}}
 	deps := jobsearchtest.NewDeps(st)
 	deps.Scoring = scoring
 	m := jobsearch.Build(deps)
@@ -20,6 +23,7 @@ func TestListNewCompanies(t *testing.T) {
 	if _, err := st.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "acme"); err != nil {
 		t.Fatal(err)
 	}
+	scoring.SeedProfile(company.ID, profile)
 	if _, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +58,9 @@ func TestListNewCompanies(t *testing.T) {
 	c := got[0]
 	if c.MatchingRoles != 2 || c.BestSuitability == nil || *c.BestSuitability != 85 {
 		t.Errorf("ListNewCompanies() = %d roles, best %v, want 2 roles, best 85", c.MatchingRoles, c.BestSuitability)
+	}
+	if diff := cmp.Diff(profile, c.Profile); diff != "" {
+		t.Errorf("ListNewCompanies() profile mismatch (-want +got):\n%s", diff)
 	}
 	if len(c.Boards) != 1 || c.Boards[0].URL == "" {
 		t.Errorf("ListNewCompanies() boards = %+v, want one with a URL", c.Boards)

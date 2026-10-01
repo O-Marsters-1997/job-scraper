@@ -24,6 +24,7 @@ type Module struct {
 
 type ScoringPort interface {
 	sourcetargets.SearchConfigReader
+	CompanyProfiles(ctx context.Context, userID string, companyIDs []string) (map[string][]dto.CompanyProfileEntry, error)
 	store.ScoringWriter
 }
 

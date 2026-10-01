@@ -319,6 +319,52 @@ func TestListScoringInputs(t *testing.T) {
 	}
 }
 
+func TestListCompanyAnswers(t *testing.T) {
+	const model = "typesafe/jev-1.13"
+	st, pool := newStore(t)
+	companyID, _ := insertTrackedCompany(t, pool, "acme")
+	insertCompanyJob := func(url, fingerprint, closedAt string) string {
+		var id string
+		err := pool.QueryRow(t.Context(),
+			`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint, closed_at)
+			 VALUES ('Engineer', 'Remote', $1, 'acme', $2, 'greenhouse', NOW(), $3, NULLIF($4, '')::timestamptz) RETURNING id`,
+			url, companyID, fingerprint, closedAt).Scan(&id)
+		if err != nil {
+			t.Fatalf("insert job: %v", err)
+		}
+		return id
+	}
+	answered := insertCompanyJob("https://example.com/a", "fp-1", "")
+	insertCompanyJob("https://example.com/b", "fp-1", "")
+	stale := insertCompanyJob("https://example.com/c", "fp-2", "")
+	closed := insertCompanyJob("https://example.com/d", "fp-1", "2026-01-01T00:00:00Z")
+	insertAnswer(t, pool, answered, "fp-1", "hash-1", model)
+	insertAnswer(t, pool, answered, "fp-1", "hash-2", "old-model")
+	insertAnswer(t, pool, stale, "fp-1", "hash-1", model)
+	insertAnswer(t, pool, closed, "fp-1", "hash-1", model)
+
+	got, err := st.ListCompanyAnswers(t.Context(), []string{companyID}, model)
+	if err != nil {
+		t.Fatalf("ListCompanyAnswers() err = %v", err)
+	}
+	jobs := got[companyID]
+	if len(jobs) != 3 {
+		t.Fatalf("ListCompanyAnswers() = %d open jobs, want 3", len(jobs))
+	}
+	withAnswers := 0
+	for _, answers := range jobs {
+		if _, ok := answers["hash-1"]; ok {
+			withAnswers++
+		}
+		if _, ok := answers["hash-2"]; ok {
+			t.Errorf("ListCompanyAnswers() included an answer under another model")
+		}
+	}
+	if withAnswers != 1 {
+		t.Errorf("ListCompanyAnswers() = %d jobs with a current answer, want 1", withAnswers)
+	}
+}
+
 func TestSaveScores(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)

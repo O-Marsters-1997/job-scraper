@@ -531,3 +531,36 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		HarvestAge:             harvestAge,
 	}, nil
 }
+
+// ListCompanyAnswers returns, per company, one answer map (keyed by question
+// hash) for each of its open jobs, from the cache only.
+func (s *Store) ListCompanyAnswers(ctx context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
+	ids, err := data.UUIDs(companyIDs)
+	if err != nil {
+		return nil, err
+	}
+	jobs, err := s.queries.ListOpenCompanyJobs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListCompanyAnswers: %w", err)
+	}
+	rows, err := s.queries.ListCompanyJobAnswers(ctx, sqlc.ListCompanyJobAnswersParams{CompanyIds: ids, Model: model})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListCompanyAnswers: %w", err)
+	}
+	byJob := make(map[string]map[string]dto.Answer, len(jobs))
+	for _, a := range rows {
+		jobID := a.JobID.String()
+		if byJob[jobID] == nil {
+			byJob[jobID] = make(map[string]dto.Answer)
+		}
+		byJob[jobID][a.QuestionHash] = dto.Answer{
+			PYes: float64(a.PYes), PNo: float64(a.PNo), PNotStated: float64(a.PNotStated), Confidence: float64(a.Confidence),
+		}
+	}
+	out := make(map[string][]map[string]dto.Answer)
+	for _, j := range jobs {
+		companyID := j.CompanyID.String()
+		out[companyID] = append(out[companyID], byJob[j.ID.String()])
+	}
+	return out, nil
+}

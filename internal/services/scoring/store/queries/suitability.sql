@@ -79,3 +79,13 @@ SELECT count(*) AS pending
 FROM effect_outbox e
 JOIN job_scores s ON s.job_id = e.job_id AND s.user_id = sqlc.arg(user_id)::uuid
 WHERE e.status IN ('pending', 'running');
+
+-- name: ListOpenCompanyJobs :many
+SELECT id, company_id FROM jobs
+WHERE company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND closed_at IS NULL;
+
+-- name: ListCompanyJobAnswers :many
+SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
+FROM jobs j
+JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+WHERE j.company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND j.closed_at IS NULL AND a.model = sqlc.arg(model)::text;

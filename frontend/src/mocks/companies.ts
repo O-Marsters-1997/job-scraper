@@ -132,6 +132,10 @@ export function getNewCompanies(): NewCompany[] {
 				boards: c.boards,
 				matching_roles: c.open_jobs,
 				best_suitability: scores.length ? Math.max(...scores) : null,
+				profile: [
+					{ dimension: "tech", label: "Go", yes: 2, known: 3, total: 4 },
+					{ dimension: "domain", label: "Fintech", yes: 0, known: 0, total: 4 },
+				],
 			};
 		});
 }

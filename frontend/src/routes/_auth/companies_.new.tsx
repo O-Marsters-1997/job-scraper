@@ -11,7 +11,7 @@ import {
 	useSetCompanyReview,
 } from "../../hooks/useCompanies";
 import { queryClient } from "../../lib/queryClient";
-import type { NewCompany } from "../../types/company";
+import type { CompanyProfileEntry, NewCompany } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies_/new")({
 	loader: () => queryClient.ensureQueryData(newCompaniesQueryOptions),
@@ -86,6 +86,18 @@ function NewCompanyCard(props: {
 						</span>
 					</Show>
 				</div>
+				<Show when={props.company.profile.length > 0}>
+					<ul class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+						<For each={props.company.profile}>
+							{(e) => (
+								<li>
+									{e.dimension}: {e.label}{" "}
+									<span class="tabular-nums">{profileSummary(e)}</span>
+								</li>
+							)}
+						</For>
+					</ul>
+				</Show>
 			</div>
 			<div class="flex shrink-0 gap-2">
 				<Button
@@ -106,4 +118,9 @@ function NewCompanyCard(props: {
 			</div>
 		</Card>
 	);
+}
+
+function profileSummary(e: CompanyProfileEntry) {
+	if (e.known === 0) return "not known";
+	return `${e.yes} of ${e.total} ${e.total === 1 ? "role" : "roles"}`;
 }
