@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -134,10 +135,8 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	return job, nil
 }
 
-// fragmentURL maps a stored /jobs/view/{id} URL to the much smaller guest fragment.
 func fragmentURL(jobURL string) string {
-	id := jobURL[strings.LastIndex(jobURL, "/")+1:]
-	return detailURL + id
+	return detailURL + path.Base(jobURL)
 }
 
 func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
