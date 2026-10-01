@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -307,7 +308,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("polled company slugs need a verified board and an enabled tracker", func(t *testing.T) {
+	t.Run("verified boards by slug skip candidates and flag enabled trackers", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
 		for _, tc := range []struct {
@@ -331,9 +332,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("SetCompanyTracking(%s) = %v", tc.slug, err)
 			}
 		}
-		got, err := st.ListPolledCompanySlugs(ctx, []string{"polled-co", "candidate-co", "paused-co", "unknown-co"})
-		if want := []string{"polled-co"}; err != nil || !cmp.Equal(got, want) {
-			t.Fatalf("ListPolledCompanySlugs(...) = %v, %v, want %v", got, err, want)
+		got, err := st.ListVerifiedBoardsBySlug(ctx, []string{"polled-co", "candidate-co", "paused-co", "unknown-co"})
+		want := []dto.CardBoard{
+			{CompanySlug: "paused-co", Source: "greenhouse", BoardToken: "paused-co"},
+			{CompanySlug: "polled-co", Source: "greenhouse", BoardToken: "polled-co", Tracked: true},
+		}
+		slices.SortFunc(got, func(a, b dto.CardBoard) int { return strings.Compare(a.CompanySlug, b.CompanySlug) })
+		if err != nil || !cmp.Equal(got, want) {
+			t.Fatalf("ListVerifiedBoardsBySlug(...) = %v, %v, want %v", got, err, want)
 		}
 	})
 

@@ -3,11 +3,16 @@ package sourcetargets
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/filter"
+	"github.com/ollymarsters/job-scraper/internal/logger"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
 const batchSize = 100
@@ -26,10 +31,9 @@ type CandidateStore interface {
 	DeleteExpiredCandidates(context.Context) error
 }
 
-// PolledCompanies reports which Company slugs are already polled through a
-// verified Board that some User tracks.
-type PolledCompanies interface {
-	PolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
+// CardBoards reads the verified Boards of the Companies that cards name.
+type CardBoards interface {
+	VerifiedBoardsBySlug(ctx context.Context, slugs []string) ([]dto.CardBoard, error)
 }
 
 func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error {
@@ -52,13 +56,29 @@ func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, c
 	for i, card := range cards {
 		slugs[i] = card.CompanySlug
 	}
-	polled, err := s.polled.PolledCompanySlugs(ctx, slugs)
+	boards, err := s.boards.VerifiedBoardsBySlug(ctx, slugs)
 	if err != nil {
-		return nil, fmt.Errorf("look up polled companies: %w", err)
+		return nil, fmt.Errorf("look up verified boards: %w", err)
 	}
+	s.harvestUntracked(ctx, boards)
 	return slices.DeleteFunc(slices.Clone(cards), func(card dto.Job) bool {
-		return slices.Contains(polled, card.CompanySlug)
+		return slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug })
 	}), nil
+}
+
+func (s *Service) harvestUntracked(ctx context.Context, boards []dto.CardBoard) {
+	published := map[dto.CardBoard]bool{}
+	for _, b := range boards {
+		if b.Tracked || published[b] {
+			continue
+		}
+		published[b] = true
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.BoardToken}
+		if err := s.queue.Publish(ctx, task); err != nil {
+			slog.WarnContext(ctx, "could not publish board harvest",
+				slog.String(logger.KeySource, b.Source), slog.String(logger.KeyCompanySlug, b.CompanySlug), slog.Any(logger.KeyErr, err))
+		}
+	}
 }
 
 func (s *Service) Reconsider(ctx context.Context, config dto.SearchConfig) error {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
@@ -49,10 +50,10 @@ func TestCapturePage(t *testing.T) {
 		}
 	})
 
-	t.Run("drops LinkedIn cards for polled companies before detail fetch", func(t *testing.T) {
+	t.Run("drops LinkedIn cards for tracked companies before detail fetch", func(t *testing.T) {
 		st := jobsearchtest.NewFakeStore()
 		q := queuetest.NewRecorder()
-		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, polledSlugs{"polled-co"})
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "polled-co", Source: "ashby", BoardToken: "polled", Tracked: true}})
 		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
 		polled := dto.Job{URL: "https://linkedin.com/jobs/view/1", Title: "Engineer", CompanySlug: "polled-co"}
 		unpolled := dto.Job{URL: "https://linkedin.com/jobs/view/2", Title: "Engineer", CompanySlug: "other-co"}
@@ -70,6 +71,32 @@ func TestCapturePage(t *testing.T) {
 		}
 		if got := len(q.Jobs()); got != 2 {
 			t.Errorf("queued %d details after non-linkedin card, want 2", got)
+		}
+		if got := q.Tasks(); len(got) != 0 {
+			t.Errorf("published %+v for tracked company, want nothing", got)
+		}
+	})
+
+	t.Run("drops LinkedIn cards for untracked verified companies and harvests the board once", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		q := queuetest.NewRecorder()
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "acme", Source: "ashby", BoardToken: "acme"}})
+		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
+		cards := []dto.Job{
+			{URL: "https://linkedin.com/jobs/view/1", Title: "Engineer", CompanySlug: "acme"},
+			{URL: "https://linkedin.com/jobs/view/2", Title: "Designer", CompanySlug: "acme"},
+			{URL: "https://linkedin.com/jobs/view/3", Title: "Engineer", CompanySlug: "other-co"},
+		}
+		config := dto.SearchConfig{UserID: userID, UpdatedAt: time.Now().UTC()}
+		if err := svc.CapturePage(t.Context(), linkedin, cards, config); err != nil {
+			t.Fatalf("CapturePage() err = %v", err)
+		}
+		if jobs := q.Jobs(); len(jobs) != 1 || jobs[0].URL != cards[2].URL {
+			t.Errorf("queued = %+v, want only %s", jobs, cards[2].URL)
+		}
+		tasks := q.Tasks()
+		if len(tasks) != 1 || tasks[0].Kind != queue.BoardDiscoverTask || tasks[0].Source != "ashby" || tasks[0].BoardToken != "acme" {
+			t.Errorf("published = %+v, want one board_discover for ashby/acme", tasks)
 		}
 	})
 
