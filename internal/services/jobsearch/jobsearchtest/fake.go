@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -388,6 +389,27 @@ func (f *FakeStore) GetVerifiedBoardID(_ context.Context, source, token string) 
 		}
 	}
 	return "", data.ErrNotFound
+}
+
+func (f *FakeStore) ListPolledCompanySlugs(_ context.Context, slugs []string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, c := range f.companies {
+		if !slices.Contains(slugs, c.Slug) {
+			continue
+		}
+		verified := slices.ContainsFunc(slices.Collect(maps.Values(f.boards)), func(b dto.CompanyBoard) bool {
+			return b.CompanyID == c.ID && b.Status == dto.BoardVerified
+		})
+		tracked := slices.ContainsFunc(slices.Collect(maps.Values(f.tracking)), func(t dto.CompanyTracking) bool {
+			return t.CompanyID == c.ID && t.Enabled
+		})
+		if verified && tracked {
+			out = append(out, c.Slug)
+		}
+	}
+	return out, nil
 }
 
 func (f *FakeStore) GetLastScraped(_ context.Context, source string) (time.Time, bool, error) {

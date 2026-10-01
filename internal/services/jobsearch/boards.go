@@ -10,6 +10,12 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 )
 
+// PolledCompanySlugs returns those of slugs whose Company has a verified Board
+// that at least one User tracks.
+func (s *Service) PolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
+	return s.store.ListPolledCompanySlugs(ctx, slugs)
+}
+
 // PublishBoardChecks queues a check per active Board when manual, else per due
 // Board. A failed publish is logged and skipped; only the list error returns.
 func (s *Service) PublishBoardChecks(ctx context.Context, manual bool) error {
