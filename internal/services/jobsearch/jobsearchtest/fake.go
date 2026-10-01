@@ -100,6 +100,7 @@ func normalizeJobURL(raw string) string {
 	}
 	u.Host = strings.ToLower(u.Host)
 	u.Fragment = ""
+	u.RawQuery = store.StripTrackingParams(u.RawQuery)
 	return u.String()
 }
 
