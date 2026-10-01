@@ -323,6 +323,7 @@ func Fetcher(route Route) (http.RoundTripper, error) {
 		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache}, nil
 	case Tiered:
 		return newTiered(sharedCache)
+	case Direct:
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil

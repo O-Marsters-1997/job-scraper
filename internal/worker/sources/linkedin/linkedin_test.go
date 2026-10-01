@@ -168,6 +168,7 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	}
 	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	src := linkedin.New("", nil)
 	recorder := sourcetest.Respond(string(html))
 	src.Client().Transport = recorder
