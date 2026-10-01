@@ -43,6 +43,7 @@ type Store interface {
 	ListTrackedCompaniesForUser(ctx context.Context, userID string) ([]dto.TrackedCompany, error)
 	ListNewCompanies(ctx context.Context, userID string) ([]dto.NewCompany, error)
 	ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error
 	DeleteCompanyTracking(ctx context.Context, userID, companyID string) error
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	GetCompany(ctx context.Context, id string) (dto.Company, error)
@@ -109,6 +110,11 @@ func (m *Module) PublishBoardChecks(ctx context.Context, manual bool) error {
 // whether it did; an existing row of any review state is left untouched.
 func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error) {
 	return m.store.TrackDiscoveredCompany(ctx, userID, companyID)
+}
+
+// SaveCompanyProfile upserts the profile source reports for companyID.
+func (m *Module) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
+	return m.store.SaveCompanyProfile(ctx, companyID, source, profile)
 }
 
 func (m *Module) Boards() Store { return m.store }

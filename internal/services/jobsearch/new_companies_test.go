@@ -59,7 +59,7 @@ func TestListNewCompanies(t *testing.T) {
 	if c.MatchingRoles != 2 || c.BestSuitability == nil || *c.BestSuitability != 85 {
 		t.Errorf("ListNewCompanies() = %d roles, best %v, want 2 roles, best 85", c.MatchingRoles, c.BestSuitability)
 	}
-	if diff := cmp.Diff(profile, c.Profile); diff != "" {
+	if diff := cmp.Diff(profile, c.Rollup); diff != "" {
 		t.Errorf("ListNewCompanies() profile mismatch (-want +got):\n%s", diff)
 	}
 	if len(c.Boards) != 1 || c.Boards[0].URL == "" {

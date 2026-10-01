@@ -694,6 +694,32 @@ func TestBoardPolling(t *testing.T) {
 		}
 	})
 
+	t.Run("a next-poll hint sets next_due_at and holds the board back", func(t *testing.T) {
+		env := verifiedBoardFixture(t)
+		ctx := t.Context()
+		hint := 3 * 24 * time.Hour
+		err := env.st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: env.claim(t, false), Complete: true, NextPollIn: hint})
+		if err != nil {
+			t.Fatalf("CompleteBoard() err = %v", err)
+		}
+		var days float64
+		if err := env.pool.QueryRow(ctx, "SELECT EXTRACT(EPOCH FROM next_due_at - NOW()) / 86400 FROM board_poll_state WHERE board_id = $1", env.board.ID).Scan(&days); err != nil {
+			t.Fatal(err)
+		}
+		if days < 2.99 || days > 3 {
+			t.Errorf("next_due_at is %.3f days out, want 3", days)
+		}
+		if _, err := env.pool.Exec(ctx, "UPDATE board_poll_state SET last_scheduled_at = NOW() - INTERVAL '30 days' WHERE board_id = $1", env.board.ID); err != nil {
+			t.Fatal(err)
+		}
+		if due := env.due(t); len(due) != 0 {
+			t.Errorf("hinted board due = %v, want none", due)
+		}
+		if _, err := env.st.ClaimBoard(ctx, env.board.ID, false); !errors.Is(err, store.ErrBoardClaimUnavailable) {
+			t.Errorf("ClaimBoard() before hint elapsed err = %v, want ErrBoardClaimUnavailable", err)
+		}
+	})
+
 	t.Run("failing a claim needs the active lease", func(t *testing.T) {
 		env := verifiedBoardFixture(t)
 		claim := env.claim(t, false)

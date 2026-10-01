@@ -6,9 +6,10 @@ JOIN companies c ON c.id = b.company_id
 JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.status = 'verified'
-GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until
+GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at
 HAVING (s.last_scheduled_at IS NULL OR s.last_scheduled_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
    AND (s.lease_until IS NULL OR s.lease_until < NOW())
+   AND (s.next_due_at IS NULL OR s.next_due_at <= NOW())
 ORDER BY b.id;
 
 -- name: ListActiveBoards :many
@@ -41,11 +42,11 @@ UPDATE board_poll_state
 SET lease_owner = $2, lease_until = NOW() + INTERVAL '30 minutes',
     last_started_at = NOW(), last_snapshot_version = last_snapshot_version + 1
 WHERE board_id = $1 AND (lease_until IS NULL OR lease_until < NOW())
-  AND (sqlc.arg(manual)::boolean OR last_scheduled_at IS NULL OR last_scheduled_at + (
+  AND (sqlc.arg(manual)::boolean OR next_due_at <= NOW() AND (last_scheduled_at IS NULL OR last_scheduled_at + (
       SELECT MIN(tc.check_interval_minutes) * INTERVAL '1 minute'
       FROM company_boards b JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled
       WHERE b.id = board_poll_state.board_id
-  ) <= NOW())
+  ) <= NOW()))
   AND EXISTS (
       SELECT 1 FROM company_boards b
       JOIN tracked_companies tc ON tc.company_id = b.company_id AND tc.enabled

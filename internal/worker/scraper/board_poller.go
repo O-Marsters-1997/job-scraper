@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
@@ -17,7 +18,7 @@ type BoardPollStore interface {
 }
 
 type BoardFetcher interface {
-	FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, error)
+	FetchBoard(context.Context, dto.BoardPoll) (jobs []dto.Job, nextPollIn time.Duration, err error)
 }
 
 type BoardIngester interface {
@@ -42,7 +43,7 @@ func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) err
 	if err != nil {
 		return err
 	}
-	jobs, err := p.fetcher.FetchBoard(ctx, claim)
+	jobs, nextPollIn, err := p.fetcher.FetchBoard(ctx, claim)
 	if err == nil {
 		for idx := range jobs {
 			jobs[idx].BoardID = claim.ID
@@ -54,17 +55,17 @@ func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) err
 	if err != nil {
 		return errors.Join(err, p.store.FailBoard(ctx, claim))
 	}
-	return p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true})
+	return p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: nextPollIn})
 }
 
 type SourceBoardFetcher struct{}
 
-func (SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) ([]dto.Job, error) {
+func (SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) ([]dto.Job, time.Duration, error) {
 	target := dto.SourceTarget{Source: board.Source, Value: board.Token, Enabled: true}
 	src, ok := builder.BuildSource(target)
 	if !ok {
-		return nil, fmt.Errorf("unsupported board source %q", board.Source)
+		return nil, 0, fmt.Errorf("unsupported board source %q", board.Source)
 	}
 	jobs, _, err := src.FetchPage(ctx, "")
-	return jobs, err
+	return jobs, 0, err
 }

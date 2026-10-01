@@ -4,20 +4,23 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 )
 
 type boardStoreStub struct {
-	board dto.BoardPoll
-	state string
+	board    dto.BoardPoll
+	state    string
+	snapshot dto.BoardSnapshot
 }
 
 func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
 	return s.board, nil
 }
-func (s *boardStoreStub) CompleteBoard(context.Context, dto.BoardSnapshot) error {
+func (s *boardStoreStub) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) error {
+	s.snapshot = snapshot
 	s.state = "completed"
 	return nil
 }
@@ -28,11 +31,12 @@ func (s *boardStoreStub) FailBoard(context.Context, dto.BoardPoll) error {
 
 type boardFetcherStub struct {
 	jobs []dto.Job
+	hint time.Duration
 	err  error
 }
 
-func (f boardFetcherStub) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, error) {
-	return f.jobs, f.err
+func (f boardFetcherStub) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, time.Duration, error) {
+	return f.jobs, f.hint, f.err
 }
 
 type boardIngesterStub struct {
@@ -85,5 +89,24 @@ func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {
 	}
 	if len(ingester.jobs) != 1 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].CompanySlug != "company-slug" || ingester.jobs[0].BoardID != "board" {
 		t.Fatalf("ingested job identity=%v", ingester.jobs)
+	}
+}
+
+func TestBoardPollPassesNextPollHintOnSuccessOnly(t *testing.T) {
+	hint := 72 * time.Hour
+	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
+	poller := scraper.NewBoardPoller(store, boardFetcherStub{hint: hint}, &boardIngesterStub{})
+	if err := poller.PollBoard(context.Background(), "board", false); err != nil {
+		t.Fatal(err)
+	}
+	if store.snapshot.NextPollIn != hint {
+		t.Errorf("snapshot NextPollIn = %v, want %v", store.snapshot.NextPollIn, hint)
+	}
+
+	failed := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
+	poller = scraper.NewBoardPoller(failed, boardFetcherStub{hint: hint, err: errPartial}, &boardIngesterStub{})
+	_ = poller.PollBoard(context.Background(), "board", false)
+	if failed.state != "failed" || failed.snapshot.NextPollIn != 0 {
+		t.Errorf("failed poll state = %q, hint = %v, want failed and no hint", failed.state, failed.snapshot.NextPollIn)
 	}
 }

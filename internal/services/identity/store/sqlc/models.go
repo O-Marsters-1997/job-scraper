@@ -149,6 +149,13 @@ type CompanyBoard struct {
 	CreatedAt          pgtype.Timestamptz
 }
 
+type CompanyProfile struct {
+	CompanyID pgtype.UUID
+	Source    string
+	Data      []byte
+	FetchedAt pgtype.Timestamptz
+}
+
 type CvHeadingMapping struct {
 	UserID      pgtype.UUID
 	DocID       string

@@ -11,7 +11,11 @@ import {
 	useSetCompanyReview,
 } from "../../hooks/useCompanies";
 import { queryClient } from "../../lib/queryClient";
-import type { CompanyProfileEntry, NewCompany } from "../../types/company";
+import type {
+	CompanyProfile,
+	CompanyProfileEntry,
+	NewCompany,
+} from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies_/new")({
 	loader: () => queryClient.ensureQueryData(newCompaniesQueryOptions),
@@ -57,6 +61,53 @@ function NewCompaniesPage() {
 	);
 }
 
+function profileFacts(p: CompanyProfile): [string, string][] {
+	const funding = [
+		p.funding_total,
+		p.funding_rounds > 0 ? `${p.funding_rounds} rounds` : "",
+	]
+		.filter(Boolean)
+		.join(", ");
+	return [
+		["Sectors", (p.sectors ?? []).join(", ")],
+		["Size", p.size],
+		["Growth", p.growth],
+		["Funding", funding],
+		["Investors", (p.investors ?? []).join(", ")],
+		["HQ", p.hq],
+		["Hybrid", p.hybrid_note],
+		["UK visa", p.uk_visa],
+		["Glassdoor", p.glassdoor],
+	];
+}
+
+function ProfileSummary(props: { profile: CompanyProfile | null }) {
+	return (
+		<Show
+			when={props.profile}
+			fallback={<p class="mt-2 text-xs text-faint">Profile: not known</p>}
+		>
+			{(profile) => (
+				<div class="mt-2 grid gap-1 text-xs text-muted">
+					<dl class="flex flex-wrap gap-x-4 gap-y-1">
+						<For each={profileFacts(profile()).filter(([, v]) => v)}>
+							{([label, value]) => (
+								<div class="flex gap-1">
+									<dt class="text-faint">{label}</dt>
+									<dd>{value}</dd>
+								</div>
+							)}
+						</For>
+					</dl>
+					<Show when={profile().mission}>
+						<p>{profile().mission}</p>
+					</Show>
+				</div>
+			)}
+		</Show>
+	);
+}
+
 function NewCompanyCard(props: {
 	company: NewCompany;
 	pending: boolean;
@@ -86,18 +137,19 @@ function NewCompanyCard(props: {
 						</span>
 					</Show>
 				</div>
-				<Show when={props.company.profile.length > 0}>
+				<Show when={props.company.rollup.length > 0}>
 					<ul class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-						<For each={props.company.profile}>
+						<For each={props.company.rollup}>
 							{(e) => (
 								<li>
 									{e.dimension}: {e.label}{" "}
-									<span class="tabular-nums">{profileSummary(e)}</span>
+									<span class="tabular-nums">{rollupSummary(e)}</span>
 								</li>
 							)}
 						</For>
 					</ul>
 				</Show>
+				<ProfileSummary profile={props.company.profile} />
 			</div>
 			<div class="flex shrink-0 gap-2">
 				<Button
@@ -120,7 +172,7 @@ function NewCompanyCard(props: {
 	);
 }
 
-function profileSummary(e: CompanyProfileEntry) {
+function rollupSummary(e: CompanyProfileEntry) {
 	if (e.known === 0) return "not known";
 	return `${e.yes} of ${e.total} ${e.total === 1 ? "role" : "roles"}`;
 }

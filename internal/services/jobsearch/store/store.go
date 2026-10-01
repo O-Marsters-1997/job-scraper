@@ -381,15 +381,42 @@ func (s *Store) ListNewCompanies(ctx context.Context, userID string) ([]dto.NewC
 			ID: b.ID.String(), Source: b.Source, BoardToken: b.BoardToken, Status: dto.BoardStatus(b.Status),
 		})
 	}
+	profileRows, err := s.queries.ListNewCompanyProfiles(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNewCompanies profiles: %w", err)
+	}
+	profiles := make(map[string]*dto.CompanyProfile, len(profileRows))
+	for _, p := range profileRows {
+		var profile dto.CompanyProfile
+		if err := json.Unmarshal(p.Data, &profile); err != nil {
+			return nil, fmt.Errorf("store.ListNewCompanies profile: %w", err)
+		}
+		profiles[p.CompanyID.String()] = &profile
+	}
 	out := make([]dto.NewCompany, len(rows))
 	for i, r := range rows {
 		id := r.ID.String()
-		out[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}}
+		out[i] = dto.NewCompany{ID: id, Name: r.Name, Slug: r.Slug, Boards: []dto.TrackedBoard{}, Profile: profiles[id]}
 		if b, ok := boards[id]; ok {
 			out[i].Boards = b
 		}
 	}
 	return out, nil
+}
+
+func (s *Store) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("store.SaveCompanyProfile: %w", err)
+	}
+	if err := s.queries.UpsertCompanyProfile(ctx, sqlc.UpsertCompanyProfileParams{CompanyID: cid, Source: source, Data: raw}); err != nil {
+		return fmt.Errorf("store.SaveCompanyProfile: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListNewCompanyJobs(ctx context.Context, userID string) ([]dto.Job, error) {
@@ -1121,7 +1148,7 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 			return fmt.Errorf("retire board: %w", err)
 		}
 	}
-	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: int32(poll.IntervalMinutes), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
+	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
 		return fmt.Errorf("complete board state: %w", err)
 	}
@@ -1132,4 +1159,11 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 		return fmt.Errorf("commit board completion: %w", err)
 	}
 	return nil
+}
+
+func pollIntervalMinutes(poll dto.BoardPoll, hint time.Duration) int32 {
+	if hint > 0 {
+		return int32(max(1, int(hint/time.Minute)))
+	}
+	return int32(poll.IntervalMinutes)
 }

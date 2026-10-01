@@ -71,6 +71,22 @@ const companyProfileEntrySchema = z.object({
 	total: z.number(),
 });
 
+export const companyProfileSchema = z.object({
+	sectors: z.array(z.string()).nullable(),
+	size: z.string(),
+	growth: z.string(),
+	funding_total: z.string(),
+	funding_rounds: z.number(),
+	investors: z.array(z.string()).nullable(),
+	hq: z.string(),
+	hybrid_note: z.string(),
+	uk_visa: z.string(),
+	glassdoor: z.string(),
+	mission: z.string(),
+});
+
+export type CompanyProfile = z.infer<typeof companyProfileSchema>;
+
 export const newCompanySchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -78,7 +94,8 @@ export const newCompanySchema = z.object({
 	boards: z.array(trackedBoardSchema),
 	matching_roles: z.number(),
 	best_suitability: z.number().nullable(),
-	profile: z.array(companyProfileEntrySchema),
+	rollup: z.array(companyProfileEntrySchema),
+	profile: companyProfileSchema.nullable(),
 });
 
 export type CompanyProfileEntry = z.infer<typeof companyProfileEntrySchema>;

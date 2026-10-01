@@ -7,5 +7,6 @@ type NewCompany struct {
 	Boards          []TrackedBoard        `json:"boards"`
 	MatchingRoles   int                   `json:"matching_roles"`
 	BestSuitability *int                  `json:"best_suitability"`
-	Profile         []CompanyProfileEntry `json:"profile"`
+	Profile         *CompanyProfile       `json:"profile"`
+	Rollup          []CompanyProfileEntry `json:"rollup"`
 }

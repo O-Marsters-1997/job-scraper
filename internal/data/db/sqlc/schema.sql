@@ -375,3 +375,11 @@ CREATE TABLE fetch_cache (
 );
 
 CREATE INDEX fetch_cache_fetched_at_idx ON fetch_cache (fetched_at);
+
+CREATE TABLE company_profiles (
+    company_id UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    source     TEXT        NOT NULL,
+    data       JSONB       NOT NULL,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (company_id, source)
+);
