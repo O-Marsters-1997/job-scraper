@@ -246,18 +246,31 @@ func (f *FakeStore) GetCompany(_ context.Context, id string) (dto.Company, error
 	return lookup(f.companies, id)
 }
 
-func (f *FakeStore) ListCompaniesForUser(_ context.Context, userID string) ([]dto.Company, error) {
+func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := make([]dto.Company, 0, len(f.companies))
+	search := strings.ToLower(options.Search)
+	var items []dto.Company
 	for _, c := range f.companies {
 		if tr, ok := f.tracking[trackingKey(userID, c.ID)]; ok {
 			c.Tracked, c.ReviewState, c.CheckIntervalMinutes = tr.Enabled, tr.ReviewState, tr.CheckIntervalMinutes
 		}
-		out = append(out, c)
+		if options.TrackedOnly && !c.Tracked {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
+			continue
+		}
+		if options.CursorID != "" && cmp.Or(cmp.Compare(c.Name, options.CursorName), cmp.Compare(c.ID, options.CursorID)) <= 0 {
+			continue
+		}
+		items = append(items, c)
 	}
-	slices.SortFunc(out, func(a, b dto.Company) int { return cmp.Compare(a.ID, b.ID) })
-	return out, nil
+	slices.SortFunc(items, func(a, b dto.Company) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID)) })
+	if limit := int(options.Limit); limit > 0 && limit < len(items) {
+		items = items[:limit]
+	}
+	return dto.CompanyPage{Items: items}, nil
 }
 
 func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto.Company, error) {

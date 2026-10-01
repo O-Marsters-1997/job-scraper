@@ -92,7 +92,7 @@ func toCompanyDTO(row sqlc.Company) dto.Company {
 	}
 }
 
-func toCompanyForUserDTO(row sqlc.ListCompaniesForUserRow) dto.Company {
+func toCompanyForUserDTO(row sqlc.GetCompanyForUserRow) dto.Company {
 	return dto.Company{
 		ID:                   row.ID.String(),
 		Slug:                 row.Slug,

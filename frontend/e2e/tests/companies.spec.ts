@@ -15,12 +15,16 @@ test.describe("Companies", () => {
 
 		await companiesPage.search(firstName.trim());
 
-		const count = await companiesPage.rows.count();
-		expect(count).toBeGreaterThan(0);
-		for (let i = 0; i < count; i++) {
-			const text = await companiesPage.rows.nth(i).textContent();
-			expect(text?.toLowerCase()).toContain(firstName.trim().toLowerCase());
-		}
+		const needle = firstName.trim().toLowerCase();
+		await expect
+			.poll(async () => {
+				const texts = await companiesPage.rows.allTextContents();
+				return (
+					texts.length > 0 &&
+					texts.every((t) => t.toLowerCase().includes(needle))
+				);
+			})
+			.toBe(true);
 	});
 
 	test("should navigate to company detail when clicking a company name", async ({

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -183,9 +184,83 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 180); err != nil {
 			t.Fatalf("SetCompanyTracking(...) = %v", err)
 		}
-		companies, err := st.ListCompaniesForUser(ctx, userID)
-		if err != nil || len(companies) != 1 || !companies[0].Tracked || companies[0].CheckIntervalMinutes != 180 {
-			t.Fatalf("ListCompaniesForUser(...) = %+v, %v, want one tracked company", companies, err)
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10})
+		if err != nil || len(page.Items) != 1 || !page.Items[0].Tracked || page.Items[0].CheckIntervalMinutes != 180 {
+			t.Fatalf("PageCompaniesForUser(...) = %+v, %v, want one tracked company", page, err)
+		}
+	})
+
+	t.Run("paging companies visits each once in name then id order", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		for _, c := range []dto.CompanyUpsert{
+			{Slug: "delta", Name: "Delta"}, {Slug: "alpha", Name: "Alpha"}, {Slug: "twin-a", Name: "Twin"},
+			{Slug: "twin-b", Name: "Twin"}, {Slug: "omega", Name: "Omega"},
+		} {
+			if _, err := st.UpsertCompany(ctx, c); err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", c.Slug, err)
+			}
+		}
+		var got []dto.Company
+		options := dto.CompanyPageOptions{Limit: 2}
+		for {
+			page, err := st.PageCompaniesForUser(ctx, userID, options)
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%+v) = %v", options, err)
+			}
+			got = append(got, page.Items...)
+			if len(page.Items) < int(options.Limit) {
+				break
+			}
+			last := page.Items[len(page.Items)-1]
+			options.CursorName, options.CursorID = last.Name, last.ID
+		}
+		names := make([]string, len(got))
+		ids := map[string]bool{}
+		for i, c := range got {
+			names[i] = c.Name
+			ids[c.ID] = true
+		}
+		if want := []string{"Alpha", "Delta", "Omega", "Twin", "Twin"}; !slices.Equal(names, want) || len(ids) != 5 || got[3].ID >= got[4].ID {
+			t.Fatalf("paged = %v (%d distinct), want %v with the Twin tie broken by id", names, len(ids), want)
+		}
+	})
+
+	t.Run("companies search and tracked filters compose with the cursor", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		var acme dto.Company
+		for _, c := range []dto.CompanyUpsert{{Slug: "acme", Name: "Acme"}, {Slug: "acme-labs", Name: "Beta Works"}, {Slug: "zeta", Name: "Zeta Acme"}} {
+			created, err := st.UpsertCompany(ctx, c)
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", c.Slug, err)
+			}
+			if c.Slug == "acme" {
+				acme = created
+			}
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, acme.ID, true, 180); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		slugs := func(options dto.CompanyPageOptions) []string {
+			page, err := st.PageCompaniesForUser(ctx, userID, options)
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%+v) = %v", options, err)
+			}
+			var out []string
+			for _, c := range page.Items {
+				out = append(out, c.Slug)
+			}
+			return out
+		}
+		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, Search: "ACME"}), []string{"acme", "acme-labs", "zeta"}; !slices.Equal(got, want) {
+			t.Errorf("search ACME = %v, want %v (name or slug, case-insensitive)", got, want)
+		}
+		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, Search: "acme", CursorName: acme.Name, CursorID: acme.ID}), []string{"acme-labs", "zeta"}; !slices.Equal(got, want) {
+			t.Errorf("search acme after Acme = %v, want %v", got, want)
+		}
+		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, TrackedOnly: true}), []string{"acme"}; !slices.Equal(got, want) {
+			t.Errorf("tracked only = %v, want %v", got, want)
 		}
 	})
 

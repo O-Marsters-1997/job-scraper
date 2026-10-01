@@ -2,10 +2,12 @@ package jobsearch_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
@@ -104,5 +106,21 @@ func TestGetCompanyHandlerUnknownIDIs404(t *testing.T) {
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	if w := handlerstest.Serve(t, r, "GET /companies/missing", ""); w.Code != http.StatusNotFound {
 		t.Errorf("GET /companies/missing = %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestListCompaniesHandlerReadsQueryParams(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	for _, name := range []string{"Alpha", "Beta"} {
+		if _, err := st.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: strings.ToLower(name), Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(st)).Routes(r)
+
+	page := handlerstest.Do[dto.CompanyPage](t, r, http.StatusOK, "GET /companies?limit=1&q=a", "")
+	if len(page.Items) != 1 || page.Items[0].Name != "Alpha" || page.NextCursor == "" {
+		t.Errorf("GET /companies?limit=1&q=a = %+v, want Alpha and a next cursor", page)
 	}
 }

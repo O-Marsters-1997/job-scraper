@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	defaultJobPageLimit = 50
-	defaultSinceDays    = 90
-	maxSinceDays        = 36500
+	defaultPageLimit = 50
+	defaultSinceDays = 90
+	maxSinceDays     = 36500
 )
 
 type jobCursor struct {
@@ -37,13 +37,9 @@ func NewService(store Store, q QueuePublisher) *Service {
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {
-	limit := defaultJobPageLimit
-	if q.Limit != "" {
-		l, err := strconv.Atoi(q.Limit)
-		if err != nil || l < 1 || l > 100 {
-			return dto.JobPage{}, apperr.Invalid("limit must be between 1 and 100")
-		}
-		limit = l
+	limit, err := parsePageLimit(q.Limit)
+	if err != nil {
+		return dto.JobPage{}, err
 	}
 	if q.Availability != "" && q.Availability != "open" && q.Availability != "closed" && q.Availability != "all" {
 		return dto.JobPage{}, apperr.Invalid("invalid availability")
@@ -60,8 +56,8 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 
 	options := dto.JobPageOptions{Limit: int32(limit + 1), Availability: q.Availability, CompanyID: q.CompanyID, ScoredOnly: q.Scored == "1", SinceDays: sinceDays}
 	if q.Cursor != "" {
-		decoded, err := decodeJobCursor(q.Cursor)
-		if err != nil {
+		var decoded jobCursor
+		if err := decodeCursor(q.Cursor, &decoded); err != nil || decoded.Time.IsZero() || decoded.ID == "" {
 			return dto.JobPage{}, apperr.Invalid("invalid cursor")
 		}
 		options.CursorTime, options.CursorID = decoded.Time, decoded.ID
@@ -78,7 +74,7 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	if len(page.Items) > limit {
 		page.Items = page.Items[:limit]
 		last := page.Items[len(page.Items)-1]
-		page.NextCursor = encodeJobCursor(jobCursor{Time: last.ScrapedAt, ID: last.ID})
+		page.NextCursor = encodeCursor(jobCursor{Time: last.ScrapedAt, ID: last.ID})
 	}
 	if page.Items == nil {
 		page.Items = []dto.Job{}
@@ -98,22 +94,26 @@ func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	}
 }
 
-func decodeJobCursor(raw string) (jobCursor, error) {
-	data, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return jobCursor{}, err
+func parsePageLimit(raw string) (int, error) {
+	if raw == "" {
+		return defaultPageLimit, nil
 	}
-	var c jobCursor
-	if err := json.Unmarshal(data, &c); err != nil {
-		return jobCursor{}, err
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 1 || limit > 100 {
+		return 0, apperr.Invalid("limit must be between 1 and 100")
 	}
-	if c.Time.IsZero() || c.ID == "" {
-		return jobCursor{}, errors.New("empty cursor")
-	}
-	return c, nil
+	return limit, nil
 }
 
-func encodeJobCursor(c jobCursor) string {
+func decodeCursor(raw string, into any) error {
+	data, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, into)
+}
+
+func encodeCursor(c any) string {
 	data, _ := json.Marshal(c)
 	return base64.RawURLEncoding.EncodeToString(data)
 }

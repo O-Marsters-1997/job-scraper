@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+import type { CompanyPageParams } from "@/api/companies";
 import type {
 	Company,
 	CompanyBoard,
@@ -53,6 +54,27 @@ const atsSourceForHost = (hostname: string) =>
 export function getCompanies(): Company[] {
 	failIfRequested("getCompanies");
 	return companies;
+}
+
+export function getCompanyPage(params: CompanyPageParams): {
+	items: Company[];
+	next_cursor: string;
+} {
+	failIfRequested("getCompanies");
+	const q = (params.q ?? "").toLowerCase();
+	const matches = companies
+		.filter((c) => !params.tracked || c.Tracked)
+		.filter(
+			(c) =>
+				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
+		)
+		.sort((a, b) => a.Name.localeCompare(b.Name) || a.ID.localeCompare(b.ID));
+	const start = Number(params.cursor ?? 0);
+	const end = start + (params.limit ?? 50);
+	return {
+		items: matches.slice(start, end),
+		next_cursor: end < matches.length ? String(end) : "",
+	};
 }
 
 export function addCompany(url: string, track: boolean): Company | null {

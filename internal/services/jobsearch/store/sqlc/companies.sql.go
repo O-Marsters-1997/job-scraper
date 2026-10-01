@@ -54,7 +54,9 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 const getCompanyForUser = `-- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,
-    (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
+    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+     WHERE j.company_id = c.id AND j.closed_at IS NULL
+       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
     COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
@@ -108,73 +110,6 @@ func (q *Queries) GetCompanyForUser(ctx context.Context, arg GetCompanyForUserPa
 		&i.LastCheckedAt,
 	)
 	return i, err
-}
-
-const listCompaniesForUser = `-- name: ListCompaniesForUser :many
-SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
-    (SELECT COUNT(*) FROM jobs j WHERE j.company_slug = c.slug) AS job_count,
-    COALESCE(tc.enabled, FALSE) AS tracked,
-    COALESCE(tc.review_state, '')::text AS review_state,
-    tc.check_interval_minutes,
-    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
-     JOIN board_poll_state bps ON bps.board_id = cb.id
-     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
-FROM companies c
-LEFT JOIN tracked_companies tc ON tc.user_id = $1 AND tc.company_id = c.id
-ORDER BY c.name
-`
-
-type ListCompaniesForUserRow struct {
-	ID                   pgtype.UUID
-	Slug                 string
-	Name                 string
-	AtsSource            pgtype.Text
-	AtsToken             pgtype.Text
-	Domain               pgtype.Text
-	LinkedinCompanyID    pgtype.Text
-	LastCrawledAt        pgtype.Timestamptz
-	FirstSeenAt          pgtype.Timestamptz
-	JobCount             int64
-	Tracked              bool
-	ReviewState          string
-	CheckIntervalMinutes pgtype.Int4
-	LastCheckedAt        pgtype.Timestamptz
-}
-
-func (q *Queries) ListCompaniesForUser(ctx context.Context, userID pgtype.UUID) ([]ListCompaniesForUserRow, error) {
-	rows, err := q.db.Query(ctx, listCompaniesForUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListCompaniesForUserRow
-	for rows.Next() {
-		var i ListCompaniesForUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Slug,
-			&i.Name,
-			&i.AtsSource,
-			&i.AtsToken,
-			&i.Domain,
-			&i.LinkedinCompanyID,
-			&i.LastCrawledAt,
-			&i.FirstSeenAt,
-			&i.JobCount,
-			&i.Tracked,
-			&i.ReviewState,
-			&i.CheckIntervalMinutes,
-			&i.LastCheckedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
@@ -343,6 +278,97 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 			&i.CheckIntervalMinutes,
 			&i.OpenJobs,
 			&i.RelevantJobs,
+			&i.LastCheckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pageCompaniesForUser = `-- name: PageCompaniesForUser :many
+SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+    c.last_crawled_at, c.first_seen_at,
+    (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+     WHERE j.company_id = c.id AND j.closed_at IS NULL
+       AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
+    COALESCE(tc.enabled, FALSE) AS tracked,
+    COALESCE(tc.review_state, '')::text AS review_state,
+    tc.check_interval_minutes,
+    (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
+     JOIN board_poll_state bps ON bps.board_id = cb.id
+     WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
+FROM companies c
+LEFT JOIN tracked_companies tc ON tc.user_id = $1::uuid AND tc.company_id = c.id
+WHERE ($2::uuid IS NULL OR (c.name, c.id) > ($3::text, $2::uuid))
+  AND ($4::text = ''
+       OR strpos(lower(c.name), lower($4::text)) > 0
+       OR strpos(c.slug, lower($4::text)) > 0)
+  AND (NOT $5::bool OR COALESCE(tc.enabled, FALSE))
+ORDER BY c.name, c.id
+LIMIT $6::int
+`
+
+type PageCompaniesForUserParams struct {
+	UserID      pgtype.UUID
+	CursorID    pgtype.UUID
+	CursorName  pgtype.Text
+	Search      string
+	TrackedOnly bool
+	PageLimit   int32
+}
+
+type PageCompaniesForUserRow struct {
+	ID                   pgtype.UUID
+	Slug                 string
+	Name                 string
+	AtsSource            pgtype.Text
+	AtsToken             pgtype.Text
+	Domain               pgtype.Text
+	LinkedinCompanyID    pgtype.Text
+	LastCrawledAt        pgtype.Timestamptz
+	FirstSeenAt          pgtype.Timestamptz
+	JobCount             int64
+	Tracked              bool
+	ReviewState          string
+	CheckIntervalMinutes pgtype.Int4
+	LastCheckedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesForUserParams) ([]PageCompaniesForUserRow, error) {
+	rows, err := q.db.Query(ctx, pageCompaniesForUser,
+		arg.UserID,
+		arg.CursorID,
+		arg.CursorName,
+		arg.Search,
+		arg.TrackedOnly,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PageCompaniesForUserRow
+	for rows.Next() {
+		var i PageCompaniesForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Name,
+			&i.AtsSource,
+			&i.AtsToken,
+			&i.Domain,
+			&i.LinkedinCompanyID,
+			&i.LastCrawledAt,
+			&i.FirstSeenAt,
+			&i.JobCount,
+			&i.Tracked,
+			&i.ReviewState,
+			&i.CheckIntervalMinutes,
 			&i.LastCheckedAt,
 		); err != nil {
 			return nil, err
