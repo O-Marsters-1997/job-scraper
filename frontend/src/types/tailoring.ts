@@ -39,6 +39,7 @@ const draftFindingSchema = z.object({
 });
 
 const provenanceBulletSchema = z.object({
+	slotId: z.string(),
 	segments: z.array(z.object({ text: z.string(), novel: z.boolean() })),
 	achievements: z.array(
 		z.object({ id: z.string(), positionId: z.string(), text: z.string() }),
@@ -71,6 +72,7 @@ export const draftSchema = z.object({
 
 export const draftRefSchema = z.object({ id: z.string() });
 
+export type SlotEdit = { slotId: string; text: string };
 export type DraftFinding = z.infer<typeof draftFindingSchema>;
 export type DraftProvenance = z.infer<typeof draftProvenanceSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;

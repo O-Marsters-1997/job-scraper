@@ -49,6 +49,10 @@ type Draft struct {
 	Provenance  *DraftProvenance `json:"provenance"`
 	DraftDocID  string           `json:"-"`
 	EditSet     json.RawMessage  `json:"-"`
+
+	BaseDocID      string   `json:"-"`
+	BaseTabID      string   `json:"-"`
+	AchievementIDs []string `json:"-"`
 }
 
 const (
@@ -71,6 +75,7 @@ type ProvenancePosition struct {
 // ProvenanceBullet is one rewritten bullet, its cited Achievements, and its
 // text split so words absent from those Achievements are marked Novel.
 type ProvenanceBullet struct {
+	SlotID       string        `json:"slotId"`
 	Segments     []TextSegment `json:"segments"`
 	Achievements []Achievement `json:"achievements"`
 }
@@ -126,4 +131,16 @@ type DraftQuery struct {
 // DraftJobQuery selects the Drafts of one Job.
 type DraftJobQuery struct {
 	JobID string `json:"-" path:"jobId"`
+}
+
+// SlotEdit is the User's new text for one bullet slot of a Draft's Doc.
+type SlotEdit struct {
+	SlotID string `json:"slotId"`
+	Text   string `json:"text"`
+}
+
+// DraftSlotsInput carries the bullets the User changed on a Draft.
+type DraftSlotsInput struct {
+	ID    string     `json:"-" path:"id"`
+	Slots []SlotEdit `json:"slots"`
 }

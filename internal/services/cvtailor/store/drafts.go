@@ -26,6 +26,10 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	if err := json.Unmarshal(t.Findings, &findings); err != nil {
 		return dto.Draft{}, fmt.Errorf("decode findings: %w", err)
 	}
+	achievementIDs := make([]string, len(t.AchievementIds))
+	for i, id := range t.AchievementIds {
+		achievementIDs[i] = id.String()
+	}
 	var outcome *string
 	if t.Outcome.Valid {
 		outcome = &t.Outcome.String
@@ -33,6 +37,7 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	return dto.Draft{
 		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet,
+		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
 	}, nil
 }
 
@@ -260,6 +265,31 @@ func (s *Store) FailKeep(ctx context.Context, claim dto.DraftClaim, failure dto.
 	})
 	if err != nil {
 		return fmt.Errorf("store.FailKeep: %w", err)
+	}
+	if n == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}
+
+// SetDraftEdits replaces the Draft's edit set and findings after the User's
+// edits; ErrDraftNotFound when userID does not own it.
+func (s *Store) SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error {
+	uid, err := parseID(userID, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	did, err := parseID(id, ErrDraftNotFound)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(findings)
+	if err != nil {
+		return fmt.Errorf("store.SetDraftEdits: encode findings: %w", err)
+	}
+	n, err := s.queries.SetDraftEdits(ctx, sqlc.SetDraftEditsParams{ID: did, UserID: uid, EditSet: editSet, Findings: raw})
+	if err != nil {
+		return fmt.Errorf("store.SetDraftEdits: %w", err)
 	}
 	if n == 0 {
 		return ErrDraftNotFound

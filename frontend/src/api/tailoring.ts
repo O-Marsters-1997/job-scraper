@@ -9,6 +9,7 @@ import {
 	draftSchema,
 	type HeadingMapping,
 	headingMappingSchema,
+	type SlotEdit,
 	type Suggestion,
 	suggestionSchema,
 } from "../types/tailoring";
@@ -111,5 +112,20 @@ export async function discardDraft(id: string): Promise<Draft> {
 			apiFetch(`/tailoring/drafts/${id}/discard`, draftSchema, {
 				method: "POST",
 			}),
+	);
+}
+
+export async function saveDraftSlots(
+	id: string,
+	slots: SlotEdit[],
+): Promise<Draft> {
+	return mocked(
+		(db) => db.saveDraftSlots(id, slots),
+		() =>
+			apiFetch(
+				`/tailoring/drafts/${id}/slots`,
+				draftSchema,
+				jsonInit("PUT", { slots }),
+			),
 	);
 }

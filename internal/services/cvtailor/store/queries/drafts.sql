@@ -74,3 +74,7 @@ UPDATE tailored_cvs SET
     lease_until = NULL,
     last_error = sqlc.arg(last_error)::text
 WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status = 'keeping';
+
+-- name: SetDraftEdits :execrows
+UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;

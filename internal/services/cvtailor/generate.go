@@ -147,7 +147,7 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return "", dto.DraftResult{}, fmt.Errorf("load credential: %w", err)
 	}
 
-	pl, err := m.plan(ctx, claim, claim.DocID)
+	pl, err := m.svc.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return "", dto.DraftResult{}, err
 	}
@@ -161,17 +161,13 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	if err != nil {
 		return docID, dto.DraftResult{}, err
 	}
-	if err := m.applyEdits(ctx, claim, docID, pl, res.Edits); err != nil {
+	if err := m.svc.applyEdits(ctx, claim.UserID, docID, pl, res.Edits); err != nil {
 		return docID, dto.DraftResult{}, err
 	}
 
-	_, basePages, err := m.measure(ctx, claim.UserID, claim.DocID, claim.TabID)
+	basePages, draftPages, draftPDF, err := m.svc.pageCounts(ctx, claim, docID)
 	if err != nil {
-		return docID, dto.DraftResult{}, fmt.Errorf("count base pages: %w", err)
-	}
-	draftPDF, draftPages, err := m.measure(ctx, claim.UserID, docID, claim.TabID)
-	if err != nil {
-		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
+		return docID, dto.DraftResult{}, err
 	}
 	if draftPages > basePages {
 		slog.InfoContext(ctx, "draft runs over the base CV, shortening",
@@ -181,11 +177,12 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 			return docID, dto.DraftResult{}, err
 		}
 		res, cost = short, cost+short.Cost
-		if draftPDF, draftPages, err = m.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
+		if draftPDF, draftPages, err = m.svc.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
 			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 		}
 	}
 
+	res.Edits = pl.withSlotIDs(res.Edits)
 	finalDraft := pl.draft(res.Edits, basePages, draftPages)
 	finalDraft.Parse = parseInput(ctx, draftPDF, pl.structure.Headings)
 
@@ -220,11 +217,11 @@ func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID s
 	if err != nil {
 		return cvedit.Result{}, err
 	}
-	copyPlan, err := m.plan(ctx, claim, docID)
+	copyPlan, err := m.svc.plan(ctx, claim, docID)
 	if err != nil {
 		return cvedit.Result{}, err
 	}
-	if err := m.applyEdits(ctx, claim, docID, copyPlan, res.Edits); err != nil {
+	if err := m.svc.applyEdits(ctx, claim.UserID, docID, copyPlan, res.Edits); err != nil {
 		return cvedit.Result{}, err
 	}
 	return res, nil
@@ -292,7 +289,7 @@ func (m *Module) copyTab(ctx context.Context, claim dto.DraftClaim) (string, err
 	return docID, nil
 }
 
-func (m *Module) applyEdits(ctx context.Context, claim dto.DraftClaim, docID string, pl plan, edits cvedit.EditSet) error {
+func (s *Service) applyEdits(ctx context.Context, userID, docID string, pl plan, edits cvedit.EditSet) error {
 	requests, err := docedit.Requests(pl.structure, pl.slotIDs(), edits)
 	if err != nil {
 		return fmt.Errorf("build doc edits: %w", err)
@@ -308,7 +305,7 @@ func (m *Module) applyEdits(ctx context.Context, claim dto.DraftClaim, docID str
 		}
 		raw[i] = b
 	}
-	if err := m.drive.BatchUpdate(ctx, claim.UserID, docID, raw); err != nil {
+	if err := s.drive.BatchUpdate(ctx, userID, docID, raw); err != nil {
 		return fmt.Errorf("apply doc edits: %w", err)
 	}
 	return nil

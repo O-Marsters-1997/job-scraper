@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createSignal, Show } from "solid-js";
+import { createMemo, createSignal, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { PdfPreview } from "@/components/PdfPreview";
 import { ProvenanceDiff } from "@/components/tailoring/ProvenanceDiff";
@@ -47,10 +47,13 @@ function DraftReview(props: { draft: Draft }) {
 	const isKeeping = () => props.draft.status === "keeping";
 	const isReviewable = () => props.draft.status === "ready" || isKeeping();
 	const hasDoc = () => isReviewable() && props.draft.outcome !== "discarded";
-	const pdfURL = usePdfUrl(
-		() => (hasDoc() ? props.draft.id : undefined),
-		fetchDraftPdf,
+	const [pdfRevision, setPdfRevision] = createSignal(0);
+	const pdfSource = createMemo(
+		() => (hasDoc() ? { id: props.draft.id, rev: pdfRevision() } : undefined),
+		undefined,
+		{ equals: (a, b) => a?.id === b?.id && a?.rev === b?.rev },
 	);
+	const pdfURL = usePdfUrl(pdfSource, (s) => fetchDraftPdf(s.id));
 	const otherKept = () => {
 		const kept = keptDraft(jobDrafts.data ?? []);
 		return kept?.id === props.draft.id ? undefined : kept;
@@ -220,6 +223,11 @@ function DraftReview(props: { draft: Draft }) {
 					</div>
 					<div class="min-w-0">
 						<ProvenanceDiff
+							draftId={props.draft.id}
+							editable={
+								hasDoc() && !isKeeping() && props.draft.outcome !== "kept"
+							}
+							onSaved={() => setPdfRevision((n) => n + 1)}
 							provenance={props.draft.provenance}
 							findings={props.draft.findings}
 						/>

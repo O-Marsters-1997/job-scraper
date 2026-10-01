@@ -20,6 +20,7 @@ func (m *Module) tailorRoutes(r chi.Router) {
 		r.Get("/jobs/{jobId}/drafts", handlers.Query(m.svc.ListJobDrafts))
 		r.Get("/drafts/{id}", handlers.Query(m.svc.GetDraft))
 		r.Get("/drafts/{id}/pdf", m.draftPDF())
+		r.Put("/drafts/{id}/slots", handlers.Update(m.svc.SaveDraftSlots))
 		r.Post("/drafts/{id}/keep", handlers.Update(m.svc.KeepDraft))
 		r.Post("/drafts/{id}/discard", handlers.Update(m.svc.DiscardDraft))
 	})

@@ -1,6 +1,9 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { reviewFindings, skillGaps } from "@/lib/tailoring";
 import type { DraftFinding, DraftProvenance } from "@/types/tailoring";
+import { useSaveDraftSlots } from "../../hooks/useTailoring";
 
 const SEVERITY_LABEL: Record<DraftFinding["severity"], string> = {
 	block: "Blocking",
@@ -8,22 +11,109 @@ const SEVERITY_LABEL: Record<DraftFinding["severity"], string> = {
 	info: "Note",
 };
 
-function Bullet(props: {
-	bullet: DraftProvenance["positions"][number]["bullets"][number];
+type BulletData = DraftProvenance["positions"][number]["bullets"][number];
+
+function BulletText(props: { bullet: BulletData }) {
+	return (
+		<p class="text-sm text-foreground">
+			<For each={props.bullet.segments}>
+				{(seg) => (
+					<Show when={seg.novel} fallback={seg.text}>
+						<mark class="rounded-sm bg-destructive-subtle px-0.5 text-destructive-strong underline decoration-dotted underline-offset-2">
+							{seg.text}
+						</mark>
+					</Show>
+				)}
+			</For>
+		</p>
+	);
+}
+
+function BulletEditor(props: {
+	initial: string;
+	pending: boolean;
+	failed: boolean;
+	onSave: (text: string) => void;
+	onCancel: () => void;
 }) {
+	const [text, setText] = createSignal(props.initial);
+	const trimmed = () => text().trim();
+	const unchanged = () => trimmed() === props.initial;
+	return (
+		<div class="space-y-2">
+			<Textarea
+				rows={3}
+				aria-label="Bullet text"
+				value={text()}
+				onInput={(e) =>
+					setText(e.currentTarget.value.replace(/\s*\n\s*/g, " "))
+				}
+			/>
+			<Show when={props.failed}>
+				<p role="alert" class="text-xs text-destructive-strong">
+					Could not save the bullet. Try again.
+				</p>
+			</Show>
+			<div class="flex gap-2">
+				<Button
+					size="sm"
+					disabled={props.pending || unchanged() || trimmed() === ""}
+					onClick={() => props.onSave(trimmed())}
+				>
+					{props.pending ? "Saving…" : "Save"}
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={props.pending}
+					onClick={props.onCancel}
+				>
+					Cancel
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+function Bullet(props: {
+	bullet: BulletData;
+	editable: boolean;
+	pending: boolean;
+	failed: boolean;
+	onSave: (slotId: string, text: string, done: () => void) => void;
+}) {
+	const [editing, setEditing] = createSignal(false);
+	const current = () => props.bullet.segments.map((s) => s.text).join("");
 	return (
 		<li class="rounded-md border border-border bg-surface px-3 py-2.5">
-			<p class="text-sm text-foreground">
-				<For each={props.bullet.segments}>
-					{(seg) => (
-						<Show when={seg.novel} fallback={seg.text}>
-							<mark class="rounded-sm bg-destructive-subtle px-0.5 text-destructive-strong underline decoration-dotted underline-offset-2">
-								{seg.text}
-							</mark>
+			<Show
+				when={editing()}
+				fallback={
+					<>
+						<BulletText bullet={props.bullet} />
+						<Show when={props.editable && props.bullet.slotId}>
+							<Button
+								variant="outline"
+								size="sm"
+								class="mt-2"
+								onClick={() => setEditing(true)}
+							>
+								Edit
+							</Button>
 						</Show>
-					)}
-				</For>
-			</p>
+					</>
+				}
+			>
+				<BulletEditor
+					initial={current()}
+					pending={props.pending}
+					failed={props.failed}
+					onSave={(text) =>
+						props.onSave(props.bullet.slotId, text, () => setEditing(false))
+					}
+					onCancel={() => setEditing(false)}
+				/>
+			</Show>
 			<p class="mt-2 text-xs text-faint">Drawn from</p>
 			<ul class="mt-1 space-y-1">
 				<For
@@ -46,9 +136,26 @@ function Bullet(props: {
 }
 
 export function ProvenanceDiff(props: {
+	draftId: string;
 	provenance: DraftProvenance | null;
 	findings: DraftFinding[];
+	editable: boolean;
+	onSaved: () => void;
 }) {
+	const save = useSaveDraftSlots();
+	const [savingSlot, setSavingSlot] = createSignal<string>();
+	const saveBullet = (slotId: string, text: string, done: () => void) => {
+		setSavingSlot(slotId);
+		save.mutate(
+			{ id: props.draftId, slots: [{ slotId, text }] },
+			{
+				onSuccess: () => {
+					done();
+					props.onSaved();
+				},
+			},
+		);
+	};
 	const flagged = () => reviewFindings(props.findings);
 	const gaps = () => skillGaps(props.findings);
 	return (
@@ -116,7 +223,17 @@ export function ProvenanceDiff(props: {
 								{p.title}, {p.employer}
 							</h3>
 							<ul class="space-y-2">
-								<For each={p.bullets}>{(b) => <Bullet bullet={b} />}</For>
+								<For each={p.bullets}>
+									{(b) => (
+										<Bullet
+											bullet={b}
+											editable={props.editable}
+											pending={save.isPending && savingSlot() === b.slotId}
+											failed={save.isError && savingSlot() === b.slotId}
+											onSave={saveBullet}
+										/>
+									)}
+								</For>
 							</ul>
 						</div>
 					)}
