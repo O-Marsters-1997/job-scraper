@@ -13,6 +13,8 @@ import (
 
 const existingURLs = `-- name: ExistingURLs :many
 SELECT url FROM jobs WHERE url = ANY($1::text[])
+UNION
+SELECT normalized_url FROM job_candidates WHERE normalized_url = ANY($1::text[])
 `
 
 func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string, error) {

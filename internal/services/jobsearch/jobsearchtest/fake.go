@@ -202,7 +202,14 @@ func (f *FakeStore) NewURLs(_ context.Context, urls []string) ([]string, error) 
 	defer f.mu.Unlock()
 	out := make([]string, 0, len(urls))
 	for _, u := range urls {
-		if _, ok := f.byURL[u]; !ok {
+		n := store.NormalizeOrRaw(u)
+		known := false
+		for _, k := range []string{u, n} {
+			_, job := f.byURL[k]
+			_, candidate := f.candidateByURL[k]
+			known = known || job || candidate
+		}
+		if !known {
 			out = append(out, u)
 		}
 	}
@@ -812,10 +819,15 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		if card.URL == "" {
 			continue
 		}
-		id, ok := f.candidateByURL[card.URL]
+		normalized, err := store.NormalizeCandidateURL(card.URL)
+		if err != nil {
+			return nil, err
+		}
+		card.URL = normalized
+		id, ok := f.candidateByURL[normalized]
 		if !ok {
 			id = f.nextID("candidate")
-			f.candidateByURL[card.URL] = id
+			f.candidateByURL[normalized] = id
 		}
 		card.Source = target.Source
 		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
