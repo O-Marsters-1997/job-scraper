@@ -5,7 +5,9 @@ test.describe("Overview", () => {
 	test("Total jobs counts the full job list, not just the first page", async ({
 		overviewPage,
 	}) => {
-		const seededCount = getJobs().length;
+		const seededCount = getJobs().filter(
+			(job) => job.SuitabilityScore != null,
+		).length;
 		expect(seededCount).toBeGreaterThan(100);
 
 		await overviewPage.goto();

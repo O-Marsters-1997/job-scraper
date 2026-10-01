@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getBoardCompanyID = `-- name: GetBoardCompanyID :one
+SELECT company_id FROM company_boards WHERE source = $1 AND board_token = $2
+`
+
+type GetBoardCompanyIDParams struct {
+	Source     string
+	BoardToken string
+}
+
+func (q *Queries) GetBoardCompanyID(ctx context.Context, arg GetBoardCompanyIDParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getBoardCompanyID, arg.Source, arg.BoardToken)
+	var company_id pgtype.UUID
+	err := row.Scan(&company_id)
+	return company_id, err
+}
+
 const getVerifiedBoardID = `-- name: GetVerifiedBoardID :one
 SELECT id FROM company_boards WHERE source = $1 AND board_token = $2 AND status = 'verified'
 `

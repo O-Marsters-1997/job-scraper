@@ -45,6 +45,22 @@ func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) err
 		return err
 	}
 	jobs, nextPollIn, err := p.fetcher.FetchBoard(ctx, claim)
+	return p.complete(ctx, claim, jobs, nextPollIn, err)
+}
+
+// PollPrefetched completes a Board's poll from jobs the caller already fetched.
+func (p *BoardPoller) PollPrefetched(ctx context.Context, id string, jobs []dto.Job, nextPollIn time.Duration) error {
+	claim, err := p.store.ClaimBoard(ctx, id, false)
+	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return p.complete(ctx, claim, jobs, nextPollIn, nil)
+}
+
+func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, jobs []dto.Job, nextPollIn time.Duration, err error) error {
 	if err == nil {
 		for idx := range jobs {
 			jobs[idx].BoardID = claim.ID

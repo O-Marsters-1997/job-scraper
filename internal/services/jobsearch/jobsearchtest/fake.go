@@ -487,6 +487,17 @@ func (f *FakeStore) UpsertCandidateBoard(_ context.Context, companyID, source, t
 	return board, nil
 }
 
+func (f *FakeStore) GetBoardCompanyID(_ context.Context, source, token string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, b := range f.boards {
+		if b.Source == source && b.BoardToken == token {
+			return b.CompanyID, nil
+		}
+	}
+	return "", data.ErrNotFound
+}
+
 func (f *FakeStore) GetVerifiedBoardID(_ context.Context, source, token string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

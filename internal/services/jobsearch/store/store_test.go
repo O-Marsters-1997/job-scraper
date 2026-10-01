@@ -27,7 +27,7 @@ var baseJob = dto.Job{
 	URL:         "https://example.com/jobs/1",
 	CompanySlug: "example",
 	Source:      "greenhouse",
-	UpdatedAt:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	UpdatedAt:   time.Now(),
 }
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
@@ -205,6 +205,7 @@ func TestPage(t *testing.T) {
 		company := insertCompany(t, pool, "acme")
 		blocked := insertJob(t, pool, company, 1, time.Now(), false)
 		open := insertJob(t, pool, company, 2, time.Now(), false)
+		scoreJob(t, pool, open, userID, `[]`)
 		scoreJob(t, pool, blocked, userID, `[{"key":"domain:gambling","label":"Gambling","stance":"block","resolved":"yes","effect":"blocked"}]`)
 
 		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open", CompanyID: company})
@@ -263,6 +264,25 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("ListJobs keeps only scored jobs updated within 90 days", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		recent := insertJob(t, pool, company, 1, time.Now(), false)
+		stale := insertJob(t, pool, company, 2, time.Now().AddDate(0, 0, -91), false)
+		insertJob(t, pool, company, 3, time.Now(), false)
+		scoreJob(t, pool, recent, userID, `[]`)
+		scoreJob(t, pool, stale, userID, `[]`)
+
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{recent}, jobIDs(all)); diff != "" {
+			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("scored only keeps the caller's scored jobs of the company", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		otherUserID := pgtest.InsertUser(t, pool)
@@ -291,7 +311,7 @@ func TestSaveCanonical(t *testing.T) {
 	const boardB = "22222222-2222-2222-2222-222222222222"
 
 	t.Run("URL aliases and replays keep one job", func(t *testing.T) {
-		st, _ := newStore(t)
+		st, pool, userID := newUserStore(t)
 		first := baseJob
 		first.BoardID = boardA
 		first.ProviderPostingID = "posting-1"
@@ -310,7 +330,8 @@ func TestSaveCanonical(t *testing.T) {
 			}
 		}
 
-		jobs, err := st.ListJobs(t.Context(), "")
+		scoreJob(t, pool, saved.ID, userID, `[]`)
+		jobs, err := st.ListJobs(t.Context(), userID)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -514,6 +535,21 @@ func TestCompanyBoards(t *testing.T) {
 		}
 		if len(boards) != 2 {
 			t.Errorf("ListCompanyBoards() = %+v, want two boards", boards)
+		}
+	})
+
+	t.Run("a board resolves to its owning company", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
+			t.Fatalf("UpsertCandidateBoard() err = %v", err)
+		}
+		if got, err := st.GetBoardCompanyID(ctx, "greenhouse", "acme"); err != nil || got != company.ID {
+			t.Errorf("GetBoardCompanyID(known) = %q, %v, want %q", got, err, company.ID)
+		}
+		if _, err := st.GetBoardCompanyID(ctx, "greenhouse", "nobody"); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetBoardCompanyID(unknown) err = %v, want ErrNotFound", err)
 		}
 	})
 }
