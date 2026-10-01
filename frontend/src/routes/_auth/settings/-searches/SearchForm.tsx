@@ -18,6 +18,9 @@ import type { SourceTarget } from "../../../../types/sourceTarget";
 type Option = { value: string; label: string };
 const ANY = "__any__";
 
+const defaultFilters = (source: string | undefined): Record<string, string> =>
+	source === "linkedin" ? { recency: "r604800" } : {};
+
 function FilterSelect(props: {
 	field: SourceFilterField;
 	value: string;
@@ -74,7 +77,7 @@ export function SearchForm(props: {
 	const sourceName = () => picked() ?? props.sources[0]?.name;
 	const [value, setValue] = createSignal(props.initial?.value ?? "");
 	const [filters, setFilters] = createSignal<Record<string, string>>(
-		props.initial?.filters ?? {},
+		props.initial?.filters ?? defaultFilters(sourceName()),
 	);
 
 	const source = () => props.sources.find((s) => s.name === sourceName());
@@ -82,7 +85,7 @@ export function SearchForm(props: {
 	const pickSource = (name: string) => {
 		setSourceName(name);
 		setValue("");
-		setFilters({});
+		setFilters(defaultFilters(name));
 	};
 
 	const form = useFormSubmit(
