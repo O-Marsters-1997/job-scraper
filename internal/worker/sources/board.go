@@ -11,8 +11,8 @@ import (
 // BoardSpec describes one board integration. URL is the API endpoint; Parse decodes
 // the response body into jobs. FetchPage stamps Source with Name, and CompanySlug when set.
 type BoardSpec struct {
-	Name     string
-	UseProxy bool
+	Name  string
+	Route Route
 	// Post, when true, fetches the board via POST with an empty JSON body
 	// instead of GET. Workable's job-list API only responds to POST.
 	Post        bool
@@ -33,7 +33,7 @@ var _ Source = (*BoardSource)(nil)
 
 func NewBoardSource(spec BoardSpec) *BoardSource {
 	return &BoardSource{
-		PaginatedBase: NewBase(Config{Name: spec.Name, UseProxy: spec.UseProxy}),
+		PaginatedBase: NewBase(Config{Name: spec.Name, Route: spec.Route}),
 		spec:          spec,
 	}
 }

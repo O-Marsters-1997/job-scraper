@@ -42,6 +42,9 @@ func main() {
 	if err := proxy.Validate(); err != nil {
 		fatal(ctx, "Web Unlocker config invalid", err)
 	}
+	if err := proxy.ValidateResidential(); err != nil {
+		fatal(ctx, "residential proxy config invalid", err)
+	}
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {
 		fatal(ctx, "tracing init failed", err)

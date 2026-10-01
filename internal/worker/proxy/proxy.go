@@ -11,14 +11,23 @@ import (
 	"strconv"
 )
 
-const envKey = "BRIGHTDATA_PROXY_URL"
+const (
+	envKey            = "BRIGHTDATA_PROXY_URL"
+	residentialEnvKey = "DECODO_PROXY_URL"
+)
 
 func Validate() error {
 	_, err := Transport(true)
 	return err
 }
 
-func proxyURL() (*url.URL, error) {
+// ValidateResidential checks DECODO_PROXY_URL, which every tiered Source needs.
+func ValidateResidential() error {
+	_, err := proxyURL(residentialEnvKey)
+	return err
+}
+
+func proxyURL(envKey string) (*url.URL, error) {
 	raw := os.Getenv(envKey)
 	if raw == "" {
 		return nil, fmt.Errorf("proxy: %s is required", envKey)
@@ -41,7 +50,7 @@ func Transport(useProxy bool) (http.RoundTripper, error) {
 	if !useProxy {
 		return http.DefaultTransport, nil
 	}
-	u, err := proxyURL()
+	u, err := proxyURL(envKey)
 	if err != nil {
 		return nil, err
 	}

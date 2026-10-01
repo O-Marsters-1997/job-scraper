@@ -122,23 +122,48 @@ func storable(resp *http.Response) bool {
 	return ok && resp.Header.Get("X-Brd-Error") == "" && !strings.Contains(strings.ToLower(resp.Header.Get("Proxy-Status")), "error=")
 }
 
+func lookupCached(ctx context.Context, cache Cache, req *http.Request) (*Collector, *http.Response, error) {
+	if cache == nil {
+		return nil, nil, nil
+	}
+	collector, _ := ctx.Value(collectorKey{}).(*Collector)
+	if collector == nil {
+		return nil, nil, nil
+	}
+	hit, found, err := cache.LookupFetch(ctx, req.URL.String())
+	if err != nil {
+		return nil, nil, fmt.Errorf("fetch cache lookup: %w", err)
+	}
+	if !found {
+		return collector, nil, nil
+	}
+	collector.add(req.URL.String())
+	return collector, cachedResponse(req, hit), nil
+}
+
+func storeResponse(cache Cache, req *http.Request, resp *http.Response, collector *Collector) (*http.Response, error) {
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	stored := dto.CachedResponse{URL: req.URL.String(), Status: resp.StatusCode, Header: resp.Header, Body: body}
+	if err := cache.PutFetch(req.Context(), stored); err != nil {
+		slog.ErrorContext(req.Context(), "fetch cache write failed", slog.String(logger.KeyURL, stored.URL), slog.Any(logger.KeyErr, err))
+	} else {
+		collector.add(stored.URL)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	return resp, nil
+}
+
 func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err := ValidateURL(req.Context(), req.URL); err != nil {
 		return nil, err
 	}
-	var collector *Collector
-	if f.cache != nil {
-		collector, _ = req.Context().Value(collectorKey{}).(*Collector)
-	}
-	if collector != nil {
-		hit, found, err := f.cache.LookupFetch(req.Context(), req.URL.String())
-		if err != nil {
-			return nil, fmt.Errorf("fetch cache lookup: %w", err)
-		}
-		if found {
-			collector.add(req.URL.String())
-			return cachedResponse(req, hit), nil
-		}
+	collector, hit, err := lookupCached(req.Context(), f.cache, req)
+	if err != nil || hit != nil {
+		return hit, err
 	}
 	probe := false
 	if f.zone != nil {
@@ -178,23 +203,10 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		if resp.StatusCode != http.StatusTooManyRequests || attempt == 1 {
 			resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
-			if collector != nil && storable(resp) {
-				body, err := io.ReadAll(resp.Body)
-				_ = resp.Body.Close()
-				held = false
-				if err != nil {
-					return nil, err
-				}
-				stored := dto.CachedResponse{URL: req.URL.String(), Status: resp.StatusCode, Header: resp.Header, Body: body}
-				if err := f.cache.PutFetch(req.Context(), stored); err != nil {
-					slog.ErrorContext(req.Context(), "fetch cache write failed", slog.String(logger.KeyURL, stored.URL), slog.Any(logger.KeyErr, err))
-				} else {
-					collector.add(stored.URL)
-				}
-				resp.Body = io.NopCloser(bytes.NewReader(body))
-				return resp, nil
-			}
 			held = false
+			if collector != nil && storable(resp) {
+				return storeResponse(f.cache, req, resp, collector)
+			}
 			return resp, nil
 		}
 		_ = resp.Body.Close()
@@ -203,16 +215,24 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, req.Context().Err()
 		case <-time.After(200 * time.Millisecond):
 		}
-		if req.GetBody != nil {
-			body, err := req.GetBody()
-			if err != nil {
-				return nil, err
-			}
-			req = req.Clone(req.Context())
-			req.Body = body
+		if req, err = rewound(req); err != nil {
+			return nil, err
 		}
 	}
 	return nil, errors.New("unreachable")
+}
+
+func rewound(req *http.Request) (*http.Request, error) {
+	if req.GetBody == nil {
+		return req, nil
+	}
+	body, err := req.GetBody()
+	if err != nil {
+		return nil, err
+	}
+	req = req.Clone(req.Context())
+	req.Body = body
+	return req, nil
 }
 
 func zoneExhausted(resp *http.Response) bool {
@@ -282,13 +302,28 @@ func publicIP(ip netip.Addr) bool {
 	return true
 }
 
-func Fetcher(useProxy bool) (http.RoundTripper, error) {
-	if useProxy {
+// Route is how a Source's requests leave the worker. Neither proxy route ever falls back to direct.
+type Route int
+
+const (
+	Direct Route = iota
+	// Unlocker sends every request through Bright Data Web Unlocker.
+	Unlocker
+	// Tiered tries Decodo residential first, then Unlocker (docs/adr/0018-hostile-sources-fetch-residential-first.md).
+	Tiered
+)
+
+func Fetcher(route Route) (http.RoundTripper, error) {
+	switch route {
+	case Unlocker:
 		base, err := Transport(true)
 		if err != nil {
 			return nil, err
 		}
 		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache}, nil
+	case Tiered:
+		return newTiered(sharedCache)
+	case Direct:
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
@@ -316,7 +351,7 @@ func Probe(ctx context.Context) error {
 	if !paused {
 		return nil
 	}
-	tr, err := Fetcher(true)
+	tr, err := Fetcher(Unlocker)
 	if err != nil {
 		return err
 	}

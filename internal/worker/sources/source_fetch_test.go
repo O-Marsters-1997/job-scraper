@@ -12,7 +12,7 @@ import (
 
 func TestProtectedSourceDoesNotFetchDirectlyWithoutCredentials(t *testing.T) {
 	t.Setenv("BRIGHTDATA_PROXY_URL", "")
-	src := sources.NewBase(sources.Config{Name: "protected", UseProxy: true})
+	src := sources.NewBase(sources.Config{Name: "protected", Route: sources.RouteUnlocker})
 	if _, err := src.Get(t.Context(), "https://8.8.8.8/jobs"); err == nil {
 		t.Fatal("protected fetch should fail without credentials")
 	}
