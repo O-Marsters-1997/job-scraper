@@ -864,15 +864,29 @@ func (s *Store) ClaimRecoverableSourceTarget(ctx context.Context, id, runID stri
 	return toSourceTargetDTO(row), nil
 }
 
-func normalizedCandidateURL(raw string) (string, error) {
+// NormalizeCandidateURL is the rule behind job_candidates.normalized_url.
+func NormalizeCandidateURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return "", fmt.Errorf("invalid candidate URL %q", raw)
 	}
 	u.Host = strings.ToLower(u.Host)
+	if strings.HasSuffix(u.Host, ".linkedin.com") {
+		u.Host = "www.linkedin.com"
+	}
 	u.Fragment = ""
+	u.RawQuery = StripTrackingParams(u.RawQuery)
 	u.Path = strings.TrimSuffix(u.Path, "/")
 	return u.String(), nil
+}
+
+// NormalizeOrRaw normalises raw, or returns it unchanged when it is not a valid URL.
+func NormalizeOrRaw(raw string) string {
+	n, err := NormalizeCandidateURL(raw)
+	if err != nil {
+		return raw
+	}
+	return n
 }
 
 func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]sourcetargets.Candidate, error) {
@@ -892,7 +906,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		if card.URL == "" {
 			continue
 		}
-		normalized, err := normalizedCandidateURL(card.URL)
+		normalized, err := NormalizeCandidateURL(card.URL)
 		if err != nil {
 			return nil, err
 		}
@@ -1001,7 +1015,11 @@ func (s *Store) SetLastScraped(ctx context.Context, source string) error {
 }
 
 func (s *Store) NewURLs(ctx context.Context, urls []string) ([]string, error) {
-	existing, err := s.queries.ExistingURLs(ctx, urls)
+	normalized := make([]string, len(urls))
+	for i, u := range urls {
+		normalized[i] = NormalizeOrRaw(u)
+	}
+	existing, err := s.queries.ExistingURLs(ctx, normalized)
 	if err != nil {
 		return nil, fmt.Errorf("store.NewURLs: %w", err)
 	}
@@ -1010,8 +1028,8 @@ func (s *Store) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 		known[u] = struct{}{}
 	}
 	out := make([]string, 0, len(urls))
-	for _, u := range urls {
-		if _, ok := known[u]; !ok {
+	for i, u := range urls {
+		if _, ok := known[normalized[i]]; !ok {
 			out = append(out, u)
 		}
 	}

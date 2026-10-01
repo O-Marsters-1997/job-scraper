@@ -28,4 +28,6 @@ WHERE j.id = $1
 LIMIT 1;
 
 -- name: ExistingURLs :many
-SELECT url FROM jobs WHERE url = ANY($1::text[]);
+SELECT url FROM jobs WHERE url = ANY($1::text[])
+UNION
+SELECT normalized_url FROM job_candidates WHERE normalized_url = ANY($1::text[]);

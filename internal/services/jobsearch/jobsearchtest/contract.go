@@ -658,6 +658,27 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("new urls counts saved candidates as known under any host or tracking params", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "known-search", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+		if _, err := st.SaveCards(ctx, target, []dto.Job{{URL: "https://www.linkedin.com/jobs/view/111", Title: "Engineer"}}); err != nil {
+			t.Fatalf("SaveCards(...) = %v", err)
+		}
+		fresh := "https://www.linkedin.com/jobs/view/222"
+		got, err := st.NewURLs(ctx, []string{
+			"https://www.linkedin.com/jobs/view/111",
+			"https://uk.linkedin.com/jobs/view/111?ref=x&utm_source=y",
+			fresh,
+		})
+		if err != nil || len(got) != 1 || got[0] != fresh {
+			t.Fatalf("NewURLs(...) = %v, %v, want only %q", got, err, fresh)
+		}
+	})
+
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
