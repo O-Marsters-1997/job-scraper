@@ -617,6 +617,18 @@ func (s *Store) GetVerifiedBoardID(ctx context.Context, source, token string) (s
 	return id.String(), nil
 }
 
+func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
+	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListUntrackedDiscoveredBoards: %w", err)
+	}
+	boards := make([]dto.CompanyBoard, len(rows))
+	for i, row := range rows {
+		boards[i] = toCompanyBoardDTO(row)
+	}
+	return boards, nil
+}
+
 func (s *Store) ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
 	out, err := s.queries.ListPolledCompanySlugs(ctx, slugs)
 	if err != nil {
