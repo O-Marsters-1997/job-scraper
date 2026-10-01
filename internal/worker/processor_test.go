@@ -176,6 +176,7 @@ func (f fixture) discoverProcessor(discover worker.DiscoverFunc, scoring worker.
 	return worker.NewProcessor(worker.Deps{
 		JS:       jobsearch.Build(jobsearchtest.NewDeps(f.store)),
 		Boards:   scraper.NewBoardPoller(f.store, oneBoardJob{}, exporter),
+		Broker:   f.published,
 		Scoring:  scoring,
 		Discover: discover,
 	})
@@ -570,6 +571,75 @@ func TestProcessBoardDiscover(t *testing.T) {
 		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx)
 		if err != nil || len(untracked) != 0 {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want none", untracked, err)
+		}
+	})
+
+	t.Run("apply urls on another ATS pivot to its board instead of tracking", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		ashbyJobs := []dto.Job{{Title: "Go Engineer", Location: "London", ApplyURL: "https://jobs.ashbyhq.com/acme/123"}}
+		viaAshby := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Jobs: ashbyJobs}, nil
+		}
+		wttj := queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+		if err := f.discoverProcessor(viaAshby, configsStub{match}).Process(ctx, wttj); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tasks := f.published.Tasks()
+		if len(tasks) != 1 || tasks[0].Kind != queue.BoardDiscoverTask || tasks[0].Source != "ashby" || tasks[0].BoardToken != "acme" || tasks[0].CompanyID != company.ID {
+			t.Fatalf("published = %+v, want one ashby/acme discover for company %s", tasks, company.ID)
+		}
+		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+		if err != nil || len(tracked) != 0 {
+			t.Fatalf("ListTrackedCompaniesForUser(match) = %+v, %v, want none", tracked, err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Errorf("ingest requests = %d, want 0", got)
+		}
+	})
+
+	t.Run("an already verified ATS board is not republished", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "ashby", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.VerifyCompanyBoard(ctx, company.ID, "ashby", "acme", "discovered"); err != nil {
+			t.Fatal(err)
+		}
+		viaAshby := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Jobs: []dto.Job{{Title: "Go Engineer", ApplyURL: "https://jobs.ashbyhq.com/acme/123"}}}, nil
+		}
+		wttj := queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+		if err := f.discoverProcessor(viaAshby, configsStub{match}).Process(ctx, wttj); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		if tasks := f.published.Tasks(); len(tasks) != 0 {
+			t.Errorf("published = %+v, want none", tasks)
+		}
+	})
+
+	t.Run("an unresolvable apply host falls through to tracking", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		viaWorkday := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Jobs: []dto.Job{{Title: "Go Engineer", Location: "London", ApplyURL: "https://acme.wd3.myworkdayjobs.com/en/1"}}}, nil
+		}
+		wttj := queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+		if err := f.discoverProcessor(viaWorkday, configsStub{match}).Process(ctx, wttj); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+		if err != nil || len(tracked) != 1 {
+			t.Fatalf("ListTrackedCompaniesForUser(match) = %+v, %v, want one", tracked, err)
+		}
+		if tasks := f.published.Tasks(); len(tasks) != 0 {
+			t.Errorf("published = %+v, want none", tasks)
 		}
 	})
 
