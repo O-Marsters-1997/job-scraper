@@ -23,6 +23,7 @@ import (
 const (
 	DriveReadonlyScope = "https://www.googleapis.com/auth/drive.readonly"
 	DriveFileScope     = "https://www.googleapis.com/auth/drive.file"
+	DocumentsScope     = "https://www.googleapis.com/auth/documents"
 )
 
 type Tab struct {
@@ -58,7 +59,7 @@ func NewClient(clientID, clientSecret, redirectURL string, store Store, cipher *
 func (c *Client) AuthURL(state string, write bool) string {
 	cfg := *c.cfg
 	if write {
-		cfg.Scopes = []string{DriveFileScope}
+		cfg.Scopes = []string{DriveFileScope, DocumentsScope}
 	}
 	return cfg.AuthCodeURL(state,
 		oauth2.AccessTypeOffline,

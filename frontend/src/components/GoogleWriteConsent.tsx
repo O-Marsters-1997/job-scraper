@@ -2,14 +2,16 @@ import { Show } from "solid-js";
 import { API_BASE } from "../api/config";
 import { useGoogleStatus } from "../hooks/useGoogle";
 
+export const googleWriteHref = (returnTo: string) =>
+	`${API_BASE}/google/oauth/start?write=1&return=${encodeURIComponent(returnTo)}`;
+
 type GoogleWriteConsentProps = {
 	returnTo: string;
 };
 
 export function GoogleWriteConsent(props: GoogleWriteConsentProps) {
 	const status = useGoogleStatus();
-	const href = () =>
-		`${API_BASE}/google/oauth/start?write=1&return=${encodeURIComponent(props.returnTo)}`;
+	const href = () => googleWriteHref(props.returnTo);
 
 	return (
 		<Show when={status.data && !status.data.canWrite}>
