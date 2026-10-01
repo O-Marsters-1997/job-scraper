@@ -1,131 +1,79 @@
-import { createMemo, For, Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { MATCHED_COLOUR, MISSING_COLOUR } from "@/lib/scoreColour";
 import { unknownCount } from "@/lib/scoreRows";
+import { cn } from "@/lib/utils";
 import type { Job, ScoreRow } from "@/types/job";
 
-function isVisible(row: ScoreRow): boolean {
-	if (
-		row.effect === "meets" ||
-		row.effect === "unknown" ||
-		row.effect === "retired" ||
-		row.effect === "blocked"
-	)
-		return true;
-	return row.effect === "misses" && row.stance === "avoid";
-}
+const tintedChip = (colour: string) => ({
+	background: `color-mix(in srgb, ${colour} 12%, white)`,
+	color: `color-mix(in srgb, ${colour} 80%, black)`,
+	border: `1px solid color-mix(in srgb, ${colour} 28%, white)`,
+});
+
+const GROUPS: {
+	label: string;
+	keep: (row: ScoreRow) => boolean;
+	style?: ReturnType<typeof tintedChip>;
+	class?: string;
+}[] = [
+	{
+		label: "Blocked",
+		keep: (r) => r.effect === "blocked",
+		style: tintedChip(MISSING_COLOUR),
+	},
+	{
+		label: "Matched",
+		keep: (r) => r.effect === "meets",
+		style: tintedChip(MATCHED_COLOUR),
+	},
+	{
+		label: "Avoid hit",
+		keep: (r) => r.effect === "misses" && r.stance === "avoid",
+		style: tintedChip(MISSING_COLOUR),
+	},
+	{
+		label: "Retired",
+		keep: (r) => r.effect === "retired",
+		class: "bg-surface-muted text-muted",
+	},
+];
 
 export function ScoreBreakdown(props: { job: Job }) {
-	const rows = createMemo(() => (props.job.Breakdown ?? []).filter(isVisible));
-	const matched = createMemo(() => rows().filter((r) => r.effect === "meets"));
-	const avoidHits = createMemo(() =>
-		rows().filter((r) => r.effect === "misses"),
-	);
-	const retired = createMemo(() =>
-		rows().filter((r) => r.effect === "retired"),
-	);
-	const blocked = createMemo(() =>
-		rows().filter((r) => r.effect === "blocked"),
-	);
-	const unknowns = createMemo(() => unknownCount(props.job.Breakdown));
+	const breakdown = () => props.job.Breakdown ?? [];
+	const groups = () =>
+		GROUPS.map((g) => ({ ...g, rows: breakdown().filter(g.keep) })).filter(
+			(g) => g.rows.length > 0,
+		);
+	const unknowns = () => unknownCount(props.job.Breakdown);
 
 	return (
-		<Show when={rows().length > 0}>
+		<Show when={groups().length > 0 || unknowns() > 0}>
 			<div class="flex flex-col gap-2.5">
-				<Show when={blocked().length > 0}>
-					<div class="flex flex-col gap-1">
-						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
-							Blocked
-						</span>
-						<div class="flex flex-wrap gap-1">
-							<For each={blocked()}>
-								{(r) => (
-									<span
-										class="inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
-										style={{
-											background: `color-mix(in srgb, ${MISSING_COLOUR} 12%, white)`,
-											color: `color-mix(in srgb, ${MISSING_COLOUR} 80%, black)`,
-											border: `1px solid color-mix(in srgb, ${MISSING_COLOUR} 28%, white)`,
-										}}
-										title={r.label}
-									>
-										{r.label}
-									</span>
-								)}
-							</For>
+				<For each={groups()}>
+					{(g) => (
+						<div class="flex flex-col gap-1">
+							<span class="text-2xs font-medium uppercase tracking-wide text-faint">
+								{g.label}
+							</span>
+							<div class="flex flex-wrap gap-1">
+								<For each={g.rows}>
+									{(r) => (
+										<span
+											class={cn(
+												"inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium",
+												g.class,
+											)}
+											style={g.style}
+											title={r.label}
+										>
+											{r.label}
+										</span>
+									)}
+								</For>
+							</div>
 						</div>
-					</div>
-				</Show>
-
-				<Show when={matched().length > 0}>
-					<div class="flex flex-col gap-1">
-						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
-							Matched
-						</span>
-						<div class="flex flex-wrap gap-1">
-							<For each={matched()}>
-								{(r) => (
-									<span
-										class="inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
-										style={{
-											background: `color-mix(in srgb, ${MATCHED_COLOUR} 12%, white)`,
-											color: `color-mix(in srgb, ${MATCHED_COLOUR} 80%, black)`,
-											border: `1px solid color-mix(in srgb, ${MATCHED_COLOUR} 28%, white)`,
-										}}
-										title={r.label}
-									>
-										{r.label}
-									</span>
-								)}
-							</For>
-						</div>
-					</div>
-				</Show>
-
-				<Show when={avoidHits().length > 0}>
-					<div class="flex flex-col gap-1">
-						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
-							Avoid hit
-						</span>
-						<div class="flex flex-wrap gap-1">
-							<For each={avoidHits()}>
-								{(r) => (
-									<span
-										class="inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
-										style={{
-											background: `color-mix(in srgb, ${MISSING_COLOUR} 12%, white)`,
-											color: `color-mix(in srgb, ${MISSING_COLOUR} 80%, black)`,
-											border: `1px solid color-mix(in srgb, ${MISSING_COLOUR} 28%, white)`,
-										}}
-										title={r.label}
-									>
-										{r.label}
-									</span>
-								)}
-							</For>
-						</div>
-					</div>
-				</Show>
-
-				<Show when={retired().length > 0}>
-					<div class="flex flex-col gap-1">
-						<span class="text-2xs font-medium uppercase tracking-wide text-faint">
-							Retired
-						</span>
-						<div class="flex flex-wrap gap-1">
-							<For each={retired()}>
-								{(r) => (
-									<span
-										class="inline-flex max-w-[240px] items-center truncate rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-muted"
-										title={r.label}
-									>
-										{r.label}
-									</span>
-								)}
-							</For>
-						</div>
-					</div>
-				</Show>
-
+					)}
+				</For>
 				<Show when={unknowns() > 0}>
 					<p class="text-2xs text-faint">
 						{unknowns()} unknown — not stated in the posting

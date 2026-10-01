@@ -1,6 +1,7 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { allConfirmed, toMappings } from "@/lib/tailoring";
 import { useExperience } from "../../../hooks/useExperience";
 import {
@@ -10,7 +11,6 @@ import {
 } from "../../../hooks/useTailoring";
 import type { Position } from "../../../types/experience";
 import type { CVHeading } from "../../../types/tailoring";
-import { Panel } from "./Panel";
 
 export function HeadingsStep(props: {
 	cv: () => CVRef | undefined;
@@ -42,7 +42,7 @@ export function HeadingsStep(props: {
 	return (
 		<QueryBoundary query={headings}>
 			{(data) => (
-				<Panel>
+				<Card class="p-5">
 					<p class="mb-4 text-sm text-muted">
 						Match each role heading in this CV to a Position. Choose None to
 						leave a section untouched.
@@ -86,7 +86,7 @@ export function HeadingsStep(props: {
 							Save and continue
 						</Button>
 					</div>
-				</Panel>
+				</Card>
 			)}
 		</QueryBoundary>
 	);

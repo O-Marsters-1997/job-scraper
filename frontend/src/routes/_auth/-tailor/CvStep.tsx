@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Card } from "@/components/ui/card";
 import { useCVTemplates } from "../../../hooks/useCVTemplates";
 import type { CVRef } from "../../../hooks/useTailoring";
 import type { CV } from "../../../types/cv";
-import { Panel } from "./Panel";
 
 export function CvStep(props: { onPick: (ref: CVRef) => void }) {
 	const query = useCVTemplates();
@@ -15,7 +15,7 @@ export function CvStep(props: { onPick: (ref: CVRef) => void }) {
 				<Show
 					when={visible(cvs()).length > 0}
 					fallback={
-						<Panel>
+						<Card class="p-5">
 							<p class="text-sm text-muted">
 								No CVs tracked yet.{" "}
 								<Link to="/cv-templates" class="text-accent-text underline">
@@ -23,7 +23,7 @@ export function CvStep(props: { onPick: (ref: CVRef) => void }) {
 								</Link>{" "}
 								first.
 							</p>
-						</Panel>
+						</Card>
 					}
 				>
 					<ul class="space-y-2">

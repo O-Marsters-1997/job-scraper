@@ -2,12 +2,12 @@ import { Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { selectedAchievementIds } from "@/lib/tailoring";
 import { MissingAiKeyError } from "../../../api/tailoring";
 import { useExperience } from "../../../hooks/useExperience";
 import { type CVRef, useSuggestions } from "../../../hooks/useTailoring";
 import type { Suggestion } from "../../../types/tailoring";
-import { Panel } from "./Panel";
 
 export function AchievementsStep(props: {
 	jobId: () => string;
@@ -29,7 +29,7 @@ export function AchievementsStep(props: {
 		<Show
 			when={!(suggestions.error instanceof MissingAiKeyError)}
 			fallback={
-				<Panel>
+				<Card class="p-5">
 					<p class="text-sm text-foreground">
 						Ranking Achievements against this job needs an OpenRouter key.{" "}
 						<Link to="/settings/ai" class="text-accent-text underline">
@@ -37,7 +37,7 @@ export function AchievementsStep(props: {
 						</Link>
 						, which is also used to tailor your CV.
 					</p>
-				</Panel>
+				</Card>
 			}
 		>
 			<QueryBoundary query={suggestions} fallbackRows={4}>
@@ -56,7 +56,7 @@ export function AchievementsStep(props: {
 							<Show
 								when={grouped().length > 0}
 								fallback={
-									<Panel>
+									<Card class="p-5">
 										<p class="text-sm text-muted">
 											Your Experience Bank has no Achievements yet.{" "}
 											<Link to="/experience" class="text-accent-text underline">
@@ -64,12 +64,12 @@ export function AchievementsStep(props: {
 											</Link>
 											.
 										</p>
-									</Panel>
+									</Card>
 								}
 							>
 								<For each={grouped()}>
 									{(g) => (
-										<Panel>
+										<Card class="p-5">
 											<h2 class="mb-3 text-sm font-semibold text-foreground">
 												{g.position.title}, {g.position.employer}
 											</h2>
@@ -101,7 +101,7 @@ export function AchievementsStep(props: {
 													)}
 												</For>
 											</ul>
-										</Panel>
+										</Card>
 									)}
 								</For>
 							</Show>
