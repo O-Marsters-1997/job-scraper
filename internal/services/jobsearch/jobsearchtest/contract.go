@@ -262,6 +262,32 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("verified company slugs need a verified board", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		for _, tc := range []struct {
+			slug     string
+			verified bool
+		}{{"verified-co", true}, {"candidate-co", false}} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: tc.slug, Name: tc.slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%s) = %v", tc.slug, err)
+			}
+			if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", tc.slug); err != nil {
+				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
+			}
+			if tc.verified {
+				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test"); err != nil {
+					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
+				}
+			}
+		}
+		got, err := st.ListVerifiedCompanySlugs(ctx, []string{"verified-co", "candidate-co", "unknown-co"})
+		if want := []string{"verified-co"}; err != nil || !cmp.Equal(got, want) {
+			t.Fatalf("ListVerifiedCompanySlugs(...) = %v, %v, want %v", got, err, want)
+		}
+	})
+
 	t.Run("delete company tracking removes it and keeps the company", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

@@ -150,19 +150,24 @@ func wttjCompany(token string) discover.Company {
 	return discover.Company{Slug: token, Name: "Derived", Board: discover.Board{Source: "wttj", Token: token}}
 }
 
-func TestRunner_RecordsCompaniesWithCandidateBoards(t *testing.T) {
+func TestRunner_RepublishesDiscoveryForCandidateBoards(t *testing.T) {
 	catalog := jobsearchtest.NewFakeStore()
 	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
 
+	var published []queue.Task
 	for range 2 {
 		gate := newFakeGate()
 		pub, err := runOnceWith(t, catalog, gate, h)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(pub.tasks) != 1 || pub.tasks[0].Kind != queue.BoardVerifyTask || pub.tasks[0].BoardToken != "faculty" {
-			t.Fatalf("published = %+v, want one board_verify for faculty", pub.tasks)
+		if len(pub.tasks) != 1 || pub.tasks[0].Kind != queue.BoardDiscoverTask || pub.tasks[0].BoardToken != "faculty" {
+			t.Fatalf("published = %+v, want one board_discover for faculty", pub.tasks)
 		}
+		if err := pub.tasks[0].Validate(); err != nil {
+			t.Errorf("published task invalid: %v", err)
+		}
+		published = append(published, pub.tasks[0])
 	}
 
 	company, err := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Derived"})
@@ -172,6 +177,9 @@ func TestRunner_RecordsCompaniesWithCandidateBoards(t *testing.T) {
 	boards, _ := catalog.ListCompanyBoards(t.Context(), company.ID)
 	if len(boards) != 1 || boards[0].Status != dto.BoardCandidate {
 		t.Errorf("boards after two runs = %+v, want one candidate", boards)
+	}
+	if got := published[0].CompanyID; got != company.ID {
+		t.Errorf("task CompanyID = %q, want %q", got, company.ID)
 	}
 }
 

@@ -661,6 +661,14 @@ func (s *Store) ListPolledCompanySlugs(ctx context.Context, slugs []string) ([]s
 	return out, nil
 }
 
+func (s *Store) ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error) {
+	out, err := s.queries.ListVerifiedCompanySlugs(ctx, slugs)
+	if err != nil {
+		return nil, data.QueryErr("ListVerifiedCompanySlugs", err)
+	}
+	return out, nil
+}
+
 func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 	filters := map[string]string{}
 	if len(row.Filters) > 0 {

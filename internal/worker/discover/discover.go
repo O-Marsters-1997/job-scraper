@@ -81,14 +81,15 @@ type Publisher interface {
 // Catalog is the Company and Board store a harvested Company is written to.
 type Catalog interface {
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
-	ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error)
+	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 }
 
 const gateKeyPrefix = "harvest:"
 
 // Runner publishes a board_discover task per harvested board, and records each
-// harvested Company with a board_verify task for its candidate Board.
+// harvested Company that has no verified Board, with a candidate Board and a
+// board_discover task for it.
 type Runner struct {
 	harvesters []Harvester
 	publisher  Publisher
@@ -130,6 +131,11 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 		return err
 	}
 
+	verified, err := r.verifiedSlugs(ctx, found.Companies)
+	if err != nil {
+		return fmt.Errorf("list verified companies: %w", err)
+	}
+
 	published := 0
 	for _, b := range found.Boards {
 		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token}
@@ -139,10 +145,10 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 		}
 		published++
 	}
-	recorded := r.recordCompanies(ctx, log, found.Companies)
+	recorded := r.recordUndiscovered(ctx, log, found.Companies, verified)
 	log.InfoContext(ctx, "harvest: completed",
 		slog.Int(logger.KeyCount, len(found.Boards)+len(found.Companies)), slog.Int("published", published),
-		slog.Int("recorded", recorded), slog.Int("skipped", found.Skipped))
+		slog.Int("recorded", recorded), slog.Int("verified", len(verified)), slog.Int("skipped", found.Skipped))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))
@@ -150,9 +156,28 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 	return nil
 }
 
-func (r *Runner) recordCompanies(ctx context.Context, log *slog.Logger, companies []Company) int {
+func (r *Runner) verifiedSlugs(ctx context.Context, companies []Company) (map[string]bool, error) {
+	slugs := make([]string, len(companies))
+	for i, c := range companies {
+		slugs[i] = c.Slug
+	}
+	found, err := r.catalog.ListVerifiedCompanySlugs(ctx, slugs)
+	if err != nil {
+		return nil, err
+	}
+	verified := make(map[string]bool, len(found))
+	for _, s := range found {
+		verified[s] = true
+	}
+	return verified, nil
+}
+
+func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, companies []Company, verified map[string]bool) int {
 	recorded := 0
 	for _, c := range companies {
+		if verified[c.Slug] {
+			continue
+		}
 		if err := r.recordCompany(ctx, c); err != nil {
 			log.WarnContext(ctx, "harvest: could not record company", slog.String(logger.KeyCompanySlug, c.Slug), slog.Any(logger.KeyErr, err))
 			continue
@@ -167,15 +192,6 @@ func (r *Runner) recordCompany(ctx context.Context, c Company) error {
 	if err != nil {
 		return err
 	}
-	boards, err := r.catalog.ListCompanyBoards(ctx, company.ID)
-	if err != nil {
-		return err
-	}
-	for _, b := range boards {
-		if b.Status == dto.BoardVerified && b.Source != c.Board.Source {
-			return nil
-		}
-	}
 	board, err := r.catalog.UpsertCandidateBoard(ctx, company.ID, c.Board.Source, c.Board.Token)
 	if err != nil {
 		return err
@@ -184,7 +200,7 @@ func (r *Runner) recordCompany(ctx context.Context, c Company) error {
 		return nil
 	}
 	return r.publisher.Publish(ctx, queue.Task{
-		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardVerifyTask,
+		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardDiscoverTask,
 		CompanyID: company.ID, BoardToken: board.BoardToken,
 	})
 }
