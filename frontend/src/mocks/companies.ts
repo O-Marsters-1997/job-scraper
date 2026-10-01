@@ -132,6 +132,7 @@ export function getNewCompanies(): NewCompany[] {
 				boards: c.boards,
 				matching_roles: c.open_jobs,
 				best_suitability: scores.length ? Math.max(...scores) : null,
+				profile: null,
 			};
 		});
 }
