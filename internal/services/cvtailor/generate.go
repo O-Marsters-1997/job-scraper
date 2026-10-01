@@ -138,11 +138,11 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 		return docID, dto.DraftResult{}, err
 	}
 
-	basePages, err := m.pageCount(ctx, claim.UserID, claim.DocID, claim.TabID)
+	_, basePages, err := m.measure(ctx, claim.UserID, claim.DocID, claim.TabID)
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("count base pages: %w", err)
 	}
-	draftPages, err := m.pageCount(ctx, claim.UserID, docID, claim.TabID)
+	draftPDF, draftPages, err := m.measure(ctx, claim.UserID, docID, claim.TabID)
 	if err != nil {
 		return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 	}
@@ -154,10 +154,13 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 			return docID, dto.DraftResult{}, err
 		}
 		res, cost = short, cost+short.Cost
-		if draftPages, err = m.pageCount(ctx, claim.UserID, docID, claim.TabID); err != nil {
+		if draftPDF, draftPages, err = m.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
 			return docID, dto.DraftResult{}, fmt.Errorf("count draft pages: %w", err)
 		}
 	}
+
+	finalDraft := pl.draft(res.Edits, basePages, draftPages)
+	finalDraft.Parse = parseInput(ctx, draftPDF, pl.structure.Headings)
 
 	editSet, err := json.Marshal(res.Edits)
 	if err != nil {
@@ -166,7 +169,7 @@ func (m *Module) generate(ctx context.Context, claim dto.DraftClaim) (string, dt
 	return docID, dto.DraftResult{
 		EditSet: editSet, RawOutput: res.Raw, Model: cvedit.Model, PromptVersion: cvedit.PromptVersion,
 		JobFingerprint: claim.JobFingerprint, Cost: cost,
-		Findings: toDraftFindings(checks.Run(pl.draft(res.Edits, basePages, draftPages))),
+		Findings: toDraftFindings(checks.Run(finalDraft)),
 	}, nil
 }
 
