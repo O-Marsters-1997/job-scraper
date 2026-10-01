@@ -137,8 +137,8 @@ func TestAuthURLForcesConsentForRefreshToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := write.Query()
-	if q.Get("scope") != google.DriveFileScope {
-		t.Errorf("write scope = %q", q.Get("scope"))
+	if want := google.DriveFileScope + " " + google.DocumentsScope; q.Get("scope") != want {
+		t.Errorf("write scope = %q, want %q", q.Get("scope"), want)
 	}
 	assertRefreshTokenParams(t, q)
 }
@@ -250,6 +250,9 @@ func TestHasScope(t *testing.T) {
 		tokenStore{row: dto.GoogleToken{Scope: google.DriveReadonlyScope + " " + google.DriveFileScope}}, nil)
 	if ok, err := client.HasScope(t.Context(), "u1", google.DriveFileScope); err != nil || !ok {
 		t.Errorf("HasScope(drive.file) = %v, %v", ok, err)
+	}
+	if ok, _ := client.HasScope(t.Context(), "u1", google.DocumentsScope); ok {
+		t.Error("HasScope(documents) = true without the grant")
 	}
 	if ok, _ := client.HasScope(t.Context(), "u1", "other"); ok {
 		t.Error("HasScope(other) = true")

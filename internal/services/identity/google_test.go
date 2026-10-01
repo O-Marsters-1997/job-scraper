@@ -38,7 +38,7 @@ func TestGoogleStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("CanWrite reflects the drive.file scope", func(t *testing.T) {
+	t.Run("CanWrite and CanEditDocs reflect the granted scopes", func(t *testing.T) {
 		for _, granted := range []bool{false, true} {
 			svc := newGoogleService(t, identitytest.Unlinked(granted))
 			if err := svc.Connect(ctx, "user-1", "code"); err != nil {
@@ -48,7 +48,7 @@ func TestGoogleStatus(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !got.Connected || got.Email != "user-1@example.com" || got.CanWrite != granted {
+			if !got.Connected || got.Email != "user-1@example.com" || got.CanWrite != granted || got.CanEditDocs != granted {
 				t.Errorf("granted=%v: GoogleStatus(...) = %+v", granted, got)
 			}
 		}
