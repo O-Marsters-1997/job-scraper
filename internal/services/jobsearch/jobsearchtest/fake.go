@@ -203,9 +203,13 @@ func (f *FakeStore) NewURLs(_ context.Context, urls []string) ([]string, error) 
 	out := make([]string, 0, len(urls))
 	for _, u := range urls {
 		n := store.NormalizeOrRaw(u)
-		_, job := f.byURL[n]
-		_, candidate := f.candidateByURL[n]
-		if !job && !candidate {
+		known := false
+		for _, k := range []string{u, n} {
+			_, job := f.byURL[k]
+			_, candidate := f.candidateByURL[k]
+			known = known || job || candidate
+		}
+		if !known {
 			out = append(out, u)
 		}
 	}

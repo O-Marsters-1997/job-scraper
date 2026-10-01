@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -1019,7 +1020,7 @@ func (s *Store) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 	for i, u := range urls {
 		normalized[i] = NormalizeOrRaw(u)
 	}
-	existing, err := s.queries.ExistingURLs(ctx, normalized)
+	existing, err := s.queries.ExistingURLs(ctx, append(slices.Clone(urls), normalized...))
 	if err != nil {
 		return nil, fmt.Errorf("store.NewURLs: %w", err)
 	}
@@ -1029,7 +1030,9 @@ func (s *Store) NewURLs(ctx context.Context, urls []string) ([]string, error) {
 	}
 	out := make([]string, 0, len(urls))
 	for i, u := range urls {
-		if _, ok := known[normalized[i]]; !ok {
+		_, rawKnown := known[u]
+		_, normalizedKnown := known[normalized[i]]
+		if !rawKnown && !normalizedKnown {
 			out = append(out, u)
 		}
 	}
