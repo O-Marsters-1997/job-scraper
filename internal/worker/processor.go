@@ -180,6 +180,9 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		return nil
 	}
 	boardID, err := p.js.Boards().GetVerifiedBoardID(ctx, task.Source, task.BoardToken)
+	if errors.Is(err, data.ErrNotFound) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
