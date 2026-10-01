@@ -35,6 +35,7 @@ func TestList(t *testing.T) {
 			{"cursor not base64", dto.JobsQuery{Cursor: "not-base64"}},
 			{"unknown availability", dto.JobsQuery{Availability: "unknown"}},
 			{"negative since_days", dto.JobsQuery{SinceDays: "-1"}},
+			{"huge since_days", dto.JobsQuery{SinceDays: "2147483647"}},
 			{"non-numeric since_days", dto.JobsQuery{SinceDays: "week"}},
 		}
 		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil)

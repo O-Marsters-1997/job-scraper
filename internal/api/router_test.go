@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -118,6 +119,7 @@ type ingestResult struct {
 
 func (a *app) ingest(job map[string]string) ingestResult {
 	a.t.Helper()
+	job["UpdatedAt"] = time.Now().Format(time.RFC3339)
 	req := jsonRequest(a.t, http.MethodPost, "/ingest", job)
 	req.Header.Set("Authorization", "Bearer "+ingestToken)
 	return send[ingestResult](a, http.StatusOK, req)
