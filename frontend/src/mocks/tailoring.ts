@@ -5,6 +5,7 @@ import type {
 	DraftProvenance,
 	DraftRef,
 	HeadingMapping,
+	SlotEdit,
 	Suggestion,
 } from "@/types/tailoring";
 import { KeptDraftExistsError } from "../lib/tailoring";
@@ -68,7 +69,8 @@ function mockProvenance(): DraftProvenance {
 			positionId: p.id,
 			employer: p.employer,
 			title: p.title,
-			bullets: achievements.map((a) => ({
+			bullets: achievements.map((a, i) => ({
+				slotId: `s${i}`,
 				segments: [
 					{ text: `${a.text} using `, novel: false },
 					{ text: "Kubernetes", novel: true },
@@ -179,5 +181,27 @@ export function keepDraft(id: string): Draft {
 export function discardDraft(id: string): Draft {
 	const entry = mockEntry(id);
 	entry.draft = { ...entry.draft, outcome: "discarded", draftDocUrl: null };
+	return entry.draft;
+}
+
+export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
+	const entry = mockEntry(id);
+	const provenance = entry.draft.provenance;
+	if (!provenance) throw new Error(`mock draft ${id} is not ready`);
+	const texts = new Map(slots.map((s) => [s.slotId, s.text]));
+	entry.draft = {
+		...entry.draft,
+		provenance: {
+			positions: provenance.positions.map((p) => ({
+				...p,
+				bullets: p.bullets.map((b) => {
+					const text = texts.get(b.slotId);
+					return text === undefined
+						? b
+						: { ...b, segments: [{ text, novel: false }] };
+				}),
+			})),
+		},
+	};
 	return entry.draft;
 }

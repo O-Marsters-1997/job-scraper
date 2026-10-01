@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/pdftext"
@@ -18,8 +19,8 @@ var pageObjectRe = regexp.MustCompile(`/Type\s*/Page\b`)
 
 var errNoPages = errors.New("no pages found in the exported PDF")
 
-func (m *Module) exportPDF(ctx context.Context, userID, docID, tabID string) ([]byte, error) {
-	body, err := m.drive.ExportPDF(ctx, userID, docID, tabID)
+func (s *Service) exportPDF(ctx context.Context, userID, docID, tabID string) ([]byte, error) {
+	body, err := s.drive.ExportPDF(ctx, userID, docID, tabID)
 	if err != nil {
 		return nil, err
 	}
@@ -35,13 +36,23 @@ func pageCount(pdf []byte) (int, error) {
 	return n, nil
 }
 
-func (m *Module) measure(ctx context.Context, userID, docID, tabID string) ([]byte, int, error) {
-	pdf, err := m.exportPDF(ctx, userID, docID, tabID)
+func (s *Service) measure(ctx context.Context, userID, docID, tabID string) ([]byte, int, error) {
+	pdf, err := s.exportPDF(ctx, userID, docID, tabID)
 	if err != nil {
 		return nil, 0, err
 	}
 	n, err := pageCount(pdf)
 	return pdf, n, err
+}
+
+func (s *Service) pageCounts(ctx context.Context, claim dto.DraftClaim, docID string) (base, draft int, draftPDF []byte, err error) {
+	if _, base, err = s.measure(ctx, claim.UserID, claim.DocID, claim.TabID); err != nil {
+		return 0, 0, nil, fmt.Errorf("count base pages: %w", err)
+	}
+	if draftPDF, draft, err = s.measure(ctx, claim.UserID, docID, claim.TabID); err != nil {
+		return 0, 0, nil, fmt.Errorf("count draft pages: %w", err)
+	}
+	return base, draft, draftPDF, nil
 }
 
 func parseInput(ctx context.Context, pdf []byte, headings []docparse.Heading) *checks.ParseInput {

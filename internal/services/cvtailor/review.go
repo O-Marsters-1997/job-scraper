@@ -186,7 +186,7 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 			if b.Keep {
 				segments = []dto.TextSegment{{Text: b.Text}}
 			}
-			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{Segments: segments, Achievements: cited})
+			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: b.SlotID, Segments: segments, Achievements: cited})
 		}
 		out.Positions = append(out.Positions, pp)
 	}

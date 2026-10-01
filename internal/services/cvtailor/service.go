@@ -4,6 +4,7 @@ package cvtailor
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type Store interface {
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
 	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)
+	SetDraftEdits(ctx context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error
 	ClaimDraft(ctx context.Context) (dto.DraftClaim, error)
 	SetDraftDoc(ctx context.Context, claim dto.DraftClaim, docID string) error
 	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error

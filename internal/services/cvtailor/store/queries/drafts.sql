@@ -52,3 +52,7 @@ UPDATE tailored_cvs SET outcome = sqlc.arg(outcome)::text,
     draft_doc_id = CASE WHEN sqlc.arg(outcome)::text = 'discarded' THEN NULL ELSE draft_doc_id END
 WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid
 RETURNING *;
+
+-- name: SetDraftEdits :execrows
+UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb
+WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;

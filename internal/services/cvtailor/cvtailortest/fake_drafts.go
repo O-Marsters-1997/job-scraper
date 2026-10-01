@@ -2,6 +2,7 @@ package cvtailortest
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (f *FakeStore) DraftResult(id string) dto.DraftResult {
 func (f *FakeStore) CreateDraft(_ context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now()}, userID: userID, input: in, dueAt: time.Now()}
+	d := &draft{Draft: dto.Draft{ID: f.nextID(), JobID: in.JobID, Status: "pending", Findings: []dto.DraftFinding{}, CreatedAt: time.Now(), BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIDs: slices.Clone(in.AchievementIDs)}, userID: userID, input: in, dueAt: time.Now()}
 	f.drafts[d.ID] = d
 	return d.Draft, nil
 }
@@ -98,6 +99,17 @@ func (f *FakeStore) SetDraftOutcome(_ context.Context, userID, id, outcome strin
 		d.DraftDocID = ""
 	}
 	return d.Draft, nil
+}
+
+func (f *FakeStore) SetDraftEdits(_ context.Context, userID, id string, editSet json.RawMessage, findings []dto.DraftFinding) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.drafts[id]
+	if !ok || d.userID != userID {
+		return errDraftNotFound
+	}
+	d.EditSet, d.Findings = editSet, slices.Clone(findings)
+	return nil
 }
 
 func (f *FakeStore) ClaimDraft(_ context.Context) (dto.DraftClaim, error) {

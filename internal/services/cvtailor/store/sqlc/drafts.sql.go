@@ -294,6 +294,31 @@ func (q *Queries) SetDraftDoc(ctx context.Context, arg SetDraftDocParams) error 
 	return err
 }
 
+const setDraftEdits = `-- name: SetDraftEdits :execrows
+UPDATE tailored_cvs SET edit_set = $1::jsonb, findings = $2::jsonb
+WHERE id = $3::uuid AND user_id = $4::uuid
+`
+
+type SetDraftEditsParams struct {
+	EditSet  []byte
+	Findings []byte
+	ID       pgtype.UUID
+	UserID   pgtype.UUID
+}
+
+func (q *Queries) SetDraftEdits(ctx context.Context, arg SetDraftEditsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setDraftEdits,
+		arg.EditSet,
+		arg.Findings,
+		arg.ID,
+		arg.UserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setDraftOutcome = `-- name: SetDraftOutcome :one
 UPDATE tailored_cvs SET outcome = $1::text,
     draft_doc_id = CASE WHEN $1::text = 'discarded' THEN NULL ELSE draft_doc_id END

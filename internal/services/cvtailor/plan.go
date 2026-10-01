@@ -25,16 +25,16 @@ type plan struct {
 	bank      []string
 }
 
-func (m *Module) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
-	ds, err := loadTab(ctx, m.docs, claim.UserID, docID, claim.TabID)
+func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
+	ds, err := loadTab(ctx, s.docs, claim.UserID, docID, claim.TabID)
 	if err != nil {
 		return plan{}, err
 	}
-	bank, err := m.store.ListPositions(ctx, claim.UserID)
+	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
 		return plan{}, err
 	}
-	mappings, err := m.store.ListHeadingMappings(ctx, claim.UserID, claim.DocID, claim.TabID)
+	mappings, err := s.store.ListHeadingMappings(ctx, claim.UserID, claim.DocID, claim.TabID)
 	if err != nil {
 		return plan{}, err
 	}
@@ -231,4 +231,14 @@ func loadTab(ctx context.Context, docs DocFetcher, userID, docID, tabID string) 
 		return docparse.DocStructure{}, apperr.Unprocessable("could not read the CV tab")
 	}
 	return ds, nil
+}
+
+func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {
+	slotIDs := pl.slotIDs()
+	for _, pe := range edits.Positions {
+		for i := range pe.Bullets {
+			pe.Bullets[i].SlotID = slotIDs[pe.PositionID][i]
+		}
+	}
+	return edits
 }

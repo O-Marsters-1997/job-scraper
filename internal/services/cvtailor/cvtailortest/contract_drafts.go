@@ -92,6 +92,34 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("saving edits replaces the edit set and findings for the owner only", func(t *testing.T) {
+		f := newStore(t)
+		d := create(t, f)
+		if err := f.Store.CompleteDraft(ctx, claim(t, f), dto.DraftResult{EditSet: json.RawMessage(`{"positions":[]}`), DraftDocID: "doc-copy"}); err != nil {
+			t.Fatal(err)
+		}
+		finding := dto.DraftFinding{Check: "page_count", Severity: "block", Message: "over a page"}
+		edited := json.RawMessage(`{"positions":[{"positionId":"p","bullets":[]}]}`)
+		if err := f.Store.SetDraftEdits(ctx, f.Other, d.ID, edited, nil); !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("SetDraftEdits(other user) err = %v, want not found", err)
+		}
+		if err := f.Store.SetDraftEdits(ctx, f.UserID, d.ID, edited, []dto.DraftFinding{finding}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := f.Store.GetDraft(ctx, f.UserID, d.ID)
+		if diff := cmp.Diff([]dto.DraftFinding{finding}, got.Findings); diff != "" {
+			t.Errorf("GetDraft().Findings mismatch (-want +got):\n%s", diff)
+		}
+		var gotEdits, wantEdits any
+		if err := json.Unmarshal(got.EditSet, &gotEdits); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.Unmarshal(edited, &wantEdits)
+		if diff := cmp.Diff(wantEdits, gotEdits); diff != "" {
+			t.Errorf("GetDraft().EditSet mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("a terminal failure is failed with its reason and no Doc", func(t *testing.T) {
 		f := newStore(t)
 		d := create(t, f)
