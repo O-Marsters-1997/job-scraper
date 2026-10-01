@@ -1,7 +1,6 @@
 package cvtailortest
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,7 +11,7 @@ import (
 
 func runHeadingMappingContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	sortByText := cmpopts.SortSlices(func(a, b dto.HeadingMapping) bool { return a.HeadingText < b.HeadingText })
 
 	t.Run("saves, upserts and scopes by user and tab", func(t *testing.T) {

@@ -1,7 +1,6 @@
 package store_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -74,7 +73,7 @@ func closeJob(t *testing.T, pool *pgxpool.Pool, jobID string) {
 func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) string {
 	t.Helper()
 	var id string
-	err := pool.QueryRow(context.Background(),
+	err := pool.QueryRow(t.Context(),
 		`INSERT INTO effect_outbox (job_id, fingerprint) VALUES ($1, $2) RETURNING id`,
 		jobID, fingerprint).Scan(&id)
 	if err != nil {
@@ -174,7 +173,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
-	effect, err := st.ClaimAnswerEffect(ctx)
+	effect, err := st.ClaimAnswerEffect(t.Context())
 	if err != nil {
 		t.Fatalf("ClaimAnswerEffect() err = %v", err)
 	}
@@ -659,7 +658,6 @@ func TestQueueMissingAnswers(t *testing.T) {
 
 func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 	st, pool := newStore(t)
-	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
 
@@ -670,7 +668,7 @@ func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 	for range claimers {
 		go func() {
 			defer wg.Done()
-			_, err := st.ClaimAnswerEffect(ctx)
+			_, err := st.ClaimAnswerEffect(t.Context())
 			switch {
 			case err == nil:
 				wins.Add(1)

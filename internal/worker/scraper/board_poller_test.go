@@ -69,7 +69,7 @@ func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", Source: "greenhouse", Token: "acme"}}
 			poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, err: tc.fetchErr}, &boardIngesterStub{err: tc.ingestErr})
-			err := poller.PollBoard(context.Background(), "board", false)
+			err := poller.PollBoard(t.Context(), "board", false)
 			if tc.wantErr == nil && err != nil || tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
 				t.Errorf("PollBoard() = %v, want %v", err, tc.wantErr)
 			}
@@ -84,7 +84,7 @@ func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board", CompanyID: "company", CompanySlug: "company-slug", Source: "greenhouse", Token: "regional-token"}}
 	ingester := &boardIngesterStub{}
 	poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1", CompanySlug: "regional-token"}}}, ingester)
-	if err := poller.PollBoard(context.Background(), "board", false); err != nil {
+	if err := poller.PollBoard(t.Context(), "board", false); err != nil {
 		t.Fatal(err)
 	}
 	if len(ingester.jobs) != 1 || ingester.jobs[0].CompanyID != "company" || ingester.jobs[0].CompanySlug != "company-slug" || ingester.jobs[0].BoardID != "board" {
@@ -96,7 +96,7 @@ func TestBoardPollPassesNextPollHintOnSuccessOnly(t *testing.T) {
 	hint := 72 * time.Hour
 	store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
 	poller := scraper.NewBoardPoller(store, boardFetcherStub{hint: hint}, &boardIngesterStub{})
-	if err := poller.PollBoard(context.Background(), "board", false); err != nil {
+	if err := poller.PollBoard(t.Context(), "board", false); err != nil {
 		t.Fatal(err)
 	}
 	if store.snapshot.NextPollIn != hint {
@@ -105,7 +105,7 @@ func TestBoardPollPassesNextPollHintOnSuccessOnly(t *testing.T) {
 
 	failed := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
 	poller = scraper.NewBoardPoller(failed, boardFetcherStub{hint: hint, err: errPartial}, &boardIngesterStub{})
-	_ = poller.PollBoard(context.Background(), "board", false)
+	_ = poller.PollBoard(t.Context(), "board", false)
 	if failed.state != "failed" || failed.snapshot.NextPollIn != 0 {
 		t.Errorf("failed poll state = %q, hint = %v, want failed and no hint", failed.state, failed.snapshot.NextPollIn)
 	}

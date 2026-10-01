@@ -1,7 +1,6 @@
 package extract_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -48,7 +47,7 @@ func TestExtract(t *testing.T) {
 			replyWith(t, w, `{"picks":[{"optionId":"tech:go","stance":"nice"}]}`)
 		})
 
-		picks, err := client.Extract(context.Background(), "sk-or-test", "I love Go", options, dimensions)
+		picks, err := client.Extract(t.Context(), "sk-or-test", "I love Go", options, dimensions)
 		if err != nil {
 			t.Fatalf("Extract: %v", err)
 		}
@@ -82,7 +81,7 @@ func TestExtract(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 
-		_, err := client.Extract(context.Background(), "sk-or-test", "I love Go", nil, nil)
+		_, err := client.Extract(t.Context(), "sk-or-test", "I love Go", nil, nil)
 		var statusErr *openrouter.StatusError
 		if !errors.As(err, &statusErr) {
 			t.Fatalf("Extract error = %v, want *openrouter.StatusError", err)

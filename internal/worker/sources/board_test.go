@@ -1,7 +1,6 @@
 package sources_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestBoardSource_FetchPage(t *testing.T) {
 	})
 	src.Client().Transport = sourcetest.Respond("ok")
 
-	jobs, next, err := src.FetchPage(context.Background(), "")
+	jobs, next, err := src.FetchPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -44,7 +43,7 @@ func TestBoardSource_FetchPageRejectsNonEmptyCursor(t *testing.T) {
 			return []dto.Job{{Title: "acme"}}, nil
 		},
 	})
-	if _, _, err := src.FetchPage(context.Background(), "again"); err == nil {
+	if _, _, err := src.FetchPage(t.Context(), "again"); err == nil {
 		t.Fatal("expected an error for a non-empty cursor")
 	}
 }
@@ -60,7 +59,7 @@ func TestBoardParserIsIndependentOfFetchMode(t *testing.T) {
 			},
 		})
 		src.Client().Transport = sourcetest.Respond("Engineer")
-		jobs, _, err := src.FetchPage(context.Background(), "")
+		jobs, _, err := src.FetchPage(t.Context(), "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -79,7 +78,7 @@ func TestFetchPage(t *testing.T) {
 	src.Client().Transport = identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusNotFound, Status: "404 Not Found", Body: http.NoBody}, nil
 	})
-	if _, _, err := src.FetchPage(context.Background(), ""); err == nil {
+	if _, _, err := src.FetchPage(t.Context(), ""); err == nil {
 		t.Fatal("FetchPage() = nil, want error for 404")
 	}
 }

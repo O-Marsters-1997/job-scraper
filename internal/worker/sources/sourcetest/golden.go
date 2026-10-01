@@ -1,7 +1,6 @@
 package sourcetest
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -31,7 +30,7 @@ func RunGolden(t *testing.T, fixture string, src *sources.BoardSource) {
 	src.Client().Transport = Respond(string(body))
 
 	start := time.Now()
-	got, _, err := src.FetchPage(context.Background(), "")
+	got, _, err := src.FetchPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("FetchPage(%s) error: %v", fixture, err)
 	}

@@ -1,7 +1,6 @@
 package proxy_test
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -66,7 +65,7 @@ func TestProxyConnectClassifiesZoneExhaustion(t *testing.T) {
 	if !ok {
 		t.Fatalf("Transport(true) = %T, want *http.Transport", tr)
 	}
-	if err := httpTr.OnProxyConnectResponse(context.Background(), &url.URL{}, &http.Request{}, resp); !proxy.IsZonePaused(err) {
+	if err := httpTr.OnProxyConnectResponse(t.Context(), &url.URL{}, &http.Request{}, resp); !proxy.IsZonePaused(err) {
 		t.Fatalf("CONNECT exhaustion = %v", err)
 	}
 }

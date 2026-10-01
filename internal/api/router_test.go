@@ -2,7 +2,6 @@ package api_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -176,7 +175,7 @@ func TestRecomputeAfterConfigUpdateShowsScoresOnJobs(t *testing.T) {
 		"title": "Engineer", "location": "Remote", "url": "https://example.com/jobs/2",
 		"company_slug": "acme", "source": "greenhouse", "salaryraw": "£30,000",
 	})
-	if _, err := a.pool.Exec(context.Background(),
+	if _, err := a.pool.Exec(t.Context(),
 		"INSERT INTO job_scores (job_id, user_id) SELECT $1, id FROM users", job.JobID); err != nil {
 		t.Fatalf("seed job score row: %v", err)
 	}

@@ -206,7 +206,7 @@ func (f fixture) board(t *testing.T) string {
 }
 
 func TestProcess(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	exports := []struct {
 		name string
@@ -435,7 +435,7 @@ type configsStub []dto.SearchConfig
 func (c configsStub) IncludeFilterConfigs(context.Context) ([]dto.SearchConfig, error) { return c, nil }
 
 func TestProcessBoardDiscover(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	jobs := []dto.Job{{Title: "Go Engineer", Location: "London"}}
 	discover := func(context.Context, string, string) (string, []dto.Job, error) {
 		return "Acme Corp", jobs, nil
@@ -508,7 +508,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 }
 
 func TestFailRun(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("marks the run failed", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")

@@ -1,7 +1,6 @@
 package cvtailortest
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -35,7 +34,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 
 func runPositionContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	wantKind := func(t *testing.T, call string, err error, kind apperr.Kind) {
 		t.Helper()

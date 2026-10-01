@@ -22,11 +22,11 @@ func TestSeedDefaultsSeedsTheUsersStatuses(t *testing.T) {
 	store := applicationstest.NewFakeStore()
 	m := applications.Build(applications.Deps{Store: store})
 
-	if err := m.SeedDefaults(context.Background(), nil, "user-1"); err != nil {
+	if err := m.SeedDefaults(t.Context(), nil, "user-1"); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := store.ListApplicationStatusesByUser(context.Background(), "user-1")
+	got, err := store.ListApplicationStatusesByUser(t.Context(), "user-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestSeedDefaultsPropagatesStoreError(t *testing.T) {
 		Store: failingSeed{Store: applicationstest.NewFakeStore(), err: wantErr},
 	})
 
-	if err := m.SeedDefaults(context.Background(), nil, "user-1"); !errors.Is(err, wantErr) {
+	if err := m.SeedDefaults(t.Context(), nil, "user-1"); !errors.Is(err, wantErr) {
 		t.Fatalf("SeedDefaults(...) err = %v, want %v", err, wantErr)
 	}
 }

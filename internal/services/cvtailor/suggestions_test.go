@@ -34,7 +34,7 @@ func addAchievements(t *testing.T, positionID string, st interface {
 	t.Helper()
 	var out []dto.Achievement
 	for _, text := range texts {
-		a, err := st.CreateAchievement(context.Background(), userID, dto.AchievementInput{PositionID: positionID, Text: text})
+		a, err := st.CreateAchievement(t.Context(), userID, dto.AchievementInput{PositionID: positionID, Text: text})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +55,7 @@ func TestSuggestionsRankByPYesTimesConfidence(t *testing.T) {
 	p := addPosition(t, st, "Acme", "Engineer")
 	addAchievements(t, p.ID, st, "a", "b", "c", "d", "e")
 
-	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
+	got, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,14 +80,14 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 	other := addPosition(t, st, "Globex", "Engineer")
 	addAchievements(t, acme.ID, st, "a1", "a2", "a3", "a4")
 	addAchievements(t, other.ID, st, "g1", "g2", "g3", "g4")
-	_, err := svc.SaveHeadings(context.Background(), userID, dto.HeadingMappingsInput{
+	_, err := svc.SaveHeadings(t.Context(), userID, dto.HeadingMappingsInput{
 		DocID: "doc", TabID: "tab", Mappings: []dto.HeadingMapping{{HeadingText: "Engineer, Acme", PositionID: &acme.ID}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1", DocID: "doc", TabID: "tab"})
+	got, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1", DocID: "doc", TabID: "tab"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestSuggestionsPreselectSlotCountOfMappedHeading(t *testing.T) {
 func TestSuggestionsEmptyBankMakesNoAskCall(t *testing.T) {
 	asker := &fakeAsker{}
 	svc, _ := newService(t, nil, asker)
-	got, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
+	got, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestSuggestionsPropagatesMissingKey(t *testing.T) {
 	p := addPosition(t, st, "Acme", "Engineer")
 	addAchievements(t, p.ID, st, "a")
 
-	_, err := svc.Suggestions(context.Background(), userID, dto.SuggestionsQuery{JobID: "job-1"})
+	_, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if !errors.Is(err, missingKey) {
 		t.Errorf("Suggestions() err = %v, want %v", err, missingKey)
 	}

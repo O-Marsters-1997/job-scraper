@@ -585,7 +585,7 @@ func TestRecompute(t *testing.T) {
 		alerter := &fakeAlerter{}
 		svc := newService(t, st, withAlerter(alerter))
 
-		result, err := svc.Recompute(context.Background(), "user-1")
+		result, err := svc.Recompute(t.Context(), "user-1")
 		if err != nil {
 			t.Fatalf("Recompute: %v", err)
 		}
@@ -618,7 +618,7 @@ func TestRecompute(t *testing.T) {
 
 		svc := newService(t, st)
 
-		if _, err := svc.Recompute(context.Background(), "user-1"); err != nil {
+		if _, err := svc.Recompute(t.Context(), "user-1"); err != nil {
 			t.Fatalf("Recompute: %v", err)
 		}
 		saved := st.Recomputed()
@@ -820,7 +820,7 @@ func TestRecompute(t *testing.T) {
 				})
 
 				svc := newService(t, st)
-				result, err := svc.Recompute(context.Background(), "user-1")
+				result, err := svc.Recompute(t.Context(), "user-1")
 				if err != nil {
 					t.Fatalf("Recompute: %v", err)
 				}
@@ -880,7 +880,7 @@ func TestFillMissingAnswers(t *testing.T) {
 func ptr[T any](v T) *T { return &v }
 
 func TestAsk(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	job := dto.Job{ID: "job-1", ContentFingerprint: "fp-1"}
 	newSvc := func(t *testing.T, key string) (*scoring.Service, *fakeAnswerer) {
 		t.Helper()

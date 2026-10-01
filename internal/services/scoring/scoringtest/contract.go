@@ -1,7 +1,6 @@
 package scoringtest
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -17,7 +16,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("claim on an empty queue returns not found", func(t *testing.T) {
 		st := newStore(t)
-		_, err := st.ClaimAnswerEffect(context.Background())
+		_, err := st.ClaimAnswerEffect(t.Context())
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("ClaimAnswerEffect(...) err = %v, want ErrNotFound", err)
 		}
@@ -25,7 +24,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("get job for scoring on an unknown id returns not found", func(t *testing.T) {
 		st := newStore(t)
-		_, err := st.GetJobForScoring(context.Background(), missingID)
+		_, err := st.GetJobForScoring(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetJobForScoring(...) err = %v, want ErrNotFound", err)
 		}
@@ -33,7 +32,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("get search config on an unknown user returns not found", func(t *testing.T) {
 		st := newStore(t)
-		_, err := st.GetSearchConfig(context.Background(), missingID)
+		_, err := st.GetSearchConfig(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetSearchConfig(...) err = %v, want ErrNotFound", err)
 		}
@@ -41,7 +40,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("reword an unknown option returns not found", func(t *testing.T) {
 		st := newStore(t)
-		err := st.RewordScoringOption(context.Background(), missingID, "question")
+		err := st.RewordScoringOption(t.Context(), missingID, "question")
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("RewordScoringOption(...) err = %v, want ErrNotFound", err)
 		}
@@ -49,7 +48,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("retire an unknown option returns not found", func(t *testing.T) {
 		st := newStore(t)
-		err := st.RetireScoringOption(context.Background(), missingID)
+		err := st.RetireScoringOption(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("RetireScoringOption(...) err = %v, want ErrNotFound", err)
 		}
@@ -57,7 +56,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("add, reword then retire an option round trips", func(t *testing.T) {
 		st := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
 			t.Fatalf("AddScoringOption(...) = %v", err)
 		}
@@ -85,7 +84,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("retire an already retired option returns not found", func(t *testing.T) {
 		st := newStore(t)
-		ctx := context.Background()
+		ctx := t.Context()
 		if err := st.AddScoringOption(ctx, optionID, "tech", "Go", "Does the role use Go?"); err != nil {
 			t.Fatalf("AddScoringOption(...) = %v", err)
 		}
@@ -99,7 +98,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 
 	t.Run("ops state on an empty store reports nothing", func(t *testing.T) {
 		st := newStore(t)
-		state, err := st.OpsState(context.Background())
+		state, err := st.OpsState(t.Context())
 		if err != nil {
 			t.Fatalf("OpsState(...) error = %v", err)
 		}

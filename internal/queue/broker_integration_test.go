@@ -32,7 +32,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires Docker")
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	container, err := testcontainers.Run(ctx, "rabbitmq:4.3.6-management",
 		testcontainers.WithEnv(map[string]string{"RABBITMQ_DEFAULT_USER": "jobs", "RABBITMQ_DEFAULT_PASS": "testpass"}),
 		testcontainers.WithExposedPorts("5672/tcp", "15672/tcp"),
