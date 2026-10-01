@@ -17,7 +17,7 @@ func (e draftEnv) readyDrafts(t *testing.T, n int) []string {
 	for i := range ids {
 		ids[i] = e.queue(t)
 	}
-	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by moving Redis queries to Postgres", 0))
+	editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency by quickly moving queries to Postgres", 0))
 	for range n {
 		e.run(t, tick{editor: editor})
 	}
@@ -36,9 +36,9 @@ func TestGetDraftProvenance(t *testing.T) {
 		}
 		bullet := d.Provenance.Positions[0].Bullets[0]
 		want := []dto.TextSegment{
-			{Text: "Cut p99 latency by moving ", Novel: false},
-			{Text: "Redis", Novel: true},
-			{Text: " queries to Postgres", Novel: false},
+			{Text: "Cut p99 latency by ", Novel: false},
+			{Text: "quickly", Novel: true},
+			{Text: " moving queries to Postgres", Novel: false},
 		}
 		if diff := cmp.Diff(want, bullet.Segments); diff != "" {
 			t.Errorf("segments (-want +got):\n%s", diff)

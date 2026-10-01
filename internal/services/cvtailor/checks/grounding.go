@@ -10,7 +10,7 @@ import (
 
 const (
 	checkGrounding = "grounding"
-	checkSkills    = "skills"
+	CheckSkills    = "skills"
 )
 
 var numberRe = regexp.MustCompile(`\d+(?:[.,]\d+)*(?:%|[xX×]|[kKmMbB]\b)?`)
@@ -77,7 +77,7 @@ func groundSkills(d Draft) []Finding {
 	for _, s := range d.Skills {
 		if !sourced(s) {
 			out = append(out, Finding{
-				Check: checkSkills, Severity: Block,
+				Check: CheckSkills, Severity: Block,
 				Message: fmt.Sprintf("skill %q is in neither the base skills nor the Bank", s),
 			})
 		}
@@ -85,7 +85,7 @@ func groundSkills(d Draft) []Finding {
 	for _, s := range d.JobSkills {
 		if !sourced(s) {
 			out = append(out, Finding{
-				Check: checkSkills, Severity: Info,
+				Check: CheckSkills, Severity: Info,
 				Message: fmt.Sprintf("the job asks for %q; nothing in your CV or Bank supports it", s),
 			})
 		}
