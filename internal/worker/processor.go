@@ -40,7 +40,7 @@ type IncludeFilterConfigs interface {
 	IncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
 }
 
-type DiscoverFunc func(ctx context.Context, source, token string) (name string, jobs []dto.Job, err error)
+type DiscoverFunc func(ctx context.Context, source, token string) (scraper.Discovery, error)
 
 type Deps struct {
 	JS           *jobsearch.Module
@@ -147,19 +147,23 @@ func (p *Processor) nameCompany(ctx context.Context, companyID, name string) err
 }
 
 func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
-	name, jobs, err := p.discover(ctx, task.Source, task.BoardToken)
+	found, err := p.discover(ctx, task.Source, task.BoardToken)
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(name), Name: name})
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(found.Name), Name: found.Name})
 	if err != nil {
 		return err
 	}
 	if _, err := p.js.Boards().UpsertCandidateBoard(ctx, company.ID, task.Source, task.BoardToken); err != nil {
 		return err
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, company.ID, task.Source, task.BoardToken, "discovered"); err != nil && !errors.Is(err, data.ErrNotFound) {
+	method := "discovered"
+	if !found.Recheck {
+		method = scraper.MethodWTTJOrigin
+	}
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, company.ID, task.Source, task.BoardToken, method); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
 	}
 	configs, err := p.scoring.IncludeFilterConfigs(ctx)
@@ -167,7 +171,7 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		return err
 	}
 	for _, cfg := range configs {
-		if !anyPasses(jobs, cfg) {
+		if !anyPasses(found.Jobs, cfg) {
 			continue
 		}
 		if _, err := p.js.TrackDiscoveredCompany(ctx, cfg.UserID, company.ID); err != nil {

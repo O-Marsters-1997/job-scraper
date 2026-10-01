@@ -438,8 +438,8 @@ func (c configsStub) IncludeFilterConfigs(context.Context) ([]dto.SearchConfig, 
 func TestProcessBoardDiscover(t *testing.T) {
 	ctx := t.Context()
 	jobs := []dto.Job{{Title: "Go Engineer", Location: "London"}}
-	discover := func(context.Context, string, string) (string, []dto.Job, error) {
-		return "Acme Corp", jobs, nil
+	discover := func(context.Context, string, string) (scraper.Discovery, error) {
+		return scraper.Discovery{Name: "Acme Corp", Jobs: jobs, Recheck: true}, nil
 	}
 	task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
 	match := dto.SearchConfig{UserID: "match", RequiredTitleKeywords: []string{"go"}}
@@ -493,10 +493,32 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a board that is not worth rechecking is verified wttj-origin", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		noRecheck := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp"}, nil
+		}
+		if err := f.discoverProcessor(noRecheck, configsStub{match}).Process(ctx, queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+		if err != nil || len(boards) != 1 || boards[0].VerificationMethod != scraper.MethodWTTJOrigin {
+			t.Fatalf("ListCompanyBoards(%s) = %+v, %v, want one board verified wttj-origin", company.ID, boards, err)
+		}
+		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx)
+		if err != nil || len(untracked) != 0 {
+			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want none", untracked, err)
+		}
+	})
+
 	t.Run("a failed fetch is acked without creating a company", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
-		failing := func(context.Context, string, string) (string, []dto.Job, error) {
-			return "", nil, errors.New("board gone")
+		failing := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{}, errors.New("board gone")
 		}
 		if err := f.discoverProcessor(failing, configsStub{match}).Process(ctx, task); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)

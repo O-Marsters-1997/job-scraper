@@ -253,6 +253,37 @@ func TestPollBoard(t *testing.T) {
 	})
 }
 
+func TestDiscover(t *testing.T) {
+	discover := func(t *testing.T, s *site) (wttj.Discovery, error) {
+		t.Helper()
+		wttj.ResetLimiter()
+		src := wttj.New("discover", func() time.Time { return now })
+		src.Client().Transport = s
+		return src.Discover(t.Context())
+	}
+
+	t.Run("a UK company returns its page name, its jobs and UK", func(t *testing.T) {
+		got, err := discover(t, newSite(t, "company_faculty.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Faculty" || !got.UK || len(got.Jobs) == 0 {
+			t.Errorf("Discover() = name %q, UK %v, %d jobs, want Faculty, UK and jobs", got.Name, got.UK, len(got.Jobs))
+		}
+	})
+
+	t.Run("a non-UK company sends one request and is not UK", func(t *testing.T) {
+		s := newSite(t, "company_us_only.html")
+		got, err := discover(t, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.UK || len(got.Jobs) != 0 || len(s.requests) != 1 {
+			t.Errorf("Discover() = UK %v, %d jobs, %d requests, want not UK, none, 1", got.UK, len(got.Jobs), len(s.requests))
+		}
+	})
+}
+
 var apolloStateRe = regexp.MustCompile(`__APOLLO_STATE__=__b64dec\("([^"]+)"\)`)
 
 func breakProfile(t *testing.T, page string) string {
