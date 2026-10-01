@@ -19,9 +19,17 @@ const (
 	userAgent      = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
+type Route = proxy.Route
+
+const (
+	RouteDirect   = proxy.Direct
+	RouteUnlocker = proxy.Unlocker
+	RouteTiered   = proxy.Tiered
+)
+
 type Config struct {
-	Name     string
-	UseProxy bool
+	Name  string
+	Route Route
 }
 
 // SnapshotSource is implemented by any source that has snapshot-testable parsers.
@@ -75,7 +83,7 @@ type PaginatedBase struct {
 }
 
 func NewBase(cfg Config) PaginatedBase {
-	transport, err := proxy.Fetcher(cfg.UseProxy)
+	transport, err := proxy.Fetcher(cfg.Route)
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,

@@ -136,6 +136,7 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 
 	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	allParams := []string{"keywords", "location", "f_C", "f_TPR", "f_WT", "f_E", "f_JT", "geoId", "f_D", "f_SB2"}
 
 	for _, tt := range tests {

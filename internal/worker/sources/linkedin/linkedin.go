@@ -29,7 +29,7 @@ const (
 	// maxStart bounds pagination — seeMoreJobPostings never returns a total result
 	// count, so an empty page is the only end-of-results signal LinkedIn gives us.
 	// LinkedIn also tends to start 429ing a given IP after ~page 10; the proxy
-	// (UseProxy below) mitigates that, and this cap bounds the damage if it doesn't.
+	// (Route below) mitigates that, and this cap bounds the damage if it doesn't.
 	maxStart = 1000
 
 	selCard         = `div.base-search-card`
@@ -85,8 +85,8 @@ var _ sources.SnapshotSource = (*Scraper)(nil)
 func New(keywords string, filters map[string]string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:     "linkedin",
-			UseProxy: true,
+			Name:  "linkedin",
+			Route: sources.RouteTiered,
 		}),
 		keywords: keywords,
 		filters:  filters,

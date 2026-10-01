@@ -50,9 +50,9 @@ func TestBoardSource_FetchPageRejectsNonEmptyCursor(t *testing.T) {
 
 func TestBoardParserIsIndependentOfFetchMode(t *testing.T) {
 	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
-	for _, useProxy := range []bool{false, true} {
+	for _, route := range []sources.Route{sources.RouteDirect, sources.RouteUnlocker} {
 		src := sources.NewBoardSource(sources.BoardSpec{
-			Name: "stub", UseProxy: useProxy,
+			Name: "stub", Route: route,
 			URL: "https://8.8.8.8/jobs",
 			Parse: func(body []byte) ([]dto.Job, error) {
 				return []dto.Job{{Title: string(body)}}, nil
@@ -64,7 +64,7 @@ func TestBoardParserIsIndependentOfFetchMode(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(jobs) != 1 || jobs[0].Title != "Engineer" {
-			t.Fatalf("useProxy=%t jobs=%v", useProxy, jobs)
+			t.Fatalf("route=%v jobs=%v", route, jobs)
 		}
 	}
 }

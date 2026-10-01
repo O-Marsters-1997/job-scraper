@@ -51,8 +51,8 @@ var _ sources.SnapshotSource = (*Scraper)(nil)
 func New(searchURL string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:     "indeed",
-			UseProxy: true,
+			Name:  "indeed",
+			Route: sources.RouteUnlocker,
 		}),
 		searchURL: searchURL,
 	}
