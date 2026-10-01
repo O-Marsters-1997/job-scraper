@@ -8,6 +8,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
@@ -58,14 +59,33 @@ func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) err
 	return p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: nextPollIn})
 }
 
-type SourceBoardFetcher struct{}
+type ProfileSaver interface {
+	SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error
+}
 
-func (SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) ([]dto.Job, time.Duration, error) {
+type SourceBoardFetcher struct {
+	Profiles ProfileSaver
+}
+
+func (f SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) ([]dto.Job, time.Duration, error) {
 	target := dto.SourceTarget{Source: board.Source, Value: board.Token, Enabled: true}
 	src, ok := builder.BuildSource(target)
 	if !ok {
 		return nil, 0, fmt.Errorf("unsupported board source %q", board.Source)
 	}
-	jobs, _, err := src.FetchPage(ctx, "")
-	return jobs, 0, err
+	bp, ok := src.(sources.BoardPoller)
+	if !ok {
+		jobs, _, err := src.FetchPage(ctx, "")
+		return jobs, 0, err
+	}
+	res, err := bp.PollBoard(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if res.Profile != nil {
+		if err := f.Profiles.SaveCompanyProfile(ctx, board.CompanyID, board.Source, *res.Profile); err != nil {
+			return nil, 0, err
+		}
+	}
+	return res.Jobs, res.NextPollIn, nil
 }

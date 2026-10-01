@@ -44,6 +44,27 @@ type DetailFetcher interface {
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 
+// StatusError is returned by Get and PostEmptyJSON for any non-200 response other than 404 or 410.
+type StatusError struct {
+	Code   int
+	Status string
+}
+
+func (e *StatusError) Error() string { return "unexpected status " + e.Status }
+
+// BoardResult is what one poll of a Board yields beyond its jobs: an optional next-poll
+// hint and an optional company profile for the source's company_profiles row.
+type BoardResult struct {
+	Jobs       []dto.Job
+	NextPollIn time.Duration
+	Profile    *dto.CompanyProfile
+}
+
+// BoardPoller is implemented by a Source that reports a next-poll hint or a profile.
+type BoardPoller interface {
+	PollBoard(ctx context.Context) (BoardResult, error)
+}
+
 // ErrGone is returned by Get and PostEmptyJSON for a 404 or 410 response.
 var ErrGone = errors.New("gone")
 
@@ -109,7 +130,7 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte)
 		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status %s", resp.Status)
+		return nil, &StatusError{Code: resp.StatusCode, Status: resp.Status}
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
