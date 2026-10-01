@@ -24,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 var (
@@ -915,9 +916,18 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		if err != nil {
 			return nil, err
 		}
+		card.URL = normalized
+		card.Source = target.Source
+		var payload []byte
+		if sourcespec.CardComplete(target.Source) {
+			if payload, err = json.Marshal(card); err != nil {
+				return nil, fmt.Errorf("marshal candidate card: %w", err)
+			}
+		}
 		id, err := queries.UpsertCandidate(ctx, sqlc.UpsertCandidateParams{
 			NormalizedUrl: normalized, Source: target.Source,
 			CardTitle: card.Title, CardCompany: card.CompanySlug, CardLocation: card.Location,
+			Card: payload,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("upsert candidate: %w", err)
@@ -927,8 +937,6 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		}); err != nil {
 			return nil, fmt.Errorf("record candidate discovery: %w", err)
 		}
-		card.URL = normalized
-		card.Source = target.Source
 		out = append(out, sourcetargets.Candidate{ID: id.String(), URL: normalized, Card: card})
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -960,11 +968,14 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 	}
 	out := make([]sourcetargets.Candidate, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, sourcetargets.Candidate{
-			ID: row.ID.String(), URL: row.NormalizedUrl,
-			Card: dto.Job{URL: row.NormalizedUrl, Title: row.CardTitle, CompanySlug: row.CardCompany,
-				Location: row.CardLocation, Source: row.Source},
-		})
+		card := dto.Job{URL: row.NormalizedUrl, Title: row.CardTitle, CompanySlug: row.CardCompany,
+			Location: row.CardLocation, Source: row.Source}
+		if row.Card != nil {
+			if err := json.Unmarshal(row.Card, &card); err != nil {
+				return nil, fmt.Errorf("unmarshal candidate card %s: %w", row.ID, err)
+			}
+		}
+		out = append(out, sourcetargets.Candidate{ID: row.ID.String(), URL: row.NormalizedUrl, Card: card})
 	}
 	return out, nil
 }

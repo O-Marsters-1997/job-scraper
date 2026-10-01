@@ -122,4 +122,22 @@ func TestCapturePage(t *testing.T) {
 			t.Errorf("queued after reconsideration = %+v, want one job for %s", jobs, card.URL)
 		}
 	})
+
+	t.Run("reconsideration keeps the description of a complete card", func(t *testing.T) {
+		svc, _, q := newService(t)
+		remoteok := dto.SourceTarget{ID: "target-3", UserID: userID, Source: "remoteok"}
+		card := dto.Job{URL: "https://remoteok.com/1", Title: "Senior Engineer", Description: "full text"}
+		first := dto.SearchConfig{UserID: userID, ExcludedTitleKeywords: []string{"senior"}, UpdatedAt: time.Now().UTC()}
+		if err := svc.CapturePage(t.Context(), remoteok, []dto.Job{card}, first); err != nil {
+			t.Fatalf("CapturePage() err = %v", err)
+		}
+
+		changed := dto.SearchConfig{UserID: userID, UpdatedAt: first.UpdatedAt.Add(time.Second)}
+		if err := svc.Reconsider(t.Context(), changed); err != nil {
+			t.Fatalf("Reconsider() err = %v", err)
+		}
+		if jobs := q.Jobs(); len(jobs) != 1 || jobs[0].Card.Description != card.Description {
+			t.Errorf("queued after reconsideration = %+v, want the card with its description", jobs)
+		}
+	})
 }

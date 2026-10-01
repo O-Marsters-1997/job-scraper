@@ -685,6 +685,37 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("list for user returns the full card only for complete sources", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		complete, err := st.CreateSourceTarget(ctx, userID, "remoteok", "complete-search", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(remoteok) = %v", err)
+		}
+		partial, err := st.CreateSourceTarget(ctx, userID, "linkedin", "partial-search", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(linkedin) = %v", err)
+		}
+		if _, err := st.SaveCards(ctx, complete, []dto.Job{{URL: "https://example.com/full", Title: "Engineer", Description: "full text"}}); err != nil {
+			t.Fatalf("SaveCards(remoteok) = %v", err)
+		}
+		if _, err := st.SaveCards(ctx, partial, []dto.Job{{URL: "https://example.com/partial", Title: "Engineer", Description: "full text"}}); err != nil {
+			t.Fatalf("SaveCards(linkedin) = %v", err)
+		}
+		listed, err := st.ListForUser(ctx, userID, "", 10)
+		if err != nil {
+			t.Fatalf("ListForUser(...) = %v", err)
+		}
+		got := map[string]string{}
+		for _, c := range listed {
+			got[c.Card.Source] = c.Card.Description
+		}
+		want := map[string]string{"remoteok": "full text", "linkedin": ""}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("ListForUser(...) descriptions by source (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

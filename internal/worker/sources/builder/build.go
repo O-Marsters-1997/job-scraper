@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/ashby"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/greenhouse"
@@ -23,9 +24,8 @@ import (
 )
 
 type entry struct {
-	build        func(dto.SourceTarget) sources.Source
-	detail       sources.DetailFetcher
-	cardComplete bool
+	build  func(dto.SourceTarget) sources.Source
+	detail sources.DetailFetcher
 }
 
 func boardEntry(newSource func(token string) sources.Source) entry {
@@ -44,8 +44,8 @@ var registry = map[string]entry{
 		build:  func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value) },
 		detail: indeed.New(""),
 	},
-	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }, cardComplete: true},
-	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }, cardComplete: true},
+	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 	"wis": {
 		build: func(t dto.SourceTarget) sources.Source {
 			return wis.New(wis.Search{Keywords: t.Value, Region: t.Filters["region"]})
@@ -82,8 +82,8 @@ func Detailers() map[string]sources.DetailFetcher {
 // CardComplete returns the sources whose listing card is already the full job.
 func CardComplete() map[string]bool {
 	out := map[string]bool{}
-	for name, e := range registry {
-		if e.cardComplete {
+	for name := range registry {
+		if sourcespec.CardComplete(name) {
 			out[name] = true
 		}
 	}
