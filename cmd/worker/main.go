@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -23,6 +24,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -95,9 +98,8 @@ func main() {
 	// go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	// go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
-	// harvest := discover.NewRunner([]discover.Harvester{yc.New(), getro.New()}, js.Boards(), js.Boards())
-	// go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
-	// go schedule.Every(ctx, "crawl", 6*time.Hour, crawl.New(js.Boards()).RunOnce)
+	harvest := discover.NewRunner([]discover.Harvester{commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL)}, q, js.Boards())
+	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
 	// slog.InfoContext(ctx, "RabbitMQ source workers starting")
 
 	if err := q.Consume(ctx, processor.Process, processor.FailRun); err != nil && ctx.Err() == nil {
