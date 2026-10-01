@@ -3,6 +3,7 @@ package jobsearchtest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -325,6 +326,55 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		got, err := st.SetCompanyTracking(ctx, userID, c.ID, false, 0)
 		if err != nil || got.Enabled || got.CheckIntervalMinutes != 180 {
 			t.Fatalf("SetCompanyTracking(..., false, 0) = %+v, %v, want disabled at 180", got, err)
+		}
+	})
+
+	t.Run("new companies list only review state new, newest first, with their open jobs", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := context.Background()
+		var ids []string
+		for _, slug := range []string{"older-co", "newer-co", "kept-co"} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%s) = %v", slug, err)
+			}
+			if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 0); err != nil {
+				t.Fatalf("SetCompanyTracking(%s) = %v", slug, err)
+			}
+			state := "new"
+			if slug == "kept-co" {
+				state = "kept"
+			}
+			if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, state); err != nil {
+				t.Fatalf("SetCompanyReviewState(%s) = %v", slug, err)
+			}
+			ids = append(ids, c.ID)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, ids[0], "greenhouse", "older-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		for i, id := range ids {
+			if _, _, err := st.SaveCanonical(ctx, dto.Job{
+				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id,
+			}); err != nil {
+				t.Fatalf("SaveCanonical(...) = %v", err)
+			}
+		}
+
+		got, err := st.ListNewCompanies(ctx, userID)
+		if err != nil || len(got) != 2 || got[0].ID != ids[1] || got[1].ID != ids[0] {
+			t.Fatalf("ListNewCompanies(...) = %+v, %v, want newer-co then older-co", got, err)
+		}
+		if len(got[0].Boards) != 0 || len(got[1].Boards) != 1 {
+			t.Fatalf("ListNewCompanies(...) boards = %+v, want one on older-co only", got)
+		}
+		jobs, err := st.ListNewCompanyJobs(ctx, userID)
+		if err != nil || len(jobs) != 2 {
+			t.Fatalf("ListNewCompanyJobs(...) = %+v, %v, want the two new companies' jobs", jobs, err)
+		}
+		other, err := st.ListNewCompanies(ctx, missingID)
+		if err != nil || len(other) != 0 {
+			t.Fatalf("ListNewCompanies(other user) = %+v, %v, want none", other, err)
 		}
 	})
 

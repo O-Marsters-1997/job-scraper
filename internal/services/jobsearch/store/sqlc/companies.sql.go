@@ -157,6 +157,88 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 	return items, nil
 }
 
+const listNewCompaniesForUser = `-- name: ListNewCompaniesForUser :many
+SELECT c.id, c.name, c.slug, tc.created_at AS added_at
+FROM tracked_companies tc
+JOIN companies c ON c.id = tc.company_id
+WHERE tc.user_id = $1 AND tc.review_state = 'new'
+ORDER BY tc.created_at DESC, c.id
+`
+
+type ListNewCompaniesForUserRow struct {
+	ID      pgtype.UUID
+	Name    string
+	Slug    string
+	AddedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListNewCompaniesForUser(ctx context.Context, userID pgtype.UUID) ([]ListNewCompaniesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompaniesForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNewCompaniesForUserRow
+	for rows.Next() {
+		var i ListNewCompaniesForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNewCompanyJobs = `-- name: ListNewCompanyJobs :many
+SELECT j.company_id, j.company_slug, j.title, j.location, js.suitability_score
+FROM tracked_companies tc
+JOIN jobs j ON j.company_id = tc.company_id AND j.closed_at IS NULL
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
+WHERE tc.user_id = $1 AND tc.review_state = 'new'
+`
+
+type ListNewCompanyJobsRow struct {
+	CompanyID        pgtype.UUID
+	CompanySlug      string
+	Title            string
+	Location         string
+	SuitabilityScore pgtype.Int4
+}
+
+func (q *Queries) ListNewCompanyJobs(ctx context.Context, userID pgtype.UUID) ([]ListNewCompanyJobsRow, error) {
+	rows, err := q.db.Query(ctx, listNewCompanyJobs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNewCompanyJobsRow
+	for rows.Next() {
+		var i ListNewCompanyJobsRow
+		if err := rows.Scan(
+			&i.CompanyID,
+			&i.CompanySlug,
+			&i.Title,
+			&i.Location,
+			&i.SuitabilityScore,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTrackedCompaniesForUser = `-- name: ListTrackedCompaniesForUser :many
 SELECT c.id, c.name, c.slug, tc.enabled, tc.review_state, tc.check_interval_minutes,
     (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.closed_at IS NULL) AS open_jobs,

@@ -73,3 +73,17 @@ ORDER BY c.name, c.id;
 
 -- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2;
+
+-- name: ListNewCompaniesForUser :many
+SELECT c.id, c.name, c.slug, tc.created_at AS added_at
+FROM tracked_companies tc
+JOIN companies c ON c.id = tc.company_id
+WHERE tc.user_id = $1 AND tc.review_state = 'new'
+ORDER BY tc.created_at DESC, c.id;
+
+-- name: ListNewCompanyJobs :many
+SELECT j.company_id, j.company_slug, j.title, j.location, js.suitability_score
+FROM tracked_companies tc
+JOIN jobs j ON j.company_id = tc.company_id AND j.closed_at IS NULL
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = tc.user_id
+WHERE tc.user_id = $1 AND tc.review_state = 'new';

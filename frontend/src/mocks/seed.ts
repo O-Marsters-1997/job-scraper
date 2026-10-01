@@ -83,7 +83,8 @@ jobs.sort(
 const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 	const slug = slugify(name);
 	const hasBoard = i % 2 === 0;
-	const tracked = hasBoard && i % 4 === 0;
+	const isNew = hasBoard && i % 8 === 2;
+	const tracked = (hasBoard && i % 4 === 0) || isNew;
 	return {
 		ID: `company-${i + 1}`,
 		Slug: slug,
@@ -93,7 +94,7 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
 		Tracked: tracked,
-		ReviewState: tracked ? "kept" : "",
+		ReviewState: isNew ? "new" : tracked ? "kept" : "",
 		TargetID: tracked ? `target-${i + 1}` : "",
 		CheckIntervalMinutes: 360,
 		LastCheckedAt: tracked

@@ -4,6 +4,7 @@ import {
 	addCompanyBoard,
 	fetchCompanies,
 	fetchCompanyBoards,
+	fetchNewCompanies,
 	fetchTrackedCompanies,
 	setCompanyReview,
 	setCompanyTracking,
@@ -27,6 +28,15 @@ export function useTrackedCompanies(poll: () => boolean = () => false) {
 		queryFn: fetchTrackedCompanies,
 		refetchInterval: poll() ? 4000 : false,
 	}));
+}
+
+export const newCompaniesQueryOptions = queryOptions({
+	queryKey: keys.companies.new,
+	queryFn: fetchNewCompanies,
+});
+
+export function useNewCompanies() {
+	return createQuery(() => newCompaniesQueryOptions);
 }
 
 export function useCompanyBoards(
@@ -77,6 +87,6 @@ export function useSetCompanyReview() {
 	return useInvalidatingMutation(
 		({ id, state }: { id: string; state: ReviewState }) =>
 			setCompanyReview(id, state),
-		[keys.companies.all, keys.companies.tracked],
+		[keys.companies.all, keys.companies.tracked, keys.companies.new],
 	);
 }
