@@ -42,6 +42,15 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 			jobs: []dto.Job{{Title: "Eng", URL: ashbyURL, Source: "ashby"}},
 		},
 		{
+			name: "apply url on another host publishes its board",
+			jobs: []dto.Job{{Title: "Eng", URL: "https://app.welcometothejungle.com/jobs/x", ApplyURL: ashbyURL, Source: "wttj"}},
+			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}},
+		},
+		{
+			name: "unresolved apply url publishes none",
+			jobs: []dto.Job{{Title: "Eng", URL: "https://app.welcometothejungle.com/jobs/x", ApplyURL: "https://x.wd1.myworkdayjobs.com/j/1", Source: "wttj"}},
+		},
+		{
 			name: "unresolved host publishes none",
 			jobs: []dto.Job{{Title: "Eng", URL: "https://careers.example.com/1", Source: "linkedin"}},
 		},
