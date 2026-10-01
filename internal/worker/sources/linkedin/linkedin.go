@@ -23,6 +23,7 @@ import (
 const (
 	baseURL   = "https://www.linkedin.com"
 	searchURL = baseURL + "/jobs-guest/jobs/api/seeMoreJobPostings/search"
+	detailURL = baseURL + "/jobs-guest/jobs/api/jobPosting/"
 
 	// maxStart bounds pagination — seeMoreJobPostings never returns a total result
 	// count, so an empty page is the only end-of-results signal LinkedIn gives us.
@@ -37,7 +38,7 @@ const (
 	selCardCompany  = `h4.base-search-card__subtitle a`
 	selCardLocation = `span.job-search-card__location`
 
-	selDetailTitle        = `h1.top-card-layout__title.topcard__title`
+	selDetailTitle        = `.top-card-layout__title.topcard__title`
 	selDetailCompany      = `a.topcard__org-name-link`
 	selDetailFlavorRow    = `.topcard__flavor-row`
 	selDetailFlavorBullet = `.topcard__flavor--bullet`
@@ -115,7 +116,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.Get(ctx, url)
+	body, err := s.Get(ctx, fragmentURL(url))
 	if err != nil {
 		return dto.Job{}, err
 	}
@@ -131,6 +132,12 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 		job.UpdatedAt = time.Now().UTC()
 	}
 	return job, nil
+}
+
+// fragmentURL maps a stored /jobs/view/{id} URL to the much smaller guest fragment.
+func fragmentURL(jobURL string) string {
+	id := jobURL[strings.LastIndex(jobURL, "/")+1:]
+	return detailURL + id
 }
 
 func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) {
