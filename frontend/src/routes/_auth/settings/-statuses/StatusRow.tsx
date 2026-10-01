@@ -47,7 +47,7 @@ export function StatusRow(props: {
 							onClick={() => props.onDelete()}
 							variant="ghost"
 							size="sm"
-							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle"
+							class="h-auto px-2 py-1 text-xs text-destructive-strong hover:bg-destructive-subtle hover:text-destructive-strong"
 						>
 							Delete
 						</Button>
@@ -68,7 +68,7 @@ export function StatusRow(props: {
 					disabled={props.pending}
 					variant="ghost"
 					size="sm"
-					class="h-auto px-2 py-1 text-xs text-primary"
+					class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"
 				>
 					Save
 				</Button>

@@ -29,7 +29,7 @@ export function AddStatusForm(props: {
 				disabled={props.pending || !props.name.trim()}
 				variant="ghost"
 				size="sm"
-				class="h-auto px-2 py-1 text-xs text-primary"
+				class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"
 			>
 				Add
 			</Button>

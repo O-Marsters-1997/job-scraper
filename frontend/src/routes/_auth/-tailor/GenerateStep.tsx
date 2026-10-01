@@ -42,7 +42,7 @@ export function GenerateStep(props: {
 	return (
 		<div class="space-y-4">
 			<GoogleWriteConsent returnTo={`/jobs/${props.jobId()}/tailor`} />
-			<Card class="p-5">
+			<Card class="block p-5">
 				<Show
 					when={draftId()}
 					fallback={

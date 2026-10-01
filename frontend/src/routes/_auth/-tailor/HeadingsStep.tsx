@@ -42,7 +42,7 @@ export function HeadingsStep(props: {
 	return (
 		<QueryBoundary query={headings}>
 			{(data) => (
-				<Card class="p-5">
+				<Card class="block p-5">
 					<p class="mb-4 text-sm text-muted">
 						Match each role heading in this CV to a Position. Choose None to
 						leave a section untouched.

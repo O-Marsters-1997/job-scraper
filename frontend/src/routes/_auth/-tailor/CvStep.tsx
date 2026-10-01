@@ -15,7 +15,7 @@ export function CvStep(props: { onPick: (ref: CVRef) => void }) {
 				<Show
 					when={visible(cvs()).length > 0}
 					fallback={
-						<Card class="p-5">
+						<Card class="block p-5">
 							<p class="text-sm text-muted">
 								No CVs tracked yet.{" "}
 								<Link to="/cv-templates" class="text-accent-text underline">

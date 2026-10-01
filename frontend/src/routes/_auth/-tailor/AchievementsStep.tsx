@@ -29,7 +29,7 @@ export function AchievementsStep(props: {
 		<Show
 			when={!(suggestions.error instanceof MissingAiKeyError)}
 			fallback={
-				<Card class="p-5">
+				<Card class="block p-5">
 					<p class="text-sm text-foreground">
 						Ranking Achievements against this job needs an OpenRouter key.{" "}
 						<Link to="/settings/ai" class="text-accent-text underline">
@@ -56,7 +56,7 @@ export function AchievementsStep(props: {
 							<Show
 								when={grouped().length > 0}
 								fallback={
-									<Card class="p-5">
+									<Card class="block p-5">
 										<p class="text-sm text-muted">
 											Your Experience Bank has no Achievements yet.{" "}
 											<Link to="/experience" class="text-accent-text underline">
@@ -69,7 +69,7 @@ export function AchievementsStep(props: {
 							>
 								<For each={grouped()}>
 									{(g) => (
-										<Card class="p-5">
+										<Card class="block p-5">
 											<h2 class="mb-3 text-sm font-semibold text-foreground">
 												{g.position.title}, {g.position.employer}
 											</h2>
