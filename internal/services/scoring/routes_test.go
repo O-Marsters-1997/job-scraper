@@ -85,7 +85,7 @@ func TestFeedbackRoutes(t *testing.T) {
 	t.Setenv("SCORING_FEEDBACK", "true")
 	r := newTestRouter(t)
 
-	handlerstest.RequiresAuth(t, r, "POST /scoring-feedback/overall", "GET /scoring-feedback")
+	handlerstest.RequiresAuth(t, r, "POST /scoring-feedback/overall", "GET /scoring-feedback", "DELETE /scoring-feedback/{id}")
 	handlerstest.RejectsMalformedBody(t, r, "POST /scoring-feedback/overall")
 
 	blank := handlerstest.Serve(t, r, "POST /scoring-feedback/overall", `{"reason":" "}`)
@@ -98,8 +98,25 @@ func TestFeedbackRoutes(t *testing.T) {
 		t.Errorf("POST /scoring-feedback/overall = %+v, want an overall entry with the reason", created)
 	}
 
-	listed := handlerstest.Do[[]dto.ScoreFeedback](t, r, http.StatusOK, "GET /scoring-feedback", "")
-	if len(listed) != 1 || listed[0].ID != created.ID {
-		t.Errorf("GET /scoring-feedback = %+v, want just the created entry", listed)
+	listed := handlerstest.Do[dto.ScoreFeedbackPage](t, r, http.StatusOK, "GET /scoring-feedback", "")
+	if len(listed.Entries) != 1 || listed.Entries[0].ID != created.ID || listed.Total != 1 {
+		t.Errorf("GET /scoring-feedback = %+v, want just the created entry, total 1", listed)
+	}
+
+	for _, target := range []string{"?kind=nonsense", "?page=0", "?page=x"} {
+		if rec := handlerstest.Serve(t, r, "GET /scoring-feedback"+target, ""); rec.Code != http.StatusBadRequest {
+			t.Errorf("GET /scoring-feedback%s status = %d, want 400", target, rec.Code)
+		}
+	}
+	jobs := handlerstest.Do[dto.ScoreFeedbackPage](t, r, http.StatusOK, "GET /scoring-feedback?kind=job", "")
+	if len(jobs.Entries) != 0 || jobs.Total != 0 {
+		t.Errorf("GET /scoring-feedback?kind=job = %+v, want empty", jobs)
+	}
+
+	if rec := handlerstest.Serve(t, r, "DELETE /scoring-feedback/nope", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("DELETE unknown id status = %d, want 404", rec.Code)
+	}
+	if rec := handlerstest.Serve(t, r, "DELETE /scoring-feedback/"+created.ID, ""); rec.Code != http.StatusNoContent {
+		t.Errorf("DELETE own entry status = %d, want 204", rec.Code)
 	}
 }

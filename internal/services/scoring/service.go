@@ -56,7 +56,9 @@ type Store interface {
 	RewordScoringOption(ctx context.Context, id, question string) error
 	RetireScoringOption(ctx context.Context, id string) error
 	InsertScoreFeedback(ctx context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error)
-	ListScoreFeedback(ctx context.Context, userID string, limit int) ([]dto.ScoreFeedback, error)
+	ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error)
+	CountScoreFeedback(ctx context.Context, userID, kind string) (int, error)
+	DeleteScoreFeedback(ctx context.Context, userID, id string) error
 	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 }
 

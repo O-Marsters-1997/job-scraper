@@ -5,15 +5,40 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import {
 	useAppendOverallFeedback,
+	useDeleteScoreFeedback,
 	useScoreFeedback,
 } from "@/hooks/useScoreFeedback";
+import {
+	SCORE_FEEDBACK_PAGE_SIZE,
+	type ScoreFeedbackKind,
+} from "@/types/scoreFeedback";
+
+const KIND_CHIPS: { label: string; kind?: ScoreFeedbackKind }[] = [
+	{ label: "All" },
+	{ label: "Jobs", kind: "job" },
+	{ label: "Collections", kind: "collection" },
+	{ label: "Overall", kind: "overall" },
+];
 
 export default function ScoreFeedbackPanel() {
 	const [open, setOpen] = createSignal(false);
 	const [composing, setComposing] = createSignal(false);
 	const [reason, setReason] = createSignal("");
-	const feedback = useScoreFeedback();
+	const [kind, setKind] = createSignal<ScoreFeedbackKind | undefined>();
+	const [page, setPage] = createSignal(1);
+	const feedback = useScoreFeedback(kind, page);
 	const append = useAppendOverallFeedback();
+	const remove = useDeleteScoreFeedback();
+	const lastPage = () =>
+		Math.max(
+			1,
+			Math.ceil((feedback.data?.total ?? 0) / SCORE_FEEDBACK_PAGE_SIZE),
+		);
+
+	const pickKind = (next: ScoreFeedbackKind | undefined) => {
+		setKind(next);
+		setPage(1);
+	};
 
 	const form = useFormSubmit(async () => {
 		await append.mutateAsync({ reason: reason() });
@@ -76,9 +101,24 @@ export default function ScoreFeedbackPanel() {
 						</form>
 					</Show>
 
+					<div class="flex gap-1">
+						<For each={KIND_CHIPS}>
+							{(chip) => (
+								<Button
+									variant={kind() === chip.kind ? "default" : "outline"}
+									size="sm"
+									aria-pressed={kind() === chip.kind}
+									onClick={() => pickKind(chip.kind)}
+								>
+									{chip.label}
+								</Button>
+							)}
+						</For>
+					</div>
+
 					<ul class="flex flex-col gap-2 overflow-y-auto">
 						<For
-							each={feedback.data}
+							each={feedback.data?.entries}
 							fallback={<li class="text-sm text-faint">No feedback yet.</li>}
 						>
 							{(entry) => (
@@ -89,10 +129,45 @@ export default function ScoreFeedbackPanel() {
 									<p class="text-sm whitespace-pre-wrap text-foreground">
 										{entry.reason}
 									</p>
+									<Button
+										variant="ghost"
+										size="sm"
+										class="self-end"
+										disabled={remove.isPending}
+										onClick={() =>
+											remove.mutate(entry.id, {
+												onSuccess: () => setPage(Math.min(page(), lastPage())),
+											})
+										}
+									>
+										Delete
+									</Button>
 								</li>
 							)}
 						</For>
 					</ul>
+
+					<div class="flex items-center justify-between text-xs text-faint">
+						<Button
+							variant="ghost"
+							size="sm"
+							disabled={page() <= 1}
+							onClick={() => setPage(page() - 1)}
+						>
+							Previous
+						</Button>
+						<span>
+							Page {page()} of {lastPage()}
+						</span>
+						<Button
+							variant="ghost"
+							size="sm"
+							disabled={page() >= lastPage()}
+							onClick={() => setPage(page() + 1)}
+						>
+							Next
+						</Button>
+					</div>
 				</aside>
 			</Show>
 		</>

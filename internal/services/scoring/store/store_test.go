@@ -743,7 +743,7 @@ func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
 		t.Fatalf("InsertScoreFeedback() err = %v", err)
 	}
 
-	got, err := st.ListScoreFeedback(t.Context(), userID, 10)
+	got, err := st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("ListScoreFeedback() = %+v, %v, want one entry", got, err)
 	}

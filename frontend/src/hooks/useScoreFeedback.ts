@@ -1,18 +1,26 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { createQuery, keepPreviousData } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	appendOverallFeedback,
+	deleteScoreFeedback,
 	fetchScoreFeedback,
 } from "../api/scoreFeedback";
+import type { ScoreFeedbackKind } from "../types/scoreFeedback";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-const scoreFeedbackQueryOptions = queryOptions({
-	queryKey: keys.scoreFeedback,
-	queryFn: fetchScoreFeedback,
-});
+export function useScoreFeedback(
+	kind: () => ScoreFeedbackKind | undefined,
+	page: () => number,
+) {
+	return createQuery(() => ({
+		queryKey: [...keys.scoreFeedback, kind() ?? "all", page()],
+		queryFn: () => fetchScoreFeedback(kind(), page()),
+		placeholderData: keepPreviousData,
+	}));
+}
 
-export function useScoreFeedback() {
-	return createQuery(() => scoreFeedbackQueryOptions);
+export function useDeleteScoreFeedback() {
+	return useInvalidatingMutation(deleteScoreFeedback, [keys.scoreFeedback]);
 }
 
 export function useAppendOverallFeedback() {

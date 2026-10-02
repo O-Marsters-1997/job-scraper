@@ -601,13 +601,14 @@ func (s *Store) InsertScoreFeedback(ctx context.Context, userID string, f dto.Sc
 	return out, nil
 }
 
-// ListScoreFeedback returns userID's newest limit entries, newest first.
-func (s *Store) ListScoreFeedback(ctx context.Context, userID string, limit int) ([]dto.ScoreFeedback, error) {
+// ListScoreFeedback returns userID's entries of kind (all kinds when empty),
+// newest first, skipping offset and returning at most limit.
+func (s *Store) ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListScoreFeedback(ctx, sqlc.ListScoreFeedbackParams{UserID: uid, RowLimit: int32(limit)})
+	rows, err := s.queries.ListScoreFeedback(ctx, sqlc.ListScoreFeedbackParams{UserID: uid, Kind: kind, RowLimit: int32(limit), RowOffset: int32(offset)})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoreFeedback: %w", err)
 	}
@@ -618,6 +619,40 @@ func (s *Store) ListScoreFeedback(ctx context.Context, userID string, limit int)
 		}
 	}
 	return out, nil
+}
+
+// CountScoreFeedback counts userID's entries of kind (all kinds when empty).
+func (s *Store) CountScoreFeedback(ctx context.Context, userID, kind string) (int, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.queries.CountScoreFeedback(ctx, sqlc.CountScoreFeedbackParams{UserID: uid, Kind: kind})
+	if err != nil {
+		return 0, fmt.Errorf("store.CountScoreFeedback: %w", err)
+	}
+	return int(n), nil
+}
+
+// DeleteScoreFeedback removes one of userID's entries; data.ErrNotFound when
+// id is unknown or belongs to someone else.
+func (s *Store) DeleteScoreFeedback(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	fid, err := data.UUID(id)
+	if err != nil {
+		return data.ErrNotFound
+	}
+	n, err := s.queries.DeleteScoreFeedback(ctx, sqlc.DeleteScoreFeedbackParams{ID: fid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteScoreFeedback: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
 }
 
 // ClearScoreFeedback hard-deletes userID's whole log and returns the count.

@@ -987,7 +987,7 @@ func TestAppendOverallFeedback(t *testing.T) {
 		if !apperr.IsKind(err, apperr.KindInvalid) {
 			t.Fatalf("AppendOverallFeedback(blank) err = %v, want Invalid", err)
 		}
-		if got, _ := svc.ListFeedback(t.Context(), userID); len(got) != 0 {
+		if got, _ := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
 			t.Errorf("ListFeedback() = %+v, want nothing written", got)
 		}
 	})
