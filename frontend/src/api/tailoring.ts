@@ -11,6 +11,8 @@ import {
 	draftLayoutSchema,
 	draftRefSchema,
 	draftSchema,
+	type Explanation,
+	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
 	type SlotEdit,
@@ -78,6 +80,21 @@ export async function fetchSuggestions(
 			apiFetch(
 				`/tailoring/jobs/${jobId}/suggestions?${new URLSearchParams({ docId, tabId })}`,
 				suggestionSchema.array(),
+			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
+	);
+}
+
+export async function explainAchievement(
+	jobId: string,
+	achievementId: string,
+): Promise<Explanation> {
+	return mocked(
+		(db) => db.explainAchievement(achievementId),
+		() =>
+			apiFetch(
+				`/tailoring/jobs/${jobId}/achievements/${encodeURIComponent(achievementId)}/explain`,
+				explanationSchema,
+				jsonInit("POST", {}),
 			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
 	);
 }

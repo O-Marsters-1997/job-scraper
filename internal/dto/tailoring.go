@@ -53,3 +53,14 @@ type Suggestion struct {
 	State         SuggestionState `json:"state"`
 	Preselected   bool            `json:"preselected"`
 }
+
+// ExplainInput names the bullet to explain against a Job.
+type ExplainInput struct {
+	JobID         string `json:"-" path:"jobId"`
+	AchievementID string `json:"-" path:"achievementId"`
+}
+
+// Explanation is a model's after-the-fact guess at why a bullet scored low.
+type Explanation struct {
+	Text string `json:"text"`
+}

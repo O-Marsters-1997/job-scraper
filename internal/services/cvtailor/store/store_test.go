@@ -117,3 +117,16 @@ func TestImportPositionsIsAllOrNothing(t *testing.T) {
 		t.Fatalf("positions rows after failed import = %d, want 0", n)
 	}
 }
+
+func TestJobDescription(t *testing.T) {
+	st, pool, _ := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
+
+	got, err := st.JobDescription(t.Context(), jobID)
+	if err != nil || got != "Build things in Go" {
+		t.Errorf("JobDescription() = %q, %v, want the Job's description", got, err)
+	}
+	if _, err := st.JobDescription(t.Context(), missingID); !errors.Is(err, store.ErrJobNotFound) {
+		t.Errorf("JobDescription(unknown) err = %v, want ErrJobNotFound", err)
+	}
+}

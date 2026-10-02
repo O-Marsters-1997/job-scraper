@@ -16,6 +16,8 @@ export const suggestionSchema = z.object({
 	preselected: z.boolean(),
 });
 
+export const explanationSchema = z.object({ text: z.string() });
+
 export const headingMappingSchema = z.object({
 	headingText: z.string(),
 	positionId: z.string().nullable(),
@@ -157,6 +159,7 @@ export type DraftInput = {
 };
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
+export type Explanation = z.infer<typeof explanationSchema>;
 export type HeadingMapping = z.infer<typeof headingMappingSchema>;
 export type LayoutBorder = z.infer<typeof layoutBorderSchema>;
 export type LayoutRun = z.infer<typeof layoutRunSchema>;

@@ -237,6 +237,17 @@ func (q *Queries) GetDraft(ctx context.Context, arg GetDraftParams) (TailoredCv,
 	return i, err
 }
 
+const getJobDescription = `-- name: GetJobDescription :one
+SELECT description FROM jobs WHERE id = $1
+`
+
+func (q *Queries) GetJobDescription(ctx context.Context, id pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getJobDescription, id)
+	var description string
+	err := row.Scan(&description)
+	return description, err
+}
+
 const insertDraft = `-- name: InsertDraft :one
 INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids)
 SELECT $1::uuid, j.id, $2::text, $3::text, $4::uuid[]

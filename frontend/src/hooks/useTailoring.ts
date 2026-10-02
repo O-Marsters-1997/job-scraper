@@ -4,6 +4,7 @@ import { keys } from "../api/keys";
 import {
 	createDraft,
 	discardDraft,
+	explainAchievement,
 	fetchDraft,
 	fetchDraftLayout,
 	fetchHeadings,
@@ -53,6 +54,13 @@ export function useSuggestions(
 			staleTime: 5 * 60 * 1000,
 		};
 	});
+}
+
+export function useExplainAchievement(jobId: Accessor<string>) {
+	return useInvalidatingMutation(
+		(achievementId: string) => explainAchievement(jobId(), achievementId),
+		[],
+	);
 }
 
 export function useCreateDraft() {

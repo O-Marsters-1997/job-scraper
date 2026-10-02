@@ -36,6 +36,19 @@ type RecordingEditor struct {
 	deltas        []string
 	suggestErr    error
 	SuggestInputs []cvedit.SuggestInput
+
+	explanation   string
+	ExplainInputs []cvedit.ExplainInput
+}
+
+// Explaining is an Editor whose explanations reply with text.
+func Explaining(text string) *RecordingEditor {
+	return &RecordingEditor{explanation: text}
+}
+
+func (e *RecordingEditor) Explain(_ context.Context, _ string, in cvedit.ExplainInput) (cvedit.ExplainResult, error) {
+	e.ExplainInputs = append(e.ExplainInputs, in)
+	return cvedit.ExplainResult{Text: e.explanation, Cost: 0.001}, nil
 }
 
 // Suggesting is an Editor whose suggestions stream the given deltas.

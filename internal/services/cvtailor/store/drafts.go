@@ -296,3 +296,18 @@ func (s *Store) SetDraftEdits(ctx context.Context, userID, id string, editSet js
 	}
 	return nil
 }
+
+func (s *Store) JobDescription(ctx context.Context, jobID string) (string, error) {
+	id, err := parseID(jobID, ErrJobNotFound)
+	if err != nil {
+		return "", err
+	}
+	desc, err := s.queries.GetJobDescription(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrJobNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("store.JobDescription: %w", err)
+	}
+	return desc, nil
+}
