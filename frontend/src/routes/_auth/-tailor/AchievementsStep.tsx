@@ -195,7 +195,7 @@ export function AchievementsStep(props: {
 																</Show>
 															</div>
 															<span class="font-mono text-xs tabular-nums text-faint">
-																{Math.round(s.score * 100)}
+																{Math.round((s.score + 1) * 50)}%
 															</span>
 															<button
 																type="button"
