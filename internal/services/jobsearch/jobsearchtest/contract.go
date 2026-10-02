@@ -618,6 +618,56 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("disabling a source records the reason until the target is re-enabled", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		running, err := st.CreateSourceTargetWithRun(ctx, userID, "indeed", "go", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTargetWithRun(...) = %v", err)
+		}
+		other, err := st.CreateSourceTarget(ctx, userID, "linkedin", "go", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+
+		n, err := st.DisableSourceTargets(ctx, "indeed", "indeed key rejected")
+		if err != nil || n != 1 {
+			t.Fatalf("DisableSourceTargets(...) = %d, %v, want 1", n, err)
+		}
+		got, err := st.GetSourceTarget(ctx, running.ID)
+		if err != nil || got.Enabled || got.DisabledReason != "indeed key rejected" || got.RunStatus != "failed" || got.LastRunError != "indeed key rejected" {
+			t.Fatalf("GetSourceTarget(...) = %+v, %v, want disabled, failed with the reason", got, err)
+		}
+		if got, _ := st.GetSourceTarget(ctx, other.ID); !got.Enabled || got.DisabledReason != "" {
+			t.Fatalf("other source target = %+v, want untouched", got)
+		}
+		if n, err := st.DisableSourceTargets(ctx, "indeed", "again"); err != nil || n != 0 {
+			t.Fatalf("second DisableSourceTargets(...) = %d, %v, want 0", n, err)
+		}
+
+		enabled := true
+		got, err = st.UpdateSourceTarget(ctx, running.ID, userID, &enabled, nil)
+		if err != nil || !got.Enabled || got.DisabledReason != "" {
+			t.Fatalf("UpdateSourceTarget(enable) = %+v, %v, want enabled with no reason", got, err)
+		}
+	})
+
+	t.Run("starting a run clears the disabled reason", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		target, err := st.CreateSourceTarget(ctx, userID, "indeed", "go", true, map[string]string{})
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+		if _, err := st.DisableSourceTargets(ctx, "indeed", "indeed key rejected"); err != nil {
+			t.Fatalf("DisableSourceTargets(...) = %v", err)
+		}
+		started, err := st.StartSourceTargetRun(ctx, target.ID)
+		if err != nil || !started.Enabled || started.DisabledReason != "" {
+			t.Fatalf("StartSourceTargetRun(...) = %+v, %v, want enabled with no reason", started, err)
+		}
+	})
+
 	t.Run("update then delete a source target", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

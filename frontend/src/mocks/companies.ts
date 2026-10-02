@@ -275,6 +275,7 @@ function companyToSourceTarget(company: Company): SourceTarget {
 		RunStatus: "idle",
 		LastRunAt: company.LastCheckedAt,
 		LastRunError: "",
+		DisabledReason: "",
 		URL: "",
 	};
 }

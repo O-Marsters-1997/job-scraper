@@ -18,5 +18,6 @@ type SourceTarget struct {
 	LastRunAt            *time.Time
 	LastSucceededAt      *time.Time
 	LastRunError         string
+	DisabledReason       string
 	UpdatedAt            time.Time
 }

@@ -160,6 +160,7 @@ const discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "succeeded",
 		LastRunAt: faker.date.recent({ days: 1 }).toISOString(),
 		LastRunError: "",
+		DisabledReason: "",
 		URL: "",
 	},
 	{
@@ -172,6 +173,7 @@ const discoverySourceTargets: SourceTarget[] = [
 		RunStatus: "idle",
 		LastRunAt: null,
 		LastRunError: "",
+		DisabledReason: "",
 		URL: "",
 	},
 ];

@@ -352,6 +352,7 @@ type SourceTarget struct {
 	LastRunAt            pgtype.Timestamptz
 	LastSucceededAt      pgtype.Timestamptz
 	LastRunError         string
+	DisabledReason       string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz
 }

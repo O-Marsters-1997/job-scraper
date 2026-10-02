@@ -698,6 +698,7 @@ func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 		RunStatus:            row.RunStatus,
 		LastRunError:         row.LastRunError,
+		DisabledReason:       row.DisabledReason,
 		UpdatedAt:            row.UpdatedAt.Time,
 	}
 	if row.RunID.Valid {
@@ -841,6 +842,14 @@ func (s *Store) TransitionSourceTargetRun(ctx context.Context, id, runID, status
 		return dto.SourceTarget{}, data.QueryErr("TransitionSourceTargetRun", err)
 	}
 	return toSourceTargetDTO(row), nil
+}
+
+func (s *Store) DisableSourceTargets(ctx context.Context, source, reason string) (int64, error) {
+	n, err := s.queries.DisableSourceTargets(ctx, sqlc.DisableSourceTargetsParams{Source: source, DisabledReason: reason})
+	if err != nil {
+		return 0, data.QueryErr("DisableSourceTargets", err)
+	}
+	return n, nil
 }
 
 func (s *Store) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {

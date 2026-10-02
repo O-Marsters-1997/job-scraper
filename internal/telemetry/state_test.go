@@ -37,6 +37,7 @@ func TestStateCollector(t *testing.T) {
 				BoardsOverdue:          4,
 				BoardsFailing:          2,
 				SourceTargetsFailed:    5,
+				DisabledSourceTargets:  map[string]int64{"indeed": 2},
 				HarvestAge:             map[string]time.Duration{"ashby": time.Hour, "lever": 30 * time.Second},
 			}},
 			want: `
@@ -59,6 +60,9 @@ func TestStateCollector(t *testing.T) {
 				# HELP jobscraper_outbox_pending Scoring effects with status pending or running.
 				# TYPE jobscraper_outbox_pending gauge
 				jobscraper_outbox_pending 3
+				# HELP jobscraper_source_targets_disabled Source Targets that were disabled with a reason, per source.
+				# TYPE jobscraper_source_targets_disabled gauge
+				jobscraper_source_targets_disabled{source="indeed"} 2
 				# HELP jobscraper_source_targets_failed Source Targets whose last run failed.
 				# TYPE jobscraper_source_targets_failed gauge
 				jobscraper_source_targets_failed 5

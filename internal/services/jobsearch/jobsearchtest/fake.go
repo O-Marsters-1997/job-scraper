@@ -721,6 +721,9 @@ func (f *FakeStore) UpdateSourceTarget(_ context.Context, id, userID string, ena
 	}
 	if enabled != nil {
 		t.Enabled = *enabled
+		if *enabled {
+			t.DisabledReason = ""
+		}
 	}
 	if checkIntervalMinutes != nil {
 		t.CheckIntervalMinutes = *checkIntervalMinutes
@@ -762,7 +765,7 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.Sour
 		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	t.RunID = f.nextID("run")
-	t.RunStatus, t.LastRunError, t.Enabled = "queued", "", true
+	t.RunStatus, t.LastRunError, t.Enabled, t.DisabledReason = "queued", "", true, ""
 	f.sourceTargets[id] = t
 	return t, nil
 }
@@ -788,6 +791,24 @@ func (f *FakeStore) TransitionSourceTargetRun(_ context.Context, id, runID, stat
 	}
 	f.sourceTargets[id] = t
 	return t, nil
+}
+
+func (f *FakeStore) DisableSourceTargets(_ context.Context, source, reason string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var n int64
+	for id, t := range f.sourceTargets {
+		if t.Source != source || !t.Enabled {
+			continue
+		}
+		t.Enabled, t.DisabledReason = false, reason
+		if t.RunStatus == "queued" || t.RunStatus == "running" {
+			t.RunStatus, t.LastRunError = "failed", reason
+		}
+		f.sourceTargets[id] = t
+		n++
+	}
+	return n, nil
 }
 
 func (f *FakeStore) ListRecoverableSourceTargets(context.Context) ([]dto.SourceTarget, error) {

@@ -15,3 +15,6 @@ SELECT
 
 -- name: HarvestRuns :many
 SELECT harvester, last_succeeded_at FROM harvest_runs;
+
+-- name: DisabledSourceTargets :many
+SELECT source, count(*) AS disabled FROM source_targets WHERE disabled_reason <> '' GROUP BY source;

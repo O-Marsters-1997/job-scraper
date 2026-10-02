@@ -119,6 +119,8 @@ const RUN_STATUS: Record<
 
 export function RunStatus(props: { target: SourceTarget }) {
 	const s = () => RUN_STATUS[props.target.RunStatus];
+	const disabledReason = () =>
+		props.target.Enabled ? "" : props.target.DisabledReason;
 	const showTime = () =>
 		props.target.LastRunAt &&
 		(props.target.RunStatus === "succeeded" ||
@@ -130,6 +132,9 @@ export function RunStatus(props: { target: SourceTarget }) {
 		>
 			<span class={cn("size-1.5 shrink-0 rounded-full", s().dot)} />
 			{s().label}
+			<Show when={disabledReason()}>
+				<span class="text-destructive">· {disabledReason()}</span>
+			</Show>
 			<Show when={showTime()}>
 				<span class="text-faint">· {relativeTime(props.target.LastRunAt)}</span>
 			</Show>

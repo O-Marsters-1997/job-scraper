@@ -573,6 +573,21 @@ func TestOpsState(t *testing.T) {
 		}
 	})
 
+	t.Run("counts disabled source targets per source", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		for i, row := range []struct{ source, reason string }{{"indeed", "indeed key rejected"}, {"indeed", "indeed key rejected"}, {"indeed", ""}, {"linkedin", ""}} {
+			exec(t, pool,
+				`INSERT INTO source_targets (user_id, source, value, disabled_reason) VALUES ($1, $2, $3, $4)`,
+				userID, row.source, fmt.Sprintf("q-%d", i), row.reason)
+		}
+
+		want := map[string]int64{"indeed": 2}
+		if diff := cmp.Diff(want, opsState(t, st).DisabledSourceTargets); diff != "" {
+			t.Errorf("OpsState().DisabledSourceTargets mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reports harvest age per harvester", func(t *testing.T) {
 		st, pool := newStore(t)
 		now := time.Now()

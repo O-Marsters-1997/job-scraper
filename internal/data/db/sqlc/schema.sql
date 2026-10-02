@@ -273,6 +273,7 @@ CREATE TABLE IF NOT EXISTS source_targets (
     last_run_at            TIMESTAMPTZ,
     last_succeeded_at      TIMESTAMPTZ,
     last_run_error         TEXT        NOT NULL DEFAULT '',
+    disabled_reason        TEXT        NOT NULL DEFAULT '',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (user_id, source, value, filters)

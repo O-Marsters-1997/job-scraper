@@ -14,17 +14,25 @@ RETURNING *;
 -- name: UpdateSourceTarget :one
 UPDATE source_targets SET
     enabled                = COALESCE(sqlc.narg('enabled'), enabled),
+    disabled_reason        = CASE WHEN sqlc.narg('enabled')::boolean THEN '' ELSE disabled_reason END,
     check_interval_minutes = COALESCE(sqlc.narg('check_interval_minutes'), check_interval_minutes),
     updated_at             = NOW()
 WHERE id = $1 AND user_id = $2
 RETURNING *;
+
+-- name: DisableSourceTargets :execrows
+UPDATE source_targets SET enabled = FALSE, disabled_reason = $2,
+    run_status = CASE WHEN run_status IN ('queued', 'running') THEN 'failed' ELSE run_status END,
+    last_run_error = CASE WHEN run_status IN ('queued', 'running') THEN $2 ELSE last_run_error END,
+    updated_at = NOW()
+WHERE source = $1 AND enabled = TRUE;
 
 -- name: DeleteSourceTarget :exec
 DELETE FROM source_targets WHERE id = $1 AND user_id = $2;
 
 -- name: StartSourceTargetRun :one
 UPDATE source_targets SET run_id = gen_random_uuid(), run_status = 'queued',
-    enabled = TRUE, last_run_error = '', updated_at = NOW()
+    enabled = TRUE, disabled_reason = '', last_run_error = '', updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 

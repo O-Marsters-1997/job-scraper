@@ -76,6 +76,10 @@ type BoardPoller interface {
 // ErrGone is returned by Get and PostEmptyJSON for a 404 or 410 response.
 var ErrGone = errors.New("gone")
 
+// ErrSourceKeyRejected is returned by a keyed Source when the provider refuses
+// its API key, so every Target of that Source will fail until the key changes.
+var ErrSourceKeyRejected = errors.New("source key rejected")
+
 type PaginatedBase struct {
 	cfg     Config
 	client  *http.Client
