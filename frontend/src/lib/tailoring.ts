@@ -24,11 +24,46 @@ export function isSettled(status: DraftStatus): boolean {
 	return status === "ready" || status === "failed";
 }
 
+export function orderSuggestions(
+	suggestions: Suggestion[],
+	order: string[],
+): Suggestion[] {
+	const rank = new Map(order.map((id, i) => [id, i]));
+	return [...suggestions].sort(
+		(a, b) =>
+			(rank.get(a.achievementId) ?? order.length) -
+			(rank.get(b.achievementId) ?? order.length),
+	);
+}
+
+export function moveSuggestion(
+	ordered: Suggestion[],
+	id: string,
+	to: number,
+): string[] {
+	const moved = ordered.find((s) => s.achievementId === id);
+	const ids = ordered.map((s) => s.achievementId);
+	if (!moved) return ids;
+	const slots = ordered.flatMap((s, i) =>
+		s.positionId === moved.positionId ? [i] : [],
+	);
+	const group = slots.flatMap((i) => ids[i] ?? []);
+	const from = group.indexOf(id);
+	if (to < 0 || to >= group.length) return ids;
+	group.splice(to, 0, ...group.splice(from, 1));
+	for (const [n, slot] of slots.entries()) {
+		const next = group[n];
+		if (next !== undefined) ids[slot] = next;
+	}
+	return ids;
+}
+
 export function selectedAchievementIds(
 	suggestions: Suggestion[],
 	overrides: Record<string, boolean>,
+	order: string[],
 ): string[] {
-	return suggestions
+	return orderSuggestions(suggestions, order)
 		.filter((s) => overrides[s.achievementId] ?? s.preselected)
 		.map((s) => s.achievementId);
 }

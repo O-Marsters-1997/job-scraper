@@ -4,6 +4,8 @@ import {
 	allConfirmed,
 	isSettled,
 	keptDraft,
+	moveSuggestion,
+	orderSuggestions,
 	reviewFindings,
 	selectedAchievementIds,
 	skillGaps,
@@ -50,10 +52,35 @@ const suggestion = (id: string, preselected: boolean): Suggestion => ({
 const picked = selectedAchievementIds(
 	[suggestion("a", true), suggestion("b", true), suggestion("c", false)],
 	{ b: false, c: true },
+	[],
 );
 assert.ok(
 	picked.join() === "a,c",
 	"an override beats the preselection, either way",
+);
+assert.ok(
+	selectedAchievementIds(
+		[suggestion("a", true), suggestion("b", true), suggestion("c", true)],
+		{},
+		["c", "a"],
+	).join() === "c,a,b",
+	"chosen order comes first and unordered suggestions keep their rank",
+);
+const ranked = [
+	suggestion("a", true),
+	{ ...suggestion("x", true), positionId: "p2" },
+	suggestion("b", true),
+	suggestion("c", true),
+];
+assert.ok(
+	moveSuggestion(ranked, "c", 0).join() === "c,x,a,b",
+	"a move reorders only its own position's slots",
+);
+assert.ok(
+	orderSuggestions(ranked, moveSuggestion(ranked, "b", 0))
+		.map((s) => s.achievementId)
+		.join() === "b,x,a,c",
+	"the moved order round-trips through orderSuggestions",
 );
 assert.ok(
 	isSettled("ready") && isSettled("failed"),
