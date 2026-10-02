@@ -1075,3 +1075,35 @@ func TestAppendJobFeedback(t *testing.T) {
 		})
 	}
 }
+
+func TestListFeedback_Outdated(t *testing.T) {
+	const userID = "user-1"
+	st := newFakeStore()
+	st.SeedSearchConfig(picking(userID, "tech:go"))
+	svc := scoring.NewService(newDeps(t, st))
+	for _, reason := range []string{"before", "also before"} {
+		if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {
+			t.Fatalf("AppendOverallFeedback(%q) err = %v", reason, err)
+		}
+	}
+	st.SeedSearchConfig(picking(userID, "tech:cobol"))
+	if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "after"}); err != nil {
+		t.Fatalf("AppendOverallFeedback() err = %v", err)
+	}
+
+	hidden, err := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{})
+	if err != nil {
+		t.Fatalf("ListFeedback() err = %v", err)
+	}
+	if hidden.Total != 1 || hidden.CurrentCount != 1 || hidden.OutdatedCount != 2 || len(hidden.Entries) != 1 {
+		t.Errorf("ListFeedback() = %+v, want 1 current entry and 2 outdated counted", hidden)
+	}
+
+	shown, err := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{Outdated: "true"})
+	if err != nil {
+		t.Fatalf("ListFeedback(outdated) err = %v", err)
+	}
+	if shown.Total != 3 || len(shown.Entries) != 3 || !shown.Entries[1].PicksChanged || shown.Entries[0].PicksChanged {
+		t.Errorf("ListFeedback(outdated) = %+v, want all 3 entries, the two earlier ones tagged picks changed", shown)
+	}
+}

@@ -612,37 +612,42 @@ func (s *Store) InsertScoreFeedback(ctx context.Context, userID string, f dto.Sc
 	return out, nil
 }
 
-// ListScoreFeedback returns userID's entries of kind (all kinds when empty),
-// newest first, skipping offset and returning at most limit.
-func (s *Store) ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error) {
+// ListScoreFeedback returns userID's entries matching f, newest first,
+// skipping offset and returning at most limit. Each entry carries its drift
+// from the user's current Picks and f.Model.
+func (s *Store) ListScoreFeedback(ctx context.Context, userID string, f dto.ScoreFeedbackFilter, limit, offset int) ([]dto.ScoreFeedback, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListScoreFeedback(ctx, sqlc.ListScoreFeedbackParams{UserID: uid, Kind: kind, RowLimit: int32(limit), RowOffset: int32(offset)})
+	rows, err := s.queries.ListScoreFeedback(ctx, sqlc.ListScoreFeedbackParams{
+		UserID: uid, Kind: f.Kind, Model: f.Model, IncludeOutdated: f.IncludeOutdated,
+		RowLimit: int32(limit), RowOffset: int32(offset),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoreFeedback: %w", err)
 	}
 	out := make([]dto.ScoreFeedback, len(rows))
 	for i, row := range rows {
-		if out[i], err = toScoreFeedbackDTO(row); err != nil {
+		if out[i], err = toListedScoreFeedbackDTO(row); err != nil {
 			return nil, fmt.Errorf("store.ListScoreFeedback: %w", err)
 		}
 	}
 	return out, nil
 }
 
-// CountScoreFeedback counts userID's entries of kind (all kinds when empty).
-func (s *Store) CountScoreFeedback(ctx context.Context, userID, kind string) (int, error) {
+// CountScoreFeedback counts userID's current and outdated entries of f.Kind
+// (all kinds when empty) against f.Model.
+func (s *Store) CountScoreFeedback(ctx context.Context, userID string, f dto.ScoreFeedbackFilter) (current, outdated int, err error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	n, err := s.queries.CountScoreFeedback(ctx, sqlc.CountScoreFeedbackParams{UserID: uid, Kind: kind})
+	row, err := s.queries.CountScoreFeedback(ctx, sqlc.CountScoreFeedbackParams{UserID: uid, Kind: f.Kind, Model: f.Model})
 	if err != nil {
-		return 0, fmt.Errorf("store.CountScoreFeedback: %w", err)
+		return 0, 0, fmt.Errorf("store.CountScoreFeedback: %w", err)
 	}
-	return int(n), nil
+	return int(row.Current), int(row.Outdated), nil
 }
 
 // DeleteScoreFeedback removes one of userID's entries; data.ErrNotFound when

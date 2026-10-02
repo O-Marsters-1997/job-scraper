@@ -427,24 +427,38 @@ func (f *FakeStore) InsertScoreFeedback(_ context.Context, userID string, entry 
 	return entry, nil
 }
 
-func (f *FakeStore) matchingFeedback(userID, kind string) []dto.ScoreFeedback {
+func (f *FakeStore) matchingFeedback(userID string, filter dto.ScoreFeedbackFilter) []dto.ScoreFeedback {
+	currentPicks := f.search[userID].Preferences.Picks
 	entries := slices.Clone(f.feedback[userID])
 	slices.Reverse(entries)
-	return slices.DeleteFunc(entries, func(e dto.ScoreFeedback) bool { return kind != "" && e.Kind != kind })
+	for i := range entries {
+		entries[i].PicksChanged = !slices.Equal(entries[i].Picks, currentPicks)
+		entries[i].ModelChanged = entries[i].Model != filter.Model
+	}
+	return slices.DeleteFunc(entries, func(e dto.ScoreFeedback) bool { return filter.Kind != "" && e.Kind != filter.Kind })
 }
 
-func (f *FakeStore) ListScoreFeedback(_ context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error) {
+func (f *FakeStore) ListScoreFeedback(_ context.Context, userID string, filter dto.ScoreFeedbackFilter, limit, offset int) ([]dto.ScoreFeedback, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	entries := f.matchingFeedback(userID, kind)
+	entries := slices.DeleteFunc(f.matchingFeedback(userID, filter), func(e dto.ScoreFeedback) bool {
+		return !filter.IncludeOutdated && (e.PicksChanged || e.ModelChanged)
+	})
 	entries = entries[min(offset, len(entries)):]
 	return entries[:min(limit, len(entries))], nil
 }
 
-func (f *FakeStore) CountScoreFeedback(_ context.Context, userID, kind string) (int, error) {
+func (f *FakeStore) CountScoreFeedback(_ context.Context, userID string, filter dto.ScoreFeedbackFilter) (current, outdated int, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return len(f.matchingFeedback(userID, kind)), nil
+	for _, e := range f.matchingFeedback(userID, filter) {
+		if e.PicksChanged || e.ModelChanged {
+			outdated++
+		} else {
+			current++
+		}
+	}
+	return current, outdated, nil
 }
 
 func (f *FakeStore) DeleteScoreFeedback(_ context.Context, userID, id string) error {

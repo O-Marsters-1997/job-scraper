@@ -29,11 +29,15 @@ export const scoreFeedbackSchema = z.object({
 	model: z.string(),
 	snapshot: snapshotSchema.optional(),
 	createdAt: z.string(),
+	picksChanged: z.boolean(),
+	modelChanged: z.boolean(),
 });
 
 export const scoreFeedbackPageSchema = z.object({
 	entries: z.array(scoreFeedbackSchema),
 	total: z.number(),
+	currentCount: z.number(),
+	outdatedCount: z.number(),
 });
 
 export type ScoreFeedbackPage = z.infer<typeof scoreFeedbackPageSchema>;

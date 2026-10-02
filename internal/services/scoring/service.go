@@ -59,8 +59,8 @@ type Store interface {
 	ListPushSubscriptions(ctx context.Context, userID string) ([]dto.PushSubscriptionInput, error)
 	DeletePushSubscription(ctx context.Context, userID, endpoint string) error
 	InsertScoreFeedback(ctx context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error)
-	ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error)
-	CountScoreFeedback(ctx context.Context, userID, kind string) (int, error)
+	ListScoreFeedback(ctx context.Context, userID string, f dto.ScoreFeedbackFilter, limit, offset int) ([]dto.ScoreFeedback, error)
+	CountScoreFeedback(ctx context.Context, userID string, f dto.ScoreFeedbackFilter) (current, outdated int, err error)
 	DeleteScoreFeedback(ctx context.Context, userID, id string) error
 	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 	GetJobScoreForFeedback(ctx context.Context, userID, jobID string) (dto.JobScoreEvidence, error)

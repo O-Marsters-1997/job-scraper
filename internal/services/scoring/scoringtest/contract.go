@@ -137,7 +137,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 		reasonsOf := func(kind string, limit, offset int) []string {
 			t.Helper()
-			got, err := f.Store.ListScoreFeedback(ctx, user, kind, limit, offset)
+			got, err := f.Store.ListScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Kind: kind, Model: "m"}, limit, offset)
 			if err != nil {
 				t.Fatalf("ListScoreFeedback(%q, %d, %d) = %v", kind, limit, offset, err)
 			}
@@ -161,9 +161,76 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 			t.Errorf("page past the end = %v, want empty", got)
 		}
 		for kind, want := range map[string]int{"": 3, "overall": 2, "collection": 1, "job": 0} {
-			if n, err := f.Store.CountScoreFeedback(ctx, user, kind); err != nil || n != want {
+			if n, _, err := f.Store.CountScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Kind: kind, Model: "m"}); err != nil || n != want {
 				t.Errorf("CountScoreFeedback(%q) = %d, %v, want %d, nil", kind, n, err, want)
 			}
+		}
+	})
+
+	t.Run("score feedback flags drift from the current Picks and model", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user := f.NewUser()
+		goPick := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
+		cobolPick := []dto.Pick{{OptionID: "tech:cobol", Stance: "avoid", Source: "manual"}}
+		setPicks := func(picks []dto.Pick) {
+			t.Helper()
+			cfg := dto.SearchConfig{UserID: user, NotifyThreshold: 70, Preferences: dto.Preferences{Picks: picks}}
+			if _, err := f.Store.UpsertSearchConfig(ctx, cfg); err != nil {
+				t.Fatalf("UpsertSearchConfig() = %v", err)
+			}
+		}
+		insert := func(reason, model string) {
+			t.Helper()
+			entry := dto.ScoreFeedback{Kind: "overall", Reason: reason, Picks: goPick, Model: model}
+			if _, err := f.Store.InsertScoreFeedback(ctx, user, entry); err != nil {
+				t.Fatalf("InsertScoreFeedback(%q) = %v", reason, err)
+			}
+		}
+		listed := func(includeOutdated bool) map[string][2]bool {
+			t.Helper()
+			filter := dto.ScoreFeedbackFilter{Model: "m", IncludeOutdated: includeOutdated}
+			got, err := f.Store.ListScoreFeedback(ctx, user, filter, 10, 0)
+			if err != nil {
+				t.Fatalf("ListScoreFeedback(%+v) = %v", filter, err)
+			}
+			drift := map[string][2]bool{}
+			for _, e := range got {
+				drift[e.Reason] = [2]bool{e.PicksChanged, e.ModelChanged}
+			}
+			return drift
+		}
+		counts := func() [2]int {
+			t.Helper()
+			current, outdated, err := f.Store.CountScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Model: "m"})
+			if err != nil {
+				t.Fatalf("CountScoreFeedback() = %v", err)
+			}
+			return [2]int{current, outdated}
+		}
+
+		setPicks(goPick)
+		insert("current", "m")
+		insert("old model", "other")
+		if diff := cmp.Diff(map[string][2]bool{"current": {false, false}}, listed(false)); diff != "" {
+			t.Errorf("default list (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string][2]bool{"current": {false, false}, "old model": {false, true}}, listed(true)); diff != "" {
+			t.Errorf("list with outdated (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([2]int{1, 1}, counts()); diff != "" {
+			t.Errorf("counts after a model change (-want +got):\n%s", diff)
+		}
+
+		setPicks(cobolPick)
+		if got := listed(false); len(got) != 0 {
+			t.Errorf("default list after changing Picks = %v, want empty", got)
+		}
+		if diff := cmp.Diff(map[string][2]bool{"current": {true, false}, "old model": {true, true}}, listed(true)); diff != "" {
+			t.Errorf("list with outdated after changing Picks (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([2]int{0, 2}, counts()); diff != "" {
+			t.Errorf("counts after changing Picks (-want +got):\n%s", diff)
 		}
 	})
 
@@ -186,7 +253,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		if err := f.Store.DeleteScoreFeedback(ctx, user, mine.ID); err != nil {
 			t.Fatalf("DeleteScoreFeedback(own id) = %v", err)
 		}
-		if n, _ := f.Store.CountScoreFeedback(ctx, user, ""); n != 0 {
+		if n, _, _ := f.Store.CountScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Model: "m"}); n != 0 {
 			t.Errorf("CountScoreFeedback after delete = %d, want 0", n)
 		}
 	})
@@ -214,7 +281,7 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		if err != nil || n != 2 {
 			t.Fatalf("ClearScoreFeedback(...) = %d, %v, want 2, nil", n, err)
 		}
-		left, err := f.Store.ListScoreFeedback(ctx, other, "", 10, 0)
+		left, err := f.Store.ListScoreFeedback(ctx, other, dto.ScoreFeedbackFilter{Model: "m"}, 10, 0)
 		if err != nil || len(left) != 1 {
 			t.Fatalf("ListScoreFeedback(other) = %+v, %v, want the other user's one entry", left, err)
 		}
