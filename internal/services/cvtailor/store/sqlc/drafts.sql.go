@@ -248,6 +248,20 @@ func (q *Queries) GetJobDescription(ctx context.Context, id pgtype.UUID) (string
 	return description, err
 }
 
+type InsertBulletLabelsParams struct {
+	UserID        pgtype.UUID
+	JobID         pgtype.UUID
+	DraftID       pgtype.UUID
+	Kind          string
+	AchievementID pgtype.UUID
+	PYes          pgtype.Float8
+	PNo           pgtype.Float8
+	PNotStated    pgtype.Float8
+	Confidence    pgtype.Float8
+	Preselected   bool
+	Kept          bool
+}
+
 const insertDraft = `-- name: InsertDraft :one
 INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids)
 SELECT $1::uuid, j.id, $2::text, $3::text, $4::uuid[]

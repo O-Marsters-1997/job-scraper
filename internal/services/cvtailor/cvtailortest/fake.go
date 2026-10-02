@@ -38,6 +38,7 @@ type FakeStore struct {
 	mappings     map[headingKey]*string
 	drafts       map[string]*draft
 	jobs         map[string]dto.Job
+	labels       []dto.BulletLabel
 	seq          int
 }
 

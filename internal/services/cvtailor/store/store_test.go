@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -36,7 +37,7 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
-	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
+	d, err := st.CreateDraft(ctx, uid, dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +70,67 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
 	st, _, uid := newStore(t)
 
-	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}})
+	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}, nil)
 
 	if !errors.Is(err, store.ErrJobNotFound) {
 		t.Errorf("CreateDraft() err = %v, want ErrJobNotFound", err)
+	}
+}
+
+func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
+	st, pool, uid := newStore(t)
+	ctx := t.Context()
+	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
+	pos, err := st.CreatePosition(ctx, uid, dto.PositionInput{Employer: "Acme", Title: "Engineer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: pos.ID, Text: "Cut latency"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unseen, err := st.CreateAchievement(ctx, uid, dto.AchievementInput{PositionID: pos.ID, Text: "Mentored"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := dto.DraftInput{JobID: jobID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{kept.ID}}
+	labels := []dto.BulletLabel{
+		{AchievementID: kept.ID, Answer: &dto.Answer{PYes: 0.7, PNo: 0.1, PNotStated: 0.2, Confidence: 0.6}, Preselected: true, Kept: true},
+		{AchievementID: unseen.ID},
+	}
+
+	for range 2 {
+		if _, err := st.CreateDraft(ctx, uid, in, labels); err != nil {
+			t.Fatalf("CreateDraft() err = %v", err)
+		}
+	}
+
+	type row struct {
+		AchievementID     string
+		PYes, Confidence  *float64
+		Preselected, Kept bool
+		Kind              string
+		Position          *int
+	}
+	rows, err := pool.Query(ctx, `SELECT achievement_id::text, p_yes, confidence, preselected, kept, kind, position
+		FROM preference_labels WHERE user_id = $1 AND job_id = $2 AND draft_id IS NOT NULL ORDER BY created_at, preselected DESC`, uid, jobID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.AchievementID, &r.PYes, &r.Confidence, &r.Preselected, &r.Kept, &r.Kind, &r.Position); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	yes, conf := 0.7, 0.6
+	one := row{AchievementID: kept.ID, PYes: &yes, Confidence: &conf, Preselected: true, Kept: true, Kind: "bullet"}
+	two := row{AchievementID: unseen.ID, Kind: "bullet"}
+	if diff := cmp.Diff([]row{one, two, one, two}, got); diff != "" {
+		t.Errorf("preference_labels mismatch (-want +got):\n%s", diff)
 	}
 }
 

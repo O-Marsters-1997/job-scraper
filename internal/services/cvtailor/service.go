@@ -25,7 +25,7 @@ type Store interface {
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error
-	CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error)
+	CreateDraft(ctx context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error)
 	GetDraft(ctx context.Context, userID, id string) (dto.Draft, error)
 	ListJobDrafts(ctx context.Context, userID, jobID string) ([]dto.Draft, error)
 	SetDraftOutcome(ctx context.Context, userID, id, outcome string) (dto.Draft, error)

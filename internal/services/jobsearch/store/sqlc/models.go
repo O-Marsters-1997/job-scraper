@@ -291,6 +291,23 @@ type Position struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type PreferenceLabel struct {
+	ID            pgtype.UUID
+	UserID        pgtype.UUID
+	JobID         pgtype.UUID
+	DraftID       pgtype.UUID
+	Kind          string
+	AchievementID pgtype.UUID
+	PYes          pgtype.Float8
+	PNo           pgtype.Float8
+	PNotStated    pgtype.Float8
+	Confidence    pgtype.Float8
+	Preselected   bool
+	Kept          bool
+	Position      pgtype.Int4
+	CreatedAt     pgtype.Timestamptz
+}
+
 type ScoringOption struct {
 	ID        string
 	Dimension ScoringDimension

@@ -49,7 +49,7 @@ func (s *Service) CreateDraft(ctx context.Context, userID string, in dto.DraftIn
 			return dto.DraftRef{}, apperr.Invalid("map the CV's headings to your positions first")
 		}
 	}
-	draft, err := s.store.CreateDraft(ctx, userID, in)
+	draft, err := s.store.CreateDraft(ctx, userID, in, s.bulletLabels(ctx, userID, in, positions))
 	if err != nil {
 		return dto.DraftRef{}, err
 	}

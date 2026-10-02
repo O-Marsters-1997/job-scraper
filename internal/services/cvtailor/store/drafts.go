@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -41,9 +42,9 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	}, nil
 }
 
-// CreateDraft inserts a pending Draft for userID; ErrJobNotFound when the Job
-// does not exist.
-func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInput) (dto.Draft, error) {
+// CreateDraft inserts a pending Draft for userID with its bullet labels;
+// ErrJobNotFound when the Job does not exist.
+func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInput, labels []dto.BulletLabel) (dto.Draft, error) {
 	uid, err := parseID(userID, ErrDraftNotFound)
 	if err != nil {
 		return dto.Draft{}, err
@@ -56,16 +57,56 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, apperr.Invalid("unknown achievement")
 	}
-	row, err := s.queries.InsertDraft(ctx, sqlc.InsertDraftParams{
-		UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements,
+	var row sqlc.TailoredCv
+	err = s.inTx(ctx, func(q *sqlc.Queries) error {
+		var err error
+		row, err = q.InsertDraft(ctx, sqlc.InsertDraftParams{
+			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrJobNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("store.CreateDraft: %w", err)
+		}
+		params, err := bulletLabelParams(uid, jid, row.ID, labels)
+		if err != nil {
+			return fmt.Errorf("store.CreateDraft: %w", err)
+		}
+		if _, err := q.InsertBulletLabels(ctx, params); err != nil {
+			return fmt.Errorf("store.CreateDraft: labels: %w", err)
+		}
+		return nil
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Draft{}, ErrJobNotFound
-	}
 	if err != nil {
-		return dto.Draft{}, fmt.Errorf("store.CreateDraft: %w", err)
+		return dto.Draft{}, err
 	}
 	return toDraft(row)
+}
+
+func bulletLabelParams(userID, jobID, draftID pgtype.UUID, labels []dto.BulletLabel) ([]sqlc.InsertBulletLabelsParams, error) {
+	params := make([]sqlc.InsertBulletLabelsParams, len(labels))
+	for i, l := range labels {
+		aid, err := data.UUID(l.AchievementID)
+		if err != nil {
+			return nil, err
+		}
+		params[i] = sqlc.InsertBulletLabelsParams{
+			UserID: userID, JobID: jobID, DraftID: draftID, Kind: "bullet", AchievementID: aid,
+			Preselected: l.Preselected, Kept: l.Kept,
+		}
+		if a := l.Answer; a != nil {
+			params[i].PYes = float8(a.PYes)
+			params[i].PNo = float8(a.PNo)
+			params[i].PNotStated = float8(a.PNotStated)
+			params[i].Confidence = float8(a.Confidence)
+		}
+	}
+	return params, nil
+}
+
+func float8(f float64) pgtype.Float8 {
+	return pgtype.Float8{Float64: f, Valid: true}
 }
 
 func (s *Store) GetDraft(ctx context.Context, userID, id string) (dto.Draft, error) {
