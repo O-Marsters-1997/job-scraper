@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -129,6 +130,37 @@ func TestTieredFetcher(t *testing.T) {
 					t.Fatalf("distinct sessions = %d, want 3: %v", len(seen), residential.sessions)
 				}
 			})
+		}
+	})
+
+	t.Run("sessions are reused until a block", func(t *testing.T) {
+		var calls atomic.Int32
+		residential := newFakeProxy(t, func(w http.ResponseWriter, r *http.Request) {
+			if calls.Add(1) == 3 {
+				status(429, "")(w, r)
+				return
+			}
+			status(200, "")(w, r)
+		})
+		unlocker := newFakeProxy(t, status(200, ""))
+		tr := tieredFetcher(t, residential, unlocker, nil)
+		for range 4 {
+			resp, err := tr.RoundTrip(httpTarget(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+		s := residential.sessions
+		if len(s) != 5 {
+			t.Fatalf("residential hits = %d, want 5: %v", len(s), s)
+		}
+		if s[0] != s[1] || s[1] != s[2] {
+			t.Fatalf("sessions before the block differ: %v", s)
+		}
+		if s[3] == s[2] || s[3] != s[4] {
+			t.Fatalf("sessions after the block = %v, want a new one reused", s)
 		}
 	})
 

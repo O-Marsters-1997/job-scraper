@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -17,9 +18,20 @@ const residentialAttempts = 3
 type sessionKey struct{}
 
 type tieredTransport struct {
-	residential http.RoundTripper
+	residential *http.Transport
 	unlocker    http.RoundTripper
 	cache       Cache
+
+	session atomic.Value
+}
+
+func newSession() string {
+	return strconv.FormatUint(rand.Uint64(), 36)
+}
+
+func (t *tieredTransport) rotate(stale string) {
+	t.session.CompareAndSwap(stale, newSession())
+	t.residential.CloseIdleConnections()
 }
 
 func newTiered(cache Cache) (*tieredTransport, error) {
@@ -32,7 +44,6 @@ func newTiered(cache Cache) (*tieredTransport, error) {
 		return nil, err
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DisableKeepAlives = true
 	tr.Proxy = func(req *http.Request) (*url.URL, error) {
 		session, _ := req.Context().Value(sessionKey{}).(string)
 		pu := *u
@@ -40,11 +51,13 @@ func newTiered(cache Cache) (*tieredTransport, error) {
 		pu.User = url.UserPassword(u.User.Username()+"-session-"+session, password)
 		return &pu, nil
 	}
-	return &tieredTransport{
+	t := &tieredTransport{
 		residential: tr,
 		unlocker:    &fetchTransport{base: unlocker, zone: sharedZone},
 		cache:       cache,
-	}, nil
+	}
+	t.session.Store(newSession())
+	return t, nil
 }
 
 func (t *tieredTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -88,14 +101,20 @@ func (t *tieredTransport) residentialAttempt(req *http.Request) (*http.Response,
 	if err != nil {
 		return nil, err
 	}
-	session := strconv.FormatUint(rand.Uint64(), 36)
+	session := t.session.Load().(string)
 	attempt := req.WithContext(context.WithValue(req.Context(), sessionKey{}, session))
 	start := time.Now()
 	resp, err := t.residential.RoundTrip(attempt)
 	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
 	if err != nil {
+		if req.Context().Err() == nil {
+			t.rotate(session)
+		}
 		release()
 		return nil, err
+	}
+	if blocked(req, resp) {
+		t.rotate(session)
 	}
 	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
 	return resp, nil

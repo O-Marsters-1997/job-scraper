@@ -27,7 +27,11 @@ request sets the bill. Measured on 2026-10-01:
   worker refuses to start if a `tiered` Source is registered and either is missing or invalid.
 - **A block is retried on fresh IPs, then sent once through Unlocker.** A 429, 999, 403, or a redirect to
   LinkedIn's authwall or login counts as a block. The request is retried up to 3 times, each with a new
-  session ID and so a new IP, then that one request goes through Unlocker. A 404 or 410 means the Job is
+  session ID and so a new IP, then that one request goes through Unlocker.
+- **One sticky Decodo session and keep-alive connection serves all requests, and rotates on a block.** A
+  connection error rotates it too, since Decodo sessions expire. Spike #536 measured a `jobPosting` fetch at
+  18.5KB billed with a new connection and session each time, of which about 5KB was CONNECT and TLS. One
+  reused connection on one session cost 12.85KB (30.6% less), with 0 blocks in 15. A 404 or 410 means the Job is
   gone on whichever route answered, and it never falls back.
 - **Neither route ever falls back to direct.** 0003 banned silent fallback because it hides that the wrong
   route was used. This fallback stays on a paid proxy and is counted:
