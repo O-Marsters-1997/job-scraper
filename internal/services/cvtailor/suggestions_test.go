@@ -43,32 +43,38 @@ func addAchievements(t *testing.T, positionID string, st interface {
 	return out
 }
 
-func TestSuggestionsRankByPYesTimesConfidence(t *testing.T) {
+func TestSuggestionsRankByNetLean(t *testing.T) {
 	asker := &fakeAsker{answers: map[string]dto.Answer{
-		questionPrefix + "a": {PYes: 0.9, Confidence: 0.2},
-		questionPrefix + "b": {PYes: 0.5, Confidence: 0.9},
-		questionPrefix + "c": {PYes: 0.1, Confidence: 1},
-		questionPrefix + "d": {PYes: 0.7, Confidence: 0.7},
-		questionPrefix + "e": {PYes: 0.6, Confidence: 0.5},
+		questionPrefix + "strong":    {PYes: 0.7, PNo: 0.1, Confidence: 0.6},
+		questionPrefix + "digest":    {PYes: 0.38, PNo: 0.36, Confidence: 0.1},
+		questionPrefix + "e2e":       {PYes: 0.31, PNo: 0.34, Confidence: 0.05},
+		questionPrefix + "microfend": {PYes: 0.13, PNo: 0.54, Confidence: 0.4},
 	}}
 	svc, st := newService(t, nil, asker)
 	p := addPosition(t, st, "Acme", "Engineer")
-	addAchievements(t, p.ID, st, "a", "b", "c", "d", "e")
+	addAchievements(t, p.ID, st, "microfend", "e2e", "digest", "strong")
 
 	got, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := make([]string, len(got))
-	selected := make([]bool, len(got))
+	type row struct {
+		Text        string
+		State       dto.SuggestionState
+		Preselected bool
+	}
+	rows := make([]row, len(got))
 	for i, s := range got {
-		ids[i], selected[i] = s.Text, s.Preselected
+		rows[i] = row{s.Text, s.State, s.Preselected}
 	}
-	if diff := cmp.Diff([]string{"d", "b", "e", "a", "c"}, ids); diff != "" {
-		t.Errorf("Suggestions() order (-want +got):\n%s", diff)
+	want := []row{
+		{"strong", dto.SuggestionFit, true},
+		{"digest", dto.SuggestionFit, true},
+		{"e2e", dto.SuggestionUnclear, true},
+		{"microfend", dto.SuggestionLow, false},
 	}
-	if diff := cmp.Diff([]bool{true, true, true, false, false}, selected); diff != "" {
-		t.Errorf("Suggestions() preselected (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, rows); diff != "" {
+		t.Errorf("Suggestions() (-want +got):\n%s", diff)
 	}
 }
 

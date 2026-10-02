@@ -58,6 +58,7 @@ export function getSuggestions(): Suggestion[] {
 			positionId: p.id,
 			text: a.text,
 			score: scores[i] ?? 0.1,
+			state: "fit",
 			preselected: i < slots,
 		}));
 	});

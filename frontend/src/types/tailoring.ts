@@ -12,6 +12,7 @@ export const suggestionSchema = z.object({
 	positionId: z.string(),
 	text: z.string(),
 	score: z.number(),
+	state: z.enum(["fit", "low", "unclear"]),
 	preselected: z.boolean(),
 });
 

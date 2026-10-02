@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, type Setter, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -131,6 +132,11 @@ export function AchievementsStep(props: {
 															<span class="flex-1 text-foreground">
 																{s.text}
 															</span>
+															<Show when={s.state !== "fit"}>
+																<Badge variant="outline">
+																	{s.state === "low" ? "Low fit" : "Unclear"}
+																</Badge>
+															</Show>
 															<span class="font-mono text-xs tabular-nums text-faint">
 																{Math.round(s.score * 100)}
 															</span>
