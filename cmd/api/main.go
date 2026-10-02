@@ -65,7 +65,8 @@ func main() {
 		notifyFrom = "onboarding@resend.dev"
 	}
 	js := jobsearch.New(pool, q, scoring.NewFacade(pool))
-	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom)
+	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
+		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
 	go func() {
 		if err := scoringModule.Run(ctx); err != nil {
 			slog.ErrorContext(ctx, "answer effect loop failed", slog.Any(logger.KeyErr, err))

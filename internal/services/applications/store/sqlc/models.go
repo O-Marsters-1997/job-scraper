@@ -308,6 +308,15 @@ type PreferenceLabel struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type PushSubscription struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Endpoint  string
+	P256dh    string
+	Auth      string
+	CreatedAt pgtype.Timestamptz
+}
+
 type ScoringOption struct {
 	ID        string
 	Dimension ScoringDimension

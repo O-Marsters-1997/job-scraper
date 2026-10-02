@@ -36,6 +36,10 @@ run-api:
 tracing-up:
     docker run --rm --name otel-lgtm -p 3000:3000 -p 4318:4318 -p 3200:3200 grafana/otel-lgtm
 
+# print a fresh VAPID key pair for VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY
+vapid-keys:
+    go run ./cmd/vapidkeys
+
 # ── Code generation ───────────────────────────────────────────────────────────
 
 # generate typed Go code from SQL files (requires sqlc: brew install sqlc)

@@ -21,6 +21,12 @@ type noopAlerter struct{}
 
 func (noopAlerter) NotifyNewJob(context.Context, dto.Job, string) error { return nil }
 
+type noopPusher struct{}
+
+func (noopPusher) Send(context.Context, dto.PushSubscriptionInput, dto.PushMessage) error {
+	return nil
+}
+
 type Module struct {
 	store Store
 	svc   *Service
@@ -30,14 +36,17 @@ type Module struct {
 // builds the real ones and calls Build. Tests call Build directly with
 // fakes (ADR 0012).
 type Deps struct {
-	Store        Store
-	Answerer     Answerer
-	Credentials  Credentials
-	Alerter      Alerter
-	Profiles     ProfileReader
-	Candidates   Reconsiderer
-	Extractor    Extractor
-	TickInterval time.Duration
+	Store       Store
+	Answerer    Answerer
+	Credentials Credentials
+	Alerter     Alerter
+	Pusher      PushSender
+	// VAPIDPublicKey empty means Web Push is not configured.
+	VAPIDPublicKey string
+	Profiles       ProfileReader
+	Candidates     Reconsiderer
+	Extractor      Extractor
+	TickInterval   time.Duration
 }
 
 func Build(deps Deps) *Module {
@@ -45,10 +54,15 @@ func Build(deps Deps) *Module {
 	return &Module{store: deps.Store, svc: svc}
 }
 
+// VAPID is the Web Push signing identity; the zero value disables push.
+type VAPID struct{ PublicKey, PrivateKey, Subject string }
+
+func (v VAPID) configured() bool { return v.PublicKey != "" && v.PrivateKey != "" && v.Subject != "" }
+
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}
@@ -56,8 +70,13 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 		alerter = notify.NewNotificationService(notify.NewResendNotifier(notifyAPIKey, notifyFrom))
 	}
 
+	var pusher PushSender
+	if vapid.configured() {
+		pusher = notify.NewWebPusher(vapid.PublicKey, vapid.PrivateKey, vapid.Subject)
+	}
+
 	return Build(Deps{
-		Store: st, Answerer: jev.NewClient(), Credentials: credentials,
+		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jev.NewClient(), Credentials: credentials,
 		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
 	})
 }
