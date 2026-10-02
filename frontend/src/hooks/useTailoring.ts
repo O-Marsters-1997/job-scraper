@@ -12,10 +12,11 @@ import {
 	fetchJobDrafts,
 	fetchSuggestions,
 	keepDraft,
+	saveDraftSlots,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping } from "../types/tailoring";
+import type { HeadingMapping, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
@@ -112,6 +113,13 @@ export function useJobDrafts(jobId: Accessor<string>) {
 
 export function useKeepDraft() {
 	return useInvalidatingMutation(keepDraft, [keys.tailoring.all]);
+}
+
+export function useSaveDraftSlots(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
+		() => [keys.tailoring.draft(id())],
+	);
 }
 
 export function useDiscardDraft() {

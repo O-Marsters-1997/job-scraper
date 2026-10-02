@@ -3,7 +3,7 @@ import { AppShellComponent } from "../components/app-shell.component";
 import { MobileNavComponent } from "../components/mobile-nav.component";
 import { TweaksPanelComponent } from "../components/tweaks-panel.component";
 import { CompaniesPage } from "../pages/companies.page";
-import { DraftPage } from "../pages/draft.page";
+import { DraftPage, PhoneDraftPage } from "../pages/draft.page";
 import { ExperiencePage } from "../pages/experience.page";
 import { InsightsPage } from "../pages/insights.page";
 import { JobsPage } from "../pages/jobs.page";
@@ -17,6 +17,7 @@ type Fixtures = {
 	jobsPage: JobsPage;
 	companiesPage: CompaniesPage;
 	draftPage: DraftPage;
+	phoneDraftPage: PhoneDraftPage;
 	overviewPage: OverviewPage;
 	experiencePage: ExperiencePage;
 	insightsPage: InsightsPage;
@@ -39,6 +40,9 @@ export const test = base.extend<Fixtures>({
 	},
 	draftPage: async ({ page }, use) => {
 		await use(new DraftPage(page));
+	},
+	phoneDraftPage: async ({ page }, use) => {
+		await use(new PhoneDraftPage(page));
 	},
 	overviewPage: async ({ page }, use) => {
 		await use(new OverviewPage(page));
