@@ -19,10 +19,12 @@ function TailorPage() {
 	const [cv, setCv] = createSignal<CVRef>();
 	const [step, setStep] = createSignal<Step>("cv");
 	const [skipped, setSkipped] = createSignal(false);
+	const [overrides, setOverrides] = createSignal<Record<string, boolean>>({});
 	const [achievementIds, setAchievementIds] = createSignal<string[]>([]);
 
 	const pickCv = (ref: CVRef) => {
 		setCv(ref);
+		setOverrides({});
 		setSkipped(false);
 		setStep("headings");
 	};
@@ -62,6 +64,8 @@ function TailorPage() {
 				<AchievementsStep
 					jobId={() => params().id}
 					cv={cv}
+					overrides={overrides}
+					setOverrides={setOverrides}
 					onBack={() => setStep(skipped() ? "cv" : "headings")}
 					onContinue={(ids) => {
 						setAchievementIds(ids);

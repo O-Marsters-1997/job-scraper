@@ -1,9 +1,11 @@
 package openrouter_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,6 +57,75 @@ func TestChat(t *testing.T) {
 		})
 		if err == nil {
 			t.Error("Chat() err = nil, want error")
+		}
+	})
+}
+
+func stream(t *testing.T, body string, onDelta func(string)) (openrouter.Reply, error) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req["stream"] != true {
+			t.Errorf("request = %v (%v), want stream:true", req, err)
+		}
+		if _, ok := req["response_format"]; ok {
+			t.Errorf("request carries response_format %v, want none for a plain-text stream", req["response_format"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return openrouter.ChatStream(t.Context(), srv.Client(), srv.URL, "k", openrouter.Request{Model: "m"}, onDelta)
+}
+
+func TestChatStream(t *testing.T) {
+	t.Run("passes deltas through and reads the cost from the last chunk", func(t *testing.T) {
+		var deltas []string
+		got, err := stream(t, ": OPENROUTER PROCESSING\n\n"+
+			"data: {\"choices\":[{\"delta\":{\"content\":\"Cut \"}}]}\n\n"+
+			"data: {\"choices\":[{\"delta\":{\"content\":\"latency\"}}]}\n\n"+
+			"data: {\"choices\":[],\"usage\":{\"cost\":0.002}}\n\n"+
+			"data: [DONE]\n\n", func(s string) { deltas = append(deltas, s) })
+
+		if err != nil {
+			t.Fatalf("ChatStream() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{"Cut ", "latency"}, deltas); diff != "" {
+			t.Errorf("deltas (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(openrouter.Reply{Content: "Cut latency", Cost: 0.002}, got); diff != "" {
+			t.Errorf("ChatStream() (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a mid-stream error chunk fails the call", func(t *testing.T) {
+		_, err := stream(t, "data: {\"choices\":[{\"delta\":{\"content\":\"Cut\"}}]}\n\n"+
+			"data: {\"error\":{\"code\":502,\"message\":\"upstream hung up\"},\"choices\":[{\"delta\":{\"content\":\"\"},\"finish_reason\":\"error\"}]}\n\n", func(string) {})
+
+		if err == nil || !strings.Contains(err.Error(), "upstream hung up") {
+			t.Errorf("ChatStream() err = %v, want the upstream message", err)
+		}
+	})
+
+	t.Run("a stream that ends without DONE is an error", func(t *testing.T) {
+		_, err := stream(t, "data: {\"choices\":[{\"delta\":{\"content\":\"Cut\"}}]}\n\n", func(string) {})
+
+		if err == nil {
+			t.Error("ChatStream() err = nil, want an error for a truncated stream")
+		}
+	})
+
+	t.Run("non-200 is a StatusError before any delta", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(srv.Close)
+
+		_, err := openrouter.ChatStream(t.Context(), srv.Client(), srv.URL, "k", openrouter.Request{}, func(string) { t.Error("delta on a failed request") })
+
+		var se *openrouter.StatusError
+		if !errors.As(err, &se) || se.Code != http.StatusUnauthorized {
+			t.Errorf("ChatStream() err = %v, want a 401 StatusError", err)
 		}
 	})
 }

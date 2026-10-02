@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/solid-router";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, For, type Setter, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,8 @@ import type { Suggestion } from "../../../types/tailoring";
 export function AchievementsStep(props: {
 	jobId: () => string;
 	cv: () => CVRef | undefined;
+	overrides: () => Record<string, boolean>;
+	setOverrides: Setter<Record<string, boolean>>;
 	onBack: () => void;
 	onContinue: (achievementIds: string[]) => void;
 }) {
@@ -20,10 +22,9 @@ export function AchievementsStep(props: {
 		() => props.cv(),
 	);
 	const positions = useExperience();
-	const [overrides, setOverrides] = createSignal<Record<string, boolean>>({});
 
 	const isSelected = (s: Suggestion) =>
-		overrides()[s.achievementId] ?? s.preselected;
+		props.overrides()[s.achievementId] ?? s.preselected;
 
 	return (
 		<Show
@@ -83,7 +84,7 @@ export function AchievementsStep(props: {
 																	class="mt-1"
 																	checked={isSelected(s)}
 																	onChange={(e) =>
-																		setOverrides((o) => ({
+																		props.setOverrides((o) => ({
 																			...o,
 																			[s.achievementId]:
 																				e.currentTarget.checked,
@@ -116,7 +117,7 @@ export function AchievementsStep(props: {
 									disabled={selectedCount() === 0}
 									onClick={() =>
 										props.onContinue(
-											selectedAchievementIds(data(), overrides()),
+											selectedAchievementIds(data(), props.overrides()),
 										)
 									}
 								>

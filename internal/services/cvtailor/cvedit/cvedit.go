@@ -172,7 +172,7 @@ func renderTask(in Input) string {
 		fmt.Fprintf(&b, "\nCurrent profile:\n%s\nRewrite it for this job in the profile field.\n", in.BaseProfile)
 	}
 	if in.HasSkills {
-		fmt.Fprintf(&b, "\nCurrent skills: %s\nReturn the skills list reordered for this job in the skills field, dropping none you cannot support and adding none the person does not already list. Return every skill the job description names in jobSkills.\n", strings.Join(in.BaseSkills, ", "))
+		fmt.Fprintf(&b, "\nCurrent skills: %s\nReturn the skills list reordered for this job in the skills field, dropping none you cannot support and adding none the person does not already list. In jobSkills return at most 8 of the job description's most important requirements: named technologies, languages, frameworks, platforms or tools, and named ways of working such as end-to-end ownership. Leave out generic concepts and nice-to-haves (databases, replication, queuing, distributed systems) and anything already in the current skills, the positions or the profile.\n", strings.Join(in.BaseSkills, ", "))
 	}
 	if in.PriorEdits != nil {
 		prior, _ := json.Marshal(in.PriorEdits)

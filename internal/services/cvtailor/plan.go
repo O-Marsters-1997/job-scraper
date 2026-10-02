@@ -3,11 +3,13 @@ package cvtailor
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
@@ -30,6 +32,10 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 	if err != nil {
 		return plan{}, err
 	}
+	return s.planOf(ctx, claim, ds)
+}
+
+func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.DocStructure) (plan, error) {
 	bank, err := s.store.ListPositions(ctx, claim.UserID)
 	if err != nil {
 		return plan{}, err
@@ -38,22 +44,7 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 	if err != nil {
 		return plan{}, err
 	}
-	positionOfHeading := make(map[string]string, len(mappings))
-	for _, hm := range mappings {
-		if hm.PositionID != nil {
-			positionOfHeading[hm.HeadingText] = *hm.PositionID
-		}
-	}
-
-	slotsOf := map[string][]docparse.Slot{}
-	for _, slot := range ds.Slots {
-		if slot.HeadingIndex < 0 {
-			continue
-		}
-		if pid, ok := positionOfHeading[ds.Headings[slot.HeadingIndex].Text]; ok {
-			slotsOf[pid] = append(slotsOf[pid], slot)
-		}
-	}
+	slotsOf := slotsByPosition(ds, mappings)
 
 	confirmed := make(map[string]bool, len(claim.AchievementIDs))
 	for _, id := range claim.AchievementIDs {
@@ -61,6 +52,7 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 	}
 	pl := plan{structure: ds}
 	found := 0
+	seen := map[string]bool{}
 	for _, p := range bank {
 		pp := planned{
 			Position: cvedit.Position{ID: p.ID, Employer: p.Employer, Title: p.Title},
@@ -69,6 +61,12 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 		for _, a := range p.Achievements {
 			pl.bank = append(pl.bank, a.Text)
 			if confirmed[a.ID] {
+				found++
+				key := normalizeText(a.Text)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
 				pp.Achievements = append(pp.Achievements, cvedit.Achievement{ID: a.ID, Text: a.Text})
 				pp.texts[a.ID] = a.Text
 			}
@@ -76,7 +74,6 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 		if len(pp.Achievements) == 0 {
 			continue
 		}
-		found += len(pp.Achievements)
 		slots := slotsOf[p.ID]
 		if len(slots) == 0 {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
@@ -91,6 +88,25 @@ func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) 
 		return plan{}, apperr.Unprocessable("a chosen achievement no longer exists")
 	}
 	return pl, nil
+}
+
+func slotsByPosition(ds docparse.DocStructure, mappings []dto.HeadingMapping) map[string][]docparse.Slot {
+	positionOfHeading := make(map[string]string, len(mappings))
+	for _, hm := range mappings {
+		if hm.PositionID != nil {
+			positionOfHeading[hm.HeadingText] = *hm.PositionID
+		}
+	}
+	out := map[string][]docparse.Slot{}
+	for _, slot := range ds.Slots {
+		if slot.HeadingIndex < 0 {
+			continue
+		}
+		if pid, ok := positionOfHeading[ds.Headings[slot.HeadingIndex].Text]; ok {
+			out[pid] = append(out[pid], slot)
+		}
+	}
+	return out
 }
 
 func (pl plan) input(jobDescription string) cvedit.Input {
@@ -133,11 +149,16 @@ func (pl plan) slotIDs() docedit.PositionSlots {
 	return out
 }
 
-func (pl plan) validate(edits cvedit.EditSet) error {
-	byID := make(map[string]planned, len(pl.positions))
+func (pl plan) byID() map[string]planned {
+	out := make(map[string]planned, len(pl.positions))
 	for _, p := range pl.positions {
-		byID[p.ID] = p
+		out[p.ID] = p
 	}
+	return out
+}
+
+func (pl plan) validate(edits cvedit.EditSet) error {
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p, ok := byID[pe.PositionID]
 		if !ok {
@@ -175,10 +196,7 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	if pl.structure.Profile != nil && blocked[pl.structure.Profile.ID] {
 		edits.Profile = nil
 	}
-	byID := make(map[string]planned, len(pl.positions))
-	for _, p := range pl.positions {
-		byID[p.ID] = p
-	}
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p := byID[pe.PositionID]
 		for i := range pe.Bullets {
@@ -190,19 +208,34 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	return edits, names
 }
 
+func (pl plan) baseText() []string {
+	var out []string
+	for _, h := range pl.structure.Headings {
+		out = append(out, h.Text)
+	}
+	for _, s := range pl.structure.Slots {
+		out = append(out, s.Text)
+	}
+	if pl.structure.Profile != nil {
+		out = append(out, pl.structure.Profile.Text)
+	}
+	if pl.structure.Skills != nil {
+		out = append(out, pl.structure.Skills.Items...)
+	}
+	return out
+}
+
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
 	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
 	d.Contact = &checks.ContactInput{InBody: pl.structure.Contact.InBody, InHeaderFooter: pl.structure.Contact.InHeaderFooter}
 	if pl.structure.Skills != nil {
 		d.BaseSkills = pl.structure.Skills.Items
 	}
+	d.BaseText = pl.baseText()
 	if pl.structure.Profile != nil && edits.Profile != nil {
 		d.Profile = &checks.Slot{ID: pl.structure.Profile.ID, Text: *edits.Profile, BaseText: pl.structure.Profile.Text}
 	}
-	byID := make(map[string]planned, len(pl.positions))
-	for _, p := range pl.positions {
-		byID[p.ID] = p
-	}
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p := byID[pe.PositionID]
 		cp := checks.Position{ID: p.ID}
@@ -228,6 +261,7 @@ func loadTab(ctx context.Context, docs DocFetcher, userID, docID, tabID string) 
 	}
 	ds, err := docparse.Parse(raw)
 	if err != nil {
+		slog.ErrorContext(ctx, "parse CV tab failed", slog.Any(logger.KeyErr, err))
 		return docparse.DocStructure{}, apperr.Unprocessable("could not read the CV tab")
 	}
 	return ds, nil
@@ -241,4 +275,8 @@ func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {
 		}
 	}
 	return edits
+}
+
+func normalizeText(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }

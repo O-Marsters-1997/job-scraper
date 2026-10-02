@@ -66,7 +66,71 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 			}
 		}
 	}
-	return s.store.ImportPositions(ctx, userID, positions)
+	fresh, touched, err := s.addToExistingRoles(ctx, userID, positions)
+	if err != nil {
+		return nil, err
+	}
+
+	out := []dto.Position{}
+	if len(fresh) > 0 {
+		if out, err = s.store.ImportPositions(ctx, userID, fresh); err != nil {
+			return nil, err
+		}
+	}
+	if len(touched) == 0 {
+		return out, nil
+	}
+	all, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range all {
+		if touched[p.ID] {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (s *Service) addToExistingRoles(ctx context.Context, userID string, positions []dto.ImportPosition) (fresh []dto.ImportPosition, touched map[string]bool, err error) {
+	existing, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	idOfRole := make(map[string]string, len(existing))
+	have := make(map[string]map[string]bool, len(existing))
+	for _, p := range existing {
+		idOfRole[roleKey(p.Employer, p.Title)] = p.ID
+		have[p.ID] = make(map[string]bool, len(p.Achievements))
+		for _, a := range p.Achievements {
+			have[p.ID][normalizeText(a.Text)] = true
+		}
+	}
+
+	touched = map[string]bool{}
+	for _, p := range positions {
+		id, ok := idOfRole[roleKey(p.Employer, p.Title)]
+		if !ok {
+			fresh = append(fresh, p)
+			continue
+		}
+		for _, text := range p.Achievements {
+			key := normalizeText(text)
+			if have[id][key] {
+				continue
+			}
+			if _, err := s.store.CreateAchievement(ctx, userID, dto.AchievementInput{PositionID: id, Text: text}); err != nil {
+				return nil, nil, err
+			}
+			have[id][key] = true
+			touched[id] = true
+		}
+	}
+	return fresh, touched, nil
+}
+
+func roleKey(employer, title string) string {
+	return normalizeText(employer) + "|" + normalizeText(title)
 }
 
 func positionsFromStructure(ds docparse.DocStructure) []dto.ImportPosition {

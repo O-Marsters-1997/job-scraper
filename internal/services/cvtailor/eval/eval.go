@@ -17,7 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
 
-//go:embed fixtures/*.json
+//go:embed fixtures/*.json fixtures/suggest/*.json
 var fixtureFS embed.FS
 
 const maxRetries = 2
@@ -42,22 +42,29 @@ type Fixture struct {
 }
 
 func Fixtures() ([]Fixture, error) {
-	entries, err := fs.ReadDir(fixtureFS, "fixtures")
+	return loadFixtures("fixtures", func(f *Fixture) *string { return &f.Name })
+}
+
+func loadFixtures[T any](dir string, name func(*T) *string) ([]T, error) {
+	entries, err := fs.ReadDir(fixtureFS, dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s: %w", dir, err)
 	}
-	var out []Fixture
+	var out []T
 	for _, e := range entries {
-		raw, err := fixtureFS.ReadFile(path.Join("fixtures", e.Name()))
-		if err != nil {
-			return nil, err
+		if e.IsDir() {
+			continue
 		}
-		var f Fixture
+		raw, err := fixtureFS.ReadFile(path.Join(dir, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read fixture %s: %w", e.Name(), err)
+		}
+		var f T
 		if err := json.Unmarshal(raw, &f); err != nil {
 			return nil, fmt.Errorf("fixture %s: %w", e.Name(), err)
 		}
-		if f.Name == "" {
-			f.Name = strings.TrimSuffix(e.Name(), ".json")
+		if n := name(&f); *n == "" {
+			*n = strings.TrimSuffix(e.Name(), ".json")
 		}
 		out = append(out, f)
 	}

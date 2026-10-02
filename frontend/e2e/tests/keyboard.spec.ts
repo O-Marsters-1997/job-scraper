@@ -1,6 +1,34 @@
 import { expect, test } from "../src/fixtures";
 
 test.describe("Keyboard operability", () => {
+	test("tabs through the Draft's lines in page order and blurs on Escape", async ({
+		page,
+		draftPage,
+	}) => {
+		await draftPage.goto();
+
+		await draftPage.line("Profile").focus();
+		const order = [
+			"Senior Backend Engineer bullet 1",
+			"Senior Backend Engineer bullet 2",
+			"Software Engineer bullet 1",
+		];
+		for (const label of order) {
+			await page.keyboard.press("Tab");
+			await expect(draftPage.line(label)).toBeFocused();
+		}
+
+		await page.keyboard.press("Enter");
+		const text = await draftPage
+			.line("Software Engineer bullet 1")
+			.evaluate((el) => el.textContent);
+		expect(text).not.toContain("\n");
+		await page.keyboard.press("Escape");
+		await expect(
+			draftPage.line("Software Engineer bullet 1"),
+		).not.toBeFocused();
+	});
+
 	test("sorts the jobs table and opens a job with the keyboard", async ({
 		page,
 		jobsPage,

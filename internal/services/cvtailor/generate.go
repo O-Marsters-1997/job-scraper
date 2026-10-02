@@ -35,6 +35,7 @@ var errInvalidEdit = errors.New("model returned an invalid edit")
 
 type Editor interface {
 	Edit(ctx context.Context, apiKey string, in cvedit.Input) (cvedit.Result, error)
+	Suggest(ctx context.Context, apiKey string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error)
 }
 
 // Credentials reads a user's stored provider API key.

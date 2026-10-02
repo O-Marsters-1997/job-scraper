@@ -2,6 +2,7 @@ package cvtailor_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -42,6 +43,8 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /tailoring/jobs/{jobId}/suggestions",
 		"POST /tailoring/drafts",
 		"GET /tailoring/drafts/{id}",
+		"GET /tailoring/drafts/{id}/layout",
+		"POST /tailoring/drafts/{id}/slots/{slotId}/suggest",
 		"GET /tailoring/drafts/{id}/pdf",
 		"POST /tailoring/drafts/{id}/keep",
 		"POST /tailoring/drafts/{id}/discard",
@@ -57,6 +60,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /experience/import",
 		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
 		"POST /tailoring/drafts",
+		"POST /tailoring/drafts/{id}/slots/{slotId}/suggest",
 	)
 	handlerstest.RejectsBadPathID(t, r,
 		"DELETE /experience/positions/{id}",
@@ -149,5 +153,49 @@ func TestReviewRoutes(t *testing.T) {
 		}
 
 		handlerstest.Do[dto.Draft](t, r, http.StatusOK, "POST /tailoring/drafts/"+ids[0]+"/discard", "")
+	})
+}
+
+func TestSuggestRoute(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.readyDrafts(t, 1)[0]
+	slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+	body := `{"action":"tighten","text":"Cut p99 latency"}`
+
+	t.Run("streams delta events then done as text/event-stream", func(t *testing.T) {
+		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("Cut ", "latency"), Creds: apiKey})
+
+		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
+
+		if ct := w.Header().Get("Content-Type"); w.Code != http.StatusOK || !strings.HasPrefix(ct, "text/event-stream") {
+			t.Fatalf("POST suggest = %d %q, want 200 text/event-stream", w.Code, ct)
+		}
+		want := "event: delta\ndata: {\"text\":\"Cut \"}\n\n" +
+			"event: delta\ndata: {\"text\":\"latency\"}\n\n" +
+			"event: done\ndata: {\"text\":\"Cut latency\",\"findings\":[]}\n\n"
+		if diff := cmp.Diff(want, w.Body.String()); diff != "" {
+			t.Errorf("POST suggest body (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a failure before the stream opens is a JSON error", func(t *testing.T) {
+		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: cvtailortest.NoKey{}})
+
+		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
+
+		if ct := w.Header().Get("Content-Type"); w.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(ct, "application/json") {
+			t.Errorf("POST suggest without a key = %d %q, want a 422 JSON error", w.Code, ct)
+		}
+	})
+
+	t.Run("the path ids win over the body's", func(t *testing.T) {
+		editor := cvtailortest.Suggesting("x")
+		r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
+
+		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"id":"other","slotId":"nope","action":"tighten","text":"Cut"}`)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("POST suggest = %d, want 200 using the path ids: %s", w.Code, w.Body)
+		}
 	})
 }

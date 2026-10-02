@@ -32,6 +32,29 @@ type Reply struct {
 type RecordingEditor struct {
 	replies []Reply
 	Inputs  []cvedit.Input
+
+	deltas        []string
+	suggestErr    error
+	SuggestInputs []cvedit.SuggestInput
+}
+
+// Suggesting is an Editor whose suggestions stream the given deltas.
+func Suggesting(deltas ...string) *RecordingEditor {
+	return &RecordingEditor{deltas: deltas}
+}
+
+// SuggestFailing streams the deltas, then fails with err; with no deltas the
+// stream never opens.
+func SuggestFailing(err error, deltas ...string) *RecordingEditor {
+	return &RecordingEditor{deltas: deltas, suggestErr: err}
+}
+
+func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error) {
+	e.SuggestInputs = append(e.SuggestInputs, in)
+	for _, d := range e.deltas {
+		onDelta(d)
+	}
+	return cvedit.SuggestResult{Text: strings.Join(e.deltas, ""), Cost: 0.001}, e.suggestErr
 }
 
 func ReplyingWith(replies ...Reply) *RecordingEditor {

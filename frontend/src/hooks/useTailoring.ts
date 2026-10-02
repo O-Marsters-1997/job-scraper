@@ -5,15 +5,15 @@ import {
 	createDraft,
 	discardDraft,
 	fetchDraft,
+	fetchDraftLayout,
 	fetchHeadings,
 	fetchJobDrafts,
 	fetchSuggestions,
 	keepDraft,
-	saveDraftSlots,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping, SlotEdit } from "../types/tailoring";
+import type { HeadingMapping } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
@@ -74,6 +74,16 @@ export function useDraft(id: Accessor<string | undefined>) {
 	}));
 }
 
+export function useDraftLayout(id: Accessor<string>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftLayout(id()),
+		queryFn: () => fetchDraftLayout(id()),
+		retry: false,
+		refetchOnWindowFocus: false,
+		gcTime: 0,
+	}));
+}
+
 export function useJobDrafts(jobId: Accessor<string>) {
 	return createQuery(() => ({
 		queryKey: keys.tailoring.jobDrafts(jobId()),
@@ -88,12 +98,4 @@ export function useKeepDraft() {
 
 export function useDiscardDraft() {
 	return useInvalidatingMutation(discardDraft, [keys.tailoring.all]);
-}
-
-export function useSaveDraftSlots() {
-	return useInvalidatingMutation(
-		({ id, slots }: { id: string; slots: SlotEdit[] }) =>
-			saveDraftSlots(id, slots),
-		[keys.tailoring.all],
-	);
 }

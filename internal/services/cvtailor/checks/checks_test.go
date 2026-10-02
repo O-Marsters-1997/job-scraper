@@ -135,6 +135,7 @@ func TestGroundingSkills(t *testing.T) {
 		skills     []string
 		baseSkills []string
 		bank       []string
+		baseText   []string
 		jobSkills  []string
 		wantSkills []want
 	}{
@@ -159,6 +160,11 @@ func TestGroundingSkills(t *testing.T) {
 			wantSkills: []want{{checks.Info, ""}},
 		},
 		{
+			name:      "job skill named anywhere in the base CV is no gap",
+			baseText:  []string{"Languages/ Frameworks \t\tTypescript", "Databases\t\t\t\tPostgreSQL"},
+			jobSkills: []string{"TypeScript", "PostgreSQL"},
+		},
+		{
 			name:       "job skill listed in skills is both blocked and reported",
 			skills:     []string{"Pulumi"},
 			jobSkills:  []string{"Pulumi"},
@@ -167,7 +173,7 @@ func TestGroundingSkills(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := checks.Draft{Skills: tt.skills, BaseSkills: tt.baseSkills, Bank: tt.bank, JobSkills: tt.jobSkills}
+			d := checks.Draft{Skills: tt.skills, BaseSkills: tt.baseSkills, Bank: tt.bank, BaseText: tt.baseText, JobSkills: tt.jobSkills}
 			if diff := cmp.Diff(tt.wantSkills, findings(checks.Grounding(d), "skills")); diff != "" {
 				t.Errorf("skills findings (-want +got):\n%s", diff)
 			}

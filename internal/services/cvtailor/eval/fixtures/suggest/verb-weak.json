@@ -1,0 +1,9 @@
+{
+ "Name": "verb-weak",
+ "Scenario": "Swap a weak opening verb.",
+ "Text": "Helped with the weekly release train for six squads",
+ "Achievements": [
+  "Ran the weekly release train for six squads"
+ ],
+ "Action": "verb"
+}

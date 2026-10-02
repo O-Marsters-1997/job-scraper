@@ -11,18 +11,20 @@ import (
 var ErrUnsupported = errors.New("tabcopy: tab has content that can't be rebuilt")
 
 type tab struct {
-	DocumentTab struct {
-		Body struct {
-			Content []element `json:"content"`
-		} `json:"body"`
-		DocumentStyle docStyle `json:"documentStyle"`
-		NamedStyles   struct {
-			Styles []namedStyle `json:"styles"`
-		} `json:"namedStyles"`
-		Lists   map[string]list            `json:"lists"`
-		Headers map[string]json.RawMessage `json:"headers"`
-		Footers map[string]json.RawMessage `json:"footers"`
-	} `json:"documentTab"`
+	DocumentTab tabBody `json:"documentTab"`
+}
+
+type tabBody struct {
+	Body struct {
+		Content []element `json:"content"`
+	} `json:"body"`
+	DocumentStyle docStyle `json:"documentStyle"`
+	NamedStyles   struct {
+		Styles []namedStyle `json:"styles"`
+	} `json:"namedStyles"`
+	Lists   map[string]list            `json:"lists"`
+	Headers map[string]json.RawMessage `json:"headers"`
+	Footers map[string]json.RawMessage `json:"footers"`
 }
 
 type element struct {
@@ -72,6 +74,7 @@ type docStyle struct {
 
 type nestingLevel struct {
 	GlyphType       string          `json:"glyphType"`
+	GlyphSymbol     string          `json:"glyphSymbol"`
 	IndentFirstLine json.RawMessage `json:"indentFirstLine"`
 	IndentStart     json.RawMessage `json:"indentStart"`
 }
@@ -90,18 +93,9 @@ const (
 // Tab tabID with every style explicit: the Docs API can neither copy a Tab nor
 // set its named styles.
 func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
-	var t tab
-	if err := json.Unmarshal(src, &t); err != nil {
-		return nil, fmt.Errorf("decoding tab: %w", err)
-	}
-	dt := t.DocumentTab
-	if len(dt.Headers) > 0 || len(dt.Footers) > 0 {
-		return nil, fmt.Errorf("%w: headers or footers", ErrUnsupported)
-	}
-
-	named := map[string]namedStyle{}
-	for _, s := range dt.NamedStyles.Styles {
-		named[s.NamedStyleType] = s
+	dt, named, err := decode(src)
+	if err != nil {
+		return nil, err
 	}
 
 	var text strings.Builder
@@ -109,40 +103,19 @@ func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
 	var run bulletRun
 
 	for _, el := range dt.Body.Content {
-		switch {
-		case el.SectionBreak != nil:
-			var sb struct {
-				SectionStyle struct {
-					ColumnProperties []json.RawMessage `json:"columnProperties"`
-				} `json:"sectionStyle"`
-			}
-			if err := json.Unmarshal(*el.SectionBreak, &sb); err != nil {
-				return nil, fmt.Errorf("decoding section break: %w", err)
-			}
-			if el.StartIndex != 0 {
-				return nil, fmt.Errorf("%w: section break at index %d", ErrUnsupported, el.StartIndex)
-			}
-			if len(sb.SectionStyle.ColumnProperties) > maxColumns {
-				return nil, fmt.Errorf("%w: multiple columns", ErrUnsupported)
-			}
-			continue
-		case el.Paragraph == nil:
-			return nil, fmt.Errorf("%w: non-paragraph content at index %d", ErrUnsupported, el.StartIndex)
+		p, err := paragraphOf(el)
+		if err != nil {
+			return nil, err
 		}
-		p := el.Paragraph
+		if p == nil {
+			continue
+		}
 
 		for _, pe := range p.Elements {
-			if pe.TextRun == nil {
-				return nil, fmt.Errorf("%w: inline element at index %d", ErrUnsupported, pe.StartIndex)
-			}
 			text.WriteString(pe.TextRun.Content)
 		}
 
-		namedType := p.ParagraphStyle.namedType()
-		pstyle := merge(named[normalText].ParagraphStyle, named[namedType].ParagraphStyle)
 		if p.Bullet != nil {
-			lvl := levelOf(dt.Lists, p.Bullet.ListID, p.Bullet.NestingLevel)
-			pstyle = merge(pstyle, style{"indentStart": lvl.IndentStart, "indentFirstLine": lvl.IndentFirstLine})
 			if p.Bullet.ListID == run.listID && el.StartIndex == run.end {
 				run.end = el.EndIndex
 			} else {
@@ -150,15 +123,16 @@ func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
 				run = bulletRun{listID: p.Bullet.ListID, start: el.StartIndex, end: el.EndIndex}
 			}
 		}
-		pstyle = merge(pstyle, p.ParagraphStyle)
+		pstyle := paragraphStyleOf(p, named, dt.Lists)
 		delete(pstyle, "namedStyleType")
 		delete(pstyle, "headingId")
 		if r := updateStyle("updateParagraphStyle", "paragraphStyle", pstyle, el.StartIndex, el.EndIndex, tabID); r != nil {
 			paragraphs = append(paragraphs, r)
 		}
 
+		namedType := p.ParagraphStyle.namedType()
 		for _, pe := range p.Elements {
-			tstyle := merge(named[normalText].TextStyle, named[namedType].TextStyle, pe.TextRun.TextStyle)
+			tstyle := textStyleOf(named, namedType, pe.TextRun.TextStyle)
 			if r := updateStyle("updateTextStyle", "textStyle", tstyle, pe.StartIndex, pe.EndIndex, tabID); r != nil {
 				runs = append(runs, r)
 			}
@@ -190,6 +164,19 @@ func (s style) namedType() string {
 		return normalText
 	}
 	return n
+}
+
+func paragraphStyleOf(p *paragraph, named map[string]namedStyle, lists map[string]list) style {
+	pstyle := merge(named[normalText].ParagraphStyle, named[p.ParagraphStyle.namedType()].ParagraphStyle)
+	if p.Bullet != nil {
+		lvl := levelOf(lists, p.Bullet.ListID, p.Bullet.NestingLevel)
+		pstyle = merge(pstyle, style{"indentStart": lvl.IndentStart, "indentFirstLine": lvl.IndentFirstLine})
+	}
+	return merge(pstyle, p.ParagraphStyle)
+}
+
+func textStyleOf(named map[string]namedStyle, namedType string, own style) style {
+	return merge(named[normalText].TextStyle, named[namedType].TextStyle, own)
 }
 
 func levelOf(ls map[string]list, id string, level int) nestingLevel {
@@ -267,4 +254,49 @@ func mustRequest(kind string, body map[string]any) json.RawMessage {
 		panic(fmt.Sprintf("tabcopy: marshalling %s: %v", kind, err))
 	}
 	return b
+}
+
+func decode(src json.RawMessage) (dt tabBody, named map[string]namedStyle, err error) {
+	var t tab
+	if err := json.Unmarshal(src, &t); err != nil {
+		return dt, nil, fmt.Errorf("decoding tab: %w", err)
+	}
+	dt = t.DocumentTab
+	if len(dt.Headers) > 0 || len(dt.Footers) > 0 {
+		return dt, nil, fmt.Errorf("%w: headers or footers", ErrUnsupported)
+	}
+	named = map[string]namedStyle{}
+	for _, s := range dt.NamedStyles.Styles {
+		named[s.NamedStyleType] = s
+	}
+	return dt, named, nil
+}
+
+func paragraphOf(el element) (*paragraph, error) {
+	if el.SectionBreak != nil {
+		var sb struct {
+			SectionStyle struct {
+				ColumnProperties []json.RawMessage `json:"columnProperties"`
+			} `json:"sectionStyle"`
+		}
+		if err := json.Unmarshal(*el.SectionBreak, &sb); err != nil {
+			return nil, fmt.Errorf("decoding section break: %w", err)
+		}
+		if el.StartIndex != 0 {
+			return nil, fmt.Errorf("%w: section break at index %d", ErrUnsupported, el.StartIndex)
+		}
+		if len(sb.SectionStyle.ColumnProperties) > maxColumns {
+			return nil, fmt.Errorf("%w: multiple columns", ErrUnsupported)
+		}
+		return nil, nil
+	}
+	if el.Paragraph == nil {
+		return nil, fmt.Errorf("%w: non-paragraph content at index %d", ErrUnsupported, el.StartIndex)
+	}
+	for _, pe := range el.Paragraph.Elements {
+		if pe.TextRun == nil {
+			return nil, fmt.Errorf("%w: inline element at index %d", ErrUnsupported, pe.StartIndex)
+		}
+	}
+	return el.Paragraph, nil
 }
