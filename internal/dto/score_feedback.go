@@ -5,15 +5,17 @@ import "time"
 // ScoreFeedback is one logged note about the scoring: the reason, plus the
 // Picks and model in force when it was written.
 type ScoreFeedback struct {
-	ID        string                `json:"id"`
-	Kind      string                `json:"kind"`
-	Direction *string               `json:"direction,omitempty"`
-	JobID     *string               `json:"jobId,omitempty"`
-	Reason    string                `json:"reason"`
-	Picks     []Pick                `json:"picks"`
-	Model     string                `json:"model"`
-	Snapshot  ScoreFeedbackSnapshot `json:"snapshot"`
-	CreatedAt time.Time             `json:"createdAt"`
+	ID           string                `json:"id"`
+	Kind         string                `json:"kind"`
+	Direction    *string               `json:"direction,omitempty"`
+	JobID        *string               `json:"jobId,omitempty"`
+	Reason       string                `json:"reason"`
+	Picks        []Pick                `json:"picks"`
+	Model        string                `json:"model"`
+	Snapshot     ScoreFeedbackSnapshot `json:"snapshot"`
+	CreatedAt    time.Time             `json:"createdAt"`
+	PicksChanged bool                  `json:"picksChanged"`
+	ModelChanged bool                  `json:"modelChanged"`
 }
 
 // ScoreFeedbackSnapshot is what a kind froze beside its reason: a Job entry
@@ -73,13 +75,27 @@ type JobFeedbackInput struct {
 // ScoreFeedbackQuery filters and pages the log. Kind is empty for all kinds;
 // Page is 1-based and defaults to 1.
 type ScoreFeedbackQuery struct {
-	Kind string `json:"kind"`
-	Page string `json:"page"`
+	Kind     string `json:"kind"`
+	Outdated string `json:"outdated"`
+	Page     string `json:"page"`
 }
 
+// ScoreFeedbackFilter selects entries for the store: Model is the live model
+// that drift is measured against, and outdated entries are listed only when
+// IncludeOutdated is set.
+type ScoreFeedbackFilter struct {
+	Kind            string
+	Model           string
+	IncludeOutdated bool
+}
+
+// ScoreFeedbackPage is one page of the log. Total counts what the query
+// matches; CurrentCount and OutdatedCount split the matching kind's entries.
 type ScoreFeedbackPage struct {
-	Entries []ScoreFeedback `json:"entries"`
-	Total   int             `json:"total"`
+	Entries       []ScoreFeedback `json:"entries"`
+	Total         int             `json:"total"`
+	CurrentCount  int             `json:"currentCount"`
+	OutdatedCount int             `json:"outdatedCount"`
 }
 
 type OverallFeedbackInput struct {

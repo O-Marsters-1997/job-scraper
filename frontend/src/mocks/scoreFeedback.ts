@@ -20,6 +20,8 @@ export function listScoreFeedback(
 	return structuredClone({
 		entries: matching.slice(start, start + SCORE_FEEDBACK_PAGE_SIZE),
 		total: matching.length,
+		currentCount: matching.length,
+		outdatedCount: 0,
 	});
 }
 
@@ -34,6 +36,8 @@ export function appendOverallFeedback(reason: string): ScoreFeedback {
 		reason,
 		model: "typesafe/jev-1.13",
 		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
 	};
 	entries = [entry, ...entries];
 	return structuredClone(entry);
@@ -64,6 +68,8 @@ export function appendJobFeedback(input: JobFeedbackInput): ScoreFeedback {
 			})),
 		},
 		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
 	};
 	entries = [entry, ...entries];
 	return structuredClone(entry);

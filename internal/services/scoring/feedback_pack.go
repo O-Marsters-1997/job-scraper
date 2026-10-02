@@ -32,7 +32,7 @@ func packPicks(picks []dto.Pick, b bank) []packPick {
 	return out
 }
 
-func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
+func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted int, includeOutdated bool) string {
 	var overall, jobs, collections []dto.ScoreFeedback
 	for _, e := range entries {
 		switch e.Kind {
@@ -46,7 +46,11 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# Feedback Pack\n\n%d overall · %d Job entries · %d Collection entries\n\n", len(overall), len(jobs), len(collections))
+	fmt.Fprintf(&sb, "# Feedback Pack\n\n%d overall · %d Job entries · %d Collection entries", len(overall), len(jobs), len(collections))
+	if !includeOutdated {
+		fmt.Fprintf(&sb, " · %d outdated omitted (--include-outdated)", outdatedOmitted)
+	}
+	sb.WriteString("\n\n")
 
 	sb.WriteString("## How Suitability is computed\n\n")
 	sb.WriteString("Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.\n")
@@ -80,6 +84,9 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 		sb.WriteString("(none)\n\n")
 	}
 	for _, e := range overall {
+		if tag := driftTag(e); tag != "" {
+			fmt.Fprintf(&sb, "[%s]\n\n", tag)
+		}
 		writeReason(&sb, e.Reason)
 	}
 
@@ -99,6 +106,17 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 		writeCollectionEntry(&sb, e)
 	}
 	return sb.String()
+}
+
+func driftTag(e dto.ScoreFeedback) string {
+	var tags []string
+	if e.PicksChanged {
+		tags = append(tags, "picks changed")
+	}
+	if e.ModelChanged {
+		tags = append(tags, "model changed")
+	}
+	return strings.Join(tags, ", ")
 }
 
 func writeReason(sb *strings.Builder, reason string) {
@@ -122,7 +140,11 @@ func writeJobEntry(sb *strings.Builder, e dto.ScoreFeedback) {
 	if e.Direction != nil {
 		direction = *e.Direction
 	}
-	fmt.Fprintf(sb, "### %s, %s: score %d, should be %s\n\n", state.Title, state.Company, score, direction)
+	heading := fmt.Sprintf("%s, %s: score %d, should be %s", state.Title, state.Company, score, direction)
+	if tag := driftTag(e); tag != "" {
+		heading += " [" + tag + "]"
+	}
+	fmt.Fprintf(sb, "### %s\n\n", heading)
 	writeReason(sb, e.Reason)
 	fmt.Fprintf(sb, "- Model: %s\n- Score model: %s\n- Score fingerprint: %s\n- Content fingerprint: %s\n\n",
 		e.Model, snap.ScoreModel, snap.ScoreFingerprint, snap.ContentFingerprint)

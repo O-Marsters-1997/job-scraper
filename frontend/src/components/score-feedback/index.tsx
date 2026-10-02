@@ -74,7 +74,12 @@ export default function ScoreFeedbackPanel() {
 	);
 	const [kind, setKind] = createSignal<ScoreFeedbackKind | undefined>();
 	const [page, setPage] = createSignal(1);
-	const feedback = useScoreFeedback(kind, page);
+	const [showOutdated, setShowOutdated] = createSignal(false);
+	const feedback = useScoreFeedback(kind, page, showOutdated);
+	const pill = useScoreFeedback(
+		() => undefined,
+		() => 1,
+	);
 	const appendOverall = useAppendOverallFeedback();
 	const appendJob = useAppendJobFeedback();
 	const appendCollection = useAppendCollectionFeedback();
@@ -200,6 +205,7 @@ export default function ScoreFeedbackPanel() {
 				onClick={() => setOpen(true)}
 			>
 				Score feedback
+				<Show when={pill.data}>{(p) => ` (${p().currentCount})`}</Show>
 			</button>
 			<Show when={hovered()}>
 				{(rect) => (
@@ -311,6 +317,20 @@ export default function ScoreFeedbackPanel() {
 						</For>
 					</div>
 
+					<Show when={(feedback.data?.outdatedCount ?? 0) > 0}>
+						<label class="flex items-center gap-2 text-xs text-muted">
+							<input
+								type="checkbox"
+								checked={showOutdated()}
+								onChange={(e) => {
+									setShowOutdated(e.currentTarget.checked);
+									setPage(1);
+								}}
+							/>
+							Show {feedback.data?.outdatedCount} outdated
+						</label>
+					</Show>
+
 					<ul class="flex flex-col gap-2">
 						<For
 							each={feedback.data?.entries}
@@ -400,6 +420,16 @@ function FeedbackEntry(props: { entry: ScoreFeedback }): JSX.Element {
 				{props.entry.direction ? ` · ${props.entry.direction}` : ""} ·{" "}
 				{new Date(props.entry.createdAt).toLocaleString()}
 			</span>
+			<Show when={props.entry.picksChanged || props.entry.modelChanged}>
+				<span class="text-2xs font-medium text-muted">
+					{[
+						props.entry.picksChanged && "picks changed",
+						props.entry.modelChanged && "model changed",
+					]
+						.filter(Boolean)
+						.join(" · ")}
+				</span>
+			</Show>
 			<p class="text-sm whitespace-pre-wrap text-foreground">
 				{props.entry.reason}
 			</p>

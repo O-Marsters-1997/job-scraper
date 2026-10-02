@@ -778,7 +778,7 @@ func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
 		t.Fatalf("InsertScoreFeedback() err = %v", err)
 	}
 
-	got, err := st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
+	got, err := st.ListScoreFeedback(t.Context(), userID, dto.ScoreFeedbackFilter{Model: "m", IncludeOutdated: true}, 10, 0)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("ListScoreFeedback() = %+v, %v, want one entry", got, err)
 	}
@@ -807,7 +807,7 @@ func TestScoreFeedback_JobEntryRoundTripsAndSurvivesJobDelete(t *testing.T) {
 	if _, err := st.InsertScoreFeedback(t.Context(), userID, entry); err != nil {
 		t.Fatalf("InsertScoreFeedback() err = %v", err)
 	}
-	got, err := st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
+	got, err := st.ListScoreFeedback(t.Context(), userID, dto.ScoreFeedbackFilter{Model: "m", IncludeOutdated: true}, 10, 0)
 	if err != nil || len(got) != 1 {
 		t.Fatalf("ListScoreFeedback() = %+v, %v, want one entry", got, err)
 	}
@@ -816,7 +816,7 @@ func TestScoreFeedback_JobEntryRoundTripsAndSurvivesJobDelete(t *testing.T) {
 	}
 
 	exec(t, pool, `DELETE FROM jobs WHERE id = $1`, jobID)
-	got, err = st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
+	got, err = st.ListScoreFeedback(t.Context(), userID, dto.ScoreFeedbackFilter{Model: "m", IncludeOutdated: true}, 10, 0)
 	if err != nil || len(got) != 1 || got[0].JobID != nil {
 		t.Errorf("ListScoreFeedback() after job delete = %+v, %v, want the entry kept with no job id", got, err)
 	}

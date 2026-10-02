@@ -14,12 +14,14 @@ import { mocked } from "./config";
 export async function fetchScoreFeedback(
 	kind: ScoreFeedbackKind | undefined,
 	page: number,
+	outdated: boolean,
 ): Promise<ScoreFeedbackPage> {
 	return mocked(
 		(db) => db.listScoreFeedback(kind, page),
 		() => {
 			const params = new URLSearchParams({ page: String(page) });
 			if (kind) params.set("kind", kind);
+			if (outdated) params.set("outdated", "true");
 			return apiFetch(`/scoring-feedback?${params}`, scoreFeedbackPageSchema);
 		},
 	);

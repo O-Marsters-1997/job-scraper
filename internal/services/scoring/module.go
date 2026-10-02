@@ -148,9 +148,10 @@ func (m *Module) RetireOption(ctx context.Context, id string) error {
 	return m.store.RetireScoringOption(ctx, id)
 }
 
-// ExportFeedback renders userID's Score Feedback log as a Feedback Pack.
-func (m *Module) ExportFeedback(ctx context.Context, userID string) (string, error) {
-	return m.svc.ExportFeedback(ctx, userID)
+// ExportFeedback renders userID's Score Feedback log as a Feedback Pack,
+// leaving out outdated entries unless includeOutdated.
+func (m *Module) ExportFeedback(ctx context.Context, userID string, includeOutdated bool) (string, error) {
+	return m.svc.ExportFeedback(ctx, userID, includeOutdated)
 }
 
 // ClearFeedback hard-deletes userID's Score Feedback log and returns the
