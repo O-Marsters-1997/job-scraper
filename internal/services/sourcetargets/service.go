@@ -72,6 +72,7 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	if in.Source == "indeed" {
 		if search, ok := detect.ParseSearchURL(in.Value); ok && search.Source == in.Source {
 			in.Value = search.Value
+			in.Filters = search.Filters
 		}
 	}
 

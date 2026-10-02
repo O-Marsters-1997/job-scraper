@@ -56,12 +56,12 @@ func TestParseSearchURL(t *testing.T) {
 			},
 		},
 		{
-			name: "indeed tracking params leave the canonical url",
+			name: "indeed tracking params are dropped and filters named",
 			url:  "https://uk.indeed.com/jobs?q=golang&l=London&vjk=abc123&from=searchOnDesktopSerp&start=10&fromage=7",
 			want: detect.SearchURL{
 				Source:  "indeed",
-				Value:   "https://uk.indeed.com/jobs?fromage=7&l=London&q=golang",
-				Filters: map[string]string{},
+				Value:   "golang",
+				Filters: map[string]string{"location": "London", "recency": "7"},
 				Dropped: []string{"from", "vjk"},
 			},
 		},
@@ -139,9 +139,9 @@ func TestBuildSearchURL(t *testing.T) {
 			want: "https://workinstartups.com/search?q=product+engineer&w=uk",
 		},
 		{
-			name:   "indeed re-normalises a stored url",
-			source: "indeed", value: "https://www.indeed.com/jobs?q=go&vjk=abc&start=20",
-			want: "https://www.indeed.com/jobs?q=go",
+			name:   "indeed keywords and filters",
+			source: "indeed", value: "go", filters: map[string]string{"location": "London", "radius": "25"},
+			want: "https://uk.indeed.com/jobs?l=London&q=go&radius=25",
 		},
 		{name: "source without a search page", source: "greenhouse", value: "acme", want: ""},
 	}
@@ -187,7 +187,7 @@ func TestBuildSearchURL(t *testing.T) {
 		}
 
 		t.Run("indeed", func(t *testing.T) {
-			raw := "https://www.indeed.com/jobs?fromage=7&jt=fulltime&l=London&q=golang&radius=25&sort=date"
+			raw := "https://uk.indeed.com/jobs?fromage=7&l=London&q=golang&radius=25"
 			parsed, ok := detect.ParseSearchURL(raw)
 			if !ok {
 				t.Fatal("ok = false")

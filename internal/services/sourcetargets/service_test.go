@@ -146,7 +146,7 @@ func TestCreate(t *testing.T) {
 				name:        "indeed urls differing in tracking params",
 				first:       dto.CreateSourceTargetInput{Source: "indeed", Value: "https://www.indeed.com/jobs?q=golang&l=London&vjk=abc"},
 				second:      dto.CreateSourceTargetInput{Source: "indeed", Value: "https://www.indeed.com/jobs?l=London&q=golang&from=searchOnDesktopSerp&start=10"},
-				wantStoredV: "https://www.indeed.com/jobs?l=London&q=golang",
+				wantStoredV: "golang",
 			},
 		}
 		for _, tt := range tests {
