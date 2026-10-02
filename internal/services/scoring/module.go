@@ -62,8 +62,10 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 	})
 }
 
+// NewFacade wires the scoring store alone, for cmd/admin; the answer loop
+// and its collaborators are absent.
 func NewFacade(pool *pgxpool.Pool) *Module {
-	return &Module{store: store.New(pool)}
+	return Build(Deps{Store: store.New(pool)})
 }
 
 // Run drains the answer-effect queue until ctx is cancelled.
@@ -125,4 +127,15 @@ func (m *Module) RewordOption(ctx context.Context, id, question string) error {
 
 func (m *Module) RetireOption(ctx context.Context, id string) error {
 	return m.store.RetireScoringOption(ctx, id)
+}
+
+// ExportFeedback renders userID's Score Feedback log as a Feedback Pack.
+func (m *Module) ExportFeedback(ctx context.Context, userID string) (string, error) {
+	return m.svc.ExportFeedback(ctx, userID)
+}
+
+// ClearFeedback hard-deletes userID's Score Feedback log and returns the
+// count removed.
+func (m *Module) ClearFeedback(ctx context.Context, userID string) (int64, error) {
+	return m.svc.ClearFeedback(ctx, userID)
 }

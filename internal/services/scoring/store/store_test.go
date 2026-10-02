@@ -15,7 +15,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
-	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
@@ -83,10 +82,10 @@ func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) s
 }
 
 func TestScoringStoreContract(t *testing.T) {
-	scoringtest.RunStoreContract(t, func(t *testing.T) scoring.Store {
+	scoringtest.RunStoreContract(t, func(t *testing.T) scoringtest.Fixture {
 		t.Helper()
-		st, _ := newStore(t)
-		return st
+		st, pool := newStore(t)
+		return scoringtest.Fixture{Store: st, NewUser: func() string { return pgtest.InsertUser(t, pool) }}
 	})
 }
 
@@ -719,5 +718,42 @@ func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
 	want := map[string]dto.Answer{"h1": {PYes: 0.5}, "h2": {PNo: 0.5}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ListAnswers() (-want +got):\n%s", diff)
+	}
+}
+
+func TestScoreFeedback_BlankReasonIsRejectedAndWritesNothing(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+
+	_, err := st.InsertScoreFeedback(t.Context(), userID, dto.ScoreFeedback{Kind: "overall", Reason: "  ", Picks: []dto.Pick{}, Model: "m"})
+	if err == nil {
+		t.Fatal("InsertScoreFeedback(blank reason) err = nil, want the CHECK to reject it")
+	}
+	if n := countRows(t, pool, "SELECT count(*) FROM score_feedback"); n != 0 {
+		t.Errorf("score_feedback rows = %d, want 0", n)
+	}
+}
+
+func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	picks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
+
+	if _, err := st.InsertScoreFeedback(t.Context(), userID, dto.ScoreFeedback{Kind: "overall", Reason: "too generous", Picks: picks, Model: "jev-1"}); err != nil {
+		t.Fatalf("InsertScoreFeedback() err = %v", err)
+	}
+
+	got, err := st.ListScoreFeedback(t.Context(), userID, 10)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ListScoreFeedback() = %+v, %v, want one entry", got, err)
+	}
+	if diff := cmp.Diff(picks, got[0].Picks); diff != "" {
+		t.Errorf("ListScoreFeedback() picks (-want +got):\n%s", diff)
+	}
+	if got[0].Kind != "overall" || got[0].Model != "jev-1" {
+		t.Errorf("ListScoreFeedback() = %+v, want kind overall and model jev-1", got[0])
+	}
+	if n := countRows(t, pool, "SELECT count(*) FROM score_feedback WHERE job_id IS NULL AND direction IS NULL"); n != 1 {
+		t.Errorf("rows with NULL job_id and direction = %d, want 1", n)
 	}
 }

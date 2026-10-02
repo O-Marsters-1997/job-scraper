@@ -24,6 +24,8 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
+	fmt.Fprintln(os.Stderr, "       admin scoring-feedback export <username>")
+	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
 	os.Exit(1)
 }
 
@@ -39,6 +41,8 @@ func main() {
 		runCreateUser(os.Args[2:])
 	case "options":
 		runOptions(os.Args[2:])
+	case "scoring-feedback":
+		runScoringFeedback(os.Args[2:])
 	default:
 		usage()
 	}
@@ -132,6 +136,36 @@ func runOptions(args []string) {
 		fatal(label, err)
 	}
 	fmt.Println(done)
+}
+
+func runScoringFeedback(args []string) {
+	if len(args) != 2 || (args[0] != "export" && args[0] != "clear") {
+		usage()
+	}
+	action, username := args[0], args[1]
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	userID, err := identity.NewFacade(pool, nil).UserIDByUsername(ctx, username)
+	if err != nil {
+		fatal("find user", err)
+	}
+	m := scoring.NewFacade(pool)
+	if action == "clear" {
+		n, err := m.ClearFeedback(ctx, userID)
+		if err != nil {
+			fatal("clear feedback", err)
+		}
+		fmt.Fprintf(os.Stderr, "Cleared %d entries\n", n)
+		return
+	}
+	pack, err := m.ExportFeedback(ctx, userID)
+	if err != nil {
+		fatal("export feedback", err)
+	}
+	fmt.Print(pack)
 }
 
 func fatal(what string, err error) {

@@ -3,6 +3,7 @@ export * from "./companies";
 export * from "./cvs";
 export * from "./experience";
 export * from "./jobs";
+export * from "./scoreFeedback";
 export * from "./scoring";
 export * from "./settings";
 export * from "./sources";

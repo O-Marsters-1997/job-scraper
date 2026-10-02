@@ -7,6 +7,7 @@ import (
 	"context"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,8 @@ type FakeStore struct {
 	search  map[string]dto.SearchConfig
 	scored  map[string]bool
 
+	feedback map[string][]dto.ScoreFeedback
+
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
 	recomputed    []dto.JobScore
@@ -59,6 +62,8 @@ func NewFakeStore() *FakeStore {
 		inputs:  make(map[string][]store.ScoringInput),
 		search:  make(map[string]dto.SearchConfig),
 		scored:  make(map[string]bool),
+
+		feedback: make(map[string][]dto.ScoreFeedback),
 	}
 }
 
@@ -379,3 +384,31 @@ func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, m
 }
 
 var _ scoring.Store = (*FakeStore)(nil)
+
+func (f *FakeStore) InsertScoreFeedback(_ context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	entry.ID = "feedback-" + strconv.Itoa(len(f.feedback[userID])+1)
+	entry.CreatedAt = time.Now()
+	f.feedback[userID] = append(f.feedback[userID], entry)
+	return entry, nil
+}
+
+func (f *FakeStore) ListScoreFeedback(_ context.Context, userID string, limit int) ([]dto.ScoreFeedback, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	entries := slices.Clone(f.feedback[userID])
+	slices.Reverse(entries)
+	if len(entries) > limit {
+		entries = entries[:limit]
+	}
+	return entries, nil
+}
+
+func (f *FakeStore) ClearScoreFeedback(_ context.Context, userID string) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := int64(len(f.feedback[userID]))
+	delete(f.feedback, userID)
+	return n, nil
+}
