@@ -71,18 +71,7 @@ func TestRoutesHappyPath(t *testing.T) {
 	}
 }
 
-func TestFeedbackRoutesAreAbsentUnlessEnabled(t *testing.T) {
-	t.Setenv("SCORING_FEEDBACK", "")
-	r := newTestRouter(t)
-
-	rec := handlerstest.Serve(t, r, "POST /scoring-feedback/overall", `{"reason":"x"}`)
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("POST /scoring-feedback/overall status = %d, want 404 with the flag unset", rec.Code)
-	}
-}
-
 func TestFeedbackRoutes(t *testing.T) {
-	t.Setenv("SCORING_FEEDBACK", "true")
 	r := newTestRouter(t)
 
 	handlerstest.RequiresAuth(t, r, "POST /scoring-feedback/overall", "GET /scoring-feedback", "DELETE /scoring-feedback/{id}")
@@ -122,7 +111,6 @@ func TestFeedbackRoutes(t *testing.T) {
 }
 
 func TestJobFeedbackRoute(t *testing.T) {
-	t.Setenv("SCORING_FEEDBACK", "true")
 	st := newFakeStore()
 	seedScoredJob(st, handlerstest.UserID, "tech:go")
 	r := chi.NewRouter()
@@ -151,7 +139,6 @@ func TestJobFeedbackRoute(t *testing.T) {
 }
 
 func TestCollectionFeedbackRoute(t *testing.T) {
-	t.Setenv("SCORING_FEEDBACK", "true")
 	st := newFakeStore()
 	seedScoredJob(st, handlerstest.UserID, "tech:go")
 	r := chi.NewRouter()
