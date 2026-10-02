@@ -16,11 +16,13 @@ import (
 
 type cvLine struct {
 	heading bool
+	prose   bool
 	text    string
 }
 
 func head(text string) cvLine   { return cvLine{heading: true, text: text} }
 func bullet(text string) cvLine { return cvLine{text: text} }
+func prose(text string) cvLine  { return cvLine{prose: true, text: text} }
 
 func tabJSON(t *testing.T, lines ...cvLine) json.RawMessage {
 	t.Helper()
@@ -30,7 +32,7 @@ func tabJSON(t *testing.T, lines ...cvLine) json.RawMessage {
 		style, bulletJSON := "NORMAL_TEXT", ""
 		if l.heading {
 			style = "HEADING_2"
-		} else {
+		} else if !l.prose {
 			bulletJSON = `,"bullet":{}`
 		}
 		end := idx + len(l.text) + 1

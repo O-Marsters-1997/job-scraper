@@ -184,6 +184,13 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 		}
 	}
 	out := &dto.DraftProvenance{Positions: []dto.ProvenancePosition{}}
+	if edits.Profile != nil {
+		var bankText []string
+		for _, a := range achievementByID {
+			bankText = append(bankText, a.Text)
+		}
+		out.Profile = &dto.ProvenanceProfile{SlotID: profileSlotID, Segments: markNovel(*edits.Profile, bankText)}
+	}
 	for _, pe := range edits.Positions {
 		p := positionByID[pe.PositionID]
 		pp := dto.ProvenancePosition{PositionID: pe.PositionID, Employer: p.Employer, Title: p.Title, Bullets: []dto.ProvenanceBullet{}}

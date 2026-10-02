@@ -20,6 +20,21 @@ func (e draftEnv) editing(t *testing.T, drive cvtailor.Drive) *cvtailor.Service 
 	return cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t)}, nil, drive)
 }
 
+func profileTab(t *testing.T) cvtailortest.Docs {
+	t.Helper()
+	return cvtailortest.Docs{TabJSON: tabJSON(t, head("Profile"), prose("Engineer who ships."), head(heading), bullet("Built and maintained the public APIs for the platform"))}
+}
+
+func (e draftEnv) readyWithProfile(t *testing.T, profile string) (string, *cvtailor.Service) {
+	t.Helper()
+	docs := profileTab(t)
+	result := e.bulletResult("Cut p99 latency by moving queries to Postgres", 0)
+	result.Edits.Profile = &profile
+	id := e.queue(t)
+	e.run(t, tick{docs: docs, editor: cvtailortest.Editing(result)})
+	return id, cvtailor.NewService(e.store, docs, nil, e.drive)
+}
+
 func (e draftEnv) saved(t *testing.T, svc *cvtailor.Service, id string, slots ...dto.SlotEdit) dto.Draft {
 	t.Helper()
 	d, err := svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Slots: slots})
@@ -80,6 +95,63 @@ func TestSaveDraftSlots(t *testing.T) {
 
 		if diff := cmp.Diff([]string{"page_count"}, findingChecks(got.Findings, "block")); diff != "" {
 			t.Errorf("block checks mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("writes an edited profile to the Doc and its own provenance", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id, svc := e.readyWithProfile(t, "Engineer who ships.")
+
+		got := e.saved(t, svc, id, dto.SlotEdit{SlotID: "profile", Text: " Engineer who cuts latency. "})
+
+		if inserted := insertedText(t, e.drive); !slices.Contains(inserted, "Engineer who cuts latency.") {
+			t.Errorf("inserted text = %q, want it to include the edited profile", inserted)
+		}
+		if got.Provenance.Profile == nil || got.Provenance.Profile.SlotID != "profile" {
+			t.Fatalf("SaveDraftSlots().Provenance.Profile = %+v, want the profile slot", got.Provenance.Profile)
+		}
+		if got.Content.Profile == nil || *got.Content.Profile != "Engineer who cuts latency." {
+			t.Errorf("SaveDraftSlots().Content.Profile = %v, want the edited text", got.Content.Profile)
+		}
+	})
+
+	t.Run("marks unbacked profile words as novel", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id, svc := e.readyWithProfile(t, "Engineer who ships.")
+
+		got := e.saved(t, svc, id, dto.SlotEdit{SlotID: "profile", Text: "Mentored four engineers at Kubernetes scale"})
+
+		want := []dto.TextSegment{
+			{Text: "Mentored four engineers at "},
+			{Text: "Kubernetes", Novel: true},
+			{Text: " "},
+			{Text: "scale", Novel: true},
+		}
+		if diff := cmp.Diff(want, got.Provenance.Profile.Segments); diff != "" {
+			t.Errorf("profile segments mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a bullet-only save leaves the profile paragraph alone", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id, svc := e.readyWithProfile(t, "Engineer who ships.")
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+
+		e.saved(t, svc, id, dto.SlotEdit{SlotID: slot, Text: "Cut p99 latency"})
+
+		if diff := cmp.Diff([]string{"Cut p99 latency"}, insertedText(t, e.drive)); diff != "" {
+			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("rejects a profile slot when the CV has no profile", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+
+		_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Slots: []dto.SlotEdit{{SlotID: "profile", Text: "x"}}})
+
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("SaveDraftSlots(profile) error = %v, want an invalid error", err)
 		}
 	})
 
