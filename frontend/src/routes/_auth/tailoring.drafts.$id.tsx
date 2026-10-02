@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { DraftEditor } from "@/components/tailoring/DraftEditor";
+import { PhoneDraftReview } from "@/components/tailoring/PhoneDraftReview";
 import type { Draft } from "@/types/tailoring";
 import { LayoutUnsupportedError } from "../../api/tailoring";
 import { useDraft, useDraftLayout } from "../../hooks/useTailoring";
@@ -24,12 +25,19 @@ function DraftReviewPage() {
 			}
 		>
 			{(d) => (
-				<Show
-					when={d().status === "ready" || d().status === "keeping"}
-					fallback={<Progress draft={d()} />}
-				>
-					<ReviewableDraft draft={d()} />
-				</Show>
+				<>
+					<div class="md:hidden">
+						<PhoneDraftReview draft={d()} />
+					</div>
+					<div class="hidden md:contents">
+						<Show
+							when={d().status === "ready" || d().status === "keeping"}
+							fallback={<Progress draft={d()} />}
+						>
+							<ReviewableDraft draft={d()} />
+						</Show>
+					</div>
+				</>
 			)}
 		</Show>
 	);

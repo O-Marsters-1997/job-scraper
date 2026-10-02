@@ -58,6 +58,11 @@ type Store interface {
 	UpsertPushSubscription(ctx context.Context, userID string, sub dto.PushSubscriptionInput) error
 	ListPushSubscriptions(ctx context.Context, userID string) ([]dto.PushSubscriptionInput, error)
 	DeletePushSubscription(ctx context.Context, userID, endpoint string) error
+	InsertScoreFeedback(ctx context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error)
+	ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error)
+	CountScoreFeedback(ctx context.Context, userID, kind string) (int, error)
+	DeleteScoreFeedback(ctx context.Context, userID, id string) error
+	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 }
 
 type Service struct {

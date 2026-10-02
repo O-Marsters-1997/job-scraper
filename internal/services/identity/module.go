@@ -97,6 +97,16 @@ func (m *Module) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.Us
 	return m.store.CreateUser(ctx, in.Username, in.PasswordHash, in.Email)
 }
 
+// UserIDByUsername resolves a username to its user ID for cmd/admin's
+// explicit user arguments.
+func (m *Module) UserIDByUsername(ctx context.Context, username string) (string, error) {
+	user, err := m.store.GetUserByUsername(ctx, username)
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
 // Get returns userID's decrypted AI provider key, satisfying scoring's
 // Credentials port.
 func (m *Module) Get(ctx context.Context, userID, provider string) (string, error) {

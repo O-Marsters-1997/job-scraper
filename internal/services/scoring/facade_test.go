@@ -1,6 +1,8 @@
 package scoring_test
 
 import (
+	"flag"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -9,6 +11,61 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
+
+var update = flag.Bool("update", false, "rewrite golden files")
+
+func TestExportFeedback(t *testing.T) {
+	const userID = "user-1"
+	st := newFakeStore()
+	st.SeedOptions(append([]dto.ScoringOption{retiredCobol}, bank...))
+	st.SeedSearchConfig(picking(userID, "tech:go", "tech:cobol"))
+	m := scoring.Build(newDeps(t, st))
+
+	for _, reason := range []string{"Scores run hot for backend roles.", "Two lines\nof reasoning."} {
+		if _, err := scoring.NewService(newDeps(t, st)).AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {
+			t.Fatalf("AppendOverallFeedback(%q) err = %v", reason, err)
+		}
+	}
+
+	got, err := m.ExportFeedback(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ExportFeedback() err = %v", err)
+	}
+
+	const golden = "testdata/feedback_pack.golden.md"
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(string(want), got); diff != "" {
+		t.Errorf("ExportFeedback() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestClearFeedback(t *testing.T) {
+	const userID = "user-1"
+	st := newFakeStore()
+	m := scoring.Build(newDeps(t, st))
+	svc := scoring.NewService(newDeps(t, st))
+	for range 2 {
+		if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "r"}); err != nil {
+			t.Fatalf("AppendOverallFeedback() err = %v", err)
+		}
+	}
+
+	n, err := m.ClearFeedback(t.Context(), userID)
+	if err != nil || n != 2 {
+		t.Fatalf("ClearFeedback() = %d, %v, want 2, nil", n, err)
+	}
+	if got, _ := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
+		t.Errorf("ListFeedback() after clear = %+v, want empty", got)
+	}
+}
 
 func TestCompanyProfiles(t *testing.T) {
 	const userID = "user-1"

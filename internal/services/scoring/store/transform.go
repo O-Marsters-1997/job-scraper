@@ -49,3 +49,18 @@ func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 		ContentFingerprint: row.ContentFingerprint.String,
 	}
 }
+
+func toScoreFeedbackDTO(row sqlc.ScoreFeedback) (dto.ScoreFeedback, error) {
+	picks := []dto.Pick{}
+	if err := json.Unmarshal(row.Picks, &picks); err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	var snapshot dto.ScoreFeedbackSnapshot
+	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	return dto.ScoreFeedback{
+		ID: row.ID.String(), Kind: row.Kind, Reason: row.Reason, Picks: picks,
+		Model: row.Model, Snapshot: snapshot, CreatedAt: row.CreatedAt.Time,
+	}, nil
+}

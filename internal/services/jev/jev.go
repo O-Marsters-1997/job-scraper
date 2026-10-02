@@ -65,7 +65,9 @@ type choiceQuestion struct {
 	Criteria     map[string]any `json:"criteria"`
 }
 
-type choiceState struct {
+// State is the job as Jev is sent it: HTML stripped and the description
+// truncated to MaxDescriptionRunes.
+type State struct {
 	Title           string `json:"title"`
 	Company         string `json:"company"`
 	Location        string `json:"location"`
@@ -76,7 +78,7 @@ type choiceState struct {
 
 type choiceRequest struct {
 	Model     string                    `json:"model"`
-	State     choiceState               `json:"state"`
+	State     State                     `json:"state"`
 	Questions map[string]choiceQuestion `json:"questions"`
 }
 
@@ -95,20 +97,23 @@ type choiceResponse struct {
 	Usage   choiceUsage             `json:"usage"`
 }
 
-// Answer asks Jev each of questions as a choice between yes, no and
-// not_stated, against the given job's state, batching under Jev's context
-// budget. Any batch failure fails the whole call.
-func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
-	desc := truncateRunes(stripHTML(job.Description), MaxDescriptionRunes)
-
-	state := choiceState{
+// StateFor maps job to exactly the State Answer sends Jev.
+func StateFor(job dto.Job) State {
+	return State{
 		Title:           job.Title,
 		Company:         job.CompanySlug,
 		Location:        job.Location,
 		WorkArrangement: job.WorkArrangement,
 		SalaryRaw:       job.SalaryRaw,
-		Description:     desc,
+		Description:     truncateRunes(stripHTML(job.Description), MaxDescriptionRunes),
 	}
+}
+
+// Answer asks Jev each of questions as a choice between yes, no and
+// not_stated, against the given job's state, batching under Jev's context
+// budget. Any batch failure fails the whole call.
+func (c *Client) Answer(ctx context.Context, apiKey string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	state := StateFor(job)
 
 	qs := make(map[string]choiceQuestion, len(questions))
 	for _, q := range questions {
@@ -168,7 +173,7 @@ func marshalledChars(v any) (int, error) {
 	return len(b), nil
 }
 
-func (c *Client) answerBatch(ctx context.Context, apiKey string, state choiceState, qs map[string]choiceQuestion, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+func (c *Client) answerBatch(ctx context.Context, apiKey string, state State, qs map[string]choiceQuestion, questions []string) (map[string]dto.Answer, dto.Usage, error) {
 	batchQs := make(map[string]choiceQuestion, len(questions))
 	for _, q := range questions {
 		batchQs[q] = qs[q]

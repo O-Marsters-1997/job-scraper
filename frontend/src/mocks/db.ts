@@ -4,6 +4,7 @@ export * from "./cvs";
 export * from "./experience";
 export * from "./jobs";
 export * from "./push";
+export * from "./scoreFeedback";
 export * from "./scoring";
 export * from "./settings";
 export * from "./sources";

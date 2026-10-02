@@ -944,3 +944,51 @@ func TestAsk(t *testing.T) {
 		}
 	})
 }
+
+func TestAppendOverallFeedback(t *testing.T) {
+	const userID = "user-1"
+
+	t.Run("stores the trimmed reason with the current Picks and model", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		svc := scoring.NewService(newDeps(t, st))
+
+		got, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "  too generous  "})
+		if err != nil {
+			t.Fatalf("AppendOverallFeedback() err = %v", err)
+		}
+
+		want := dto.ScoreFeedback{
+			Kind: "overall", Reason: "too generous", Model: jev.Model,
+			Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}},
+		}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ScoreFeedback{}, "ID", "CreatedAt")); diff != "" {
+			t.Errorf("AppendOverallFeedback() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a user with no Search Config logs empty Picks", func(t *testing.T) {
+		svc := scoring.NewService(newDeps(t, newFakeStore()))
+
+		got, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "hm"})
+		if err != nil {
+			t.Fatalf("AppendOverallFeedback() err = %v", err)
+		}
+		if got.Picks == nil || len(got.Picks) != 0 {
+			t.Errorf("AppendOverallFeedback() picks = %#v, want an empty non-nil slice", got.Picks)
+		}
+	})
+
+	t.Run("blank reason is invalid and writes nothing", func(t *testing.T) {
+		st := newFakeStore()
+		svc := scoring.NewService(newDeps(t, st))
+
+		_, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: " \n"})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("AppendOverallFeedback(blank) err = %v, want Invalid", err)
+		}
+		if got, _ := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
+			t.Errorf("ListFeedback() = %+v, want nothing written", got)
+		}
+	})
+}

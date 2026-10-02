@@ -113,6 +113,16 @@ migrate-down:
 migrate-create name:
     goose -dir {{MIGRATIONS_DIR}} create {{name}} sql
 
+# ── Score Feedback ────────────────────────────────────────────────────────────
+
+# print a user's Feedback Pack to stdout
+scoring-feedback-export user:
+    go run ./cmd/admin scoring-feedback export {{user}}
+
+# hard-delete a user's Score Feedback and print the count
+scoring-feedback-clear user:
+    go run ./cmd/admin scoring-feedback clear {{user}}
+
 # ── Seeds ─────────────────────────────────────────────────────────────────────
 
 # seed the scoring-options bank (idempotent; safe to rerun in any environment)

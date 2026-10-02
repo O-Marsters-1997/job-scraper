@@ -573,3 +573,97 @@ func (s *Store) ListCompanyAnswers(ctx context.Context, companyIDs []string, mod
 	}
 	return out, nil
 }
+
+// InsertScoreFeedback appends one entry to userID's Score Feedback log.
+func (s *Store) InsertScoreFeedback(ctx context.Context, userID string, f dto.ScoreFeedback) (dto.ScoreFeedback, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	picks, err := json.Marshal(f.Picks)
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
+	}
+	snapshot, err := json.Marshal(f.Snapshot)
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
+	}
+	row, err := s.queries.InsertScoreFeedback(ctx, sqlc.InsertScoreFeedbackParams{
+		UserID: uid, Kind: f.Kind, Reason: f.Reason, Picks: picks, Model: f.Model, Snapshot: snapshot,
+	})
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
+	}
+	out, err := toScoreFeedbackDTO(row)
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
+	}
+	return out, nil
+}
+
+// ListScoreFeedback returns userID's entries of kind (all kinds when empty),
+// newest first, skipping offset and returning at most limit.
+func (s *Store) ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListScoreFeedback(ctx, sqlc.ListScoreFeedbackParams{UserID: uid, Kind: kind, RowLimit: int32(limit), RowOffset: int32(offset)})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScoreFeedback: %w", err)
+	}
+	out := make([]dto.ScoreFeedback, len(rows))
+	for i, row := range rows {
+		if out[i], err = toScoreFeedbackDTO(row); err != nil {
+			return nil, fmt.Errorf("store.ListScoreFeedback: %w", err)
+		}
+	}
+	return out, nil
+}
+
+// CountScoreFeedback counts userID's entries of kind (all kinds when empty).
+func (s *Store) CountScoreFeedback(ctx context.Context, userID, kind string) (int, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.queries.CountScoreFeedback(ctx, sqlc.CountScoreFeedbackParams{UserID: uid, Kind: kind})
+	if err != nil {
+		return 0, fmt.Errorf("store.CountScoreFeedback: %w", err)
+	}
+	return int(n), nil
+}
+
+// DeleteScoreFeedback removes one of userID's entries; data.ErrNotFound when
+// id is unknown or belongs to someone else.
+func (s *Store) DeleteScoreFeedback(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	fid, err := data.UUID(id)
+	if err != nil {
+		return data.ErrNotFound
+	}
+	n, err := s.queries.DeleteScoreFeedback(ctx, sqlc.DeleteScoreFeedbackParams{ID: fid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteScoreFeedback: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+// ClearScoreFeedback hard-deletes userID's whole log and returns the count.
+func (s *Store) ClearScoreFeedback(ctx context.Context, userID string) (int64, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return 0, err
+	}
+	n, err := s.queries.ClearScoreFeedback(ctx, uid)
+	if err != nil {
+		return 0, fmt.Errorf("store.ClearScoreFeedback: %w", err)
+	}
+	return n, nil
+}

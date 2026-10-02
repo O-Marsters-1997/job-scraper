@@ -52,5 +52,6 @@ export const keys = {
 	google: ["google-status"] as const,
 	scoringConfig: ["scoring-config"] as const,
 	scoringOptions: ["scoring-options"] as const,
+	scoreFeedback: ["score-feedback"] as const,
 	me: ["me"] as const,
 } as const;

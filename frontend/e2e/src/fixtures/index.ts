@@ -3,9 +3,10 @@ import { AppShellComponent } from "../components/app-shell.component";
 import { MobileNavComponent } from "../components/mobile-nav.component";
 import { TweaksPanelComponent } from "../components/tweaks-panel.component";
 import { CompaniesPage } from "../pages/companies.page";
-import { DraftPage } from "../pages/draft.page";
+import { DraftPage, PhoneDraftPage } from "../pages/draft.page";
 import { ExperiencePage } from "../pages/experience.page";
 import { InsightsPage } from "../pages/insights.page";
+import { JobDetailPage } from "../pages/job-detail.page";
 import { JobsPage } from "../pages/jobs.page";
 import { LoginPage } from "../pages/login.page";
 import { OverviewPage } from "../pages/overview.page";
@@ -15,8 +16,10 @@ import { StatusesPage } from "../pages/statuses.page";
 type Fixtures = {
 	loginPage: LoginPage;
 	jobsPage: JobsPage;
+	jobDetailPage: JobDetailPage;
 	companiesPage: CompaniesPage;
 	draftPage: DraftPage;
+	phoneDraftPage: PhoneDraftPage;
 	overviewPage: OverviewPage;
 	experiencePage: ExperiencePage;
 	insightsPage: InsightsPage;
@@ -34,11 +37,17 @@ export const test = base.extend<Fixtures>({
 	jobsPage: async ({ page }, use) => {
 		await use(new JobsPage(page));
 	},
+	jobDetailPage: async ({ page }, use) => {
+		await use(new JobDetailPage(page));
+	},
 	companiesPage: async ({ page }, use) => {
 		await use(new CompaniesPage(page));
 	},
 	draftPage: async ({ page }, use) => {
 		await use(new DraftPage(page));
+	},
+	phoneDraftPage: async ({ page }, use) => {
+		await use(new PhoneDraftPage(page));
 	},
 	overviewPage: async ({ page }, use) => {
 		await use(new OverviewPage(page));

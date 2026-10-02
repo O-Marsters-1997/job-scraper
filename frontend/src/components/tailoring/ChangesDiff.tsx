@@ -116,7 +116,13 @@ export function ChangesDiff(props: {
 							<p class="min-w-0 flex-1 text-sm text-foreground">
 								<Marked ops={ops()} />
 							</p>
-							<Show when={props.onUndo && props.base.profile}>
+							<Show
+								when={
+									props.onUndo && props.base.profile !== props.content.profile
+										? props.base.profile
+										: null
+								}
+							>
 								{(from) => (
 									<Button
 										variant="ghost"

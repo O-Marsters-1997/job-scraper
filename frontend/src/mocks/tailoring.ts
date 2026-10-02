@@ -1,6 +1,7 @@
 import type {
 	CVHeading,
 	Draft,
+	DraftContent,
 	DraftInput,
 	DraftLayout,
 	DraftProvenance,
@@ -251,12 +252,39 @@ export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
 			severity: "block",
 			message: "the Draft is 2 pages; the base CV is 1",
 		});
+	const provenance = mockProvenance();
+	const { content } = entry.draft;
 	entry.draft = {
 		...entry.draft,
 		findings,
-		provenance: mockProvenance(),
+		provenance,
+		content: content && applySlots(content, provenance, slots),
 	};
 	return entry.draft;
+}
+
+function applySlots(
+	content: DraftContent,
+	provenance: DraftProvenance,
+	slots: SlotEdit[],
+): DraftContent {
+	const text = new Map(slots.map((s) => [s.slotId, s.text]));
+	return {
+		...content,
+		profile: text.get(provenance.profile?.slotId ?? "") ?? content.profile,
+		positions: content.positions.map((position) => {
+			const bullets = provenance.positions.find(
+				(p) => p.positionId === position.positionId,
+			)?.bullets;
+			return {
+				...position,
+				bullets: position.bullets.map((bullet, i) => ({
+					...bullet,
+					text: text.get(bullets?.[i]?.slotId ?? "") ?? bullet.text,
+				})),
+			};
+		}),
+	};
 }
 
 function seedDraft(id: string, outcome: Draft["outcome"]) {
@@ -295,7 +323,25 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 	});
 }
 
+function seedUnsettled(id: string, status: Draft["status"], lastError = "") {
+	seedDraft(id, null);
+	const entry = mockEntry(id);
+	entry.draft = {
+		...entry.draft,
+		jobId: getJobs().at(-2)?.ID ?? "",
+		status,
+		lastError,
+		draftDocUrl: null,
+		findings: [],
+		provenance: null,
+		content: null,
+		base: null,
+	};
+}
+
 seedDraft("draft-ready", null);
+seedUnsettled("draft-pending", "pending");
+seedUnsettled("draft-failed", "failed", "the model timed out");
 seedDraft("draft-kept", "kept");
 
 const mockRun = (text: string, over: Partial<LayoutRun> = {}): LayoutRun => ({

@@ -17,7 +17,19 @@ test.describe("Mobile navigation", () => {
 		).toBeHidden();
 
 		await mobileNav.open();
-		await expect(mobileNav.link("Overview")).toBeVisible();
+		await expect(mobileNav.link("Jobs")).toBeVisible();
+		await expect(
+			mobileNav.dialog.getByRole("link", { name: /^Applications/ }),
+		).toBeVisible();
+		for (const name of [
+			"Overview",
+			"Companies",
+			"Experience",
+			"Insights",
+			"Settings",
+		]) {
+			await expect(mobileNav.link(name)).toHaveCount(0);
+		}
 
 		const focusInsideDialog = await page.evaluate(
 			() => document.activeElement?.closest('[role="dialog"]') !== null,
@@ -37,9 +49,9 @@ test.describe("Mobile navigation", () => {
 		await expect(page.getByRole("heading", { name: "Jobs" })).toBeVisible();
 
 		await mobileNav.open();
-		await mobileNav.link("Companies").click();
+		await mobileNav.dialog.getByRole("link", { name: /^Applications/ }).click();
 
-		await expect(page).toHaveURL(/\/companies$/);
+		await expect(page).toHaveURL(/\/applications$/);
 		await expect(mobileNav.dialog).toBeHidden();
 	});
 });
