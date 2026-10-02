@@ -67,14 +67,7 @@ type choiceQuestion struct {
 
 // State is the job as Jev is sent it: HTML stripped and the description
 // truncated to MaxDescriptionRunes.
-type State struct {
-	Title           string `json:"title"`
-	Company         string `json:"company"`
-	Location        string `json:"location"`
-	WorkArrangement string `json:"work_arrangement"`
-	SalaryRaw       string `json:"salary_raw"`
-	Description     string `json:"description"`
-}
+type State = dto.JevState
 
 type choiceRequest struct {
 	Model     string                    `json:"model"`

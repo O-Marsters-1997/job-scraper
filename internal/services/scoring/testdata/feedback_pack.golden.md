@@ -1,6 +1,6 @@
 # Feedback Pack
 
-2 overall entries
+2 overall · 1 Job entries
 
 ## How Suitability is computed
 
@@ -20,6 +20,7 @@ Current Picks:
 |---|---|---|
 | Go | nice | Does the role use Go? |
 | COBOL (retired) | nice | Does the role use COBOL? |
+| Kubernetes | nice | Does the role use Kubernetes? |
 
 ## Levers you may change
 
@@ -35,4 +36,34 @@ Current Picks:
 > of reasoning.
 
 > Scores run hot for backend roles.
+
+## Job entries
+
+### Backend Engineer, acme: score 72, should be lower
+
+> Go is a given here.
+
+- Model: typesafe/jev-1.13
+- Score model: jev-old
+- Score fingerprint: score-fp
+- Content fingerprint: fp-1
+
+| Option | Stance | Resolved | P(yes) | P(no) | P(not stated) | Confidence |
+|---|---|---|---|---|---|---|
+| Go | nice | yes | 0.90 | 0.05 | 0.05 | 0.00 |
+| COBOL | nice | retired | no cached answer | | | |
+| Kubernetes | nice | unknown | no cached answer | | | |
+
+Job state sent to Jev:
+
+```json
+{
+  "title": "Backend Engineer",
+  "company": "acme",
+  "location": "",
+  "work_arrangement": "",
+  "salary_raw": "",
+  "description": "Build Go services."
+}
+```
 

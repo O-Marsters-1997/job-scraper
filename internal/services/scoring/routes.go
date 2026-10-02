@@ -15,6 +15,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
 	r.Post("/scores/recompute", handlers.GetAll(m.svc.Recompute))
 	if os.Getenv("SCORING_FEEDBACK") == "true" {
+		r.Post("/scoring-feedback/job", handlers.Create(m.svc.AppendJobFeedback))
 		r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
 		r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
 		r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))

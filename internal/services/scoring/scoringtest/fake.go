@@ -48,6 +48,7 @@ type FakeStore struct {
 
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
+	evidence    map[string]dto.JobScoreEvidence
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -65,6 +66,7 @@ func NewFakeStore() *FakeStore {
 		scored:  make(map[string]bool),
 
 		feedback: make(map[string][]dto.ScoreFeedback),
+		evidence: make(map[string]dto.JobScoreEvidence),
 	}
 }
 
@@ -434,4 +436,21 @@ func (f *FakeStore) ClearScoreFeedback(_ context.Context, userID string) (int64,
 	n := int64(len(f.feedback[userID]))
 	delete(f.feedback, userID)
 	return n, nil
+}
+
+// SeedJobScore stores the score GetJobScoreForFeedback returns for the pair.
+func (f *FakeStore) SeedJobScore(userID, jobID string, evidence dto.JobScoreEvidence) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.evidence[scoredKey(jobID, userID)] = evidence
+}
+
+func (f *FakeStore) GetJobScoreForFeedback(_ context.Context, userID, jobID string) (dto.JobScoreEvidence, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ev, ok := f.evidence[scoredKey(jobID, userID)]
+	if !ok {
+		return dto.JobScoreEvidence{}, data.ErrNotFound
+	}
+	return ev, nil
 }

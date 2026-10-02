@@ -1,4 +1,5 @@
 import {
+	type JobFeedbackInput,
 	type OverallFeedbackInput,
 	type ScoreFeedback,
 	type ScoreFeedbackKind,
@@ -38,6 +39,20 @@ export async function appendOverallFeedback(
 		() =>
 			apiFetch(
 				"/scoring-feedback/overall",
+				scoreFeedbackSchema,
+				jsonInit("POST", input),
+			),
+	);
+}
+
+export async function appendJobFeedback(
+	input: JobFeedbackInput,
+): Promise<ScoreFeedback> {
+	return mocked(
+		(db) => db.appendJobFeedback(input),
+		() =>
+			apiFetch(
+				"/scoring-feedback/job",
 				scoreFeedbackSchema,
 				jsonInit("POST", input),
 			),

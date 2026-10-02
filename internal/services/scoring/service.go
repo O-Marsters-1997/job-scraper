@@ -60,6 +60,7 @@ type Store interface {
 	CountScoreFeedback(ctx context.Context, userID, kind string) (int, error)
 	DeleteScoreFeedback(ctx context.Context, userID, id string) error
 	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
+	GetJobScoreForFeedback(ctx context.Context, userID, jobID string) (dto.JobScoreEvidence, error)
 }
 
 type Service struct {

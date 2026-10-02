@@ -3,6 +3,7 @@ package scoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -17,6 +18,8 @@ const (
 	feedbackKindJob        = "job"
 	feedbackKindCollection = "collection"
 	feedbackKindOverall    = "overall"
+	feedbackHigher         = "higher"
+	feedbackLower          = "lower"
 	maxFeedbackPage        = 100000
 	feedbackPageSize       = 20
 	exportAllFeedback      = math.MaxInt32
@@ -40,6 +43,83 @@ func (s *Service) AppendOverallFeedback(ctx context.Context, userID string, in d
 	return s.store.InsertScoreFeedback(ctx, userID, dto.ScoreFeedback{
 		Kind: feedbackKindOverall, Reason: reason, Picks: picks, Model: jev.Model,
 	})
+}
+
+// AppendJobFeedback logs that jobID's score should move in in.Direction,
+// freezing the stored score, the picked Options' cached answers and the job
+// as Jev saw it. The browser sends none of that evidence.
+func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.JobFeedbackInput) (dto.ScoreFeedback, error) {
+	reason := strings.TrimSpace(in.Reason)
+	if reason == "" {
+		return dto.ScoreFeedback{}, apperr.Invalid("reason must not be blank")
+	}
+	if in.Direction != feedbackHigher && in.Direction != feedbackLower {
+		return dto.ScoreFeedback{}, apperr.Invalid("direction must be higher or lower")
+	}
+	job, err := s.store.GetJobForScoring(ctx, in.JobID)
+	if notFound(err) {
+		return dto.ScoreFeedback{}, apperr.NotFound("job not found")
+	}
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendJobFeedback: load job: %w", err)
+	}
+	score, err := s.store.GetJobScoreForFeedback(ctx, userID, in.JobID)
+	if notFound(err) {
+		return dto.ScoreFeedback{}, apperr.Unprocessable("job has no score yet")
+	}
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendJobFeedback: load score: %w", err)
+	}
+	cfg, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	b, err := s.loadBank(ctx)
+	if err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	answers, err := s.store.ListAnswers(ctx, in.JobID, job.ContentFingerprint, jev.Model)
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendJobFeedback: load answers: %w", err)
+	}
+
+	picks := cfg.Preferences.Picks
+	if picks == nil {
+		picks = []dto.Pick{}
+	}
+	state := jev.StateFor(job)
+	return s.store.InsertScoreFeedback(ctx, userID, dto.ScoreFeedback{
+		Kind: feedbackKindJob, Direction: &in.Direction, JobID: &in.JobID, Reason: reason, Picks: picks, Model: jev.Model,
+		Snapshot: dto.ScoreFeedbackSnapshot{
+			Score: &score.Score, Breakdown: score.Breakdown, ScoreFingerprint: score.Fingerprint,
+			ScoreModel: score.Model, ContentFingerprint: job.ContentFingerprint,
+			Options: feedbackOptions(picks, b, answers), JevState: &state,
+		},
+	})
+}
+
+func feedbackOptions(picks []dto.Pick, b bank, answers map[string]dto.Answer) []dto.FeedbackOption {
+	picks = dedupeBySource(picks)
+	out := make([]dto.FeedbackOption, 0, len(picks))
+	for _, p := range picks {
+		opt, ok := b.byID[p.OptionID]
+		if !ok {
+			continue
+		}
+		a, known := answers[QuestionHash(opt.Question)]
+		resolved := "unknown"
+		switch {
+		case opt.RetiredAt != nil:
+			resolved = "retired"
+		case known:
+			resolved = resolveAnswer(a)
+		}
+		out = append(out, dto.FeedbackOption{
+			OptionID: opt.ID, Label: opt.Label, Question: opt.Question, Stance: p.Stance, Resolved: resolved,
+			PYes: a.PYes, PNo: a.PNo, PNotStated: a.PNotStated, Confidence: a.Confidence, Known: known,
+		})
+	}
+	return out
 }
 
 // ListFeedback returns one page of userID's log, newest first, with the total
