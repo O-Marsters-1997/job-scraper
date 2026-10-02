@@ -53,7 +53,7 @@ const (
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
-func pageURL(keywords string, filters map[string]string, start int) string {
+func pageURL(keywords string, filters map[string]string, recency string, start int) string {
 	v := url.Values{}
 	v.Set("keywords", keywords)
 	fields, _ := sourcespec.LookupFilterFields("linkedin")
@@ -68,6 +68,9 @@ func pageURL(keywords string, filters map[string]string, start int) string {
 		}
 		v.Set(f.Param, value)
 	}
+	if recency != "" {
+		v.Set("f_TPR", recency)
+	}
 	v.Set("start", strconv.Itoa(start))
 	return searchURL + "?" + v.Encode()
 }
@@ -76,13 +79,33 @@ type Scraper struct {
 	sources.PaginatedBase
 	keywords string
 	filters  map[string]string
+	recency  string
+}
+
+const recencyMargin = time.Hour
+
+// Recency returns the f_TPR value that fetches only what appeared since lastSucceeded,
+// padded by an hour and capped at configured (the Target's own r<seconds> filter).
+// It returns "" when the Target's stored recency should be used unchanged.
+func Recency(configured string, lastSucceeded *time.Time, now time.Time) string {
+	if lastSucceeded == nil {
+		return ""
+	}
+	seconds := int64((now.Sub(*lastSucceeded) + recencyMargin).Seconds())
+	if seconds < int64(recencyMargin.Seconds()) {
+		seconds = int64(recencyMargin.Seconds())
+	}
+	if n, err := strconv.ParseInt(strings.TrimPrefix(configured, "r"), 10, 64); err == nil && seconds >= n {
+		return ""
+	}
+	return "r" + strconv.FormatInt(seconds, 10)
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(keywords string, filters map[string]string) *Scraper {
+func New(keywords string, filters map[string]string, recency string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "linkedin",
@@ -90,6 +113,7 @@ func New(keywords string, filters map[string]string) *Scraper {
 		}),
 		keywords: keywords,
 		filters:  filters,
+		recency:  recency,
 	}
 }
 
@@ -102,7 +126,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, pageURL(s.keywords, s.filters, start))
+	body, err := s.Get(ctx, pageURL(s.keywords, s.filters, s.recency, start))
 	if err != nil {
 		return nil, "", err
 	}

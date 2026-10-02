@@ -34,6 +34,7 @@ SELECT * FROM source_targets WHERE id = $1;
 -- name: TransitionSourceTargetRun :one
 UPDATE source_targets SET run_status = $3, last_run_error = $4,
     last_run_at = CASE WHEN $3 IN ('succeeded', 'failed') THEN NOW() ELSE last_run_at END,
+    last_succeeded_at = CASE WHEN $3 = 'succeeded' THEN NOW() ELSE last_succeeded_at END,
     updated_at = NOW()
 WHERE id = $1 AND run_id = $2
 RETURNING *;

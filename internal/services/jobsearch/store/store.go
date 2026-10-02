@@ -708,6 +708,7 @@ func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 	}
 	t.LastCheckedAt = data.TimePtr(row.LastCheckedAt)
 	t.LastRunAt = data.TimePtr(row.LastRunAt)
+	t.LastSucceededAt = data.TimePtr(row.LastSucceededAt)
 	return t
 }
 

@@ -252,6 +252,7 @@ CREATE TABLE IF NOT EXISTS source_targets (
     run_status             TEXT        NOT NULL DEFAULT 'idle' CHECK (run_status IN ('idle', 'queued', 'running', 'succeeded', 'failed')),
     run_id                 UUID,
     last_run_at            TIMESTAMPTZ,
+    last_succeeded_at      TIMESTAMPTZ,
     last_run_error         TEXT        NOT NULL DEFAULT '',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),

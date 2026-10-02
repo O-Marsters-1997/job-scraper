@@ -53,8 +53,10 @@ var registry = map[string]entry{
 		detail: wis.New(wis.Search{}),
 	},
 	"linkedin": {
-		build:  func(t dto.SourceTarget) sources.Source { return linkedin.New(t.Value, t.Filters) },
-		detail: linkedin.New("", nil),
+		build: func(t dto.SourceTarget) sources.Source {
+			return linkedin.New(t.Value, t.Filters, linkedin.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+		},
+		detail: linkedin.New("", nil, ""),
 	},
 }
 
