@@ -340,16 +340,13 @@ function JobEvidence(props: { target: JobTarget }): JSX.Element {
 
 function FeedbackEntry(props: { entry: ScoreFeedback }): JSX.Element {
 	const remove = useDeleteScoreFeedback();
-	const heading = () => (
-		<span class="text-2xs tracking-wider text-faint uppercase">
-			{props.entry.kind}
-			{props.entry.direction ? ` · ${props.entry.direction}` : ""} ·{" "}
-			{new Date(props.entry.createdAt).toLocaleString()}
-		</span>
-	);
 	return (
 		<li class="flex flex-col gap-1 rounded-md border border-border p-3">
-			{heading()}
+			<span class="text-2xs tracking-wider text-faint uppercase">
+				{props.entry.kind}
+				{props.entry.direction ? ` · ${props.entry.direction}` : ""} ·{" "}
+				{new Date(props.entry.createdAt).toLocaleString()}
+			</span>
 			<p class="text-sm whitespace-pre-wrap text-foreground">
 				{props.entry.reason}
 			</p>
