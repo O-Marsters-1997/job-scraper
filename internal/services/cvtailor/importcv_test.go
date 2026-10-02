@@ -105,7 +105,7 @@ func TestPreviewImportPropagatesDocErrors(t *testing.T) {
 	}
 }
 
-func TestImportPositionsAppendsAndRejectsInvalidPositions(t *testing.T) {
+func TestImportPositionsIsIdempotentAndRejectsInvalidPositions(t *testing.T) {
 	svc, st := newService(t, nil, nil)
 	ctx := t.Context()
 
@@ -121,8 +121,21 @@ func TestImportPositionsAppendsAndRejectsInvalidPositions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || len(got[0].Achievements) != 2 || got[0].Employer != "Acme" {
-		t.Fatalf("Bank after two imports = %+v, want two Acme positions with two achievements", got)
+	if len(got) != 1 || len(got[0].Achievements) != 2 || got[0].Employer != "Acme" {
+		t.Fatalf("Bank after two imports = %+v, want one Acme position with two achievements", got)
+	}
+
+	more := dto.ImportInput{Positions: []dto.ImportPosition{
+		{Employer: "acme", Title: "engineer", Achievements: []string{"TWO", "three"}},
+	}}
+	if _, err := svc.ImportPositions(ctx, userID, more); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = st.ListPositions(ctx, userID); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || len(got[0].Achievements) != 3 {
+		t.Fatalf("Bank after a re-import with one new line = %+v, want one position with three achievements", got)
 	}
 
 	bad := dto.ImportInput{Positions: []dto.ImportPosition{{Employer: "Acme", Title: ""}}}

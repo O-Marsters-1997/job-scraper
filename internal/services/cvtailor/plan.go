@@ -75,7 +75,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 			pl.bank = append(pl.bank, a.Text)
 			if confirmed[a.ID] {
 				found++
-				key := strings.ToLower(strings.Join(strings.Fields(a.Text), " "))
+				key := normalizeText(a.Text)
 				if seen[key] {
 					continue
 				}
@@ -269,4 +269,8 @@ func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {
 		}
 	}
 	return edits
+}
+
+func normalizeText(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), " "))
 }

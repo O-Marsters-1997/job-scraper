@@ -66,7 +66,63 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 			}
 		}
 	}
-	return s.store.ImportPositions(ctx, userID, positions)
+	existing, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	byRole := make(map[string]*dto.Position, len(existing))
+	have := make(map[string]map[string]bool, len(existing))
+	for i, p := range existing {
+		byRole[roleKey(p.Employer, p.Title)] = &existing[i]
+		have[p.ID] = make(map[string]bool, len(p.Achievements))
+		for _, a := range p.Achievements {
+			have[p.ID][normalizeText(a.Text)] = true
+		}
+	}
+
+	var fresh []dto.ImportPosition
+	touched := map[string]bool{}
+	for _, p := range positions {
+		match, ok := byRole[roleKey(p.Employer, p.Title)]
+		if !ok {
+			fresh = append(fresh, p)
+			continue
+		}
+		for _, text := range p.Achievements {
+			if have[match.ID][normalizeText(text)] {
+				continue
+			}
+			if _, err := s.store.CreateAchievement(ctx, userID, dto.AchievementInput{PositionID: match.ID, Text: text}); err != nil {
+				return nil, err
+			}
+			have[match.ID][normalizeText(text)] = true
+			touched[match.ID] = true
+		}
+	}
+
+	out := []dto.Position{}
+	if len(fresh) > 0 {
+		if out, err = s.store.ImportPositions(ctx, userID, fresh); err != nil {
+			return nil, err
+		}
+	}
+	if len(touched) == 0 {
+		return out, nil
+	}
+	all, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range all {
+		if touched[p.ID] {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func roleKey(employer, title string) string {
+	return normalizeText(employer) + "|" + normalizeText(title)
 }
 
 func positionsFromStructure(ds docparse.DocStructure) []dto.ImportPosition {
