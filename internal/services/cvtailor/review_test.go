@@ -1,14 +1,18 @@
 package cvtailor_test
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 )
@@ -235,4 +239,29 @@ func TestDraftPDF(t *testing.T) {
 			t.Fatalf("%s err = %v, want kind %v", "DraftPDF(pending)", err, apperr.KindNotFound)
 		}
 	})
+}
+
+func TestMarkNovelGolden(t *testing.T) {
+	raw, err := os.ReadFile("testdata/novel.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name    string
+		Text    string
+		Sources []string
+		Want    []dto.TextSegment
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range cases {
+		t.Run(tt.Name, func(t *testing.T) {
+			got := cvtailor.MarkNovel(tt.Text, tt.Sources)
+
+			if diff := cmp.Diff(tt.Want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("MarkNovel(%q) mismatch (-want +got):\n%s", tt.Text, diff)
+			}
+		})
+	}
 }
