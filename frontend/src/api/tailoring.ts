@@ -151,11 +151,10 @@ export async function fetchDraftLayout(id: string): Promise<DraftLayout> {
 		(db) => db.getDraftLayout(),
 		() =>
 			apiFetch(`/tailoring/drafts/${id}/layout`, draftLayoutSchema).catch(
-				(err) => {
-					if (err instanceof ApiError && err.status === 422)
-						throw new LayoutUnsupportedError(unsupportedReason(err.body));
-					throw err;
-				},
+				rethrowStatus({
+					422: (err) =>
+						new LayoutUnsupportedError(bodyError(err) ?? "unsupported layout"),
+				}),
 			),
 	);
 }
@@ -164,13 +163,11 @@ const errorBodySchema = z.object({ error: z.string() });
 const deltaSchema = z.object({ text: z.string() });
 const failureSchema = z.object({ message: z.string().optional() });
 
-function unsupportedReason(body: unknown): string {
-	const parsed = errorBodySchema.safeParse(body);
-	return parsed.success ? parsed.data.error : "unsupported layout";
-}
+const bodyError = (err: ApiError) =>
+	errorBodySchema.safeParse(err.body).data?.error;
 
-const messageOf = (data: string) =>
-	failureSchema.parse(JSON.parse(data)).message ?? "Suggestion failed";
+const parseData = <S extends z.ZodType>(schema: S, data: string): z.infer<S> =>
+	schema.parse(JSON.parse(data));
 
 export async function streamSuggestion(
 	id: string,
@@ -186,20 +183,18 @@ export async function streamSuggestion(
 				`/tailoring/drafts/${id}/slots/${encodeURIComponent(slotId)}/suggest`,
 				{ ...jsonInit("POST", req), signal },
 			).catch((err) => {
-				if (err instanceof ApiError) {
-					const parsed = errorBodySchema.safeParse(err.body);
-					if (parsed.success) throw new Error(parsed.data.error);
-				}
-				throw err;
+				const message = err instanceof ApiError && bodyError(err);
+				throw message ? new Error(message) : err;
 			});
 			if (!res.body) throw new Error("Suggestion failed");
 			let done: SuggestDone | undefined;
 			let failure: string | undefined;
 			const feed = createSseParser((event, data) => {
-				if (event === "delta")
-					onDelta(deltaSchema.parse(JSON.parse(data)).text);
-				if (event === "done") done = suggestDoneSchema.parse(JSON.parse(data));
-				if (event === "error") failure = messageOf(data);
+				if (event === "delta") onDelta(parseData(deltaSchema, data).text);
+				if (event === "done") done = parseData(suggestDoneSchema, data);
+				if (event === "error")
+					failure =
+						parseData(failureSchema, data).message ?? "Suggestion failed";
 			});
 			const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
 			try {

@@ -13,8 +13,9 @@ import {
 	borderDraws,
 	hasEndTab,
 	isSpacer,
+	isSparse,
+	type LineFit,
 	linePt,
-	SPARSE_LAST_LINE,
 	splitAtTab,
 	trimParagraphEnd,
 } from "@/lib/docLayout";
@@ -36,11 +37,6 @@ export const DEFAULT_BODY_LINE_PT = 15;
 const DEFAULT_FONT_PT = 11;
 const LINE_COUNT_GUTTER_PT = 14;
 const SAME_ROW_TOLERANCE_PX = 2;
-
-export type LineFit = { lines: number; lastLineFill: number };
-
-export const isSparse = (fit: LineFit | undefined) =>
-	!!fit && fit.lines > 1 && fit.lastLineFill < SPARSE_LAST_LINE;
 
 export type PageMetrics = {
 	contentPt: number;
@@ -74,36 +70,39 @@ function dominantRun(runs: LayoutRun[]): LayoutRun | undefined {
 	);
 }
 
-function borderCss(b: LayoutBorder) {
-	return `${b.width}pt ${b.dash} ${b.color || INK}`;
-}
+const borderCss = (b: LayoutBorder | null) =>
+	b ? `${b.width}pt ${b.dash} ${b.color || INK}` : undefined;
+
+const borderPadding = (b: LayoutBorder | null) =>
+	b ? `${b.padding}pt` : undefined;
 
 function blockStyle(
 	b: LayoutBlock,
+	lead: LayoutRun | undefined,
 	draw: BorderDraw,
 	spacer: boolean,
 ): JSX.CSSProperties {
-	const lead = dominantRun(b.runs);
 	const font = resolveFont(lead?.font ?? "");
 	const size = lead?.size ?? DEFAULT_FONT_PT;
-	const hanging = b.indentFirstLine - b.indentStart;
+	const lineHeight = linePt(1, font.ratio, b.lineSpacing);
+	const top = draw.top ? b.borderTop : null;
+	const bottom = draw.bottom ? b.borderBottom : null;
 	return {
 		"font-family": font.css,
 		"font-size": `${size}pt`,
-		"line-height": `${(font.ratio * (b.lineSpacing > 0 ? b.lineSpacing : 100)) / 100}`,
-		height: spacer ? `${linePt(size, font.ratio, b.lineSpacing)}pt` : undefined,
+		"line-height": `${lineHeight}`,
+		height: spacer ? `${size * lineHeight}pt` : undefined,
 		"margin-top": `${b.spaceAbove}pt`,
 		"margin-bottom": `${b.spaceBelow}pt`,
 		"padding-left": `${b.indentStart}pt`,
-		"text-indent": b.bullet ? undefined : `${hanging}pt`,
+		"text-indent": b.bullet
+			? undefined
+			: `${b.indentFirstLine - b.indentStart}pt`,
 		"text-align": ALIGN[b.align],
-		"border-top": b.borderTop && draw.top ? borderCss(b.borderTop) : undefined,
-		"border-bottom":
-			b.borderBottom && draw.bottom ? borderCss(b.borderBottom) : undefined,
-		"padding-top":
-			b.borderTop && draw.top ? `${b.borderTop.padding}pt` : undefined,
-		"padding-bottom":
-			b.borderBottom && draw.bottom ? `${b.borderBottom.padding}pt` : undefined,
+		"border-top": borderCss(top),
+		"border-bottom": borderCss(bottom),
+		"padding-top": borderPadding(top),
+		"padding-bottom": borderPadding(bottom),
 	};
 }
 
@@ -117,6 +116,8 @@ function runStyle(r: LayoutRun): JSX.CSSProperties {
 		color: r.color || (r.link ? LINK_INK : undefined),
 	};
 }
+
+const singleLine = (text: string) => text.replace(/\s*\n\s*/g, " ");
 
 function Runs(props: { runs: LayoutRun[] }) {
 	return (
@@ -132,6 +133,24 @@ function Runs(props: { runs: LayoutRun[] }) {
 				</Show>
 			)}
 		</For>
+	);
+}
+
+function StaticLine(props: { runs: LayoutRun[]; endTab: boolean }) {
+	const split = () => (props.endTab ? splitAtTab(props.runs) : null);
+	return (
+		<Show when={split()} fallback={<Runs runs={props.runs} />}>
+			{(parts) => (
+				<span class="flex justify-between gap-2">
+					<span class="min-w-0">
+						<Runs runs={parts()[0]} />
+					</span>
+					<span class="whitespace-nowrap">
+						<Runs runs={parts()[1]} />
+					</span>
+				</span>
+			)}
+		</Show>
 	);
 }
 
@@ -160,7 +179,7 @@ function measureFit(el: HTMLElement): LineFit {
 function EditableLine(props: {
 	slotId: string;
 	editor: PageEditor;
-	runStyle: JSX.CSSProperties;
+	style: JSX.CSSProperties;
 	ref: (el: HTMLElement) => void;
 }) {
 	let el: HTMLElement | undefined;
@@ -171,7 +190,7 @@ function EditableLine(props: {
 		if (el && el.textContent !== value) el.textContent = value;
 	});
 	return (
-		<span class="relative block" style={props.runStyle}>
+		<span class="relative block" style={props.style}>
 			<Show when={diff()}>
 				{(parts) => (
 					<span data-testid="suggestion-diff" class="relative block">
@@ -214,17 +233,13 @@ function EditableLine(props: {
 				onInput={(e) =>
 					props.editor.onInput(
 						props.slotId,
-						(e.currentTarget.textContent ?? "").replace(/\s*\n\s*/g, " "),
+						singleLine(e.currentTarget.textContent ?? ""),
 					)
 				}
 				onPaste={(e) => {
 					e.preventDefault();
 					const pasted = e.clipboardData?.getData("text/plain") ?? "";
-					document.execCommand(
-						"insertText",
-						false,
-						pasted.replace(/\s*\n\s*/g, " "),
-					);
+					document.execCommand("insertText", false, singleLine(pasted));
 				}}
 				onKeyDown={(e) => {
 					if (e.key === "Enter") e.preventDefault();
@@ -233,6 +248,30 @@ function EditableLine(props: {
 				onFocus={() => props.editor.onFocus(props.slotId)}
 				onBlur={() => props.editor.onBlur(props.slotId)}
 			/>
+		</span>
+	);
+}
+
+function LineCount(props: {
+	fit: LineFit;
+	page: DraftLayout["page"];
+	indentStart: number;
+}) {
+	return (
+		<span
+			aria-hidden="true"
+			data-testid="line-count"
+			title={`${props.fit.lines} lines, last line ${Math.round(props.fit.lastLineFill * 100)}% full`}
+			class={cn(
+				"pointer-events-none absolute top-0 text-right font-mono text-2xs tabular-nums",
+				isSparse(props.fit) ? "text-status-interview" : "text-faint",
+			)}
+			style={{
+				left: `${-props.page.marginLeft - props.indentStart}pt`,
+				width: `${Math.max(props.page.marginLeft - LINE_COUNT_GUTTER_PT, 0)}pt`,
+			}}
+		>
+			{props.fit.lines}
 		</span>
 	);
 }
@@ -246,20 +285,19 @@ function Block(props: {
 	register: (slotId: string, el: HTMLElement) => void;
 }) {
 	const spacer = () => isSpacer(props.block);
-	const runs = () => trimParagraphEnd(props.block.runs);
-	const split = () => (hasEndTab(props.block) ? splitAtTab(runs()) : null);
+	const lead = () => dominantRun(props.block.runs);
+	const leadStyle = () => {
+		const run = lead();
+		return run ? runStyle(run) : {};
+	};
 	const editor = () =>
 		props.block.slotId && !props.block.section ? props.editor : undefined;
-	const leadStyle = () => {
-		const lead = dominantRun(props.block.runs);
-		return lead ? runStyle(lead) : {};
-	};
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
 			data-section={props.block.section || undefined}
 			class="relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]"
-			style={blockStyle(props.block, props.draw, spacer())}
+			style={blockStyle(props.block, lead(), props.draw, spacer())}
 		>
 			<Show when={editor()}>
 				{(ed) => (
@@ -272,21 +310,11 @@ function Block(props: {
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
 							{(fit) => (
-								<span
-									aria-hidden="true"
-									data-testid="line-count"
-									title={`${fit().lines} lines, last line ${Math.round(fit().lastLineFill * 100)}% full`}
-									class={cn(
-										"pointer-events-none absolute top-0 text-right font-mono text-2xs tabular-nums",
-										isSparse(fit()) ? "text-status-interview" : "text-faint",
-									)}
-									style={{
-										left: `${-props.page.marginLeft - props.block.indentStart}pt`,
-										width: `${Math.max(props.page.marginLeft - LINE_COUNT_GUTTER_PT, 0)}pt`,
-									}}
-								>
-									{fit().lines}
-								</span>
+								<LineCount
+									fit={fit()}
+									page={props.page}
+									indentStart={props.block.indentStart}
+								/>
 							)}
 						</Show>
 					</>
@@ -310,25 +338,17 @@ function Block(props: {
 				<Show
 					when={editor()}
 					fallback={
-						<Show when={split()} fallback={<Runs runs={runs()} />}>
-							{(parts) => (
-								<span class="flex justify-between gap-2">
-									<span class="min-w-0">
-										<Runs runs={parts()[0]} />
-									</span>
-									<span class="whitespace-nowrap">
-										<Runs runs={parts()[1]} />
-									</span>
-								</span>
-							)}
-						</Show>
+						<StaticLine
+							runs={trimParagraphEnd(props.block.runs)}
+							endTab={hasEndTab(props.block)}
+						/>
 					}
 				>
 					{(ed) => (
 						<EditableLine
 							slotId={props.block.slotId}
 							editor={ed()}
-							runStyle={leadStyle()}
+							style={leadStyle()}
 							ref={(el) => props.register(props.block.slotId, el)}
 						/>
 					)}
@@ -399,9 +419,8 @@ export function DocPage(props: {
 		onCleanup(() => ro.disconnect());
 	});
 	createEffect(() => {
-		const editor = props.editor;
-		if (editor)
-			for (const b of props.layout.blocks) if (b.slotId) editor.text(b.slotId);
+		for (const b of props.layout.blocks)
+			if (b.slotId) props.editor?.text(b.slotId);
 		remeasure();
 	});
 

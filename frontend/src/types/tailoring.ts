@@ -162,14 +162,12 @@ export type LayoutRun = z.infer<typeof layoutRunSchema>;
 export type LayoutBlock = z.infer<typeof layoutBlockSchema>;
 export type DraftLayout = z.infer<typeof draftLayoutSchema>;
 
-const suggestActionSchema = z.enum(["fit", "tighten", "verb", "ask"]);
-
 export const suggestDoneSchema = z.object({
 	text: z.string(),
 	findings: list(draftFindingSchema),
 });
 
-export type SuggestAction = z.infer<typeof suggestActionSchema>;
+export type SuggestAction = "fit" | "tighten" | "verb" | "ask";
 export type SuggestDone = z.infer<typeof suggestDoneSchema>;
 export type SuggestRequest = {
 	action: SuggestAction;

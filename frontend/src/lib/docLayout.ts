@@ -2,6 +2,11 @@ import type { LayoutBlock, LayoutBorder, LayoutRun } from "@/types/tailoring";
 
 export const SPARSE_LAST_LINE = 0.3;
 
+export type LineFit = { lines: number; lastLineFill: number };
+
+export const isSparse = (fit: LineFit | undefined) =>
+	!!fit && fit.lines > 1 && fit.lastLineFill < SPARSE_LAST_LINE;
+
 const OVERFLOW_TOLERANCE_PT = 0.5;
 const FEWER_LINES_SLACK = 0.97;
 const FULL_LINE_SPACING = 100;

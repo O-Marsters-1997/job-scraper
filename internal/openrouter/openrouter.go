@@ -110,15 +110,7 @@ func ChatStream(ctx context.Context, hc *http.Client, url, apiKey string, req Re
 		if payload == "[DONE]" {
 			return Reply{Content: content.String(), Cost: cost}, nil
 		}
-		var chunk struct {
-			Error   *struct{ Message string } `json:"error"`
-			Choices []struct {
-				Delta Message `json:"delta"`
-			} `json:"choices"`
-			Usage struct {
-				Cost float64 `json:"cost"`
-			} `json:"usage"`
-		}
+		var chunk streamChunk
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 			return Reply{}, fmt.Errorf("decode stream chunk: %w", err)
 		}
@@ -138,6 +130,16 @@ func ChatStream(ctx context.Context, hc *http.Client, url, apiKey string, req Re
 		return Reply{Content: content.String(), Cost: cost}, fmt.Errorf("read stream: %w", err)
 	}
 	return Reply{Content: content.String(), Cost: cost}, errors.New("stream ended before [DONE]")
+}
+
+type streamChunk struct {
+	Error   *struct{ Message string } `json:"error"`
+	Choices []struct {
+		Delta Message `json:"delta"`
+	} `json:"choices"`
+	Usage struct {
+		Cost float64 `json:"cost"`
+	} `json:"usage"`
 }
 
 func Post(ctx context.Context, hc *http.Client, url, apiKey string, body, out any) error {

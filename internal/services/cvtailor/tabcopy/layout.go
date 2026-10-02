@@ -1,6 +1,7 @@
 package tabcopy
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -109,8 +110,6 @@ type textLayout struct {
 	} `json:"weightedFontFamily"`
 }
 
-var alignments = map[string]string{"CENTER": "center", "END": "right", "JUSTIFIED": "justify"}
-
 // Layout resolves src's single-column body into pt-accurate blocks. It
 // returns ErrUnsupported for the content Requests cannot rebuild.
 func Layout(src json.RawMessage) (Document, error) {
@@ -128,64 +127,60 @@ func Layout(src json.RawMessage) (Document, error) {
 		if p == nil {
 			continue
 		}
-		namedType := p.ParagraphStyle.namedType()
-		pstyle := merge(named[normalText].ParagraphStyle, named[namedType].ParagraphStyle)
-		var bullet *dto.LayoutBullet
+		block := blockOf(p, named, dt.Lists)
 		if p.Bullet != nil {
-			lvl := levelOf(dt.Lists, p.Bullet.ListID, p.Bullet.NestingLevel)
-			pstyle = merge(pstyle, style{"indentStart": lvl.IndentStart, "indentFirstLine": lvl.IndentFirstLine})
 			key := p.Bullet.ListID + "/" + strconv.Itoa(p.Bullet.NestingLevel)
 			counters[key]++
-			bullet = &dto.LayoutBullet{Glyph: lvl.glyph(counters[key]), Level: p.Bullet.NestingLevel}
-		}
-		pl := decodeStyle[paragraphLayout](merge(pstyle, p.ParagraphStyle))
-		block := dto.LayoutBlock{
-			Align:           alignOf(pl.Alignment),
-			LineSpacing:     pl.LineSpacing,
-			SpaceAbove:      pl.SpaceAbove.Magnitude,
-			SpaceBelow:      pl.SpaceBelow.Magnitude,
-			IndentStart:     pl.IndentStart.Magnitude,
-			IndentFirstLine: pl.IndentFirstLine.Magnitude,
-			BorderTop:       pl.BorderTop.layout(),
-			BorderBottom:    pl.BorderBottom.layout(),
-			Bullet:          bullet,
-			Runs:            runsOf(p, named, namedType),
-		}
-		if block.LineSpacing == 0 {
-			block.LineSpacing = defaultSpacing
-		}
-		for _, ts := range pl.TabStops {
-			block.TabStops = append(block.TabStops, dto.LayoutTab{Offset: ts.Offset.Magnitude, Alignment: tabAlignment(ts.Alignment)})
-		}
-		if bullet != nil && len(block.Runs) > 0 {
-			bullet.Size = block.Runs[0].Size
+			block.Bullet = bulletOf(p, dt.Lists, counters[key], block.Runs)
 		}
 		out.Blocks = append(out.Blocks, Block{LayoutBlock: block, StartIndex: el.StartIndex, EndIndex: el.EndIndex})
 	}
 	return out, nil
 }
 
-func runsOf(p *paragraph, named map[string]namedStyle, namedType string) []dto.LayoutRun {
+func blockOf(p *paragraph, named map[string]namedStyle, lists map[string]list) dto.LayoutBlock {
+	pl := decodeStyle[paragraphLayout](paragraphStyleOf(p, named, lists))
+	block := dto.LayoutBlock{
+		Align:           alignOf(pl.Alignment),
+		LineSpacing:     cmp.Or(pl.LineSpacing, defaultSpacing),
+		SpaceAbove:      pl.SpaceAbove.Magnitude,
+		SpaceBelow:      pl.SpaceBelow.Magnitude,
+		IndentStart:     pl.IndentStart.Magnitude,
+		IndentFirstLine: pl.IndentFirstLine.Magnitude,
+		BorderTop:       pl.BorderTop.layout(),
+		BorderBottom:    pl.BorderBottom.layout(),
+		Runs:            runsOf(p, named),
+	}
+	for _, ts := range pl.TabStops {
+		block.TabStops = append(block.TabStops, dto.LayoutTab{Offset: ts.Offset.Magnitude, Alignment: tabAlignment(ts.Alignment)})
+	}
+	return block
+}
+
+func bulletOf(p *paragraph, lists map[string]list, n int, runs []dto.LayoutRun) *dto.LayoutBullet {
+	lvl := levelOf(lists, p.Bullet.ListID, p.Bullet.NestingLevel)
+	b := &dto.LayoutBullet{Glyph: lvl.glyph(n), Level: p.Bullet.NestingLevel}
+	if len(runs) > 0 {
+		b.Size = runs[0].Size
+	}
+	return b
+}
+
+func runsOf(p *paragraph, named map[string]namedStyle) []dto.LayoutRun {
+	namedType := p.ParagraphStyle.namedType()
 	var runs []dto.LayoutRun
 	for _, pe := range p.Elements {
-		ts := decodeStyle[textLayout](merge(named[normalText].TextStyle, named[namedType].TextStyle, pe.TextRun.TextStyle))
-		run := dto.LayoutRun{
+		ts := decodeStyle[textLayout](textStyleOf(named, namedType, pe.TextRun.TextStyle))
+		runs = append(runs, dto.LayoutRun{
 			Text:      pe.TextRun.Content,
-			Font:      ts.WeightedFontFamily.FontFamily,
-			Size:      ts.FontSize.Magnitude,
+			Font:      cmp.Or(ts.WeightedFontFamily.FontFamily, defaultFont),
+			Size:      cmp.Or(ts.FontSize.Magnitude, defaultSize),
 			Bold:      ts.Bold || ts.WeightedFontFamily.Weight >= boldWeight,
 			Italic:    ts.Italic,
 			Underline: ts.Underline,
 			Color:     ts.ForegroundColor.hex(),
 			Link:      ts.Link.URL,
-		}
-		if run.Font == "" {
-			run.Font = defaultFont
-		}
-		if run.Size == 0 {
-			run.Size = defaultSize
-		}
-		runs = append(runs, run)
+		})
 	}
 	if len(runs) == 0 {
 		return runs
@@ -194,12 +189,12 @@ func runsOf(p *paragraph, named map[string]namedStyle, namedType string) []dto.L
 	runs[last].Text = strings.TrimSuffix(runs[last].Text, paragraphEnd)
 	switch {
 	case runs[last].Text != "":
-		return runs
 	case last == 0:
 		runs[0].Text = paragraphEnd
-		return runs
+	default:
+		runs = runs[:last]
 	}
-	return runs[:last]
+	return runs
 }
 
 func (l nestingLevel) glyph(n int) string {
@@ -213,8 +208,13 @@ func (l nestingLevel) glyph(n int) string {
 }
 
 func alignOf(a string) string {
-	if v, ok := alignments[a]; ok {
-		return v
+	switch a {
+	case "CENTER":
+		return "center"
+	case "END":
+		return "right"
+	case "JUSTIFIED":
+		return "justify"
 	}
 	return "left"
 }
@@ -238,20 +238,13 @@ func page(ds docStyle) dto.LayoutPage {
 		MarginRight  dimension
 	}](ds)
 	return dto.LayoutPage{
-		Width:        orDefault(d.PageSize.Width.Magnitude, defaultPageW),
-		Height:       orDefault(d.PageSize.Height.Magnitude, defaultPageH),
-		MarginTop:    orDefault(d.MarginTop.Magnitude, defaultMargin),
-		MarginBottom: orDefault(d.MarginBottom.Magnitude, defaultMargin),
-		MarginLeft:   orDefault(d.MarginLeft.Magnitude, defaultMargin),
-		MarginRight:  orDefault(d.MarginRight.Magnitude, defaultMargin),
+		Width:        cmp.Or(d.PageSize.Width.Magnitude, defaultPageW),
+		Height:       cmp.Or(d.PageSize.Height.Magnitude, defaultPageH),
+		MarginTop:    cmp.Or(d.MarginTop.Magnitude, defaultMargin),
+		MarginBottom: cmp.Or(d.MarginBottom.Magnitude, defaultMargin),
+		MarginLeft:   cmp.Or(d.MarginLeft.Magnitude, defaultMargin),
+		MarginRight:  cmp.Or(d.MarginRight.Magnitude, defaultMargin),
 	}
-}
-
-func orDefault(v, fallback float64) float64 {
-	if v == 0 {
-		return fallback
-	}
-	return v
 }
 
 func decodeStyle[T any](s any) T {

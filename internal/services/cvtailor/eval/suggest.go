@@ -2,12 +2,8 @@ package eval
 
 import (
 	"context"
-	"embed"
-	"encoding/json"
 	"fmt"
-	"io/fs"
 	"maps"
-	"path"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -15,9 +11,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
-
-//go:embed fixtures/suggest/*.json
-var suggestFS embed.FS
 
 // SuggestFixture is one inline-edit request: a line, the Achievements it may
 // draw on and the action asked of the model.
@@ -32,26 +25,7 @@ type SuggestFixture struct {
 }
 
 func SuggestFixtures() ([]SuggestFixture, error) {
-	entries, err := fs.ReadDir(suggestFS, "fixtures/suggest")
-	if err != nil {
-		return nil, fmt.Errorf("read suggest fixtures: %w", err)
-	}
-	var out []SuggestFixture
-	for _, e := range entries {
-		raw, err := suggestFS.ReadFile(path.Join("fixtures/suggest", e.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("read fixture %s: %w", e.Name(), err)
-		}
-		var f SuggestFixture
-		if err := json.Unmarshal(raw, &f); err != nil {
-			return nil, fmt.Errorf("suggest fixture %s: %w", e.Name(), err)
-		}
-		if f.Name == "" {
-			f.Name = strings.TrimSuffix(e.Name(), ".json")
-		}
-		out = append(out, f)
-	}
-	return out, nil
+	return loadFixtures("fixtures/suggest", func(f *SuggestFixture) *string { return &f.Name })
 }
 
 type Suggester interface {

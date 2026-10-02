@@ -86,9 +86,18 @@ export function ChangesDiff(props: {
 		props.base.positions
 			.find((p) => p.positionId === id)
 			?.bullets.map((b) => b.text) ?? [];
-	const slotIdOf = (positionId: string, index: number) =>
-		props.provenance?.positions.find((x) => x.positionId === positionId)
-			?.bullets[index]?.slotId;
+	const undoBullet = (
+		position: DraftContent["positions"][number],
+		row: BulletRow,
+	) => {
+		const undo = props.onUndo;
+		if (row.kind !== "rewritten" || !undo) return undefined;
+		const index = position.bullets.findIndex((b) => b.text === row.text);
+		const slotId = props.provenance?.positions.find(
+			(x) => x.positionId === position.positionId,
+		)?.bullets[index]?.slotId;
+		return slotId ? () => undo(slotId, row.from) : undefined;
+	};
 	const skills = () => listDiff(props.base.skills, props.content.skills);
 	const profile = () =>
 		props.base.profile !== null && props.content.profile !== null
@@ -159,24 +168,7 @@ export function ChangesDiff(props: {
 									p.bullets.map((b) => b.text),
 								)}
 							>
-								{(row) => {
-									const index = () =>
-										p.bullets.findIndex((b) => b.text === row.text);
-									const slotId = () => slotIdOf(p.positionId, index());
-									return (
-										<Row
-											row={row}
-											onUndo={
-												row.kind === "rewritten" && props.onUndo && slotId()
-													? () => {
-															const id = slotId();
-															if (id) props.onUndo?.(id, row.from);
-														}
-													: undefined
-											}
-										/>
-									);
-								}}
+								{(row) => <Row row={row} onUndo={undoBullet(p, row)} />}
 							</For>
 						</ul>
 					</section>

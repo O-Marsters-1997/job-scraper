@@ -115,11 +115,7 @@ func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
 			text.WriteString(pe.TextRun.Content)
 		}
 
-		namedType := p.ParagraphStyle.namedType()
-		pstyle := merge(named[normalText].ParagraphStyle, named[namedType].ParagraphStyle)
 		if p.Bullet != nil {
-			lvl := levelOf(dt.Lists, p.Bullet.ListID, p.Bullet.NestingLevel)
-			pstyle = merge(pstyle, style{"indentStart": lvl.IndentStart, "indentFirstLine": lvl.IndentFirstLine})
 			if p.Bullet.ListID == run.listID && el.StartIndex == run.end {
 				run.end = el.EndIndex
 			} else {
@@ -127,15 +123,16 @@ func Requests(src json.RawMessage, tabID string) ([]json.RawMessage, error) {
 				run = bulletRun{listID: p.Bullet.ListID, start: el.StartIndex, end: el.EndIndex}
 			}
 		}
-		pstyle = merge(pstyle, p.ParagraphStyle)
+		pstyle := paragraphStyleOf(p, named, dt.Lists)
 		delete(pstyle, "namedStyleType")
 		delete(pstyle, "headingId")
 		if r := updateStyle("updateParagraphStyle", "paragraphStyle", pstyle, el.StartIndex, el.EndIndex, tabID); r != nil {
 			paragraphs = append(paragraphs, r)
 		}
 
+		namedType := p.ParagraphStyle.namedType()
 		for _, pe := range p.Elements {
-			tstyle := merge(named[normalText].TextStyle, named[namedType].TextStyle, pe.TextRun.TextStyle)
+			tstyle := textStyleOf(named, namedType, pe.TextRun.TextStyle)
 			if r := updateStyle("updateTextStyle", "textStyle", tstyle, pe.StartIndex, pe.EndIndex, tabID); r != nil {
 				runs = append(runs, r)
 			}
@@ -167,6 +164,19 @@ func (s style) namedType() string {
 		return normalText
 	}
 	return n
+}
+
+func paragraphStyleOf(p *paragraph, named map[string]namedStyle, lists map[string]list) style {
+	pstyle := merge(named[normalText].ParagraphStyle, named[p.ParagraphStyle.namedType()].ParagraphStyle)
+	if p.Bullet != nil {
+		lvl := levelOf(lists, p.Bullet.ListID, p.Bullet.NestingLevel)
+		pstyle = merge(pstyle, style{"indentStart": lvl.IndentStart, "indentFirstLine": lvl.IndentFirstLine})
+	}
+	return merge(pstyle, p.ParagraphStyle)
+}
+
+func textStyleOf(named map[string]namedStyle, namedType string, own style) style {
+	return merge(named[normalText].TextStyle, named[namedType].TextStyle, own)
 }
 
 func levelOf(ls map[string]list, id string, level int) nestingLevel {

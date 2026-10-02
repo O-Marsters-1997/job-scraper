@@ -38,8 +38,11 @@ type SuggestEvent struct {
 }
 
 type suggestTarget struct {
+	slotID       string
+	positionID   string
 	achievements []string
-	draftWith    func(text string) checks.Draft
+	scope        []string
+	bank         []string
 }
 
 // Suggest streams a model rewrite of one slot's text. Everything that can be
@@ -64,26 +67,7 @@ func (m *Module) Suggest(ctx context.Context, userID string, in dto.SuggestInput
 
 	ctx, cancel := context.WithCancel(ctx)
 	events := make(chan SuggestEvent, suggestBuffer)
-	go func() {
-		defer close(events)
-		send := func(ev SuggestEvent) {
-			select {
-			case events <- ev:
-			case <-ctx.Done():
-			}
-		}
-		res, err := m.editor.Suggest(ctx, key, cvedit.SuggestInput{
-			Action: in.Action, Prompt: in.Prompt, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
-		}, func(delta string) { send(SuggestEvent{Delta: delta}) })
-		slog.InfoContext(ctx, "draft suggestion", slog.String("draft_id", in.ID), slog.String("action", in.Action),
-			slog.String("model", cvedit.SuggestModel), slog.String("prompt_version", cvedit.SuggestPromptVersion),
-			slog.Float64("cost", res.Cost), slog.Any(logger.KeyErr, err))
-		if err != nil {
-			send(SuggestEvent{Err: suggestError(err)})
-			return
-		}
-		send(SuggestEvent{Done: &dto.SuggestDone{Text: res.Text, Findings: target.findings(res.Text)}})
-	}()
+	go m.streamSuggestion(ctx, events, key, in, target)
 
 	first, ok := <-events
 	if ok && first.Err != nil {
@@ -101,6 +85,27 @@ func (m *Module) Suggest(ctx context.Context, userID string, in dto.SuggestInput
 			}
 		}
 	}, nil
+}
+
+func (m *Module) streamSuggestion(ctx context.Context, events chan<- SuggestEvent, key string, in dto.SuggestInput, target suggestTarget) {
+	defer close(events)
+	send := func(ev SuggestEvent) {
+		select {
+		case events <- ev:
+		case <-ctx.Done():
+		}
+	}
+	res, err := m.editor.Suggest(ctx, key, cvedit.SuggestInput{
+		Action: in.Action, Prompt: in.Prompt, Text: in.Text, MaxChars: in.MaxChars, Achievements: target.achievements,
+	}, func(delta string) { send(SuggestEvent{Delta: delta}) })
+	slog.InfoContext(ctx, "draft suggestion", slog.String("draft_id", in.ID), slog.String("action", in.Action),
+		slog.String("model", cvedit.SuggestModel), slog.String("prompt_version", cvedit.SuggestPromptVersion),
+		slog.Float64("cost", res.Cost), slog.Any(logger.KeyErr, err))
+	if err != nil {
+		send(SuggestEvent{Err: suggestError(err)})
+		return
+	}
+	send(SuggestEvent{Done: &dto.SuggestDone{Text: res.Text, Findings: target.findings(res.Text)}})
 }
 
 func validateSuggest(in dto.SuggestInput) error {
@@ -121,8 +126,11 @@ func validateSuggest(in dto.SuggestInput) error {
 
 func suggestError(err error) error {
 	var se *openrouter.StatusError
-	if errors.As(err, &se) && (se.Code == http.StatusUnauthorized || se.Code == http.StatusPaymentRequired || se.Code == http.StatusForbidden) {
-		return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
+	if errors.As(err, &se) {
+		switch se.Code {
+		case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden:
+			return apperr.Unprocessable("OpenRouter refused the request; check your key and credit in Settings, AI")
+		}
 	}
 	return apperr.Upstream("the suggestion model failed")
 }
@@ -142,56 +150,63 @@ func (m *Module) suggestTarget(ctx context.Context, userID string, in dto.Sugges
 	if err := json.Unmarshal(draft.EditSet, &edits); err != nil {
 		return suggestTarget{}, fmt.Errorf("decode edit set: %w", err)
 	}
-	bank, err := m.store.ListPositions(ctx, userID)
+	positions, err := m.store.ListPositions(ctx, userID)
 	if err != nil {
 		return suggestTarget{}, err
 	}
-	chosen := make(map[string]bool, len(draft.AchievementIDs))
-	for _, id := range draft.AchievementIDs {
-		chosen[id] = true
-	}
-	textOf := map[string]string{}
-	positionChosen := map[string][]string{}
-	var all, chosenTexts []string
-	for _, p := range bank {
-		for _, a := range p.Achievements {
-			textOf[a.ID] = a.Text
-			all = append(all, a.Text)
-			if chosen[a.ID] {
-				chosenTexts = append(chosenTexts, a.Text)
-				positionChosen[p.ID] = append(positionChosen[p.ID], a.Text)
-			}
-		}
-	}
+	bank := indexBank(positions, draft.AchievementIDs)
 
 	if in.SlotID == profileSlotID {
 		if !hasProfile(draft, edits) {
 			return suggestTarget{}, apperr.NotFound("unknown slot")
 		}
-		return suggestTarget{achievements: chosenTexts, draftWith: func(text string) checks.Draft {
-			return checks.Draft{Profile: &checks.Slot{ID: profileSlotID, Text: text}, Bank: all}
-		}}, nil
+		return suggestTarget{slotID: profileSlotID, achievements: bank.chosen, bank: bank.all}, nil
 	}
 	for _, pe := range edits.Positions {
 		for _, b := range pe.Bullets {
 			if b.SlotID != in.SlotID {
 				continue
 			}
-			cited := make([]string, 0, len(b.AchievementIDs))
-			for _, id := range b.AchievementIDs {
-				cited = append(cited, textOf[id])
-			}
+			scope := bank.chosenByPosition[pe.PositionID]
+			cited := bank.texts(b.AchievementIDs)
 			if len(cited) == 0 {
-				cited = positionChosen[pe.PositionID]
+				cited = scope
 			}
-			scope := positionChosen[pe.PositionID]
-			return suggestTarget{achievements: cited, draftWith: func(text string) checks.Draft {
-				slot := checks.Slot{ID: in.SlotID, Text: text, Cited: cited}
-				return checks.Draft{Positions: []checks.Position{{ID: pe.PositionID, Achievements: scope, Bullets: []checks.Slot{slot}}}, Bank: all}
-			}}, nil
+			return suggestTarget{slotID: b.SlotID, positionID: pe.PositionID, achievements: cited, scope: scope, bank: bank.all}, nil
 		}
 	}
 	return suggestTarget{}, apperr.NotFound("unknown slot")
+}
+
+type bankTexts struct {
+	all, chosen      []string
+	byID             map[string]string
+	chosenByPosition map[string][]string
+}
+
+func indexBank(positions []dto.Position, chosenIDs []string) bankTexts {
+	b := bankTexts{byID: map[string]string{}, chosenByPosition: map[string][]string{}}
+	for _, p := range positions {
+		for _, a := range p.Achievements {
+			b.byID[a.ID] = a.Text
+			b.all = append(b.all, a.Text)
+			if slices.Contains(chosenIDs, a.ID) {
+				b.chosen = append(b.chosen, a.Text)
+				b.chosenByPosition[p.ID] = append(b.chosenByPosition[p.ID], a.Text)
+			}
+		}
+	}
+	return b
+}
+
+func (b bankTexts) texts(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if t, ok := b.byID[id]; ok {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func hasProfile(draft dto.Draft, edits cvedit.EditSet) bool {
@@ -203,6 +218,12 @@ func hasProfile(draft dto.Draft, edits cvedit.EditSet) bool {
 }
 
 func (t suggestTarget) findings(text string) []dto.DraftFinding {
-	d := t.draftWith(text)
+	d := checks.Draft{Bank: t.bank}
+	if t.slotID == profileSlotID {
+		d.Profile = &checks.Slot{ID: t.slotID, Text: text}
+	} else {
+		slot := checks.Slot{ID: t.slotID, Text: text, Cited: t.achievements}
+		d.Positions = []checks.Position{{ID: t.positionID, Achievements: t.scope, Bullets: []checks.Slot{slot}}}
+	}
 	return toDraftFindings(append(checks.Grounding(d), checks.BannedWords(d)...))
 }

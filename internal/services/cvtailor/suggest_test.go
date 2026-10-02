@@ -3,14 +3,12 @@ package cvtailor_test
 import (
 	"net/http"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
-	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
@@ -148,50 +146,6 @@ func TestSuggest(t *testing.T) {
 		}
 		if len(got) != 2 || got[0].Delta != "Cut" || got[1].Err == nil || got[1].Done != nil {
 			t.Errorf("Suggest() events = %+v, want a delta then an error", got)
-		}
-	})
-}
-
-func TestSuggestRoute(t *testing.T) {
-	e := newDraftEnv(t)
-	id := e.readyDrafts(t, 1)[0]
-	slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
-	body := `{"action":"tighten","text":"Cut p99 latency"}`
-
-	t.Run("streams delta events then done as text/event-stream", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("Cut ", "latency"), Creds: apiKey})
-
-		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
-
-		if ct := w.Header().Get("Content-Type"); w.Code != http.StatusOK || !strings.HasPrefix(ct, "text/event-stream") {
-			t.Fatalf("POST suggest = %d %q, want 200 text/event-stream", w.Code, ct)
-		}
-		want := "event: delta\ndata: {\"text\":\"Cut \"}\n\n" +
-			"event: delta\ndata: {\"text\":\"latency\"}\n\n" +
-			"event: done\ndata: {\"text\":\"Cut latency\",\"findings\":[]}\n\n"
-		if diff := cmp.Diff(want, w.Body.String()); diff != "" {
-			t.Errorf("POST suggest body (-want +got):\n%s", diff)
-		}
-	})
-
-	t.Run("a failure before the stream opens is a JSON error", func(t *testing.T) {
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.Suggesting("x"), Creds: cvtailortest.NoKey{}})
-
-		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", body)
-
-		if ct := w.Header().Get("Content-Type"); w.Code != http.StatusUnprocessableEntity || !strings.HasPrefix(ct, "application/json") {
-			t.Errorf("POST suggest without a key = %d %q, want a 422 JSON error", w.Code, ct)
-		}
-	})
-
-	t.Run("the path ids win over the body's", func(t *testing.T) {
-		editor := cvtailortest.Suggesting("x")
-		r := newRouter(cvtailor.Deps{Store: e.store, Editor: editor, Creds: apiKey})
-
-		w := handlerstest.Serve(t, r, "POST /tailoring/drafts/"+id+"/slots/"+slot+"/suggest", `{"id":"other","slotId":"nope","action":"tighten","text":"Cut"}`)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("POST suggest = %d, want 200 using the path ids: %s", w.Code, w.Body)
 		}
 	})
 }

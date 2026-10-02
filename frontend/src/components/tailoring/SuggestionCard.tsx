@@ -17,6 +17,7 @@ export function SuggestionCard(props: {
 	const delta = () =>
 		props.linesAfter === undefined ? 0 : props.linesAfter - props.linesBefore;
 	const changed = () => s().text !== s().before;
+	const acceptable = () => changed() && s().error === undefined;
 	return (
 		<div
 			data-testid="suggestion-card"
@@ -84,7 +85,7 @@ export function SuggestionCard(props: {
 						</For>
 					</Show>
 					<div class="mt-3 flex items-center gap-1.5">
-						<Show when={changed() && s().error === undefined}>
+						<Show when={acceptable()}>
 							<Button size="sm" onClick={props.onAccept}>
 								<Icon name="check" size={14} />
 								Accept
@@ -92,7 +93,7 @@ export function SuggestionCard(props: {
 							</Button>
 						</Show>
 						<Button variant="ghost" size="sm" onClick={props.onReject}>
-							{changed() && s().error === undefined ? "Reject" : "Close"}
+							{acceptable() ? "Reject" : "Close"}
 						</Button>
 						<Button
 							variant="ghost"

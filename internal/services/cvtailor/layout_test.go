@@ -35,10 +35,7 @@ func slotIDsOf(l dto.DraftLayout) []string {
 	return out
 }
 
-// twoPositionDraft is a ready Draft whose first Position lost two of its
-// three bullets in generation, so the Draft Doc's slots are numbered
-// differently from the base CV's.
-func twoPositionDraft(t *testing.T) (draftEnv, string, cvtailor.DocFetcher) {
+func renumberedDraft(t *testing.T) (draftEnv, string, cvtailor.DocFetcher) {
 	t.Helper()
 	e := newDraftEnv(t)
 	second, err := e.store.CreatePosition(t.Context(), userID, dto.PositionInput{Employer: "Beta", Title: "Dev"})
@@ -68,7 +65,7 @@ func twoPositionDraft(t *testing.T) (draftEnv, string, cvtailor.DocFetcher) {
 
 func TestDraftLayout(t *testing.T) {
 	t.Run("maps Draft Doc slots to the base slot IDs the provenance uses", func(t *testing.T) {
-		e, id, docs := twoPositionDraft(t)
+		e, id, docs := renumberedDraft(t)
 		counted := &countingDocs{DocFetcher: docs}
 		svc := cvtailor.NewService(e.store, counted, nil, e.drive)
 
@@ -91,9 +88,9 @@ func TestDraftLayout(t *testing.T) {
 }
 
 func TestDraftLayoutRefusals(t *testing.T) {
-	e, id, docs := twoPositionDraft(t)
+	e, id, docs := renumberedDraft(t)
 	pending := e.queue(t)
-	e2, discarded, _ := twoPositionDraft(t)
+	e2, discarded, _ := renumberedDraft(t)
 	if _, err := e2.svc.DiscardDraft(t.Context(), userID, dto.DraftQuery{ID: discarded}); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +129,7 @@ func TestDraftLayoutRefusals(t *testing.T) {
 }
 
 func TestDraftLayoutRoute(t *testing.T) {
-	e, id, docs := twoPositionDraft(t)
+	e, id, docs := renumberedDraft(t)
 	r := newRouter(cvtailor.Deps{Store: e.store, Drive: e.drive, Docs: docs})
 
 	got := handlerstest.Do[dto.DraftLayout](t, r, http.StatusOK, "GET /tailoring/drafts/"+id+"/layout", "")

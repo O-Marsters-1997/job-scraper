@@ -44,22 +44,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	if err != nil {
 		return plan{}, err
 	}
-	positionOfHeading := make(map[string]string, len(mappings))
-	for _, hm := range mappings {
-		if hm.PositionID != nil {
-			positionOfHeading[hm.HeadingText] = *hm.PositionID
-		}
-	}
-
-	slotsOf := map[string][]docparse.Slot{}
-	for _, slot := range ds.Slots {
-		if slot.HeadingIndex < 0 {
-			continue
-		}
-		if pid, ok := positionOfHeading[ds.Headings[slot.HeadingIndex].Text]; ok {
-			slotsOf[pid] = append(slotsOf[pid], slot)
-		}
-	}
+	slotsOf := slotsByPosition(ds, mappings)
 
 	confirmed := make(map[string]bool, len(claim.AchievementIDs))
 	for _, id := range claim.AchievementIDs {
@@ -103,6 +88,25 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		return plan{}, apperr.Unprocessable("a chosen achievement no longer exists")
 	}
 	return pl, nil
+}
+
+func slotsByPosition(ds docparse.DocStructure, mappings []dto.HeadingMapping) map[string][]docparse.Slot {
+	positionOfHeading := make(map[string]string, len(mappings))
+	for _, hm := range mappings {
+		if hm.PositionID != nil {
+			positionOfHeading[hm.HeadingText] = *hm.PositionID
+		}
+	}
+	out := map[string][]docparse.Slot{}
+	for _, slot := range ds.Slots {
+		if slot.HeadingIndex < 0 {
+			continue
+		}
+		if pid, ok := positionOfHeading[ds.Headings[slot.HeadingIndex].Text]; ok {
+			out[pid] = append(out[pid], slot)
+		}
+	}
+	return out
 }
 
 func (pl plan) input(jobDescription string) cvedit.Input {

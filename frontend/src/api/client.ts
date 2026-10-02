@@ -60,8 +60,8 @@ export async function apiFetchBlob(
 }
 
 export const rethrowStatus =
-	(errors: Record<number, () => Error>) =>
+	(errors: Record<number, (err: ApiError) => Error>) =>
 	(err: unknown): never => {
-		const make = err instanceof ApiError ? errors[err.status] : undefined;
-		throw make ? make() : err;
+		const make = err instanceof ApiError && errors[err.status];
+		throw make ? make(err) : err;
 	};

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { resolveFont } from "./docFonts";
 
-assert.equal(resolveFont("Calibri").known, true, "Calibri maps to Carlito");
+assert.match(resolveFont("Calibri").css, /^Carlito/, "Calibri maps to Carlito");
 assert.match(
 	resolveFont(" calibri ").css,
 	/^Carlito/,
@@ -18,4 +18,8 @@ assert.match(
 	/^Arimo/,
 	"an unknown sans falls back to Arimo",
 );
-assert.equal(resolveFont("Georgia").known, false, "a fallback is flagged");
+assert.match(
+	resolveFont("Open Sans Serif").css,
+	/^Arimo/,
+	"a sans name wins over a serif hint",
+);

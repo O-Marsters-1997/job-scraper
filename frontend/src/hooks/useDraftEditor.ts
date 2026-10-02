@@ -1,5 +1,11 @@
 import { useQueryClient } from "@tanstack/solid-query";
-import { type Accessor, createSignal, onCleanup, onMount } from "solid-js";
+import {
+	type Accessor,
+	createMemo,
+	createSignal,
+	onCleanup,
+	onMount,
+} from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { z } from "zod";
 import { keys } from "@/api/keys";
@@ -39,12 +45,13 @@ export function createDraftEditor(
 ) {
 	const queryClient = useQueryClient();
 	const id = draft().id;
-	const slotIds = (layout?.blocks ?? [])
-		.filter((b) => b.slotId && !b.section)
-		.map((b) => b.slotId);
-	const original: Record<string, string> = {};
-	for (const b of layout?.blocks ?? [])
-		if (b.slotId && !b.section) original[b.slotId] = blockText(b);
+	const blocks = layout?.blocks ?? [];
+	const slotBlocks = blocks.filter((b) => b.slotId && !b.section);
+	const slotIds = slotBlocks.map((b) => b.slotId);
+	const original: Record<string, string> = Object.fromEntries(
+		slotBlocks.map((b) => [b.slotId, blockText(b)]),
+	);
+	const hasSkills = blocks.some((b) => b.section === "skills");
 
 	const [texts, setTexts] = createStore<Record<string, string>>({
 		...original,
@@ -56,15 +63,14 @@ export function createDraftEditor(
 	const [googleSaved, setGoogleSaved] = createSignal(false);
 	const [resolved, setResolvedMap] = createSignal(readResolved(id));
 
-	const positions = () => draft().provenance?.positions ?? [];
-	const labels = () => {
+	const labels = createMemo(() => {
 		const out: Record<string, string> = { [PROFILE_SLOT]: "Profile" };
-		for (const p of positions())
+		for (const p of draft().provenance?.positions ?? [])
 			p.bullets.forEach((b, i) => {
 				out[b.slotId] = `${p.title} bullet ${i + 1}`;
 			});
 		return out;
-	};
+	});
 	const label = (slotId: string) => labels()[slotId] ?? "Line";
 
 	const text = (slotId: string) => texts[slotId] ?? "";
@@ -115,16 +121,16 @@ export function createDraftEditor(
 
 	const googleAgrees = () => googleSaved() && !dirty() && !pageCountFinding();
 
-	const findingsOf = (slotId: string) =>
+	const findingsFor = (slotId: string) =>
 		slotId === PROFILE_SLOT
 			? []
 			: reviewFindings(draft().findings).filter((f) => f.slotId === slotId);
 	const gaps = () => skillGaps(draft().findings);
-	const hasSkills = () =>
-		(layout?.blocks ?? []).some((b) => b.section === "skills");
 	const cardKeys = (hasCard: (slotId: string) => boolean) => [
-		...slotIds.filter((slotId) => hasCard(slotId) || findingsOf(slotId).length),
-		...(gaps().length && hasSkills() ? [SKILLS_CARD] : []),
+		...slotIds.filter(
+			(slotId) => hasCard(slotId) || findingsFor(slotId).length,
+		),
+		...(gaps().length && hasSkills ? [SKILLS_CARD] : []),
 	];
 
 	const setResolved = (key: string, value: boolean) => {
@@ -143,7 +149,7 @@ export function createDraftEditor(
 		setText,
 		undo: (slotId: string) => setText(slotId, original[slotId] ?? ""),
 		edited: (slotId: string) => text(slotId) !== original[slotId],
-		findingsFor: findingsOf,
+		findingsFor,
 		gaps,
 		cardKeys,
 		isResolved: (key: string) => resolved()[key] === true,
