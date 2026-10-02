@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -61,4 +62,24 @@ func (s *Service) pushToUser(ctx context.Context, userID string, msg dto.PushMes
 		}
 	}
 	return nil
+}
+
+const maxPushLabels = 3
+
+func newJobPush(job dto.Job, sc dto.JobScore) dto.PushMessage {
+	var labels []string
+	for _, row := range sc.Rows {
+		if len(labels) == maxPushLabels {
+			break
+		}
+		if row.Effect == "meets" {
+			labels = append(labels, row.Label)
+		}
+	}
+	return dto.PushMessage{
+		Title: fmt.Sprintf("%d · %s, %s", sc.Score, job.Title, job.CompanySlug),
+		Body:  strings.Join(labels, " · "),
+		URL:   "/jobs/" + job.ID,
+		Tag:   job.ID,
+	}
 }

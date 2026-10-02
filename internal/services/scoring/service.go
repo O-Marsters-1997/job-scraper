@@ -273,17 +273,24 @@ func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto
 		if !savedSet[sc.UserID] || cfg.CompanyIsNew || sc.Score < cfg.NotifyThreshold {
 			continue
 		}
-		profile, err := s.profiles.GetProfile(ctx, sc.UserID)
-		if err != nil {
-			slog.ErrorContext(ctx, "notification recipient lookup failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
-			continue
+		s.emailNewJob(ctx, job, sc.UserID)
+		if err := s.pushToUser(ctx, sc.UserID, newJobPush(job, sc)); err != nil {
+			slog.ErrorContext(ctx, "new job push failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
 		}
-		if profile.Email == "" {
-			continue
-		}
-		if err := s.alerter.NotifyNewJob(ctx, job, profile.Email); err != nil {
-			slog.ErrorContext(ctx, "notification send failed", slog.String(logger.KeyUserID, sc.UserID), slog.Any(logger.KeyErr, err))
-		}
+	}
+}
+
+func (s *Service) emailNewJob(ctx context.Context, job dto.Job, userID string) {
+	profile, err := s.profiles.GetProfile(ctx, userID)
+	if err != nil {
+		slog.ErrorContext(ctx, "notification recipient lookup failed", slog.String(logger.KeyUserID, userID), slog.Any(logger.KeyErr, err))
+		return
+	}
+	if profile.Email == "" {
+		return
+	}
+	if err := s.alerter.NotifyNewJob(ctx, job, profile.Email); err != nil {
+		slog.ErrorContext(ctx, "notification send failed", slog.String(logger.KeyUserID, userID), slog.Any(logger.KeyErr, err))
 	}
 }
 
