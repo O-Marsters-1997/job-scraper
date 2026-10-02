@@ -98,9 +98,10 @@ var sharedCache Cache
 func SetCache(c Cache) { sharedCache = c }
 
 type fetchTransport struct {
-	base  http.RoundTripper
-	zone  *ZoneGate
-	cache Cache
+	base          http.RoundTripper
+	zone          *ZoneGate
+	cache         Cache
+	route, source string
 }
 
 func cachedResponse(req *http.Request, c dto.CachedResponse) *http.Response {
@@ -187,6 +188,7 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		start := time.Now()
 		resp, err := f.base.RoundTrip(req)
 		logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+		record(req, f.source, f.route, resp, err)
 		if err != nil {
 			if f.zone != nil && errors.Is(err, errZoneExhausted) {
 				f.zone.result(true, false, probe)
@@ -313,16 +315,16 @@ const (
 	Tiered
 )
 
-func Fetcher(route Route) (http.RoundTripper, error) {
+func Fetcher(route Route, source string) (http.RoundTripper, error) {
 	switch route {
 	case Unlocker:
 		base, err := Transport(true)
 		if err != nil {
 			return nil, err
 		}
-		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache}, nil
+		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache, route: routeUnlocker, source: source}, nil
 	case Tiered:
-		return newTiered(sharedCache)
+		return newTiered(sharedCache, source)
 	case Direct:
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -338,7 +340,7 @@ func Fetcher(route Route) (http.RoundTripper, error) {
 		}
 		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
 	}
-	return &fetchTransport{base: tr}, nil
+	return &fetchTransport{base: tr, route: routeDirect, source: source}, nil
 }
 
 // Probe checks whether a paused Web Unlocker zone is usable again.
@@ -351,7 +353,7 @@ func Probe(ctx context.Context) error {
 	if !paused {
 		return nil
 	}
-	tr, err := Fetcher(Unlocker)
+	tr, err := Fetcher(Unlocker, "probe")
 	if err != nil {
 		return err
 	}

@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
@@ -79,7 +81,7 @@ func tieredFetcher(t *testing.T, residential, unlocker *fakeProxy, cache proxy.C
 	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	proxy.SetCache(cache)
 	t.Cleanup(func() { proxy.SetCache(nil) })
-	tr, err := proxy.Fetcher(proxy.Tiered)
+	tr, err := proxy.Fetcher(proxy.Tiered, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,4 +216,49 @@ func TestValidateResidential(t *testing.T) {
 	if err := proxy.ValidateResidential(); err != nil {
 		t.Fatalf("ValidateResidential() = %v, want nil", err)
 	}
+}
+
+func TestTieredFetcherMetrics(t *testing.T) {
+	requests := func(source, route, outcome string) float64 {
+		return testutil.ToFloat64(proxy.FetchRequests.WithLabelValues(source, route, outcome))
+	}
+	t.Run("blocked residential attempts fall back to the unlocker", func(t *testing.T) {
+		residential := newFakeProxy(t, status(429, ""))
+		unlocker := newFakeProxy(t, status(200, ""))
+		resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		src := t.Name()
+		if got := requests(src, "residential", "blocked"); got != 3 {
+			t.Errorf("residential blocked = %v, want 3", got)
+		}
+		if got := requests(src, "unlocker", "ok"); got != 1 {
+			t.Errorf("unlocker ok = %v, want 1", got)
+		}
+		if got := testutil.ToFloat64(proxy.FetchFallbacks.WithLabelValues(src)); got != 1 {
+			t.Errorf("fallbacks = %v, want 1", got)
+		}
+		if got := testutil.ToFloat64(proxy.FetchBytes.WithLabelValues(src, "unlocker")); got != 4 {
+			t.Errorf("unlocker bytes = %v, want 4", got)
+		}
+	})
+	t.Run("a gone page is not a fallback", func(t *testing.T) {
+		residential := newFakeProxy(t, status(404, ""))
+		unlocker := newFakeProxy(t, status(200, ""))
+		resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		src := t.Name()
+		if got := requests(src, "residential", "gone"); got != 1 {
+			t.Errorf("residential gone = %v, want 1", got)
+		}
+		if got := testutil.ToFloat64(proxy.FetchFallbacks.WithLabelValues(src)); got != 0 {
+			t.Errorf("fallbacks = %v, want 0", got)
+		}
+	})
 }

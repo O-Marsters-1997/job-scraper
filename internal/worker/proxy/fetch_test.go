@@ -10,6 +10,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 )
@@ -180,4 +182,23 @@ func TestFetchLimitsConcurrentRequestsPerHost(t *testing.T) {
 			t.Errorf("started %d requests after a slot freed, want 3", got)
 		}
 	})
+}
+
+func TestFetchTransportCountsRequestsAndBytes(t *testing.T) {
+	requests := proxy.FetchRequests.WithLabelValues("", "", "ok")
+	bytes := proxy.FetchBytes.WithLabelValues("", "")
+	beforeRequests, beforeBytes := testutil.ToFloat64(requests), testutil.ToFloat64(bytes)
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }), nil, nil)
+	resp, err := tr.RoundTrip(newRequest(t, freshURL("/jobs")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if got := testutil.ToFloat64(requests) - beforeRequests; got != 1 {
+		t.Errorf("ok requests = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(bytes) - beforeBytes; got != 2 {
+		t.Errorf("bytes = %v, want 2", got)
+	}
 }
