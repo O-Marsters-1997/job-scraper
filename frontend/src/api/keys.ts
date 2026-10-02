@@ -37,6 +37,8 @@ export const keys = {
 			[...tailoringAll, "headings", docId, tabId] as const,
 		suggestions: (jobId: string, docId: string, tabId: string) =>
 			[...tailoringAll, "suggestions", jobId, docId, tabId] as const,
+		experienceMatch: (jobId: string) =>
+			[...tailoringAll, "experience-match", jobId] as const,
 		draft: (id: string) => [...tailoringAll, "draft", id] as const,
 		draftLayout: (id: string) => [...tailoringAll, "draft-layout", id] as const,
 		jobDrafts: (jobId: string) =>

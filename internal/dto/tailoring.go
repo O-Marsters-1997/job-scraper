@@ -54,6 +54,17 @@ type Suggestion struct {
 	Preselected   bool            `json:"preselected"`
 }
 
+// ExperienceMatchQuery selects the Job to measure the Experience Bank against.
+type ExperienceMatchQuery struct {
+	JobID string `json:"-" path:"jobId"`
+}
+
+// ExperienceMatch is the mean net lean of the Bank's three best Achievements for
+// a Job. Score is nil when the Bank is empty.
+type ExperienceMatch struct {
+	Score *float64 `json:"score"`
+}
+
 // ExplainInput names the bullet to explain against a Job.
 type ExplainInput struct {
 	JobID         string `json:"-" path:"jobId"`

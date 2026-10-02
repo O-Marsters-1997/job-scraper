@@ -11,7 +11,9 @@ import {
 	draftLayoutSchema,
 	draftRefSchema,
 	draftSchema,
+	type ExperienceMatch,
 	type Explanation,
+	experienceMatchSchema,
 	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
@@ -80,6 +82,19 @@ export async function fetchSuggestions(
 			apiFetch(
 				`/tailoring/jobs/${jobId}/suggestions?${new URLSearchParams({ docId, tabId })}`,
 				suggestionSchema.array(),
+			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
+	);
+}
+
+export async function fetchExperienceMatch(
+	jobId: string,
+): Promise<ExperienceMatch> {
+	return mocked(
+		(db) => db.getExperienceMatch(),
+		() =>
+			apiFetch(
+				`/tailoring/jobs/${jobId}/experience-match`,
+				experienceMatchSchema,
 			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
 	);
 }

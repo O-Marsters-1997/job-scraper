@@ -3,6 +3,7 @@ package cvtailor_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -129,5 +130,49 @@ func TestSuggestionsPropagatesMissingKey(t *testing.T) {
 	_, err := svc.Suggestions(t.Context(), userID, dto.SuggestionsQuery{JobID: "job-1"})
 	if !errors.Is(err, missingKey) {
 		t.Errorf("Suggestions() err = %v, want %v", err, missingKey)
+	}
+}
+
+func TestExperienceMatchMeansTopThreeLeans(t *testing.T) {
+	asker := &fakeAsker{answers: map[string]dto.Answer{
+		questionPrefix + "fit1":    {PYes: 0.8, PNo: 0.0},
+		questionPrefix + "fit2":    {PYes: 0.6, PNo: 0.2},
+		questionPrefix + "unclear": {PYes: 0.3, PNo: 0.3},
+		questionPrefix + "low":     {PYes: 0.1, PNo: 0.7},
+	}}
+	svc, st := newService(t, nil, asker)
+	p := addPosition(t, st, "Acme", "Engineer")
+	addAchievements(t, p.ID, st, "low", "unclear", "fit1", "fit2")
+
+	got, err := svc.ExperienceMatch(t.Context(), userID, dto.ExperienceMatchQuery{JobID: "job-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Score == nil || math.Abs(*got.Score-(0.8+0.4+0)/3) > 1e-9 {
+		t.Errorf("ExperienceMatch() = %v, want (0.8+0.4+0)/3", got.Score)
+	}
+}
+
+func TestExperienceMatchEmptyBankHasNoScore(t *testing.T) {
+	asker := &fakeAsker{}
+	svc, _ := newService(t, nil, asker)
+	got, err := svc.ExperienceMatch(t.Context(), userID, dto.ExperienceMatchQuery{JobID: "job-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Score != nil || len(asker.asked) != 0 {
+		t.Errorf("ExperienceMatch() = %v, asked %v; want nil score, no asks", got.Score, asker.asked)
+	}
+}
+
+func TestExperienceMatchPropagatesMissingKey(t *testing.T) {
+	missingKey := apperr.Unprocessable("connect an OpenRouter key")
+	svc, st := newService(t, nil, &fakeAsker{err: missingKey})
+	p := addPosition(t, st, "Acme", "Engineer")
+	addAchievements(t, p.ID, st, "a")
+
+	_, err := svc.ExperienceMatch(t.Context(), userID, dto.ExperienceMatchQuery{JobID: "job-1"})
+	if !errors.Is(err, missingKey) {
+		t.Errorf("ExperienceMatch() err = %v, want %v", err, missingKey)
 	}
 }
