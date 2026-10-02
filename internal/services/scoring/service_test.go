@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ var (
 	retiredCobol = dto.ScoringOption{
 		ID: "tech:cobol", Dimension: dto.DimensionTech, Label: "COBOL", Question: "Does the role use COBOL?", RetiredAt: &retiredAt,
 	}
-	testJob = dto.Job{ID: "job-1", Title: "Backend Engineer", ContentFingerprint: "fp-1", Source: "greenhouse"}
+	testJob = dto.Job{ID: "job-1", Title: "Backend Engineer", CompanySlug: "monzo", ContentFingerprint: "fp-1", Source: "greenhouse"}
 )
 
 func newFakeStore() *scoringtest.FakeStore {
@@ -134,6 +135,7 @@ type depsOpt func(*scoring.Deps)
 
 func withAnswerer(a scoring.Answerer) depsOpt      { return func(d *scoring.Deps) { d.Answerer = a } }
 func withAlerter(a scoring.Alerter) depsOpt        { return func(d *scoring.Deps) { d.Alerter = a } }
+func withPusher(p scoring.PushSender) depsOpt      { return func(d *scoring.Deps) { d.Pusher = p } }
 func withProfiles(p scoring.ProfileReader) depsOpt { return func(d *scoring.Deps) { d.Profiles = p } }
 func withCandidates(c scoring.Reconsiderer) depsOpt {
 	return func(d *scoring.Deps) { d.Candidates = c }
@@ -358,6 +360,53 @@ func TestRunTick(t *testing.T) {
 		}
 		if completed := st.Completed(); len(completed) != 1 || len(completed[0].Scores) != 1 {
 			t.Errorf("completed = %+v, want the job still scored once", completed)
+		}
+	})
+
+	t.Run("pushes alongside the email only on a qualifying first discovery", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			first     bool
+			threshold int
+			newCo     bool
+			wantPush  bool
+		}{
+			{"qualifying job", true, 50, false, true},
+			{"below threshold", true, 101, false, false},
+			{"new company", true, 50, true, false},
+			{"re-ingest", false, 50, false, false},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				st := newFakeStore()
+				st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+				cfg := picking("user-1", "tech:go")
+				cfg.NotifyThreshold, cfg.CompanyIsNew = tt.threshold, tt.newCo
+				seedEffect(st, tt.first, cfg)
+				if err := st.UpsertPushSubscription(t.Context(), "user-1", dto.PushSubscriptionInput{Endpoint: "https://push.example/a"}); err != nil {
+					t.Fatal(err)
+				}
+				alerter, pusher := &fakeAlerter{}, &fakePusher{}
+
+				runTick(t, st, withAlerter(alerter), withPusher(pusher), withProfiles(&fakeProfiles{emails: map[string]string{"user-1": "user@example.com"}}))
+
+				if got := len(pusher.msgs) == 1; got != tt.wantPush {
+					t.Errorf("pushed = %v, want %v", pusher.msgs, tt.wantPush)
+				}
+				if got := len(alerter.notified) == 1; got != tt.wantPush {
+					t.Errorf("emailed = %v, want %v", alerter.notified, tt.wantPush)
+				}
+				if !tt.wantPush {
+					return
+				}
+				msg := pusher.msgs[0]
+				if !strings.HasSuffix(msg.Title, " · Backend Engineer, monzo") || msg.URL != "/jobs/job-1" || msg.Tag != "job-1" {
+					t.Errorf("push = %+v, want title ending \" · Backend Engineer, monzo\", URL /jobs/job-1, Tag job-1", msg)
+				}
+				if n := len(strings.Split(msg.Body, " · ")); msg.Body == "" || n > 3 {
+					t.Errorf("push body = %q, want 1 to 3 meets labels", msg.Body)
+				}
+			})
 		}
 	})
 }
