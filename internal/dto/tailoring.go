@@ -36,11 +36,20 @@ type SuggestionsQuery struct {
 	TabID string `json:"tabId"`
 }
 
-// Suggestion ranks one Achievement for a Job. Score is P(yes) x confidence.
+type SuggestionState string
+
+const (
+	SuggestionFit     SuggestionState = "fit"
+	SuggestionLow     SuggestionState = "low"
+	SuggestionUnclear SuggestionState = "unclear"
+)
+
+// Suggestion ranks one Achievement for a Job. Score is the net lean, P(yes) - P(no).
 type Suggestion struct {
-	AchievementID string  `json:"achievementId"`
-	PositionID    string  `json:"positionId"`
-	Text          string  `json:"text"`
-	Score         float64 `json:"score"`
-	Preselected   bool    `json:"preselected"`
+	AchievementID string          `json:"achievementId"`
+	PositionID    string          `json:"positionId"`
+	Text          string          `json:"text"`
+	Score         float64         `json:"score"`
+	State         SuggestionState `json:"state"`
+	Preselected   bool            `json:"preselected"`
 }

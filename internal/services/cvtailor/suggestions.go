@@ -9,7 +9,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-const defaultSlotCount = 3
+const (
+	defaultSlotCount = 3
+	lowFitLean       = -0.2
+)
 
 type Asker interface {
 	Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error)
@@ -67,8 +70,9 @@ func rankSuggestions(positions []dto.Position, answers map[string]dto.Answer, sl
 		ranked := make([]dto.Suggestion, len(p.Achievements))
 		for i, a := range p.Achievements {
 			ans := answers[achievementQuestion(a.Text)]
+			lean := ans.PYes - ans.PNo
 			ranked[i] = dto.Suggestion{
-				AchievementID: a.ID, PositionID: p.ID, Text: a.Text, Score: ans.PYes * ans.Confidence,
+				AchievementID: a.ID, PositionID: p.ID, Text: a.Text, Score: lean, State: suggestionState(lean),
 			}
 		}
 		slices.SortStableFunc(ranked, func(a, b dto.Suggestion) int { return cmp.Compare(b.Score, a.Score) })
@@ -82,4 +86,15 @@ func rankSuggestions(positions []dto.Position, answers map[string]dto.Answer, sl
 		out = append(out, ranked...)
 	}
 	return out
+}
+
+func suggestionState(lean float64) dto.SuggestionState {
+	switch {
+	case lean > 0:
+		return dto.SuggestionFit
+	case lean <= lowFitLean:
+		return dto.SuggestionLow
+	default:
+		return dto.SuggestionUnclear
+	}
 }

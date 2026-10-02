@@ -46,6 +46,7 @@ const suggestion = (id: string, preselected: boolean): Suggestion => ({
 	positionId: "p1",
 	text: id,
 	score: 0.5,
+	state: "fit",
 	preselected,
 });
 
