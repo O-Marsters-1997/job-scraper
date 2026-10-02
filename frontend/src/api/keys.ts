@@ -38,6 +38,7 @@ export const keys = {
 		suggestions: (jobId: string, docId: string, tabId: string) =>
 			[...tailoringAll, "suggestions", jobId, docId, tabId] as const,
 		draft: (id: string) => [...tailoringAll, "draft", id] as const,
+		draftLayout: (id: string) => [...tailoringAll, "draft-layout", id] as const,
 		jobDrafts: (jobId: string) =>
 			[...tailoringAll, "job-drafts", jobId] as const,
 	},

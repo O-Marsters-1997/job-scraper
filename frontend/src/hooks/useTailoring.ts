@@ -5,6 +5,7 @@ import {
 	createDraft,
 	discardDraft,
 	fetchDraft,
+	fetchDraftLayout,
 	fetchHeadings,
 	fetchJobDrafts,
 	fetchSuggestions,
@@ -71,6 +72,17 @@ export function useDraft(id: Accessor<string | undefined>) {
 			query.state.data && isSettled(query.state.data.status)
 				? false
 				: DRAFT_POLL_MS,
+	}));
+}
+
+export function useDraftLayout(id: Accessor<string>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.draftLayout(id()),
+		queryFn: () => fetchDraftLayout(id()),
+		retry: false,
+		refetchOnWindowFocus: false,
+		staleTime: 0,
+		gcTime: 0,
 	}));
 }
 

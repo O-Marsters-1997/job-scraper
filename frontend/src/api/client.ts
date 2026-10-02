@@ -17,7 +17,10 @@ export const jsonInit = (method: string, body: unknown): RequestInit => ({
 	body: JSON.stringify(body),
 });
 
-async function request(path: string, init?: RequestInit): Promise<Response> {
+export async function request(
+	path: string,
+	init?: RequestInit,
+): Promise<Response> {
 	const res = await fetch(`${API_BASE}${path}`, {
 		credentials: "include",
 		...init,
