@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/solid-query";
 import { type Accessor, createSignal, onCleanup, onMount } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
+import { z } from "zod";
 import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
 import { blockText } from "@/lib/docLayout";
@@ -21,9 +22,13 @@ function resolvedKey(id: string) {
 	return `draft.resolved.${id}`;
 }
 
+const resolvedSchema = z.record(z.string(), z.boolean());
+
 function readResolved(id: string): Record<string, boolean> {
 	try {
-		return JSON.parse(localStorage.getItem(resolvedKey(id)) ?? "{}");
+		return resolvedSchema.parse(
+			JSON.parse(localStorage.getItem(resolvedKey(id)) ?? "{}"),
+		);
 	} catch {
 		return {};
 	}

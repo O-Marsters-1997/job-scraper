@@ -202,10 +202,14 @@ export async function streamSuggestion(
 				if (event === "error") failure = messageOf(data);
 			});
 			const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-			for (;;) {
-				const chunk = await reader.read();
-				if (chunk.done) break;
-				feed(chunk.value);
+			try {
+				for (;;) {
+					const chunk = await reader.read();
+					if (chunk.done) break;
+					feed(chunk.value);
+				}
+			} finally {
+				void reader.cancel().catch(() => {});
 			}
 			if (failure !== undefined) throw new Error(failure);
 			if (!done) throw new Error("Suggestion ended early");

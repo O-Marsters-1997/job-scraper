@@ -3,6 +3,8 @@ import { expect, test } from "../src/fixtures";
 
 const SERIOUS_OR_WORSE = ["serious", "critical"];
 
+const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
+
 const ROUTES = [
 	"/overview",
 	"/jobs",
@@ -30,7 +32,7 @@ test.describe("Accessibility", () => {
 				.waitFor({ state: "visible" });
 
 			const results = await new AxeBuilder({ page })
-				.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+				.withTags(WCAG_TAGS)
 				.analyze();
 
 			const serious = results.violations.filter((v) =>
@@ -58,7 +60,7 @@ test.describe("Accessibility", () => {
 		await page.getByRole("menu").waitFor({ state: "visible" });
 
 		const results = await new AxeBuilder({ page })
-			.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+			.withTags(WCAG_TAGS)
 			.analyze();
 		expect(
 			results.violations.filter((v) =>

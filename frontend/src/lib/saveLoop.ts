@@ -5,7 +5,6 @@ export function createSaveLoop(opts: {
 	send: () => Promise<void>;
 	onStatus: (status: SaveStatus) => void;
 }) {
-	// ponytail: saves are serialised per tab only, so two tabs on one Draft can lose an edit; #517's revision CAS is the upgrade path.
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let inflight: Promise<void> | undefined;
 	let again = false;

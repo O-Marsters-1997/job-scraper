@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/tabcopy"
 )
@@ -45,6 +47,7 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 	}
 	ds, err := docparse.Parse(raw)
 	if err != nil {
+		slog.ErrorContext(ctx, "parse draft doc failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return dto.DraftLayout{}, apperr.Unprocessable("could not read the draft document")
 	}
 	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs}

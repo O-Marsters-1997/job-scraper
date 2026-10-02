@@ -34,13 +34,13 @@ type SuggestFixture struct {
 func SuggestFixtures() ([]SuggestFixture, error) {
 	entries, err := fs.ReadDir(suggestFS, "fixtures/suggest")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read suggest fixtures: %w", err)
 	}
 	var out []SuggestFixture
 	for _, e := range entries {
 		raw, err := suggestFS.ReadFile(path.Join("fixtures/suggest", e.Name()))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read fixture %s: %w", e.Name(), err)
 		}
 		var f SuggestFixture
 		if err := json.Unmarshal(raw, &f); err != nil {

@@ -69,8 +69,11 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 		bullet := got.Provenance.Positions[0].Bullets[0]
 		want := []dto.TextSegment{{Text: "Cut p99 latency by moving queries"}}
-		if bullet.SlotID != slot || !slices.Equal(bullet.Segments, want) {
-			t.Errorf("SaveDraftSlots().Provenance bullet = %+v, want slot %q with the new text", bullet, slot)
+		if bullet.SlotID != slot {
+			t.Errorf("SaveDraftSlots().Provenance bullet slot = %q, want %q", bullet.SlotID, slot)
+		}
+		if diff := cmp.Diff(want, bullet.Segments); diff != "" {
+			t.Errorf("SaveDraftSlots().Provenance bullet segments (-want +got):\n%s", diff)
 		}
 	})
 

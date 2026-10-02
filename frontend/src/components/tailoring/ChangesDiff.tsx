@@ -96,7 +96,7 @@ export function ChangesDiff(props: {
 			: null;
 
 	return (
-		<div class="space-y-6">
+		<div class="flex flex-col gap-6">
 			<Show when={profile()}>
 				{(ops) => (
 					<section aria-labelledby="diff-profile">
@@ -152,7 +152,7 @@ export function ChangesDiff(props: {
 						<h3 class="mb-2 text-xs font-medium text-muted">
 							{label(p.positionId)}
 						</h3>
-						<ul class="space-y-2">
+						<ul class="flex flex-col gap-2">
 							<For
 								each={bulletDiff(
 									baseBullets(p.positionId),
@@ -168,7 +168,10 @@ export function ChangesDiff(props: {
 											row={row}
 											onUndo={
 												row.kind === "rewritten" && props.onUndo && slotId()
-													? () => props.onUndo?.(slotId() as string, row.from)
+													? () => {
+															const id = slotId();
+															if (id) props.onUndo?.(id, row.from);
+														}
 													: undefined
 											}
 										/>

@@ -77,8 +77,14 @@ func TestRunSuggestScoresGroundingBannedWordsAndLength(t *testing.T) {
 
 func TestSuggestReportShowsPassRatePerFixture(t *testing.T) {
 	f := suggestFixture(t, "verb-weak")
-	good, _ := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Ran the weekly release train for six squads"), "key", f)
-	bad, _ := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Spearheaded the weekly release train for six squads"), "key", f)
+	good, err := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Ran the weekly release train for six squads"), "key", f)
+	if err != nil {
+		t.Fatalf("RunSuggest(good): %v", err)
+	}
+	bad, err := eval.RunSuggest(t.Context(), cvtailortest.Suggesting("Spearheaded the weekly release train for six squads"), "key", f)
+	if err != nil {
+		t.Fatalf("RunSuggest(bad): %v", err)
+	}
 
 	report := eval.SuggestReport("v1", "m", []eval.SuggestOutcome{good, bad})
 

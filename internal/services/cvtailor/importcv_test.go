@@ -129,10 +129,10 @@ func TestImportPositionsIsIdempotentAndRejectsInvalidPositions(t *testing.T) {
 		{Employer: "acme", Title: "engineer", Achievements: []string{"TWO", "three"}},
 	}}
 	if _, err := svc.ImportPositions(ctx, userID, more); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ImportPositions(re-import) error = %v", err)
 	}
 	if got, err = st.ListPositions(ctx, userID); err != nil {
-		t.Fatal(err)
+		t.Fatalf("ListPositions() error = %v", err)
 	}
 	if len(got) != 1 || len(got[0].Achievements) != 3 {
 		t.Fatalf("Bank after a re-import with one new line = %+v, want one position with three achievements", got)

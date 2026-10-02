@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 )
 
@@ -97,7 +99,6 @@ func (s *Service) KeepDraft(ctx context.Context, userID string, q dto.DraftQuery
 	return withDocURL(draft), nil
 }
 
-// holdsKeep reports whether the Draft is being kept or already kept.
 func holdsKeep(d dto.Draft) bool {
 	return d.Status == statusKeeping || outcome(d) == dto.OutcomeKept
 }
@@ -117,6 +118,7 @@ func (s *Service) DiscardDraft(ctx context.Context, userID string, q dto.DraftQu
 	}
 	if draft.DraftDocID != "" {
 		if err := s.drive.DeleteFile(ctx, userID, draft.DraftDocID); err != nil {
+			slog.ErrorContext(ctx, "delete discarded draft failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 			return dto.Draft{}, apperr.Upstream("failed to delete the draft from Google Drive")
 		}
 	}
@@ -135,6 +137,7 @@ func (s *Service) DraftPDF(ctx context.Context, userID string, q dto.DraftQuery)
 	}
 	body, err := s.drive.ExportPDF(ctx, userID, draft.DraftDocID, "")
 	if err != nil {
+		slog.ErrorContext(ctx, "export draft pdf failed", slog.String("draft_id", draft.ID), slog.Any(logger.KeyErr, err))
 		return nil, apperr.Upstream("failed to export PDF")
 	}
 	return body, nil

@@ -32,6 +32,10 @@ const LINK_INK = "#1155cc";
 const PAPER = "#ffffff";
 
 export const PX_PER_PT = 4 / 3;
+export const DEFAULT_BODY_LINE_PT = 15;
+const DEFAULT_FONT_PT = 11;
+const LINE_COUNT_GUTTER_PT = 14;
+const SAME_ROW_TOLERANCE_PX = 2;
 
 export type LineFit = { lines: number; lastLineFill: number };
 
@@ -81,7 +85,7 @@ function blockStyle(
 ): JSX.CSSProperties {
 	const lead = dominantRun(b.runs);
 	const font = resolveFont(lead?.font ?? "");
-	const size = lead?.size ?? 11;
+	const size = lead?.size ?? DEFAULT_FONT_PT;
 	const hanging = b.indentFirstLine - b.indentStart;
 	return {
 		"font-family": font.css,
@@ -142,7 +146,9 @@ function measureFit(el: HTMLElement): LineFit {
 	const rects = [...range.getClientRects()].filter((r) => r.width > 0);
 	const last = rects.at(-1);
 	if (!last) return { lines, lastLineFill: 0 };
-	const row = rects.filter((r) => Math.abs(r.top - last.top) < 2);
+	const row = rects.filter(
+		(r) => Math.abs(r.top - last.top) < SAME_ROW_TOLERANCE_PX,
+	);
 	const left = Math.min(...row.map((r) => r.left));
 	const right = Math.max(...row.map((r) => r.right));
 	return {
@@ -244,7 +250,10 @@ function Block(props: {
 	const split = () => (hasEndTab(props.block) ? splitAtTab(runs()) : null);
 	const editor = () =>
 		props.block.slotId && !props.block.section ? props.editor : undefined;
-	const lead = () => dominantRun(props.block.runs);
+	const leadStyle = () => {
+		const lead = dominantRun(props.block.runs);
+		return lead ? runStyle(lead) : {};
+	};
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
@@ -273,7 +282,7 @@ function Block(props: {
 									)}
 									style={{
 										left: `${-props.page.marginLeft - props.block.indentStart}pt`,
-										width: `${Math.max(props.page.marginLeft - 14, 0)}pt`,
+										width: `${Math.max(props.page.marginLeft - LINE_COUNT_GUTTER_PT, 0)}pt`,
 									}}
 								>
 									{fit().lines}
@@ -319,7 +328,7 @@ function Block(props: {
 						<EditableLine
 							slotId={props.block.slotId}
 							editor={ed()}
-							runStyle={lead() ? runStyle(lead() as LayoutRun) : {}}
+							runStyle={leadStyle()}
 							ref={(el) => props.register(props.block.slotId, el)}
 						/>
 					)}
@@ -355,7 +364,7 @@ export function DocPage(props: {
 		props.onMetrics?.({
 			contentPt: content.offsetHeight / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,
-			bodyLinePt: (bodyLinePx || 15 * PX_PER_PT) / PX_PER_PT,
+			bodyLinePt: bodyLinePx ? bodyLinePx / PX_PER_PT : DEFAULT_BODY_LINE_PT,
 			fits: next,
 		});
 	};
@@ -365,7 +374,8 @@ export function DocPage(props: {
 		const el = lines.get(slotId);
 		const block = el?.closest<HTMLElement>("[data-slot-id]");
 		if (!block?.parentElement) return 1;
-		const clone = block.cloneNode(true) as HTMLElement;
+		const clone = block.cloneNode(true);
+		if (!(clone instanceof HTMLElement)) return 1;
 		clone.removeAttribute("data-slot-id");
 		clone.querySelector('[data-testid="suggestion-diff"]')?.remove();
 		clone.style.position = "absolute";

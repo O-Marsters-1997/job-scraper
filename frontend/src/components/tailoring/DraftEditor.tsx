@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import {
 	createEffect,
+	createMemo,
 	createSignal,
 	type JSX,
 	onCleanup,
@@ -30,6 +31,7 @@ import {
 } from "../../hooks/useTailoring";
 import { ChangesDiff } from "./ChangesDiff";
 import {
+	DEFAULT_BODY_LINE_PT,
 	DocPage,
 	isSparse,
 	type PageEditor,
@@ -42,7 +44,7 @@ import { WandMenu } from "./WandMenu";
 const NO_METRICS: PageMetrics = {
 	contentPt: 0,
 	availablePt: 1,
-	bodyLinePt: 15,
+	bodyLinePt: DEFAULT_BODY_LINE_PT,
 	fits: {},
 };
 
@@ -147,20 +149,29 @@ function PrintPreview(props: { draftId: string; onClose: () => void }) {
 		() => ({ id: props.draftId }),
 		(s) => fetchDraftPdf(s.id),
 	);
+	let closeBtn: HTMLButtonElement | undefined;
 	onMount(() => {
+		const opener = document.activeElement;
+		closeBtn?.focus();
 		const onKey = (e: KeyboardEvent) => e.key === "Escape" && props.onClose();
 		window.addEventListener("keydown", onKey);
-		onCleanup(() => window.removeEventListener("keydown", onKey));
+		onCleanup(() => {
+			window.removeEventListener("keydown", onKey);
+			if (opener instanceof HTMLElement) opener.focus();
+		});
 	});
 	return (
 		<div class="fixed inset-0 z-[55] flex justify-end bg-black/30 backdrop-blur-[2px]">
 			<button
 				type="button"
-				aria-label="Close preview"
+				tabIndex={-1}
+				aria-hidden="true"
 				class="flex-1 cursor-default"
 				onClick={() => props.onClose()}
 			/>
-			<aside
+			<div
+				role="dialog"
+				aria-modal="true"
 				aria-label="Print preview"
 				class="scroll-slim flex h-full w-full max-w-[52rem] flex-col overflow-y-auto bg-background shadow-2xl"
 			>
@@ -172,6 +183,7 @@ function PrintPreview(props: { draftId: string; onClose: () => void }) {
 						</p>
 					</div>
 					<Button
+						ref={closeBtn}
 						variant="ghost"
 						size="icon"
 						aria-label="Close preview"
@@ -183,7 +195,7 @@ function PrintPreview(props: { draftId: string; onClose: () => void }) {
 				<div class="p-6">
 					<PdfPreview url={url} title="Draft CV PDF" />
 				</div>
-			</aside>
+			</div>
 		</div>
 	);
 }
@@ -219,7 +231,7 @@ export function DraftEditor(props: {
 	const [preview, setPreview] = createSignal(false);
 	const [blockedByKept, setBlockedByKept] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
-	const [askOpen, setAskOpen] = createSignal(false);
+	const [askSlot, setAskSlot] = createSignal<string>();
 	const [mainWidth, setMainWidth] = createSignal(0);
 	const [innerHeight, setInnerHeight] = createSignal(0);
 	const [wandTop, setWandTop] = createSignal(0);
@@ -245,31 +257,42 @@ export function DraftEditor(props: {
 		},
 		apply: ed.setText,
 	});
-	const cardKeys = () =>
+	const cardKeys = createMemo(() =>
 		ed.cardKeys(
+			// eslint-disable-next-line solid/reactivity -- pedantic: cardKeys calls the predicate synchronously inside this memo
 			(slotId) =>
 				ed.edited(slotId) ||
 				!!suggestions.get(slotId) ||
 				isSparse(metrics().fits[slotId]),
-		);
+		),
+	);
 	const activeSlot = () => {
 		const key = active();
 		return key && ed.slotIds.includes(key) ? key : undefined;
 	};
-	const focusLine = (slotId: string) =>
+	const focusLine = (slotId: string) => {
+		const root = stage();
 		queueMicrotask(() =>
-			stage()
+			root
 				?.querySelector<HTMLElement>(
 					`[data-slot-id="${slotId}"] [role="textbox"]`,
 				)
 				?.focus({ preventScroll: true }),
 		);
+	};
+	const askOpen = () => askSlot() !== undefined && askSlot() === activeSlot();
+	const setAskOpen = (open: boolean) =>
+		setAskSlot(open ? activeSlot() : undefined);
+	const activate = (key: string | undefined) => {
+		if (key !== active()) setAskSlot(undefined);
+		setActive(key);
+	};
 	const showWand = () => {
 		const key = activeSlot();
 		return !!key && editable() && !suggestions.get(key);
 	};
 	const fitSlot = (slotId: string) => {
-		setActive(slotId);
+		activate(slotId);
 		void suggestions.ask(slotId, "fit");
 	};
 
@@ -307,14 +330,10 @@ export function DraftEditor(props: {
 					];
 		},
 		onInput: ed.setText,
-		onFocus: setActive,
+		onFocus: activate,
 		onBlur: () => void ed.flush(),
 	};
 
-	createEffect(() => {
-		active();
-		setAskOpen(false);
-	});
 	createEffect(() => {
 		const key = activeSlot();
 		const root = stage();
@@ -359,7 +378,7 @@ export function DraftEditor(props: {
 			fits={metrics().fits}
 			active={active()}
 			editable={editable()}
-			onActive={setActive}
+			onActive={activate}
 			onFit={editable() ? fitSlot : undefined}
 		/>
 	);
@@ -463,7 +482,7 @@ export function DraftEditor(props: {
 							</Button>
 						)}
 					</Show>
-					<span class="mx-1 h-5 w-px bg-border" />
+					<span aria-hidden="true" class="mx-1 h-5 w-px bg-border" />
 					<Show
 						when={props.draft.status === "keeping"}
 						fallback={
@@ -571,7 +590,7 @@ export function DraftEditor(props: {
 				}}
 				class="scroll-slim flex-1 overflow-auto bg-border/45"
 				onMouseDown={(e) => {
-					if (e.target === e.currentTarget) setActive(undefined);
+					if (e.target === e.currentTarget) activate(undefined);
 				}}
 			>
 				<Show

@@ -3,11 +3,13 @@ package cvtailor
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
@@ -143,11 +145,16 @@ func (pl plan) slotIDs() docedit.PositionSlots {
 	return out
 }
 
-func (pl plan) validate(edits cvedit.EditSet) error {
-	byID := make(map[string]planned, len(pl.positions))
+func (pl plan) byID() map[string]planned {
+	out := make(map[string]planned, len(pl.positions))
 	for _, p := range pl.positions {
-		byID[p.ID] = p
+		out[p.ID] = p
 	}
+	return out
+}
+
+func (pl plan) validate(edits cvedit.EditSet) error {
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p, ok := byID[pe.PositionID]
 		if !ok {
@@ -185,10 +192,7 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	if pl.structure.Profile != nil && blocked[pl.structure.Profile.ID] {
 		edits.Profile = nil
 	}
-	byID := make(map[string]planned, len(pl.positions))
-	for _, p := range pl.positions {
-		byID[p.ID] = p
-	}
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p := byID[pe.PositionID]
 		for i := range pe.Bullets {
@@ -227,10 +231,7 @@ func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Dra
 	if pl.structure.Profile != nil && edits.Profile != nil {
 		d.Profile = &checks.Slot{ID: pl.structure.Profile.ID, Text: *edits.Profile, BaseText: pl.structure.Profile.Text}
 	}
-	byID := make(map[string]planned, len(pl.positions))
-	for _, p := range pl.positions {
-		byID[p.ID] = p
-	}
+	byID := pl.byID()
 	for _, pe := range edits.Positions {
 		p := byID[pe.PositionID]
 		cp := checks.Position{ID: p.ID}
@@ -256,6 +257,7 @@ func loadTab(ctx context.Context, docs DocFetcher, userID, docID, tabID string) 
 	}
 	ds, err := docparse.Parse(raw)
 	if err != nil {
+		slog.ErrorContext(ctx, "parse CV tab failed", slog.Any(logger.KeyErr, err))
 		return docparse.DocStructure{}, apperr.Unprocessable("could not read the CV tab")
 	}
 	return ds, nil

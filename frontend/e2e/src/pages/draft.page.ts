@@ -1,11 +1,17 @@
 import type { Locator, Page } from "@playwright/test";
 
+export const SAVED_TIMEOUT_MS = 10_000;
+const MAX_FILL_WORDS = 200;
+
 export class DraftPage {
 	readonly saveStatus: Locator;
 	readonly meter: Locator;
 	readonly cards: Locator;
 	readonly wand: Locator;
 	readonly suggestion: Locator;
+	readonly suggestionDiff: Locator;
+	readonly resolvedCount: Locator;
+	readonly dots: Locator;
 
 	constructor(readonly page: Page) {
 		this.saveStatus = page.getByTestId("save-status");
@@ -13,6 +19,9 @@ export class DraftPage {
 		this.cards = page.getByTestId("margin-card");
 		this.wand = page.getByRole("button", { name: "Edit with Haiku" });
 		this.suggestion = page.getByTestId("suggestion-card");
+		this.suggestionDiff = page.getByTestId("suggestion-diff");
+		this.resolvedCount = page.getByTestId("resolved-count");
+		this.dots = page.getByTestId("card-dot");
 	}
 
 	async goto(id = "draft-ready") {
@@ -29,6 +38,31 @@ export class DraftPage {
 
 	card(key: string) {
 		return this.page.locator(`[data-card-key="${key}"]`);
+	}
+
+	slot(slotId: string) {
+		return this.page.locator(`[data-slot-id="${slotId}"]`);
+	}
+
+	lineCount(slotId: string) {
+		return this.slot(slotId).getByTestId("line-count");
+	}
+
+	dot(key: string) {
+		return this.page.locator(
+			`[data-testid="card-dot"][data-card-key="${key}"]`,
+		);
+	}
+
+	async fillToLines(label: string, slotId: string, lines: number) {
+		const count = this.lineCount(slotId);
+		for (let words = 20; words <= MAX_FILL_WORDS; words++) {
+			await this.replace(label, "word ".repeat(words));
+			await count.waitFor({ state: "attached" });
+			const title = (await count.getAttribute("title")) ?? "";
+			if (title.startsWith(`${lines} lines`)) return words;
+		}
+		throw new Error(`${label} never reached ${lines} lines`);
 	}
 
 	async type(label: string, text: string) {

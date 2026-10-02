@@ -340,11 +340,10 @@ export function MarginCards(props: {
 						fallback={
 							<button
 								type="button"
-								tabIndex={-1}
 								aria-label={headerOf(props.editor, key).text}
 								data-testid="card-dot"
 								data-card-key={key}
-								class="pointer-events-auto absolute left-0.5 grid place-items-center"
+								class="pointer-events-auto absolute left-0.5 grid place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
 								style={{
 									top: `${tops[key] ?? 0}px`,
 									width: `${DOT}px`,

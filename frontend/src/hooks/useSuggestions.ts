@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
-import { createStore } from "solid-js/store";
+import { createStore, produce } from "solid-js/store";
 import { streamSuggestion } from "@/api/tailoring";
 import type { DraftFinding, SuggestAction } from "@/types/tailoring";
 
@@ -26,7 +26,11 @@ export function createSuggestions(opts: {
 	const drop = (slotId: string) => {
 		controllers.get(slotId)?.abort();
 		controllers.delete(slotId);
-		setItems(slotId, undefined as never);
+		setItems(
+			produce((all) => {
+				delete all[slotId];
+			}),
+		);
 	};
 
 	const ask = async (slotId: string, action: SuggestAction, prompt = "") => {

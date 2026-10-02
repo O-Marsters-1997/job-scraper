@@ -3,7 +3,7 @@ export function createSseParser(
 ): (chunk: string) => void {
 	let buffer = "";
 	return (chunk) => {
-		buffer += chunk.replace(/\r\n/g, "\n");
+		buffer = (buffer + chunk).replace(/\r\n/g, "\n");
 		let end = buffer.indexOf("\n\n");
 		while (end >= 0) {
 			const frame = buffer.slice(0, end);

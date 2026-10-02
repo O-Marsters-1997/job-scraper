@@ -2,8 +2,14 @@ import type { LayoutBlock, LayoutBorder, LayoutRun } from "@/types/tailoring";
 
 export const SPARSE_LAST_LINE = 0.3;
 
+const OVERFLOW_TOLERANCE_PT = 0.5;
+const FEWER_LINES_SLACK = 0.97;
+const FULL_LINE_SPACING = 100;
+
 export const linePt = (size: number, ratio: number, spacing: number) =>
-	size * ratio * ((spacing > 0 ? spacing : 100) / 100);
+	size *
+	ratio *
+	((spacing > 0 ? spacing : FULL_LINE_SPACING) / FULL_LINE_SPACING);
 
 const sameBorder = (a: LayoutBorder | null, b: LayoutBorder | null) =>
 	a !== null &&
@@ -58,7 +64,7 @@ export function pageFit(
 	bodyLinePt: number,
 ): PageFit {
 	const over = contentPt - availablePt;
-	return over > 0.5
+	return over > OVERFLOW_TOLERANCE_PT
 		? { over: true, lines: Math.ceil(over / bodyLinePt) }
 		: { over: false, lines: Math.max(0, Math.floor(-over / bodyLinePt)) };
 }
@@ -90,5 +96,5 @@ export function maxCharsForFewerLines(
 ): number {
 	if (lines < 2) return text.length;
 	const perLine = text.length / (lines - 1 + lastLineFill);
-	return Math.floor(perLine * (lines - 1) * 0.97);
+	return Math.floor(perLine * (lines - 1) * FEWER_LINES_SLACK);
 }

@@ -44,7 +44,7 @@ type Fixture struct {
 func Fixtures() ([]Fixture, error) {
 	entries, err := fs.ReadDir(fixtureFS, "fixtures")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read fixtures: %w", err)
 	}
 	var out []Fixture
 	for _, e := range entries {
@@ -53,7 +53,7 @@ func Fixtures() ([]Fixture, error) {
 		}
 		raw, err := fixtureFS.ReadFile(path.Join("fixtures", e.Name()))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read fixture %s: %w", e.Name(), err)
 		}
 		var f Fixture
 		if err := json.Unmarshal(raw, &f); err != nil {

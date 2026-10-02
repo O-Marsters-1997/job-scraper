@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { DraftLayout } from "@/types/tailoring";
+import type { DraftLayout, LayoutBlock, LayoutRun } from "@/types/tailoring";
 import { fontWarnings, resolveFont } from "./docFonts";
 
 assert.equal(resolveFont("Calibri").known, true, "Calibri maps to Carlito");
@@ -21,7 +21,7 @@ assert.match(
 );
 assert.equal(resolveFont("Georgia").known, false, "a fallback is flagged");
 
-const run = (font: string) => ({
+const run = (font: string): LayoutRun => ({
 	text: "x",
 	font,
 	size: 11,
@@ -31,7 +31,22 @@ const run = (font: string) => ({
 	color: "",
 	link: "",
 });
-const layout = {
+const block = (runs: LayoutRun[]): LayoutBlock => ({
+	slotId: "",
+	section: "",
+	align: "left",
+	lineSpacing: 100,
+	spaceAbove: 0,
+	spaceBelow: 0,
+	indentStart: 0,
+	indentFirstLine: 0,
+	borderTop: null,
+	borderBottom: null,
+	tabStops: [],
+	bullet: null,
+	runs,
+});
+const layout: DraftLayout = {
 	page: {
 		width: 1,
 		height: 1,
@@ -41,8 +56,8 @@ const layout = {
 		marginRight: 0,
 	},
 	warnings: [],
-	blocks: [{ runs: [run("Calibri"), run("Roboto"), run("Roboto")] }],
-} as unknown as DraftLayout;
+	blocks: [block([run("Calibri"), run("Roboto"), run("Roboto")])],
+};
 assert.deepEqual(
 	fontWarnings(layout),
 	["Roboto is not installed here, so line breaks may differ."],
