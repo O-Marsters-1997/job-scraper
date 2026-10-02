@@ -28,7 +28,7 @@ SELECT count(*) FILTER (WHERE NOT (d.picks_changed OR d.model_changed))::bigint 
        count(*) FILTER (WHERE d.picks_changed OR d.model_changed)::bigint AS outdated
 FROM score_feedback sf
 CROSS JOIN LATERAL (
-    SELECT sf.picks IS DISTINCT FROM COALESCE((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), '[]'::jsonb) AS picks_changed,
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
            sf.model <> $1::text AS model_changed
 ) d
 WHERE sf.user_id = $2
@@ -149,7 +149,7 @@ const listScoreFeedback = `-- name: ListScoreFeedback :many
 SELECT sf.id, sf.user_id, sf.job_id, sf.kind, sf.direction, sf.reason, sf.picks, sf.model, sf.snapshot, sf.created_at, d.picks_changed, d.model_changed
 FROM score_feedback sf
 CROSS JOIN LATERAL (
-    SELECT sf.picks IS DISTINCT FROM COALESCE((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), '[]'::jsonb) AS picks_changed,
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
            sf.model <> $1::text AS model_changed
 ) d
 WHERE sf.user_id = $2

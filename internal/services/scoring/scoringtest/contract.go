@@ -234,6 +234,23 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("score feedback under no Picks stays current when the config stores none", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user := f.NewUser()
+		if _, err := f.Store.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user, NotifyThreshold: 70}); err != nil {
+			t.Fatalf("UpsertSearchConfig() = %v", err)
+		}
+		entry := dto.ScoreFeedback{Kind: "overall", Reason: "r", Picks: []dto.Pick{}, Model: "m"}
+		if _, err := f.Store.InsertScoreFeedback(ctx, user, entry); err != nil {
+			t.Fatalf("InsertScoreFeedback() = %v", err)
+		}
+		current, outdated, err := f.Store.CountScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Model: "m"})
+		if err != nil || current != 1 || outdated != 0 {
+			t.Errorf("CountScoreFeedback() = %d, %d, %v, want 1, 0, nil", current, outdated, err)
+		}
+	})
+
 	t.Run("delete score feedback removes only the caller's entry", func(t *testing.T) {
 		f := newFixture(t)
 		ctx := t.Context()
