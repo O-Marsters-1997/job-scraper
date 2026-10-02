@@ -14,6 +14,10 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
 	r.Post("/scores/recompute", handlers.GetAll(m.svc.Recompute))
+	r.Get("/push/vapid-public-key", handlers.GetAll(m.svc.VAPIDPublicKey))
+	r.Post("/push/subscriptions", handlers.Create(m.svc.Subscribe))
+	r.Delete("/push/subscriptions", handlers.Update(m.svc.Unsubscribe))
+	r.Post("/push/test", handlers.Create(m.svc.TestPush))
 	if os.Getenv("SCORING_FEEDBACK") == "true" {
 		r.Post("/scoring-feedback/job", handlers.Create(m.svc.AppendJobFeedback))
 		r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))

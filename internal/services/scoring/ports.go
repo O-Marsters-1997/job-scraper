@@ -22,6 +22,12 @@ type Alerter interface {
 	NotifyNewJob(ctx context.Context, job dto.Job, email string) error
 }
 
+// PushSender delivers one Web Push message; it returns
+// notify.ErrSubscriptionGone when the subscription no longer exists.
+type PushSender interface {
+	Send(ctx context.Context, sub dto.PushSubscriptionInput, msg dto.PushMessage) error
+}
+
 // ProfileReader looks up a user's notification email.
 type ProfileReader interface {
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)

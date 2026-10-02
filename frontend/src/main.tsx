@@ -9,6 +9,10 @@ import { routeTree } from "./routeTree.gen";
 
 applyTweaks(loadTweaks());
 
+if ("serviceWorker" in navigator) {
+	navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+}
+
 const router = createRouter({
 	routeTree,
 	defaultPreload: "intent",

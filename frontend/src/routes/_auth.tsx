@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/solid-router";
 import { createSignal } from "solid-js";
+import { PushBanner } from "../components/PushBanner";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import TweaksPanel from "../components/TweaksPanel";
@@ -39,6 +40,7 @@ function AuthLayout() {
 						<span class="brand-ribbon brand-ribbon-top" />
 					</div>
 					<div class="relative z-10">
+						<PushBanner />
 						<Outlet />
 					</div>
 				</main>

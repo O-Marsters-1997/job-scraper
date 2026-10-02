@@ -722,6 +722,39 @@ func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestPushSubscriptions(t *testing.T) {
+	st, pool := newStore(t)
+	ctx := t.Context()
+	userID := pgtest.InsertUser(t, pool)
+	sub := dto.PushSubscriptionInput{Endpoint: "https://push.example/a", Keys: dto.PushKeys{P256dh: "p1", Auth: "a1"}}
+
+	if err := st.UpsertPushSubscription(ctx, userID, sub); err != nil {
+		t.Fatalf("UpsertPushSubscription() err = %v", err)
+	}
+	sub.Keys = dto.PushKeys{P256dh: "p2", Auth: "a2"}
+	if err := st.UpsertPushSubscription(ctx, userID, sub); err != nil {
+		t.Fatalf("UpsertPushSubscription() again err = %v", err)
+	}
+
+	got, err := st.ListPushSubscriptions(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListPushSubscriptions() err = %v", err)
+	}
+	if diff := cmp.Diff([]dto.PushSubscriptionInput{sub}, got); diff != "" {
+		t.Errorf("ListPushSubscriptions() after re-upsert (-want +got):\n%s", diff)
+	}
+
+	for range 2 {
+		if err := st.DeletePushSubscription(ctx, userID, sub.Endpoint); err != nil {
+			t.Fatalf("DeletePushSubscription() err = %v", err)
+		}
+	}
+	got, err = st.ListPushSubscriptions(ctx, userID)
+	if err != nil || len(got) != 0 {
+		t.Errorf("ListPushSubscriptions() after delete = %v, %v, want empty", got, err)
+	}
+}
+
 func TestScoreFeedback_BlankReasonIsRejectedAndWritesNothing(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)

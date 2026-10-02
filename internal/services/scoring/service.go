@@ -55,6 +55,9 @@ type Store interface {
 	AddScoringOption(ctx context.Context, id, dimension, label, question string) error
 	RewordScoringOption(ctx context.Context, id, question string) error
 	RetireScoringOption(ctx context.Context, id string) error
+	UpsertPushSubscription(ctx context.Context, userID string, sub dto.PushSubscriptionInput) error
+	ListPushSubscriptions(ctx context.Context, userID string) ([]dto.PushSubscriptionInput, error)
+	DeletePushSubscription(ctx context.Context, userID, endpoint string) error
 	InsertScoreFeedback(ctx context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error)
 	ListScoreFeedback(ctx context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error)
 	CountScoreFeedback(ctx context.Context, userID, kind string) (int, error)
@@ -68,6 +71,8 @@ type Service struct {
 	answerer     Answerer
 	credentials  Credentials
 	alerter      Alerter
+	pusher       PushSender
+	vapidKey     string
 	profiles     ProfileReader
 	candidates   Reconsiderer
 	extractor    Extractor
@@ -79,8 +84,13 @@ func NewService(deps Deps) *Service {
 	if tickInterval <= 0 {
 		tickInterval = defaultAnswerEffectTick
 	}
+	pusher := deps.Pusher
+	if pusher == nil {
+		pusher = noopPusher{}
+	}
 	return &Service{
 		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
+		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
 		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
 	}
 }

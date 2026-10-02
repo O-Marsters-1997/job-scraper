@@ -45,6 +45,7 @@ type FakeStore struct {
 	options []dto.ScoringOption
 	search  map[string]dto.SearchConfig
 	scored  map[string]bool
+	pushes  map[string][]dto.PushSubscriptionInput
 
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
@@ -63,6 +64,7 @@ func NewFakeStore() *FakeStore {
 		answers: make(map[string]map[string]dto.Answer),
 		inputs:  make(map[string][]store.ScoringInput),
 		search:  make(map[string]dto.SearchConfig),
+		pushes:  make(map[string][]dto.PushSubscriptionInput),
 		scored:  make(map[string]bool),
 
 		feedback: make(map[string][]dto.ScoreFeedback),
@@ -387,6 +389,33 @@ func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, m
 }
 
 var _ scoring.Store = (*FakeStore)(nil)
+
+func (f *FakeStore) UpsertPushSubscription(_ context.Context, userID string, sub dto.PushSubscriptionInput) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletePush(sub.Endpoint)
+	f.pushes[userID] = append(f.pushes[userID], sub)
+	return nil
+}
+
+func (f *FakeStore) ListPushSubscriptions(_ context.Context, userID string) ([]dto.PushSubscriptionInput, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.pushes[userID]), nil
+}
+
+func (f *FakeStore) DeletePushSubscription(_ context.Context, userID, endpoint string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pushes[userID] = slices.DeleteFunc(f.pushes[userID], func(s dto.PushSubscriptionInput) bool { return s.Endpoint == endpoint })
+	return nil
+}
+
+func (f *FakeStore) deletePush(endpoint string) {
+	for uid, subs := range f.pushes {
+		f.pushes[uid] = slices.DeleteFunc(subs, func(s dto.PushSubscriptionInput) bool { return s.Endpoint == endpoint })
+	}
+}
 
 func (f *FakeStore) InsertScoreFeedback(_ context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error) {
 	f.mu.Lock()
