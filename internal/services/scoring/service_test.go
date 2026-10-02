@@ -1069,7 +1069,7 @@ func TestAppendJobFeedback(t *testing.T) {
 			if !apperr.IsKind(err, tt.kind) {
 				t.Fatalf("AppendJobFeedback(%+v) err = %v, want kind %v", tt.in, err, tt.kind)
 			}
-			if got, _ := svc(st).ListFeedback(t.Context(), userID); len(got) != 0 {
+			if got, _ := svc(st).ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
 				t.Errorf("ListFeedback() = %+v, want nothing written", got)
 			}
 		})
