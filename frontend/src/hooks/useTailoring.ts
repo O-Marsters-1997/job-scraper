@@ -107,6 +107,10 @@ export function useJobDrafts(jobId: Accessor<string>) {
 		queryKey: keys.tailoring.jobDrafts(jobId()),
 		queryFn: () => fetchJobDrafts(jobId()),
 		retry: false,
+		refetchInterval: (query) =>
+			query.state.data?.some((d) => !isSettled(d.status))
+				? DRAFT_POLL_MS
+				: false,
 	}));
 }
 
