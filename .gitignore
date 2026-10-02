@@ -34,7 +34,7 @@ __debug_bin*
 # impeccable live session scratch (transient)
 .impeccable/live/sessions/
 
-ideas/
+ideas
 
 # Plans and PRDs are local working files
 plans/
