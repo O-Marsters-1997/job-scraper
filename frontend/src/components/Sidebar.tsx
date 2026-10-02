@@ -51,11 +51,18 @@ interface NavItem {
 	includeSearch?: boolean;
 	search?: Record<string, unknown>;
 	badge?: boolean;
+	desktopOnly?: boolean;
 	when?: (ctx: { googleConnected: boolean }) => boolean;
 }
 
 const NAV: NavItem[] = [
-	{ to: "/overview", label: "Overview", icon: "dashboard", exact: true },
+	{
+		to: "/overview",
+		label: "Overview",
+		icon: "dashboard",
+		exact: true,
+		desktopOnly: true,
+	},
 	{ to: "/jobs", label: "Jobs", icon: "suitcase", exact: true },
 	{
 		to: "/applications",
@@ -66,7 +73,7 @@ const NAV: NavItem[] = [
 		search: { status: undefined },
 		badge: true,
 	},
-	{ to: "/companies", label: "Companies", icon: "building" },
+	{ to: "/companies", label: "Companies", icon: "building", desktopOnly: true },
 	{
 		to: "/cv-templates",
 		label: "CVs",
@@ -74,10 +81,23 @@ const NAV: NavItem[] = [
 		exact: true,
 		when: (ctx) => ctx.googleConnected,
 	},
-	{ to: "/experience", label: "Experience", icon: "briefcase" },
-	{ to: "/insights", label: "Insights", icon: "barChart", exact: true },
-	{ to: "/settings", label: "Settings", icon: "settings" },
+	{
+		to: "/experience",
+		label: "Experience",
+		icon: "briefcase",
+		desktopOnly: true,
+	},
+	{
+		to: "/insights",
+		label: "Insights",
+		icon: "barChart",
+		exact: true,
+		desktopOnly: true,
+	},
+	{ to: "/settings", label: "Settings", icon: "settings", desktopOnly: true },
 ];
+
+const MOBILE_NAV = NAV.filter((item) => !item.desktopOnly);
 
 interface SidebarProps {
 	mobileOpen?: boolean;
@@ -139,7 +159,7 @@ export default function Sidebar(props: SidebarProps) {
 						onCloseAutoFocus={() => props.restoreFocusTo?.()?.focus()}
 					>
 						<DialogTitle class="sr-only">Navigation</DialogTitle>
-						<SidebarBody {...links} showLabels={() => true} />
+						<SidebarBody {...links} showLabels={() => true} mobile />
 					</DialogContent>
 				</DialogPortal>
 			</DialogRoot>
@@ -149,6 +169,7 @@ export default function Sidebar(props: SidebarProps) {
 
 interface SidebarBodyProps {
 	showLabels: Accessor<boolean>;
+	mobile?: boolean;
 	expanded?: Accessor<boolean>;
 	onCollapseToggle?: () => void;
 	appsQuery: ReturnType<typeof useApplications>;
@@ -177,7 +198,7 @@ function SidebarBody(props: SidebarBodyProps) {
 					</span>
 				</Show>
 
-				<For each={NAV}>
+				<For each={props.mobile ? MOBILE_NAV : NAV}>
 					{(item) => (
 						<Show
 							when={
