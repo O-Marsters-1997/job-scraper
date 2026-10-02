@@ -5,27 +5,31 @@ import "time"
 // ScoreFeedback is one logged note about the scoring: the reason, plus the
 // Picks and model in force when it was written.
 type ScoreFeedback struct {
-	ID        string                `json:"id"`
-	Kind      string                `json:"kind"`
-	Direction *string               `json:"direction,omitempty"`
-	JobID     *string               `json:"jobId,omitempty"`
-	Reason    string                `json:"reason"`
-	Picks     []Pick                `json:"picks"`
-	Model     string                `json:"model"`
-	Snapshot  ScoreFeedbackSnapshot `json:"snapshot"`
-	CreatedAt time.Time             `json:"createdAt"`
+	ID           string                `json:"id"`
+	Kind         string                `json:"kind"`
+	Direction    *string               `json:"direction,omitempty"`
+	JobID        *string               `json:"jobId,omitempty"`
+	Reason       string                `json:"reason"`
+	Picks        []Pick                `json:"picks"`
+	Model        string                `json:"model"`
+	Snapshot     ScoreFeedbackSnapshot `json:"snapshot"`
+	CreatedAt    time.Time             `json:"createdAt"`
+	PicksChanged bool                  `json:"picksChanged"`
+	ModelChanged bool                  `json:"modelChanged"`
 }
 
 // ScoreFeedbackSnapshot is what a kind froze beside its reason: a Job entry
 // freezes the score evidence, an Overall entry nothing.
 type ScoreFeedbackSnapshot struct {
-	Score              *int             `json:"score,omitempty"`
-	Breakdown          []ScoreRow       `json:"breakdown,omitempty"`
-	ScoreFingerprint   string           `json:"scoreFingerprint,omitempty"`
-	ScoreModel         string           `json:"scoreModel,omitempty"`
-	ContentFingerprint string           `json:"contentFingerprint,omitempty"`
-	Options            []FeedbackOption `json:"options,omitempty"`
-	JevState           *JevState        `json:"jevState,omitempty"`
+	Score              *int              `json:"score,omitempty"`
+	Breakdown          []ScoreRow        `json:"breakdown,omitempty"`
+	ScoreFingerprint   string            `json:"scoreFingerprint,omitempty"`
+	ScoreModel         string            `json:"scoreModel,omitempty"`
+	ContentFingerprint string            `json:"contentFingerprint,omitempty"`
+	Options            []FeedbackOption  `json:"options,omitempty"`
+	JevState           *JevState         `json:"jevState,omitempty"`
+	Filters            map[string]string `json:"filters,omitempty"`
+	Ranking            []RankedJob       `json:"ranking,omitempty"`
 }
 
 // FeedbackOption is one picked Option as the score saw it: Jev's cached
@@ -71,15 +75,55 @@ type JobFeedbackInput struct {
 // ScoreFeedbackQuery filters and pages the log. Kind is empty for all kinds;
 // Page is 1-based and defaults to 1.
 type ScoreFeedbackQuery struct {
-	Kind string `json:"kind"`
-	Page string `json:"page"`
+	Kind     string `json:"kind"`
+	Outdated string `json:"outdated"`
+	Page     string `json:"page"`
 }
 
+// ScoreFeedbackFilter selects entries for the store: Model is the live model
+// that drift is measured against, and outdated entries are listed only when
+// IncludeOutdated is set.
+type ScoreFeedbackFilter struct {
+	Kind            string
+	Model           string
+	IncludeOutdated bool
+}
+
+// ScoreFeedbackPage is one page of the log. Total counts what the query
+// matches; CurrentCount and OutdatedCount split the matching kind's entries.
 type ScoreFeedbackPage struct {
-	Entries []ScoreFeedback `json:"entries"`
-	Total   int             `json:"total"`
+	Entries       []ScoreFeedback `json:"entries"`
+	Total         int             `json:"total"`
+	CurrentCount  int             `json:"currentCount"`
+	OutdatedCount int             `json:"outdatedCount"`
 }
 
 type OverallFeedbackInput struct {
 	Reason string `json:"reason"`
+}
+
+// RankedJob is one row of a Collection entry's ranking as the user saw it.
+// Score is nil when the Job had no score.
+type RankedJob struct {
+	Rank    int      `json:"rank"`
+	JobID   string   `json:"jobId"`
+	Title   string   `json:"title"`
+	Company string   `json:"company"`
+	Score   *int     `json:"score"`
+	Effects []string `json:"effects"`
+}
+
+// CollectionJobScore is a Job's stored score as read for a Collection entry.
+type CollectionJobScore struct {
+	JobID     string
+	Title     string
+	Company   string
+	Score     *int
+	Breakdown []ScoreRow
+}
+
+type CollectionFeedbackInput struct {
+	JobIDs  []string          `json:"jobIds"`
+	Filters map[string]string `json:"filters"`
+	Reason  string            `json:"reason"`
 }

@@ -1124,3 +1124,92 @@ func TestAppendJobFeedback(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendCollectionFeedback(t *testing.T) {
+	const userID = "user-1"
+	svc := func(st *scoringtest.FakeStore) *scoring.Service { return scoring.NewService(newDeps(t, st)) }
+
+	t.Run("ranks in submitted order with DB scores, unscored and unknown ids keep their rank", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		st.SeedJob(dto.Job{ID: "job-2", Title: "Other", CompanySlug: "beta"}, nil)
+
+		got, err := svc(st).AppendCollectionFeedback(t.Context(), userID, dto.CollectionFeedbackInput{
+			JobIDs: []string{"job-2", "gone", testJob.ID}, Filters: map[string]string{"q": "go"}, Reason: " ranking is off ",
+		})
+		if err != nil {
+			t.Fatalf("AppendCollectionFeedback() err = %v", err)
+		}
+
+		score := 72
+		want := dto.ScoreFeedback{
+			Kind: "collection", Reason: "ranking is off", Model: jev.Model,
+			Picks: picking(userID, "tech:go").Preferences.Picks,
+			Snapshot: dto.ScoreFeedbackSnapshot{
+				Filters: map[string]string{"q": "go"},
+				Ranking: []dto.RankedJob{
+					{Rank: 1, JobID: "job-2", Title: "Other", Company: "beta", Effects: []string{}},
+					{Rank: 2, JobID: "gone", Effects: []string{}},
+					{Rank: 3, JobID: testJob.ID, Title: "Backend Engineer", Company: "acme", Score: &score, Effects: []string{"Go meets"}},
+				},
+			},
+		}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ScoreFeedback{}, "ID", "CreatedAt")); diff != "" {
+			t.Errorf("AppendCollectionFeedback() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	tooMany := make([]string, 501)
+	tests := []struct {
+		name string
+		in   dto.CollectionFeedbackInput
+	}{
+		{name: "blank reason", in: dto.CollectionFeedbackInput{JobIDs: []string{testJob.ID}, Reason: " "}},
+		{name: "zero ids", in: dto.CollectionFeedbackInput{Reason: "r"}},
+		{name: "more than 500 ids", in: dto.CollectionFeedbackInput{JobIDs: tooMany, Reason: "r"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" is invalid and writes nothing", func(t *testing.T) {
+			st := newFakeStore()
+			_, err := svc(st).AppendCollectionFeedback(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("AppendCollectionFeedback() err = %v, want Invalid", err)
+			}
+			if got, _ := svc(st).ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
+				t.Errorf("ListFeedback() = %+v, want nothing written", got)
+			}
+		})
+	}
+}
+
+func TestListFeedback_Outdated(t *testing.T) {
+	const userID = "user-1"
+	st := newFakeStore()
+	st.SeedSearchConfig(picking(userID, "tech:go"))
+	svc := scoring.NewService(newDeps(t, st))
+	for _, reason := range []string{"before", "also before"} {
+		if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {
+			t.Fatalf("AppendOverallFeedback(%q) err = %v", reason, err)
+		}
+	}
+	st.SeedSearchConfig(picking(userID, "tech:cobol"))
+	if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "after"}); err != nil {
+		t.Fatalf("AppendOverallFeedback() err = %v", err)
+	}
+
+	hidden, err := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{})
+	if err != nil {
+		t.Fatalf("ListFeedback() err = %v", err)
+	}
+	if hidden.Total != 1 || hidden.CurrentCount != 1 || hidden.OutdatedCount != 2 || len(hidden.Entries) != 1 {
+		t.Errorf("ListFeedback() = %+v, want 1 current entry and 2 outdated counted", hidden)
+	}
+
+	shown, err := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{Outdated: "true"})
+	if err != nil {
+		t.Fatalf("ListFeedback(outdated) err = %v", err)
+	}
+	if shown.Total != 3 || len(shown.Entries) != 3 || !shown.Entries[1].PicksChanged || shown.Entries[0].PicksChanged {
+		t.Errorf("ListFeedback(outdated) = %+v, want all 3 entries, the two earlier ones tagged picks changed", shown)
+	}
+}

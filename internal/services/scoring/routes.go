@@ -20,6 +20,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/push/test", handlers.Create(m.svc.TestPush))
 	if os.Getenv("SCORING_FEEDBACK") == "true" {
 		r.Post("/scoring-feedback/job", handlers.Create(m.svc.AppendJobFeedback))
+		r.Post("/scoring-feedback/collection", handlers.Create(m.svc.AppendCollectionFeedback))
 		r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
 		r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
 		r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))

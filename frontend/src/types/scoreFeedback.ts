@@ -15,9 +15,20 @@ const feedbackOptionSchema = z.object({
 
 export type FeedbackOption = z.infer<typeof feedbackOptionSchema>;
 
+const rankedJobSchema = z.object({
+	rank: z.number(),
+	jobId: z.string(),
+	title: z.string(),
+	company: z.string(),
+	score: z.number().nullable(),
+	effects: z.array(z.string()),
+});
+
 const snapshotSchema = z.object({
 	score: z.number().optional(),
 	options: z.array(feedbackOptionSchema).optional(),
+	filters: z.record(z.string(), z.string()).optional(),
+	ranking: z.array(rankedJobSchema).optional(),
 });
 
 export const scoreFeedbackSchema = z.object({
@@ -29,11 +40,15 @@ export const scoreFeedbackSchema = z.object({
 	model: z.string(),
 	snapshot: snapshotSchema.optional(),
 	createdAt: z.string(),
+	picksChanged: z.boolean(),
+	modelChanged: z.boolean(),
 });
 
 export const scoreFeedbackPageSchema = z.object({
 	entries: z.array(scoreFeedbackSchema),
 	total: z.number(),
+	currentCount: z.number(),
+	outdatedCount: z.number(),
 });
 
 export type ScoreFeedbackPage = z.infer<typeof scoreFeedbackPageSchema>;
@@ -51,5 +66,11 @@ export type FeedbackDirection = NonNullable<ScoreFeedback["direction"]>;
 export type JobFeedbackInput = {
 	jobId: string;
 	direction: FeedbackDirection;
+	reason: string;
+};
+
+export type CollectionFeedbackInput = {
+	jobIds: string[];
+	filters: Record<string, string>;
 	reason: string;
 };

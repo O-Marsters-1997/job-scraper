@@ -3,6 +3,7 @@ package scoring_test
 import (
 	"flag"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -23,18 +24,59 @@ func TestExportFeedback(t *testing.T) {
 		t.Fatalf("AppendJobFeedback() err = %v", err)
 	}
 
+	if _, err := scoring.NewService(newDeps(t, st)).AppendCollectionFeedback(t.Context(), userID, dto.CollectionFeedbackInput{
+		JobIDs: []string{"missing", testJob.ID}, Filters: map[string]string{"q": "go", "scored": "true"}, Reason: "The ranking is off.",
+	}); err != nil {
+		t.Fatalf("AppendCollectionFeedback() err = %v", err)
+	}
+
 	for _, reason := range []string{"Scores run hot for backend roles.", "Two lines\nof reasoning."} {
 		if _, err := scoring.NewService(newDeps(t, st)).AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {
 			t.Fatalf("AppendOverallFeedback(%q) err = %v", reason, err)
 		}
 	}
 
-	got, err := m.ExportFeedback(t.Context(), userID)
+	got, err := m.ExportFeedback(t.Context(), userID, false)
 	if err != nil {
 		t.Fatalf("ExportFeedback() err = %v", err)
 	}
+	assertGolden(t, "testdata/feedback_pack.golden.md", got)
+}
 
-	const golden = "testdata/feedback_pack.golden.md"
+func TestExportFeedback_Outdated(t *testing.T) {
+	const userID = "user-1"
+	st := newFakeStore()
+	seedScoredJob(st, userID, "tech:go", "tech:cobol")
+	svc := scoring.NewService(newDeps(t, st))
+	if _, err := svc.AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: "lower", Reason: "Go is a given here."}); err != nil {
+		t.Fatalf("AppendJobFeedback() err = %v", err)
+	}
+	if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "Scores run hot."}); err != nil {
+		t.Fatalf("AppendOverallFeedback() err = %v", err)
+	}
+	st.SeedSearchConfig(picking(userID, "tech:go"))
+	if _, err := svc.AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: "Fine after the Pick change."}); err != nil {
+		t.Fatalf("AppendOverallFeedback() err = %v", err)
+	}
+	m := scoring.Build(newDeps(t, st))
+
+	omitted, err := m.ExportFeedback(t.Context(), userID, false)
+	if err != nil {
+		t.Fatalf("ExportFeedback(false) err = %v", err)
+	}
+	if !strings.Contains(omitted, "1 overall · 0 Job entries · 0 Collection entries · 2 outdated omitted") || strings.Contains(omitted, "Scores run hot.") {
+		t.Errorf("ExportFeedback(false) = %q, want the header counting 2 outdated omitted and no outdated entry", omitted)
+	}
+
+	included, err := m.ExportFeedback(t.Context(), userID, true)
+	if err != nil {
+		t.Fatalf("ExportFeedback(true) err = %v", err)
+	}
+	assertGolden(t, "testdata/feedback_pack_outdated.golden.md", included)
+}
+
+func assertGolden(t *testing.T, golden, got string) {
+	t.Helper()
 	if *update {
 		if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
 			t.Fatal(err)
@@ -45,7 +87,7 @@ func TestExportFeedback(t *testing.T) {
 		t.Fatal(err)
 	}
 	if diff := cmp.Diff(string(want), got); diff != "" {
-		t.Errorf("ExportFeedback() mismatch (-want +got):\n%s", diff)
+		t.Errorf("%s mismatch (-want +got):\n%s", golden, diff)
 	}
 }
 
