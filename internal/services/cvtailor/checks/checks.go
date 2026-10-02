@@ -42,8 +42,8 @@ type Draft struct {
 	BaseSkills []string
 	JobSkills  []string
 	// BaseText holds every line of the base CV: headings, slots, profile and skills.
-	BaseText []string
-	BasePages  int
+	BaseText  []string
+	BasePages int
 	// DraftPages of zero means the page count was not measured.
 	DraftPages int
 	// Contact nil means the Doc was not parsed.

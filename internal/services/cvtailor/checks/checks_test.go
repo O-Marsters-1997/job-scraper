@@ -161,8 +161,8 @@ func TestGroundingSkills(t *testing.T) {
 		},
 		{
 			name:      "job skill named anywhere in the base CV is no gap",
-			baseText:  []string{"Golang, Postgres, TypeScript, React"},
-			jobSkills: []string{"TypeScript"},
+			baseText:  []string{"Languages/ Frameworks \t\tTypescript", "Databases\t\t\t\tPostgreSQL"},
+			jobSkills: []string{"TypeScript", "PostgreSQL"},
 		},
 		{
 			name:       "job skill listed in skills is both blocked and reported",
