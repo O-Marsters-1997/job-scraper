@@ -7,7 +7,9 @@ export async function sharePdf(bytes: ArrayBuffer, filename: string) {
 	try {
 		await navigator.share({ files: [file] });
 	} catch (err) {
-		if (!(err instanceof DOMException && err.name === "AbortError")) throw err;
+		if (!(err instanceof DOMException)) throw err;
+		if (err.name === "NotAllowedError") download(file);
+		else if (err.name !== "AbortError") throw err;
 	}
 }
 
