@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
@@ -52,6 +53,45 @@ func TestGetMapsGoneStatuses(t *testing.T) {
 			}
 			if got := errors.Is(err, sources.ErrGone); got != tt.wantGone {
 				t.Fatalf("errors.Is(err, ErrGone) = %v, want %v", got, tt.wantGone)
+			}
+		})
+	}
+}
+
+type retryAfterTransport string
+
+func (h retryAfterTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	header := http.Header{}
+	if h != "" {
+		header.Set("Retry-After", string(h))
+	}
+	return &http.Response{StatusCode: http.StatusTooManyRequests, Status: "429 Too Many Requests", Header: header, Body: io.NopCloser(strings.NewReader("")), Request: req}, nil
+}
+
+func TestGetCarriesRetryAfterOnStatusError(t *testing.T) {
+	tests := []struct {
+		name   string
+		header string
+		min    time.Duration
+		max    time.Duration
+	}{
+		{"delta seconds", "120", 120 * time.Second, 120 * time.Second},
+		{"http date", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat), 59 * time.Minute, time.Hour},
+		{"missing", "", 0, 0},
+		{"garbage", "soon", 0, 0},
+		{"past date", time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat), 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src := sources.NewBase(sources.Config{Name: "direct"})
+			src.Client().Transport = retryAfterTransport(tt.header)
+			_, err := src.Get(t.Context(), "https://example.com/jobs")
+			var statusErr *sources.StatusError
+			if !errors.As(err, &statusErr) {
+				t.Fatalf("Get() error = %v, want *StatusError", err)
+			}
+			if got := statusErr.RetryAfter; got < tt.min || got > tt.max {
+				t.Errorf("RetryAfter = %v, want in [%v, %v]", got, tt.min, tt.max)
 			}
 		})
 	}
