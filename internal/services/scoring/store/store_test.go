@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
@@ -864,6 +865,9 @@ func TestListJobScoresForCollection(t *testing.T) {
 	got, err := st.ListJobScoresForCollection(t.Context(), userID, []string{scored, unscored, "00000000-0000-0000-0000-000000000000"})
 	if err != nil {
 		t.Fatalf("ListJobScoresForCollection() err = %v", err)
+	}
+	if _, err := st.ListJobScoresForCollection(t.Context(), userID, []string{"not-a-uuid"}); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("ListJobScoresForCollection(malformed id) err = %v, want Invalid", err)
 	}
 	score := 64
 	want := []dto.CollectionJobScore{

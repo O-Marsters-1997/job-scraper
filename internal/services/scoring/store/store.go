@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
@@ -710,7 +711,7 @@ func (s *Store) ListJobScoresForCollection(ctx context.Context, userID string, j
 	}
 	ids, err := data.UUIDs(jobIDs)
 	if err != nil {
-		return nil, err
+		return nil, apperr.Invalid("jobIds must be valid ids")
 	}
 	rows, err := s.queries.ListJobScoresForCollection(ctx, sqlc.ListJobScoresForCollectionParams{UserID: uid, JobIds: ids})
 	if err != nil {
