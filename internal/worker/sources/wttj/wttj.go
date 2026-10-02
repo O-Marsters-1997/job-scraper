@@ -41,49 +41,8 @@ var (
 	}
 
 	postings = &postingCache{byToken: map[string]map[string]*dto.Job{}}
-	limiter  = &gate{gap: 2 * time.Second, now: time.Now}
+	limiter  = sources.NewGate(2*time.Second, blockFor)
 )
-
-// ErrDeferred is returned without sending a request while WTTJ has blocked us.
-var ErrDeferred = errors.New("wttj: deferred after 403/429")
-
-type gate struct {
-	mu           sync.Mutex
-	gap          time.Duration
-	now          func() time.Time
-	next         time.Time
-	blockedUntil time.Time
-}
-
-func (g *gate) wait(ctx context.Context) error {
-	g.mu.Lock()
-	now := g.now()
-	if now.Before(g.blockedUntil) {
-		g.mu.Unlock()
-		return ErrDeferred
-	}
-	slot := g.next
-	if slot.Before(now) {
-		slot = now
-	}
-	g.next = slot.Add(g.gap)
-	g.mu.Unlock()
-
-	timer := time.NewTimer(slot.Sub(now))
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (g *gate) block(d time.Duration) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	g.blockedUntil = g.now().Add(d)
-}
 
 // postingCache remembers, per Board token, every job page already fetched, so a repeat poll
 // re-reads only the company page. A nil entry is a page that failed the age gate.
@@ -126,13 +85,13 @@ func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, strin
 }
 
 func (s *Source) get(ctx context.Context, url string) ([]byte, error) {
-	if err := limiter.wait(ctx); err != nil {
+	if err := limiter.Wait(ctx); err != nil {
 		return nil, err
 	}
 	body, err := s.Get(ctx, url)
 	var statusErr *sources.StatusError
 	if errors.As(err, &statusErr) && (statusErr.Code == http.StatusForbidden || statusErr.Code == http.StatusTooManyRequests) {
-		limiter.block(blockFor)
+		limiter.Block(blockFor)
 	}
 	return body, err
 }
