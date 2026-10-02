@@ -483,3 +483,21 @@ func (f *FakeStore) GetJobScoreForFeedback(_ context.Context, userID, jobID stri
 	}
 	return ev, nil
 }
+
+func (f *FakeStore) ListJobScoresForCollection(_ context.Context, userID string, jobIDs []string) ([]dto.CollectionJobScore, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []dto.CollectionJobScore
+	for _, id := range jobIDs {
+		job, ok := f.jobs[id]
+		if !ok {
+			continue
+		}
+		row := dto.CollectionJobScore{JobID: id, Title: job.Title, Company: job.CompanySlug}
+		if ev, ok := f.evidence[scoredKey(id, userID)]; ok {
+			row.Score, row.Breakdown = &ev.Score, ev.Breakdown
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}

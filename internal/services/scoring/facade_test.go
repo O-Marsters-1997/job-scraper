@@ -23,6 +23,12 @@ func TestExportFeedback(t *testing.T) {
 		t.Fatalf("AppendJobFeedback() err = %v", err)
 	}
 
+	if _, err := scoring.NewService(newDeps(t, st)).AppendCollectionFeedback(t.Context(), userID, dto.CollectionFeedbackInput{
+		JobIDs: []string{"missing", testJob.ID}, Filters: map[string]string{"q": "go", "scored": "true"}, Reason: "The ranking is off.",
+	}); err != nil {
+		t.Fatalf("AppendCollectionFeedback() err = %v", err)
+	}
+
 	for _, reason := range []string{"Scores run hot for backend roles.", "Two lines\nof reasoning."} {
 		if _, err := scoring.NewService(newDeps(t, st)).AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {
 			t.Fatalf("AppendOverallFeedback(%q) err = %v", reason, err)

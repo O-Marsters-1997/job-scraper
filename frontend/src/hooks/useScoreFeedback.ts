@@ -1,6 +1,7 @@
 import { createQuery, keepPreviousData } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
+	appendCollectionFeedback,
 	appendJobFeedback,
 	appendOverallFeedback,
 	deleteScoreFeedback,
@@ -30,4 +31,10 @@ export function useAppendOverallFeedback() {
 
 export function useAppendJobFeedback() {
 	return useInvalidatingMutation(appendJobFeedback, [keys.scoreFeedback]);
+}
+
+export function useAppendCollectionFeedback() {
+	return useInvalidatingMutation(appendCollectionFeedback, [
+		keys.scoreFeedback,
+	]);
 }

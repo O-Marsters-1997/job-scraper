@@ -3,6 +3,8 @@ package scoring
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -31,18 +33,20 @@ func packPicks(picks []dto.Pick, b bank) []packPick {
 }
 
 func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
-	var overall, jobs []dto.ScoreFeedback
+	var overall, jobs, collections []dto.ScoreFeedback
 	for _, e := range entries {
 		switch e.Kind {
 		case feedbackKindOverall:
 			overall = append(overall, e)
 		case feedbackKindJob:
 			jobs = append(jobs, e)
+		case feedbackKindCollection:
+			collections = append(collections, e)
 		}
 	}
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# Feedback Pack\n\n%d overall · %d Job entries\n\n", len(overall), len(jobs))
+	fmt.Fprintf(&sb, "# Feedback Pack\n\n%d overall · %d Job entries · %d Collection entries\n\n", len(overall), len(jobs), len(collections))
 
 	sb.WriteString("## How Suitability is computed\n\n")
 	sb.WriteString("Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.\n")
@@ -85,6 +89,14 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 	}
 	for _, e := range jobs {
 		writeJobEntry(&sb, e)
+	}
+
+	sb.WriteString("## Collection entries\n\n")
+	if len(collections) == 0 {
+		sb.WriteString("(none)\n")
+	}
+	for _, e := range collections {
+		writeCollectionEntry(&sb, e)
 	}
 	return sb.String()
 }
@@ -133,6 +145,35 @@ func writeJobEntry(sb *strings.Builder, e dto.ScoreFeedback) {
 	stateJSON, _ := json.MarshalIndent(state, "", "  ")
 	fence := strings.Repeat("`", max(3, longestRun(string(stateJSON), '`')+1))
 	fmt.Fprintf(sb, "Job state sent to Jev:\n\n%sjson\n%s\n%s\n\n", fence, stateJSON, fence)
+}
+
+func writeCollectionEntry(sb *strings.Builder, e dto.ScoreFeedback) {
+	snap := e.Snapshot
+	fmt.Fprintf(sb, "### Ranking of %d Jobs\n\n", len(snap.Ranking))
+	writeReason(sb, e.Reason)
+
+	filters := make([]string, 0, len(snap.Filters))
+	for k, v := range snap.Filters {
+		filters = append(filters, k+"="+v)
+	}
+	slices.Sort(filters)
+	if len(filters) == 0 {
+		filters = append(filters, "(none)")
+	}
+	fmt.Fprintf(sb, "- Model: %s\n- Filters: %s\n\n", e.Model, strings.Join(filters, ", "))
+
+	for _, r := range snap.Ranking {
+		score := "no score"
+		if r.Score != nil {
+			score = strconv.Itoa(*r.Score)
+		}
+		fmt.Fprintf(sb, "%d. %s · %s — %s", r.Rank, score, r.Title, r.Company)
+		if len(r.Effects) > 0 {
+			fmt.Fprintf(sb, " · %s", strings.Join(r.Effects, ", "))
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\n")
 }
 
 func longestRun(s string, r rune) int {

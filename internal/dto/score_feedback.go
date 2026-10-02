@@ -19,13 +19,15 @@ type ScoreFeedback struct {
 // ScoreFeedbackSnapshot is what a kind froze beside its reason: a Job entry
 // freezes the score evidence, an Overall entry nothing.
 type ScoreFeedbackSnapshot struct {
-	Score              *int             `json:"score,omitempty"`
-	Breakdown          []ScoreRow       `json:"breakdown,omitempty"`
-	ScoreFingerprint   string           `json:"scoreFingerprint,omitempty"`
-	ScoreModel         string           `json:"scoreModel,omitempty"`
-	ContentFingerprint string           `json:"contentFingerprint,omitempty"`
-	Options            []FeedbackOption `json:"options,omitempty"`
-	JevState           *JevState        `json:"jevState,omitempty"`
+	Score              *int              `json:"score,omitempty"`
+	Breakdown          []ScoreRow        `json:"breakdown,omitempty"`
+	ScoreFingerprint   string            `json:"scoreFingerprint,omitempty"`
+	ScoreModel         string            `json:"scoreModel,omitempty"`
+	ContentFingerprint string            `json:"contentFingerprint,omitempty"`
+	Options            []FeedbackOption  `json:"options,omitempty"`
+	JevState           *JevState         `json:"jevState,omitempty"`
+	Filters            map[string]string `json:"filters,omitempty"`
+	Ranking            []RankedJob       `json:"ranking,omitempty"`
 }
 
 // FeedbackOption is one picked Option as the score saw it: Jev's cached
@@ -82,4 +84,30 @@ type ScoreFeedbackPage struct {
 
 type OverallFeedbackInput struct {
 	Reason string `json:"reason"`
+}
+
+// RankedJob is one row of a Collection entry's ranking as the user saw it.
+// Score is nil when the Job had no score.
+type RankedJob struct {
+	Rank    int      `json:"rank"`
+	JobID   string   `json:"jobId"`
+	Title   string   `json:"title"`
+	Company string   `json:"company"`
+	Score   *int     `json:"score"`
+	Effects []string `json:"effects"`
+}
+
+// CollectionJobScore is a Job's stored score as read for a Collection entry.
+type CollectionJobScore struct {
+	JobID     string
+	Title     string
+	Company   string
+	Score     *int
+	Breakdown []ScoreRow
+}
+
+type CollectionFeedbackInput struct {
+	JobIDs  []string          `json:"jobIds"`
+	Filters map[string]string `json:"filters"`
+	Reason  string            `json:"reason"`
 }

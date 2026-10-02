@@ -700,3 +700,33 @@ func (s *Store) GetJobScoreForFeedback(ctx context.Context, userID, jobID string
 	}
 	return dto.JobScoreEvidence{Score: int(row.Score), Breakdown: rows, Fingerprint: row.ScoreFingerprint, Model: row.ScoreModel}, nil
 }
+
+// ListJobScoresForCollection returns userID's stored score for each of jobIDs
+// that exists, in no particular order. A Job with no score has a nil Score.
+func (s *Store) ListJobScoresForCollection(ctx context.Context, userID string, jobIDs []string) ([]dto.CollectionJobScore, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := data.UUIDs(jobIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobScoresForCollection(ctx, sqlc.ListJobScoresForCollectionParams{UserID: uid, JobIds: ids})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobScoresForCollection: %w", err)
+	}
+	out := make([]dto.CollectionJobScore, len(rows))
+	for i, row := range rows {
+		breakdown := []dto.ScoreRow{}
+		if err := json.Unmarshal(row.Breakdown, &breakdown); err != nil {
+			return nil, fmt.Errorf("store.ListJobScoresForCollection: breakdown: %w", err)
+		}
+		out[i] = dto.CollectionJobScore{JobID: row.ID.String(), Title: row.Title, Company: row.CompanySlug, Breakdown: breakdown}
+		if row.Score.Valid {
+			score := int(row.Score.Int32)
+			out[i].Score = &score
+		}
+	}
+	return out, nil
+}
