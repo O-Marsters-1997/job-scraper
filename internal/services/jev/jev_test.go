@@ -312,3 +312,25 @@ func TestAnswer(t *testing.T) {
 		}
 	})
 }
+
+func TestStateFor(t *testing.T) {
+	job := dto.Job{
+		Title:           "Engineer",
+		CompanySlug:     "acme",
+		Location:        "London",
+		WorkArrangement: "remote",
+		SalaryRaw:       "£50k",
+		Description:     "<p>Build <b>things</b></p>",
+	}
+	want := jev.State{
+		Title:           "Engineer",
+		Company:         "acme",
+		Location:        "London",
+		WorkArrangement: "remote",
+		SalaryRaw:       "£50k",
+		Description:     "Build things",
+	}
+	if diff := cmp.Diff(want, jev.StateFor(job)); diff != "" {
+		t.Errorf("StateFor mismatch (-want +got):\n%s", diff)
+	}
+}
