@@ -91,10 +91,8 @@ func Recency(configured string, lastSucceeded *time.Time, now time.Time) string 
 	if lastSucceeded == nil {
 		return ""
 	}
-	seconds := int64((now.Sub(*lastSucceeded) + recencyMargin).Seconds())
-	if seconds < int64(recencyMargin.Seconds()) {
-		seconds = int64(recencyMargin.Seconds())
-	}
+	elapsed := max(now.Sub(*lastSucceeded), 0)
+	seconds := int64((elapsed + recencyMargin).Seconds())
 	if n, err := strconv.ParseInt(strings.TrimPrefix(configured, "r"), 10, 64); err == nil && seconds >= n {
 		return ""
 	}

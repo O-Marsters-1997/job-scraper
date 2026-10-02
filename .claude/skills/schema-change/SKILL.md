@@ -80,6 +80,16 @@ inconsistent in a way tests won't catch until CI's `git diff --exit-code`.
    `go test` from the repo root, because migrations resolve
    `scripts/migrations` relative to CWD.
 
+10. **Refresh the schema diagram, if there is one.** `docs/diagrams/` is
+    gitignored and local only, so a fresh clone has no diagram. If
+    `docs/diagrams/build.py` doesn't exist, skip this step and don't create it.
+    Otherwise run `python3 docs/diagrams/build.py`. Add a new table to its
+    context's `CONTEXTS` entry in `docs/diagrams/template.html`, next to the
+    tables it references, or it lands in the "Not yet placed" panel. Add a new
+    reference column with no `REFERENCES` constraint (a bare `UUID` or
+    `UUID[]`) to `SOFT`. Edit `template.html`, never `schema.html`: the build
+    overwrites it.
+
 ## References
 
 - `references/sql-conventions.md` — column types, index naming, `CHECK`
