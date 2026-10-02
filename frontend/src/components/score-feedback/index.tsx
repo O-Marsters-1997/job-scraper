@@ -1,15 +1,29 @@
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { useQueryClient } from "@tanstack/solid-query";
+import {
+	createEffect,
+	createSignal,
+	For,
+	type JSX,
+	on,
+	onCleanup,
+	Show,
+} from "solid-js";
+import { keys } from "@/api/keys";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import {
+	useAppendJobFeedback,
 	useAppendOverallFeedback,
 	useDeleteScoreFeedback,
 	useScoreFeedback,
 } from "@/hooks/useScoreFeedback";
+import type { Job, ScoreRow } from "@/types/job";
 import {
+	type FeedbackDirection,
 	SCORE_FEEDBACK_PAGE_SIZE,
+	type ScoreFeedback,
 	type ScoreFeedbackKind,
 } from "@/types/scoreFeedback";
 
@@ -20,15 +34,43 @@ const KIND_CHIPS: { label: string; kind?: ScoreFeedbackKind }[] = [
 	{ label: "Overall", kind: "overall" },
 ];
 
+const TARGET_SELECTOR = "[data-feedback-job]";
+
+type JobTarget = {
+	id: string;
+	title: string;
+	score: number;
+	breakdown: ScoreRow[];
+};
+
+type Composing = { kind: "overall" } | { kind: "job"; target: JobTarget };
+
+const DIRECTIONS: { value: FeedbackDirection; label: string }[] = [
+	{ value: "higher", label: "Should be higher" },
+	{ value: "lower", label: "Should be lower" },
+];
+
+function targetAt(event: Event): HTMLElement | null {
+	return event.target instanceof Element
+		? event.target.closest<HTMLElement>(TARGET_SELECTOR)
+		: null;
+}
+
 export default function ScoreFeedbackPanel() {
+	const queryClient = useQueryClient();
 	const [open, setOpen] = createSignal(false);
-	const [composing, setComposing] = createSignal(false);
+	const [targeting, setTargeting] = createSignal(false);
+	const [hovered, setHovered] = createSignal<DOMRect | null>(null);
+	const [composing, setComposing] = createSignal<Composing | null>(null);
 	const [reason, setReason] = createSignal("");
+	const [direction, setDirection] = createSignal<FeedbackDirection | null>(
+		null,
+	);
 	const [kind, setKind] = createSignal<ScoreFeedbackKind | undefined>();
 	const [page, setPage] = createSignal(1);
 	const feedback = useScoreFeedback(kind, page);
-	const append = useAppendOverallFeedback();
-	const remove = useDeleteScoreFeedback();
+	const appendOverall = useAppendOverallFeedback();
+	const appendJob = useAppendJobFeedback();
 	const lastPage = () =>
 		Math.max(
 			1,
@@ -44,11 +86,85 @@ export default function ScoreFeedbackPanel() {
 		setPage(1);
 	};
 
-	const form = useFormSubmit(async () => {
-		await append.mutateAsync({ reason: reason() });
+	function cachedJob(id: string): Job | undefined {
+		return (
+			queryClient.getQueryData<Job>(keys.jobs.detail(id)) ??
+			queryClient
+				.getQueryData<Job[]>(keys.jobs.full())
+				?.find((j) => j.ID === id)
+		);
+	}
+
+	function startJob(id: string) {
+		const job = cachedJob(id);
+		if (job?.SuitabilityScore == null) return;
+		setComposing({
+			kind: "job",
+			target: {
+				id,
+				title: job.Title,
+				score: job.SuitabilityScore,
+				breakdown: job.Breakdown ?? [],
+			},
+		});
+	}
+
+	function close() {
+		setComposing(null);
 		setReason("");
-		setComposing(false);
+		setDirection(null);
+	}
+
+	const form = useFormSubmit(async () => {
+		const current = composing();
+		if (current?.kind === "overall") {
+			await appendOverall.mutateAsync({ reason: reason() });
+		} else if (current?.kind === "job") {
+			const dir = direction();
+			if (dir == null) return;
+			await appendJob.mutateAsync({
+				jobId: current.target.id,
+				direction: dir,
+				reason: reason(),
+			});
+		}
+		close();
 	});
+
+	createEffect(
+		on(targeting, (active) => {
+			if (!active) {
+				setHovered(null);
+				return;
+			}
+			const onMove = (e: MouseEvent) =>
+				setHovered(targetAt(e)?.getBoundingClientRect() ?? null);
+			const onClick = (e: MouseEvent) => {
+				const el = targetAt(e);
+				if (!el) return;
+				e.preventDefault();
+				e.stopPropagation();
+				setTargeting(false);
+				startJob(el.dataset.feedbackJob ?? "");
+			};
+			const onKey = (e: KeyboardEvent) => {
+				if (e.key === "Escape") setTargeting(false);
+			};
+			document.addEventListener("mousemove", onMove);
+			document.addEventListener("click", onClick, true);
+			document.addEventListener("keydown", onKey);
+			onCleanup(() => {
+				document.removeEventListener("mousemove", onMove);
+				document.removeEventListener("click", onClick, true);
+				document.removeEventListener("keydown", onKey);
+			});
+		}),
+	);
+
+	const canSubmit = () =>
+		!form.pending() &&
+		reason().trim() !== "" &&
+		(composing()?.kind !== "job" || direction() != null);
 
 	return (
 		<>
@@ -59,10 +175,23 @@ export default function ScoreFeedbackPanel() {
 			>
 				Score feedback
 			</button>
+			<Show when={hovered()}>
+				{(rect) => (
+					<div
+						class="pointer-events-none fixed z-40 rounded-sm outline-2 outline-primary"
+						style={{
+							top: `${rect().top}px`,
+							left: `${rect().left}px`,
+							width: `${rect().width}px`,
+							height: `${rect().height}px`,
+						}}
+					/>
+				)}
+			</Show>
 			<Show when={open()}>
 				<aside
 					aria-label="Score feedback"
-					class="fixed inset-y-0 right-0 z-50 flex w-96 max-w-full flex-col gap-4 border-l border-border bg-surface p-5"
+					class="fixed inset-y-0 right-0 z-50 flex w-96 max-w-full flex-col gap-4 overflow-y-auto border-l border-border bg-surface p-5"
 				>
 					<header class="flex items-center justify-between">
 						<h2 class="text-base font-semibold">Score feedback</h2>
@@ -74,35 +203,66 @@ export default function ScoreFeedbackPanel() {
 					<Show
 						when={composing()}
 						fallback={
-							<Button variant="outline" onClick={() => setComposing(true)}>
-								Overall
-							</Button>
-						}
-					>
-						<form class="flex flex-col gap-3" onSubmit={form.submit}>
-							<FormFeedback error={form.error()} />
-							<div class="flex flex-col gap-1 text-xs text-faint">
-								<label for="score-feedback-reason">Reason</label>
-								<Textarea
-									id="score-feedback-reason"
-									class="min-h-24 text-sm text-foreground"
-									value={reason()}
-									onInput={(e) => setReason(e.currentTarget.value)}
-									required
-								/>
-							</div>
 							<div class="flex gap-2">
 								<Button
-									type="submit"
-									disabled={form.pending() || reason().trim() === ""}
+									variant={targeting() ? "default" : "outline"}
+									onClick={() => setTargeting(!targeting())}
 								>
-									Submit
+									{targeting() ? "Pick a Job (Esc to cancel)" : "Target"}
 								</Button>
-								<Button variant="ghost" onClick={() => setComposing(false)}>
-									Cancel
+								<Button
+									variant="outline"
+									onClick={() => setComposing({ kind: "overall" })}
+								>
+									Overall
 								</Button>
 							</div>
-						</form>
+						}
+					>
+						{(current) => (
+							<form class="flex flex-col gap-3" onSubmit={form.submit}>
+								<FormFeedback error={form.error()} />
+								<Show when={jobTarget(current())}>
+									{(target) => <JobEvidence target={target()} />}
+								</Show>
+								<Show when={current().kind === "job"}>
+									<div class="flex gap-2" role="radiogroup">
+										<For each={DIRECTIONS}>
+											{(d) => (
+												<Button
+													type="button"
+													variant={
+														direction() === d.value ? "default" : "outline"
+													}
+													aria-pressed={direction() === d.value}
+													onClick={() => setDirection(d.value)}
+												>
+													{d.label}
+												</Button>
+											)}
+										</For>
+									</div>
+								</Show>
+								<div class="flex flex-col gap-1 text-xs text-faint">
+									<label for="score-feedback-reason">Reason</label>
+									<Textarea
+										id="score-feedback-reason"
+										class="min-h-24 text-sm text-foreground"
+										value={reason()}
+										onInput={(e) => setReason(e.currentTarget.value)}
+										required
+									/>
+								</div>
+								<div class="flex gap-2">
+									<Button type="submit" disabled={!canSubmit()}>
+										Submit
+									</Button>
+									<Button type="button" variant="ghost" onClick={close}>
+										Cancel
+									</Button>
+								</div>
+							</form>
+						)}
 					</Show>
 
 					<div class="flex gap-1">
@@ -120,30 +280,12 @@ export default function ScoreFeedbackPanel() {
 						</For>
 					</div>
 
-					<ul class="flex flex-col gap-2 overflow-y-auto">
+					<ul class="flex flex-col gap-2">
 						<For
 							each={feedback.data?.entries}
 							fallback={<li class="text-sm text-faint">No feedback yet.</li>}
 						>
-							{(entry) => (
-								<li class="flex flex-col gap-1 rounded-md border border-border p-3">
-									<span class="text-2xs tracking-wider text-faint uppercase">
-										{entry.kind} · {new Date(entry.createdAt).toLocaleString()}
-									</span>
-									<p class="text-sm whitespace-pre-wrap text-foreground">
-										{entry.reason}
-									</p>
-									<Button
-										variant="ghost"
-										size="sm"
-										class="self-end"
-										disabled={remove.isPending}
-										onClick={() => remove.mutate(entry.id)}
-									>
-										Delete
-									</Button>
-								</li>
-							)}
+							{(entry) => <FeedbackEntry entry={entry} />}
 						</For>
 					</ul>
 
@@ -171,5 +313,86 @@ export default function ScoreFeedbackPanel() {
 				</aside>
 			</Show>
 		</>
+	);
+}
+
+function jobTarget(composing: Composing): JobTarget | null {
+	return composing.kind === "job" ? composing.target : null;
+}
+
+function JobEvidence(props: { target: JobTarget }): JSX.Element {
+	return (
+		<div class="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
+			<span class="font-medium text-foreground">{props.target.title}</span>
+			<span class="text-muted">Score {props.target.score}</span>
+			<ul class="flex flex-wrap gap-1 text-2xs text-faint">
+				<For each={props.target.breakdown}>
+					{(row) => (
+						<li>
+							{row.label}: {row.effect}
+						</li>
+					)}
+				</For>
+			</ul>
+		</div>
+	);
+}
+
+function FeedbackEntry(props: { entry: ScoreFeedback }): JSX.Element {
+	const remove = useDeleteScoreFeedback();
+	return (
+		<li class="flex flex-col gap-1 rounded-md border border-border p-3">
+			<span class="text-2xs tracking-wider text-faint uppercase">
+				{props.entry.kind}
+				{props.entry.direction ? ` · ${props.entry.direction}` : ""} ·{" "}
+				{new Date(props.entry.createdAt).toLocaleString()}
+			</span>
+			<p class="text-sm whitespace-pre-wrap text-foreground">
+				{props.entry.reason}
+			</p>
+			<Show when={props.entry.snapshot?.options?.length}>
+				<details class="text-xs text-muted">
+					<summary class="cursor-pointer">
+						Score {props.entry.snapshot?.score} · probabilities
+					</summary>
+					<table class="mt-1 w-full text-left">
+						<thead>
+							<tr>
+								<th>Option</th>
+								<th>Yes</th>
+								<th>No</th>
+								<th>n/s</th>
+							</tr>
+						</thead>
+						<tbody>
+							<For each={props.entry.snapshot?.options}>
+								{(o) => (
+									<tr>
+										<td>{o.label}</td>
+										<Show
+											when={o.known}
+											fallback={<td colspan={3}>no cached answer</td>}
+										>
+											<td>{o.pYes.toFixed(2)}</td>
+											<td>{o.pNo.toFixed(2)}</td>
+											<td>{o.pNotStated.toFixed(2)}</td>
+										</Show>
+									</tr>
+								)}
+							</For>
+						</tbody>
+					</table>
+				</details>
+			</Show>
+			<Button
+				variant="ghost"
+				size="sm"
+				class="self-end"
+				disabled={remove.isPending}
+				onClick={() => remove.mutate(props.entry.id)}
+			>
+				Delete
+			</Button>
+		</li>
 	);
 }

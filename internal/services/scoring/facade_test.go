@@ -17,9 +17,11 @@ var update = flag.Bool("update", false, "rewrite golden files")
 func TestExportFeedback(t *testing.T) {
 	const userID = "user-1"
 	st := newFakeStore()
-	st.SeedOptions(append([]dto.ScoringOption{retiredCobol}, bank...))
-	st.SeedSearchConfig(picking(userID, "tech:go", "tech:cobol"))
+	seedScoredJob(st, userID, "tech:go", "tech:cobol", "tech:kubernetes")
 	m := scoring.Build(newDeps(t, st))
+	if _, err := scoring.NewService(newDeps(t, st)).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: "lower", Reason: "Go is a given here."}); err != nil {
+		t.Fatalf("AppendJobFeedback() err = %v", err)
+	}
 
 	for _, reason := range []string{"Scores run hot for backend roles.", "Two lines\nof reasoning."} {
 		if _, err := scoring.NewService(newDeps(t, st)).AppendOverallFeedback(t.Context(), userID, dto.OverallFeedbackInput{Reason: reason}); err != nil {

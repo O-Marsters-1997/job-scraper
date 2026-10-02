@@ -120,3 +120,32 @@ func TestFeedbackRoutes(t *testing.T) {
 		t.Errorf("DELETE own entry status = %d, want 204", rec.Code)
 	}
 }
+
+func TestJobFeedbackRoute(t *testing.T) {
+	t.Setenv("SCORING_FEEDBACK", "true")
+	st := newFakeStore()
+	seedScoredJob(st, handlerstest.UserID, "tech:go")
+	r := chi.NewRouter()
+	scoring.Build(newDeps(t, st)).Routes(r)
+
+	handlerstest.RequiresAuth(t, r, "POST /scoring-feedback/job")
+	handlerstest.RejectsMalformedBody(t, r, "POST /scoring-feedback/job")
+
+	for name, tc := range map[string]struct {
+		body string
+		want int
+	}{
+		"unknown job":   {`{"jobId":"nope","direction":"higher","reason":"r"}`, http.StatusNotFound},
+		"bad direction": {`{"jobId":"job-1","direction":"up","reason":"r"}`, http.StatusBadRequest},
+		"blank reason":  {`{"jobId":"job-1","direction":"higher","reason":" "}`, http.StatusBadRequest},
+	} {
+		if rec := handlerstest.Serve(t, r, "POST /scoring-feedback/job", tc.body); rec.Code != tc.want {
+			t.Errorf("POST /scoring-feedback/job %s status = %d, want %d", name, rec.Code, tc.want)
+		}
+	}
+
+	created := handlerstest.Do[dto.ScoreFeedback](t, r, http.StatusCreated, "POST /scoring-feedback/job", `{"jobId":"job-1","direction":"higher","reason":"too low"}`)
+	if created.Kind != "job" || created.Snapshot.Score == nil || *created.Snapshot.Score != 72 || len(created.Snapshot.Options) != 1 {
+		t.Errorf("POST /scoring-feedback/job = %+v, want a job entry with the frozen score and one Option", created)
+	}
+}

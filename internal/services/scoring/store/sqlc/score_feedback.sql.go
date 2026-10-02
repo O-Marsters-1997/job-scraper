@@ -58,25 +58,60 @@ func (q *Queries) DeleteScoreFeedback(ctx context.Context, arg DeleteScoreFeedba
 	return result.RowsAffected(), nil
 }
 
+const getJobScoreForFeedback = `-- name: GetJobScoreForFeedback :one
+SELECT suitability_score::int AS score, breakdown, COALESCE(score_fingerprint, '')::text AS score_fingerprint,
+    COALESCE(score_model, '')::text AS score_model
+FROM job_scores
+WHERE user_id = $1 AND job_id = $2 AND suitability_score IS NOT NULL
+`
+
+type GetJobScoreForFeedbackParams struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+}
+
+type GetJobScoreForFeedbackRow struct {
+	Score            int32
+	Breakdown        []byte
+	ScoreFingerprint string
+	ScoreModel       string
+}
+
+func (q *Queries) GetJobScoreForFeedback(ctx context.Context, arg GetJobScoreForFeedbackParams) (GetJobScoreForFeedbackRow, error) {
+	row := q.db.QueryRow(ctx, getJobScoreForFeedback, arg.UserID, arg.JobID)
+	var i GetJobScoreForFeedbackRow
+	err := row.Scan(
+		&i.Score,
+		&i.Breakdown,
+		&i.ScoreFingerprint,
+		&i.ScoreModel,
+	)
+	return i, err
+}
+
 const insertScoreFeedback = `-- name: InsertScoreFeedback :one
-INSERT INTO score_feedback (user_id, kind, reason, picks, model, snapshot)
-VALUES ($1, $2::text, $3::text, $4, $5::text, $6)
+INSERT INTO score_feedback (user_id, job_id, kind, direction, reason, picks, model, snapshot)
+VALUES ($1, $2, $3::text, $4::text, $5::text, $6, $7::text, $8)
 RETURNING id, user_id, job_id, kind, direction, reason, picks, model, snapshot, created_at
 `
 
 type InsertScoreFeedbackParams struct {
-	UserID   pgtype.UUID
-	Kind     string
-	Reason   string
-	Picks    []byte
-	Model    string
-	Snapshot []byte
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Kind      string
+	Direction pgtype.Text
+	Reason    string
+	Picks     []byte
+	Model     string
+	Snapshot  []byte
 }
 
 func (q *Queries) InsertScoreFeedback(ctx context.Context, arg InsertScoreFeedbackParams) (ScoreFeedback, error) {
 	row := q.db.QueryRow(ctx, insertScoreFeedback,
 		arg.UserID,
+		arg.JobID,
 		arg.Kind,
+		arg.Direction,
 		arg.Reason,
 		arg.Picks,
 		arg.Model,

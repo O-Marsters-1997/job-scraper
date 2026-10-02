@@ -992,3 +992,86 @@ func TestAppendOverallFeedback(t *testing.T) {
 		}
 	})
 }
+
+func seedScoredJob(st *scoringtest.FakeStore, userID string, optionIDs ...string) {
+	st.SeedOptions(append([]dto.ScoringOption{retiredCobol}, bank...))
+	st.SeedSearchConfig(picking(userID, optionIDs...))
+	job := testJob
+	job.CompanySlug = "acme"
+	job.Description = "<p>Build Go services.</p>"
+	st.SeedJob(job, nil)
+	st.SeedAnswers(job.ID, job.ContentFingerprint, jev.Model, cachedAnswers())
+	st.SeedJobScore(userID, job.ID, dto.JobScoreEvidence{
+		Score: 72, Fingerprint: "score-fp", Model: "jev-old",
+		Breakdown: []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}},
+	})
+}
+
+func TestAppendJobFeedback(t *testing.T) {
+	const userID = "user-1"
+	svc := func(st *scoringtest.FakeStore) *scoring.Service { return scoring.NewService(newDeps(t, st)) }
+
+	t.Run("freezes the score, per-Option probabilities and Jev state", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go", "tech:cobol", "tech:kubernetes")
+
+		got, err := svc(st).AppendJobFeedback(t.Context(), userID, dto.JobFeedbackInput{JobID: testJob.ID, Direction: "lower", Reason: " too high "})
+		if err != nil {
+			t.Fatalf("AppendJobFeedback() err = %v", err)
+		}
+
+		score, direction, jobID := 72, "lower", testJob.ID
+		want := dto.ScoreFeedback{
+			Kind: "job", Direction: &direction, JobID: &jobID, Reason: "too high", Model: jev.Model,
+			Picks: picking(userID, "tech:go", "tech:cobol", "tech:kubernetes").Preferences.Picks,
+			Snapshot: dto.ScoreFeedbackSnapshot{
+				Score:              &score,
+				Breakdown:          []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}},
+				ScoreFingerprint:   "score-fp",
+				ScoreModel:         "jev-old",
+				ContentFingerprint: "fp-1",
+				Options: []dto.FeedbackOption{
+					{OptionID: "tech:go", Label: "Go", Question: "Does the role use Go?", Stance: "nice", Resolved: "yes", PYes: 0.9, PNo: 0.05, PNotStated: 0.05, Known: true},
+					{OptionID: "tech:cobol", Label: "COBOL", Question: "Does the role use COBOL?", Stance: "nice", Resolved: "retired"},
+					{OptionID: "tech:kubernetes", Label: "Kubernetes", Question: "Does the role use Kubernetes?", Stance: "nice", Resolved: "unknown"},
+				},
+				JevState: &dto.JevState{Title: "Backend Engineer", Company: "acme", Description: "Build Go services."},
+			},
+		}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.ScoreFeedback{}, "ID", "CreatedAt")); diff != "" {
+			t.Errorf("AppendJobFeedback() mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	tests := []struct {
+		name string
+		in   dto.JobFeedbackInput
+		seed func(*scoringtest.FakeStore)
+		kind apperr.Kind
+	}{
+		{name: "unknown job is not found", in: dto.JobFeedbackInput{JobID: "nope", Direction: "higher", Reason: "r"}, kind: apperr.KindNotFound},
+		{
+			name: "unscored job is unprocessable", in: dto.JobFeedbackInput{JobID: "job-2", Direction: "higher", Reason: "r"},
+			seed: func(st *scoringtest.FakeStore) { st.SeedJob(dto.Job{ID: "job-2"}, nil) }, kind: apperr.KindUnprocessable,
+		},
+		{name: "bad direction is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "sideways", Reason: "r"}, kind: apperr.KindInvalid},
+		{name: "blank reason is invalid", in: dto.JobFeedbackInput{JobID: testJob.ID, Direction: "higher", Reason: " "}, kind: apperr.KindInvalid},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" and writes nothing", func(t *testing.T) {
+			st := newFakeStore()
+			seedScoredJob(st, userID, "tech:go")
+			if tt.seed != nil {
+				tt.seed(st)
+			}
+
+			_, err := svc(st).AppendJobFeedback(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.kind) {
+				t.Fatalf("AppendJobFeedback(%+v) err = %v, want kind %v", tt.in, err, tt.kind)
+			}
+			if got, _ := svc(st).ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
+				t.Errorf("ListFeedback() = %+v, want nothing written", got)
+			}
+		})
+	}
+}

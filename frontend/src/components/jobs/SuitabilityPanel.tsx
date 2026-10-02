@@ -6,7 +6,11 @@ import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export function SuitabilityPanel(props: { job: Job }) {
 	return (
-		<Card>
+		<Card
+			data-feedback-job={
+				props.job.SuitabilityScore == null ? undefined : props.job.ID
+			}
+		>
 			<CardHeader class="pb-2">
 				<CardTitle>Suitability</CardTitle>
 			</CardHeader>

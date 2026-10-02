@@ -1,9 +1,11 @@
 import {
+	type JobFeedbackInput,
 	SCORE_FEEDBACK_PAGE_SIZE,
 	type ScoreFeedback,
 	type ScoreFeedbackKind,
 	type ScoreFeedbackPage,
 } from "../types/scoreFeedback";
+import { getJobs } from "./jobs";
 
 let entries: ScoreFeedback[] = [];
 let nextId = 1;
@@ -30,6 +32,36 @@ export function appendOverallFeedback(reason: string): ScoreFeedback {
 		kind: "overall",
 		reason,
 		model: "typesafe/jev-1.13",
+		createdAt: new Date().toISOString(),
+	};
+	entries = [entry, ...entries];
+	return structuredClone(entry);
+}
+
+export function appendJobFeedback(input: JobFeedbackInput): ScoreFeedback {
+	const job = getJobs().find((j) => j.ID === input.jobId);
+	const entry: ScoreFeedback = {
+		id: `feedback-${nextId++}`,
+		kind: "job",
+		direction: input.direction,
+		jobId: input.jobId,
+		reason: input.reason,
+		model: "typesafe/jev-1.13",
+		snapshot: {
+			score: job?.SuitabilityScore ?? undefined,
+			options: (job?.Breakdown ?? []).map((row) => ({
+				optionId: row.key,
+				label: row.label,
+				question: `Does the role match ${row.label}?`,
+				stance: row.stance,
+				resolved: row.resolved,
+				pYes: row.resolved === "yes" ? 0.9 : 0.05,
+				pNo: row.resolved === "no" ? 0.9 : 0.05,
+				pNotStated: row.resolved === "unknown" ? 0.9 : 0.05,
+				confidence: 0.8,
+				known: true,
+			})),
+		},
 		createdAt: new Date().toISOString(),
 	};
 	entries = [entry, ...entries];

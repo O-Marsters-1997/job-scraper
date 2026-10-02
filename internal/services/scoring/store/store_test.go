@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -755,5 +756,65 @@ func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
 	}
 	if n := countRows(t, pool, "SELECT count(*) FROM score_feedback WHERE job_id IS NULL AND direction IS NULL"); n != 1 {
 		t.Errorf("rows with NULL job_id and direction = %d, want 1", n)
+	}
+}
+
+func TestScoreFeedback_JobEntryRoundTripsAndSurvivesJobDelete(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	direction := "lower"
+	score := 50
+
+	entry := dto.ScoreFeedback{
+		Kind: "job", Direction: &direction, JobID: &jobID, Reason: "r", Picks: []dto.Pick{}, Model: "m",
+		Snapshot: dto.ScoreFeedbackSnapshot{Score: &score, ContentFingerprint: "fp-1"},
+	}
+	if _, err := st.InsertScoreFeedback(t.Context(), userID, entry); err != nil {
+		t.Fatalf("InsertScoreFeedback() err = %v", err)
+	}
+	got, err := st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ListScoreFeedback() = %+v, %v, want one entry", got, err)
+	}
+	if diff := cmp.Diff(entry, got[0], cmpopts.IgnoreFields(dto.ScoreFeedback{}, "ID", "CreatedAt")); diff != "" {
+		t.Errorf("ListScoreFeedback() (-want +got):\n%s", diff)
+	}
+
+	exec(t, pool, `DELETE FROM jobs WHERE id = $1`, jobID)
+	got, err = st.ListScoreFeedback(t.Context(), userID, "", 10, 0)
+	if err != nil || len(got) != 1 || got[0].JobID != nil {
+		t.Errorf("ListScoreFeedback() after job delete = %+v, %v, want the entry kept with no job id", got, err)
+	}
+}
+
+func TestScoreFeedback_DirectionWithoutJobKindIsRejected(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	direction := "lower"
+
+	_, err := st.InsertScoreFeedback(t.Context(), userID, dto.ScoreFeedback{Kind: "overall", Direction: &direction, Reason: "r", Picks: []dto.Pick{}, Model: "m"})
+	if err == nil {
+		t.Error("InsertScoreFeedback(overall with direction) err = nil, want the kind/direction CHECK to reject it")
+	}
+}
+
+func TestGetJobScoreForFeedback(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, score_fingerprint, score_model)
+		VALUES ($1, $2, 64, '[{"key":"tech:go","label":"Go","stance":"nice","resolved":"yes","effect":"meets","overridden":false}]', 'fp-1', 'jev-1')`, jobID, userID)
+
+	got, err := st.GetJobScoreForFeedback(t.Context(), userID, jobID)
+	if err != nil {
+		t.Fatalf("GetJobScoreForFeedback() err = %v", err)
+	}
+	want := dto.JobScoreEvidence{
+		Score: 64, Fingerprint: "fp-1", Model: "jev-1",
+		Breakdown: []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("GetJobScoreForFeedback() (-want +got):\n%s", diff)
 	}
 }

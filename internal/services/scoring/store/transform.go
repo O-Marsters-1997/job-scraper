@@ -59,8 +59,16 @@ func toScoreFeedbackDTO(row sqlc.ScoreFeedback) (dto.ScoreFeedback, error) {
 	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
 		return dto.ScoreFeedback{}, err
 	}
-	return dto.ScoreFeedback{
+	out := dto.ScoreFeedback{
 		ID: row.ID.String(), Kind: row.Kind, Reason: row.Reason, Picks: picks,
 		Model: row.Model, Snapshot: snapshot, CreatedAt: row.CreatedAt.Time,
-	}, nil
+	}
+	if row.Direction.Valid {
+		out.Direction = &row.Direction.String
+	}
+	if row.JobID.Valid {
+		id := row.JobID.String()
+		out.JobID = &id
+	}
+	return out, nil
 }

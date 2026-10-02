@@ -191,6 +191,14 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("job score for feedback missing returns not found", func(t *testing.T) {
+		f := newFixture(t)
+		_, err := f.Store.GetJobScoreForFeedback(t.Context(), f.NewUser(), missingID)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetJobScoreForFeedback(missing) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("clear score feedback deletes only that user's rows and counts them", func(t *testing.T) {
 		f := newFixture(t)
 		ctx := t.Context()

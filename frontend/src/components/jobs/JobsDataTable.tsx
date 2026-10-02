@@ -155,7 +155,13 @@ export function JobsDataTable<TData extends Job>(
 							<For each={table.getRowModel().rows}>
 								{(row) => (
 									<>
-										<TableRow>
+										<TableRow
+											data-feedback-job={
+												row.original.SuitabilityScore == null
+													? undefined
+													: row.original.ID
+											}
+										>
 											<For each={row.getVisibleCells()}>
 												{(cell) => (
 													<TableCell>

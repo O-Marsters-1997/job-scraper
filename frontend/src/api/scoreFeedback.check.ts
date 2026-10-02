@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+	appendJobFeedback,
 	appendOverallFeedback,
 	deleteScoreFeedback,
 	listScoreFeedback,
@@ -41,3 +42,8 @@ assert.throws(
 	() => scoreFeedbackSchema.parse({ ...created, kind: "nonsense" }),
 	"unknown kind rejected",
 );
+
+const job = scoreFeedbackSchema.parse(
+	appendJobFeedback({ jobId: "missing", direction: "lower", reason: "high" }),
+);
+assert.equal(job.direction, "lower", "mock job entry keeps its direction");

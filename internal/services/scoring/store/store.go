@@ -588,8 +588,19 @@ func (s *Store) InsertScoreFeedback(ctx context.Context, userID string, f dto.Sc
 	if err != nil {
 		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
 	}
+	var jobID pgtype.UUID
+	if f.JobID != nil {
+		if jobID, err = data.UUID(*f.JobID); err != nil {
+			return dto.ScoreFeedback{}, err
+		}
+	}
+	var direction pgtype.Text
+	if f.Direction != nil {
+		direction = data.Text(*f.Direction)
+	}
 	row, err := s.queries.InsertScoreFeedback(ctx, sqlc.InsertScoreFeedbackParams{
-		UserID: uid, Kind: f.Kind, Reason: f.Reason, Picks: picks, Model: f.Model, Snapshot: snapshot,
+		UserID: uid, JobID: jobID, Kind: f.Kind, Direction: direction, Reason: f.Reason,
+		Picks: picks, Model: f.Model, Snapshot: snapshot,
 	})
 	if err != nil {
 		return dto.ScoreFeedback{}, fmt.Errorf("store.InsertScoreFeedback: %w", err)
@@ -666,4 +677,26 @@ func (s *Store) ClearScoreFeedback(ctx context.Context, userID string) (int64, e
 		return 0, fmt.Errorf("store.ClearScoreFeedback: %w", err)
 	}
 	return n, nil
+}
+
+// GetJobScoreForFeedback returns userID's stored score for jobID, or
+// data.ErrNotFound when the Job has none.
+func (s *Store) GetJobScoreForFeedback(ctx context.Context, userID, jobID string) (dto.JobScoreEvidence, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobScoreEvidence{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return dto.JobScoreEvidence{}, err
+	}
+	row, err := s.queries.GetJobScoreForFeedback(ctx, sqlc.GetJobScoreForFeedbackParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.JobScoreEvidence{}, data.QueryErr("GetJobScoreForFeedback", err)
+	}
+	rows := []dto.ScoreRow{}
+	if err := json.Unmarshal(row.Breakdown, &rows); err != nil {
+		return dto.JobScoreEvidence{}, fmt.Errorf("store.GetJobScoreForFeedback: breakdown: %w", err)
+	}
+	return dto.JobScoreEvidence{Score: int(row.Score), Breakdown: rows, Fingerprint: row.ScoreFingerprint, Model: row.ScoreModel}, nil
 }
