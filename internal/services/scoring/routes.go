@@ -1,8 +1,6 @@
 package scoring
 
 import (
-	"os"
-
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/handlers"
@@ -18,11 +16,9 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/push/subscriptions", handlers.Create(m.svc.Subscribe))
 	r.Delete("/push/subscriptions", handlers.Update(m.svc.Unsubscribe))
 	r.Post("/push/test", handlers.Create(m.svc.TestPush))
-	if os.Getenv("SCORING_FEEDBACK") == "true" {
-		r.Post("/scoring-feedback/job", handlers.Create(m.svc.AppendJobFeedback))
-		r.Post("/scoring-feedback/collection", handlers.Create(m.svc.AppendCollectionFeedback))
-		r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
-		r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
-		r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))
-	}
+	r.Post("/scoring-feedback/job", handlers.Create(m.svc.AppendJobFeedback))
+	r.Post("/scoring-feedback/collection", handlers.Create(m.svc.AppendCollectionFeedback))
+	r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
+	r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
+	r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))
 }
