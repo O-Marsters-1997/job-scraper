@@ -21,7 +21,7 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	}
 	create := func(t *testing.T, f Fixture) dto.Draft {
 		t.Helper()
-		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f))
+		d, err := f.Store.CreateDraft(ctx, f.UserID, input(f), nil)
 		if err != nil {
 			t.Fatal(err)
 		}

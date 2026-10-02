@@ -108,7 +108,7 @@ func TestImportRoutes(t *testing.T) {
 }
 
 func TestDraftRoutesQueueAndReadADraft(t *testing.T) {
-	r := newRouter(cvtailor.Deps{})
+	r := newRouter(cvtailor.Deps{Asker: &fakeAsker{}, Docs: cvtailortest.Docs{TabJSON: tabJSON(t, head("Acme"), bullet("cut latency"))}})
 	p := handlerstest.Do[dto.Position](t, r, http.StatusCreated, "POST /experience/positions", `{"employer":"Acme","title":"Engineer"}`)
 	a := handlerstest.Do[dto.Achievement](t, r, http.StatusCreated, "POST /experience/positions/"+p.ID+"/achievements", `{"text":"cut latency"}`)
 	handlerstest.Do[struct{}](t, r, http.StatusOK, "PUT /tailoring/cvs/d/t/headings", `{"mappings":[{"headingText":"Acme","positionId":"`+p.ID+`"}]}`)

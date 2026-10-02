@@ -14,6 +14,15 @@ type DraftInput struct {
 	AchievementIDs []string `json:"achievementIds"`
 }
 
+// BulletLabel is what one offered Achievement looked like when a Draft was
+// created; Answer is nil when Jev had no cached answer for it.
+type BulletLabel struct {
+	AchievementID string
+	Answer        *Answer
+	Preselected   bool
+	Kept          bool
+}
+
 // MaxDraftAttempts is how many times a Draft is claimed before it fails for
 // good.
 const MaxDraftAttempts = 5
