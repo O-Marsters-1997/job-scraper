@@ -88,3 +88,28 @@ export class DraftPage {
 			.evaluateAll((els) => els.map((el) => el.getAttribute("title")));
 	}
 }
+
+export class PhoneDraftPage {
+	readonly status: Locator;
+	readonly error: Locator;
+	readonly retry: Locator;
+	readonly undo: Locator;
+	readonly keep: Locator;
+	readonly kept: Locator;
+
+	constructor(readonly page: Page) {
+		this.status = page.getByText("Tailoring…");
+		this.error = page.getByRole("alert").filter({ hasText: "failed" });
+		this.retry = page.getByRole("link", { name: "Try again" });
+		this.undo = page.getByRole("button", { name: "Undo" });
+		this.keep = page.getByRole("button", { name: "Keep", exact: true });
+		this.kept = page.getByText("Kept", { exact: true });
+	}
+
+	async goto(id: string) {
+		await this.page.goto(`/tailoring/drafts/${id}`);
+		await this.page
+			.getByRole("heading", { name: "Draft CV", level: 1 })
+			.waitFor({ state: "visible" });
+	}
+}

@@ -237,7 +237,7 @@ test.describe("Draft editor", () => {
 	});
 });
 
-for (const width of [375, 1024]) {
+for (const width of [768, 1024]) {
 	test.describe(`Draft editor at ${width}px`, () => {
 		test.use({ viewport: { width, height: 800 } });
 
