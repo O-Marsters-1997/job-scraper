@@ -65,19 +65,26 @@ func (h retryAfterTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if h != "" {
 		header.Set("Retry-After", string(h))
 	}
-	return &http.Response{StatusCode: http.StatusTooManyRequests, Status: "429 Too Many Requests", Header: header, Body: io.NopCloser(strings.NewReader("")), Request: req}, nil
+	return &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Status:     "429 Too Many Requests",
+		Header:     header,
+		Body:       http.NoBody,
+		Request:    req,
+	}, nil
 }
 
 func TestGetCarriesRetryAfterOnStatusError(t *testing.T) {
 	tests := []struct {
-		name   string
-		header string
-		min    time.Duration
-		max    time.Duration
+		name    string
+		header  string
+		atLeast time.Duration
+		atMost  time.Duration
 	}{
 		{"delta seconds", "120", 120 * time.Second, 120 * time.Second},
 		{"http date", time.Now().Add(time.Hour).UTC().Format(http.TimeFormat), 59 * time.Minute, time.Hour},
 		{"missing", "", 0, 0},
+		{"overflowing seconds", "9000000000000", 24 * time.Hour, 24 * time.Hour},
 		{"garbage", "soon", 0, 0},
 		{"past date", time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat), 0, 0},
 	}
@@ -90,8 +97,8 @@ func TestGetCarriesRetryAfterOnStatusError(t *testing.T) {
 			if !errors.As(err, &statusErr) {
 				t.Fatalf("Get() error = %v, want *StatusError", err)
 			}
-			if got := statusErr.RetryAfter; got < tt.min || got > tt.max {
-				t.Errorf("RetryAfter = %v, want in [%v, %v]", got, tt.min, tt.max)
+			if got := statusErr.RetryAfter; got < tt.atLeast || got > tt.atMost {
+				t.Errorf("RetryAfter = %v, want in [%v, %v]", got, tt.atLeast, tt.atMost)
 			}
 		})
 	}

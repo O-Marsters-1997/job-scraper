@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	DefaultTimeout = 15 * time.Second
-	userAgent      = "Mozilla/5.0 (compatible; job-scraper/1.0)"
+	DefaultTimeout       = 15 * time.Second
+	maxRetryAfterSeconds = 24 * 60 * 60
+	userAgent            = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
 type Route = proxy.Route
@@ -152,7 +153,8 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, &StatusError{Code: resp.StatusCode, Status: resp.Status, RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
+		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		return nil, &StatusError{Code: resp.StatusCode, Status: resp.Status, RetryAfter: retryAfter}
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -162,10 +164,10 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 	return respBody, nil
 }
 
-// parseRetryAfter reads delta-seconds or an HTTP-date, returning zero when absent, unparseable or past.
+// RFC 9110 §10.2.3: Retry-After is delta-seconds or an HTTP-date.
 func parseRetryAfter(v string) time.Duration {
 	if secs, err := strconv.Atoi(v); err == nil {
-		return max(time.Duration(secs)*time.Second, 0)
+		return time.Duration(min(max(secs, 0), maxRetryAfterSeconds)) * time.Second
 	}
 	if t, err := http.ParseTime(v); err == nil {
 		return max(time.Until(t), 0)
