@@ -48,7 +48,7 @@ var searchBoards = []boardSpec{
 		paths:         []string{"/search"},
 		canonical:     "https://workinstartups.com/search",
 		keywordsParam: "q",
-		silent:        []string{"p", "per_page"},
+		silent:        []string{"p", "per_page", "sb", "sd", "sorting", "f"},
 	},
 	{
 		source:        "indeed",

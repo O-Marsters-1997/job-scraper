@@ -47,7 +47,7 @@ var registry = map[string]entry{
 		build: func(t dto.SourceTarget) sources.Source {
 			return wis.New(wis.Search{
 				Keywords: t.Value,
-				Region:   t.Filters["region"],
+				Filters:  t.Filters,
 				Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
 			})
 		},

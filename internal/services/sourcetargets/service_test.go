@@ -170,7 +170,7 @@ func TestCreate(t *testing.T) {
 func TestList(t *testing.T) {
 	svc, _, _ := newService(t)
 	in := wisTarget
-	in.Filters = map[string]string{"region": "uk"}
+	in.Filters = map[string]string{"loc": "86383"}
 	in.Enabled = new(false)
 	if _, err := svc.Create(t.Context(), userID, in); err != nil {
 		t.Fatalf("Create() err = %v", err)
@@ -180,7 +180,7 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() err = %v", err)
 	}
-	if len(got) != 1 || got[0].URL != "https://workinstartups.com/search?q=engineer&w=uk" {
+	if len(got) != 1 || got[0].URL != "https://workinstartups.com/search?loc=86383&q=engineer" {
 		t.Errorf("List() = %+v, want one target with the board URL", got)
 	}
 }
