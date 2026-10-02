@@ -52,15 +52,8 @@ test.describe("Draft editor", () => {
 		await expect(draftPage.saveStatus).toHaveCount(0);
 	});
 
-	test("shows an unbacked word in the line's card", async ({ draftPage }) => {
-		await expect(draftPage.card("s1")).toContainText(
-			"Backed by your Achievement",
-		);
+	test("shows an edit in the line's card", async ({ draftPage }) => {
 		await draftPage.type(BULLET, " Terraform");
-		await expect(draftPage.card("s1")).toContainText("1 unbacked word");
-		await expect(draftPage.card("s1").getByTestId("card-novel")).toContainText(
-			"Terraform",
-		);
 		await expect(draftPage.card("s1").getByTestId("card-diff")).toContainText(
 			"Terraform",
 		);
@@ -69,14 +62,14 @@ test.describe("Draft editor", () => {
 	test("undoes edits and saves the restored text", async ({ draftPage }) => {
 		const original = (await draftPage.line(BULLET).textContent()) ?? "";
 		await draftPage.type(BULLET, " Terraform");
-		await expect(draftPage.card("s1")).toContainText("Edited");
+		await expect(draftPage.card("s1")).toContainText("Your edit");
 
 		await draftPage
 			.card("s1")
 			.getByRole("button", { name: "Undo my edits" })
 			.click();
 		await expect(draftPage.line(BULLET)).toHaveText(original);
-		await expect(draftPage.card("s1")).not.toContainText("Edited");
+		await expect(draftPage.card("s1")).toHaveCount(0);
 		await expect(draftPage.saveStatus).toHaveText("Saved", { timeout: 10_000 });
 	});
 
@@ -84,7 +77,8 @@ test.describe("Draft editor", () => {
 		page,
 		draftPage,
 	}) => {
-		await draftPage.line(SECOND_BULLET).click();
+		await draftPage.type(SECOND_BULLET, " again");
+		await draftPage.card("s2").getByRole("button").first().click();
 		await expect(
 			draftPage.card("s2").getByRole("button", { name: "Resolve" }),
 		).toBeVisible();
@@ -136,11 +130,9 @@ test.describe("Draft editor", () => {
 
 	test("counts resolved cards", async ({ page, draftPage }) => {
 		await expect(page.getByTestId("resolved-count")).toContainText("0/");
-		await draftPage.card("profile").getByRole("button").first().click();
-		await draftPage
-			.card("profile")
-			.getByRole("button", { name: "Resolve" })
-			.click();
+		await draftPage.type(BULLET, " Terraform");
+		await draftPage.card("s1").getByRole("button").first().click();
+		await draftPage.card("s1").getByRole("button", { name: "Resolve" }).click();
 		await expect(page.getByTestId("resolved-count")).toContainText("1/");
 	});
 
@@ -169,7 +161,7 @@ test.describe("Draft editor", () => {
 		await draftPage.replace(BULLET, "");
 		await draftPage.type(SECOND_BULLET, " again");
 		await expect(draftPage.saveStatus).toHaveText("Saved", { timeout: 10_000 });
-		await expect(draftPage.card("s1")).toContainText("Edited");
+		await expect(draftPage.card("s1")).toContainText("Your edit");
 	});
 
 	test("restores the line on Reject", async ({ draftPage }) => {
@@ -293,7 +285,7 @@ for (const width of [375, 1024]) {
 		}) => {
 			await draftPage.goto();
 			await expect(page.getByTestId("card-dot").first()).toBeVisible();
-			await draftPage.line(BULLET).click();
+			await draftPage.type(BULLET, " again");
 
 			const card = draftPage.card("s1");
 			await expect(card.getByRole("button", { name: "Resolve" })).toBeVisible();
@@ -322,7 +314,9 @@ for (const width of [375, 1024]) {
 			draftPage,
 		}) => {
 			await draftPage.goto();
-			await page.getByTestId("card-dot").nth(2).click();
+			await page
+				.locator('[data-testid="card-dot"][data-card-key="s2"]')
+				.click();
 			await expect(draftPage.cards).toHaveCount(1);
 			await expect(
 				draftPage.cards.first().getByRole("button", { name: "Resolve" }),

@@ -1,4 +1,6 @@
 import { For, Match, Show, Switch } from "solid-js";
+import { Button } from "@/components/ui/button";
+import { PROFILE_SLOT } from "@/hooks/useDraftEditor";
 import { type BulletRow, bulletDiff } from "@/lib/bulletDiff";
 import { listDiff, type WordOp, wordDiff } from "@/lib/wordDiff";
 import type { DraftContent, DraftProvenance } from "@/types/tailoring";
@@ -34,28 +36,38 @@ function Marked(props: { ops: WordOp[] }) {
 	);
 }
 
-function Row(props: { row: BulletRow }) {
+function Row(props: { row: BulletRow; onUndo?: (() => void) | undefined }) {
 	return (
-		<li class="rounded-md border border-border bg-surface px-3 py-2.5">
-			<span class="mr-2 text-xs font-medium text-muted">
-				{BULLET_LABEL[props.row.kind]}
-			</span>
-			<span
-				class="text-sm"
-				classList={{
-					"text-faint": props.row.kind === "same",
-					"text-destructive-strong line-through": props.row.kind === "removed",
-					"text-foreground":
-						props.row.kind !== "same" && props.row.kind !== "removed",
-				}}
-			>
-				<Show
-					when={props.row.kind === "rewritten" ? props.row : undefined}
-					fallback={props.row.text}
+		<li class="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
+			<div class="min-w-0 flex-1">
+				<span class="mr-2 text-xs font-medium text-muted">
+					{BULLET_LABEL[props.row.kind]}
+				</span>
+				<span
+					class="text-sm"
+					classList={{
+						"text-faint": props.row.kind === "same",
+						"text-destructive-strong line-through":
+							props.row.kind === "removed",
+						"text-foreground":
+							props.row.kind !== "same" && props.row.kind !== "removed",
+					}}
 				>
-					{(row) => <Marked ops={wordDiff(row().from, row().text)} />}
-				</Show>
-			</span>
+					<Show
+						when={props.row.kind === "rewritten" ? props.row : undefined}
+						fallback={props.row.text}
+					>
+						{(row) => <Marked ops={wordDiff(row().from, row().text)} />}
+					</Show>
+				</span>
+			</div>
+			<Show when={props.onUndo}>
+				{(undo) => (
+					<Button variant="ghost" size="sm" onClick={() => undo()()}>
+						Undo
+					</Button>
+				)}
+			</Show>
 		</li>
 	);
 }
@@ -64,6 +76,7 @@ export function ChangesDiff(props: {
 	base: DraftContent;
 	content: DraftContent;
 	provenance: DraftProvenance | null;
+	onUndo?: ((slotId: string, text: string) => void) | undefined;
 }) {
 	const label = (id: string) => {
 		const p = props.provenance?.positions.find((x) => x.positionId === id);
@@ -73,6 +86,9 @@ export function ChangesDiff(props: {
 		props.base.positions
 			.find((p) => p.positionId === id)
 			?.bullets.map((b) => b.text) ?? [];
+	const slotIdOf = (positionId: string, index: number) =>
+		props.provenance?.positions.find((x) => x.positionId === positionId)
+			?.bullets[index]?.slotId;
 	const skills = () => listDiff(props.base.skills, props.content.skills);
 	const profile = () =>
 		props.base.profile !== null && props.content.profile !== null
@@ -87,9 +103,22 @@ export function ChangesDiff(props: {
 						<h3 id="diff-profile" class="mb-2 text-sm font-semibold">
 							Profile
 						</h3>
-						<p class="rounded-md border border-border bg-surface px-3 py-2.5 text-sm text-foreground">
-							<Marked ops={ops()} />
-						</p>
+						<div class="flex items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
+							<p class="min-w-0 flex-1 text-sm text-foreground">
+								<Marked ops={ops()} />
+							</p>
+							<Show when={props.onUndo && props.base.profile}>
+								{(from) => (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => props.onUndo?.(PROFILE_SLOT, from())}
+									>
+										Undo
+									</Button>
+								)}
+							</Show>
+						</div>
 					</section>
 				)}
 			</Show>
@@ -130,7 +159,21 @@ export function ChangesDiff(props: {
 									p.bullets.map((b) => b.text),
 								)}
 							>
-								{(row) => <Row row={row} />}
+								{(row) => {
+									const index = () =>
+										p.bullets.findIndex((b) => b.text === row.text);
+									const slotId = () => slotIdOf(p.positionId, index());
+									return (
+										<Row
+											row={row}
+											onUndo={
+												row.kind === "rewritten" && props.onUndo && slotId()
+													? () => props.onUndo?.(slotId() as string, row.from)
+													: undefined
+											}
+										/>
+									);
+								}}
 							</For>
 						</ul>
 					</section>

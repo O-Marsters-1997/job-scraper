@@ -14,12 +14,7 @@ import { cardTops } from "@/lib/cardLayout";
 import { charsToSave, SPARSE_LAST_LINE } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
-import {
-	type DraftEditorState,
-	NOTES_CARD,
-	PROFILE_SLOT,
-	SKILLS_CARD,
-} from "../../hooks/useDraftEditor";
+import { type DraftEditorState, SKILLS_CARD } from "../../hooks/useDraftEditor";
 import type { SuggestionsState } from "../../hooks/useSuggestions";
 import type { LineFit } from "./DocPage";
 import { SuggestionCard } from "./SuggestionCard";
@@ -35,29 +30,16 @@ const anchorSelector = (key: string) =>
 type Tone = { dot: string; text: string };
 
 function headerOf(ed: DraftEditorState, key: string): Tone {
-	if (key === NOTES_CARD)
-		return {
-			dot: "bg-border-strong",
-			text: `${ed.notes().length} layout notes`,
-		};
 	if (key === SKILLS_CARD)
 		return {
 			dot: "bg-status-interview",
-			text: `${ed.gaps().length} asks nothing backs`,
+			text: `${ed.gaps().length} missing from your CV`,
 		};
-	const novel = ed.segments(key).filter((s) => s.novel).length;
-	if (key !== PROFILE_SLOT && ed.sources(key).length === 0)
-		return { dot: "bg-destructive", text: "Nothing backs this" };
 	if (ed.findingsFor(key).some((f) => f.severity === "block"))
 		return { dot: "bg-destructive", text: "Blocking issue" };
-	if (novel > 0)
-		return {
-			dot: "bg-status-interview",
-			text: `${novel} unbacked ${novel === 1 ? "word" : "words"}`,
-		};
-	return key === PROFILE_SLOT
-		? { dot: "bg-border-strong", text: "Profile, rewritten for this job" }
-		: { dot: "bg-status-offer", text: "Backed by your Achievement" };
+	return ed.edited(key)
+		? { dot: "bg-border-strong", text: "Your edit" }
+		: { dot: "bg-status-interview", text: "Short last line" };
 }
 
 const SEVERITY_DOT = {
@@ -79,20 +61,9 @@ function Card(props: {
 	// eslint-disable-next-line solid/reactivity -- pedantic: the editor object is never replaced
 	const ed = props.editor;
 	const key = () => props.cardKey;
-	const isSlot = () => key() !== NOTES_CARD && key() !== SKILLS_CARD;
+	const isSlot = () => key() !== SKILLS_CARD;
 	const resolved = () => ed.isResolved(key());
 	const header = () => headerOf(ed, key());
-	const novelWords = () =>
-		isSlot()
-			? [
-					...new Set(
-						ed
-							.segments(key())
-							.filter((s) => s.novel)
-							.map((s) => s.text),
-					),
-				]
-			: [];
 	const sparse = () =>
 		!!props.fit &&
 		props.fit.lines > 1 &&
@@ -126,9 +97,6 @@ function Card(props: {
 				<span class="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
 					{header().text}
 				</span>
-				<Show when={isSlot() && ed.edited(key())}>
-					<span class="text-2xs font-medium text-accent-text">Edited</span>
-				</Show>
 				<Show when={props.fit}>
 					{(fit) => (
 						<span
@@ -145,22 +113,9 @@ function Card(props: {
 
 			<Show when={props.active}>
 				<div class="flex flex-col gap-3 border-t border-border px-3.5 pt-3 pb-3.5 animate-in fade-in duration-200">
-					<Show when={key() === NOTES_CARD}>
-						<ul class="flex flex-col gap-2">
-							<For each={ed.notes()}>
-								{(note) => (
-									<li class="flex items-start gap-2 text-xs text-muted">
-										<span class="mt-1 size-1.5 shrink-0 rounded-full bg-border-strong" />
-										{note}
-									</li>
-								)}
-							</For>
-						</ul>
-					</Show>
-
 					<Show when={key() === SKILLS_CARD}>
 						<p class="text-xs text-muted">
-							The job asks for these and nothing in your CV backs them. Add one
+							The job asks for these and your CV never mentions them. Add one
 							only if it is true.
 						</p>
 						<ul class="flex flex-col gap-1.5">
@@ -192,42 +147,6 @@ function Card(props: {
 									</For>
 								</p>
 							</div>
-						</Show>
-						<Show when={key() !== PROFILE_SLOT}>
-							<div>
-								<p class="text-xs font-semibold text-muted">
-									{ed.sources(key()).length > 1
-										? "Your Achievements"
-										: "Your Achievement"}
-								</p>
-								<For
-									each={ed.sources(key())}
-									fallback={
-										<p class="mt-1 text-xs text-faint">
-											The cited Achievements no longer exist.
-										</p>
-									}
-								>
-									{(src) => (
-										<p class="mt-1 text-xs leading-relaxed text-muted">{src}</p>
-									)}
-								</For>
-							</div>
-						</Show>
-						<Show when={novelWords().length > 0}>
-							<p class="text-xs text-foreground" data-testid="card-novel">
-								Not in your Achievements:{" "}
-								<For each={novelWords()}>
-									{(w, i) => (
-										<>
-											<span class="underline decoration-status-interview decoration-wavy underline-offset-2">
-												{w}
-											</span>
-											{i() < novelWords().length - 1 ? ", " : ""}
-										</>
-									)}
-								</For>
-							</p>
 						</Show>
 						<For each={ed.findingsFor(key())}>
 							{(f) => (
@@ -292,6 +211,7 @@ function Card(props: {
 
 export function MarginCards(props: {
 	editor: DraftEditorState;
+	keys: string[];
 	suggestions: SuggestionsState;
 	measureLines: (slotId: string, text: string) => number;
 	stage: HTMLElement | undefined;
@@ -312,11 +232,9 @@ export function MarginCards(props: {
 		if (!rail || !stage) return;
 		const base = rail.getBoundingClientRect().top;
 		const paperTop = stage.getBoundingClientRect().top;
-		const keys = props.editor.cardKeys();
+		const keys = props.keys;
 		const anchor = (key: string) =>
-			key === NOTES_CARD
-				? undefined
-				: stage.querySelector(anchorSelector(key))?.getBoundingClientRect();
+			stage.querySelector(anchorSelector(key))?.getBoundingClientRect();
 		const desired = (key: string) => (anchor(key)?.top ?? paperTop) - base;
 		const active = props.active;
 		if (props.narrow) {
@@ -354,7 +272,7 @@ export function MarginCards(props: {
 			[
 				() => props.active,
 				() => props.narrow,
-				() => props.editor.cardKeys().join(),
+				() => props.keys.join(),
 				() => JSON.stringify(props.fits),
 				() => props.stage,
 			],
@@ -418,7 +336,7 @@ export function MarginCards(props: {
 					: "w-80 shrink-0 self-stretch",
 			)}
 		>
-			<For each={props.editor.cardKeys()}>
+			<For each={props.keys}>
 				{(key) => (
 					<Show
 						when={!props.narrow || props.active === key}

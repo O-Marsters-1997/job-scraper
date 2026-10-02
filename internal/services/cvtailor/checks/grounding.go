@@ -65,12 +65,14 @@ func groundSlot(s Slot, numberSource, termSource []string) []Finding {
 
 func groundSkills(d Draft) []Finding {
 	bank := normalise(strings.Join(d.Bank, " "))
+	baseText := normalise(strings.Join(d.BaseText, " "))
 	base := map[string]bool{}
 	for _, s := range d.BaseSkills {
 		base[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 	sourced := func(skill string) bool {
-		return base[strings.ToLower(strings.TrimSpace(skill))] || containsWord(bank, strings.ToLower(skill))
+		key := strings.ToLower(strings.TrimSpace(skill))
+		return base[key] || containsWord(bank, key) || containsWord(baseText, key)
 	}
 
 	var out []Finding
@@ -86,7 +88,7 @@ func groundSkills(d Draft) []Finding {
 		if !sourced(s) {
 			out = append(out, Finding{
 				Check: CheckSkills, Severity: Info,
-				Message: fmt.Sprintf("the job asks for %q; nothing in your CV or Bank supports it", s),
+				Message: fmt.Sprintf("the job asks for %q; your CV and Bank never mention it", s),
 			})
 		}
 	}

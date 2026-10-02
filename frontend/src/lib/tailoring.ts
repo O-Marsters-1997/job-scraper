@@ -56,7 +56,9 @@ export function reviewFindings(findings: DraftFinding[]): DraftFinding[] {
 }
 
 export function skillGaps(findings: DraftFinding[]): string[] {
-	return findings.filter(isSkillGap).map((f) => f.message);
+	return findings
+		.filter(isSkillGap)
+		.map((f) => /"([^"]+)"/.exec(f.message)?.[1] ?? f.message);
 }
 
 export function keptDraft<T extends { outcome: string | null }>(

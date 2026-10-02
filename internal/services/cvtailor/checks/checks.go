@@ -41,6 +41,8 @@ type Draft struct {
 	Bank       []string
 	BaseSkills []string
 	JobSkills  []string
+	// BaseText holds every line of the base CV: headings, slots, profile and skills.
+	BaseText []string
 	BasePages  int
 	// DraftPages of zero means the page count was not measured.
 	DraftPages int

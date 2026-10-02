@@ -65,6 +65,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	}
 	pl := plan{structure: ds}
 	found := 0
+	seen := map[string]bool{}
 	for _, p := range bank {
 		pp := planned{
 			Position: cvedit.Position{ID: p.ID, Employer: p.Employer, Title: p.Title},
@@ -73,6 +74,12 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		for _, a := range p.Achievements {
 			pl.bank = append(pl.bank, a.Text)
 			if confirmed[a.ID] {
+				found++
+				key := strings.ToLower(strings.Join(strings.Fields(a.Text), " "))
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
 				pp.Achievements = append(pp.Achievements, cvedit.Achievement{ID: a.ID, Text: a.Text})
 				pp.texts[a.ID] = a.Text
 			}
@@ -80,7 +87,6 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		if len(pp.Achievements) == 0 {
 			continue
 		}
-		found += len(pp.Achievements)
 		slots := slotsOf[p.ID]
 		if len(slots) == 0 {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
@@ -194,12 +200,30 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	return edits, names
 }
 
+func (pl plan) baseText() []string {
+	var out []string
+	for _, h := range pl.structure.Headings {
+		out = append(out, h.Text)
+	}
+	for _, s := range pl.structure.Slots {
+		out = append(out, s.Text)
+	}
+	if pl.structure.Profile != nil {
+		out = append(out, pl.structure.Profile.Text)
+	}
+	if pl.structure.Skills != nil {
+		out = append(out, pl.structure.Skills.Items...)
+	}
+	return out
+}
+
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
 	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
 	d.Contact = &checks.ContactInput{InBody: pl.structure.Contact.InBody, InHeaderFooter: pl.structure.Contact.InHeaderFooter}
 	if pl.structure.Skills != nil {
 		d.BaseSkills = pl.structure.Skills.Items
 	}
+	d.BaseText = pl.baseText()
 	if pl.structure.Profile != nil && edits.Profile != nil {
 		d.Profile = &checks.Slot{ID: pl.structure.Profile.ID, Text: *edits.Profile, BaseText: pl.structure.Profile.Text}
 	}

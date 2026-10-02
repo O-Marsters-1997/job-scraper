@@ -11,7 +11,11 @@ import { googleWriteHref } from "@/components/GoogleWriteConsent";
 import { Icon } from "@/components/Icon";
 import { PdfPreview } from "@/components/PdfPreview";
 import { Button } from "@/components/ui/button";
-import { maxCharsForFewerLines, pageFit } from "@/lib/docLayout";
+import {
+	maxCharsForFewerLines,
+	pageFit,
+	SPARSE_LAST_LINE,
+} from "@/lib/docLayout";
 import type { SaveStatus } from "@/lib/saveLoop";
 import { KeptDraftExistsError, keptDraft } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
@@ -240,6 +244,15 @@ export function DraftEditor(props: {
 		},
 		apply: ed.setText,
 	});
+	const cardKeys = () =>
+		ed.cardKeys((slotId) => {
+			const fit = metrics().fits[slotId];
+			return (
+				ed.edited(slotId) ||
+				!!suggestions.get(slotId) ||
+				(!!fit && fit.lines > 1 && fit.lastLineFill < SPARSE_LAST_LINE)
+			);
+		});
 	const activeSlot = () => {
 		const key = active();
 		return key && ed.slotIds.includes(key) ? key : undefined;
@@ -283,7 +296,6 @@ export function DraftEditor(props: {
 			return active();
 		},
 		text: ed.text,
-		segments: ed.segments,
 		label: ed.label,
 		diffFor: (slotId) => {
 			const sug = suggestions.get(slotId);
@@ -387,7 +399,8 @@ export function DraftEditor(props: {
 							class="font-mono text-xs whitespace-nowrap text-faint tabular-nums"
 							data-testid="resolved-count"
 						>
-							{ed.resolvedCount()}/{ed.cardKeys().length} resolved
+							{cardKeys().filter((k) => ed.isResolved(k)).length}/
+							{cardKeys().length} resolved
 						</span>
 						<Button
 							variant="ghost"
@@ -580,6 +593,7 @@ export function DraftEditor(props: {
 											base={c().base}
 											content={c().content}
 											provenance={props.draft.provenance}
+											onUndo={editable() ? ed.setText : undefined}
 										/>
 									</section>
 								)}
@@ -651,6 +665,7 @@ export function DraftEditor(props: {
 									<MarginCards
 										narrow
 										editor={ed}
+										keys={cardKeys()}
 										suggestions={suggestions}
 										measureLines={(id, text) => measureLines(id, text)}
 										stage={stage()}
@@ -666,6 +681,7 @@ export function DraftEditor(props: {
 								<MarginCards
 									narrow={false}
 									editor={ed}
+									keys={cardKeys()}
 									suggestions={suggestions}
 									measureLines={(id, text) => measureLines(id, text)}
 									stage={stage()}

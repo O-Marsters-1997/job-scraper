@@ -3,7 +3,6 @@ import { type Accessor, createSignal, onCleanup, onMount } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
-import { fontWarnings } from "@/lib/docFonts";
 import { blockText } from "@/lib/docLayout";
 import { markNovel } from "@/lib/markNovel";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
@@ -11,7 +10,6 @@ import { reviewFindings, skillGaps } from "@/lib/tailoring";
 import type { Draft, DraftLayout, Segment } from "@/types/tailoring";
 
 export const PROFILE_SLOT = "profile";
-export const NOTES_CARD = "notes";
 export const SKILLS_CARD = "skills";
 
 const SAVE_DELAY_MS = 1500;
@@ -138,20 +136,15 @@ export function createDraftEditor(
 
 	const googleAgrees = () => googleSaved() && !dirty() && !pageCountFinding();
 
-	const flagged = () => reviewFindings(draft().findings);
-	const notes = () => [
-		...(layout?.warnings ?? []),
-		...(layout ? fontWarnings(layout) : []),
-		...flagged()
-			.filter((f) => !f.slotId)
-			.map((f) => f.message),
-	];
+	const findingsOf = (slotId: string) =>
+		slotId === PROFILE_SLOT
+			? []
+			: reviewFindings(draft().findings).filter((f) => f.slotId === slotId);
 	const gaps = () => skillGaps(draft().findings);
 	const hasSkills = () =>
 		(layout?.blocks ?? []).some((b) => b.section === "skills");
-	const cardKeys = () => [
-		...(notes().length ? [NOTES_CARD] : []),
-		...slotIds,
+	const cardKeys = (hasCard: (slotId: string) => boolean) => [
+		...slotIds.filter((slotId) => hasCard(slotId) || findingsOf(slotId).length),
 		...(gaps().length && hasSkills() ? [SKILLS_CARD] : []),
 	];
 
@@ -173,14 +166,11 @@ export function createDraftEditor(
 		edited: (slotId: string) => text(slotId) !== original[slotId],
 		segments,
 		sources,
-		findingsFor: (slotId: string) =>
-			flagged().filter((f) => f.slotId === slotId),
-		notes,
+		findingsFor: findingsOf,
 		gaps,
 		cardKeys,
 		isResolved: (key: string) => resolved()[key] === true,
 		setResolved,
-		resolvedCount: () => cardKeys().filter((k) => resolved()[k]).length,
 		status,
 		retry: loop.retry,
 		flush: loop.flush,

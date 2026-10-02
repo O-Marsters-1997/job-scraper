@@ -25,7 +25,6 @@ import type {
 	LayoutBlock,
 	LayoutBorder,
 	LayoutRun,
-	Segment,
 } from "@/types/tailoring";
 
 const INK = "#000000";
@@ -48,7 +47,6 @@ export type PageEditor = {
 	showCounts: boolean;
 	active: string | undefined;
 	text: (slotId: string) => string;
-	segments: (slotId: string) => Segment[];
 	label: (slotId: string) => string;
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
@@ -184,21 +182,6 @@ function EditableLine(props: {
 					</span>
 				)}
 			</Show>
-			<span
-				aria-hidden="true"
-				class="pointer-events-none absolute inset-0 select-none"
-				style={{ color: "transparent" }}
-			>
-				<For each={props.editor.segments(props.slotId)}>
-					{(seg) => (
-						<Show when={seg.novel} fallback={seg.text}>
-							<span class="underline decoration-status-interview decoration-wavy decoration-[1.25px] underline-offset-[2.5px]">
-								{seg.text}
-							</span>
-						</Show>
-					)}
-				</For>
-			</span>
 			{/* biome-ignore lint/a11y/useSemanticElements: an <input> or <textarea> cannot reproduce the CV's own line wrapping, which contenteditable does */}
 			<span
 				ref={(e) => {
@@ -305,7 +288,7 @@ function Block(props: {
 						aria-hidden="true"
 						class="absolute"
 						style={{
-							left: `${props.block.indentFirstLine}pt`,
+							left: `${Math.min(props.block.indentFirstLine, Math.max(props.block.indentStart - bullet().size, 0))}pt`,
 							"font-size": bullet().size > 0 ? `${bullet().size}pt` : undefined,
 						}}
 					>
