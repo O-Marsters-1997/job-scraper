@@ -283,6 +283,14 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("collection scores for unknown jobs returns nothing", func(t *testing.T) {
+		f := newFixture(t)
+		got, err := f.Store.ListJobScoresForCollection(t.Context(), f.NewUser(), []string{missingID})
+		if err != nil || len(got) != 0 {
+			t.Errorf("ListJobScoresForCollection(missing) = %+v, %v, want nothing", got, err)
+		}
+	})
+
 	t.Run("clear score feedback deletes only that user's rows and counts them", func(t *testing.T) {
 		f := newFixture(t)
 		ctx := t.Context()

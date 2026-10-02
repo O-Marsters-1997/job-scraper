@@ -38,3 +38,9 @@ SELECT suitability_score::int AS score, breakdown, COALESCE(score_fingerprint, '
     COALESCE(score_model, '')::text AS score_model
 FROM job_scores
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id) AND suitability_score IS NOT NULL;
+
+-- name: ListJobScoresForCollection :many
+SELECT j.id, j.title, j.company_slug, js.suitability_score AS score, COALESCE(js.breakdown, '[]'::jsonb) AS breakdown
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)
+WHERE j.id = ANY(sqlc.arg(job_ids)::uuid[]);

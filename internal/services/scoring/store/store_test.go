@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
@@ -849,5 +850,31 @@ func TestGetJobScoreForFeedback(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("GetJobScoreForFeedback() (-want +got):\n%s", diff)
+	}
+}
+
+func TestListJobScoresForCollection(t *testing.T) {
+	st, pool := newStore(t)
+	userID, otherID := pgtest.InsertUser(t, pool), pgtest.InsertUser(t, pool)
+	scored := pgtest.InsertJob(t, pool, "Scored", "fp-1")
+	unscored := pgtest.InsertJob(t, pool, "Unscored", "fp-2")
+	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES
+		($1, $2, 64, '[{"key":"tech:go","label":"Go","stance":"nice","resolved":"yes","effect":"meets","overridden":false}]'),
+		($1, $3, 10, '[]')`, scored, userID, otherID)
+
+	got, err := st.ListJobScoresForCollection(t.Context(), userID, []string{scored, unscored, "00000000-0000-0000-0000-000000000000"})
+	if err != nil {
+		t.Fatalf("ListJobScoresForCollection() err = %v", err)
+	}
+	if _, err := st.ListJobScoresForCollection(t.Context(), userID, []string{"not-a-uuid"}); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("ListJobScoresForCollection(malformed id) err = %v, want Invalid", err)
+	}
+	score := 64
+	want := []dto.CollectionJobScore{
+		{JobID: scored, Title: "Scored", Company: "acme", Score: &score, Breakdown: []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
+		{JobID: unscored, Title: "Unscored", Company: "acme", Breakdown: []dto.ScoreRow{}},
+	}
+	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b dto.CollectionJobScore) bool { return a.Title < b.Title })); diff != "" {
+		t.Errorf("ListJobScoresForCollection() (-want +got):\n%s", diff)
 	}
 }

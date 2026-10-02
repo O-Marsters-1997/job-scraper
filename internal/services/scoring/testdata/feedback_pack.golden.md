@@ -1,6 +1,6 @@
 # Feedback Pack
 
-2 overall · 1 Job entries · 0 outdated omitted (--include-outdated)
+2 overall · 1 Job entries · 1 Collection entries · 0 outdated omitted (--include-outdated)
 
 ## How Suitability is computed
 
@@ -66,4 +66,16 @@ Job state sent to Jev:
   "description": "Build Go services."
 }
 ```
+
+## Collection entries
+
+### Ranking of 2 Jobs
+
+> The ranking is off.
+
+- Model: typesafe/jev-1.13
+- Filters: q=go, scored=true
+
+1. no score ·  — 
+2. 72 · Backend Engineer — acme · Go meets
 

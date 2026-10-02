@@ -145,6 +145,52 @@ func (q *Queries) InsertScoreFeedback(ctx context.Context, arg InsertScoreFeedba
 	return i, err
 }
 
+const listJobScoresForCollection = `-- name: ListJobScoresForCollection :many
+SELECT j.id, j.title, j.company_slug, js.suitability_score AS score, COALESCE(js.breakdown, '[]'::jsonb) AS breakdown
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+WHERE j.id = ANY($2::uuid[])
+`
+
+type ListJobScoresForCollectionParams struct {
+	UserID pgtype.UUID
+	JobIds []pgtype.UUID
+}
+
+type ListJobScoresForCollectionRow struct {
+	ID          pgtype.UUID
+	Title       string
+	CompanySlug string
+	Score       pgtype.Int4
+	Breakdown   []byte
+}
+
+func (q *Queries) ListJobScoresForCollection(ctx context.Context, arg ListJobScoresForCollectionParams) ([]ListJobScoresForCollectionRow, error) {
+	rows, err := q.db.Query(ctx, listJobScoresForCollection, arg.UserID, arg.JobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobScoresForCollectionRow
+	for rows.Next() {
+		var i ListJobScoresForCollectionRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.CompanySlug,
+			&i.Score,
+			&i.Breakdown,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScoreFeedback = `-- name: ListScoreFeedback :many
 SELECT sf.id, sf.user_id, sf.job_id, sf.kind, sf.direction, sf.reason, sf.picks, sf.model, sf.snapshot, sf.created_at, d.picks_changed, d.model_changed
 FROM score_feedback sf

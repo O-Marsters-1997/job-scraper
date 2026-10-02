@@ -1,6 +1,6 @@
 # Feedback Pack
 
-2 overall · 1 Job entries
+2 overall · 1 Job entries · 0 Collection entries
 
 ## How Suitability is computed
 
@@ -65,3 +65,6 @@ Job state sent to Jev:
 }
 ```
 
+## Collection entries
+
+(none)
