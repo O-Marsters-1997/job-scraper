@@ -57,7 +57,7 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 	}
 
 	slotAt := baseSlotsByStart(pl, edits)
-	out := dto.DraftLayout{Page: doc.Page, Blocks: make([]dto.LayoutBlock, len(doc.Blocks)), Warnings: []string{}}
+	out := dto.DraftLayout{Page: doc.Page, Blocks: make([]dto.LayoutBlock, len(doc.Blocks))}
 	for i, b := range doc.Blocks {
 		b.SlotID = slotAt[b.StartIndex]
 		if sk := ds.Skills; sk != nil && b.StartIndex >= sk.StartIndex && b.StartIndex < sk.EndIndex {

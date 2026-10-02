@@ -179,9 +179,8 @@ type DraftSlotsInput struct {
 // DraftLayout is a Draft Doc's single-column page geometry and styled
 // paragraphs, in pt, for rendering at true size.
 type DraftLayout struct {
-	Page     LayoutPage    `json:"page"`
-	Blocks   []LayoutBlock `json:"blocks"`
-	Warnings []string      `json:"warnings"`
+	Page   LayoutPage    `json:"page"`
+	Blocks []LayoutBlock `json:"blocks"`
 }
 
 type LayoutPage struct {

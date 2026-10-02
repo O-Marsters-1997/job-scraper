@@ -1,5 +1,3 @@
-import type { DraftLayout } from "@/types/tailoring";
-
 export type DocFont = { css: string; ratio: number; known: boolean };
 
 const ARIMO = { css: "Arimo, Arial, sans-serif", ratio: 1.1499 };
@@ -26,18 +24,4 @@ export function resolveFont(name: string): DocFont {
 	if (known) return { ...known, known: true };
 	const serif = SERIF_HINT.test(name) && !SANS_HINT.test(name);
 	return { ...(serif ? TINOS : ARIMO), known: false };
-}
-
-function unknownFonts(layout: DraftLayout): string[] {
-	const names = new Set<string>();
-	for (const b of layout.blocks)
-		for (const r of b.runs)
-			if (r.font && !resolveFont(r.font).known) names.add(r.font);
-	return [...names].sort();
-}
-
-export function fontWarnings(layout: DraftLayout): string[] {
-	return unknownFonts(layout).map(
-		(n) => `${n} is not installed here, so line breaks may differ.`,
-	);
 }

@@ -380,7 +380,6 @@ export function getDraftLayout(): DraftLayout {
 			marginLeft: 54,
 			marginRight: 54,
 		},
-		warnings: [],
 		blocks: [
 			mockBlock({
 				align: "center",

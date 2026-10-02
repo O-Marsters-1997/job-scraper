@@ -142,7 +142,6 @@ export const draftLayoutSchema = z.object({
 		marginRight: z.number(),
 	}),
 	blocks: list(layoutBlockSchema),
-	warnings: list(z.string()),
 });
 
 export const draftRefSchema = z.object({ id: z.string() });
