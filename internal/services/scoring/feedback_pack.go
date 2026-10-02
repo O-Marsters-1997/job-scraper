@@ -48,7 +48,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 	} else {
 		sb.WriteString("| Option | Stance | Question |\n|---|---|---|\n")
 		for _, p := range picks {
-			fmt.Fprintf(&sb, "| %s | %s | %s |\n", p.Label, p.Stance, p.Question)
+			fmt.Fprintf(&sb, "| %s | %s | %s |\n", cell(p.Label), p.Stance, cell(p.Question))
 		}
 		sb.WriteString("\n")
 	}
@@ -72,3 +72,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick) string {
 	}
 	return sb.String()
 }
+
+var cellEscaper = strings.NewReplacer("|", `\|`, "\n", " ")
+
+func cell(s string) string { return cellEscaper.Replace(s) }
