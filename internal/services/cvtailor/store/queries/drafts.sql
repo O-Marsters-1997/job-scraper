@@ -78,3 +78,6 @@ WHERE id = sqlc.arg(id)::uuid AND attempts = sqlc.arg(attempts)::int AND status 
 -- name: SetDraftEdits :execrows
 UPDATE tailored_cvs SET edit_set = sqlc.arg(edit_set)::jsonb, findings = sqlc.arg(findings)::jsonb
 WHERE id = sqlc.arg(id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
+
+-- name: GetJobDescription :one
+SELECT description FROM jobs WHERE id = $1;

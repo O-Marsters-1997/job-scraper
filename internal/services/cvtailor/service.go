@@ -37,6 +37,7 @@ type Store interface {
 	SetDraftDoc(ctx context.Context, claim dto.DraftClaim, docID string) error
 	CompleteDraft(ctx context.Context, claim dto.DraftClaim, res dto.DraftResult) error
 	FailDraft(ctx context.Context, claim dto.DraftClaim, failure dto.DraftFailure) error
+	JobDescription(ctx context.Context, jobID string) (string, error)
 }
 
 type Service struct {

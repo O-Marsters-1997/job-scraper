@@ -36,6 +36,10 @@ export function orderSuggestions(
 	);
 }
 
+export function canExplain(s: Suggestion): boolean {
+	return s.state !== "fit";
+}
+
 export function moveSuggestion(
 	ordered: Suggestion[],
 	id: string,

@@ -5,6 +5,7 @@ import type {
 	DraftLayout,
 	DraftProvenance,
 	DraftRef,
+	Explanation,
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
@@ -58,8 +59,8 @@ export function getSuggestions(): Suggestion[] {
 			positionId: p.id,
 			text: a.text,
 			score: scores[i] ?? 0.1,
-			state: "fit",
 			preselected: i < slots,
+			state: i === 2 ? "unclear" : i > 2 ? "low" : "fit",
 		}));
 	});
 }
@@ -425,4 +426,13 @@ export async function streamSuggestion(
 	}
 	signal.throwIfAborted();
 	return { text, findings: [] };
+}
+
+export async function explainAchievement(
+	_achievementId: string,
+): Promise<Explanation> {
+	await new Promise((resolve) => setTimeout(resolve, MOCK_WORD_MS * 10));
+	return {
+		text: "The job asks for on-call ownership; this bullet doesn't show it.",
+	};
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import type { CVHeading, DraftFinding, Suggestion } from "../types/tailoring";
 import {
 	allConfirmed,
+	canExplain,
 	isSettled,
 	keptDraft,
 	moveSuggestion,
@@ -41,13 +42,17 @@ assert.ok(
 	"an untouched heading keeps its match",
 );
 
-const suggestion = (id: string, preselected: boolean): Suggestion => ({
+const suggestion = (
+	id: string,
+	preselected: boolean,
+	state: Suggestion["state"] = "fit",
+): Suggestion => ({
 	achievementId: id,
 	positionId: "p1",
 	text: id,
 	score: 0.5,
-	state: "fit",
 	preselected,
+	state,
 });
 
 const picked = selectedAchievementIds(
@@ -120,4 +125,14 @@ assert.ok(
 assert.ok(
 	keptDraft([{ outcome: "discarded" }]) === undefined,
 	"a discarded draft is not kept",
+);
+
+assert.ok(!canExplain(suggestion("a", true)), "a bullet that fits has no Why?");
+assert.ok(
+	canExplain(suggestion("a", true, "low")),
+	"a low bullet can be explained",
+);
+assert.ok(
+	canExplain(suggestion("a", true, "unclear")),
+	"an unclear bullet can be explained",
 );

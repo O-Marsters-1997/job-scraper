@@ -5,14 +5,75 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
+	canExplain,
 	moveSuggestion,
 	orderSuggestions,
 	selectedAchievementIds,
 } from "@/lib/tailoring";
 import { MissingAiKeyError } from "../../../api/tailoring";
 import { useExperience } from "../../../hooks/useExperience";
-import { type CVRef, useSuggestions } from "../../../hooks/useTailoring";
+import {
+	type CVRef,
+	useExplainAchievement,
+	useSuggestions,
+} from "../../../hooks/useTailoring";
 import type { Suggestion } from "../../../types/tailoring";
+
+function MissingKeyPrompt() {
+	return (
+		<Card class="block p-5">
+			<p class="text-sm text-foreground">
+				Ranking Achievements against this job needs an OpenRouter key.{" "}
+				<Link to="/settings/ai" class="text-accent-text underline">
+					Add one in Settings, AI
+				</Link>
+				, which is also used to tailor your CV.
+			</p>
+		</Card>
+	);
+}
+
+function ExplainWhy(props: { jobId: () => string; achievementId: string }) {
+	const explain = useExplainAchievement(() => props.jobId());
+	return (
+		<div class="mt-1 text-xs">
+			<Show
+				when={explain.data}
+				fallback={
+					<button
+						type="button"
+						class="text-accent-text underline disabled:opacity-50"
+						disabled={explain.isPending}
+						onClick={() => explain.mutate(props.achievementId)}
+					>
+						{explain.isPending ? "Thinking" : "Why?"}
+					</button>
+				}
+			>
+				{(e) => (
+					<p class="text-muted">
+						<span class="font-medium">A guess, not Jev's reasoning:</span>{" "}
+						{e().text}
+					</p>
+				)}
+			</Show>
+			<Show when={explain.error}>
+				{(err) => (
+					<Show
+						when={err() instanceof MissingAiKeyError}
+						fallback={
+							<p role="alert" class="text-danger">
+								Could not explain this bullet. Try again.
+							</p>
+						}
+					>
+						<MissingKeyPrompt />
+					</Show>
+				)}
+			</Show>
+		</div>
+	);
+}
 
 export function AchievementsStep(props: {
 	jobId: () => string;
@@ -38,17 +99,7 @@ export function AchievementsStep(props: {
 	return (
 		<Show
 			when={!(suggestions.error instanceof MissingAiKeyError)}
-			fallback={
-				<Card class="block p-5">
-					<p class="text-sm text-foreground">
-						Ranking Achievements against this job needs an OpenRouter key.{" "}
-						<Link to="/settings/ai" class="text-accent-text underline">
-							Add one in Settings, AI
-						</Link>
-						, which is also used to tailor your CV.
-					</p>
-				</Card>
-			}
+			fallback={<MissingKeyPrompt />}
 		>
 			<QueryBoundary query={suggestions} fallbackRows={4}>
 				{(data) => {
@@ -129,14 +180,20 @@ export function AchievementsStep(props: {
 																	}))
 																}
 															/>
-															<span class="flex-1 text-foreground">
-																{s.text}
-															</span>
-															<Show when={s.state !== "fit"}>
-																<Badge variant="outline">
-																	{s.state === "low" ? "Low fit" : "Unclear"}
-																</Badge>
-															</Show>
+															<div class="flex-1">
+																<span class="text-foreground">{s.text}</span>
+																<Show when={s.state !== "fit"}>
+																	<Badge variant="outline">
+																		{s.state === "low" ? "Low fit" : "Unclear"}
+																	</Badge>
+																</Show>
+																<Show when={canExplain(s)}>
+																	<ExplainWhy
+																		jobId={props.jobId}
+																		achievementId={s.achievementId}
+																	/>
+																</Show>
+															</div>
 															<span class="font-mono text-xs tabular-nums text-faint">
 																{Math.round(s.score * 100)}
 															</span>

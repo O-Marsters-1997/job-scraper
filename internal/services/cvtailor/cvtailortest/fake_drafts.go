@@ -254,3 +254,13 @@ func (f *FakeStore) FailKeep(_ context.Context, claim dto.DraftClaim, failure dt
 	}
 	return nil
 }
+
+func (f *FakeStore) JobDescription(_ context.Context, jobID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	job, ok := f.jobs[jobID]
+	if !ok {
+		return "", apperr.NotFound("job not found")
+	}
+	return job.Description, nil
+}
