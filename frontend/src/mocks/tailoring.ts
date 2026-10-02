@@ -5,6 +5,7 @@ import type {
 	DraftLayout,
 	DraftProvenance,
 	DraftRef,
+	ExperienceMatch,
 	Explanation,
 	HeadingMapping,
 	LayoutBlock,
@@ -48,6 +49,10 @@ export function saveHeadings(
 ): HeadingMapping[] {
 	savedHeadings.set(`${docId}/${tabId}`, mappings);
 	return mappings;
+}
+
+export function getExperienceMatch(): ExperienceMatch {
+	return { score: 0.34 };
 }
 
 export function getSuggestions(): Suggestion[] {

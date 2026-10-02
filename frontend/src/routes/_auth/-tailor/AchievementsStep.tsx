@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, For, type Setter, Show } from "solid-js";
+import { ExperienceMatch } from "@/components/jobs/ExperienceMatch";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,7 @@ export function AchievementsStep(props: {
 						isSelected(s) && items.filter(isSelected).length === 1;
 					return (
 						<div class="space-y-4">
+							<ExperienceMatch jobId={props.jobId()} />
 							<Show
 								when={grouped().length > 0}
 								fallback={

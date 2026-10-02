@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job } from "@/types/job";
+import { ExperienceMatch } from "./ExperienceMatch";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
@@ -16,6 +17,7 @@ export function SuitabilityPanel(props: { job: Job }) {
 					size="lg"
 				/>
 				<ScoreBreakdown job={props.job} />
+				<ExperienceMatch jobId={props.job.ID} />
 			</CardContent>
 		</Card>
 	);

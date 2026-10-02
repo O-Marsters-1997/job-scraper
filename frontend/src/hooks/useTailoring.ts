@@ -7,6 +7,7 @@ import {
 	explainAchievement,
 	fetchDraft,
 	fetchDraftLayout,
+	fetchExperienceMatch,
 	fetchHeadings,
 	fetchJobDrafts,
 	fetchSuggestions,
@@ -54,6 +55,15 @@ export function useSuggestions(
 			staleTime: 5 * 60 * 1000,
 		};
 	});
+}
+
+export function useExperienceMatch(jobId: Accessor<string>) {
+	return createQuery(() => ({
+		queryKey: keys.tailoring.experienceMatch(jobId()),
+		queryFn: () => fetchExperienceMatch(jobId()),
+		retry: false,
+		staleTime: 5 * 60 * 1000,
+	}));
 }
 
 export function useExplainAchievement(jobId: Accessor<string>) {

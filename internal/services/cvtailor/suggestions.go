@@ -12,6 +12,7 @@ import (
 const (
 	defaultSlotCount = 3
 	lowFitLean       = -0.2
+	matchTopN        = 3
 )
 
 type Asker interface {
@@ -22,17 +23,22 @@ func achievementQuestion(text string) string {
 	return "Would this job value a candidate who: " + text
 }
 
-func (s *Service) Suggestions(ctx context.Context, userID string, q dto.SuggestionsQuery) ([]dto.Suggestion, error) {
-	positions, err := s.store.ListPositions(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
+func bankQuestions(positions []dto.Position) []string {
 	var questions []string
 	for _, p := range positions {
 		for _, a := range p.Achievements {
 			questions = append(questions, achievementQuestion(a.Text))
 		}
 	}
+	return questions
+}
+
+func (s *Service) Suggestions(ctx context.Context, userID string, q dto.SuggestionsQuery) ([]dto.Suggestion, error) {
+	positions, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	questions := bankQuestions(positions)
 	if len(questions) == 0 {
 		return []dto.Suggestion{}, nil
 	}
@@ -97,4 +103,35 @@ func suggestionState(lean float64) dto.SuggestionState {
 	default:
 		return dto.SuggestionUnclear
 	}
+}
+
+func (s *Service) ExperienceMatch(ctx context.Context, userID string, q dto.ExperienceMatchQuery) (dto.ExperienceMatch, error) {
+	positions, err := s.store.ListPositions(ctx, userID)
+	if err != nil {
+		return dto.ExperienceMatch{}, err
+	}
+	questions := bankQuestions(positions)
+	if len(questions) == 0 {
+		return dto.ExperienceMatch{}, nil
+	}
+	answers, err := s.asker.Ask(ctx, userID, q.JobID, questions)
+	if err != nil {
+		return dto.ExperienceMatch{}, err
+	}
+	score := topLeanMean(questions, answers)
+	return dto.ExperienceMatch{Score: &score}, nil
+}
+
+func topLeanMean(questions []string, answers map[string]dto.Answer) float64 {
+	leans := make([]float64, len(questions))
+	for i, q := range questions {
+		leans[i] = answers[q].PYes - answers[q].PNo
+	}
+	slices.SortFunc(leans, func(a, b float64) int { return cmp.Compare(b, a) })
+	top := leans[:min(matchTopN, len(leans))]
+	var sum float64
+	for _, l := range top {
+		sum += l
+	}
+	return sum / float64(len(top))
 }
