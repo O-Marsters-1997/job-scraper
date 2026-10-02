@@ -16,6 +16,7 @@ type SourceTarget struct {
 	RunStatus            string
 	RunID                string
 	LastRunAt            *time.Time
+	LastSucceededAt      *time.Time
 	LastRunError         string
 	UpdatedAt            time.Time
 }

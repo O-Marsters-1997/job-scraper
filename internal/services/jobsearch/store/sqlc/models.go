@@ -350,6 +350,7 @@ type SourceTarget struct {
 	RunStatus            string
 	RunID                pgtype.UUID
 	LastRunAt            pgtype.Timestamptz
+	LastSucceededAt      pgtype.Timestamptz
 	LastRunError         string
 	CreatedAt            pgtype.Timestamptz
 	UpdatedAt            pgtype.Timestamptz

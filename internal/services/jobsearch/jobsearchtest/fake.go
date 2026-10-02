@@ -783,6 +783,9 @@ func (f *FakeStore) TransitionSourceTargetRun(_ context.Context, id, runID, stat
 	t.RunStatus, t.LastRunError = status, runError
 	now := time.Now()
 	t.LastRunAt = &now
+	if status == "succeeded" {
+		t.LastSucceededAt = &now
+	}
 	f.sourceTargets[id] = t
 	return t, nil
 }

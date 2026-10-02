@@ -3,6 +3,7 @@ package linkedin_test
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -12,11 +13,11 @@ import (
 )
 
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, linkedin.New("", nil))
+	sourcetest.RunSnapshotTests(t, linkedin.New("", nil, ""))
 }
 
 func FuzzParse(f *testing.F) {
-	sourcetest.FuzzSnapshots(f, linkedin.New("", nil))
+	sourcetest.FuzzSnapshots(f, linkedin.New("", nil, ""))
 }
 
 func TestFetchPage_SearchQuery(t *testing.T) {
@@ -141,7 +142,7 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := linkedin.New(tt.keywords, tt.filters)
+			src := linkedin.New(tt.keywords, tt.filters, "")
 			recorder := sourcetest.Respond("<html></html>")
 			src.Client().Transport = recorder
 			if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
@@ -169,7 +170,7 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
 	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
-	src := linkedin.New("", nil)
+	src := linkedin.New("", nil, "")
 	recorder := sourcetest.Respond(string(html))
 	src.Client().Transport = recorder
 
@@ -185,5 +186,51 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	wantURL := "https://www.linkedin.com/jobs/view/4335312853"
 	if job.URL != wantURL {
 		t.Errorf("Job.URL = %q, want %q", job.URL, wantURL)
+	}
+}
+
+func TestRecency(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	ago := func(d time.Duration) *time.Time {
+		at := now.Add(-d)
+		return &at
+	}
+	tests := []struct {
+		name       string
+		configured string
+		last       *time.Time
+		want       string
+	}{
+		{"no previous success keeps stored recency", "r604800", nil, ""},
+		{"two days ago adds the margin", "r604800", ago(48 * time.Hour), "r176400"},
+		{"gap longer than the Target recency keeps stored recency", "r86400", ago(72 * time.Hour), ""},
+		{"no configured recency still narrows", "", ago(48 * time.Hour), "r176400"},
+		{"just ran still keeps the margin", "r604800", ago(0), "r3600"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := linkedin.Recency(tt.configured, tt.last, now); got != tt.want {
+				t.Errorf("Recency(%q) = %q, want %q", tt.configured, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFetchPage_NarrowedRecencyOverridesFilter(t *testing.T) {
+	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
+	t.Setenv("BRIGHTDATA_CA_CERT", "")
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+	filters := map[string]string{"recency": "r604800"}
+	src := linkedin.New("go", filters, "r176400")
+	recorder := sourcetest.Respond("<html></html>")
+	src.Client().Transport = recorder
+	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := recorder.Last.URL.Query().Get("f_TPR"); got != "r176400" {
+		t.Errorf("f_TPR = %q, want r176400", got)
+	}
+	if filters["recency"] != "r604800" {
+		t.Errorf("stored recency = %q, want r604800", filters["recency"])
 	}
 }
