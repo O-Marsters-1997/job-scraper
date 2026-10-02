@@ -6,6 +6,7 @@ import { CompaniesPage } from "../pages/companies.page";
 import { DraftPage } from "../pages/draft.page";
 import { ExperiencePage } from "../pages/experience.page";
 import { InsightsPage } from "../pages/insights.page";
+import { JobDetailPage } from "../pages/job-detail.page";
 import { JobsPage } from "../pages/jobs.page";
 import { LoginPage } from "../pages/login.page";
 import { OverviewPage } from "../pages/overview.page";
@@ -15,6 +16,7 @@ import { StatusesPage } from "../pages/statuses.page";
 type Fixtures = {
 	loginPage: LoginPage;
 	jobsPage: JobsPage;
+	jobDetailPage: JobDetailPage;
 	companiesPage: CompaniesPage;
 	draftPage: DraftPage;
 	overviewPage: OverviewPage;
@@ -33,6 +35,9 @@ export const test = base.extend<Fixtures>({
 	},
 	jobsPage: async ({ page }, use) => {
 		await use(new JobsPage(page));
+	},
+	jobDetailPage: async ({ page }, use) => {
+		await use(new JobDetailPage(page));
 	},
 	companiesPage: async ({ page }, use) => {
 		await use(new CompaniesPage(page));

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { JobActionBar } from "@/components/jobs/JobActionBar";
 import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
@@ -55,7 +56,7 @@ function JobDetailPage() {
 			}
 		>
 			{(j) => (
-				<div class="px-7 py-6 pb-16">
+				<div class="px-4 py-6 pb-24 md:px-7 md:pb-16">
 					<JobHeader
 						job={j()}
 						app={app()}
@@ -64,7 +65,7 @@ function JobDetailPage() {
 					/>
 
 					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
-						<Card>
+						<Card class="max-md:order-2">
 							<CardHeader>
 								<CardTitle>Description</CardTitle>
 							</CardHeader>
@@ -90,11 +91,13 @@ function JobDetailPage() {
 							</CardContent>
 						</Card>
 
-						<div class="sticky top-0 flex flex-col gap-3">
-							<JobFactsCard job={j()} />
+						<div class="sticky top-0 flex flex-col gap-3 max-md:contents">
+							<div class="max-md:order-3">
+								<JobFactsCard job={j()} />
+							</div>
 
 							<Show when={(j().Skills?.length ?? 0) > 0}>
-								<Card>
+								<Card class="max-md:order-3">
 									<CardHeader class="pb-2">
 										<CardTitle>Skills & technologies</CardTitle>
 									</CardHeader>
@@ -112,16 +115,33 @@ function JobDetailPage() {
 								</Card>
 							</Show>
 
-							<SuitabilityPanel job={j()} />
+							<div class="max-md:order-1">
+								<SuitabilityPanel job={j()} />
+							</div>
 
-							<JobDrafts jobId={params().id} />
+							<div id="job-drafts" class="max-md:order-4">
+								<JobDrafts jobId={params().id} />
+							</div>
 
-							<ApplicationCard
-								app={app()}
-								onTrack={() => track.openTrack(params().id)}
-							/>
+							<div class="max-md:order-4">
+								<ApplicationCard
+									app={app()}
+									onTrack={() => track.openTrack(params().id)}
+								/>
+							</div>
 						</div>
 					</div>
+
+					<JobActionBar
+						job={j()}
+						app={app()}
+						onCv={() =>
+							document
+								.getElementById("job-drafts")
+								?.scrollIntoView({ behavior: "smooth" })
+						}
+						onTrack={() => track.openTrack(params().id)}
+					/>
 
 					<TrackApplicationDialog
 						open={track.modalOpen()}
