@@ -96,6 +96,7 @@ export class PhoneDraftPage {
 	readonly undo: Locator;
 	readonly keep: Locator;
 	readonly kept: Locator;
+	readonly download: Locator;
 
 	constructor(readonly page: Page) {
 		this.status = page.getByText("Tailoring…");
@@ -104,6 +105,7 @@ export class PhoneDraftPage {
 		this.undo = page.getByRole("button", { name: "Undo" });
 		this.keep = page.getByRole("button", { name: "Keep", exact: true });
 		this.kept = page.getByText("Kept", { exact: true });
+		this.download = page.getByRole("button", { name: "Download" });
 	}
 
 	async goto(id: string) {
