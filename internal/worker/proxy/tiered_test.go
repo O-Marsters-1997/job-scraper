@@ -1,9 +1,12 @@
 package proxy_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -201,6 +204,39 @@ func TestTieredFetcher(t *testing.T) {
 			t.Fatalf("residential=%d unlocker=%d, want 1/0", residential.hits(), unlocker.hits())
 		}
 	})
+}
+
+func TestTieredFetcherLogsRotations(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	residential := newFakeProxy(t, status(429, ""))
+	unlocker := newFakeProxy(t, status(200, ""))
+	resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+
+	var counts []float64
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var rec map[string]any
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			t.Fatal(err)
+		}
+		if rec["msg"] != "residential session rotated" {
+			continue
+		}
+		if rec["source"] != t.Name() || rec["reason"] != "blocked" || rec["status"] != float64(429) {
+			t.Errorf("rotation log = %v, want source, reason blocked and status 429", rec)
+		}
+		counts = append(counts, rec["count"].(float64))
+	}
+	if len(counts) != 3 || counts[0] != 1 || counts[2] != 3 {
+		t.Errorf("rotation counts = %v, want 1..3", counts)
+	}
 }
 
 func TestValidateResidential(t *testing.T) {
