@@ -4,11 +4,13 @@ export class JobDetailPage {
 	readonly actionBar: Locator;
 	readonly applied: Locator;
 	readonly dialog: Locator;
+	readonly cvButton: Locator;
 
 	constructor(private readonly page: Page) {
 		this.actionBar = page.locator("div.fixed.bottom-0");
 		this.applied = this.actionBar.getByRole("button", { name: "I applied" });
 		this.dialog = page.getByRole("dialog");
+		this.cvButton = this.actionBar.getByRole("button", { name: "CV" });
 	}
 
 	async goto(jobId: string) {
@@ -19,6 +21,10 @@ export class JobDetailPage {
 	// The dev-only router devtools button floats over the bar's right edge.
 	async tapApplied() {
 		await this.applied.dispatchEvent("click");
+	}
+
+	async openCvSheet() {
+		await this.cvButton.dispatchEvent("click");
 	}
 
 	async hasHorizontalScroll() {
