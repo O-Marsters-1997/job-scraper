@@ -1,6 +1,7 @@
 package cvtailor_test
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -153,6 +154,21 @@ func TestCreateDraft(t *testing.T) {
 		}
 		if diff := cmp.Diff(want, e.store.BulletLabels()); diff != "" {
 			t.Errorf("recorded labels mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("still queues the Draft when Jev cannot answer", func(t *testing.T) {
+		e := newDraftEnv(t)
+		e.asker.err = errors.New("jev down")
+
+		if _, err := e.svc.CreateDraft(t.Context(), userID, e.input); err != nil {
+			t.Fatalf("CreateDraft() error = %v", err)
+		}
+
+		for _, l := range e.store.BulletLabels() {
+			if l.Answer != nil {
+				t.Errorf("label %+v has an answer, want none", l)
+			}
 		}
 	})
 

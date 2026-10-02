@@ -187,6 +187,7 @@ CREATE TABLE preference_labels (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX preference_labels_user_job_idx ON preference_labels (user_id, job_id);
+CREATE INDEX preference_labels_draft_idx ON preference_labels (draft_id);
 
 CREATE TABLE IF NOT EXISTS job_scores (
     id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

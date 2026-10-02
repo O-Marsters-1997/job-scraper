@@ -2,12 +2,14 @@ package cvtailor
 
 import (
 	"context"
+	"log/slog"
 	"slices"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
-func (s *Service) bulletLabels(ctx context.Context, userID string, in dto.DraftInput, positions []dto.Position) ([]dto.BulletLabel, error) {
+func (s *Service) bulletLabels(ctx context.Context, userID string, in dto.DraftInput, positions []dto.Position) []dto.BulletLabel {
 	var questions []string
 	for _, p := range positions {
 		for _, a := range p.Achievements {
@@ -16,11 +18,11 @@ func (s *Service) bulletLabels(ctx context.Context, userID string, in dto.DraftI
 	}
 	answers, err := s.asker.Ask(ctx, userID, in.JobID, questions)
 	if err != nil {
-		return nil, err
+		slog.WarnContext(ctx, "bullet labels recorded without Jev answers", slog.Any(logger.KeyErr, err))
 	}
 	slots, err := s.slotCounts(ctx, userID, dto.SuggestionsQuery{JobID: in.JobID, DocID: in.DocID, TabID: in.TabID}, positions)
 	if err != nil {
-		return nil, err
+		slog.WarnContext(ctx, "bullet labels recorded with default slot counts", slog.Any(logger.KeyErr, err))
 	}
 	suggestions := rankSuggestions(positions, answers, slots)
 	labels := make([]dto.BulletLabel, len(suggestions))
@@ -32,5 +34,5 @@ func (s *Service) bulletLabels(ctx context.Context, userID string, in dto.DraftI
 			labels[i].Answer = &ans
 		}
 	}
-	return labels, nil
+	return labels
 }

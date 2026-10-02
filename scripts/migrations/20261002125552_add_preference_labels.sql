@@ -16,6 +16,7 @@ CREATE TABLE preference_labels (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX preference_labels_user_job_idx ON preference_labels (user_id, job_id);
+CREATE INDEX preference_labels_draft_idx ON preference_labels (draft_id);
 
 -- +goose Down
 DROP TABLE preference_labels;
