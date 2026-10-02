@@ -4,15 +4,30 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/ollymarsters/job-scraper/internal/data"
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
+
+// Fixture is a store under test plus a way to mint users the store accepts:
+// the real one needs a users row for each user_id (a foreign key).
+type Fixture struct {
+	Store   scoring.Store
+	NewUser func() string
+}
 
 // RunStoreContract proves newStore's scoring.Store behaves the same whether
 // it's the fake or the real store (ADR 0012). Cases needing a real foreign
 // key, exact effect ordering or precise timing stay in store_test.go.
-func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
+func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 	t.Helper()
+
+	newStore := func(t *testing.T) scoring.Store {
+		t.Helper()
+		return newFixture(t).Store
+	}
 
 	t.Run("claim on an empty queue returns not found", func(t *testing.T) {
 		st := newStore(t)
@@ -105,6 +120,51 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) scoring.Store) {
 		if state.OutboxPending != 0 || state.BoardsOverdue != 0 || state.BoardsFailing != 0 ||
 			state.SourceTargetsFailed != 0 || len(state.HarvestAge) != 0 {
 			t.Errorf("OpsState(...) = %+v, want no pending effects, overdue or failing boards, failed targets or harvests", state)
+		}
+	})
+
+	t.Run("score feedback lists newest first within the limit", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user := f.NewUser()
+		for _, reason := range []string{"first", "second", "third"} {
+			entry := dto.ScoreFeedback{Kind: "overall", Reason: reason, Picks: []dto.Pick{}, Model: "m"}
+			if _, err := f.Store.InsertScoreFeedback(ctx, user, entry); err != nil {
+				t.Fatalf("InsertScoreFeedback(%q) = %v", reason, err)
+			}
+		}
+
+		got, err := f.Store.ListScoreFeedback(ctx, user, 2)
+		if err != nil {
+			t.Fatalf("ListScoreFeedback(...) = %v", err)
+		}
+		var reasons []string
+		for _, e := range got {
+			reasons = append(reasons, e.Reason)
+		}
+		if diff := cmp.Diff([]string{"third", "second"}, reasons); diff != "" {
+			t.Errorf("ListScoreFeedback(...) reasons (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("clear score feedback deletes only that user's rows and counts them", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user, other := f.NewUser(), f.NewUser()
+		entry := dto.ScoreFeedback{Kind: "overall", Reason: "r", Picks: []dto.Pick{}, Model: "m"}
+		for _, u := range []string{user, user, other} {
+			if _, err := f.Store.InsertScoreFeedback(ctx, u, entry); err != nil {
+				t.Fatalf("InsertScoreFeedback(...) = %v", err)
+			}
+		}
+
+		n, err := f.Store.ClearScoreFeedback(ctx, user)
+		if err != nil || n != 2 {
+			t.Fatalf("ClearScoreFeedback(...) = %d, %v, want 2, nil", n, err)
+		}
+		left, err := f.Store.ListScoreFeedback(ctx, other, 10)
+		if err != nil || len(left) != 1 {
+			t.Fatalf("ListScoreFeedback(other) = %+v, %v, want the other user's one entry", left, err)
 		}
 	})
 }

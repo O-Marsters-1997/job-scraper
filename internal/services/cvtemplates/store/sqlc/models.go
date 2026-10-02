@@ -308,6 +308,19 @@ type PreferenceLabel struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type ScoreFeedback struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Kind      string
+	Direction pgtype.Text
+	Reason    string
+	Picks     []byte
+	Model     string
+	Snapshot  []byte
+	CreatedAt pgtype.Timestamptz
+}
+
 type ScoringOption struct {
 	ID        string
 	Dimension ScoringDimension

@@ -70,3 +70,36 @@ func TestRoutesHappyPath(t *testing.T) {
 		t.Errorf("POST /scores/recompute recomputed = %d, want 0 (no scored jobs)", recomputed.Recomputed)
 	}
 }
+
+func TestFeedbackRoutesAreAbsentUnlessEnabled(t *testing.T) {
+	t.Setenv("SCORING_FEEDBACK", "")
+	r := newTestRouter(t)
+
+	rec := handlerstest.Serve(t, r, "POST /scoring-feedback/overall", `{"reason":"x"}`)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("POST /scoring-feedback/overall status = %d, want 404 with the flag unset", rec.Code)
+	}
+}
+
+func TestFeedbackRoutes(t *testing.T) {
+	t.Setenv("SCORING_FEEDBACK", "true")
+	r := newTestRouter(t)
+
+	handlerstest.RequiresAuth(t, r, "POST /scoring-feedback/overall", "GET /scoring-feedback")
+	handlerstest.RejectsMalformedBody(t, r, "POST /scoring-feedback/overall")
+
+	blank := handlerstest.Serve(t, r, "POST /scoring-feedback/overall", `{"reason":" "}`)
+	if blank.Code != http.StatusBadRequest {
+		t.Errorf("POST /scoring-feedback/overall blank status = %d, want 400", blank.Code)
+	}
+
+	created := handlerstest.Do[dto.ScoreFeedback](t, r, http.StatusCreated, "POST /scoring-feedback/overall", `{"reason":"too generous"}`)
+	if created.Kind != "overall" || created.Reason != "too generous" {
+		t.Errorf("POST /scoring-feedback/overall = %+v, want an overall entry with the reason", created)
+	}
+
+	listed := handlerstest.Do[[]dto.ScoreFeedback](t, r, http.StatusOK, "GET /scoring-feedback", "")
+	if len(listed) != 1 || listed[0].ID != created.ID {
+		t.Errorf("GET /scoring-feedback = %+v, want just the created entry", listed)
+	}
+}

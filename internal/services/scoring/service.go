@@ -55,6 +55,9 @@ type Store interface {
 	AddScoringOption(ctx context.Context, id, dimension, label, question string) error
 	RewordScoringOption(ctx context.Context, id, question string) error
 	RetireScoringOption(ctx context.Context, id string) error
+	InsertScoreFeedback(ctx context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error)
+	ListScoreFeedback(ctx context.Context, userID string, limit int) ([]dto.ScoreFeedback, error)
+	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 }
 
 type Service struct {

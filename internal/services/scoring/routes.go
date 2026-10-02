@@ -1,6 +1,8 @@
 package scoring
 
 import (
+	"os"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/handlers"
@@ -12,4 +14,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
 	r.Post("/scores/recompute", handlers.GetAll(m.svc.Recompute))
+	if os.Getenv("SCORING_FEEDBACK") == "true" {
+		r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
+		r.Get("/scoring-feedback", handlers.GetAll(m.svc.ListFeedback))
+	}
 }

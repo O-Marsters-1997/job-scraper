@@ -13,6 +13,11 @@ const TanStackRouterDevtools = import.meta.env.DEV
 		)
 	: () => null;
 
+const ScoreFeedback =
+	import.meta.env.VITE_SCORING_FEEDBACK === "true"
+		? lazy(() => import("@/components/score-feedback"))
+		: () => null;
+
 export const Route = createRootRoute({
 	component: RootComponent,
 });
@@ -21,6 +26,7 @@ function RootComponent() {
 	return (
 		<>
 			<Outlet />
+			<ScoreFeedback />
 			<Show when={import.meta.env.DEV}>
 				<TanStackRouterDevtools position="bottom-right" />
 			</Show>
