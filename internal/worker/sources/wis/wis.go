@@ -48,6 +48,24 @@ func DetectWorkArrangement(badges []string, descText string) string {
 type Search struct {
 	Keywords string
 	Filters  map[string]string
+	Recency  string // maps to the f URL param, a day count from Recency; empty means no filter
+}
+
+const recencyMargin = time.Hour
+
+// Recency returns the smallest f value (days) covering the time since lastSucceeded
+// plus a margin. It returns "" on a first run or when more than 7 days have passed.
+func Recency(lastSucceeded *time.Time, now time.Time) string {
+	if lastSucceeded == nil {
+		return ""
+	}
+	elapsed := max(now.Sub(*lastSucceeded), 0) + recencyMargin
+	for _, days := range []int{1, 3, 7} {
+		if elapsed <= time.Duration(days)*24*time.Hour {
+			return strconv.Itoa(days)
+		}
+	}
+	return ""
 }
 
 func (s Search) startURL() string {
@@ -67,6 +85,9 @@ func (s Search) startURL() string {
 	}
 	v.Set("sb", "date")
 	v.Set("sd", "down")
+	if s.Recency != "" {
+		v.Set("f", s.Recency)
+	}
 	v.Set("per_page", strconv.Itoa(pageSize))
 	return baseURL + "?" + v.Encode()
 }

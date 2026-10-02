@@ -45,7 +45,11 @@ var registry = map[string]entry{
 	"remotive":   {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 	"wis": {
 		build: func(t dto.SourceTarget) sources.Source {
-			return wis.New(wis.Search{Keywords: t.Value, Filters: t.Filters})
+			return wis.New(wis.Search{
+				Keywords: t.Value,
+				Filters:  t.Filters,
+				Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
+			})
 		},
 		detail: wis.New(wis.Search{}),
 	},

@@ -1,5 +1,5 @@
 package wttj
 
-import "time"
+import "github.com/ollymarsters/job-scraper/internal/worker/sources"
 
-func ResetLimiter() { limiter = &gate{now: time.Now} }
+func ResetLimiter() { limiter = sources.NewGate(0, 0) }

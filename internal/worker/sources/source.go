@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -15,8 +16,9 @@ import (
 )
 
 const (
-	DefaultTimeout = 15 * time.Second
-	userAgent      = "Mozilla/5.0 (compatible; job-scraper/1.0)"
+	DefaultTimeout       = 15 * time.Second
+	maxRetryAfterSeconds = 24 * 60 * 60
+	userAgent            = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
 
 type Route = proxy.Route
@@ -54,8 +56,9 @@ type DetailFetcher interface {
 
 // StatusError is returned by Get and PostEmptyJSON for any non-200 response other than 404 or 410.
 type StatusError struct {
-	Code   int
-	Status string
+	Code       int
+	Status     string
+	RetryAfter time.Duration
 }
 
 func (e *StatusError) Error() string { return "unexpected status " + e.Status }
@@ -150,7 +153,8 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 		return nil, fmt.Errorf("%w: status %s", ErrGone, resp.Status)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, &StatusError{Code: resp.StatusCode, Status: resp.Status}
+		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		return nil, &StatusError{Code: resp.StatusCode, Status: resp.Status, RetryAfter: retryAfter}
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -158,4 +162,15 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 		return nil, fmt.Errorf("read body: %w", err)
 	}
 	return respBody, nil
+}
+
+// RFC 9110 §10.2.3: Retry-After is delta-seconds or an HTTP-date.
+func parseRetryAfter(v string) time.Duration {
+	if secs, err := strconv.Atoi(v); err == nil {
+		return time.Duration(min(max(secs, 0), maxRetryAfterSeconds)) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(time.Until(t), 0)
+	}
+	return 0
 }

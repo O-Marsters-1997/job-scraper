@@ -247,7 +247,7 @@ func TestPollBoard(t *testing.T) {
 		other := newSite(t, "company_faculty.html")
 		src := wttj.New("other", func() time.Time { return now })
 		src.Client().Transport = other
-		if _, err := src.PollBoard(t.Context()); !errors.Is(err, wttj.ErrDeferred) || len(other.requests) != 0 {
+		if _, err := src.PollBoard(t.Context()); !errors.Is(err, sources.ErrDeferred) || len(other.requests) != 0 {
 			t.Errorf("PollBoard after 429 = %v with %d requests, want ErrDeferred and none", err, len(other.requests))
 		}
 	})
