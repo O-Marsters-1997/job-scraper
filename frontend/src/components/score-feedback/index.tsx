@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,10 @@ export default function ScoreFeedbackPanel() {
 			1,
 			Math.ceil((feedback.data?.total ?? 0) / SCORE_FEEDBACK_PAGE_SIZE),
 		);
+
+	createEffect(() => {
+		if (feedback.data && page() > lastPage()) setPage(lastPage());
+	});
 
 	const pickKind = (next: ScoreFeedbackKind | undefined) => {
 		setKind(next);
@@ -134,11 +138,7 @@ export default function ScoreFeedbackPanel() {
 										size="sm"
 										class="self-end"
 										disabled={remove.isPending}
-										onClick={() =>
-											remove.mutate(entry.id, {
-												onSuccess: () => setPage(Math.min(page(), lastPage())),
-											})
-										}
+										onClick={() => remove.mutate(entry.id)}
 									>
 										Delete
 									</Button>

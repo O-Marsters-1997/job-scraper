@@ -17,6 +17,7 @@ const (
 	feedbackKindJob        = "job"
 	feedbackKindCollection = "collection"
 	feedbackKindOverall    = "overall"
+	maxFeedbackPage        = 100000
 	feedbackPageSize       = 20
 	exportAllFeedback      = math.MaxInt32
 )
@@ -52,8 +53,8 @@ func (s *Service) ListFeedback(ctx context.Context, userID string, q dto.ScoreFe
 	page := 1
 	if q.Page != "" {
 		n, err := strconv.Atoi(q.Page)
-		if err != nil || n < 1 {
-			return dto.ScoreFeedbackPage{}, apperr.Invalid("page must be a positive integer")
+		if err != nil || n < 1 || n > maxFeedbackPage {
+			return dto.ScoreFeedbackPage{}, apperr.Invalid("page must be between 1 and 100000")
 		}
 		page = n
 	}
