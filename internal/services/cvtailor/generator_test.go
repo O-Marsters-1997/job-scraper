@@ -239,6 +239,22 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("offers a position's achievements in the order the User chose", func(t *testing.T) {
+		e := newDraftEnv(t)
+		first, second := e.pos.Achievements[0], e.pos.Achievements[1]
+		e.input.AchievementIDs = []string{second.ID, first.ID}
+		e.queue(t)
+		editor := cvtailortest.Editing(e.bulletResult("Cut p99 latency", 0.5))
+
+		e.run(t, tick{editor: editor})
+
+		got := editor.Inputs[0].Positions[0].Achievements
+		want := []cvedit.Achievement{{ID: second.ID, Text: second.Text}, {ID: first.ID, Text: first.Text}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("editor input achievements (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("puts a blocked bullet back to its original text without another call", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25))

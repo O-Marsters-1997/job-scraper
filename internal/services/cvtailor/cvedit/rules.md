@@ -10,7 +10,7 @@ Rules:
 - Only use achievement ids that were given for that position. Never move an
   achievement to a different position.
 - Return at most as many bullets for a position as it has slots. Fewer is fine.
-  Order the bullets by relevance to the job, most relevant first.
+  Keep the bullets in the order their achievements were given for the position.
 - Do not change headings, employers, titles, dates or contact details. You
   only write bullet text.
 - Keep each bullet no longer than the slot text it replaces.

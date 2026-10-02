@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -46,9 +47,9 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	}
 	slotsOf := slotsByPosition(ds, mappings)
 
-	confirmed := make(map[string]bool, len(claim.AchievementIDs))
-	for _, id := range claim.AchievementIDs {
-		confirmed[id] = true
+	chosenAt := make(map[string]int, len(claim.AchievementIDs))
+	for i, id := range claim.AchievementIDs {
+		chosenAt[id] = i
 	}
 	pl := plan{structure: ds}
 	found := 0
@@ -60,7 +61,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		}
 		for _, a := range p.Achievements {
 			pl.bank = append(pl.bank, a.Text)
-			if confirmed[a.ID] {
+			if _, ok := chosenAt[a.ID]; ok {
 				found++
 				key := normalizeText(a.Text)
 				if seen[key] {
@@ -74,6 +75,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		if len(pp.Achievements) == 0 {
 			continue
 		}
+		slices.SortFunc(pp.Achievements, func(a, b cvedit.Achievement) int { return chosenAt[a.ID] - chosenAt[b.ID] })
 		slots := slotsOf[p.ID]
 		if len(slots) == 0 {
 			return plan{}, apperr.Unprocessable("a chosen position is no longer mapped to a heading of the CV tab")
@@ -84,7 +86,7 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		}
 		pl.positions = append(pl.positions, pp)
 	}
-	if found != len(confirmed) {
+	if found != len(chosenAt) {
 		return plan{}, apperr.Unprocessable("a chosen achievement no longer exists")
 	}
 	return pl, nil
