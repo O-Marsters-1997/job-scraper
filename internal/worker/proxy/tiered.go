@@ -23,6 +23,7 @@ type tieredTransport struct {
 	cache       Cache
 
 	session atomic.Value
+	source  string
 }
 
 func newSession() string {
@@ -34,7 +35,7 @@ func (t *tieredTransport) rotate(stale string) {
 	t.residential.CloseIdleConnections()
 }
 
-func newTiered(cache Cache) (*tieredTransport, error) {
+func newTiered(cache Cache, source string) (*tieredTransport, error) {
 	u, err := proxyURL(residentialEnvKey)
 	if err != nil {
 		return nil, err
@@ -53,8 +54,9 @@ func newTiered(cache Cache) (*tieredTransport, error) {
 	}
 	t := &tieredTransport{
 		residential: tr,
-		unlocker:    &fetchTransport{base: unlocker, zone: sharedZone},
+		unlocker:    &fetchTransport{base: unlocker, zone: sharedZone, route: routeUnlocker, source: source},
 		cache:       cache,
+		source:      source,
 	}
 	t.session.Store(newSession())
 	return t, nil
@@ -93,6 +95,7 @@ func (t *tieredTransport) fetch(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 	}
+	FetchFallbacks.WithLabelValues(t.source).Inc()
 	return t.unlocker.RoundTrip(req)
 }
 
@@ -106,6 +109,7 @@ func (t *tieredTransport) residentialAttempt(req *http.Request) (*http.Response,
 	start := time.Now()
 	resp, err := t.residential.RoundTrip(attempt)
 	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	record(req, t.source, routeResidential, resp, err)
 	if err != nil {
 		if req.Context().Err() == nil {
 			t.rotate(session)

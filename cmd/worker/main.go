@@ -60,6 +60,7 @@ func main() {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	proxy.RegisterMetrics(reg)
 	telemetry.ServeMetrics(ctx, reg)
 
 	q, err := queue.NewBrokerFromEnv()

@@ -89,6 +89,90 @@
           "instant": true
         }
       ]
+    },
+    {
+      "id": 6,
+      "title": "Fetch requests by source and route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "__PROM_DATASOURCE_UID__"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source, route, outcome) (rate(jobscraper_fetch_requests_total{env=\"$env\"}[5m]))",
+          "legendFormat": "{{source}} {{route}} {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Fetch bytes by source and route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "__PROM_DATASOURCE_UID__"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (source, route) (rate(jobscraper_fetch_bytes_total{env=\"$env\"}[5m]))",
+          "legendFormat": "{{source}} {{route}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Estimated proxy spend by source and route",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "__PROM_DATASOURCE_UID__"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (source, route) (increase(jobscraper_fetch_bytes_total{env=\"$env\", route=\"residential\"}[$__range])) / 1e9 * 4) or (sum by (source, route) (increase(jobscraper_fetch_requests_total{env=\"$env\", route=\"unlocker\"}[$__range])) / 1000 * 1.5)",
+          "legendFormat": "{{source}} {{route}}"
+        }
+      ]
     }
   ]
 }

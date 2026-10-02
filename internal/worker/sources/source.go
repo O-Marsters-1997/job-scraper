@@ -83,7 +83,7 @@ type PaginatedBase struct {
 }
 
 func NewBase(cfg Config) PaginatedBase {
-	transport, err := proxy.Fetcher(cfg.Route)
+	transport, err := proxy.Fetcher(cfg.Route, cfg.Name)
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,
