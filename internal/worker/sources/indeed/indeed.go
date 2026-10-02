@@ -69,6 +69,10 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	header.Set("Indeed-Api-Key", key)
 	body, err := s.PostJSON(ctx, apiURL, payload, header)
 	if err != nil {
+		var statusErr *sources.StatusError
+		if errors.As(err, &statusErr) && (statusErr.Code == http.StatusUnauthorized || statusErr.Code == http.StatusForbidden) {
+			return nil, "", fmt.Errorf("indeed: %w: %w", sources.ErrSourceKeyRejected, err)
+		}
 		return nil, "", fmt.Errorf("indeed: %w", err)
 	}
 	return parse(body)
@@ -113,7 +117,10 @@ type response struct {
 		} `json:"jobSearch"`
 	} `json:"data"`
 	Errors []struct {
-		Message string `json:"message"`
+		Message    string `json:"message"`
+		Extensions struct {
+			Code string `json:"code"`
+		} `json:"extensions"`
 	} `json:"errors"`
 }
 
@@ -151,6 +158,10 @@ func parse(body []byte) ([]dto.Job, string, error) {
 	}
 	if resp.Data == nil {
 		if len(resp.Errors) > 0 {
+			switch resp.Errors[0].Extensions.Code {
+			case "UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN":
+				return nil, "", fmt.Errorf("indeed: %w: %s", sources.ErrSourceKeyRejected, resp.Errors[0].Message)
+			}
 			return nil, "", fmt.Errorf("indeed: graphql error: %s", resp.Errors[0].Message)
 		}
 		return nil, "", errors.New("indeed: response has no data")

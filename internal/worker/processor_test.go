@@ -1,10 +1,12 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,6 +83,13 @@ func (s fetchingPage) FetchPage(ctx context.Context, _ string) ([]dto.Job, strin
 	return []dto.Job{{URL: "https://example.com/job/1"}}, "", s.err
 }
 
+type failingPage struct{ err error }
+
+func (failingPage) Cfg() sources.Config { return sources.Config{Name: "failing"} }
+func (s failingPage) FetchPage(context.Context, string) ([]dto.Job, string, error) {
+	return nil, "", s.err
+}
+
 type allNewURLs struct{}
 
 func (allNewURLs) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
@@ -147,6 +156,10 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 		switch target.Source {
 		case "fetching":
 			return page, true
+		case "indeed":
+			return failingPage{err: fmt.Errorf("indeed: %w", sources.ErrSourceKeyRejected)}, true
+		case "unavailable":
+			return failingPage{err: &sources.StatusError{Code: http.StatusInternalServerError, Status: "500"}}, true
 		case "fetchfail":
 			page.err = errors.New("page failed after fetch")
 			return page, true
@@ -654,6 +667,60 @@ func TestProcessBoardDiscover(t *testing.T) {
 		page, err := f.store.PageCompaniesForUser(ctx, "match", dto.CompanyPageOptions{Limit: 100})
 		if err != nil || len(page.Items) != 0 {
 			t.Fatalf("PageCompaniesForUser() = %+v, %v, want none", page, err)
+		}
+	})
+}
+
+func TestProcessKeyRejection(t *testing.T) {
+	ctx := t.Context()
+	scrape := func(t *testing.T, f fixture, source string) (dto.SourceTarget, error) {
+		t.Helper()
+		target := f.target(t, source)
+		task := queuetest.ListingTask(source)
+		task.TargetID, task.RunID = target.ID, target.RunID
+		return target, f.processor.Process(ctx, task)
+	}
+
+	t.Run("a rejected key fails the run and disables every target of the source", func(t *testing.T) {
+		var logs bytes.Buffer
+		prev := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+		t.Cleanup(func() { slog.SetDefault(prev) })
+		f := newFixture(t, http.StatusOK, "")
+		other, err := f.store.CreateSourceTarget(ctx, "user-2", "indeed", "rust", true, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		unrelated := f.target(t, "wis")
+
+		target, err := scrape(t, f, "indeed")
+		if err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+
+		got := f.runStatus(t, target)
+		if got.Enabled || got.DisabledReason != "indeed key rejected" || got.RunStatus != "failed" || got.LastRunError != "indeed key rejected" {
+			t.Errorf("rejected target = %+v, want disabled, failed and reason set", got)
+		}
+		if got := f.runStatus(t, other); got.Enabled || got.DisabledReason != "indeed key rejected" {
+			t.Errorf("other user's indeed target = %+v, want disabled with reason", got)
+		}
+		if got := f.runStatus(t, unrelated); !got.Enabled || got.DisabledReason != "" {
+			t.Errorf("unrelated target = %+v, want untouched", got)
+		}
+		if n := strings.Count(logs.String(), `"level":"ERROR"`); n != 1 {
+			t.Errorf("ERROR log lines = %d, want 1\n%s", n, logs.String())
+		}
+	})
+
+	t.Run("a non-auth failure leaves targets enabled and retries", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target, err := scrape(t, f, "unavailable")
+		if err == nil {
+			t.Fatal("Process() = nil, want the fetch error")
+		}
+		if got := f.runStatus(t, target); !got.Enabled || got.DisabledReason != "" {
+			t.Errorf("target = %+v, want still enabled", got)
 		}
 	})
 }

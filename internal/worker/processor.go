@@ -298,6 +298,9 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 		}
 	}
 	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
+	if errors.Is(err, sources.ErrSourceKeyRejected) {
+		return p.disableSource(ctx, task.Source, err)
+	}
 	if err != nil {
 		return err
 	}
@@ -312,6 +315,17 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	}
 	_, err = p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "succeeded", "")
 	return err
+}
+
+func (p *Processor) disableSource(ctx context.Context, source string, cause error) error {
+	disabled, err := p.js.Targets().DisableSource(ctx, source, source+" key rejected")
+	if err != nil {
+		return err
+	}
+	if disabled > 0 {
+		slog.ErrorContext(ctx, "source key rejected, targets disabled", slog.String(logger.KeySource, source), slog.Int64("targets", disabled), slog.Any(logger.KeyErr, cause))
+	}
+	return nil
 }
 
 func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {

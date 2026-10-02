@@ -213,6 +213,7 @@ export function createSourceTarget(
 		RunStatus: "succeeded",
 		LastRunAt: new Date().toISOString(),
 		LastRunError: "",
+		DisabledReason: "",
 		URL: SOURCE_INFOS.find((s) => s.name === payload.source)?.url_prefix ?? "",
 	};
 	discoverySourceTargets = [...discoverySourceTargets, target];

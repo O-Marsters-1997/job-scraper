@@ -9,5 +9,6 @@ type OpsState struct {
 	BoardsOverdue          int64
 	BoardsFailing          int64
 	SourceTargetsFailed    int64
+	DisabledSourceTargets  map[string]int64
 	HarvestAge             map[string]time.Duration
 }

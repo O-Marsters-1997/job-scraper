@@ -559,3 +559,39 @@ rules:
             - evaluator:
                 type: gt
                 params: [0.2]
+
+  - uid: source-disabled
+    title: Source disabled
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $values.A }} {{ $labels.source }} Targets are disabled (key rejected). Rotate the key and re-enable them."
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_source_targets_disabled{env="prod"}
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]

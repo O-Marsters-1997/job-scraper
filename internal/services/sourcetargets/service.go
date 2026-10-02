@@ -32,6 +32,7 @@ type Store interface {
 	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
 	GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error)
 	TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error)
+	DisableSourceTargets(ctx context.Context, source, reason string) (int64, error)
 	ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error)
 	ClaimRecoverableSourceTarget(ctx context.Context, id, runID string) (dto.SourceTarget, error)
 }
@@ -238,6 +239,12 @@ func (s *Service) GetSourceTarget(ctx context.Context, id string) (dto.SourceTar
 
 func (s *Service) TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error) {
 	return s.targets.TransitionSourceTargetRun(ctx, id, runID, status, runError)
+}
+
+// DisableSource turns off every enabled target of source for all users and
+// returns how many it changed. In-flight runs are failed with the reason.
+func (s *Service) DisableSource(ctx context.Context, source, reason string) (int64, error) {
+	return s.targets.DisableSourceTargets(ctx, source, reason)
 }
 
 func (s *Service) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {

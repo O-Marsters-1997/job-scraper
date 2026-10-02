@@ -1,12 +1,15 @@
 package indeed_test
 
 import (
+	"errors"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
@@ -118,4 +121,33 @@ func TestFetchPage(t *testing.T) {
 			t.Errorf("FetchPage() err = %v, want the graphql message", err)
 		}
 	})
+}
+
+func TestFetchPageKeyRejection(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantReject bool
+	}{
+		{"401 is a rejected key", http.StatusUnauthorized, "", true},
+		{"403 is a rejected key", http.StatusForbidden, "", true},
+		{"graphql auth error is a rejected key", http.StatusOK, `{"errors":[{"message":"bad key","extensions":{"code":"UNAUTHENTICATED"}}]}`, true},
+		{"500 is not a rejected key", http.StatusInternalServerError, "", false},
+		{"429 is not a rejected key", http.StatusTooManyRequests, "", false},
+		{"other graphql error is not a rejected key", http.StatusOK, `{"errors":[{"message":"bad query","extensions":{"code":"BAD_USER_INPUT"}}]}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _ := newScraper(t, "", nil)
+			s.Client().Transport = sourcetest.RespondStatus(tt.status, tt.body)
+			_, _, err := s.FetchPage(t.Context(), "")
+			if err == nil {
+				t.Fatal("FetchPage() err = nil, want error")
+			}
+			if got := errors.Is(err, sources.ErrSourceKeyRejected); got != tt.wantReject {
+				t.Errorf("FetchPage() errors.Is(ErrSourceKeyRejected) = %v, want %v (err = %v)", got, tt.wantReject, err)
+			}
+		})
+	}
 }

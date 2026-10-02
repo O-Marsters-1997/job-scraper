@@ -513,6 +513,14 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	if err != nil {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest runs: %w", err)
 	}
+	disabled, err := s.queries.DisabledSourceTargets(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState disabled source targets: %w", err)
+	}
+	disabledBySource := make(map[string]int64, len(disabled))
+	for _, d := range disabled {
+		disabledBySource[d.Source] = d.Disabled
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -528,6 +536,7 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		BoardsOverdue:          row.BoardsOverdue,
 		BoardsFailing:          row.BoardsFailing,
 		SourceTargetsFailed:    row.SourceTargetsFailed,
+		DisabledSourceTargets:  disabledBySource,
 		HarvestAge:             harvestAge,
 	}, nil
 }

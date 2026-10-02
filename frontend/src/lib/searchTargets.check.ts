@@ -36,6 +36,7 @@ const target = (over: Partial<SourceTarget>): SourceTarget => ({
 	RunStatus: "succeeded",
 	LastRunAt: null,
 	LastRunError: "",
+	DisabledReason: "",
 	URL: "",
 	...over,
 });

@@ -11,6 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const disabledSourceTargets = `-- name: DisabledSourceTargets :many
+SELECT source, count(*) AS disabled FROM source_targets WHERE disabled_reason <> '' GROUP BY source
+`
+
+type DisabledSourceTargetsRow struct {
+	Source   string
+	Disabled int64
+}
+
+func (q *Queries) DisabledSourceTargets(ctx context.Context) ([]DisabledSourceTargetsRow, error) {
+	rows, err := q.db.Query(ctx, disabledSourceTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DisabledSourceTargetsRow
+	for rows.Next() {
+		var i DisabledSourceTargetsRow
+		if err := rows.Scan(&i.Source, &i.Disabled); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const harvestRuns = `-- name: HarvestRuns :many
 SELECT harvester, last_succeeded_at FROM harvest_runs
 `
