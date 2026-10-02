@@ -62,7 +62,7 @@ func TestClearFeedback(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("ClearFeedback() = %d, %v, want 2, nil", n, err)
 	}
-	if got, _ := svc.ListFeedback(t.Context(), userID); len(got) != 0 {
+	if got, _ := svc.ListFeedback(t.Context(), userID, dto.ScoreFeedbackQuery{}); len(got.Entries) != 0 {
 		t.Errorf("ListFeedback() after clear = %+v, want empty", got)
 	}
 }

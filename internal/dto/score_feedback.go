@@ -18,6 +18,18 @@ type ScoreFeedback struct {
 // entry freezes nothing.
 type ScoreFeedbackSnapshot struct{}
 
+// ScoreFeedbackQuery filters and pages the log. Kind is empty for all kinds;
+// Page is 1-based and defaults to 1.
+type ScoreFeedbackQuery struct {
+	Kind string `json:"kind"`
+	Page string `json:"page"`
+}
+
+type ScoreFeedbackPage struct {
+	Entries []ScoreFeedback `json:"entries"`
+	Total   int             `json:"total"`
+}
+
 type OverallFeedbackInput struct {
 	Reason string `json:"reason"`
 }

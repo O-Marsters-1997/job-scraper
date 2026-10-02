@@ -2,18 +2,24 @@ package scoring
 
 import (
 	"context"
+	"errors"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
 const (
-	feedbackKindOverall = "overall"
-	feedbackPageSize    = 20
-	exportAllFeedback   = math.MaxInt32
+	feedbackKindJob        = "job"
+	feedbackKindCollection = "collection"
+	feedbackKindOverall    = "overall"
+	maxFeedbackPage        = 100000
+	feedbackPageSize       = 20
+	exportAllFeedback      = math.MaxInt32
 )
 
 // AppendOverallFeedback logs a reason about the scoring as a whole, beside
@@ -36,14 +42,45 @@ func (s *Service) AppendOverallFeedback(ctx context.Context, userID string, in d
 	})
 }
 
-// ListFeedback returns the first page of userID's log, newest first.
-func (s *Service) ListFeedback(ctx context.Context, userID string) ([]dto.ScoreFeedback, error) {
-	return s.store.ListScoreFeedback(ctx, userID, feedbackPageSize)
+// ListFeedback returns one page of userID's log, newest first, with the total
+// matching q.Kind.
+func (s *Service) ListFeedback(ctx context.Context, userID string, q dto.ScoreFeedbackQuery) (dto.ScoreFeedbackPage, error) {
+	switch q.Kind {
+	case "", feedbackKindJob, feedbackKindCollection, feedbackKindOverall:
+	default:
+		return dto.ScoreFeedbackPage{}, apperr.Invalid("unknown kind")
+	}
+	page := 1
+	if q.Page != "" {
+		n, err := strconv.Atoi(q.Page)
+		if err != nil || n < 1 || n > maxFeedbackPage {
+			return dto.ScoreFeedbackPage{}, apperr.Invalid("page must be between 1 and 100000")
+		}
+		page = n
+	}
+	entries, err := s.store.ListScoreFeedback(ctx, userID, q.Kind, feedbackPageSize, (page-1)*feedbackPageSize)
+	if err != nil {
+		return dto.ScoreFeedbackPage{}, err
+	}
+	total, err := s.store.CountScoreFeedback(ctx, userID, q.Kind)
+	if err != nil {
+		return dto.ScoreFeedbackPage{}, err
+	}
+	return dto.ScoreFeedbackPage{Entries: entries, Total: total}, nil
+}
+
+// DeleteFeedback removes one of userID's entries.
+func (s *Service) DeleteFeedback(ctx context.Context, userID, id string) error {
+	err := s.store.DeleteScoreFeedback(ctx, userID, id)
+	if errors.Is(err, data.ErrNotFound) {
+		return apperr.NotFound("feedback entry not found")
+	}
+	return err
 }
 
 // ExportFeedback renders userID's whole log as a Feedback Pack.
 func (s *Service) ExportFeedback(ctx context.Context, userID string) (string, error) {
-	entries, err := s.store.ListScoreFeedback(ctx, userID, exportAllFeedback)
+	entries, err := s.store.ListScoreFeedback(ctx, userID, "", exportAllFeedback, 0)
 	if err != nil {
 		return "", err
 	}

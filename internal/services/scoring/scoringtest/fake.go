@@ -46,7 +46,8 @@ type FakeStore struct {
 	search  map[string]dto.SearchConfig
 	scored  map[string]bool
 
-	feedback map[string][]dto.ScoreFeedback
+	feedback    map[string][]dto.ScoreFeedback
+	feedbackSeq int
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -388,21 +389,43 @@ var _ scoring.Store = (*FakeStore)(nil)
 func (f *FakeStore) InsertScoreFeedback(_ context.Context, userID string, entry dto.ScoreFeedback) (dto.ScoreFeedback, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	entry.ID = "feedback-" + strconv.Itoa(len(f.feedback[userID])+1)
+	f.feedbackSeq++
+	entry.ID = "feedback-" + strconv.Itoa(f.feedbackSeq)
 	entry.CreatedAt = time.Now()
 	f.feedback[userID] = append(f.feedback[userID], entry)
 	return entry, nil
 }
 
-func (f *FakeStore) ListScoreFeedback(_ context.Context, userID string, limit int) ([]dto.ScoreFeedback, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+func (f *FakeStore) matchingFeedback(userID, kind string) []dto.ScoreFeedback {
 	entries := slices.Clone(f.feedback[userID])
 	slices.Reverse(entries)
-	if len(entries) > limit {
-		entries = entries[:limit]
+	return slices.DeleteFunc(entries, func(e dto.ScoreFeedback) bool { return kind != "" && e.Kind != kind })
+}
+
+func (f *FakeStore) ListScoreFeedback(_ context.Context, userID, kind string, limit, offset int) ([]dto.ScoreFeedback, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	entries := f.matchingFeedback(userID, kind)
+	entries = entries[min(offset, len(entries)):]
+	return entries[:min(limit, len(entries))], nil
+}
+
+func (f *FakeStore) CountScoreFeedback(_ context.Context, userID, kind string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.matchingFeedback(userID, kind)), nil
+}
+
+func (f *FakeStore) DeleteScoreFeedback(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	entries := f.feedback[userID]
+	i := slices.IndexFunc(entries, func(e dto.ScoreFeedback) bool { return e.ID == id })
+	if i < 0 {
+		return data.ErrNotFound
 	}
-	return entries, nil
+	f.feedback[userID] = slices.Delete(entries, i, i+1)
+	return nil
 }
 
 func (f *FakeStore) ClearScoreFeedback(_ context.Context, userID string) (int64, error) {
