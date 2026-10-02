@@ -27,7 +27,7 @@ const (
 	suggestBuffer   = 16
 )
 
-var suggestActions = []string{"fit", "tighten", "ground", "verb", "ask"}
+var suggestActions = []string{"fit", "tighten", "verb", "ask"}
 
 // SuggestEvent is one step of a suggestion stream: a Delta, then either Done
 // or Err.

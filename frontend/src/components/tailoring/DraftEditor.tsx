@@ -686,7 +686,6 @@ export function DraftEditor(props: {
 										<WandMenu
 											top={wandTop()}
 											canFit={(metrics().fits[key()]?.lines ?? 1) > 1}
-											canGround={ed.segments(key()).some((seg) => seg.novel)}
 											askOpen={askOpen()}
 											onAskOpen={setAskOpen}
 											onAction={(action, prompt) =>

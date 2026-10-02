@@ -62,8 +62,6 @@ func renderSuggest(in SuggestInput) (string, error) {
 		fmt.Fprintf(&b, "Shorten the line to at most %d characters, keeping its meaning and the facts it draws on.\n", in.MaxChars)
 	case "tighten":
 		b.WriteString("Tighten the line: cut filler words and keep every fact. It must not get longer.\n")
-	case "ground":
-		b.WriteString("Replace the words in the line that the Achievements do not support with the Achievements' own wording, or drop them.\n")
 	case "verb":
 		b.WriteString("Start the line with a stronger, more specific verb. Change nothing else.\n")
 	case "ask":

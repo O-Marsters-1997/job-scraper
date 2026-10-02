@@ -5,10 +5,9 @@ import { z } from "zod";
 import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
 import { blockText } from "@/lib/docLayout";
-import { markNovel } from "@/lib/markNovel";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
 import { reviewFindings, skillGaps } from "@/lib/tailoring";
-import type { Draft, DraftLayout, Segment } from "@/types/tailoring";
+import type { Draft, DraftLayout } from "@/types/tailoring";
 
 export const PROFILE_SLOT = "profile";
 export const SKILLS_CARD = "skills";
@@ -58,10 +57,6 @@ export function createDraftEditor(
 	const [resolved, setResolvedMap] = createSignal(readResolved(id));
 
 	const positions = () => draft().provenance?.positions ?? [];
-	const bulletOf = (slotId: string) =>
-		positions()
-			.flatMap((p) => p.bullets)
-			.find((b) => b.slotId === slotId);
 	const labels = () => {
 		const out: Record<string, string> = { [PROFILE_SLOT]: "Profile" };
 		for (const p of positions())
@@ -72,29 +67,7 @@ export function createDraftEditor(
 	};
 	const label = (slotId: string) => labels()[slotId] ?? "Line";
 
-	const serverSegments = (slotId: string): Segment[] | undefined =>
-		slotId === PROFILE_SLOT
-			? (draft().provenance?.profile?.segments ?? undefined)
-			: bulletOf(slotId)?.segments;
-	const sources = (slotId: string): string[] => {
-		if (slotId !== PROFILE_SLOT)
-			return bulletOf(slotId)?.achievements.map((a) => a.text) ?? [];
-		return [
-			...positions().flatMap((p) =>
-				p.bullets.flatMap((b) => b.achievements.map((a) => a.text)),
-			),
-			...(serverSegments(PROFILE_SLOT) ?? [])
-				.filter((s) => !s.novel)
-				.map((s) => s.text),
-		];
-	};
 	const text = (slotId: string) => texts[slotId] ?? "";
-	const segments = (slotId: string): Segment[] => {
-		const server = serverSegments(slotId);
-		if (server && server.map((s) => s.text).join("") === text(slotId))
-			return server;
-		return markNovel(text(slotId), sources(slotId));
-	};
 
 	const send = async () => {
 		const sent = { ...unwrap(texts) };
@@ -170,7 +143,6 @@ export function createDraftEditor(
 		setText,
 		undo: (slotId: string) => setText(slotId, original[slotId] ?? ""),
 		edited: (slotId: string) => text(slotId) !== original[slotId],
-		segments,
 		findingsFor: findingsOf,
 		gaps,
 		cardKeys,

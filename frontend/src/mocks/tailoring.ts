@@ -13,7 +13,6 @@ import type {
 	Suggestion,
 	SuggestRequest,
 } from "@/types/tailoring";
-import { markNovel } from "../lib/markNovel";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import { getExperience } from "./experience";
 import { getJobs } from "./jobs";
@@ -95,22 +94,9 @@ const MOCK_BULLET_TEXT: Record<string, string> = {
 	s3: MOCK_ACHIEVEMENTS[2]?.text ?? "",
 };
 
-const MOCK_BANK = [...MOCK_ACHIEVEMENTS.map((a) => a.text), MOCK_PROFILE];
-
-function mockSources(slotId: string): string[] {
-	if (slotId === "profile") return MOCK_BANK;
-	const n = Number(slotId.slice(1));
-	return [MOCK_ACHIEVEMENTS[n - 1]?.text ?? ""];
-}
-
-function mockProvenance(texts: Record<string, string> = {}): DraftProvenance {
-	const text = (slotId: string, fallback: string) => texts[slotId] ?? fallback;
+function mockProvenance(): DraftProvenance {
 	const bullet = (slotId: string, achievement: number) => ({
 		slotId,
-		segments: markNovel(
-			text(slotId, MOCK_BULLET_TEXT[slotId] ?? ""),
-			mockSources(slotId),
-		),
 		achievements: MOCK_ACHIEVEMENTS.slice(achievement, achievement + 1),
 	});
 	return {
@@ -128,10 +114,7 @@ function mockProvenance(texts: Record<string, string> = {}): DraftProvenance {
 				bullets: [bullet("s3", 2)],
 			},
 		],
-		profile: {
-			slotId: "profile",
-			segments: markNovel(text("profile", MOCK_PROFILE), MOCK_BANK),
-		},
+		profile: { slotId: "profile" },
 	};
 }
 
@@ -253,7 +236,6 @@ const MOCK_TWO_PAGES_CHARS = 1500;
 export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
-	const texts = Object.fromEntries(slots.map((s) => [s.slotId, s.text]));
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
 	const findings = entry.draft.findings.filter((f) => f.check !== "page_count");
 	if (chars > MOCK_TWO_PAGES_CHARS)
@@ -265,7 +247,7 @@ export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
 	entry.draft = {
 		...entry.draft,
 		findings,
-		provenance: mockProvenance(texts),
+		provenance: mockProvenance(),
 	};
 	return entry.draft;
 }
@@ -424,7 +406,6 @@ function mockSuggestion(req: SuggestRequest): string {
 		}
 		return kept.join(" ");
 	}
-	if (req.action === "ground") return words.slice(0, -1).join(" ");
 	if (req.action === "verb") return ["Led", ...words.slice(1)].join(" ");
 	return words.slice(0, Math.ceil(words.length * 0.75)).join(" ");
 }

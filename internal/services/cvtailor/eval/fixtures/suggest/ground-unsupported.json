@@ -1,9 +1,0 @@
-{
- "Name": "ground-unsupported",
- "Scenario": "Replace words the Achievement does not support.",
- "Text": "Built a scalable Kafka-backed CSV import pipeline for customer data handling files up to 2GB",
- "Achievements": [
-  "Built a CSV import for customer data that handles files up to 2GB"
- ],
- "Action": "ground"
-}

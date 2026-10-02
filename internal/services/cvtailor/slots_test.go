@@ -68,12 +68,8 @@ func TestSaveDraftSlots(t *testing.T) {
 			t.Errorf("inserted text mismatch (-want +got):\n%s", diff)
 		}
 		bullet := got.Provenance.Positions[0].Bullets[0]
-		want := []dto.TextSegment{{Text: "Cut p99 latency by moving queries"}}
 		if bullet.SlotID != slot {
 			t.Errorf("SaveDraftSlots().Provenance bullet slot = %q, want %q", bullet.SlotID, slot)
-		}
-		if diff := cmp.Diff(want, bullet.Segments); diff != "" {
-			t.Errorf("SaveDraftSlots().Provenance bullet segments (-want +got):\n%s", diff)
 		}
 	})
 
@@ -115,23 +111,6 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 		if got.Content.Profile == nil || *got.Content.Profile != "Engineer who cuts latency." {
 			t.Errorf("SaveDraftSlots().Content.Profile = %v, want the edited text", got.Content.Profile)
-		}
-	})
-
-	t.Run("marks unbacked profile words as novel", func(t *testing.T) {
-		e := newDraftEnv(t)
-		id, svc := e.readyWithProfile(t, "Engineer who ships.")
-
-		got := e.saved(t, svc, id, dto.SlotEdit{SlotID: "profile", Text: "Mentored four engineers at Kubernetes scale"})
-
-		want := []dto.TextSegment{
-			{Text: "Mentored four engineers at "},
-			{Text: "Kubernetes", Novel: true},
-			{Text: " "},
-			{Text: "scale", Novel: true},
-		}
-		if diff := cmp.Diff(want, got.Provenance.Profile.Segments); diff != "" {
-			t.Errorf("profile segments mismatch (-want +got):\n%s", diff)
 		}
 	})
 

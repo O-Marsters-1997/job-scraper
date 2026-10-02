@@ -88,11 +88,8 @@ type DraftProvenance struct {
 	Profile   *ProvenanceProfile   `json:"profile"`
 }
 
-// ProvenanceProfile is the Profile text split so words absent from the
-// Achievement bank are marked Novel.
 type ProvenanceProfile struct {
-	SlotID   string        `json:"slotId"`
-	Segments []TextSegment `json:"segments"`
+	SlotID string `json:"slotId"`
 }
 
 type ProvenancePosition struct {
@@ -102,17 +99,10 @@ type ProvenancePosition struct {
 	Bullets    []ProvenanceBullet `json:"bullets"`
 }
 
-// ProvenanceBullet is one rewritten bullet, its cited Achievements, and its
-// text split so words absent from those Achievements are marked Novel.
+// ProvenanceBullet is one rewritten bullet and its cited Achievements.
 type ProvenanceBullet struct {
 	SlotID       string        `json:"slotId"`
-	Segments     []TextSegment `json:"segments"`
 	Achievements []Achievement `json:"achievements"`
-}
-
-type TextSegment struct {
-	Text  string `json:"text"`
-	Novel bool   `json:"novel"`
 }
 
 // DraftClaim is a Draft leased to the generator with the Job facts it

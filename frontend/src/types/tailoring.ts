@@ -38,11 +38,8 @@ const draftFindingSchema = z.object({
 	score: z.number().optional(),
 });
 
-const segmentSchema = z.object({ text: z.string(), novel: z.boolean() });
-
 const provenanceBulletSchema = z.object({
 	slotId: z.string(),
-	segments: z.array(segmentSchema),
 	achievements: z.array(
 		z.object({ id: z.string(), positionId: z.string(), text: z.string() }),
 	),
@@ -57,9 +54,7 @@ const draftProvenanceSchema = z.object({
 			bullets: z.array(provenanceBulletSchema),
 		}),
 	),
-	profile: z
-		.object({ slotId: z.string(), segments: z.array(segmentSchema) })
-		.nullable(),
+	profile: z.object({ slotId: z.string() }).nullable(),
 });
 
 const draftContentSchema = z.object({
@@ -162,13 +157,12 @@ export type DraftInput = {
 export type CVHeading = z.infer<typeof cvHeadingSchema>;
 export type Suggestion = z.infer<typeof suggestionSchema>;
 export type HeadingMapping = z.infer<typeof headingMappingSchema>;
-export type Segment = z.infer<typeof segmentSchema>;
 export type LayoutBorder = z.infer<typeof layoutBorderSchema>;
 export type LayoutRun = z.infer<typeof layoutRunSchema>;
 export type LayoutBlock = z.infer<typeof layoutBlockSchema>;
 export type DraftLayout = z.infer<typeof draftLayoutSchema>;
 
-const suggestActionSchema = z.enum(["fit", "tighten", "ground", "verb", "ask"]);
+const suggestActionSchema = z.enum(["fit", "tighten", "verb", "ask"]);
 
 export const suggestDoneSchema = z.object({
 	text: z.string(),

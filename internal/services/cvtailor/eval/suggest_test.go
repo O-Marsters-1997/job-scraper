@@ -36,7 +36,7 @@ func TestSuggestFixturesCoverEveryActionAndEmbellishment(t *testing.T) {
 		}
 		actions = append(actions, f.Action)
 	}
-	for _, want := range []string{"fit", "tighten", "ground", "verb", "ask"} {
+	for _, want := range []string{"fit", "tighten", "verb", "ask"} {
 		if !slices.Contains(actions, want) {
 			t.Errorf("no suggest fixture for action %q", want)
 		}

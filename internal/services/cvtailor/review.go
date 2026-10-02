@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"regexp"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -188,68 +187,21 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 	}
 	out := &dto.DraftProvenance{Positions: []dto.ProvenancePosition{}}
 	if edits.Profile != nil {
-		var bankText []string
-		for _, a := range achievementByID {
-			bankText = append(bankText, a.Text)
-		}
-		out.Profile = &dto.ProvenanceProfile{SlotID: profileSlotID, Segments: markNovel(*edits.Profile, bankText)}
+		out.Profile = &dto.ProvenanceProfile{SlotID: profileSlotID}
 	}
 	for _, pe := range edits.Positions {
 		p := positionByID[pe.PositionID]
 		pp := dto.ProvenancePosition{PositionID: pe.PositionID, Employer: p.Employer, Title: p.Title, Bullets: []dto.ProvenanceBullet{}}
 		for _, b := range pe.Bullets {
 			cited := []dto.Achievement{}
-			var citedText []string
 			for _, id := range b.AchievementIDs {
 				if a, ok := achievementByID[id]; ok {
 					cited = append(cited, a)
-					citedText = append(citedText, a.Text)
 				}
 			}
-			segments := markNovel(b.Text, citedText)
-			if b.Keep {
-				segments = []dto.TextSegment{{Text: b.Text}}
-			}
-			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: b.SlotID, Segments: segments, Achievements: cited})
+			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: b.SlotID, Achievements: cited})
 		}
 		out.Positions = append(out.Positions, pp)
 	}
-	return out
-}
-
-var wordRe = regexp.MustCompile(`[\p{L}\p{N}]+`)
-
-var stopwords = map[string]bool{
-	"and": true, "the": true, "for": true, "with": true, "from": true, "that": true, "this": true,
-	"into": true, "over": true, "across": true, "using": true, "through": true,
-}
-
-func markNovel(text string, sources []string) []dto.TextSegment {
-	known := map[string]bool{}
-	for _, src := range sources {
-		for _, w := range wordRe.FindAllString(strings.ToLower(src), -1) {
-			known[w] = true
-		}
-	}
-	var out []dto.TextSegment
-	last := 0
-	emit := func(t string, novel bool) {
-		if t == "" {
-			return
-		}
-		if n := len(out); n > 0 && out[n-1].Novel == novel {
-			out[n-1].Text += t
-			return
-		}
-		out = append(out, dto.TextSegment{Text: t, Novel: novel})
-	}
-	for _, loc := range wordRe.FindAllStringIndex(text, -1) {
-		emit(text[last:loc[0]], false)
-		word := text[loc[0]:loc[1]]
-		lower := strings.ToLower(word)
-		emit(word, len([]rune(word)) > 2 && !stopwords[lower] && !known[lower])
-		last = loc[1]
-	}
-	emit(text[last:], false)
 	return out
 }

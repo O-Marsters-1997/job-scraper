@@ -12,7 +12,6 @@ import type { SuggestAction } from "@/types/tailoring";
 export const ACTION_LABEL: Record<SuggestAction, string> = {
 	fit: "Fit to fewer lines",
 	tighten: "Tighten",
-	ground: "Use only my Achievement",
 	verb: "Stronger verb",
 	ask: "Ask",
 };
@@ -58,7 +57,6 @@ function AskForm(props: {
 export function WandMenu(props: {
 	top: number;
 	canFit: boolean;
-	canGround: boolean;
 	askOpen: boolean;
 	onAskOpen: (open: boolean) => void;
 	onAction: (action: SuggestAction, prompt?: string) => void;
@@ -92,11 +90,6 @@ export function WandMenu(props: {
 							<DropdownMenuItem onSelect={() => props.onAction("tighten")}>
 								{ACTION_LABEL.tighten}
 							</DropdownMenuItem>
-							<Show when={props.canGround}>
-								<DropdownMenuItem onSelect={() => props.onAction("ground")}>
-									{ACTION_LABEL.ground}
-								</DropdownMenuItem>
-							</Show>
 							<DropdownMenuItem onSelect={() => props.onAction("verb")}>
 								{ACTION_LABEL.verb}
 							</DropdownMenuItem>
