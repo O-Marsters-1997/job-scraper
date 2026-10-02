@@ -11,11 +11,7 @@ import { googleWriteHref } from "@/components/GoogleWriteConsent";
 import { Icon } from "@/components/Icon";
 import { PdfPreview } from "@/components/PdfPreview";
 import { Button } from "@/components/ui/button";
-import {
-	maxCharsForFewerLines,
-	pageFit,
-	SPARSE_LAST_LINE,
-} from "@/lib/docLayout";
+import { maxCharsForFewerLines, pageFit } from "@/lib/docLayout";
 import type { SaveStatus } from "@/lib/saveLoop";
 import { KeptDraftExistsError, keptDraft } from "@/lib/tailoring";
 import { cn } from "@/lib/utils";
@@ -33,7 +29,13 @@ import {
 	useKeepDraft,
 } from "../../hooks/useTailoring";
 import { ChangesDiff } from "./ChangesDiff";
-import { DocPage, type PageEditor, type PageMetrics } from "./DocPage";
+import {
+	DocPage,
+	isSparse,
+	type PageEditor,
+	type PageMetrics,
+	PX_PER_PT,
+} from "./DocPage";
 import { MarginCards } from "./MarginCards";
 import { WandMenu } from "./WandMenu";
 
@@ -44,7 +46,6 @@ const NO_METRICS: PageMetrics = {
 	fits: {},
 };
 
-const PX_PER_PT = 4 / 3;
 const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
 const DESKTOP_PAD_PX = 64;
@@ -245,14 +246,12 @@ export function DraftEditor(props: {
 		apply: ed.setText,
 	});
 	const cardKeys = () =>
-		ed.cardKeys((slotId) => {
-			const fit = metrics().fits[slotId];
-			return (
+		ed.cardKeys(
+			(slotId) =>
 				ed.edited(slotId) ||
 				!!suggestions.get(slotId) ||
-				(!!fit && fit.lines > 1 && fit.lastLineFill < SPARSE_LAST_LINE)
-			);
-		});
+				isSparse(metrics().fits[slotId]),
+		);
 	const activeSlot = () => {
 		const key = active();
 		return key && ed.slotIds.includes(key) ? key : undefined;
@@ -348,6 +347,22 @@ export function DraftEditor(props: {
 		window.addEventListener("keydown", onKey);
 		onCleanup(() => window.removeEventListener("keydown", onKey));
 	});
+
+	const marginCards = (narrowRail: boolean) => (
+		<MarginCards
+			narrow={narrowRail}
+			editor={ed}
+			keys={cardKeys()}
+			suggestions={suggestions}
+			measureLines={(id, text) => measureLines(id, text)}
+			stage={stage()}
+			fits={metrics().fits}
+			active={active()}
+			editable={editable()}
+			onActive={setActive}
+			onFit={editable() ? fitSlot : undefined}
+		/>
+	);
 
 	const doKeep = async () => {
 		if (!(await ed.flush())) return;
@@ -661,37 +676,9 @@ export function DraftEditor(props: {
 										/>
 									)}
 								</Show>
-								<Show when={narrow()}>
-									<MarginCards
-										narrow
-										editor={ed}
-										keys={cardKeys()}
-										suggestions={suggestions}
-										measureLines={(id, text) => measureLines(id, text)}
-										stage={stage()}
-										fits={metrics().fits}
-										active={active()}
-										editable={editable()}
-										onActive={setActive}
-										onFit={editable() ? fitSlot : undefined}
-									/>
-								</Show>
+								<Show when={narrow()}>{marginCards(true)}</Show>
 							</div>
-							<Show when={!narrow()}>
-								<MarginCards
-									narrow={false}
-									editor={ed}
-									keys={cardKeys()}
-									suggestions={suggestions}
-									measureLines={(id, text) => measureLines(id, text)}
-									stage={stage()}
-									fits={metrics().fits}
-									active={active()}
-									editable={editable()}
-									onActive={setActive}
-									onFit={editable() ? fitSlot : undefined}
-								/>
-							</Show>
+							<Show when={!narrow()}>{marginCards(false)}</Show>
 						</div>
 					)}
 				</Show>

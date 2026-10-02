@@ -127,8 +127,6 @@ func suggestError(err error) error {
 	return apperr.Upstream("the suggestion model failed")
 }
 
-// suggestTarget finds the Achievements a slot may draw on and the one-slot
-// Draft its suggestion is checked against.
 func (m *Module) suggestTarget(ctx context.Context, userID string, in dto.SuggestInput) (suggestTarget, error) {
 	draft, err := m.store.GetDraft(ctx, userID, in.ID)
 	if err != nil {
@@ -204,8 +202,6 @@ func hasProfile(draft dto.Draft, edits cvedit.EditSet) bool {
 	return len(draft.BaseContent) > 0 && json.Unmarshal(draft.BaseContent, &base) == nil && base.Profile != nil
 }
 
-// findings runs the generation-time grounding and banned-word checks on the
-// suggested text. They advise; they never block.
 func (t suggestTarget) findings(text string) []dto.DraftFinding {
 	d := t.draftWith(text)
 	return toDraftFindings(append(checks.Grounding(d), checks.BannedWords(d)...))

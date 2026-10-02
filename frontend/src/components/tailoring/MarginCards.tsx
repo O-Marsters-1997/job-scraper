@@ -11,12 +11,12 @@ import { createStore, reconcile } from "solid-js/store";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { cardTops } from "@/lib/cardLayout";
-import { charsToSave, SPARSE_LAST_LINE } from "@/lib/docLayout";
+import { charsToSave } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
 import { type DraftEditorState, SKILLS_CARD } from "../../hooks/useDraftEditor";
 import type { SuggestionsState } from "../../hooks/useSuggestions";
-import type { LineFit } from "./DocPage";
+import { isSparse, type LineFit } from "./DocPage";
 import { SuggestionCard } from "./SuggestionCard";
 
 const GAP = 10;
@@ -64,10 +64,7 @@ function Card(props: {
 	const isSlot = () => key() !== SKILLS_CARD;
 	const resolved = () => ed.isResolved(key());
 	const header = () => headerOf(ed, key());
-	const sparse = () =>
-		!!props.fit &&
-		props.fit.lines > 1 &&
-		props.fit.lastLineFill < SPARSE_LAST_LINE;
+	const sparse = () => isSparse(props.fit);
 	return (
 		<div
 			data-testid="margin-card"

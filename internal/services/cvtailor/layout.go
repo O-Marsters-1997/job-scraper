@@ -65,9 +65,6 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 	return out, nil
 }
 
-// baseSlotsByStart maps each editable paragraph's start index in the Draft
-// Doc to its base slot ID, pairing Draft Doc slots with the edit set's
-// bullets by Position and index as applyEdits does.
 func baseSlotsByStart(pl plan, edits cvedit.EditSet) map[int]string {
 	out := map[int]string{}
 	if pl.structure.Profile != nil {

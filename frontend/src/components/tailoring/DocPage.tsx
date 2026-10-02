@@ -31,9 +31,12 @@ const INK = "#000000";
 const LINK_INK = "#1155cc";
 const PAPER = "#ffffff";
 
-const PX_PER_PT = 4 / 3;
+export const PX_PER_PT = 4 / 3;
 
 export type LineFit = { lines: number; lastLineFill: number };
+
+export const isSparse = (fit: LineFit | undefined) =>
+	!!fit && fit.lines > 1 && fit.lastLineFill < SPARSE_LAST_LINE;
 
 export type PageMetrics = {
 	contentPt: number;
@@ -266,9 +269,7 @@ function Block(props: {
 									title={`${fit().lines} lines, last line ${Math.round(fit().lastLineFill * 100)}% full`}
 									class={cn(
 										"pointer-events-none absolute top-0 text-right font-mono text-2xs tabular-nums",
-										fit().lines > 1 && fit().lastLineFill < SPARSE_LAST_LINE
-											? "text-status-interview"
-											: "text-faint",
+										isSparse(fit()) ? "text-status-interview" : "text-faint",
 									)}
 									style={{
 										left: `${-props.page.marginLeft - props.block.indentStart}pt`,

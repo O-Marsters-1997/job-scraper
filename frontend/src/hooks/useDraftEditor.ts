@@ -129,8 +129,9 @@ export function createDraftEditor(
 	const pageCountFinding = () =>
 		draft().findings.find((f) => f.check === "page_count");
 	const googlePages = (): number | undefined => {
-		if (dirty() || !pageCountFinding()) return undefined;
-		const n = Number(PAGE_COUNT.exec(pageCountFinding()?.message ?? "")?.[1]);
+		const finding = pageCountFinding();
+		if (dirty() || !finding) return undefined;
+		const n = Number(PAGE_COUNT.exec(finding.message)?.[1]);
 		return n > 1 ? n : 2;
 	};
 
@@ -165,7 +166,6 @@ export function createDraftEditor(
 		undo: (slotId: string) => setText(slotId, original[slotId] ?? ""),
 		edited: (slotId: string) => text(slotId) !== original[slotId],
 		segments,
-		sources,
 		findingsFor: findingsOf,
 		gaps,
 		cardKeys,

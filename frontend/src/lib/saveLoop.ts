@@ -62,6 +62,5 @@ export function createSaveLoop(opts: {
 			return ok;
 		},
 		pending: () => timer !== undefined || inflight !== undefined,
-		dispose: cancelTimer,
 	};
 }

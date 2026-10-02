@@ -28,7 +28,7 @@ export function resolveFont(name: string): DocFont {
 	return { ...(serif ? TINOS : ARIMO), known: false };
 }
 
-export function unknownFonts(layout: DraftLayout): string[] {
+function unknownFonts(layout: DraftLayout): string[] {
 	const names = new Set<string>();
 	for (const b of layout.blocks)
 		for (const r of b.runs)

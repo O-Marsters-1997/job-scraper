@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createSseParser } from "../lib/sse";
 import { KeptDraftExistsError } from "../lib/tailoring";
 import {
@@ -159,13 +160,17 @@ export async function fetchDraftLayout(id: string): Promise<DraftLayout> {
 	);
 }
 
+const errorBodySchema = z.object({ error: z.string() });
+const deltaSchema = z.object({ text: z.string() });
+const failureSchema = z.object({ message: z.string().optional() });
+
 function unsupportedReason(body: unknown): string {
-	const reason = (body as { error?: unknown } | undefined)?.error;
-	return typeof reason === "string" ? reason : "unsupported layout";
+	const parsed = errorBodySchema.safeParse(body);
+	return parsed.success ? parsed.data.error : "unsupported layout";
 }
 
 const messageOf = (data: string) =>
-	(JSON.parse(data) as { message?: string }).message ?? "Suggestion failed";
+	failureSchema.parse(JSON.parse(data)).message ?? "Suggestion failed";
 
 export async function streamSuggestion(
 	id: string,
@@ -182,8 +187,8 @@ export async function streamSuggestion(
 				{ ...jsonInit("POST", req), signal },
 			).catch((err) => {
 				if (err instanceof ApiError) {
-					const msg = (err.body as { error?: unknown } | undefined)?.error;
-					if (typeof msg === "string") throw new Error(msg);
+					const parsed = errorBodySchema.safeParse(err.body);
+					if (parsed.success) throw new Error(parsed.data.error);
 				}
 				throw err;
 			});
@@ -192,7 +197,7 @@ export async function streamSuggestion(
 			let failure: string | undefined;
 			const feed = createSseParser((event, data) => {
 				if (event === "delta")
-					onDelta((JSON.parse(data) as { text: string }).text);
+					onDelta(deltaSchema.parse(JSON.parse(data)).text);
 				if (event === "done") done = suggestDoneSchema.parse(JSON.parse(data));
 				if (event === "error") failure = messageOf(data);
 			});
