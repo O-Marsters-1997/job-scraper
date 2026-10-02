@@ -156,7 +156,7 @@ const discoverySourceTargets: SourceTarget[] = [
 		Source: "wis",
 		Value: "engineer",
 		Enabled: true,
-		Filters: { region: "uk" },
+		Filters: { loc: "86383" },
 		RunStatus: "succeeded",
 		LastRunAt: faker.date.recent({ days: 1 }).toISOString(),
 		LastRunError: "",

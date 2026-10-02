@@ -46,13 +46,16 @@ func TestParseSearchURL(t *testing.T) {
 			},
 		},
 		{
-			name: "wis with paging",
-			url:  "https://workinstartups.com/search?q=product+engineer&w=uk&p=3&per_page=50",
+			name: "wis keeps filters, ignores paging, sort and f, drops w",
+			url:  "https://workinstartups.com/search?q=product+engineer&w=uk&p=3&per_page=50&loc=86384&cat=2&remote_only=1&cty=permanent&cti=full_time&sf=30000&sb=date&sd=down&f=3",
 			want: detect.SearchURL{
-				Source:  "wis",
-				Value:   "product engineer",
-				Filters: map[string]string{"region": "uk"},
-				Dropped: []string{},
+				Source: "wis",
+				Value:  "product engineer",
+				Filters: map[string]string{
+					"loc": "86384", "category": "2", "remote_only": "1",
+					"contract": "permanent", "hours": "full_time", "salary_from": "30000",
+				},
+				Dropped: []string{"w"},
 			},
 		},
 		{
@@ -134,9 +137,9 @@ func TestBuildSearchURL(t *testing.T) {
 			want: "https://www.linkedin.com/jobs/search/?keywords=go",
 		},
 		{
-			name:   "wis region",
-			source: "wis", value: "product engineer", filters: map[string]string{"region": "uk"},
-			want: "https://workinstartups.com/search?q=product+engineer&w=uk",
+			name:   "wis loc",
+			source: "wis", value: "product engineer", filters: map[string]string{"loc": "86383"},
+			want: "https://workinstartups.com/search?loc=86383&q=product+engineer",
 		},
 		{
 			name:   "indeed keywords and filters",
@@ -166,7 +169,10 @@ func TestBuildSearchURL(t *testing.T) {
 		}{
 			{"linkedin every filter", "linkedin", "golang engineer", linkedin},
 			{"linkedin keywords only", "linkedin", "go", map[string]string{}},
-			{"wis region", "wis", "product engineer", map[string]string{"region": "uk"}},
+			{"wis every filter", "wis", "product engineer", map[string]string{
+				"loc": "86384", "category": "2", "remote_only": "1",
+				"contract": "permanent", "hours": "full_time", "salary_from": "30000",
+			}},
 			{"wis keywords only", "wis", "go", map[string]string{}},
 		}
 		for _, tt := range tests {

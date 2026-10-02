@@ -9,7 +9,7 @@ import (
 func TestSources(t *testing.T) {
 	enumerated := map[string][]string{
 		"linkedin": {"recency", "arrangement", "experience", "job_type", "distance", "salary_band"},
-		"wis":      {"region"},
+		"wis":      {"loc", "remote_only", "category", "contract", "hours", "salary_from"},
 	}
 	byName := map[string]sourcespec.SourceInfo{}
 	for _, s := range sourcespec.Sources() {
@@ -45,7 +45,8 @@ func TestValidFilterValue(t *testing.T) {
 		{"free-form field accepts anything", "linkedin", "location", "London", true},
 		{"unknown field", "linkedin", "nope", "1", false},
 		{"unknown source", "nope", "recency", "r86400", false},
-		{"wis region", "wis", "region", "uk", true},
+		{"wis loc", "wis", "loc", "86383", true},
+		{"wis removed region", "wis", "region", "uk", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

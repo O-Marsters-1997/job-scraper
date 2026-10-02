@@ -46,20 +46,27 @@ func DetectWorkArrangement(badges []string, descText string) string {
 }
 
 type Search struct {
-	Keywords string // maps to the q URL param, e.g. "product engineer"
-	Region   string // maps to the w URL param, e.g. "uk"; empty means no filter
+	Keywords string
+	Filters  map[string]string
 }
 
 func (s Search) startURL() string {
 	v := url.Values{}
 	v.Set("q", s.Keywords)
-	switch {
-	case s.Region == "":
-	case sourcespec.ValidFilterValue("wis", "region", s.Region):
-		v.Set("w", s.Region)
-	default:
-		slog.Warn("wis: dropping invalid filter value", slog.String("param", "region"), slog.String("value", s.Region))
+	fields, _ := sourcespec.LookupFilterFields("wis")
+	for _, f := range fields {
+		value := s.Filters[f.Name]
+		if value == "" {
+			continue
+		}
+		if !sourcespec.ValidFilterValue("wis", f.Name, value) {
+			slog.Warn("wis: dropping invalid filter value", slog.String("param", f.Param), slog.String("value", value))
+			continue
+		}
+		v.Set(f.Param, value)
 	}
+	v.Set("sb", "date")
+	v.Set("sd", "down")
 	v.Set("per_page", strconv.Itoa(pageSize))
 	return baseURL + "?" + v.Encode()
 }

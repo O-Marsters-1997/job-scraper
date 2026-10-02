@@ -69,13 +69,12 @@ const SOURCE_INFOS: SourceInfo[] = [
 		url_prefix: "https://workinstartups.com",
 		filters: [
 			{
-				name: "region",
-				label: "Region",
+				name: "loc",
+				label: "Location",
 				required: false,
 				options: [
-					{ value: "uk", label: "UK" },
-					{ value: "us", label: "US" },
-					{ value: "remote", label: "Remote" },
+					{ value: "86383", label: "United Kingdom" },
+					{ value: "86384", label: "London" },
 				],
 			},
 		],
