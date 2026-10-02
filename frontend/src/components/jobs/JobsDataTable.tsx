@@ -107,7 +107,13 @@ export function JobsDataTable<TData extends Job>(
 				</Button>
 			</div>
 
-			<div class="overflow-hidden rounded-xl border border-border bg-surface">
+			<div
+				class="overflow-hidden rounded-xl border border-border bg-surface"
+				data-feedback-collection={table
+					.getPrePaginationRowModel()
+					.rows.map((row) => row.original.ID)
+					.join(",")}
+			>
 				<Table>
 					<TableHeader>
 						<For each={table.getHeaderGroups()}>

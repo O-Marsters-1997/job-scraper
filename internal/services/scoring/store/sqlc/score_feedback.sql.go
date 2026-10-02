@@ -24,21 +24,33 @@ func (q *Queries) ClearScoreFeedback(ctx context.Context, userID pgtype.UUID) (i
 }
 
 const countScoreFeedback = `-- name: CountScoreFeedback :one
-SELECT count(*) FROM score_feedback
-WHERE user_id = $1
-  AND ($2::text = '' OR kind = $2::text)
+SELECT count(*) FILTER (WHERE NOT (d.picks_changed OR d.model_changed))::bigint AS current,
+       count(*) FILTER (WHERE d.picks_changed OR d.model_changed)::bigint AS outdated
+FROM score_feedback sf
+CROSS JOIN LATERAL (
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
+           sf.model <> $1::text AS model_changed
+) d
+WHERE sf.user_id = $2
+  AND ($3::text = '' OR sf.kind = $3::text)
 `
 
 type CountScoreFeedbackParams struct {
+	Model  string
 	UserID pgtype.UUID
 	Kind   string
 }
 
-func (q *Queries) CountScoreFeedback(ctx context.Context, arg CountScoreFeedbackParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countScoreFeedback, arg.UserID, arg.Kind)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type CountScoreFeedbackRow struct {
+	Current  int64
+	Outdated int64
+}
+
+func (q *Queries) CountScoreFeedback(ctx context.Context, arg CountScoreFeedbackParams) (CountScoreFeedbackRow, error) {
+	row := q.db.QueryRow(ctx, countScoreFeedback, arg.Model, arg.UserID, arg.Kind)
+	var i CountScoreFeedbackRow
+	err := row.Scan(&i.Current, &i.Outdated)
+	return i, err
 }
 
 const deleteScoreFeedback = `-- name: DeleteScoreFeedback :execrows
@@ -133,25 +145,96 @@ func (q *Queries) InsertScoreFeedback(ctx context.Context, arg InsertScoreFeedba
 	return i, err
 }
 
+const listJobScoresForCollection = `-- name: ListJobScoresForCollection :many
+SELECT j.id, j.title, j.company_slug, js.suitability_score AS score, COALESCE(js.breakdown, '[]'::jsonb) AS breakdown
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+WHERE j.id = ANY($2::uuid[])
+`
+
+type ListJobScoresForCollectionParams struct {
+	UserID pgtype.UUID
+	JobIds []pgtype.UUID
+}
+
+type ListJobScoresForCollectionRow struct {
+	ID          pgtype.UUID
+	Title       string
+	CompanySlug string
+	Score       pgtype.Int4
+	Breakdown   []byte
+}
+
+func (q *Queries) ListJobScoresForCollection(ctx context.Context, arg ListJobScoresForCollectionParams) ([]ListJobScoresForCollectionRow, error) {
+	rows, err := q.db.Query(ctx, listJobScoresForCollection, arg.UserID, arg.JobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobScoresForCollectionRow
+	for rows.Next() {
+		var i ListJobScoresForCollectionRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.CompanySlug,
+			&i.Score,
+			&i.Breakdown,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listScoreFeedback = `-- name: ListScoreFeedback :many
-SELECT id, user_id, job_id, kind, direction, reason, picks, model, snapshot, created_at FROM score_feedback
-WHERE user_id = $1
-  AND ($2::text = '' OR kind = $2::text)
-ORDER BY created_at DESC, id DESC
-LIMIT $4::int OFFSET $3::int
+SELECT sf.id, sf.user_id, sf.job_id, sf.kind, sf.direction, sf.reason, sf.picks, sf.model, sf.snapshot, sf.created_at, d.picks_changed, d.model_changed
+FROM score_feedback sf
+CROSS JOIN LATERAL (
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
+           sf.model <> $1::text AS model_changed
+) d
+WHERE sf.user_id = $2
+  AND ($3::text = '' OR sf.kind = $3::text)
+  AND ($4::bool OR NOT (d.picks_changed OR d.model_changed))
+ORDER BY sf.created_at DESC, sf.id DESC
+LIMIT $6::int OFFSET $5::int
 `
 
 type ListScoreFeedbackParams struct {
-	UserID    pgtype.UUID
-	Kind      string
-	RowOffset int32
-	RowLimit  int32
+	Model           string
+	UserID          pgtype.UUID
+	Kind            string
+	IncludeOutdated bool
+	RowOffset       int32
+	RowLimit        int32
 }
 
-func (q *Queries) ListScoreFeedback(ctx context.Context, arg ListScoreFeedbackParams) ([]ScoreFeedback, error) {
+type ListScoreFeedbackRow struct {
+	ID           pgtype.UUID
+	UserID       pgtype.UUID
+	JobID        pgtype.UUID
+	Kind         string
+	Direction    pgtype.Text
+	Reason       string
+	Picks        []byte
+	Model        string
+	Snapshot     []byte
+	CreatedAt    pgtype.Timestamptz
+	PicksChanged bool
+	ModelChanged bool
+}
+
+func (q *Queries) ListScoreFeedback(ctx context.Context, arg ListScoreFeedbackParams) ([]ListScoreFeedbackRow, error) {
 	rows, err := q.db.Query(ctx, listScoreFeedback,
+		arg.Model,
 		arg.UserID,
 		arg.Kind,
+		arg.IncludeOutdated,
 		arg.RowOffset,
 		arg.RowLimit,
 	)
@@ -159,9 +242,9 @@ func (q *Queries) ListScoreFeedback(ctx context.Context, arg ListScoreFeedbackPa
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ScoreFeedback
+	var items []ListScoreFeedbackRow
 	for rows.Next() {
-		var i ScoreFeedback
+		var i ListScoreFeedbackRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -173,6 +256,8 @@ func (q *Queries) ListScoreFeedback(ctx context.Context, arg ListScoreFeedbackPa
 			&i.Model,
 			&i.Snapshot,
 			&i.CreatedAt,
+			&i.PicksChanged,
+			&i.ModelChanged,
 		); err != nil {
 			return nil, err
 		}

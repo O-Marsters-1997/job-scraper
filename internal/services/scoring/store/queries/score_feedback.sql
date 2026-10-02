@@ -4,16 +4,28 @@ VALUES (sqlc.arg(user_id), sqlc.narg(job_id), sqlc.arg(kind)::text, sqlc.narg(di
 RETURNING *;
 
 -- name: ListScoreFeedback :many
-SELECT * FROM score_feedback
-WHERE user_id = sqlc.arg(user_id)
-  AND (sqlc.arg(kind)::text = '' OR kind = sqlc.arg(kind)::text)
-ORDER BY created_at DESC, id DESC
+SELECT sf.*, d.picks_changed, d.model_changed
+FROM score_feedback sf
+CROSS JOIN LATERAL (
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
+           sf.model <> sqlc.arg(model)::text AS model_changed
+) d
+WHERE sf.user_id = sqlc.arg(user_id)
+  AND (sqlc.arg(kind)::text = '' OR sf.kind = sqlc.arg(kind)::text)
+  AND (sqlc.arg(include_outdated)::bool OR NOT (d.picks_changed OR d.model_changed))
+ORDER BY sf.created_at DESC, sf.id DESC
 LIMIT sqlc.arg(row_limit)::int OFFSET sqlc.arg(row_offset)::int;
 
 -- name: CountScoreFeedback :one
-SELECT count(*) FROM score_feedback
-WHERE user_id = sqlc.arg(user_id)
-  AND (sqlc.arg(kind)::text = '' OR kind = sqlc.arg(kind)::text);
+SELECT count(*) FILTER (WHERE NOT (d.picks_changed OR d.model_changed))::bigint AS current,
+       count(*) FILTER (WHERE d.picks_changed OR d.model_changed)::bigint AS outdated
+FROM score_feedback sf
+CROSS JOIN LATERAL (
+    SELECT sf.picks IS DISTINCT FROM COALESCE(NULLIF((SELECT preferences->'picks' FROM search_config WHERE user_id = sf.user_id), 'null'::jsonb), '[]'::jsonb) AS picks_changed,
+           sf.model <> sqlc.arg(model)::text AS model_changed
+) d
+WHERE sf.user_id = sqlc.arg(user_id)
+  AND (sqlc.arg(kind)::text = '' OR sf.kind = sqlc.arg(kind)::text);
 
 -- name: DeleteScoreFeedback :execrows
 DELETE FROM score_feedback WHERE id = $1 AND user_id = $2;
@@ -26,3 +38,9 @@ SELECT suitability_score::int AS score, breakdown, COALESCE(score_fingerprint, '
     COALESCE(score_model, '')::text AS score_model
 FROM job_scores
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id) AND suitability_score IS NOT NULL;
+
+-- name: ListJobScoresForCollection :many
+SELECT j.id, j.title, j.company_slug, js.suitability_score AS score, COALESCE(js.breakdown, '[]'::jsonb) AS breakdown
+FROM jobs j
+LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)
+WHERE j.id = ANY(sqlc.arg(job_ids)::uuid[]);

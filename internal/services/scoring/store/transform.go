@@ -50,6 +50,15 @@ func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 	}
 }
 
+func toListedScoreFeedbackDTO(row sqlc.ListScoreFeedbackRow) (dto.ScoreFeedback, error) {
+	out, err := toScoreFeedbackDTO(sqlc.ScoreFeedback{
+		ID: row.ID, UserID: row.UserID, JobID: row.JobID, Kind: row.Kind, Direction: row.Direction,
+		Reason: row.Reason, Picks: row.Picks, Model: row.Model, Snapshot: row.Snapshot, CreatedAt: row.CreatedAt,
+	})
+	out.PicksChanged, out.ModelChanged = row.PicksChanged, row.ModelChanged
+	return out, err
+}
+
 func toScoreFeedbackDTO(row sqlc.ScoreFeedback) (dto.ScoreFeedback, error) {
 	picks := []dto.Pick{}
 	if err := json.Unmarshal(row.Picks, &picks); err != nil {
