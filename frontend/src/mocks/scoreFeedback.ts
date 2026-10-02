@@ -99,6 +99,8 @@ export function appendCollectionFeedback(
 			}),
 		},
 		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
 	};
 	entries = [entry, ...entries];
 	return structuredClone(entry);
