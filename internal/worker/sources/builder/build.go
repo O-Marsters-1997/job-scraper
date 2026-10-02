@@ -6,6 +6,7 @@ package builder
 import (
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -40,12 +41,9 @@ var registry = map[string]entry{
 	"recruitee":  boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
 	"personio":   boardEntry(func(v string) sources.Source { return personio.New(v) }),
 	"wttj":       {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
-	"indeed": {
-		build:  func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value) },
-		detail: indeed.New(""),
-	},
-	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
-	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+	"indeed":     {build: func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value, t.Filters) }},
+	"remoteok":   {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+	"remotive":   {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 	"wis": {
 		build: func(t dto.SourceTarget) sources.Source {
 			return wis.New(wis.Search{Keywords: t.Value, Region: t.Filters["region"]})
@@ -58,6 +56,13 @@ var registry = map[string]entry{
 		},
 		detail: linkedin.New("", nil, ""),
 	},
+}
+
+func buildIndeed(t dto.SourceTarget) sources.Source {
+	if search, ok := detect.ParseSearchURL(t.Value); ok && search.Source == "indeed" {
+		return indeed.New(search.Value, search.Filters)
+	}
+	return indeed.New(t.Value, t.Filters)
 }
 
 // BuildSource builds the Source for one enabled target. It returns false when

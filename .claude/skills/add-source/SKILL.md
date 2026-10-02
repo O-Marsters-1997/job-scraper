@@ -19,9 +19,6 @@ it embeds `sources.PaginatedBase` and implements `FetchPage` plus `DetailFetcher
 (`CanHandle`/`GetDetails`). Load the `goquery-parsing` skill before writing any
 selectors — see `references/html-parsing.md` for when.
 
-Do not copy `internal/worker/sources/indeed` for either branch — it predates both
-patterns and is a legacy outlier, not something to imitate.
-
 ## 2. Register it
 
 Add an entry to the `entries` slice in `internal/sourcespec/sourcespec.go` (metadata the API

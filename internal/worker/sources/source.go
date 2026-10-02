@@ -101,15 +101,20 @@ func (b *PaginatedBase) Cfg() Config { return b.cfg }
 func (b *PaginatedBase) Client() *http.Client { return b.client }
 
 func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
-	return b.do(ctx, http.MethodGet, url, nil)
+	return b.do(ctx, http.MethodGet, url, nil, nil)
+}
+
+// PostJSON sends body as JSON; header entries override the defaults.
+func (b *PaginatedBase) PostJSON(ctx context.Context, url string, body []byte, header http.Header) ([]byte, error) {
+	return b.do(ctx, http.MethodPost, url, body, header)
 }
 
 // PostEmptyJSON exists because some ATS list APIs (e.g. Workable) only respond to POST.
 func (b *PaginatedBase) PostEmptyJSON(ctx context.Context, url string) ([]byte, error) {
-	return b.do(ctx, http.MethodPost, url, []byte("{}"))
+	return b.do(ctx, http.MethodPost, url, []byte("{}"), nil)
 }
 
-func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte, header http.Header) ([]byte, error) {
 	if b.initErr != nil {
 		return nil, b.initErr
 	}
@@ -126,6 +131,9 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte)
 	req.Header.Set("Accept-Language", "en-GB,en;q=0.9")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range header {
+		req.Header[k] = v
 	}
 
 	resp, err := b.client.Do(req)

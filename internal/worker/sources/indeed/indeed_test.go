@@ -1,59 +1,121 @@
 package indeed_test
 
 import (
+	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
-// TestSnapshots runs against the placeholder fixtures in snapshots/ — see
-// snapshots/README.md. They are NOT real Indeed captures.
-func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, indeed.New(""))
+func newScraper(t *testing.T, body string, filters map[string]string) (*indeed.Scraper, *sourcetest.Responder) {
+	t.Helper()
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
+	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@localhost:7001")
+	t.Setenv("INDEED_API_KEY", "test-key")
+	s := indeed.New("go developer", filters)
+	r := sourcetest.Respond(body)
+	s.Client().Transport = r
+	return s, r
 }
 
-func FuzzParse(f *testing.F) {
-	sourcetest.FuzzSnapshots(f, indeed.New(""))
-}
-
-// TestParseURLs_AntiBotBlock guards the semantic-200 check: BrightData's Web
-// Unlocker returns HTTP 200 even for anti-bot interstitials, so a page with
-// zero job cards and no recognizable "no results" marker must error rather
-// than silently look like a fresh, empty scrape.
-//
-// testdata/blocked_cloudflare.html is a real page captured by this
-// environment's own direct (unproxied, non-BrightData) fetch attempt against
-// indeed.com, which was blocked with a Cloudflare "Additional Verification
-// Required" interstitial. It's not a BrightData-specific capture, but it is a
-// real anti-bot block page and exercises the same zero-cards/no-marker shape.
-func TestParseURLs_AntiBotBlock(t *testing.T) {
-	f, err := os.Open("testdata/blocked_cloudflare.html")
+func TestFetchPage(t *testing.T) {
+	fixture, err := os.ReadFile("snapshots/search_london.json")
 	if err != nil {
-		t.Fatalf("open fixture: %v", err)
+		t.Fatalf("read fixture: %v", err)
 	}
-	defer func() { _ = f.Close() }()
 
-	_, err = indeed.ParseURLs(f)
-	if err == nil {
-		t.Fatal("expected an error for a blocked/interstitial page, got nil")
-	}
-}
+	t.Run("maps a card to a complete Job", func(t *testing.T) {
+		s, _ := newScraper(t, string(fixture), nil)
+		jobs, next, err := s.FetchPage(t.Context(), "")
+		if err != nil {
+			t.Fatalf("FetchPage() err = %v", err)
+		}
+		if len(jobs) != 3 {
+			t.Fatalf("FetchPage() returned %d jobs, want 3", len(jobs))
+		}
+		got := jobs[1]
+		if got.URL != "https://uk.indeed.com/viewjob?jk=829d375fdc5c3ced" {
+			t.Errorf("URL = %q", got.URL)
+		}
+		if got.Title != "Full Stack Developer" || got.CompanySlug != "orientate" || got.Location != "London" {
+			t.Errorf("job = %+v, want title, company slug and location mapped", got)
+		}
+		if got.SalaryRaw != "£40000 - £80000 per year" {
+			t.Errorf("SalaryRaw = %q", got.SalaryRaw)
+		}
+		if !strings.HasPrefix(got.Description, "<p>Orientate is growing") {
+			t.Errorf("Description = %q, want the card's html", got.Description)
+		}
+		if want := time.UnixMilli(1790945211332).UTC(); !got.UpdatedAt.Equal(want) {
+			t.Errorf("UpdatedAt = %v, want %v", got.UpdatedAt, want)
+		}
+		if next == "" {
+			t.Error("next cursor is empty, want the response's nextCursor")
+		}
+	})
 
-func TestParseURLs_NoResultsIsNotAnError(t *testing.T) {
-	const noResultsHTML = `<!DOCTYPE html><html><body>
-		<div id="mosaic-provider-jobcards">
-			<p>Sorry, we did not match any jobs to your search.</p>
-		</div>
-	</body></html>`
+	t.Run("a card without salary or employer still maps", func(t *testing.T) {
+		s, _ := newScraper(t, string(fixture), nil)
+		jobs, _, err := s.FetchPage(t.Context(), "")
+		if err != nil {
+			t.Fatalf("FetchPage() err = %v", err)
+		}
+		if jobs[0].CompanySlug != "" || jobs[2].SalaryRaw != "" {
+			t.Errorf("jobs = %+v, want empty company for the first and empty salary for the last", jobs)
+		}
+	})
 
-	jobs, err := indeed.ParseURLs(strings.NewReader(noResultsHTML))
-	if err != nil {
-		t.Fatalf("expected no error for a genuine no-results page, got: %v", err)
-	}
-	if len(jobs) != 0 {
-		t.Fatalf("expected 0 jobs, got %d", len(jobs))
-	}
+	t.Run("the last page has no next cursor", func(t *testing.T) {
+		s, _ := newScraper(t, `{"data":{"jobSearch":{"pageInfo":{"nextCursor":null},"results":[]}}}`, nil)
+		jobs, next, err := s.FetchPage(t.Context(), "abc")
+		if err != nil || len(jobs) != 0 || next != "" {
+			t.Errorf("FetchPage() = %v, %q, %v; want no jobs, no cursor, no error", jobs, next, err)
+		}
+	})
+
+	t.Run("sends the key, locale headers and the search arguments", func(t *testing.T) {
+		filters := map[string]string{"location": `Lon"don`, "radius": "25", "recency": "7"}
+		s, r := newScraper(t, string(fixture), filters)
+		if _, _, err := s.FetchPage(t.Context(), "cur"); err != nil {
+			t.Fatalf("FetchPage() err = %v", err)
+		}
+		req := r.Last
+		headers := map[string]string{"Indeed-Api-Key": "test-key", "Indeed-Co": "GB", "Indeed-Locale": "en-GB"}
+		for k, want := range headers {
+			if got := req.Header.Get(k); got != want {
+				t.Errorf("header %s = %q, want %q", k, got, want)
+			}
+		}
+		body, _ := io.ReadAll(req.Body)
+		for _, want := range []string{
+			`what: \"go developer\"`,
+			`location: {where: \"Lon\\\"don\", radius: 25, radiusUnit: MILES}`,
+			`start: \"168h\"`,
+			`cursor: \"cur\"`,
+		} {
+			if !strings.Contains(string(body), want) {
+				t.Errorf("request body missing %s:\n%s", want, body)
+			}
+		}
+	})
+
+	t.Run("a missing key is an error", func(t *testing.T) {
+		s, _ := newScraper(t, string(fixture), nil)
+		t.Setenv("INDEED_API_KEY", "")
+		if _, _, err := s.FetchPage(t.Context(), ""); err == nil {
+			t.Error("FetchPage() err = nil, want a missing-key error")
+		}
+	})
+
+	t.Run("a graphql error is an error", func(t *testing.T) {
+		s, _ := newScraper(t, `{"errors":[{"message":"bad query"}],"data":null}`, nil)
+		_, _, err := s.FetchPage(t.Context(), "")
+		if err == nil || !strings.Contains(err.Error(), "bad query") {
+			t.Errorf("FetchPage() err = %v, want the graphql message", err)
+		}
+	})
 }

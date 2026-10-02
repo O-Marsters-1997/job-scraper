@@ -1,0 +1,89 @@
+{
+  "data": {
+    "jobSearch": {
+      "pageInfo": {
+        "nextCursor": "AGQAAQBkAAAAAAAAAAAAAAACZPBtVAEBARc/S9xU"
+      },
+      "results": [
+        {
+          "job": {
+            "key": "ec5291ef2414cdd2",
+            "title": "Full-Stack JavaScript Developer",
+            "datePublished": 1790945709671,
+            "description": {
+              "html": "<p><b>Location</b></p><p>Upminster, Essex, UK</p><p><b>Working pattern</b></p><p>On Site</p><p><b>Salary</b></p><p>&pound;40,000-&pound;60,000, depending on experience</p><p><b>Employment type</b></p>"
+            },
+            "location": {
+              "formatted": {
+                "long": "Upminster"
+              }
+            },
+            "compensation": {
+              "baseSalary": {
+                "unitOfWork": "YEAR",
+                "range": {
+                  "min": 40000.0,
+                  "max": 60000.0
+                }
+              },
+              "currencyCode": "GBP"
+            },
+            "employer": {
+              "name": null
+            }
+          }
+        },
+        {
+          "job": {
+            "key": "829d375fdc5c3ced",
+            "title": "Full Stack Developer",
+            "datePublished": 1790945211332,
+            "description": {
+              "html": "<p>Orientate is growing seats by double digits weekly, and we need to build more software to continue to serve our clients. We are looking for an engineer who can build full-stack, client-facing appli"
+            },
+            "location": {
+              "formatted": {
+                "long": "London"
+              }
+            },
+            "compensation": {
+              "baseSalary": {
+                "unitOfWork": "YEAR",
+                "range": {
+                  "min": 40000.0,
+                  "max": 80000.0
+                }
+              },
+              "currencyCode": "GBP"
+            },
+            "employer": {
+              "name": "Orientate"
+            }
+          }
+        },
+        {
+          "job": {
+            "key": "b3ee3195157eba56",
+            "title": "Senior Fullstack Engineer - UK",
+            "datePublished": 1790917200000,
+            "description": {
+              "html": "<div><p>We&rsquo;re Heidi.</p><p></p><p>\nWe're building the future of healthcare by giving every clinician the earth's finest AI Care Partner. Our platform has absorbed the administrative chaos of 175"
+            },
+            "location": {
+              "formatted": {
+                "long": "London"
+              }
+            },
+            "compensation": {
+              "baseSalary": null,
+              "currencyCode": null
+            },
+            "employer": {
+              "name": "Heidi"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

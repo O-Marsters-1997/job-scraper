@@ -9,7 +9,7 @@ import (
 )
 
 // SearchURL is a board search page reduced to the fields the source adapters
-// accept. Value is the keyword query, or for Indeed the normalised URL.
+// accept. Value is the keyword query.
 type SearchURL struct {
 	Source  string
 	Value   string
@@ -28,7 +28,6 @@ type boardSpec struct {
 	paths         []string
 	canonical     string
 	keywordsParam string
-	params        []paramSpec
 	dropped       []string
 	silent        []string
 }
@@ -55,16 +54,10 @@ var searchBoards = []boardSpec{
 		source:        "indeed",
 		hosts:         []string{"indeed.com", "indeed.co.uk"},
 		paths:         []string{"/jobs"},
+		canonical:     "https://uk.indeed.com/jobs",
 		keywordsParam: "q",
-		params: []paramSpec{
-			{"l", "l"},
-			{"fromage", "fromage"},
-			{"radius", "radius"},
-			{"jt", "jt"},
-			{"sort", "sort"},
-		},
-		dropped: []string{"vjk", "from", "advn", "vjs", "sc"},
-		silent:  []string{"start"},
+		dropped:       []string{"vjk", "from", "advn", "vjs", "sc"},
+		silent:        []string{"start"},
 	},
 }
 
@@ -98,10 +91,7 @@ func (b boardSpec) matchesPath(path string) bool {
 }
 
 func (b boardSpec) paramSpecs() []paramSpec {
-	fields, ok := sourcespec.LookupFilterFields(b.source)
-	if !ok {
-		return b.params
-	}
+	fields, _ := sourcespec.LookupFilterFields(b.source)
 	specs := make([]paramSpec, len(fields))
 	for i, f := range fields {
 		specs[i] = paramSpec{param: f.Param, filter: f.Name}
@@ -177,26 +167,8 @@ func (b boardSpec) parse(u *neturl.URL) SearchURL {
 	}
 	slices.Sort(out.Dropped)
 
-	keywords := query.Get(b.keywordsParam)
-	if b.source != "indeed" {
-		out.Value = keywords
-		return out
-	}
-	out.Value = buildIndeed(strings.ToLower(u.Hostname()), keywords, out.Filters)
-	out.Filters = map[string]string{}
+	out.Value = query.Get(b.keywordsParam)
 	return out
-}
-
-func buildIndeed(host, keywords string, params map[string]string) string {
-	v := neturl.Values{}
-	if keywords != "" {
-		v.Set("q", keywords)
-	}
-	for k, val := range params {
-		v.Set(k, val)
-	}
-	u := neturl.URL{Scheme: "https", Host: host, Path: "/jobs", RawQuery: v.Encode()}
-	return u.String()
 }
 
 // BuildSearchURL returns the board page for a search, or "" for a source with
@@ -205,13 +177,6 @@ func BuildSearchURL(source, value string, filters map[string]string) string {
 	for _, b := range searchBoards {
 		if b.source != source {
 			continue
-		}
-		if source == "indeed" {
-			parsed, ok := ParseSearchURL(value)
-			if !ok {
-				return ""
-			}
-			return parsed.Value
 		}
 		v := neturl.Values{}
 		if value != "" {

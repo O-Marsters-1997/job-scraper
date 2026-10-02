@@ -1,193 +1,210 @@
-// Package indeed scrapes Indeed search-result and job-detail pages.
-// It runs through BrightData Web Unlocker because Cloudflare and Indeed's own
-// fingerprinting block direct HTTP; selectors are unverified against a live page.
 package indeed
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"regexp"
+	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
-
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 const (
-	baseURL = "https://www.indeed.com"
+	apiURL    = "https://apis.indeed.com/graphql"
+	jobURL    = "https://uk.indeed.com/viewjob?jk="
+	apiKeyEnv = "INDEED_API_KEY"
 
-	selJobCard      = `div.job_seen_beacon`
-	selCardTitle    = `h2.jobTitle a`
-	selCardCompany  = `[data-testid="company-name"]`
-	selCardLocation = `[data-testid="text-location"]`
-
-	selDetailTitle       = `h1[data-testid="jobsearch-JobInfoHeader-title"]`
-	selDetailCompany     = `[data-testid="inlineHeader-companyName"]`
-	selDetailLocation    = `[data-testid="inlineHeader-companyLocation"]`
-	selDetailDescription = `#jobDescriptionText`
+	resultFields = `pageInfo { nextCursor } results { job { key title datePublished description { html }
+location { formatted { long } }
+compensation { currencyCode baseSalary { unitOfWork range { ... on Range { min max } } } }
+employer { name } } }`
 )
 
-// noResultsRe matches Indeed's plain-text "nothing found" copy. Unverified
-// (see package doc) — refine once a real empty-search fixture is captured.
-var noResultsRe = regexp.MustCompile(`(?i)did not match any jobs|no jobs found|couldn't find any jobs`)
+var apiHeaders = http.Header{
+	"Accept":          {"application/json"},
+	"Accept-Language": {"en-GB,en;q=0.9"},
+	"User-Agent":      {"Mozilla/5.0 (iPhone; CPU iPhone OS 16_6_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Indeed App 193.1"},
+	"Indeed-Co":       {"GB"},
+	"Indeed-Locale":   {"en-GB"},
+	"Indeed-App-Info": {"appv=193.1; appid=com.indeed.jobsearch; osv=16.6.1; os=ios; dtype=phone"},
+}
 
 type Scraper struct {
 	sources.PaginatedBase
-	searchURL string
+	keywords string
+	filters  map[string]string
 }
 
 var _ sources.Source = (*Scraper)(nil)
-var _ sources.DetailFetcher = (*Scraper)(nil)
-var _ sources.SnapshotSource = (*Scraper)(nil)
 
-// New builds an Indeed source for one full search-result URL (each target's
-// value is already a complete search URL, not a token to build one from).
-func New(searchURL string) *Scraper {
+func New(keywords string, filters map[string]string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "indeed",
-			Route: sources.RouteUnlocker,
+			Route: sources.RouteTiered,
 		}),
-		searchURL: searchURL,
+		keywords: keywords,
+		filters:  filters,
 	}
 }
 
-// FetchPage has no offset pagination because Indeed's total-result-count
-// selector is unverified without a live fetch (see package doc); it fetches
-// the one configured search URL and always returns next="".
 func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
-	if cursor != "" {
-		return nil, "", fmt.Errorf("indeed: unexpected cursor %q", cursor)
+	key := os.Getenv(apiKeyEnv)
+	if key == "" {
+		return nil, "", fmt.Errorf("indeed: %s is required", apiKeyEnv)
 	}
-	body, err := s.Get(ctx, s.searchURL)
+	payload, err := json.Marshal(map[string]string{"query": s.query(cursor)})
 	if err != nil {
-		return nil, "", fmt.Errorf("indeed: fetch %s: %w", s.searchURL, err)
+		return nil, "", err
 	}
-
-	jobs, err := ParseURLs(bytes.NewReader(body))
+	header := apiHeaders.Clone()
+	header.Set("Indeed-Api-Key", key)
+	body, err := s.PostJSON(ctx, apiURL, payload, header)
 	if err != nil {
-		return nil, "", fmt.Errorf("indeed: parse %s: %w", s.searchURL, err)
+		return nil, "", fmt.Errorf("indeed: %w", err)
 	}
-
-	return jobs, "", nil
+	return parse(body)
 }
 
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.Get(ctx, url)
-	if err != nil {
-		return dto.Job{}, err
+func (s *Scraper) query(cursor string) string {
+	args := []string{"limit: 100", "sort: RELEVANCE"}
+	if s.keywords != "" {
+		args = append(args, "what: "+quote(s.keywords))
 	}
-	job, err := ParseJobDetail(bytes.NewReader(body), url)
-	if err != nil {
-		return dto.Job{}, err
-	}
-	// Indeed's detail page exposes no reliable machine-readable post date, so
-	// UpdatedAt is stamped here rather than in the pure parser — keeps the
-	// parser deterministic for snapshot testing (same approach as linkedin).
-	if job.UpdatedAt.IsZero() {
-		sources.WarnDefaulted("indeed", "UpdatedAt", url)
-		job.UpdatedAt = time.Now().UTC()
-	}
-	return job, nil
-}
-
-func (s *Scraper) ParseURLs(r io.Reader) ([]dto.Job, error) { return ParseURLs(r) }
-
-func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
-	return ParseJobDetail(r, url)
-}
-
-// ParseURLs extracts job cards from a search-results page. A page with zero
-// cards and no "no results" marker errors instead of looking like an empty
-// scrape, since BrightData returns HTTP 200 even for anti-bot interstitials.
-func ParseURLs(r io.Reader) ([]dto.Job, error) {
-	doc, err := sources.ParseHTML(r)
-	if err != nil {
-		return nil, err
-	}
-
-	var jobs []dto.Job
-	doc.Find(selJobCard).Each(func(_ int, card *goquery.Selection) {
-		linkEl := card.Find(selCardTitle).First()
-		jobURL := cardJobURL(linkEl)
-		if jobURL == "" {
-			return
+	if where := s.filters["location"]; where != "" {
+		loc := "location: {where: " + quote(where)
+		if radius := s.filters["radius"]; radius != "" && sourcespec.ValidFilterValue("indeed", "radius", radius) {
+			loc += ", radius: " + radius + ", radiusUnit: MILES"
 		}
-
-		title := strings.TrimSpace(linkEl.Text())
-		company := strings.TrimSpace(card.Find(selCardCompany).First().Text())
-		location := strings.TrimSpace(card.Find(selCardLocation).First().Text())
-
-		jobs = append(jobs, dto.Job{
-			Title:       title,
-			Location:    location,
-			URL:         jobURL,
-			CompanySlug: slug.Make(company),
-		})
-	})
-
-	if len(jobs) == 0 && !noResultsRe.MatchString(doc.Text()) {
-		return nil, fmt.Errorf("indeed: zero job cards and no recognizable no-results marker (possible anti-bot block)")
+		args = append(args, loc+"}")
 	}
-	return jobs, nil
+	recency := s.filters["recency"]
+	if days, err := strconv.Atoi(recency); err == nil && sourcespec.ValidFilterValue("indeed", "recency", recency) {
+		args = append(args, fmt.Sprintf(`filters: [{ date: { field: "dateOnIndeed", start: "%dh" } }]`, days*24))
+	}
+	if cursor != "" {
+		args = append(args, "cursor: "+quote(cursor))
+	}
+	return "query { jobSearch(" + strings.Join(args, " ") + ") { " + resultFields + " } }"
 }
 
-// cardJobURL prefers the canonical /viewjob?jk= form built from data-jk over
-// the card's raw href, which is often a /rc/clk redirect/tracking link rather
-// than the stable job page itself.
-func cardJobURL(linkEl *goquery.Selection) string {
-	if jk, ok := linkEl.Attr("data-jk"); ok && jk != "" {
-		return baseURL + "/viewjob?jk=" + jk
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+type response struct {
+	Data *struct {
+		JobSearch struct {
+			PageInfo struct {
+				NextCursor string `json:"nextCursor"`
+			} `json:"pageInfo"`
+			Results []struct {
+				Job result `json:"job"`
+			} `json:"results"`
+		} `json:"jobSearch"`
+	} `json:"data"`
+	Errors []struct {
+		Message string `json:"message"`
+	} `json:"errors"`
+}
+
+type result struct {
+	Key           string `json:"key"`
+	Title         string `json:"title"`
+	DatePublished int64  `json:"datePublished"`
+	Description   struct {
+		HTML string `json:"html"`
+	} `json:"description"`
+	Location struct {
+		Formatted struct {
+			Long string `json:"long"`
+		} `json:"formatted"`
+	} `json:"location"`
+	Compensation *struct {
+		CurrencyCode string `json:"currencyCode"`
+		BaseSalary   *struct {
+			UnitOfWork string `json:"unitOfWork"`
+			Range      *struct {
+				Min *float64 `json:"min"`
+				Max *float64 `json:"max"`
+			} `json:"range"`
+		} `json:"baseSalary"`
+	} `json:"compensation"`
+	Employer *struct {
+		Name string `json:"name"`
+	} `json:"employer"`
+}
+
+func parse(body []byte) ([]dto.Job, string, error) {
+	var resp response
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, "", fmt.Errorf("indeed: parse json: %w", err)
 	}
-	href, ok := linkEl.Attr("href")
-	if !ok || href == "" {
+	if resp.Data == nil {
+		if len(resp.Errors) > 0 {
+			return nil, "", fmt.Errorf("indeed: graphql error: %s", resp.Errors[0].Message)
+		}
+		return nil, "", errors.New("indeed: response has no data")
+	}
+
+	search := resp.Data.JobSearch
+	jobs := make([]dto.Job, 0, len(search.Results))
+	for _, r := range search.Results {
+		j := r.Job
+		if j.Key == "" {
+			continue
+		}
+		company := ""
+		if j.Employer != nil {
+			company = j.Employer.Name
+		}
+		url := jobURL + j.Key
+		updatedAt := time.Now().UTC()
+		if j.DatePublished > 0 {
+			updatedAt = time.UnixMilli(j.DatePublished).UTC()
+		} else {
+			sources.WarnDefaulted("indeed", "UpdatedAt", url)
+		}
+		jobs = append(jobs, dto.Job{
+			Title:           j.Title,
+			Location:        j.Location.Formatted.Long,
+			URL:             url,
+			CompanySlug:     slug.Make(company),
+			Description:     j.Description.HTML,
+			SalaryRaw:       formatSalary(j),
+			WorkArrangement: sources.DetectWorkArrangement(j.Title + " " + j.Location.Formatted.Long + " " + j.Description.HTML),
+			UpdatedAt:       updatedAt,
+		})
+	}
+	return jobs, search.PageInfo.NextCursor, nil
+}
+
+func formatSalary(j result) string {
+	c := j.Compensation
+	if c == nil || c.BaseSalary == nil || c.BaseSalary.Range == nil {
 		return ""
 	}
-	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
-		return href
+	symbol := map[string]string{"GBP": "£", "USD": "$", "EUR": "€"}[c.CurrencyCode]
+	if symbol == "" {
+		symbol = c.CurrencyCode + " "
 	}
-	return baseURL + href
-}
-
-func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
-	doc, err := sources.ParseHTML(r)
-	if err != nil {
-		return dto.Job{}, err
+	var amounts []string
+	for _, v := range []*float64{c.BaseSalary.Range.Min, c.BaseSalary.Range.Max} {
+		if v != nil {
+			amounts = append(amounts, fmt.Sprintf("%s%.0f", symbol, *v))
+		}
 	}
-
-	title := strings.TrimSpace(doc.Find(selDetailTitle).First().Text())
-	if title == "" {
-		return dto.Job{}, fmt.Errorf("title not found (selector: %q)", selDetailTitle)
+	if len(amounts) == 0 {
+		return ""
 	}
-
-	company := strings.TrimSpace(doc.Find(selDetailCompany).First().Text())
-	location := strings.TrimSpace(doc.Find(selDetailLocation).First().Text())
-
-	descNode := doc.Find(selDetailDescription).First()
-	descHTML, _ := descNode.Html()
-	description := strings.TrimSpace(descHTML)
-	descText := descNode.Text()
-	if description == "" {
-		sources.WarnDefaulted("indeed", "Description", url)
-	}
-
-	salaryRaw := sources.ParseSalaryRaw(descText)
-	workArrangement := sources.DetectWorkArrangement(title + " " + location + " " + descText)
-
-	return dto.Job{
-		Title:           title,
-		Location:        location,
-		URL:             url,
-		CompanySlug:     slug.Make(company),
-		Source:          "indeed",
-		Description:     description,
-		SalaryRaw:       salaryRaw,
-		WorkArrangement: workArrangement,
-	}, nil
+	return strings.Join(amounts, " - ") + " per " + strings.ToLower(c.BaseSalary.UnitOfWork)
 }

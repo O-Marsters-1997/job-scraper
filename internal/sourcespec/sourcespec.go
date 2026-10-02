@@ -118,7 +118,23 @@ var entries = []registryEntry{
 			{Value: "9", Label: "$200,000+"},
 		}},
 	}},
-	{name: "indeed", label: "Indeed", kind: kindURL, role: RoleDiscovery, urlPrefix: "https://www.indeed.com"},
+	{name: "indeed", label: "Indeed", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://uk.indeed.com", cardComplete: true, filters: []FilterField{
+		{Name: "location", Param: "l", Label: "Location"},
+		{Name: "radius", Param: "radius", Label: "Radius", Options: []FilterOption{
+			{Value: "5", Label: "5 miles"},
+			{Value: "10", Label: "10 miles"},
+			{Value: "15", Label: "15 miles"},
+			{Value: "25", Label: "25 miles"},
+			{Value: "50", Label: "50 miles"},
+			{Value: "100", Label: "100 miles"},
+		}},
+		{Name: "recency", Param: "fromage", Label: "Recency", Options: []FilterOption{
+			{Value: "1", Label: "Past 24 hours"},
+			{Value: "3", Label: "Past 3 days"},
+			{Value: "7", Label: "Past week"},
+			{Value: "14", Label: "Past 2 weeks"},
+		}},
+	}},
 	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com", cardComplete: true},
 	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com", cardComplete: true},
 }
