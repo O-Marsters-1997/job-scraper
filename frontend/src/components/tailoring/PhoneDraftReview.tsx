@@ -1,8 +1,13 @@
 import { Link } from "@tanstack/solid-router";
 import { Match, Show, Switch } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
+import { useFormSubmit } from "@/hooks/useFormSubmit";
+import { useJob } from "@/hooks/useJobs";
+import { sharePdf } from "@/lib/sharePdf";
 import type { Draft } from "@/types/tailoring";
+import { fetchDraftPdf } from "../../api/tailoring";
 import { createKeepFlow } from "../../hooks/useKeepFlow";
 import { useSaveDraftSlots } from "../../hooks/useTailoring";
 import { ChangesDiff } from "./ChangesDiff";
@@ -47,6 +52,13 @@ function Review(props: {
 		async () => true,
 	);
 	const save = useSaveDraftSlots(() => props.draft.id);
+	const job = useJob(() => props.draft.jobId);
+	const download = useFormSubmit(async () =>
+		sharePdf(
+			await fetchDraftPdf(props.draft.id),
+			`cv-${job.data?.CompanySlug ?? "draft"}.pdf`,
+		),
+	);
 	const open = () => props.draft.status === "ready" && !props.draft.outcome;
 
 	return (
@@ -81,9 +93,21 @@ function Review(props: {
 					}
 				>
 					{(outcome) => (
-						<p class="text-center text-sm text-muted">
-							{OUTCOME_LABEL[outcome()]}
-						</p>
+						<div class="flex flex-col gap-2">
+							<FormFeedback error={download.error()} />
+							<p class="text-center text-sm text-muted">
+								{OUTCOME_LABEL[outcome()]}
+							</p>
+							<Show when={outcome() === "kept"}>
+								<Button
+									class="w-full"
+									disabled={download.pending()}
+									onClick={() => void download.submit()}
+								>
+									Download
+								</Button>
+							</Show>
+						</div>
 					)}
 				</Show>
 			</div>

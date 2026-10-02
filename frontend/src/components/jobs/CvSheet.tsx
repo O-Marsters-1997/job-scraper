@@ -3,25 +3,25 @@ import {
 	Portal as SheetPortal,
 	Title as SheetTitle,
 } from "@kobalte/core/dialog";
-import { For, type JSX, Show } from "solid-js";
+import { useNavigate } from "@tanstack/solid-router";
+import { For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogOverlay } from "@/components/ui/dialog";
 import { useCVTemplates } from "@/hooks/useCVTemplates";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useGoogleStatus } from "@/hooks/useGoogle";
-import { useJobDrafts } from "@/hooks/useTailoring";
+import { useCreateDraft, useJobDrafts } from "@/hooks/useTailoring";
 import { formatDate } from "@/lib/datetime";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Job } from "@/types/job";
 import { fetchCVPdf } from "../../api/cvTemplates";
-import { fetchDraftPdf } from "../../api/tailoring";
+import { fetchDraftPdf, fetchSuggestions } from "../../api/tailoring";
 
 interface CvSheetProps {
 	job: Pick<Job, "ID" | "CompanySlug">;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
-	tailor?: JSX.Element;
 }
 
 export function CvSheet(props: CvSheetProps) {
@@ -38,6 +38,23 @@ export function CvSheet(props: CvSheetProps) {
 		void share.submit();
 	};
 
+	const navigate = useNavigate();
+	const createDraft = useCreateDraft();
+	let baseCv = { DocID: "", TabID: "" };
+	const tailor = useFormSubmit(async () => {
+		const { DocID: docId, TabID: tabId } = baseCv;
+		const suggestions = await fetchSuggestions(props.job.ID, docId, tabId);
+		const draft = await createDraft.mutateAsync({
+			jobId: props.job.ID,
+			docId,
+			tabId,
+			achievementIds: suggestions
+				.filter((s) => s.preselected)
+				.map((s) => s.achievementId),
+		});
+		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
+	});
+
 	const baseCvs = () => cvs.data?.filter((c) => c.Visible) ?? [];
 	const keptDrafts = () =>
 		drafts.data?.filter((d) => d.outcome === "kept") ?? [];
@@ -50,8 +67,7 @@ export function CvSheet(props: CvSheetProps) {
 					<SheetTitle class="text-base font-semibold text-foreground">
 						Get a CV
 					</SheetTitle>
-					{props.tailor}
-					<FormFeedback error={share.error()} />
+					<FormFeedback error={share.error() ?? tailor.error()} />
 					<Show
 						when={google.data?.connected}
 						fallback={
@@ -64,15 +80,26 @@ export function CvSheet(props: CvSheetProps) {
 						>
 							<For each={baseCvs()}>
 								{(c) => (
-									<Button
-										variant="outline"
-										class="justify-between"
-										disabled={share.pending()}
-										onClick={shareRow(() => fetchCVPdf(c.DocID, c.TabID))}
-									>
-										<span>{c.Title}</span>
-										<span class="text-xs text-faint">{c.SourceDoc}</span>
-									</Button>
+									<fieldset aria-label={c.Title} class="flex min-w-0 gap-2">
+										<Button
+											variant="outline"
+											class="flex-1 justify-between"
+											disabled={share.pending()}
+											onClick={shareRow(() => fetchCVPdf(c.DocID, c.TabID))}
+										>
+											<span>{c.Title}</span>
+											<span class="text-xs text-faint">{c.SourceDoc}</span>
+										</Button>
+										<Button
+											disabled={tailor.pending() || share.pending()}
+											onClick={() => {
+												baseCv = c;
+												void tailor.submit();
+											}}
+										>
+											{tailor.pending() ? "Tailoring…" : "Tailor"}
+										</Button>
+									</fieldset>
 								)}
 							</For>
 							<For each={keptDrafts()}>
