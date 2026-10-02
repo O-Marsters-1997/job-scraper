@@ -41,3 +41,6 @@ plans/
 docs/plans/
 docs/prd-*.md
 worker.log
+
+# Local schema diagram (regenerate with python3 docs/diagrams/build.py)
+docs/diagrams/
