@@ -505,6 +505,15 @@ func (s *Store) GetScoringStatus(ctx context.Context, userID string) (dto.Scorin
 	return dto.ScoringStatus{Pending: pending}, nil
 }
 
+func countsBy[R any](rows []R, kv func(R) (string, int64)) map[string]int64 {
+	counts := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		k, v := kv(r)
+		counts[k] = v
+	}
+	return counts
+}
+
 func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	row, err := s.queries.OpsState(ctx)
 	if err != nil {
@@ -518,10 +527,27 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	if err != nil {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState disabled source targets: %w", err)
 	}
-	disabledBySource := make(map[string]int64, len(disabled))
-	for _, d := range disabled {
-		disabledBySource[d.Source] = d.Disabled
+	disabledBySource := countsBy(disabled, func(r sqlc.DisabledSourceTargetsRow) (string, int64) { return r.Source, r.Disabled })
+	unique, err := s.queries.UniqueRelevantJobs(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState unique relevant jobs: %w", err)
 	}
+	uniqueBySource := countsBy(unique, func(r sqlc.UniqueRelevantJobsRow) (string, int64) { return r.Source, r.Jobs })
+	boards, err := s.queries.DiscoveryBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState discovery boards: %w", err)
+	}
+	boardsByVia := countsBy(boards, func(r sqlc.DiscoveryBoardsRow) (string, int64) { return r.Via, r.Boards })
+	relevant, err := s.queries.DiscoveryRelevantJobs(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState discovery relevant jobs: %w", err)
+	}
+	relevantByVia := countsBy(relevant, func(r sqlc.DiscoveryRelevantJobsRow) (string, int64) { return r.Via, r.Jobs })
+	admitted, err := s.queries.HarvestAdmitted(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest admitted: %w", err)
+	}
+	admittedByHarvester := countsBy(admitted, func(r sqlc.HarvestAdmittedRow) (string, int64) { return r.Harvester, r.Companies })
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -539,6 +565,10 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		SourceTargetsFailed:    row.SourceTargetsFailed,
 		DisabledSourceTargets:  disabledBySource,
 		HarvestAge:             harvestAge,
+		UniqueRelevantJobs:     uniqueBySource,
+		DiscoveryBoards:        boardsByVia,
+		DiscoveryRelevantJobs:  relevantByVia,
+		HarvestAdmitted:        admittedByHarvester,
 	}, nil
 }
 

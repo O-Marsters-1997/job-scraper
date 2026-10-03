@@ -24,7 +24,7 @@ func TestHarvester(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Harvest() err = %v", err)
 	}
-	want := discover.Harvest{Boards: []discover.Board{{Source: "ashby", Token: "acme"}, {Source: "greenhouse", Token: "globex"}}}
+	want := discover.Harvest{Boards: []discover.Board{{Source: "ashby", Token: "acme"}, {Source: "greenhouse", Token: "globex"}}, Recheck: true}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Harvest() mismatch (-want +got):\n%s", diff)
 	}

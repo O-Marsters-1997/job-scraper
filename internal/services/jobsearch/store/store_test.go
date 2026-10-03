@@ -715,7 +715,7 @@ func boardFixture(t *testing.T) boardEnv {
 func verifiedBoardFixture(t *testing.T) boardEnv {
 	t.Helper()
 	env := boardFixture(t)
-	if _, err := env.st.VerifyCompanyBoard(t.Context(), env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed"); err != nil {
+	if _, err := env.st.VerifyCompanyBoard(t.Context(), env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed", ""); err != nil {
 		t.Fatalf("VerifyCompanyBoard() err = %v", err)
 	}
 	return env
@@ -760,7 +760,7 @@ func TestBoardPolling(t *testing.T) {
 		if due := env.due(t); len(due) != 0 {
 			t.Fatalf("candidate board due = %v, want none", due)
 		}
-		if _, err := env.st.VerifyCompanyBoard(ctx, env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed"); err != nil {
+		if _, err := env.st.VerifyCompanyBoard(ctx, env.companyID, env.board.Source, env.board.BoardToken, "user_confirmed", ""); err != nil {
 			t.Fatal(err)
 		}
 		if due := env.due(t); len(due) != 1 || due[0].ID != env.board.ID {
@@ -1077,7 +1077,7 @@ func TestPageCompaniesForUser(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "acme", "test"); err != nil {
+		if _, err := st.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "acme", "test", ""); err != nil {
 			t.Fatal(err)
 		}
 		completed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)

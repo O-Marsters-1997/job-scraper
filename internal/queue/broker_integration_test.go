@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -97,6 +98,29 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		unbindSource(t, ch, "wis")
 		if err := broker.Publish(ctx, detail); err == nil {
 			t.Fatal("unroutable publish confirmed as success")
+		}
+	})
+
+	t.Run("board discover yields to board check", func(t *testing.T) {
+		discover := queue.Task{Version: 1, ID: uuid.NewString(), Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+		check := queue.Task{Version: 1, ID: uuid.NewString(), Source: "ashby", Kind: queue.BoardCheckTask, BoardID: uuid.NewString()}
+		for _, task := range []queue.Task{discover, check} {
+			if err := broker.Publish(ctx, task); err != nil {
+				t.Fatal(err)
+			}
+		}
+		first, ok, err := ch.Get("source.ashby", false)
+		if err != nil || !ok {
+			t.Fatalf("get first: %v %v", ok, err)
+		}
+		_ = first.Ack(false)
+		second, ok, err := ch.Get("source.ashby", false)
+		if err != nil || !ok {
+			t.Fatalf("get second: %v %v", ok, err)
+		}
+		_ = second.Ack(false)
+		if first.MessageId != check.ID {
+			t.Errorf("first message = %s, want board_check %s", first.MessageId, check.ID)
 		}
 	})
 

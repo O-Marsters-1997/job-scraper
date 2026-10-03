@@ -40,6 +40,105 @@ func (q *Queries) DisabledSourceTargets(ctx context.Context) ([]DisabledSourceTa
 	return items, nil
 }
 
+const discoveryBoards = `-- name: DiscoveryBoards :many
+SELECT discovered_via::text AS via, count(*) AS boards
+FROM company_boards
+WHERE status = 'verified' AND discovered_via IS NOT NULL AND verified_at > NOW() - INTERVAL '14 days'
+GROUP BY discovered_via
+`
+
+type DiscoveryBoardsRow struct {
+	Via    string
+	Boards int64
+}
+
+func (q *Queries) DiscoveryBoards(ctx context.Context) ([]DiscoveryBoardsRow, error) {
+	rows, err := q.db.Query(ctx, discoveryBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryBoardsRow
+	for rows.Next() {
+		var i DiscoveryBoardsRow
+		if err := rows.Scan(&i.Via, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const discoveryRelevantJobs = `-- name: DiscoveryRelevantJobs :many
+SELECT b.discovered_via::text AS via, count(*) AS jobs
+FROM jobs j
+JOIN company_boards b ON b.id = j.primary_board_id
+WHERE b.status = 'verified' AND b.discovered_via IS NOT NULL AND b.verified_at > NOW() - INTERVAL '14 days'
+  AND EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id)
+GROUP BY b.discovered_via
+`
+
+type DiscoveryRelevantJobsRow struct {
+	Via  string
+	Jobs int64
+}
+
+func (q *Queries) DiscoveryRelevantJobs(ctx context.Context) ([]DiscoveryRelevantJobsRow, error) {
+	rows, err := q.db.Query(ctx, discoveryRelevantJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryRelevantJobsRow
+	for rows.Next() {
+		var i DiscoveryRelevantJobsRow
+		if err := rows.Scan(&i.Via, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const harvestAdmitted = `-- name: HarvestAdmitted :many
+SELECT b.discovered_via::text AS harvester, count(DISTINCT tc.company_id) AS companies
+FROM tracked_companies tc
+JOIN company_boards b ON b.company_id = tc.company_id
+WHERE tc.review_state IN ('new', 'kept') AND b.discovered_via IN (SELECT harvester FROM harvest_runs)
+GROUP BY b.discovered_via
+`
+
+type HarvestAdmittedRow struct {
+	Harvester string
+	Companies int64
+}
+
+func (q *Queries) HarvestAdmitted(ctx context.Context) ([]HarvestAdmittedRow, error) {
+	rows, err := q.db.Query(ctx, harvestAdmitted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HarvestAdmittedRow
+	for rows.Next() {
+		var i HarvestAdmittedRow
+		if err := rows.Scan(&i.Harvester, &i.Companies); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const harvestRuns = `-- name: HarvestRuns :many
 SELECT harvester, last_succeeded_at FROM harvest_runs
 `
@@ -101,4 +200,42 @@ func (q *Queries) OpsState(ctx context.Context) (OpsStateRow, error) {
 		&i.SourceTargetsFailed,
 	)
 	return i, err
+}
+
+const uniqueRelevantJobs = `-- name: UniqueRelevantJobs :many
+SELECT source::text AS source, count(*) AS jobs
+FROM (
+    SELECT min(u.source) AS source
+      FROM job_urls u
+     WHERE EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = u.job_id)
+     GROUP BY u.job_id
+    HAVING count(DISTINCT u.source) = 1
+       AND min(u.first_seen_at) > NOW() - INTERVAL '14 days'
+) unique_jobs
+GROUP BY source
+`
+
+type UniqueRelevantJobsRow struct {
+	Source string
+	Jobs   int64
+}
+
+func (q *Queries) UniqueRelevantJobs(ctx context.Context) ([]UniqueRelevantJobsRow, error) {
+	rows, err := q.db.Query(ctx, uniqueRelevantJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UniqueRelevantJobsRow
+	for rows.Next() {
+		var i UniqueRelevantJobsRow
+		if err := rows.Scan(&i.Source, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

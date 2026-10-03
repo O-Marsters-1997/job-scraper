@@ -35,6 +35,14 @@ var (
 		"jobscraper_source_targets_disabled", "Source Targets that were disabled with a reason, per source.", []string{"source"}, nil)
 	harvestAgeSecondsDesc = prometheus.NewDesc(
 		"jobscraper_harvest_age_seconds", "Seconds since each catalog harvester last succeeded.", []string{"harvester"}, nil)
+	discoveryBoardsDesc = prometheus.NewDesc(
+		"jobscraper_discovery_boards", "Boards verified in the last 14 days, per discovery route.", []string{"via"}, nil)
+	discoveryRelevantJobsDesc = prometheus.NewDesc(
+		"jobscraper_discovery_relevant_jobs", "Scored Jobs whose primary Board was verified in the last 14 days, per discovery route.", []string{"via"}, nil)
+	harvestAdmittedDesc = prometheus.NewDesc(
+		"jobscraper_harvest_admitted", "Companies tracked as new or kept whose Board came from this harvester.", []string{"harvester"}, nil)
+	sourceUniqueRelevantJobsDesc = prometheus.NewDesc(
+		"jobscraper_source_unique_relevant_jobs", "Scored Jobs first discovered in the last 14 days whose every URL came from this source.", []string{"source"}, nil)
 )
 
 type stateCollector struct {
@@ -58,6 +66,10 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- sourceTargetsFailedDesc
 	ch <- sourceTargetsDisabledDesc
 	ch <- harvestAgeSecondsDesc
+	ch <- sourceUniqueRelevantJobsDesc
+	ch <- discoveryBoardsDesc
+	ch <- discoveryRelevantJobsDesc
+	ch <- harvestAdmittedDesc
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
@@ -82,5 +94,17 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for harvester, age := range state.HarvestAge {
 		ch <- prometheus.MustNewConstMetric(harvestAgeSecondsDesc, prometheus.GaugeValue, age.Seconds(), harvester)
+	}
+	for source, n := range state.UniqueRelevantJobs {
+		ch <- prometheus.MustNewConstMetric(sourceUniqueRelevantJobsDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for via, n := range state.DiscoveryBoards {
+		ch <- prometheus.MustNewConstMetric(discoveryBoardsDesc, prometheus.GaugeValue, float64(n), via)
+	}
+	for via, n := range state.DiscoveryRelevantJobs {
+		ch <- prometheus.MustNewConstMetric(discoveryRelevantJobsDesc, prometheus.GaugeValue, float64(n), via)
+	}
+	for harvester, n := range state.HarvestAdmitted {
+		ch <- prometheus.MustNewConstMetric(harvestAdmittedDesc, prometheus.GaugeValue, float64(n), harvester)
 	}
 }
