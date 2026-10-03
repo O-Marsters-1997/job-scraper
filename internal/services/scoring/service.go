@@ -426,10 +426,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 
-	scores := make([]dto.JobScore, len(inputs))
-	for i, in := range inputs {
-		scores[i] = scoreJob(userID, cfg, in.Job, byID, in.Answers, in.Corrections, in.Favourite)
-	}
+	scores := scoreInputs(userID, cfg, byID, inputs)
 	if err := s.store.SaveScores(ctx, scores); err != nil {
 		return dto.RecomputeResult{}, err
 	}
@@ -451,11 +448,7 @@ func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID
 	if err != nil {
 		return err
 	}
-	scores := make([]dto.JobScore, len(inputs))
-	for i, in := range inputs {
-		scores[i] = scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections, in.Favourite)
-	}
-	return s.store.SaveScoresTx(ctx, tx, scores)
+	return s.store.SaveScoresTx(ctx, tx, scoreInputs(userID, cfg, bk.byID, inputs))
 }
 
 // FillMissingAnswers queues an answer effect, without alerting, for each of
@@ -500,6 +493,14 @@ func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.Se
 		return dto.SearchConfig{}, err
 	}
 	return cfg, nil
+}
+
+func scoreInputs(userID string, cfg dto.SearchConfig, byID map[string]dto.ScoringOption, inputs []store.ScoringInput) []dto.JobScore {
+	scores := make([]dto.JobScore, len(inputs))
+	for i, in := range inputs {
+		scores[i] = scoreJob(userID, cfg, in.Job, byID, in.Answers, in.Corrections, in.Favourite)
+	}
+	return scores
 }
 
 func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) dto.JobScore {

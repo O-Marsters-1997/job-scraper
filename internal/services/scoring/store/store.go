@@ -22,9 +22,8 @@ import (
 // ScoringInput is one job and its cached answers, keyed by question hash,
 // ready for Recompute.
 type ScoringInput struct {
-	Job     dto.Job
-	Answers map[string]dto.Answer
-	// Favourite is whether the user has starred the job's Company.
+	Job       dto.Job
+	Answers   map[string]dto.Answer
 	Favourite bool
 	// Corrections maps option id to the user's "yes" or "no" for this job.
 	Corrections map[string]string
@@ -492,7 +491,6 @@ func (s *Store) IsJobCompanyFavourite(ctx context.Context, userID, jobID string)
 	return favourite, nil
 }
 
-// SaveScoresTx is SaveScores within tx.
 func (s *Store) SaveScoresTx(ctx context.Context, tx pgx.Tx, scores []dto.JobScore) error {
 	return saveScores(ctx, s.queries.WithTx(tx), scores)
 }

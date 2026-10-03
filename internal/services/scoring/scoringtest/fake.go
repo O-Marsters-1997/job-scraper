@@ -305,8 +305,6 @@ func (f *FakeStore) SaveScoresTx(ctx context.Context, _ pgx.Tx, scores []dto.Job
 	return f.SaveScores(ctx, scores)
 }
 
-// SeedFavouriteJob marks jobID's Company as starred by userID for
-// IsJobCompanyFavourite.
 func (f *FakeStore) SeedFavouriteJob(userID, jobID string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
