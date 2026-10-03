@@ -93,7 +93,8 @@ SET last_completed_at = NOW(),
     last_scheduled_at = CASE WHEN sqlc.arg(manual)::boolean THEN last_scheduled_at ELSE NOW() END,
     next_due_at = CASE WHEN sqlc.arg(manual)::boolean THEN next_due_at ELSE NOW() + sqlc.arg(interval_minutes)::int * INTERVAL '1 minute' END,
     consecutive_complete_empty = CASE WHEN sqlc.arg(empty)::boolean THEN consecutive_complete_empty + 1 ELSE 0 END,
-    consecutive_failures = 0, lease_owner = NULL, lease_until = NULL
+    consecutive_failures = 0, lease_owner = NULL, lease_until = NULL,
+    last_reported_total = sqlc.arg(reported)::int, last_parsed = sqlc.arg(parsed)::int
 WHERE board_id = sqlc.arg(board_id)::uuid AND lease_owner = sqlc.arg(lease_owner)::text
   AND last_snapshot_version = sqlc.arg(version)::bigint;
 

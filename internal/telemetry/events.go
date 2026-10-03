@@ -8,3 +8,6 @@ const EventHTTPRequest = "http.request"
 
 // EventScoreCall marks one successful Jev answer call billed to a user.
 const EventScoreCall = "score.call"
+
+// EventBoardUnderparsed marks a Board poll that parsed fewer Jobs than the ATS reported.
+const EventBoardUnderparsed = "board.underparsed"

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -108,8 +107,8 @@ func (discardCards) CapturePage(context.Context, dto.SourceTarget, []dto.Job, dt
 
 type oneBoardJob struct{}
 
-func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, time.Duration, error) {
-	return []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, 0, nil
+func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResult, error) {
+	return sources.BoardResult{Jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}}, nil
 }
 
 type ingest struct {

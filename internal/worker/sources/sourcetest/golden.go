@@ -68,3 +68,21 @@ func clearTimeNowFallbacks(jobs []dto.Job, parseStart time.Time) {
 		}
 	}
 }
+
+// PollReported serves snapshots/<fixture> as src's API response and returns the Reported
+// count from one PollBoard.
+func PollReported(t *testing.T, fixture string, src *sources.BoardSource) int {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Join("snapshots", fixture))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	src.Client().Transport = Respond(string(body))
+
+	res, err := src.PollBoard(t.Context())
+	if err != nil {
+		t.Fatalf("PollBoard(%s) error: %v", fixture, err)
+	}
+	return res.Reported
+}

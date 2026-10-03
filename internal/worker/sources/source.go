@@ -72,6 +72,8 @@ type BoardResult struct {
 	Jobs       []dto.Job
 	NextPollIn time.Duration
 	Profile    *dto.CompanyProfile
+	// Reported is how many jobs the ATS says the board holds; 0 means unknown.
+	Reported int
 }
 
 // BoardPoller is implemented by a Source that reports a next-poll hint or a profile.
