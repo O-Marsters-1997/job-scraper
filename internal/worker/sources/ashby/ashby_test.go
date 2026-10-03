@@ -16,3 +16,7 @@ func TestPollBoard_Reported(t *testing.T) {
 		t.Errorf("PollBoard(%s).Reported = %d, want %d", "board_askdragonfly.json", got, want)
 	}
 }
+
+func TestFetchPage_GoldenCompensation(t *testing.T) {
+	sourcetest.RunGolden(t, "board_cohere.json", ashby.New("cohere"))
+}

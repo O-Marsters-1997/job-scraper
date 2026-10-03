@@ -4,6 +4,7 @@
     "Title": "Founding Sales Development Representative",
     "Location": "London",
     "URL": "https://jobs.ashbyhq.com/askdragonfly/2a9fc9fb-f50b-43d3-8d3b-b86bee43e510",
+    "ApplyURL": "",
     "CompanySlug": "askdragonfly",
     "CompanyID": "",
     "BoardID": "",
@@ -16,13 +17,16 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   },
   {
     "ID": "",
     "Title": "Senior Product Engineer",
     "Location": "Tallinn",
     "URL": "https://jobs.ashbyhq.com/askdragonfly/43376c66-9659-41bf-afba-f527caa2e4f1",
+    "ApplyURL": "",
     "CompanySlug": "askdragonfly",
     "CompanyID": "",
     "BoardID": "",
@@ -35,6 +39,8 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   }
 ]
