@@ -30,14 +30,14 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
     updated_at = sqlc.arg(updated_at), description = sqlc.arg(description),
     salary_raw = sqlc.arg(salary_raw), work_arrangement = sqlc.arg(work_arrangement),
     content_fingerprint = sqlc.arg(fingerprint), content_changed_at = NOW(),
-    company_id = COALESCE(sqlc.narg(company_id)::uuid, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug)), company_id),
+    company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     primary_board_id = COALESCE(sqlc.narg(board_id)::uuid, primary_board_id),
     provider_posting_id = COALESCE(sqlc.narg(posting_id), provider_posting_id),
     scraped_at = NOW()
 WHERE id = sqlc.arg(id)::uuid;
 
 -- name: UpdateUnchangedCanonicalJob :exec
-UPDATE jobs SET company_id = COALESCE(sqlc.narg(company_id)::uuid, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug)), company_id),
+UPDATE jobs SET company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     primary_board_id = COALESCE(sqlc.narg(board_id)::uuid, primary_board_id),
     provider_posting_id = COALESCE(sqlc.narg(posting_id), provider_posting_id),
     content_fingerprint = COALESCE(content_fingerprint, sqlc.arg(fingerprint))

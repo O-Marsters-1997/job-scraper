@@ -164,7 +164,7 @@ UPDATE jobs SET title = $1, location = $2,
     updated_at = $3, description = $4,
     salary_raw = $5, work_arrangement = $6,
     content_fingerprint = $7, content_changed_at = NOW(),
-    company_id = COALESCE($8::uuid, (SELECT id FROM companies WHERE slug = $9), company_id),
+    company_id = COALESCE($8::uuid, company_id, (SELECT id FROM companies WHERE slug = $9)),
     primary_board_id = COALESCE($10::uuid, primary_board_id),
     provider_posting_id = COALESCE($11, provider_posting_id),
     scraped_at = NOW()
@@ -205,7 +205,7 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 }
 
 const updateUnchangedCanonicalJob = `-- name: UpdateUnchangedCanonicalJob :exec
-UPDATE jobs SET company_id = COALESCE($1::uuid, (SELECT id FROM companies WHERE slug = $2), company_id),
+UPDATE jobs SET company_id = COALESCE($1::uuid, company_id, (SELECT id FROM companies WHERE slug = $2)),
     primary_board_id = COALESCE($3::uuid, primary_board_id),
     provider_posting_id = COALESCE($4, provider_posting_id),
     content_fingerprint = COALESCE(content_fingerprint, $5)
