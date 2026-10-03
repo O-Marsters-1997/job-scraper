@@ -126,6 +126,25 @@ func (q *Queries) InsertOptionAnswer(ctx context.Context, arg InsertOptionAnswer
 	return err
 }
 
+const isJobCompanyFavourite = `-- name: IsJobCompanyFavourite :one
+SELECT EXISTS (
+    SELECT 1 FROM jobs j JOIN company_favourites cf ON cf.company_id = j.company_id
+    WHERE j.id = $1::uuid AND cf.user_id = $2::uuid
+) AS favourite
+`
+
+type IsJobCompanyFavouriteParams struct {
+	JobID  pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) IsJobCompanyFavourite(ctx context.Context, arg IsJobCompanyFavouriteParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isJobCompanyFavourite, arg.JobID, arg.UserID)
+	var favourite bool
+	err := row.Scan(&favourite)
+	return favourite, err
+}
+
 const listCompanyJobAnswers = `-- name: ListCompanyJobAnswers :many
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM jobs j
@@ -187,7 +206,11 @@ SELECT u.id AS user_id,
         SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
         WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'
           AND (c.id = j.company_id OR c.slug = j.company_slug)
-    ) AS company_is_new
+    ) AS company_is_new,
+    EXISTS (
+        SELECT 1 FROM company_favourites cf
+        WHERE cf.user_id = u.id AND cf.company_id = j.company_id
+    ) AS company_is_favourite
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
 JOIN jobs j ON j.id = $1::uuid
@@ -209,6 +232,7 @@ type ListInterestedConfigsRow struct {
 	NotifyThreshold       int32
 	Preferences           []byte
 	CompanyIsNew          bool
+	CompanyIsFavourite    bool
 }
 
 func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) ([]ListInterestedConfigsRow, error) {
@@ -230,6 +254,7 @@ func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) 
 			&i.NotifyThreshold,
 			&i.Preferences,
 			&i.CompanyIsNew,
+			&i.CompanyIsFavourite,
 		); err != nil {
 			return nil, err
 		}
@@ -369,10 +394,20 @@ func (q *Queries) ListScoringAnswersForUser(ctx context.Context, arg ListScoring
 const listScoringInputJobs = `-- name: ListScoringInputJobs :many
 SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at,
     j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id,
-    j.provider_posting_id, j.content_fingerprint
+    j.provider_posting_id, j.content_fingerprint,
+    EXISTS (
+        SELECT 1 FROM company_favourites cf
+        WHERE cf.user_id = s.user_id AND cf.company_id = j.company_id
+    ) AS is_favourite
 FROM job_scores s JOIN jobs j ON j.id = s.job_id
 WHERE s.user_id = $1::uuid
+  AND ($2::uuid IS NULL OR (j.company_id = $2::uuid AND j.closed_at IS NULL))
 `
+
+type ListScoringInputJobsParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
 
 type ListScoringInputJobsRow struct {
 	ID                 pgtype.UUID
@@ -390,10 +425,11 @@ type ListScoringInputJobsRow struct {
 	PrimaryBoardID     pgtype.UUID
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
+	IsFavourite        bool
 }
 
-func (q *Queries) ListScoringInputJobs(ctx context.Context, userID pgtype.UUID) ([]ListScoringInputJobsRow, error) {
-	rows, err := q.db.Query(ctx, listScoringInputJobs, userID)
+func (q *Queries) ListScoringInputJobs(ctx context.Context, arg ListScoringInputJobsParams) ([]ListScoringInputJobsRow, error) {
+	rows, err := q.db.Query(ctx, listScoringInputJobs, arg.UserID, arg.CompanyID)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +453,7 @@ func (q *Queries) ListScoringInputJobs(ctx context.Context, userID pgtype.UUID) 
 			&i.PrimaryBoardID,
 			&i.ProviderPostingID,
 			&i.ContentFingerprint,
+			&i.IsFavourite,
 		); err != nil {
 			return nil, err
 		}

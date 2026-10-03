@@ -8,7 +8,10 @@ import {
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
+import { useSetCompanyFavourite } from "./useCompanies";
 import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
+import { useMarkJobsSeen } from "./useJobs";
+import { announceBulkSeen } from "./useSeenToast";
 
 export function useTrackJobs(jobs: () => Job[]) {
 	const applications = useApplications();
@@ -43,13 +46,32 @@ export function useTrackJobs(jobs: () => Job[]) {
 		setGradeOpen(true);
 	};
 
+	const markSeen = useMarkJobsSeen();
+	const bulkSeen = async (target: Job[], seen: boolean) => {
+		await markSeen.mutateAsync({ jobIds: target.map((j) => j.ID), seen });
+		setSelection({});
+	};
+	const markAllSeen = async (unseen: Job[]) => {
+		const jobIds = unseen.map((j) => j.ID);
+		await markSeen.mutateAsync({ jobIds, seen: true });
+		announceBulkSeen(jobIds);
+	};
+
 	const dismiss = useDismissJob();
+	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
 		onGrade: (job) => openGrade([job]),
+		onToggleFavourite: (job) => {
+			if (!job.CompanyID) return;
+			setFavourite.mutate({
+				id: job.CompanyID,
+				favourite: !job.CompanyFavourite,
+			});
+		},
 		onExcludeCompany: exclude.exclude,
 	});
 
@@ -68,5 +90,7 @@ export function useTrackJobs(jobs: () => Job[]) {
 		gradeOpen,
 		setGradeOpen,
 		openGrade,
+		bulkSeen,
+		markAllSeen,
 	};
 }

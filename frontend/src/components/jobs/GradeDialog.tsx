@@ -18,6 +18,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { useGrade, useSetGrade } from "@/hooks/useGrades";
+import { useMarkSeenAfterGrade } from "@/hooks/useJobs";
 import { BAND_LABEL, gradeDirection } from "@/lib/band";
 import { planSaves } from "@/lib/gradeBatch";
 import { queryClient } from "@/lib/queryClient";
@@ -65,6 +66,7 @@ function GradeForm(props: {
 	const jobs = untrack(() => props.jobs);
 	const bulk = jobs.length > 1;
 	const set = useSetGrade();
+	const markSeen = useMarkSeenAfterGrade();
 	const [batch, setBatch] = createSignal(jobs);
 	const [index, setIndex] = createSignal(0);
 	const [batchGrade, setBatchGrade] = createSignal<GradeValue | undefined>();
@@ -146,8 +148,9 @@ function GradeForm(props: {
 		const results = await Promise.allSettled(
 			plan.map((p) => set.mutateAsync(p)),
 		);
-		setPending(false);
 		const landed = plan.filter((_, i) => results[i]?.status === "fulfilled");
+		await markSeen(landed.map((p) => p.jobId));
+		setPending(false);
 		const all = [...saved(), ...landed.map((p) => p.jobId)];
 		setSaved(all);
 		if (landed.length === plan.length) {

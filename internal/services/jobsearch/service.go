@@ -22,6 +22,7 @@ const (
 	defaultPageLimit = 50
 	defaultSinceDays = 90
 	maxSinceDays     = 36500
+	maxSeenJobIDs    = 5000
 )
 
 type jobCursor struct {
@@ -114,6 +115,17 @@ func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	default:
 		return job, err
 	}
+}
+
+func (s *Service) MarkSeen(ctx context.Context, userID string, in dto.SeenInput) (struct{}, error) {
+	if len(in.JobIDs) > maxSeenJobIDs {
+		return struct{}{}, apperr.Invalid("too many job IDs")
+	}
+	err := s.store.MarkJobsSeen(ctx, userID, in.JobIDs, in.Seen)
+	if errors.Is(err, store.ErrInvalidID) {
+		return struct{}{}, apperr.Invalid("invalid job ID")
+	}
+	return struct{}{}, err
 }
 
 func parsePageLimit(raw string) (int, error) {

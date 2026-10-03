@@ -20,6 +20,11 @@ const GROUPS: {
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
+		label: "Boosts",
+		keep: (r) => r.effect === "favourite",
+		style: tintedChip(MATCHED_COLOUR),
+	},
+	{
 		label: "Met",
 		keep: (r) => r.effect === "meets",
 		style: tintedChip(MATCHED_COLOUR),
@@ -48,7 +53,10 @@ const GROUPS: {
 
 const canCorrect = (r: ScoreRow) =>
 	r.corrected === true ||
-	(r.resolved === "yes" && r.effect !== "retired" && r.key !== "salary");
+	(r.resolved === "yes" &&
+		r.effect !== "retired" &&
+		r.effect !== "favourite" &&
+		r.key !== "salary");
 
 export function ScoreBreakdown(props: { job: Job }) {
 	const [selectedKey, setSelectedKey] = createSignal<string>();

@@ -5,6 +5,6 @@ export const WARNING_COLOUR = "#d97706";
 
 export const tintedChip = (colour: string) => ({
 	background: `color-mix(in srgb, ${colour} 12%, white)`,
-	color: `color-mix(in srgb, ${colour} 80%, black)`,
+	color: `color-mix(in srgb, ${colour} 65%, black)`,
 	border: `1px solid color-mix(in srgb, ${colour} 28%, white)`,
 });

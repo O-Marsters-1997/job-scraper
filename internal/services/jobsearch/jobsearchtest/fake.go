@@ -33,6 +33,7 @@ type FakeStore struct {
 	seq int
 
 	jobs     map[string]dto.Job
+	seen     map[string]map[string]bool
 	jobOrder []string
 	byURL    map[string]string
 	byBoard  map[string]string
@@ -40,6 +41,7 @@ type FakeStore struct {
 	companies     map[string]dto.Company
 	companyBySlug map[string]string
 	tracking      map[string]dto.CompanyTracking
+	favourites    map[string]bool
 
 	boards    map[string]dto.CompanyBoard
 	pollState map[string]*boardPollState
@@ -59,11 +61,13 @@ type FakeStore struct {
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		jobs:           make(map[string]dto.Job),
+		seen:           make(map[string]map[string]bool),
 		byURL:          make(map[string]string),
 		byBoard:        make(map[string]string),
 		companies:      make(map[string]dto.Company),
 		companyBySlug:  make(map[string]string),
 		tracking:       make(map[string]dto.CompanyTracking),
+		favourites:     make(map[string]bool),
 		boards:         make(map[string]dto.CompanyBoard),
 		pollState:      make(map[string]*boardPollState),
 		lastScraped:    make(map[string]time.Time),
@@ -160,7 +164,14 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	return job, status, nil
 }
 
-func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions) (dto.JobPage, error) {
+func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
+	job.Seen = f.seen[userID][job.ID]
+	companyID := cmp.Or(job.CompanyID, f.companyBySlug[job.CompanySlug])
+	job.CompanyFavourite = f.favourites[trackingKey(userID, companyID)]
+	return job
+}
+
+func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	items := make([]dto.Job, 0, len(f.jobOrder))
@@ -179,7 +190,7 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
 			continue
 		}
-		items = append(items, job)
+		items = append(items, f.withUserState(userID, job))
 	}
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
@@ -187,19 +198,42 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 	return dto.JobPage{Items: items}, nil
 }
 
-func (f *FakeStore) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) {
+func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return lookup(f.jobs, jobID)
+	job, err := lookup(f.jobs, jobID)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	return f.withUserState(userID, job), nil
 }
 
-func (f *FakeStore) ListJobs(_ context.Context, _ string, excludedCompanySlugs []string) ([]dto.Job, error) {
+func (f *FakeStore) MarkJobsSeen(_ context.Context, userID string, jobIDs []string, seen bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.seen[userID] == nil {
+		f.seen[userID] = make(map[string]bool)
+	}
+	for _, id := range jobIDs {
+		if _, ok := f.jobs[id]; !ok {
+			continue
+		}
+		if seen {
+			f.seen[userID][id] = true
+		} else {
+			delete(f.seen[userID], id)
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) ListJobs(_ context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]dto.Job, 0, len(f.jobOrder))
 	for _, id := range f.jobOrder {
 		if !slices.Contains(excludedCompanySlugs, f.jobs[id].CompanySlug) {
-			out = append(out, f.jobs[id])
+			out = append(out, f.withUserState(userID, f.jobs[id]))
 		}
 	}
 	return out, nil
@@ -270,7 +304,11 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 		if tr, ok := f.tracking[trackingKey(userID, c.ID)]; ok {
 			c.Tracked, c.ReviewState, c.CheckIntervalMinutes = tr.Enabled, tr.ReviewState, tr.CheckIntervalMinutes
 		}
+		c.Favourite = f.favourites[trackingKey(userID, c.ID)]
 		if options.TrackedOnly && !c.Tracked {
+			continue
+		}
+		if options.FavouriteOnly && !c.Favourite {
 			continue
 		}
 		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
@@ -298,7 +336,27 @@ func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto
 	if tr, ok := f.tracking[trackingKey(userID, c.ID)]; ok {
 		c.Tracked, c.ReviewState, c.CheckIntervalMinutes = tr.Enabled, tr.ReviewState, tr.CheckIntervalMinutes
 	}
+	c.Favourite = f.favourites[trackingKey(userID, c.ID)]
 	return c, nil
+}
+
+func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID string, favourite bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.companies[companyID]; !ok {
+		return data.ErrNotFound
+	}
+	key := trackingKey(userID, companyID)
+	if !favourite {
+		delete(f.favourites, key)
+		return nil
+	}
+	f.favourites[key] = true
+	if t, ok := f.tracking[key]; ok && t.ReviewState == "new" {
+		t.ReviewState = "kept"
+		f.tracking[key] = t
+	}
+	return nil
 }
 
 func (f *FakeStore) ListTrackedCompaniesForUser(_ context.Context, userID string) ([]dto.TrackedCompany, error) {
@@ -420,6 +478,9 @@ func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, 
 		return dto.CompanyTracking{}, data.ErrNotFound
 	}
 	t.Enabled = state != "dismissed"
+	if state == "dismissed" {
+		delete(f.favourites, key)
+	}
 	t.ReviewState = state
 	f.tracking[key] = t
 	return t, nil

@@ -9,6 +9,7 @@ export const companySchema = z.object({
 	FirstSeenAt: z.string(),
 	JobCount: z.number(),
 	Tracked: z.boolean(),
+	Favourite: z.boolean().optional(),
 	ReviewState: z.enum(["", "new", "kept", "dismissed"]),
 	TargetID: z.string(),
 	CheckIntervalMinutes: z.number(),

@@ -21,6 +21,7 @@ import {
 	DEFAULT_FILTERS,
 	GRADED_OPTIONS,
 	type JobFilters,
+	SEEN_OPTIONS,
 } from "@/lib/jobFilters";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,12 @@ const GRADED_LABEL = {
 	all: "All",
 	ungraded: "Ungraded",
 	graded: "Graded",
+} as const;
+
+const SEEN_LABEL = {
+	all: "All",
+	unseen: "Unseen",
+	seen: "Seen",
 } as const;
 
 const toggle = <T,>(arr: T[], val: T): T[] =>
@@ -118,6 +125,32 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 											/>
 										)}
 									</For>
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-2">
+								<p class="text-xs font-medium text-muted">Seen</p>
+								<div class="flex flex-wrap gap-1.5">
+									<For each={SEEN_OPTIONS}>
+										{(opt) => (
+											<FilterChip
+												label={SEEN_LABEL[opt]}
+												active={props.filters.seen === opt}
+												onClick={() => props.onChange({ seen: opt })}
+											/>
+										)}
+									</For>
+								</div>
+							</div>
+
+							<div class="flex flex-col gap-2">
+								<p class="text-xs font-medium text-muted">Company</p>
+								<div class="flex flex-wrap gap-1.5">
+									<FilterChip
+										label="Favourites"
+										active={props.filters.fav}
+										onClick={() => props.onChange({ fav: !props.filters.fav })}
+									/>
 								</div>
 							</div>
 

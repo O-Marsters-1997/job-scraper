@@ -458,3 +458,17 @@ CREATE TABLE job_grades (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, job_id)
 );
+
+CREATE TABLE job_views (
+    user_id UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id  UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, job_id)
+);
+
+CREATE TABLE company_favourites (
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    company_id UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, company_id)
+);

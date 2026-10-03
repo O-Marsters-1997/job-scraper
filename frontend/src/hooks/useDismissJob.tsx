@@ -4,6 +4,7 @@ import { undoPlan } from "@/lib/gradeBatch";
 import type { Grade, GradeReason } from "@/types/grade";
 import { useExcludeCompany, useUnexcludeCompany } from "./useCompanies";
 import { useClearGrade, useSetGrade } from "./useGrades";
+import { useMarkSeenAfterGrade } from "./useJobs";
 
 const TOAST_MS = 8000;
 
@@ -48,9 +49,11 @@ export function announceBulkGrading(next: BulkGrading) {
 export function useDismissJob() {
 	const set = useSetGrade();
 	const clear = useClearGrade();
+	const markSeen = useMarkSeenAfterGrade();
 	return {
 		dismiss: async (job: { ID: string; Title: string }) => {
 			await set.mutateAsync({ jobId: job.ID, grade: "no", reasons: [] });
+			await markSeen([job.ID]);
 			showFor({ jobId: job.ID, title: job.Title, reasons: [] });
 		},
 		undo: async (jobId: string) => {

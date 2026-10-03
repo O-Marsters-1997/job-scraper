@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ import {
 import { formatDate } from "@/lib/datetime";
 import {
 	useCompanyPages,
+	useSetCompanyFavourite,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { useDebouncedTerm } from "../../hooks/useDebouncedTerm";
@@ -35,8 +37,10 @@ export const Route = createFileRoute("/_auth/companies")({
 
 function CompaniesPage() {
 	const [term, search] = useDebouncedTerm();
-	const query = useCompanyPages(term);
+	const [favouritesOnly, setFavouritesOnly] = createSignal(false);
+	const query = useCompanyPages(term, favouritesOnly);
 	const trackMutation = useSetCompanyTracking();
+	const favouriteMutation = useSetCompanyFavourite();
 
 	const handleToggle = (c: Company) => {
 		trackMutation.mutate({ id: c.ID, enabled: !c.Tracked });
@@ -53,15 +57,25 @@ function CompaniesPage() {
 				</Link>
 			</PageHeading>
 
-			<div class="mb-4 max-w-xs">
-				<Label for="companies-search" class="sr-only">
-					Search companies
-				</Label>
-				<Input
-					id="companies-search"
-					placeholder="Search companies…"
-					onInput={(e) => search(e.currentTarget.value)}
-				/>
+			<div class="mb-4 flex items-center gap-4">
+				<div class="max-w-xs flex-1">
+					<Label for="companies-search" class="sr-only">
+						Search companies
+					</Label>
+					<Input
+						id="companies-search"
+						placeholder="Search companies…"
+						onInput={(e) => search(e.currentTarget.value)}
+					/>
+				</div>
+				<Switch checked={favouritesOnly()} onChange={setFavouritesOnly}>
+					<div class="flex items-center gap-2">
+						<SwitchControl>
+							<SwitchThumb />
+						</SwitchControl>
+						<SwitchLabel>Favourites</SwitchLabel>
+					</div>
+				</Switch>
 			</div>
 
 			<QueryBoundary query={query} fallbackRows={6}>
@@ -71,6 +85,9 @@ function CompaniesPage() {
 							<Table>
 								<TableHeader>
 									<TableRow>
+										<TableHead class="w-10">
+											<span class="sr-only">Favourite</span>
+										</TableHead>
 										<TableHead>Name</TableHead>
 										<TableHead>ATS</TableHead>
 										<TableHead>Jobs</TableHead>
@@ -82,6 +99,19 @@ function CompaniesPage() {
 									<For each={data().pages.flatMap((page) => page.items)}>
 										{(c) => (
 											<TableRow>
+												<TableCell>
+													<FavouriteStar
+														favourite={c.Favourite ?? false}
+														companyName={c.Name}
+														disabled={favouriteMutation.isPending}
+														onToggle={() =>
+															favouriteMutation.mutate({
+																id: c.ID,
+																favourite: !c.Favourite,
+															})
+														}
+													/>
+												</TableCell>
 												<TableCell>
 													<Link
 														to="/companies/$id"

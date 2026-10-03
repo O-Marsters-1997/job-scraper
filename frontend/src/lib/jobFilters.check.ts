@@ -165,3 +165,23 @@ assert.equal(isDefaultView({ ...DEFAULT_FILTERS, company: "c" }, false), false);
 assert.equal(isDefaultView({ ...DEFAULT_FILTERS, src: ["a"] }, false), false);
 
 console.log("✓ jobFilters checks passed");
+
+{
+	const starred = (jobs as object[]).map((j, i) => ({
+		...j,
+		ID: String(i + 1),
+		CompanyFavourite: i === 1,
+	})) as never[];
+	const starredIds = applyJobFilters(starred, {
+		...DEFAULT_FILTERS,
+		fav: true,
+	}).map((j) => (j as { ID: string }).ID);
+	assert.deepEqual(starredIds, ["2"]);
+}
+
+assert.equal(parseSearch({}).fav, false);
+assert.equal(parseSearch({ fav: "1" }).fav, true);
+assert.equal(parseSearch({ fav: true }).fav, true);
+assert.equal(parseSearch({ fav: "nonsense" }).fav, false);
+assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, fav: true }), 1);
+assert.equal(isDefaultView({ ...DEFAULT_FILTERS, fav: true }, false), false);

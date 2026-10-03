@@ -19,6 +19,7 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
+    EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
@@ -31,6 +32,7 @@ WHERE (sqlc.narg(cursor_id)::uuid IS NULL OR (c.name, c.id) > (sqlc.narg(cursor_
        OR strpos(lower(c.name), lower(sqlc.arg(search)::text)) > 0
        OR strpos(c.slug, lower(sqlc.arg(search)::text)) > 0)
   AND (NOT sqlc.arg(tracked_only)::bool OR COALESCE(tc.enabled, FALSE))
+  AND (NOT sqlc.arg(favourite_only)::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id))
 ORDER BY c.name, c.id
 LIMIT sqlc.arg(page_limit)::int;
 
@@ -41,6 +43,7 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
+    EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
@@ -114,3 +117,16 @@ WHERE tc.user_id = $1 AND tc.review_state = 'new';
 
 -- name: RenameCompany :exec
 UPDATE companies SET name = $2, updated_at = NOW() WHERE id = $1;
+
+-- name: AddCompanyFavourite :exec
+INSERT INTO company_favourites (user_id, company_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveCompanyFavourite :exec
+DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2;
+
+-- name: KeepNewTrackedCompany :exec
+UPDATE tracked_companies
+SET review_state = 'kept', updated_at = NOW()
+WHERE user_id = $1 AND company_id = $2 AND review_state = 'new';

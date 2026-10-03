@@ -22,6 +22,8 @@ type Job struct {
 	SuitabilityScore   *int
 	Band               string
 	Grade              string
+	Seen               bool
+	CompanyFavourite   bool
 	Breakdown          []ScoreRow
 	Wildcard           bool
 }

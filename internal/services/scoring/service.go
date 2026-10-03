@@ -47,6 +47,9 @@ type Store interface {
 	AddExcludedCompany(ctx context.Context, userID, name string) (bool, error)
 	RemoveExcludedCompany(ctx context.Context, userID, name string) error
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
+	ListCompanyScoringInputs(ctx context.Context, tx pgx.Tx, userID, companyID, model string) ([]store.ScoringInput, error)
+	IsJobCompanyFavourite(ctx context.Context, userID, jobID string) (bool, error)
+	SaveScoresTx(ctx context.Context, tx pgx.Tx, scores []dto.JobScore) error
 	SetAnswerCorrection(ctx context.Context, userID, jobID, optionID, value string) error
 	DeleteAnswerCorrection(ctx context.Context, userID, jobID, optionID string) error
 	ListJobCorrections(ctx context.Context, jobID string) (map[string]map[string]string, error)
@@ -237,7 +240,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
-		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID])
+		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
 		score.Cost = cost
 		scores = append(scores, score)
 	}
@@ -425,14 +428,29 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 		return dto.RecomputeResult{}, err
 	}
 
-	scores := make([]dto.JobScore, len(inputs))
-	for i, in := range inputs {
-		scores[i] = scoreJob(userID, cfg, in.Job, byID, in.Answers, in.Corrections)
-	}
+	scores := scoreInputs(userID, cfg, byID, inputs)
 	if err := s.store.SaveScores(ctx, scores); err != nil {
 		return dto.RecomputeResult{}, err
 	}
 	return dto.RecomputeResult{Recomputed: int64(len(scores))}, nil
+}
+
+// CompanyFavouriteChanged re-scores userID's scored, open Jobs at companyID
+// from cached answers within tx. It never calls Answerer or notifies.
+func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	cfg, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
+		return err
+	}
+	bk, err := s.loadBank(ctx)
+	if err != nil {
+		return err
+	}
+	inputs, err := s.store.ListCompanyScoringInputs(ctx, tx, userID, companyID, jev.Model)
+	if err != nil {
+		return err
+	}
+	return s.store.SaveScoresTx(ctx, tx, scoreInputs(userID, cfg, bk.byID, inputs))
 }
 
 // FillMissingAnswers queues an answer effect, without alerting, for each of
@@ -479,11 +497,19 @@ func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.Se
 	return cfg, nil
 }
 
-func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) dto.JobScore {
+func scoreInputs(userID string, cfg dto.SearchConfig, byID map[string]dto.ScoringOption, inputs []store.ScoringInput) []dto.JobScore {
+	scores := make([]dto.JobScore, len(inputs))
+	for i, in := range inputs {
+		scores[i] = scoreJob(userID, cfg, in.Job, byID, in.Answers, in.Corrections, in.Favourite)
+	}
+	return scores
+}
+
+func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) dto.JobScore {
 	picks := dedupeBySource(cfg.Preferences.Picks)
 	evaluated := evaluatedPicksFor(picks, byID, answers, corrections)
 	unpicked := unpickedGateOptions(picks, byID, answers, corrections)
-	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor)
+	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor, favourite)
 	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Band: band, Rows: rows, Unknowns: countUnknown(rows)}
 }
 

@@ -79,7 +79,11 @@ func (s *Service) rescoreJob(ctx context.Context, userID, jobID string) (dto.Job
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load corrections: %w", err)
 	}
-	score := scoreJob(userID, cfg, job, bk.byID, answers, corrections[userID])
+	favourite, err := s.store.IsJobCompanyFavourite(ctx, userID, jobID)
+	if err != nil {
+		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load favourite: %w", err)
+	}
+	score := scoreJob(userID, cfg, job, bk.byID, answers, corrections[userID], favourite)
 	if err := s.store.SaveScores(ctx, []dto.JobScore{score}); err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: %w", err)
 	}

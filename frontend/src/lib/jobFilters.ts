@@ -3,6 +3,9 @@ import type { Job } from "@/types/job";
 export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
 export type GradedFilter = (typeof GRADED_OPTIONS)[number];
 
+export const SEEN_OPTIONS = ["all", "unseen", "seen"] as const;
+export type SeenFilter = (typeof SEEN_OPTIONS)[number];
+
 export interface JobFilters {
 	q: string;
 	suit?: number | undefined;
@@ -14,6 +17,8 @@ export interface JobFilters {
 	company?: string | undefined;
 	scored: boolean;
 	graded: GradedFilter;
+	seen: SeenFilter;
+	fav: boolean;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -27,6 +32,8 @@ export const DEFAULT_FILTERS: JobFilters = {
 	company: undefined,
 	scored: false,
 	graded: "all",
+	seen: "all",
+	fav: false,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -56,6 +63,8 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 			raw.scored === "1" ||
 			raw.scored === 1,
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
+		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
+		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
 	};
 }
 
@@ -105,6 +114,9 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 			return false;
 		if (f.graded === "ungraded" && j.Grade) return false;
 		if (f.graded === "graded" && !j.Grade) return false;
+		if (f.seen === "unseen" && j.Seen) return false;
+		if (f.seen === "seen" && !j.Seen) return false;
+		if (f.fav && !j.CompanyFavourite) return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
 			return false;
@@ -127,6 +139,8 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.work.length > 0) n++;
 	if (f.sal) n++;
 	if (f.graded !== "all") n++;
+	if (f.seen !== "all") n++;
+	if (f.fav) n++;
 	return n;
 }
 

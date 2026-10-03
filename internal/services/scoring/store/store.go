@@ -23,8 +23,9 @@ import (
 // ScoringInput is one job and its cached answers, keyed by question hash,
 // ready for Recompute.
 type ScoringInput struct {
-	Job     dto.Job
-	Answers map[string]dto.Answer
+	Job       dto.Job
+	Answers   map[string]dto.Answer
+	Favourite bool
 	// Corrections maps option id to the user's "yes" or "no" for this job.
 	Corrections map[string]string
 }
@@ -356,6 +357,7 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 			RequiredTitleKeywords: row.RequiredTitleKeywords,
 			NotifyThreshold:       int(row.NotifyThreshold),
 			CompanyIsNew:          row.CompanyIsNew,
+			CompanyIsFavourite:    row.CompanyIsFavourite,
 			Preferences:           prefs,
 		}
 	}
@@ -486,15 +488,50 @@ func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore,
 }
 
 func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]ScoringInput, error) {
+	return listScoringInputs(ctx, s.queries, userID, model, pgtype.UUID{})
+}
+
+// ListCompanyScoringInputs is ListScoringInputs narrowed to userID's scored,
+// open Jobs at companyID, read within tx.
+func (s *Store) ListCompanyScoringInputs(ctx context.Context, tx pgx.Tx, userID, companyID, model string) ([]ScoringInput, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return nil, err
+	}
+	return listScoringInputs(ctx, s.queries.WithTx(tx), userID, model, cid)
+}
+
+// IsJobCompanyFavourite reports whether userID has starred jobID's Company.
+func (s *Store) IsJobCompanyFavourite(ctx context.Context, userID, jobID string) (bool, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return false, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return false, err
+	}
+	favourite, err := s.queries.IsJobCompanyFavourite(ctx, sqlc.IsJobCompanyFavouriteParams{JobID: jid, UserID: uid})
+	if err != nil {
+		return false, fmt.Errorf("store.IsJobCompanyFavourite: %w", err)
+	}
+	return favourite, nil
+}
+
+func (s *Store) SaveScoresTx(ctx context.Context, tx pgx.Tx, scores []dto.JobScore) error {
+	return saveScores(ctx, s.queries.WithTx(tx), scores)
+}
+
+func listScoringInputs(ctx context.Context, queries *sqlc.Queries, userID, model string, companyID pgtype.UUID) ([]ScoringInput, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	jobRows, err := s.queries.ListScoringInputJobs(ctx, uid)
+	jobRows, err := queries.ListScoringInputJobs(ctx, sqlc.ListScoringInputJobsParams{UserID: uid, CompanyID: companyID})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringInputs: %w", err)
 	}
-	answerRows, err := s.queries.ListScoringAnswersForUser(ctx, sqlc.ListScoringAnswersForUserParams{UserID: uid, Model: model})
+	answerRows, err := queries.ListScoringAnswersForUser(ctx, sqlc.ListScoringAnswersForUserParams{UserID: uid, Model: model})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringInputs: %w", err)
 	}
@@ -509,7 +546,7 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]
 		}
 	}
 
-	correctionRows, err := s.queries.ListAnswerCorrectionsForUser(ctx, uid)
+	correctionRows, err := queries.ListAnswerCorrectionsForUser(ctx, uid)
 	if err != nil {
 		return nil, fmt.Errorf("store.ListScoringInputs: corrections: %w", err)
 	}
@@ -524,13 +561,23 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]
 
 	inputs := make([]ScoringInput, len(jobRows))
 	for i, row := range jobRows {
-		job := toJobDTO(sqlc.GetJobForScoringRow(row))
-		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID], Corrections: correctionsByJob[job.ID]}
+		job := toJobDTO(sqlc.GetJobForScoringRow{
+			ID: row.ID, Title: row.Title, Location: row.Location, Url: row.Url, CompanySlug: row.CompanySlug,
+			Source: row.Source, UpdatedAt: row.UpdatedAt, ScrapedAt: row.ScrapedAt, Description: row.Description,
+			SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement, CompanyID: row.CompanyID,
+			PrimaryBoardID: row.PrimaryBoardID, ProviderPostingID: row.ProviderPostingID,
+			ContentFingerprint: row.ContentFingerprint,
+		})
+		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID], Corrections: correctionsByJob[job.ID], Favourite: row.IsFavourite}
 	}
 	return inputs, nil
 }
 
 func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
+	return saveScores(ctx, s.queries, scores)
+}
+
+func saveScores(ctx context.Context, queries *sqlc.Queries, scores []dto.JobScore) error {
 	for _, sc := range scores {
 		jobID, err := data.UUID(sc.JobID)
 		if err != nil {
@@ -544,7 +591,7 @@ func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 		if err != nil {
 			return fmt.Errorf("store.SaveScores: marshal breakdown: %w", err)
 		}
-		if err := s.queries.UpdateJobScoreBreakdown(ctx, sqlc.UpdateJobScoreBreakdownParams{
+		if err := queries.UpdateJobScoreBreakdown(ctx, sqlc.UpdateJobScoreBreakdownParams{
 			Score: int32(sc.Score), Band: sc.Band, Breakdown: breakdown, JobID: jobID, UserID: userID,
 		}); err != nil {
 			return fmt.Errorf("store.SaveScores: %w", err)

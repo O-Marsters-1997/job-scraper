@@ -16,6 +16,7 @@ import (
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
 	r.Get("/jobs/all", handlers.GetAll(m.jobs.ListScored))
+	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
 	r.Get("/sources", handlers.GetAll(m.jobs.ListSources))
@@ -37,6 +38,8 @@ func (m *Module) Routes(r chi.Router) {
 		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))
 		r.Delete("/{id}/tracking", handlers.Delete(m.jobs.UntrackCompany))
 		r.Put("/{id}/tracking", handlers.Update(m.jobs.SetCompanyTracking))
+		r.Put("/{id}/favourite", handlers.GetByID(m.jobs.FavouriteCompany))
+		r.Delete("/{id}/favourite", handlers.GetByID(m.jobs.UnfavouriteCompany))
 		r.Put("/{id}/review", handlers.Update(m.jobs.SetCompanyReview))
 		r.Put("/{id}/exclusion", handlers.Update(m.ExcludeCompany))
 		r.Post("/{id}/exclusion/undo", handlers.Update(m.UnexcludeCompany))

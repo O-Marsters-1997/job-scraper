@@ -39,6 +39,7 @@ type Store interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error)
+	MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	PageCompaniesForUser(ctx context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error)
@@ -54,6 +55,7 @@ type Store interface {
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
 	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
+	SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)

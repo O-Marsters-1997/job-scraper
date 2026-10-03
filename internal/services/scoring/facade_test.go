@@ -242,3 +242,88 @@ func TestReplay_UnscoredLabel(t *testing.T) {
 		t.Errorf("Replay() = %q, want the unscored label counted", got)
 	}
 }
+
+func TestFavouriteScoresIdenticallyOnEveryPath(t *testing.T) {
+	const userID = "user-1"
+	goKey := scoring.QuestionHash("Does the role use Go?")
+	answers := map[string]dto.Answer{goKey: {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}
+	job := dto.Job{ID: "job-1", Title: "Backend Engineer", CompanySlug: "acme", ContentFingerprint: "fp-1"}
+	const unstarred = 37
+
+	effect := func(t *testing.T) int {
+		t.Helper()
+		st := newFakeStore()
+		st.SeedAnswers(job.ID, job.ContentFingerprint, jev.Model, answers)
+		cfg := picking(userID, "tech:go")
+		cfg.CompanyIsFavourite = true
+		st.SeedJob(job, []dto.SearchConfig{cfg})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		runTick(t, st)
+		return st.Completed()[0].Scores[0].Score
+	}
+	recompute := func(t *testing.T) int {
+		t.Helper()
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		st.SeedScoringInputs(userID, []store.ScoringInput{{Job: job, Answers: answers, Favourite: true}})
+		if _, err := newService(t, st).Recompute(t.Context(), userID); err != nil {
+			t.Fatalf("Recompute err = %v", err)
+		}
+		return st.Recomputed()[0].Score
+	}
+	port := func(t *testing.T) int {
+		t.Helper()
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		st.SeedScoringInputs(userID, []store.ScoringInput{{Job: job, Answers: answers, Favourite: true}})
+		if err := scoring.Build(newDeps(t, st)).CompanyFavouriteChanged(t.Context(), nil, userID, ""); err != nil {
+			t.Fatalf("CompanyFavouriteChanged err = %v", err)
+		}
+		return st.Recomputed()[0].Score
+	}
+
+	want := effect(t)
+	if want <= unstarred {
+		t.Fatalf("favourite score = %d, want above %d", want, unstarred)
+	}
+	for name, path := range map[string]func(*testing.T) int{"recompute": recompute, "port": port} {
+		if got := path(t); got != want {
+			t.Errorf("%s score = %d, want %d (same as the answer effect)", name, got, want)
+		}
+	}
+
+	t.Run("replay", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		st.SeedScoringInputs(userID, []store.ScoringInput{{Job: job, Answers: answers, Favourite: true}})
+		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: job.ID, Source: "application"})
+		got, err := scoring.Build(newDeps(t, st)).Replay(t.Context(), userID)
+		if err != nil {
+			t.Fatalf("Replay err = %v", err)
+		}
+		if wantCell := fmt.Sprintf("| %d |", want); !strings.Contains(got, wantCell) {
+			t.Errorf("Replay() = %q, want a row scored %q", got, wantCell)
+		}
+	})
+}
+
+func TestCorrectionRescoreReadsFavourite(t *testing.T) {
+	const userID = "user-1"
+	score := func(t *testing.T, starred bool) int {
+		t.Helper()
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		if starred {
+			st.SeedFavouriteJob(userID, testJob.ID)
+		}
+		got, err := newService(t, st).SetCorrection(t.Context(), userID, dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "yes"})
+		if err != nil {
+			t.Fatalf("SetCorrection err = %v", err)
+		}
+		return got.Score
+	}
+
+	if starred, plain := score(t, true), score(t, false); starred <= plain {
+		t.Errorf("starred score = %d, want above the unstarred %d", starred, plain)
+	}
+}

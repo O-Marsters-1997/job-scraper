@@ -77,7 +77,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
 	var labelled []replayRow
 	for i, in := range inputs {
-		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections)
+		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections, in.Favourite)
 		score := scored.Score
 		report.Scores[i] = score
 		if l, ok := labels[in.Job.ID]; ok {
