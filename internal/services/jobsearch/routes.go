@@ -38,6 +38,8 @@ func (m *Module) Routes(r chi.Router) {
 		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))
 		r.Delete("/{id}/tracking", handlers.Delete(m.jobs.UntrackCompany))
 		r.Put("/{id}/tracking", handlers.Update(m.jobs.SetCompanyTracking))
+		r.Put("/{id}/favourite", handlers.GetByID(m.jobs.FavouriteCompany))
+		r.Delete("/{id}/favourite", handlers.GetByID(m.jobs.UnfavouriteCompany))
 		r.Put("/{id}/review", handlers.Update(m.jobs.SetCompanyReview))
 		r.Get("/{id}/boards", handlers.GetByID(m.jobs.ListCompanyBoards))
 		r.Post("/{id}/boards", handlers.Create(m.jobs.AddCompanyBoard))

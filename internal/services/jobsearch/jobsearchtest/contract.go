@@ -537,6 +537,74 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("favouriting an untracked company stars it without tracking it", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "star-co", Name: "Star Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		job, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/star", CompanySlug: "star-co"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		for range 2 {
+			if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+				t.Fatalf("SetCompanyFavourite(true) = %v", err)
+			}
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || !got.Favourite || got.Tracked {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want favourite and untracked", got, err)
+		}
+		gotJob, err := st.GetJob(ctx, job.ID, userID)
+		if err != nil || !gotJob.CompanyFavourite {
+			t.Fatalf("GetJob(...).CompanyFavourite = %v, %v, want true", gotJob.CompanyFavourite, err)
+		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, FavouriteOnly: true})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != c.ID {
+			t.Fatalf("PageCompaniesForUser(favourite only) = %+v, %v, want Star Co", page, err)
+		}
+		if tracked, err := st.ListTrackedCompaniesForUser(ctx, userID); err != nil || len(tracked) != 0 {
+			t.Fatalf("ListTrackedCompaniesForUser(...) = %+v, %v, want none", tracked, err)
+		}
+		for range 2 {
+			if err := st.SetCompanyFavourite(ctx, userID, c.ID, false); err != nil {
+				t.Fatalf("SetCompanyFavourite(false) = %v", err)
+			}
+		}
+		page, err = st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, FavouriteOnly: true})
+		if err != nil || len(page.Items) != 0 {
+			t.Fatalf("PageCompaniesForUser(favourite only) after unstar = %+v, %v, want none", page, err)
+		}
+	})
+
+	t.Run("favouriting a new tracked company keeps it, and dismissing it removes the star", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "found-co", Name: "Found Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.TrackDiscoveredCompany(ctx, userID, c.ID); err != nil {
+			t.Fatalf("TrackDiscoveredCompany(...) = %v", err)
+		}
+		if err := st.SetCompanyFavourite(ctx, userID, c.ID, true); err != nil {
+			t.Fatalf("SetCompanyFavourite(true) = %v", err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.ReviewState != "kept" || !got.Favourite {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want kept and favourite", got, err)
+		}
+		if _, err := st.SetCompanyReviewState(ctx, userID, c.ID, "dismissed"); err != nil {
+			t.Fatalf("SetCompanyReviewState(dismissed) = %v", err)
+		}
+		got, err = st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Favourite {
+			t.Fatalf("GetCompanyForUser(...) after dismiss = %+v, %v, want not favourite", got, err)
+		}
+	})
+
 	t.Run("untracked discovered boards exclude tracked, dismissed, candidate and user-confirmed ones", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

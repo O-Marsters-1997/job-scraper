@@ -30,7 +30,7 @@ func TestRoutesRequireAuth(t *testing.T) {
 	r := chi.NewRouter()
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	handlerstest.RequiresAuth(t, r,
-		"GET /jobs", "POST /jobs/seen", "GET /jobs/all", "GET /jobs/{id}",
+		"GET /jobs", "POST /jobs/seen", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/all", "GET /jobs/{id}",
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
@@ -155,6 +155,38 @@ func TestMarkSeenHandler(t *testing.T) {
 		ids := strings.TrimSuffix(strings.Repeat(`"`+saved.ID+`",`, 5001), ",")
 		if w := handlerstest.Serve(t, r, "POST /jobs/seen", `{"JobIDs":[`+ids+`],"Seen":true}`); w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+}
+
+func TestCompanyFavouriteHandlers(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	company, err := st.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(st)).Routes(r)
+	path := "/companies/" + company.ID + "/favourite"
+
+	t.Run("PUT and DELETE are idempotent", func(t *testing.T) {
+		for range 2 {
+			if got := handlerstest.Do[dto.Company](t, r, http.StatusOK, "PUT "+path, ""); !got.Favourite {
+				t.Errorf("PUT %s Favourite = false, want true", path)
+			}
+		}
+		for range 2 {
+			if got := handlerstest.Do[dto.Company](t, r, http.StatusOK, "DELETE "+path, ""); got.Favourite {
+				t.Errorf("DELETE %s Favourite = true, want false", path)
+			}
+		}
+	})
+
+	t.Run("an unknown company is 404", func(t *testing.T) {
+		for _, method := range []string{"PUT", "DELETE"} {
+			if w := handlerstest.Serve(t, r, method+" /companies/missing/favourite", ""); w.Code != http.StatusNotFound {
+				t.Errorf("%s /companies/missing/favourite = %d, want %d", method, w.Code, http.StatusNotFound)
+			}
 		}
 	})
 }
