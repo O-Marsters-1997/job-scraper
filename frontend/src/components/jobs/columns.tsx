@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/solid-table";
 import { Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/datetime";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
@@ -20,6 +21,7 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
+		showWildcard: () => boolean;
 	}
 }
 
@@ -31,14 +33,26 @@ export function createJobColumns(
 			accessorKey: "Title",
 			header: "Title",
 			cell: (info) => (
-				<Link
-					to="/jobs/$id"
-					params={{ id: info.row.original.ID }}
-					class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
-					title={info.getValue() as string}
-				>
-					{info.getValue() as string}
-				</Link>
+				<div class="flex items-center gap-2">
+					<Link
+						to="/jobs/$id"
+						params={{ id: info.row.original.ID }}
+						class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
+						title={info.getValue() as string}
+					>
+						{info.getValue() as string}
+					</Link>
+					<Show
+						when={
+							info.row.original.Wildcard &&
+							info.table.options.meta?.showWildcard()
+						}
+					>
+						<Badge variant="secondary" class="shrink-0">
+							Wildcard
+						</Badge>
+					</Show>
+				</div>
 			),
 		},
 		{

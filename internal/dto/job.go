@@ -21,4 +21,5 @@ type Job struct {
 	WorkArrangement    string
 	SuitabilityScore   *int
 	Breakdown          []ScoreRow
+	Wildcard           bool
 }

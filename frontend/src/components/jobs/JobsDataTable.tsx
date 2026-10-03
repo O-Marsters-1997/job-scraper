@@ -23,7 +23,11 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
+import {
+	activeFilterCount,
+	isDefaultView,
+	type JobFilters,
+} from "@/lib/jobFilters";
 import type { Job } from "@/types/job";
 
 interface JobsDataTableProps<TData extends Job> {
@@ -65,6 +69,7 @@ export function JobsDataTable<TData extends Job>(
 		meta: {
 			isExpanded,
 			toggleExpanded,
+			showWildcard: () => isDefaultView(props.filters, sorting().length > 0),
 		},
 	});
 

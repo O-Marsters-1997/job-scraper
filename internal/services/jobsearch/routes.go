@@ -15,7 +15,7 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
-	r.Get("/jobs/all", handlers.GetAll(m.store.ListJobs))
+	r.Get("/jobs/all", handlers.GetAll(m.jobs.ListScored))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
 	r.Get("/sources", handlers.GetAll(m.jobs.ListSources))
