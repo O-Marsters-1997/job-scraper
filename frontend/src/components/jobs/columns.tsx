@@ -5,7 +5,7 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/datetime";
-import { titleCase } from "@/lib/utils";
+import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
@@ -65,10 +65,20 @@ export function createJobColumns(
 			header: "Title",
 			cell: (info) => (
 				<div class="flex items-center gap-2">
+					<Show when={!info.row.original.Seen}>
+						<span
+							role="img"
+							aria-label="Unseen"
+							class="size-1.5 shrink-0 rounded-full bg-primary"
+						/>
+					</Show>
 					<Link
 						to="/jobs/$id"
 						params={{ id: info.row.original.ID }}
-						class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
+						class={cn(
+							"block max-w-[260px] truncate text-foreground transition-colors hover:text-primary",
+							info.row.original.Seen ? "font-medium" : "font-bold",
+						)}
 						title={info.getValue() as string}
 					>
 						{info.getValue() as string}

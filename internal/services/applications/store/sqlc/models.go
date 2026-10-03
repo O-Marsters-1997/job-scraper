@@ -286,6 +286,12 @@ type JobUrl struct {
 	LastSeenAt    pgtype.Timestamptz
 }
 
+type JobView struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+	SeenAt pgtype.Timestamptz
+}
+
 type NotificationDigest struct {
 	ID       pgtype.UUID
 	SentAt   pgtype.Timestamptz

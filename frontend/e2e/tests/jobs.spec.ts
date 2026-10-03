@@ -135,6 +135,27 @@ test.describe("Jobs", () => {
 		await expect(titleLink).toBeHidden();
 	});
 
+	test("a row is bold until its detail page is opened, and the Unseen filter drops it", async ({
+		page,
+		jobsPage,
+	}) => {
+		const href =
+			(await jobsPage.firstJobTitleLink().getAttribute("href")) ?? "";
+		const titleLink = page.locator(`a[href="${href}"]`);
+		await expect(titleLink).toHaveClass(/font-bold/);
+
+		const title = ((await titleLink.textContent()) ?? "").trim();
+		await titleLink.click();
+		await expect(page.getByRole("heading", { name: title })).toBeVisible();
+		await page.goBack();
+		await expect(titleLink).not.toHaveClass(/font-bold/);
+
+		await page.getByRole("button", { name: "Filters" }).click();
+		await page.getByRole("button", { name: "Unseen" }).click();
+		await page.getByRole("button", { name: "Done" }).click();
+		await expect(titleLink).toBeHidden();
+	});
+
 	test("shows the job title in the breadcrumb on a direct visit to /jobs/:id", async ({
 		page,
 		jobsPage,

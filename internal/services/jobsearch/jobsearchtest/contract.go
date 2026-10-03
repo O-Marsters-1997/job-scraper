@@ -81,6 +81,40 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("marking seen is idempotent and unseen clears it", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		saved, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/seen"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		isSeen := func() bool {
+			t.Helper()
+			got, err := st.GetJob(ctx, saved.ID, userID)
+			if err != nil {
+				t.Fatalf("GetJob(...) = %v", err)
+			}
+			return got.Seen
+		}
+		if isSeen() {
+			t.Fatal("GetJob(new job).Seen = true, want false")
+		}
+		for range 2 {
+			if err := st.MarkJobsSeen(ctx, userID, []string{saved.ID, missingID}, true); err != nil {
+				t.Fatalf("MarkJobsSeen(true) = %v", err)
+			}
+		}
+		if !isSeen() {
+			t.Error("GetJob(seen job).Seen = false, want true")
+		}
+		if err := st.MarkJobsSeen(ctx, userID, []string{saved.ID}, false); err != nil {
+			t.Fatalf("MarkJobsSeen(false) = %v", err)
+		}
+		if isSeen() {
+			t.Error("GetJob(unseen job).Seen = true, want false")
+		}
+	})
+
 	t.Run("resaving the same content is unchanged, changed content is changed", func(t *testing.T) {
 		st, _ := newStore(t)
 		ctx := t.Context()

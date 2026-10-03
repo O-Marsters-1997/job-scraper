@@ -42,6 +42,7 @@ export const jobSchema = z.object({
 	SuitabilityScore: z.number().nullable(),
 	Band: bandSchema.optional(),
 	Grade: z.enum(GRADES).or(z.literal("")).optional(),
+	Seen: z.boolean().optional(),
 	Wildcard: z.boolean().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	// Optional rich fields — populated in demo mode; absent from the live backend
