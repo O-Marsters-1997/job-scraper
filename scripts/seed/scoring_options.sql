@@ -153,7 +153,7 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('work:hybrid', 'work', 'Hybrid', 'Is the role hybrid, split between home and an office (not fully remote or fully onsite)?'),
     ('work:onsite', 'work', 'Onsite', 'Is the role fully onsite in an office (not remote or hybrid)?'),
     ('employment:permanent', 'employment', 'Permanent', 'Is the role a permanent, full-time employment contract (not contract, freelance or part-time)?'),
-    ('employment:contract', 'employment', 'Contract', 'Is the role a fixed-term or day-rate contract, including outside IR35 or inside IR35 (not permanent)?'),
+    ('employment:contract', 'employment', 'Contract', 'Is the role a fixed-term or day-rate contract, (not permanent)?'),
     ('employment:part_time', 'employment', 'Part-time', 'Is the role part-time (not full-time)?'),
     ('stage:seed', 'stage', 'Seed', 'Is the company at Seed stage (not pre-seed, Series A or later, or public)?'),
     ('stage:series_a', 'stage', 'Series A', 'Is the company at Series A stage (not Seed, Series B or later, or public)?'),
