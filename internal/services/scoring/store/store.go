@@ -276,7 +276,7 @@ func (s *Store) FailAnswerEffect(ctx context.Context, id string, attempts int, f
 func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {
-		return dto.Job{}, err
+		return dto.Job{}, data.ErrNotFound
 	}
 	row, err := s.queries.GetJobForScoring(ctx, jid)
 	if err != nil {
