@@ -276,6 +276,39 @@ func (q *Queries) OpsState(ctx context.Context) (OpsStateRow, error) {
 	return i, err
 }
 
+const underparsedBoards = `-- name: UnderparsedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.last_reported_total > 0 AND ps.last_parsed < 0.98 * ps.last_reported_total
+GROUP BY b.source
+`
+
+type UnderparsedBoardsRow struct {
+	Source string
+	Boards int64
+}
+
+func (q *Queries) UnderparsedBoards(ctx context.Context) ([]UnderparsedBoardsRow, error) {
+	rows, err := q.db.Query(ctx, underparsedBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UnderparsedBoardsRow
+	for rows.Next() {
+		var i UnderparsedBoardsRow
+		if err := rows.Scan(&i.Source, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const uniqueRelevantJobs = `-- name: UniqueRelevantJobs :many
 SELECT source::text AS source, count(*) AS jobs
 FROM (
