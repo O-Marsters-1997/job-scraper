@@ -86,6 +86,38 @@ func (q *Queries) ListGrades(ctx context.Context, userID pgtype.UUID) ([]JobGrad
 	return items, nil
 }
 
+const listImpliedPositives = `-- name: ListImpliedPositives :many
+SELECT job_id, 'application'::text AS source FROM applications WHERE applications.user_id = $1
+UNION ALL
+SELECT job_id, 'kept_cv'::text AS source FROM tailored_cvs WHERE tailored_cvs.user_id = $1 AND outcome = 'kept'
+ORDER BY source, job_id
+`
+
+type ListImpliedPositivesRow struct {
+	JobID  pgtype.UUID
+	Source string
+}
+
+func (q *Queries) ListImpliedPositives(ctx context.Context, userID pgtype.UUID) ([]ListImpliedPositivesRow, error) {
+	rows, err := q.db.Query(ctx, listImpliedPositives, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListImpliedPositivesRow
+	for rows.Next() {
+		var i ListImpliedPositivesRow
+		if err := rows.Scan(&i.JobID, &i.Source); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertGrade = `-- name: UpsertGrade :one
 INSERT INTO job_grades (user_id, job_id, grade, reasons, score_at_grade, score_model)
 VALUES ($1, $2, $3::text, $4::text[], $5, $6)

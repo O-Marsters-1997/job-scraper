@@ -182,6 +182,12 @@ The one-tap "Not for me" that saves Grade `no` and hides the Job from that User'
 blocked row. Undo clears the Grade.
 _Avoid_: Hide, archive, delete — nothing is removed and the Job page still opens
 
+**Replay**:
+A report of where a User's labelled Jobs rank under their current Picks, re-scored from cached Answers
+without calling Jev. Positives are Grade `great`/`ok`, an application or a kept tailored CV; negatives
+are Grade `no`. Run as `just eval-scoring <user>`, and summarised in the Feedback Pack.
+_Avoid_: Backtest, eval run
+
 **Search Config**:
 A User's editable search criteria (role, location, keywords), Picks (in `preferences`), and notify threshold — exactly one per User; the single source of truth feeding the
 relevance gate, Suitability, and notifications.

@@ -26,6 +26,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback export <username> [--include-outdated]")
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
+	fmt.Fprintln(os.Stderr, "       admin scoring replay <username>")
 	os.Exit(1)
 }
 
@@ -43,6 +44,8 @@ func main() {
 		runOptions(os.Args[2:])
 	case "scoring-feedback":
 		runScoringFeedback(os.Args[2:])
+	case "scoring":
+		runScoring(os.Args[2:])
 	default:
 		usage()
 	}
@@ -170,6 +173,26 @@ func runScoringFeedback(args []string) {
 		fatal("export feedback", err)
 	}
 	fmt.Print(pack)
+}
+
+func runScoring(args []string) {
+	if len(args) != 2 || args[0] != "replay" {
+		usage()
+	}
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	userID, err := identity.NewFacade(pool, nil).UserIDByUsername(ctx, args[1])
+	if err != nil {
+		fatal("find user", err)
+	}
+	report, err := scoring.NewFacade(pool).Replay(ctx, userID)
+	if err != nil {
+		fatal("replay", err)
+	}
+	fmt.Print(report)
 }
 
 func fatal(what string, err error) {

@@ -123,6 +123,10 @@ scoring-feedback-export user *flags:
 scoring-feedback-clear user:
     go run ./cmd/admin scoring-feedback clear {{user}}
 
+# replay a user's labels against current scoring and print the report
+eval-scoring user:
+    go run ./cmd/admin scoring replay {{user}}
+
 # ── Seeds ─────────────────────────────────────────────────────────────────────
 
 # seed the scoring-options bank (idempotent; safe to rerun in any environment)

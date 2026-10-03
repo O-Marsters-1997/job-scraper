@@ -32,7 +32,7 @@ func packPicks(picks []dto.Pick, b bank) []packPick {
 	return out
 }
 
-func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted int, includeOutdated bool) string {
+func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayReport, outdatedOmitted int, includeOutdated bool) string {
 	var overall, jobs, collections []dto.ScoreFeedback
 	for _, e := range entries {
 		switch e.Kind {
@@ -89,6 +89,10 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted i
 		}
 		writeReason(&sb, e.Reason)
 	}
+
+	sb.WriteString("## Replay\n\n")
+	writeReplaySummary(&sb, replay)
+	sb.WriteString("\n")
 
 	sb.WriteString("## Job entries\n\n")
 	if len(jobs) == 0 {

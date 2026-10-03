@@ -18,3 +18,10 @@ type GradeInput struct {
 	Grade   string   `json:"grade"`
 	Reasons []string `json:"reasons"`
 }
+
+// ImpliedLabel is a Job the User engaged with beyond a Grade: Source is
+// "application" or "kept_cv".
+type ImpliedLabel struct {
+	JobID  string
+	Source string
+}

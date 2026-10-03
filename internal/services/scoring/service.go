@@ -72,6 +72,7 @@ type Store interface {
 	GetGrade(ctx context.Context, userID, jobID string) (dto.Grade, error)
 	DeleteGrade(ctx context.Context, userID, jobID string) error
 	ListGrades(ctx context.Context, userID string) ([]dto.Grade, error)
+	ListImpliedPositives(ctx context.Context, userID string) ([]dto.ImpliedLabel, error)
 }
 
 type Service struct {
