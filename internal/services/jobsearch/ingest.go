@@ -93,7 +93,7 @@ func (s *Service) discoverBoard(ctx context.Context, j dto.Job, seen map[string]
 		return
 	}
 	seen[key] = true
-	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.BoardDiscoverTask, BoardToken: token}
+	task := queue.Task{Version: 1, ID: uuid.NewString(), Source: source, Kind: queue.BoardDiscoverTask, BoardToken: token, Via: j.Source}
 	if err := s.queue.Publish(ctx, task); err != nil {
 		slog.WarnContext(ctx, "ingest: could not publish board discover",
 			slog.String(logger.KeySource, source), slog.Any(logger.KeyErr, err))

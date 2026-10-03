@@ -418,15 +418,18 @@ func (f *FakeStore) SetCompanyReviewState(_ context.Context, userID, companyID, 
 	return t, nil
 }
 
-func (f *FakeStore) VerifyCompanyBoard(_ context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+func (f *FakeStore) VerifyCompanyBoard(_ context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, b := range f.boards {
 		if b.CompanyID != companyID || b.Source != source || b.BoardToken != token {
 			continue
 		}
+		if b.Status != dto.BoardCandidate {
+			continue
+		}
 		now := time.Now()
-		b.Status, b.VerificationMethod, b.VerifiedAt = dto.BoardVerified, method, &now
+		b.Status, b.VerificationMethod, b.VerifiedAt, b.DiscoveredVia = dto.BoardVerified, method, &now, via
 		f.boards[id] = b
 		return b, nil
 	}

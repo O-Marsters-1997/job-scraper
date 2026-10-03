@@ -53,7 +53,7 @@ type Store interface {
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
 	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
-	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error)
+	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
 	TouchCompanyCrawled(ctx context.Context, id string) error
 	RenameCompany(ctx context.Context, id, name string) error

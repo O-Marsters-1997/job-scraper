@@ -37,6 +37,7 @@ type Task struct {
 	BoardToken  string   `json:"board_token,omitempty"`
 	Manual      bool     `json:"manual,omitempty"`
 	Recovery    bool     `json:"recovery,omitempty"`
+	Via         string   `json:"via,omitempty"`
 	Redelivered bool     `json:"-"`
 }
 

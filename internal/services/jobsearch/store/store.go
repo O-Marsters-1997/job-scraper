@@ -1098,14 +1098,14 @@ func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
 	return nil
 }
 
-func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method string) (dto.CompanyBoard, error) {
+func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
 	id, err := data.UUID(companyID)
 	if err != nil {
 		return dto.CompanyBoard{}, err
 	}
 	row, err := s.queries.VerifyCompanyBoard(ctx, sqlc.VerifyCompanyBoardParams{
 		CompanyID: id, Source: source, BoardToken: token,
-		VerificationMethod: pgtype.Text{String: method, Valid: true},
+		VerificationMethod: pgtype.Text{String: method, Valid: true}, Via: via,
 	})
 	if err != nil {
 		return dto.CompanyBoard{}, data.QueryErr("VerifyCompanyBoard", err)

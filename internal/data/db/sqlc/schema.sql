@@ -301,6 +301,7 @@ CREATE TABLE IF NOT EXISTS company_boards (
     last_linked_at TIMESTAMPTZ,
     retired_at TIMESTAMPTZ,
     superseded_at TIMESTAMPTZ,
+    discovered_via TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
