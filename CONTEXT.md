@@ -153,6 +153,12 @@ Shared across every User, keyed on the Job, its content fingerprint, the questio
 the model, so identical questions across Users and Custom questions answer once.
 _Avoid_: Score, judgement — an Answer is a fact about the Job, not a fit verdict
 
+**Correction**:
+One User's yes or no on one Option for one Job, overriding Jev's Answer in that User's score only
+(as certain, `Corrected` on the breakdown row). Stored in `answer_corrections`, kept across
+Recompute and later answer effects, and never visible to other Users.
+_Avoid_: Override (a manual Pick overriding a text Pick), feedback (Score Feedback is free text)
+
 **Hard filter**:
 A company-blocklist or no-go-tech check that runs in code before any Jev spend, at answer-effect
 time rather than at ingest; a Job that trips every interested User's filter is never sent to Jev.

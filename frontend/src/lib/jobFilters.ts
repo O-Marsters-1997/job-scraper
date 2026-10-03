@@ -121,6 +121,11 @@ export function activeFilterCount(f: JobFilters): number {
 	return n;
 }
 
+/** The server-ordered list, where wildcard slots are meaningful: no search, filters or column sort. */
+export function isDefaultView(f: JobFilters, sorted: boolean): boolean {
+	return !sorted && !f.q && !f.company && activeFilterCount(f) === 0;
+}
+
 /** Unique Source values present in the dataset, sorted. */
 export function sourceOptions(jobs: Job[]): string[] {
 	return [...new Set(jobs.map((j) => j.Source))].sort();

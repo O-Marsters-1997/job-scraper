@@ -37,15 +37,16 @@ type QueuedMissing struct {
 type FakeStore struct {
 	mu sync.Mutex
 
-	effects []dto.AnswerEffect
-	jobs    map[string]dto.Job
-	configs map[string][]dto.SearchConfig
-	answers map[string]map[string]dto.Answer
-	inputs  map[string][]store.ScoringInput
-	options []dto.ScoringOption
-	search  map[string]dto.SearchConfig
-	scored  map[string]bool
-	pushes  map[string][]dto.PushSubscriptionInput
+	effects     []dto.AnswerEffect
+	jobs        map[string]dto.Job
+	configs     map[string][]dto.SearchConfig
+	answers     map[string]map[string]dto.Answer
+	inputs      map[string][]store.ScoringInput
+	options     []dto.ScoringOption
+	search      map[string]dto.SearchConfig
+	scored      map[string]bool
+	corrections map[string]map[string]string
+	pushes      map[string][]dto.PushSubscriptionInput
 
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
@@ -60,13 +61,14 @@ type FakeStore struct {
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
-		jobs:    make(map[string]dto.Job),
-		configs: make(map[string][]dto.SearchConfig),
-		answers: make(map[string]map[string]dto.Answer),
-		inputs:  make(map[string][]store.ScoringInput),
-		search:  make(map[string]dto.SearchConfig),
-		pushes:  make(map[string][]dto.PushSubscriptionInput),
-		scored:  make(map[string]bool),
+		jobs:        make(map[string]dto.Job),
+		configs:     make(map[string][]dto.SearchConfig),
+		answers:     make(map[string]map[string]dto.Answer),
+		inputs:      make(map[string][]store.ScoringInput),
+		search:      make(map[string]dto.SearchConfig),
+		pushes:      make(map[string][]dto.PushSubscriptionInput),
+		scored:      make(map[string]bool),
+		corrections: make(map[string]map[string]string),
 
 		feedback: make(map[string][]dto.ScoreFeedback),
 		evidence: make(map[string]dto.JobScoreEvidence),
@@ -260,7 +262,43 @@ func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) 
 func (f *FakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]store.ScoringInput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.inputs[userID], nil
+	inputs := slices.Clone(f.inputs[userID])
+	for i, in := range inputs {
+		if c := f.corrections[scoredKey(in.Job.ID, userID)]; c != nil {
+			inputs[i].Corrections = maps.Clone(c)
+		}
+	}
+	return inputs, nil
+}
+
+func (f *FakeStore) SetAnswerCorrection(_ context.Context, userID, jobID, optionID, value string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := scoredKey(jobID, userID)
+	if f.corrections[key] == nil {
+		f.corrections[key] = make(map[string]string)
+	}
+	f.corrections[key][optionID] = value
+	return nil
+}
+
+func (f *FakeStore) DeleteAnswerCorrection(_ context.Context, userID, jobID, optionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.corrections[scoredKey(jobID, userID)], optionID)
+	return nil
+}
+
+func (f *FakeStore) ListJobCorrections(_ context.Context, jobID string) (map[string]map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]map[string]string)
+	for key, c := range f.corrections {
+		if userID, ok := strings.CutPrefix(key, jobID+"|"); ok && len(c) > 0 {
+			out[userID] = maps.Clone(c)
+		}
+	}
+	return out, nil
 }
 
 func (f *FakeStore) SaveScores(_ context.Context, scores []dto.JobScore) error {

@@ -11,6 +11,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Put("/scoring-config", handlers.Update(m.svc.UpdateConfig))
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
+	r.Put("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.SetCorrection))
+	r.Delete("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.RevertCorrection))
 	r.Post("/scores/recompute", handlers.GetAll(m.svc.Recompute))
 	r.Get("/push/vapid-public-key", handlers.GetAll(m.svc.VAPIDPublicKey))
 	r.Post("/push/subscriptions", handlers.Create(m.svc.Subscribe))

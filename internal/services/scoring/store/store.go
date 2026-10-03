@@ -24,6 +24,8 @@ import (
 type ScoringInput struct {
 	Job     dto.Job
 	Answers map[string]dto.Answer
+	// Corrections maps option id to the user's "yes" or "no" for this job.
+	Corrections map[string]string
 }
 
 type Store struct {
@@ -462,10 +464,23 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]
 		}
 	}
 
+	correctionRows, err := s.queries.ListAnswerCorrectionsForUser(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScoringInputs: corrections: %w", err)
+	}
+	correctionsByJob := make(map[string]map[string]string)
+	for _, c := range correctionRows {
+		jobID := c.JobID.String()
+		if correctionsByJob[jobID] == nil {
+			correctionsByJob[jobID] = make(map[string]string)
+		}
+		correctionsByJob[jobID][c.OptionID] = c.Value
+	}
+
 	inputs := make([]ScoringInput, len(jobRows))
 	for i, row := range jobRows {
 		job := toJobDTO(sqlc.GetJobForScoringRow(row))
-		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID]}
+		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID], Corrections: correctionsByJob[job.ID]}
 	}
 	return inputs, nil
 }
@@ -809,4 +824,60 @@ func (s *Store) ListGrades(ctx context.Context, userID string) ([]dto.Grade, err
 		out[i] = toGradeDTO(row)
 	}
 	return out, nil
+}
+
+func (s *Store) SetAnswerCorrection(ctx context.Context, userID, jobID, optionID, value string) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.UpsertAnswerCorrection(ctx, sqlc.UpsertAnswerCorrectionParams{UserID: uid, JobID: jid, OptionID: optionID, Value: value}); err != nil {
+		return fmt.Errorf("store.SetAnswerCorrection: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteAnswerCorrection(ctx context.Context, userID, jobID, optionID string) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteAnswerCorrection(ctx, sqlc.DeleteAnswerCorrectionParams{UserID: uid, JobID: jid, OptionID: optionID}); err != nil {
+		return fmt.Errorf("store.DeleteAnswerCorrection: %w", err)
+	}
+	return nil
+}
+
+// ListJobCorrections returns every user's Corrections for jobID, keyed by
+// user id then option id.
+func (s *Store) ListJobCorrections(ctx context.Context, jobID string) (map[string]map[string]string, error) {
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListAnswerCorrectionsForJob(ctx, jid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobCorrections: %w", err)
+	}
+	out := make(map[string]map[string]string)
+	for _, r := range rows {
+		userID := r.UserID.String()
+		if out[userID] == nil {
+			out[userID] = make(map[string]string)
+		}
+		out[userID][r.OptionID] = r.Value
+	}
+	return out, nil
+}
+
+func userAndJob(userID, jobID string) (pgtype.UUID, pgtype.UUID, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, err
+	}
+	return uid, jid, nil
 }

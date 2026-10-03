@@ -67,6 +67,14 @@ type Achievement struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
+type AnswerCorrection struct {
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	OptionID  string
+	Value     string
+	CreatedAt pgtype.Timestamptz
+}
+
 type Application struct {
 	ID         pgtype.UUID
 	UserID     pgtype.UUID

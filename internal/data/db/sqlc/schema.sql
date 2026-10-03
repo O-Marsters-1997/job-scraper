@@ -220,6 +220,15 @@ CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerpr
     WHERE status IN ('pending', 'running');
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
+CREATE TABLE answer_corrections (
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    option_id  TEXT        NOT NULL REFERENCES scoring_options(id),
+    value      TEXT        NOT NULL CHECK (value IN ('yes', 'no')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, job_id, option_id)
+);
+
 CREATE TABLE IF NOT EXISTS search_config (
     id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id                 UUID        NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,

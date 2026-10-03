@@ -1295,3 +1295,108 @@ func TestClearGrade(t *testing.T) {
 		t.Errorf("GetGrade() after clear = %+v, %v, want nil, nil", got, err)
 	}
 }
+
+func TestCorrections(t *testing.T) {
+	const userID = "user-1"
+	goKey := scoring.QuestionHash("Does the role use Go?")
+
+	t.Run("a correction survives Recompute and marks its row", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		st.SeedScoringInputs(userID, []store.ScoringInput{{Job: dto.Job{ID: "job-1"}, Answers: map[string]dto.Answer{goKey: {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}}})
+		if err := st.SetAnswerCorrection(t.Context(), userID, "job-1", "tech:go", "no"); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := newService(t, st).Recompute(t.Context(), userID); err != nil {
+			t.Fatalf("Recompute: %v", err)
+		}
+
+		saved := st.Recomputed()
+		if len(saved) != 1 || saved[0].Score != 38 || !saved[0].Rows[0].Corrected || saved[0].Rows[0].Resolved != "no" {
+			t.Fatalf("Recompute saved %+v, want score 38 with a corrected no row", saved)
+		}
+	})
+
+	t.Run("the answer effect applies each user's own corrections", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		seedEffect(st, false, picking("user-1", "tech:go"), picking("user-2", "tech:go"))
+		if err := st.SetAnswerCorrection(t.Context(), "user-1", testJob.ID, "tech:go", "no"); err != nil {
+			t.Fatal(err)
+		}
+
+		runTick(t, st)
+
+		got := map[string]int{}
+		for _, sc := range st.Completed()[0].Scores {
+			got[sc.UserID] = sc.Score
+		}
+		if diff := cmp.Diff(map[string]int{"user-1": 38, "user-2": 63}, got); diff != "" {
+			t.Errorf("effect scores (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("setting then reverting rescores the job", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		svc := newService(t, st)
+
+		set, err := svc.SetCorrection(t.Context(), userID, dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "no"})
+		if err != nil {
+			t.Fatalf("SetCorrection: %v", err)
+		}
+		if set.Score != 38 || !set.Rows[0].Corrected {
+			t.Errorf("SetCorrection = %+v, want score 38 with a corrected row", set)
+		}
+
+		reverted, err := svc.RevertCorrection(t.Context(), userID, dto.RevertCorrectionInput{JobID: testJob.ID, OptionID: "tech:go"})
+		if err != nil {
+			t.Fatalf("RevertCorrection: %v", err)
+		}
+		if reverted.Score != 63 || reverted.Rows[0].Corrected {
+			t.Errorf("RevertCorrection = %+v, want score 63 with no correction", reverted)
+		}
+	})
+
+	t.Run("rejects a bad value, an unknown option and an unscored job", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		svc := newService(t, st)
+		tests := []struct {
+			name string
+			in   dto.CorrectionInput
+			kind apperr.Kind
+		}{
+			{"bad value", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "maybe"}, apperr.KindInvalid},
+			{"unknown option", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:nope", Value: "no"}, apperr.KindNotFound},
+			{"unscored job", dto.CorrectionInput{JobID: "job-9", OptionID: "tech:go", Value: "no"}, apperr.KindNotFound},
+		}
+		for _, tt := range tests {
+			_, err := svc.SetCorrection(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.kind) {
+				t.Errorf("SetCorrection(%s) err = %v, want kind %v", tt.name, err, tt.kind)
+			}
+		}
+		if got := st.Recomputed(); len(got) != 0 {
+			t.Errorf("rejected corrections rescored %+v, want nothing", got)
+		}
+	})
+}
+
+func TestSetCorrectionWhileRescoringKeepsTheStoredScore(t *testing.T) {
+	st := newFakeStore()
+	seedScoredJob(st, "user-1", "tech:go")
+	job := testJob
+	job.ContentFingerprint = "fp-2"
+	st.SeedJob(job, nil)
+
+	_, err := newService(t, st).SetCorrection(t.Context(), "user-1", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "no"})
+
+	if !apperr.IsKind(err, apperr.KindConflict) {
+		t.Errorf("SetCorrection() err = %v, want a conflict", err)
+	}
+	if got := st.Recomputed(); len(got) != 0 {
+		t.Errorf("SetCorrection() saved %+v, want the stored score left alone", got)
+	}
+}
