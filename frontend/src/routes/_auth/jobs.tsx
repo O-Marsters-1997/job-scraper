@@ -111,6 +111,7 @@ function JobsPage() {
 					filters={filters()}
 					onChange={setFilters}
 					sourceOptions={srcOptions()}
+					wildcards
 				/>
 			</Show>
 
