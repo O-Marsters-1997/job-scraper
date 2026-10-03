@@ -30,3 +30,24 @@ FROM (
        AND min(u.first_seen_at) > NOW() - INTERVAL '14 days'
 ) unique_jobs
 GROUP BY source;
+
+-- name: DiscoveryBoards :many
+SELECT discovered_via::text AS via, count(*) AS boards
+FROM company_boards
+WHERE status = 'verified' AND discovered_via IS NOT NULL AND verified_at > NOW() - INTERVAL '14 days'
+GROUP BY discovered_via;
+
+-- name: DiscoveryRelevantJobs :many
+SELECT b.discovered_via::text AS via, count(*) AS jobs
+FROM jobs j
+JOIN company_boards b ON b.id = j.primary_board_id
+WHERE b.status = 'verified' AND b.discovered_via IS NOT NULL AND b.verified_at > NOW() - INTERVAL '14 days'
+  AND EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id)
+GROUP BY b.discovered_via;
+
+-- name: HarvestAdmitted :many
+SELECT b.discovered_via::text AS harvester, count(DISTINCT tc.company_id) AS companies
+FROM tracked_companies tc
+JOIN company_boards b ON b.company_id = tc.company_id
+WHERE tc.review_state IN ('new', 'kept') AND b.discovered_via IN (SELECT harvester FROM harvest_runs)
+GROUP BY b.discovered_via;

@@ -530,6 +530,30 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	for _, u := range unique {
 		uniqueBySource[u.Source] = u.Jobs
 	}
+	boards, err := s.queries.DiscoveryBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState discovery boards: %w", err)
+	}
+	boardsByVia := make(map[string]int64, len(boards))
+	for _, b := range boards {
+		boardsByVia[b.Via] = b.Boards
+	}
+	relevant, err := s.queries.DiscoveryRelevantJobs(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState discovery relevant jobs: %w", err)
+	}
+	relevantByVia := make(map[string]int64, len(relevant))
+	for _, r := range relevant {
+		relevantByVia[r.Via] = r.Jobs
+	}
+	admitted, err := s.queries.HarvestAdmitted(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest admitted: %w", err)
+	}
+	admittedByHarvester := make(map[string]int64, len(admitted))
+	for _, a := range admitted {
+		admittedByHarvester[a.Harvester] = a.Companies
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -548,6 +572,9 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		DisabledSourceTargets:  disabledBySource,
 		HarvestAge:             harvestAge,
 		UniqueRelevantJobs:     uniqueBySource,
+		DiscoveryBoards:        boardsByVia,
+		DiscoveryRelevantJobs:  relevantByVia,
+		HarvestAdmitted:        admittedByHarvester,
 	}, nil
 }
 

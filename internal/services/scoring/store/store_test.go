@@ -638,6 +638,53 @@ func TestOpsState(t *testing.T) {
 			t.Errorf("OpsState().HarvestAge[lever] = %s, want ~1m", age)
 		}
 	})
+
+	t.Run("gauges boards, relevant jobs and admitted companies by discovery route", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		exec(t, pool, `INSERT INTO harvest_runs (harvester, last_succeeded_at) VALUES ('ashby', NOW())`)
+		day := 24 * time.Hour
+		seed := func(slug, via, status string, verifiedAgo time.Duration, reviewState string, scoredJobs int) {
+			var companyID, boardID string
+			if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+				t.Fatalf("insert company: %v", err)
+			}
+			if err := pool.QueryRow(t.Context(),
+				`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at, discovered_via)
+				 VALUES ($1, 'greenhouse', $2, $3, 'manual', $4, NULLIF($5, '')) RETURNING id`,
+				companyID, slug, status, time.Now().Add(-verifiedAgo), via).Scan(&boardID); err != nil {
+				t.Fatalf("insert board: %v", err)
+			}
+			if reviewState != "" {
+				exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, $3)`, userID, companyID, reviewState)
+			}
+			for i := range scoredJobs {
+				jobID := pgtest.InsertJob(t, pool, slug, fmt.Sprintf("%s-%d", slug, i))
+				exec(t, pool, `UPDATE jobs SET primary_board_id = $1 WHERE id = $2`, boardID, jobID)
+				insertScore(t, pool, jobID, userID)
+			}
+		}
+		seed("li-a", "linkedin", "verified", day, "", 2)
+		seed("li-b", "linkedin", "verified", 2*day, "", 1)
+		seed("li-stale", "linkedin", "verified", 20*day, "", 1)
+		seed("li-retired", "linkedin", "retired", day, "", 1)
+		seed("ashby-kept", "ashby", "verified", day, "kept", 1)
+		seed("ashby-new", "ashby", "verified", day, "new", 0)
+		seed("ashby-dismissed", "ashby", "verified", day, "dismissed", 0)
+		seed("linkedin-tracked", "linkedin", "verified", day, "kept", 0)
+		seed("unattributed", "", "verified", day, "kept", 1)
+
+		state := opsState(t, st)
+		if diff := cmp.Diff(map[string]int64{"linkedin": 3, "ashby": 3}, state.DiscoveryBoards); diff != "" {
+			t.Errorf("OpsState().DiscoveryBoards mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string]int64{"linkedin": 3, "ashby": 1}, state.DiscoveryRelevantJobs); diff != "" {
+			t.Errorf("OpsState().DiscoveryRelevantJobs mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string]int64{"ashby": 2}, state.HarvestAdmitted); diff != "" {
+			t.Errorf("OpsState().HarvestAdmitted mismatch (-want +got):\n%s", diff)
+		}
+	})
 }
 
 func TestQueueMissingAnswers(t *testing.T) {
