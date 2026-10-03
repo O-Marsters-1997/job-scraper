@@ -87,7 +87,14 @@ func TestScoringStoreContract(t *testing.T) {
 	scoringtest.RunStoreContract(t, func(t *testing.T) scoringtest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
-		return scoringtest.Fixture{Store: st, NewUser: func() string { return pgtest.InsertUser(t, pool) }}
+		return scoringtest.Fixture{
+			Store:   st,
+			NewUser: func() string { return pgtest.InsertUser(t, pool) },
+			NewJob: func() string {
+				n := seedCounter.Add(1)
+				return pgtest.InsertJob(t, pool, "job", fmt.Sprintf("fp-%d", n))
+			},
+		}
 	})
 }
 

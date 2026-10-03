@@ -51,6 +51,7 @@ type FakeStore struct {
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
 	evidence    map[string]dto.JobScoreEvidence
+	grades      map[string]map[string]dto.Grade
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -71,6 +72,7 @@ func NewFakeStore() *FakeStore {
 
 		feedback: make(map[string][]dto.ScoreFeedback),
 		evidence: make(map[string]dto.JobScoreEvidence),
+		grades:   make(map[string]map[string]dto.Grade),
 	}
 }
 
@@ -551,5 +553,45 @@ func (f *FakeStore) ListJobScoresForCollection(_ context.Context, userID string,
 		}
 		out = append(out, row)
 	}
+	return out, nil
+}
+
+func (f *FakeStore) UpsertGrade(_ context.Context, userID string, g dto.Grade) (dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.grades[userID] == nil {
+		f.grades[userID] = make(map[string]dto.Grade)
+	}
+	if g.Reasons == nil {
+		g.Reasons = []string{}
+	}
+	g.UpdatedAt = time.Now()
+	f.grades[userID][g.JobID] = g
+	return g, nil
+}
+
+func (f *FakeStore) GetGrade(_ context.Context, userID, jobID string) (dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g, ok := f.grades[userID][jobID]
+	if !ok {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	return g, nil
+}
+
+func (f *FakeStore) DeleteGrade(_ context.Context, userID, jobID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.grades[userID], jobID)
+	return nil
+}
+
+func (f *FakeStore) ListGrades(_ context.Context, userID string) ([]dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := slices.SortedFunc(maps.Values(f.grades[userID]), func(a, b dto.Grade) int {
+		return b.UpdatedAt.Compare(a.UpdatedAt)
+	})
 	return out, nil
 }

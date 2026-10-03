@@ -157,6 +157,44 @@ func TestCollectionFeedbackRoute(t *testing.T) {
 	}
 }
 
+func TestGradeRoutes(t *testing.T) {
+	st := newFakeStore()
+	seedScoredJob(st, handlerstest.UserID, "tech:go")
+	r := chi.NewRouter()
+	scoring.Build(newDeps(t, st)).Routes(r)
+
+	handlerstest.RequiresAuth(t, r, "PUT /jobs/job-1/grade", "GET /jobs/job-1/grade", "DELETE /jobs/job-1/grade")
+	handlerstest.RejectsMalformedBody(t, r, "PUT /jobs/job-1/grade")
+
+	for name, tc := range map[string]struct {
+		path, body string
+		want       int
+	}{
+		"bad grade":      {"/jobs/job-1/grade", `{"grade":"meh"}`, http.StatusBadRequest},
+		"unknown reason": {"/jobs/job-1/grade", `{"grade":"no","reasons":["vibes"]}`, http.StatusBadRequest},
+		"unknown job":    {"/jobs/nope/grade", `{"grade":"no"}`, http.StatusNotFound},
+	} {
+		if rec := handlerstest.Serve(t, r, "PUT "+tc.path, tc.body); rec.Code != tc.want {
+			t.Errorf("PUT %s %s status = %d, want %d", tc.path, name, rec.Code, tc.want)
+		}
+	}
+
+	if rec := handlerstest.Serve(t, r, "GET /jobs/job-1/grade", ""); rec.Body.String() != "null\n" {
+		t.Errorf("GET ungraded body = %q, want null", rec.Body.String())
+	}
+	put := handlerstest.Do[dto.Grade](t, r, http.StatusOK, "PUT /jobs/job-1/grade", `{"grade":"no","reasons":["role"]}`)
+	if put.JobID != "job-1" || put.Grade != "no" || !slices.Equal(put.Reasons, []string{"role"}) {
+		t.Errorf("PUT /jobs/job-1/grade = %+v, want the saved no grade", put)
+	}
+	got := handlerstest.Do[dto.Grade](t, r, http.StatusOK, "GET /jobs/job-1/grade", "")
+	if got.Grade != "no" {
+		t.Errorf("GET /jobs/job-1/grade = %+v, want the no grade", got)
+	}
+	if rec := handlerstest.Serve(t, r, "DELETE /jobs/job-1/grade", ""); rec.Code != http.StatusNoContent {
+		t.Errorf("DELETE /jobs/job-1/grade status = %d, want 204", rec.Code)
+	}
+}
+
 func TestCorrectionRoutes(t *testing.T) {
 	st := newFakeStore()
 	seedScoredJob(st, handlerstest.UserID, "tech:go")

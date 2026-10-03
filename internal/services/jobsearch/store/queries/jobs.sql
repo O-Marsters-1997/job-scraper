@@ -5,6 +5,7 @@ JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 WHERE j.closed_at IS NULL
   AND j.updated_at > now() - interval '90 days'
   AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1 AND g.grade = 'no')
 ORDER BY js.suitability_score DESC, j.scraped_at DESC;
 
 -- name: PageJobs :many
@@ -17,6 +18,7 @@ WHERE (sqlc.narg(cursor_time)::timestamptz IS NULL OR (j.scraped_at, j.id) < (sq
   AND (NOT sqlc.arg(scored_only)::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = sqlc.arg(user_id)::uuid))
   AND (sqlc.arg(since_days)::int = 0 OR j.updated_at >= now() - make_interval(days => sqlc.arg(since_days)::int))
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = sqlc.arg(user_id)::uuid AND g.grade = 'no')
 ORDER BY j.scraped_at DESC, j.id DESC
 LIMIT sqlc.arg(page_limit)::int;
 

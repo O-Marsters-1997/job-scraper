@@ -1214,6 +1214,88 @@ func TestListFeedback_Outdated(t *testing.T) {
 	}
 }
 
+func TestSetGrade(t *testing.T) {
+	const userID = "user-1"
+	svc := func(st *scoringtest.FakeStore) *scoring.Service { return scoring.NewService(newDeps(t, st)) }
+
+	t.Run("records the grade beside the stored score and model, and re-grading replaces it", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+
+		if _, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "ok"}); err != nil {
+			t.Fatalf("SetGrade(ok) err = %v", err)
+		}
+		if _, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "no", Reasons: []string{"tech", "role", "tech"}}); err != nil {
+			t.Fatalf("SetGrade(no) err = %v", err)
+		}
+
+		got, err := svc(st).GetGrade(t.Context(), userID, testJob.ID)
+		score := 72
+		want := &dto.Grade{JobID: testJob.ID, Grade: "no", Reasons: []string{"role", "tech"}, ScoreAtGrade: &score, ScoreModel: "jev-old"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Grade{}, "UpdatedAt")); err != nil || diff != "" {
+			t.Errorf("GetGrade() = %+v, %v (-want +got):\n%s", got, err, diff)
+		}
+		if list, _ := svc(st).ListGrades(t.Context(), userID); len(list) != 1 {
+			t.Errorf("ListGrades() = %+v, want one row", list)
+		}
+	})
+
+	t.Run("an unscored job is graded with no score", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedJob(testJob, nil)
+
+		got, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "great"})
+		if err != nil || got.ScoreAtGrade != nil || got.ScoreModel != "" {
+			t.Errorf("SetGrade() = %+v, %v, want a grade with no score", got, err)
+		}
+	})
+
+	tests := []struct {
+		name string
+		in   dto.GradeInput
+		kind apperr.Kind
+	}{
+		{name: "bad grade is invalid", in: dto.GradeInput{JobID: testJob.ID, Grade: "meh"}, kind: apperr.KindInvalid},
+		{name: "unknown reason is invalid", in: dto.GradeInput{JobID: testJob.ID, Grade: "no", Reasons: []string{"vibes"}}, kind: apperr.KindInvalid},
+		{name: "unknown job is not found", in: dto.GradeInput{JobID: "nope", Grade: "no"}, kind: apperr.KindNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" and writes nothing", func(t *testing.T) {
+			st := newFakeStore()
+			st.SeedJob(testJob, nil)
+
+			if _, err := svc(st).SetGrade(t.Context(), userID, tt.in); !apperr.IsKind(err, tt.kind) {
+				t.Fatalf("SetGrade(%+v) err = %v, want kind %v", tt.in, err, tt.kind)
+			}
+			if list, _ := svc(st).ListGrades(t.Context(), userID); len(list) != 0 {
+				t.Errorf("ListGrades() = %+v, want nothing written", list)
+			}
+		})
+	}
+}
+
+func TestClearGrade(t *testing.T) {
+	st := newFakeStore()
+	st.SeedJob(testJob, nil)
+	svc := scoring.NewService(newDeps(t, st))
+	if _, err := svc.SetGrade(t.Context(), "user-1", dto.GradeInput{JobID: testJob.ID, Grade: "no"}); err != nil {
+		t.Fatalf("SetGrade() err = %v", err)
+	}
+
+	if err := svc.ClearGrade(t.Context(), "user-2", testJob.ID); err != nil {
+		t.Fatalf("ClearGrade(other user) err = %v", err)
+	}
+	if got, _ := svc.GetGrade(t.Context(), "user-1", testJob.ID); got == nil {
+		t.Fatal("ClearGrade(other user) removed user-1's grade")
+	}
+	if err := svc.ClearGrade(t.Context(), "user-1", testJob.ID); err != nil {
+		t.Fatalf("ClearGrade() err = %v", err)
+	}
+	if got, err := svc.GetGrade(t.Context(), "user-1", testJob.ID); got != nil || err != nil {
+		t.Errorf("GetGrade() after clear = %+v, %v, want nil, nil", got, err)
+	}
+}
+
 func TestCorrections(t *testing.T) {
 	const userID = "user-1"
 	goKey := scoring.QuestionHash("Does the role use Go?")

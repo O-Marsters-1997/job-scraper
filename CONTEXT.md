@@ -171,6 +171,17 @@ Answers — no per-Job Jev call, since Suitability is derived entirely from data
 once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
+**Grade**:
+A User's current verdict on one Job (`great`, `ok` or `no`), with optional reason chips from a fixed
+set, stored with the Suitability score and model at the time. One per (User, Job), updated in place
+and deleted to clear. The only explicit label the scoring is tuned against.
+_Avoid_: Rating, vote — keep distinct from Score Feedback, which is a free-text log
+
+**Dismiss**:
+The one-tap "Not for me" that saves Grade `no` and hides the Job from that User's lists, like a
+blocked row. Undo clears the Grade.
+_Avoid_: Hide, archive, delete — nothing is removed and the Job page still opens
+
 **Search Config**:
 A User's editable search criteria (role, location, keywords), Picks (in `preferences`), and notify threshold — exactly one per User; the single source of truth feeding the
 relevance gate, Suitability, and notifications.
