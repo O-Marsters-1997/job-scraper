@@ -17,6 +17,13 @@ export const companySchema = z.object({
 
 export type Company = z.infer<typeof companySchema>;
 
+export const companyExclusionSchema = z.object({
+	name: z.string(),
+	added: z.boolean(),
+});
+
+export type CompanyExclusion = z.infer<typeof companyExclusionSchema>;
+
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
 	next_cursor: z.string(),

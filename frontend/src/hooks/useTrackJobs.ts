@@ -8,7 +8,7 @@ import {
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
-import { useDismissJob } from "./useDismissJob";
+import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
 
 export function useTrackJobs(jobs: () => Job[]) {
 	const applications = useApplications();
@@ -44,11 +44,13 @@ export function useTrackJobs(jobs: () => Job[]) {
 	};
 
 	const dismiss = useDismissJob();
+	const exclude = useExcludeJobCompany();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
 		onGrade: (job) => openGrade([job]),
+		onExcludeCompany: exclude.exclude,
 	});
 
 	return {

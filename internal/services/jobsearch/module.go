@@ -26,6 +26,8 @@ type ScoringPort interface {
 	sourcetargets.SearchConfigReader
 	CompanyProfiles(ctx context.Context, userID string, companyIDs []string) (map[string][]dto.CompanyProfileEntry, error)
 	store.ScoringWriter
+	ExcludeCompany(ctx context.Context, userID, name string) (bool, error)
+	UnexcludeCompany(ctx context.Context, userID, name string) error
 }
 
 type QueuePublisher interface {
@@ -36,7 +38,7 @@ type QueuePublisher interface {
 type Store interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
-	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error)
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	PageCompaniesForUser(ctx context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error)
@@ -83,7 +85,7 @@ type Deps struct {
 }
 
 func Build(deps Deps) *Module {
-	jobs := NewService(deps.Store, deps.Queue)
+	jobs := NewService(deps.Store, deps.Queue, deps.Scoring)
 	return &Module{
 		store:         deps.Store,
 		jobs:          jobs,

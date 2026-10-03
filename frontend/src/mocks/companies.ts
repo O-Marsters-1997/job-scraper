@@ -3,6 +3,7 @@ import type { CompanyPageParams } from "@/api/companies";
 import type {
 	Company,
 	CompanyBoard,
+	CompanyExclusion,
 	CompanyTracking,
 	NewCompany,
 	ReviewState,
@@ -14,6 +15,7 @@ import type {
 } from "@/types/sourceTarget";
 import { failIfRequested, hostMatches, humanizeSlug, slugify } from "./helpers";
 import { getJobs } from "./jobs";
+import { excludeCompanyName, unexcludeCompanyName } from "./scoring";
 import { seed } from "./seed";
 import { mockUser } from "./user";
 
@@ -189,6 +191,25 @@ export function setCompanyReview(
 		Enabled: updated.Tracked,
 		CheckIntervalMinutes: updated.CheckIntervalMinutes,
 	};
+}
+
+export function excludeCompany(id: string): CompanyExclusion {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	const added = excludeCompanyName(company.Name);
+	if (trackedCompanyIds.has(id)) setCompanyReview(id, "dismissed");
+	return { name: company.Name, added };
+}
+
+export function unexcludeCompany(
+	id: string,
+	removeName: boolean,
+): CompanyExclusion {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	if (removeName) unexcludeCompanyName(company.Name);
+	if (trackedCompanyIds.has(id)) setCompanyReview(id, "new");
+	return { name: company.Name, added: false };
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {

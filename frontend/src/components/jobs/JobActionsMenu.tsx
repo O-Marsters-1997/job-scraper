@@ -17,9 +17,11 @@ interface JobActionsMenuProps {
 	onTrack: () => void;
 	onGrade?: () => void;
 	onDismiss?: () => void;
+	onExcludeCompany?: () => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
+	const canExclude = () => !!props.onExcludeCompany && !!props.job.CompanyID;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -62,7 +64,7 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 						</DropdownMenuItem>
 					)}
 				</Show>
-				<Show when={props.onGrade || props.onDismiss}>
+				<Show when={props.onGrade || props.onDismiss || canExclude()}>
 					<DropdownMenuSeparator />
 				</Show>
 				<Show when={props.onGrade}>
@@ -75,6 +77,12 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 					<DropdownMenuItem onSelect={() => props.onDismiss?.()}>
 						<Icon name="x" size={14} />
 						Not for me
+					</DropdownMenuItem>
+				</Show>
+				<Show when={canExclude()}>
+					<DropdownMenuItem onSelect={() => props.onExcludeCompany?.()}>
+						<Icon name="x" size={14} />
+						Exclude company
 					</DropdownMenuItem>
 				</Show>
 			</DropdownMenuContent>

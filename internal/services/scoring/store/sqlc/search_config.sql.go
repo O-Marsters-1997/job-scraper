@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addExcludedCompany = `-- name: AddExcludedCompany :one
+INSERT INTO search_config (user_id, excluded_companies)
+VALUES ($1, ARRAY[$2::text])
+ON CONFLICT (user_id) DO UPDATE SET
+    excluded_companies = array_append(search_config.excluded_companies, $2::text),
+    updated_at         = NOW()
+WHERE NOT ($2::text = ANY(search_config.excluded_companies))
+RETURNING user_id
+`
+
+type AddExcludedCompanyParams struct {
+	UserID pgtype.UUID
+	Name   string
+}
+
+func (q *Queries) AddExcludedCompany(ctx context.Context, arg AddExcludedCompanyParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, addExcludedCompany, arg.UserID, arg.Name)
+	var user_id pgtype.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const getSearchConfig = `-- name: GetSearchConfig :one
 SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
 `
@@ -69,6 +91,23 @@ func (q *Queries) ListIncludeFilterConfigs(ctx context.Context) ([]SearchConfig,
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeExcludedCompany = `-- name: RemoveExcludedCompany :exec
+UPDATE search_config
+SET excluded_companies = array_remove(excluded_companies, $1::text),
+    updated_at         = NOW()
+WHERE user_id = $2 AND $1::text = ANY(excluded_companies)
+`
+
+type RemoveExcludedCompanyParams struct {
+	Name   string
+	UserID pgtype.UUID
+}
+
+func (q *Queries) RemoveExcludedCompany(ctx context.Context, arg RemoveExcludedCompanyParams) error {
+	_, err := q.db.Exec(ctx, removeExcludedCompany, arg.Name, arg.UserID)
+	return err
 }
 
 const upsertSearchConfig = `-- name: UpsertSearchConfig :one

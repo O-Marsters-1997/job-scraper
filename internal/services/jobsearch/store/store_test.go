@@ -223,12 +223,39 @@ func TestPage(t *testing.T) {
 		if diff := cmp.Diff([]string{open}, jobIDs(page.Items)); diff != "" {
 			t.Errorf("Page() ids (-want +got):\n%s", diff)
 		}
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
 		if diff := cmp.Diff([]string{open}, jobIDs(all)); diff != "" {
 			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("hides jobs of excluded company slugs from the page and the full list", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		company := insertCompany(t, pool, "acme")
+		scoreJob(t, pool, insertJob(t, pool, company, 1, time.Now(), false), userID, `[]`)
+
+		for _, tt := range []struct {
+			name     string
+			slugs    []string
+			wantJobs bool
+		}{{"none excluded", nil, true}, {"another company excluded", []string{"globex"}, true}, {"its slug excluded", []string{"globex", "acme"}, false}} {
+			page, err := st.Page(t.Context(), userID, dto.JobPageOptions{Limit: 10, Availability: "open", ExcludedCompanySlugs: tt.slugs})
+			if err != nil {
+				t.Fatalf("Page(%s) err = %v", tt.name, err)
+			}
+			all, err := st.ListJobs(t.Context(), userID, tt.slugs)
+			if err != nil {
+				t.Fatalf("ListJobs(%s) err = %v", tt.name, err)
+			}
+			if got := len(page.Items) > 0; got != tt.wantJobs {
+				t.Errorf("Page(%s) has jobs = %v, want %v", tt.name, got, tt.wantJobs)
+			}
+			if got := len(all) > 0; got != tt.wantJobs {
+				t.Errorf("ListJobs(%s) has jobs = %v, want %v", tt.name, got, tt.wantJobs)
+			}
 		}
 	})
 
@@ -259,7 +286,7 @@ func TestPage(t *testing.T) {
 		if diff := cmp.Diff(want, jobIDs(page.Items), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 			t.Errorf("Page() ids (-want +got):\n%s", diff)
 		}
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -335,7 +362,7 @@ func TestPage(t *testing.T) {
 		if diff := cmp.Diff(want, jobGrades(page.Items)); diff != "" {
 			t.Errorf("Page() grades (-want +got):\n%s", diff)
 		}
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -354,7 +381,7 @@ func TestPage(t *testing.T) {
 		scoreJob(t, pool, recent, userID, `[]`)
 		scoreJob(t, pool, stale, userID, `[]`)
 
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -411,7 +438,7 @@ func TestSaveCanonical(t *testing.T) {
 		}
 
 		scoreJob(t, pool, saved.ID, userID, `[]`)
-		jobs, err := st.ListJobs(t.Context(), userID)
+		jobs, err := st.ListJobs(t.Context(), userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}

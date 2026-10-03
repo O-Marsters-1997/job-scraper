@@ -15,7 +15,11 @@ const wildcardBlock = 10
 // ten replaced by a flagged wildcard from the bottom half of the list. The
 // choice is fixed for a (user, UTC day), so reloads see one order.
 func (s *Service) ListScored(ctx context.Context, userID string) ([]dto.Job, error) {
-	jobs, err := s.store.ListJobs(ctx, userID)
+	excluded, err := s.excludedCompanySlugs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	jobs, err := s.store.ListJobs(ctx, userID, excluded)
 	if err != nil {
 		return nil, err
 	}
