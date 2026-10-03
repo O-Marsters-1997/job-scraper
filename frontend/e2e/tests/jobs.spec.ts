@@ -109,6 +109,32 @@ test.describe("Jobs", () => {
 		await expect(titleLink).toBeVisible();
 	});
 
+	test("shows a graded job's grade and drops it from the Ungraded filter", async ({
+		page,
+		jobsPage,
+	}) => {
+		const row = jobsPage.rows.first();
+		const href =
+			(await row.getByRole("link").first().getAttribute("href")) ?? "";
+		const titleLink = page.locator(`a[href="${href}"]`);
+		await jobsPage.openRowMenu(row);
+		await page.getByRole("menuitem", { name: "Grade…" }).click();
+		const dialog = jobsPage.gradeDialog;
+		await dialog.getByRole("button", { name: /^OK/ }).click();
+		await dialog.getByRole("button", { name: "Save grade" }).click();
+		await expect(dialog).toBeHidden();
+		await expect(
+			page.getByRole("row").filter({ has: titleLink }).getByText("OK", {
+				exact: true,
+			}),
+		).toBeVisible();
+
+		await page.getByRole("button", { name: "Filters" }).click();
+		await page.getByRole("button", { name: "Ungraded" }).click();
+		await page.getByRole("button", { name: "Done" }).click();
+		await expect(titleLink).toBeHidden();
+	});
+
 	test("shows the job title in the breadcrumb on a direct visit to /jobs/:id", async ({
 		page,
 		jobsPage,

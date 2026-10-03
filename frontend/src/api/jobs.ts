@@ -10,7 +10,8 @@ export async function fetchAllJobs(): Promise<Job[]> {
 				.getJobs()
 				.filter(
 					(job) => job.SuitabilityScore != null && !db.isDismissed(job.ID),
-				),
+				)
+				.map((job) => ({ ...job, Grade: db.getGrade(job.ID)?.grade ?? "" })),
 		() => apiFetch("/jobs/all", jobSchema.array()),
 	);
 }

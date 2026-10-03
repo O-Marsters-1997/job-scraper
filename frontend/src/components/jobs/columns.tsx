@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/datetime";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
+import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
@@ -72,6 +73,13 @@ export function createJobColumns(
 					>
 						{info.getValue() as string}
 					</Link>
+					<Show when={info.row.original.Grade || undefined}>
+						{(grade) => (
+							<Badge variant="outline" class="shrink-0">
+								{GRADE_LABEL[grade()]}
+							</Badge>
+						)}
+					</Show>
 					<Show
 						when={
 							info.row.original.Wildcard &&

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GRADES } from "./grade";
 
 export const BANDS = ["great", "good", "fair", "poor"] as const;
 export type Band = (typeof BANDS)[number];
@@ -39,6 +40,7 @@ export const jobSchema = z.object({
 	SalaryRaw: z.string().optional(),
 	SuitabilityScore: z.number().nullable(),
 	Band: bandSchema.optional(),
+	Grade: z.enum(GRADES).or(z.literal("")).optional(),
 	Wildcard: z.boolean().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	// Optional rich fields — populated in demo mode; absent from the live backend

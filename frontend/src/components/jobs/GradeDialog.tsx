@@ -23,6 +23,7 @@ import { planSaves } from "@/lib/gradeBatch";
 import { queryClient } from "@/lib/queryClient";
 import { cn, titleCase } from "@/lib/utils";
 import {
+	GRADE_LABEL,
 	GRADES,
 	type Grade,
 	type GradeReason,
@@ -31,12 +32,6 @@ import {
 import type { Job } from "@/types/job";
 import { BandChip } from "./BandChip";
 import { GradeChips } from "./GradeChips";
-
-const LABEL: Record<GradeValue, string> = {
-	great: "Great",
-	ok: "OK",
-	no: "No",
-};
 
 interface Props {
 	open: boolean;
@@ -200,7 +195,7 @@ function GradeForm(props: {
 										aria-pressed={batchGrade() === value}
 										onClick={() => setBatchGrade(value)}
 									>
-										{LABEL[value]}
+										{GRADE_LABEL[value]}
 									</Button>
 								)}
 							</For>
@@ -298,7 +293,7 @@ function GradeForm(props: {
 										onClick={() => setJobGrade(value)}
 										class="justify-between"
 									>
-										{LABEL[value]}
+										{GRADE_LABEL[value]}
 										<kbd class="font-mono text-xs font-normal opacity-60">
 											{i() + 1}
 										</kbd>
@@ -311,7 +306,7 @@ function GradeForm(props: {
 								<Show when={job().Band || undefined}>
 									{(band) => (
 										<p class="text-xs text-muted">
-											Graded {LABEL[g()]} · scored {BAND_LABEL[band()]}:{" "}
+											Graded {GRADE_LABEL[g()]} · scored {BAND_LABEL[band()]}:{" "}
 											{gradeDirection(g(), band())}
 										</p>
 									)}

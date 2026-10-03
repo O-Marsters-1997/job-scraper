@@ -1,7 +1,8 @@
 -- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade
 FROM jobs j
 JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1
 WHERE j.closed_at IS NULL
   AND j.updated_at > now() - interval '90 days'
   AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
@@ -9,9 +10,10 @@ WHERE j.closed_at IS NULL
 ORDER BY js.suitability_score DESC, j.scraped_at DESC;
 
 -- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
 WHERE (sqlc.narg(cursor_time)::timestamptz IS NULL OR (j.scraped_at, j.id) < (sqlc.narg(cursor_time)::timestamptz, sqlc.narg(cursor_id)::uuid))
   AND (sqlc.narg(company_id)::uuid IS NULL OR j.company_id = sqlc.narg(company_id)::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = sqlc.narg(company_id)::uuid)))
   AND (sqlc.arg(availability)::text = 'all' OR (sqlc.arg(availability)::text = 'open' AND j.closed_at IS NULL) OR (sqlc.arg(availability)::text = 'closed' AND j.closed_at IS NOT NULL))
