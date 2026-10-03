@@ -40,6 +40,7 @@ var (
 // directly (ADR 0011).
 type ScoringWriter interface {
 	JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, firstDiscovery bool) error
+	CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID, companyID string) error
 	JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) error
 	CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error
 }
@@ -600,6 +601,9 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 		if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("store.SetCompanyReviewState favourite: %w", err)
 		}
+		if err := s.scoring.CompanyFavouriteChanged(ctx, tx, userID, companyID); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("scoring.CompanyFavouriteChanged: %w", err)
+		}
 	}
 	if row.Enabled {
 		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
@@ -642,6 +646,9 @@ func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID strin
 		}
 	} else if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
 		return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+	}
+	if err := s.scoring.CompanyFavouriteChanged(ctx, tx, userID, companyID); err != nil {
+		return fmt.Errorf("scoring.CompanyFavouriteChanged: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit company favourite: %w", err)

@@ -130,6 +130,13 @@ func (m *Module) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyI
 	return m.store.CompanyTracked(ctx, tx, userID, companyID)
 }
 
+// CompanyFavouriteChanged is scoring's tx-scoped port for a user starring or
+// un-starring a company: it re-scores their open Jobs there from cached
+// answers within the caller's own transaction, without alerting (ADR 0011).
+func (m *Module) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	return m.svc.CompanyFavouriteChanged(ctx, tx, userID, companyID)
+}
+
 // Ask answers arbitrary questions about a job, reusing cached Jev answers
 // and billing the rest to userID's OpenRouter key.
 func (m *Module) Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error) {

@@ -16,7 +16,11 @@ SELECT u.id AS user_id,
         SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
         WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'
           AND (c.id = j.company_id OR c.slug = j.company_slug)
-    ) AS company_is_new
+    ) AS company_is_new,
+    EXISTS (
+        SELECT 1 FROM company_favourites cf
+        WHERE cf.user_id = u.id AND cf.company_id = j.company_id
+    ) AS company_is_favourite
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
 JOIN jobs j ON j.id = sqlc.arg(job_id)::uuid
@@ -63,9 +67,14 @@ WHERE job_id = sqlc.arg(job_id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 -- name: ListScoringInputJobs :many
 SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at,
     j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id,
-    j.provider_posting_id, j.content_fingerprint
+    j.provider_posting_id, j.content_fingerprint,
+    EXISTS (
+        SELECT 1 FROM company_favourites cf
+        WHERE cf.user_id = s.user_id AND cf.company_id = j.company_id
+    ) AS is_favourite
 FROM job_scores s JOIN jobs j ON j.id = s.job_id
-WHERE s.user_id = sqlc.arg(user_id)::uuid;
+WHERE s.user_id = sqlc.arg(user_id)::uuid
+  AND (sqlc.narg(company_id)::uuid IS NULL OR (j.company_id = sqlc.narg(company_id)::uuid AND j.closed_at IS NULL));
 
 -- name: ListScoringAnswersForUser :many
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
@@ -89,3 +98,9 @@ SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confi
 FROM jobs j
 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
 WHERE j.company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND j.closed_at IS NULL AND a.model = sqlc.arg(model)::text;
+
+-- name: IsJobCompanyFavourite :one
+SELECT EXISTS (
+    SELECT 1 FROM jobs j JOIN company_favourites cf ON cf.company_id = j.company_id
+    WHERE j.id = sqlc.arg(job_id)::uuid AND cf.user_id = sqlc.arg(user_id)::uuid
+) AS favourite;
