@@ -15,6 +15,7 @@ interface JobActionBarProps {
 	app: ApplicationWithDetails | undefined;
 	onCv: () => void;
 	onTrack: () => void;
+	onDismiss: () => void;
 }
 
 export function JobActionBar(props: JobActionBarProps) {
@@ -54,6 +55,14 @@ export function JobActionBar(props: JobActionBarProps) {
 	return (
 		<div class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
 			<FormFeedback error={applied.error()} />
+			<Button
+				variant="ghost"
+				size="sm"
+				class="mb-2 w-full"
+				onClick={props.onDismiss}
+			>
+				Not for me
+			</Button>
 			<div class="grid grid-cols-3 gap-2">
 				<Button variant="outline" onClick={props.onCv}>
 					CV

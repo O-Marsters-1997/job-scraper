@@ -81,3 +81,15 @@ func toScoreFeedbackDTO(row sqlc.ScoreFeedback) (dto.ScoreFeedback, error) {
 	}
 	return out, nil
 }
+
+func toGradeDTO(row sqlc.JobGrade) dto.Grade {
+	g := dto.Grade{
+		JobID: row.JobID.String(), Grade: row.Grade, Reasons: nonNilStrings(row.Reasons),
+		ScoreModel: row.ScoreModel.String, UpdatedAt: row.UpdatedAt.Time,
+	}
+	if row.ScoreAtGrade.Valid {
+		score := int(row.ScoreAtGrade.Int32)
+		g.ScoreAtGrade = &score
+	}
+	return g
+}

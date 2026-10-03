@@ -21,4 +21,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
 	r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
 	r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))
+	r.Put("/jobs/{id}/grade", handlers.Update(m.svc.SetGrade))
+	r.Get("/jobs/{id}/grade", handlers.GetByID(m.svc.GetGrade))
+	r.Delete("/jobs/{id}/grade", handlers.Delete(m.svc.ClearGrade))
 }

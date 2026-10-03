@@ -5,7 +5,12 @@ import { mocked } from "./config";
 
 export async function fetchAllJobs(): Promise<Job[]> {
 	return mocked(
-		(db) => db.getJobs().filter((job) => job.SuitabilityScore != null),
+		(db) =>
+			db
+				.getJobs()
+				.filter(
+					(job) => job.SuitabilityScore != null && !db.isDismissed(job.ID),
+				),
 		() => apiFetch("/jobs/all", jobSchema.array()),
 	);
 }

@@ -240,6 +240,17 @@ type JobCandidate struct {
 	DetailState   string
 }
 
+type JobGrade struct {
+	UserID       pgtype.UUID
+	JobID        pgtype.UUID
+	Grade        string
+	Reasons      []string
+	ScoreAtGrade pgtype.Int4
+	ScoreModel   pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type JobScore struct {
 	ID               pgtype.UUID
 	JobID            pgtype.UUID

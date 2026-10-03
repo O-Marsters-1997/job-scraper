@@ -14,6 +14,7 @@ func TestFakeStoreSatisfiesContract(t *testing.T) {
 		return scoringtest.Fixture{
 			Store:   scoringtest.NewFakeStore(),
 			NewUser: func() string { n++; return fmt.Sprintf("user-%d", n) },
+			NewJob:  func() string { n++; return fmt.Sprintf("job-%d", n) },
 		}
 	})
 }

@@ -65,6 +65,10 @@ type Store interface {
 	ClearScoreFeedback(ctx context.Context, userID string) (int64, error)
 	GetJobScoreForFeedback(ctx context.Context, userID, jobID string) (dto.JobScoreEvidence, error)
 	ListJobScoresForCollection(ctx context.Context, userID string, jobIDs []string) ([]dto.CollectionJobScore, error)
+	UpsertGrade(ctx context.Context, userID string, grade dto.Grade) (dto.Grade, error)
+	GetGrade(ctx context.Context, userID, jobID string) (dto.Grade, error)
+	DeleteGrade(ctx context.Context, userID, jobID string) error
+	ListGrades(ctx context.Context, userID string) ([]dto.Grade, error)
 }
 
 type Service struct {

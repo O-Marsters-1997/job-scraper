@@ -224,6 +224,42 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("hides jobs the user graded no, but not another user's no or a better grade", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		dismissed := insertJob(t, pool, company, 1, time.Now(), false)
+		liked := insertJob(t, pool, company, 2, time.Now(), false)
+		othersNo := insertJob(t, pool, company, 3, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{dismissed, liked, othersNo} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		for _, g := range []struct{ user, job, grade string }{
+			{userID, dismissed, "no"}, {userID, liked, "ok"}, {other, othersNo, "no"},
+		} {
+			if _, err := pool.Exec(ctx, `INSERT INTO job_grades (user_id, job_id, grade) VALUES ($1, $2, $3)`, g.user, g.job, g.grade); err != nil {
+				t.Fatalf("insert grade: %v", err)
+			}
+		}
+
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		want := []string{othersNo, liked}
+		if diff := cmp.Diff(want, jobIDs(page.Items), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("Page() ids (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobIDs(all), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("since days windows on updated_at and composes with the cursor", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()

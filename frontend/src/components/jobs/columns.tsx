@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
 import { Match, Show, Switch } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatRelative } from "@/lib/datetime";
@@ -13,6 +14,7 @@ import { ScoreCircle } from "./ScoreCircle";
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
+	onDismiss: (job: Job) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -165,7 +167,16 @@ export function createJobColumns(
 			enableSorting: false,
 			enableGlobalFilter: false,
 			cell: (info) => (
-				<div class="flex justify-end">
+				<div class="flex items-center justify-end">
+					<button
+						type="button"
+						aria-label="Not for me"
+						title="Not for me"
+						onClick={() => ctx.onDismiss(info.row.original)}
+						class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground"
+					>
+						<Icon name="x" />
+					</button>
 					<JobActionsMenu
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}

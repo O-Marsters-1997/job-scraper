@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
@@ -10,7 +10,9 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Job } from "@/types/job";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
+import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
 import { jobQueryOptions, useJob } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -31,6 +33,12 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const jobsQuery = useJob(() => params().id);
+	const navigate = useNavigate();
+	const { dismiss } = useDismissJob();
+	const dismissAndLeave = async (job: Job) => {
+		await dismiss(job);
+		navigate({ to: "/jobs" });
+	};
 	const track = useTrackJobs(() => (jobsQuery.data ? [jobsQuery.data] : []));
 
 	const app = () =>
@@ -140,7 +148,9 @@ function JobDetailPage() {
 						app={app()}
 						onCv={() => setCvOpen(true)}
 						onTrack={() => track.openTrack(params().id)}
+						onDismiss={() => void dismissAndLeave(j())}
 					/>
+					<DismissToast />
 
 					<TrackApplicationDialog
 						open={track.modalOpen()}

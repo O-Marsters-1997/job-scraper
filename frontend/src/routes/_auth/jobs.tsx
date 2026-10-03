@@ -10,6 +10,7 @@ import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
+import { DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -113,6 +114,8 @@ function JobsPage() {
 					sourceOptions={srcOptions()}
 				/>
 			</Show>
+
+			<DismissToast />
 
 			<TrackApplicationDialog
 				open={track.modalOpen()}

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job } from "@/types/job";
 import { ExperienceMatch } from "./ExperienceMatch";
+import { GradeControl } from "./GradeControl";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
@@ -22,6 +23,7 @@ export function SuitabilityPanel(props: { job: Job }) {
 				/>
 				<ScoreBreakdown job={props.job} />
 				<ExperienceMatch jobId={props.job.ID} />
+				<GradeControl jobId={props.job.ID} />
 			</CardContent>
 		</Card>
 	);

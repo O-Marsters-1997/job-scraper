@@ -2,6 +2,7 @@ export * from "./applications";
 export * from "./companies";
 export * from "./cvs";
 export * from "./experience";
+export * from "./grades";
 export * from "./jobs";
 export * from "./push";
 export * from "./scoreFeedback";

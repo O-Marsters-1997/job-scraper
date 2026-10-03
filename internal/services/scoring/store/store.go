@@ -736,3 +736,77 @@ func (s *Store) ListJobScoresForCollection(ctx context.Context, userID string, j
 	}
 	return out, nil
 }
+
+// UpsertGrade writes userID's Grade for g.JobID, replacing any earlier one.
+func (s *Store) UpsertGrade(ctx context.Context, userID string, g dto.Grade) (dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	jid, err := data.UUID(g.JobID)
+	if err != nil {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	params := sqlc.UpsertGradeParams{UserID: uid, JobID: jid, Grade: g.Grade, Reasons: nonNilStrings(g.Reasons)}
+	if g.ScoreAtGrade != nil {
+		params.ScoreAtGrade = pgtype.Int4{Int32: int32(*g.ScoreAtGrade), Valid: true}
+	}
+	if g.ScoreModel != "" {
+		params.ScoreModel = data.Text(g.ScoreModel)
+	}
+	row, err := s.queries.UpsertGrade(ctx, params)
+	if err != nil {
+		return dto.Grade{}, fmt.Errorf("store.UpsertGrade: %w", err)
+	}
+	return toGradeDTO(row), nil
+}
+
+// GetGrade returns userID's Grade for jobID, or data.ErrNotFound.
+func (s *Store) GetGrade(ctx context.Context, userID, jobID string) (dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	row, err := s.queries.GetGrade(ctx, sqlc.GetGradeParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.Grade{}, data.QueryErr("GetGrade", err)
+	}
+	return toGradeDTO(row), nil
+}
+
+// DeleteGrade removes userID's Grade for jobID; an ungraded job is a no-op.
+func (s *Store) DeleteGrade(ctx context.Context, userID, jobID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil
+	}
+	if _, err := s.queries.DeleteGrade(ctx, sqlc.DeleteGradeParams{UserID: uid, JobID: jid}); err != nil {
+		return fmt.Errorf("store.DeleteGrade: %w", err)
+	}
+	return nil
+}
+
+// ListGrades returns every Grade userID has given, newest first.
+func (s *Store) ListGrades(ctx context.Context, userID string) ([]dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListGrades(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListGrades: %w", err)
+	}
+	out := make([]dto.Grade, len(rows))
+	for i, row := range rows {
+		out[i] = toGradeDTO(row)
+	}
+	return out, nil
+}

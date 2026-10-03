@@ -7,6 +7,7 @@ import {
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
+import { useDismissJob } from "./useDismissJob";
 
 export function useTrackJobs(jobs: () => Job[]) {
 	const applications = useApplications();
@@ -33,9 +34,11 @@ export function useTrackJobs(jobs: () => Job[]) {
 		return app ? toExistingApp(app) : undefined;
 	};
 
+	const dismiss = useDismissJob();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
+		onDismiss: dismiss.dismiss,
 	});
 
 	return {
