@@ -18,21 +18,50 @@ func New(token string) *sources.BoardSource {
 		CompanySlug: token,
 		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
 		Count:       count,
+		NextPage:    nextPage,
 	})
 }
 
 type boardResponse struct {
-	Results []jobResult `json:"results"`
+	Results  []jobResult `json:"results"`
+	NextPage *string     `json:"nextPage"`
 }
 
 type jobResult struct {
 	Shortcode string      `json:"shortcode"`
 	Title     string      `json:"title"`
 	Location  jobLocation `json:"location"`
+	Remote    bool        `json:"remote"`
+	Workplace string      `json:"workplace"`
 }
 
 type jobLocation struct {
 	City string `json:"city"`
+}
+
+func nextPage(body []byte) []byte {
+	var resp boardResponse
+	if err := json.Unmarshal(body, &resp); err != nil || resp.NextPage == nil || *resp.NextPage == "" {
+		return nil
+	}
+	next, err := json.Marshal(map[string]string{"token": *resp.NextPage})
+	if err != nil {
+		return nil
+	}
+	return next
+}
+
+func workArrangement(r jobResult) string {
+	switch r.Workplace {
+	case "remote", "hybrid":
+		return r.Workplace
+	case "on_site":
+		return "onsite"
+	}
+	if r.Remote {
+		return "remote"
+	}
+	return ""
 }
 
 func count(body []byte) (int, error) {
@@ -60,6 +89,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			Location:          r.Location.City,
 			URL:               fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
 			ProviderPostingID: r.Shortcode,
+			WorkArrangement:   workArrangement(r),
 			UpdatedAt:         time.Now().UTC(),
 		})
 	}
