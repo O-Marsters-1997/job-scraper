@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -34,6 +35,7 @@ type Store interface {
 	ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error)
+	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
@@ -203,9 +205,16 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return fail(fmt.Errorf("load corrections: %w", err))
 	}
 
+	derived, err := s.profileAnswers(ctx, job, byID, asked)
+	if err != nil {
+		return fail(err)
+	}
+
 	var missing []string
 	for hash, question := range asked {
-		if _, ok := cached[hash]; !ok {
+		_, isCached := cached[hash]
+		_, isDerived := derived[hash]
+		if !isCached && !isDerived {
 			missing = append(missing, question)
 		}
 	}
@@ -214,6 +223,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	if err != nil {
 		return fail(err)
 	}
+	maps.Copy(fresh, derived)
 
 	allAnswers := make(map[string]dto.Answer, len(cached)+len(fresh))
 	for h, a := range cached {
@@ -240,6 +250,30 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	s.notifyNewJob(ctx, job, surviving, scores, saved)
 	return nil
+}
+
+func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {
+	if job.CompanyID == "" {
+		return nil, nil
+	}
+	profile, err := s.store.GetCompanyProfile(ctx, job.CompanyID)
+	if errors.Is(err, data.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load company profile: %w", err)
+	}
+	out := make(map[string]dto.Answer)
+	for id, answer := range companyFactAnswers(profile) {
+		opt, ok := byID[id]
+		if !ok || opt.RetiredAt != nil {
+			continue
+		}
+		if hash := QuestionHash(opt.Question); asked[hash] != "" {
+			out[hash] = answer
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) answerMissing(ctx context.Context, surviving []dto.SearchConfig, job dto.Job, missing []string) (map[string]dto.Answer, float64, error) {

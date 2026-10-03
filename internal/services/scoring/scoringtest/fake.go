@@ -39,6 +39,7 @@ type FakeStore struct {
 
 	effects     []dto.AnswerEffect
 	jobs        map[string]dto.Job
+	profiles    map[string]dto.CompanyProfile
 	configs     map[string][]dto.SearchConfig
 	answers     map[string]map[string]dto.Answer
 	inputs      map[string][]store.ScoringInput
@@ -63,6 +64,7 @@ type FakeStore struct {
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		jobs:        make(map[string]dto.Job),
+		profiles:    make(map[string]dto.CompanyProfile),
 		configs:     make(map[string][]dto.SearchConfig),
 		answers:     make(map[string]map[string]dto.Answer),
 		inputs:      make(map[string][]store.ScoringInput),
@@ -173,6 +175,23 @@ func (f *FakeStore) GetJobForScoring(_ context.Context, jobID string) (dto.Job, 
 		return dto.Job{}, data.ErrNotFound
 	}
 	return job, nil
+}
+
+// SeedCompanyProfile gives companyID a profile.
+func (f *FakeStore) SeedCompanyProfile(companyID string, profile dto.CompanyProfile) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.profiles[companyID] = profile
+}
+
+func (f *FakeStore) GetCompanyProfile(_ context.Context, companyID string) (dto.CompanyProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	profile, ok := f.profiles[companyID]
+	if !ok {
+		return dto.CompanyProfile{}, data.ErrNotFound
+	}
+	return profile, nil
 }
 
 func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string) ([]dto.SearchConfig, error) {

@@ -9,4 +9,5 @@ const (
 	DimensionSeniority Dimension = "seniority"
 	DimensionWork      Dimension = "work"
 	DimensionStage     Dimension = "stage"
+	DimensionSize      Dimension = "size"
 )

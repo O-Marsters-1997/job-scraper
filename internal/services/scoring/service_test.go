@@ -1564,3 +1564,74 @@ func TestSetCorrectionWhileRescoringKeepsTheStoredScore(t *testing.T) {
 		t.Errorf("SetCorrection() saved %+v, want the stored score left alone", got)
 	}
 }
+
+func TestRunTick_CompanyProfileAnswers(t *testing.T) {
+	sizeStage := []dto.ScoringOption{
+		{ID: "size:startup", Dimension: dto.DimensionSize, Label: "Startup", Question: "Under 50 employees?"},
+		{ID: "size:scaleup", Dimension: dto.DimensionSize, Label: "Scale-up", Question: "50 to 500 employees?"},
+		{ID: "size:large", Dimension: dto.DimensionSize, Label: "Large", Question: "500 to 5,000 employees?"},
+		{ID: "size:enterprise", Dimension: dto.DimensionSize, Label: "Enterprise", Question: "Over 5,000 employees?"},
+		{ID: "stage:seed", Dimension: dto.DimensionStage, Label: "Seed", Question: "Seed stage?"},
+		{ID: "stage:series_b", Dimension: dto.DimensionStage, Label: "Series B", Question: "Series B stage?"},
+		{ID: "stage:public", Dimension: dto.DimensionStage, Label: "Public", Question: "Publicly listed?"},
+	}
+	setup := func(profile *dto.CompanyProfile) (*scoringtest.FakeStore, *fakeAnswerer) {
+		st := newFakeStore()
+		st.SeedOptions(append(slices.Clone(bank), sizeStage...))
+		job := testJob
+		job.CompanyID = "company-1"
+		st.SeedJob(job, []dto.SearchConfig{picking("user-1", "tech:go", "size:startup", "size:scaleup", "stage:seed", "stage:series_b", "stage:public")})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		if profile != nil {
+			st.SeedCompanyProfile("company-1", *profile)
+		}
+		return st, &fakeAnswerer{}
+	}
+
+	t.Run("a profiled company gets size and stage without asking jev", func(t *testing.T) {
+		st, answerer := setup(&dto.CompanyProfile{Size: "201-500", FundingRounds: 3})
+
+		runTick(t, st, withAnswerer(answerer))
+
+		want := [][]string{{"Does the role use Go?", "Publicly listed?"}}
+		sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+		if diff := cmp.Diff(want, answerer.calls, sortStrings); diff != "" {
+			t.Errorf("Answer calls (-want +got):\n%s", diff)
+		}
+		completed := st.Completed()
+		if len(completed) != 1 {
+			t.Fatalf("completed effects = %d, want 1", len(completed))
+		}
+		wantAnswers := map[string]dto.Answer{
+			scoring.QuestionHash("Under 50 employees?"):  {PNo: 1},
+			scoring.QuestionHash("50 to 500 employees?"): {PYes: 1},
+			scoring.QuestionHash("Seed stage?"):          {PNo: 1},
+			scoring.QuestionHash("Series B stage?"):      {PYes: 1},
+		}
+		for hash, want := range wantAnswers {
+			if got := completed[0].Answers[hash]; got != want {
+				t.Errorf("saved answer for %s = %+v, want %+v", hash, got, want)
+			}
+		}
+	})
+
+	t.Run("a company without a profile is asked as usual", func(t *testing.T) {
+		st, answerer := setup(nil)
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
+			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
+
+	t.Run("a profile that cannot place the company leaves it to jev", func(t *testing.T) {
+		st, answerer := setup(&dto.CompanyProfile{Size: "", FundingRounds: 0})
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
+			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
+}

@@ -20,6 +20,7 @@ const (
 	ScoringDimensionSeniority ScoringDimension = "seniority"
 	ScoringDimensionWork      ScoringDimension = "work"
 	ScoringDimensionStage     ScoringDimension = "stage"
+	ScoringDimensionSize      ScoringDimension = "size"
 )
 
 func (e *ScoringDimension) Scan(src interface{}) error {

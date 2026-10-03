@@ -55,6 +55,14 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("get company profile on an unknown company returns not found", func(t *testing.T) {
+		st := newStore(t)
+		_, err := st.GetCompanyProfile(t.Context(), missingID)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("GetCompanyProfile(...) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("get search config on an unknown user returns not found", func(t *testing.T) {
 		st := newStore(t)
 		_, err := st.GetSearchConfig(t.Context(), missingID)
