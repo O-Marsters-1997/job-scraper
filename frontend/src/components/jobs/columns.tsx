@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
-import { Match, Show, Switch } from "solid-js";
-import { Icon } from "@/components/Icon";
+import { createRenderEffect, Match, Show, Switch } from "solid-js";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,7 @@ export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
+	onGrade: (job: Job) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -31,6 +31,34 @@ export function createJobColumns(
 	ctx: JobTableContext,
 ): ColumnDef<Job, unknown>[] {
 	return [
+		{
+			id: "select",
+			enableSorting: false,
+			enableGlobalFilter: false,
+			header: (info) => (
+				<input
+					type="checkbox"
+					aria-label="Select all jobs on this page"
+					class="size-4 cursor-pointer align-middle accent-primary"
+					checked={info.table.getIsAllPageRowsSelected()}
+					ref={(el) =>
+						createRenderEffect(() => {
+							el.indeterminate = info.table.getIsSomePageRowsSelected();
+						})
+					}
+					onChange={info.table.getToggleAllPageRowsSelectedHandler()}
+				/>
+			),
+			cell: (info) => (
+				<input
+					type="checkbox"
+					aria-label={`Select ${info.row.original.Title}`}
+					class="size-4 cursor-pointer align-middle accent-primary"
+					checked={info.row.getIsSelected()}
+					onChange={info.row.getToggleSelectedHandler()}
+				/>
+			),
+		},
 		{
 			accessorKey: "Title",
 			header: "Title",
@@ -185,19 +213,12 @@ export function createJobColumns(
 			enableGlobalFilter: false,
 			cell: (info) => (
 				<div class="flex items-center justify-end">
-					<button
-						type="button"
-						aria-label="Not for me"
-						title="Not for me"
-						onClick={() => ctx.onDismiss(info.row.original)}
-						class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground"
-					>
-						<Icon name="x" />
-					</button>
 					<JobActionsMenu
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}
 						onTrack={() => ctx.onTrack(info.row.original.ID)}
+						onGrade={() => ctx.onGrade(info.row.original)}
+						onDismiss={() => ctx.onDismiss(info.row.original)}
 					/>
 				</div>
 			),

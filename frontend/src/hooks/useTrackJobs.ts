@@ -1,3 +1,4 @@
+import type { RowSelectionState } from "@tanstack/solid-table";
 import { createMemo, createSignal } from "solid-js";
 import { createJobColumns } from "@/components/jobs/columns";
 import {
@@ -34,11 +35,20 @@ export function useTrackJobs(jobs: () => Job[]) {
 		return app ? toExistingApp(app) : undefined;
 	};
 
+	const [selection, setSelection] = createSignal<RowSelectionState>({});
+	const [gradeJobs, setGradeJobs] = createSignal<Job[]>([]);
+	const [gradeOpen, setGradeOpen] = createSignal(false);
+	const openGrade = (target: Job[]) => {
+		setGradeJobs(target);
+		setGradeOpen(true);
+	};
+
 	const dismiss = useDismissJob();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
+		onGrade: (job) => openGrade([job]),
 	});
 
 	return {
@@ -50,5 +60,11 @@ export function useTrackJobs(jobs: () => Job[]) {
 		setModalOpen,
 		currentJob,
 		existingApp,
+		selection,
+		setSelection,
+		gradeJobs,
+		gradeOpen,
+		setGradeOpen,
+		openGrade,
 	};
 }

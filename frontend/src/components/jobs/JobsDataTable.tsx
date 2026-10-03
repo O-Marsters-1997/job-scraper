@@ -5,9 +5,10 @@ import {
 	getCoreRowModel,
 	getPaginationRowModel,
 	getSortedRowModel,
+	type RowSelectionState,
 	type SortingState,
 } from "@tanstack/solid-table";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
@@ -37,6 +38,9 @@ interface JobsDataTableProps<TData extends Job> {
 	onChange: (patch: Partial<JobFilters>) => void;
 	sourceOptions: string[];
 	wildcards?: boolean;
+	selection?: RowSelectionState;
+	onSelectionChange?: (next: RowSelectionState) => void;
+	onBulkGrade?: (jobs: TData[]) => void;
 }
 
 export function JobsDataTable<TData extends Job>(
@@ -44,6 +48,12 @@ export function JobsDataTable<TData extends Job>(
 ) {
 	const [sorting, setSorting] = createSignal<SortingState>([]);
 	const [filtersOpen, setFiltersOpen] = createSignal(false);
+	const [localSelection, setLocalSelection] = createSignal<RowSelectionState>(
+		{},
+	);
+	const selection = () => props.selection ?? localSelection();
+	const setSelection = (next: RowSelectionState) =>
+		(props.onSelectionChange ?? setLocalSelection)(next);
 
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
 	const isExpanded = (rowId: string) => expandedRow() === rowId;
@@ -60,13 +70,22 @@ export function JobsDataTable<TData extends Job>(
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
+		getRowId: (row) => row.ID,
+		enableRowSelection: true,
 		initialState: { pagination: { pageSize: 10 } },
 		state: {
 			get sorting() {
 				return sorting();
 			},
+			get rowSelection() {
+				return selection();
+			},
 		},
 		onSortingChange: setSorting,
+		onRowSelectionChange: (updater) =>
+			setSelection(
+				typeof updater === "function" ? updater(selection()) : updater,
+			),
 		meta: {
 			isExpanded,
 			toggleExpanded,
@@ -76,43 +95,72 @@ export function JobsDataTable<TData extends Job>(
 		},
 	});
 
+	createEffect(
+		on(
+			[() => props.data, sorting, () => table.getState().pagination.pageIndex],
+			() => setSelection({}),
+			{ defer: true },
+		),
+	);
+
+	const selectedJobs = () =>
+		props.data.filter((job) => selection()[job.ID] === true);
 	const filterCount = () => activeFilterCount(props.filters);
 
 	return (
 		<div class="flex flex-col gap-3">
-			<div class="flex items-center gap-2">
-				<div class="relative max-w-xs flex-1">
-					<Icon
-						name="search"
-						size={14}
-						class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
-					/>
-					<Label for="jobs-search" class="sr-only">
-						Search jobs
-					</Label>
-					<Input
-						id="jobs-search"
-						type="search"
-						placeholder="Search by role or company…"
-						value={props.filters.q}
-						onInput={(e) => props.onChange({ q: e.currentTarget.value })}
-						class="pr-3 pl-9"
-					/>
+			<div class="flex min-h-9 flex-wrap items-center justify-between gap-2">
+				<div class="flex min-w-0 flex-1 items-center gap-2">
+					<div class="relative max-w-xs flex-1">
+						<Icon
+							name="search"
+							size={14}
+							class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+						/>
+						<Label for="jobs-search" class="sr-only">
+							Search jobs
+						</Label>
+						<Input
+							id="jobs-search"
+							type="search"
+							placeholder="Search by role or company…"
+							value={props.filters.q}
+							onInput={(e) => props.onChange({ q: e.currentTarget.value })}
+							class="pr-3 pl-9"
+						/>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setFiltersOpen(true)}
+						class="relative shrink-0"
+					>
+						<Icon name="filter" size={14} />
+						Filters
+						<Show when={filterCount() > 0}>
+							<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+								{filterCount()}
+							</Badge>
+						</Show>
+					</Button>
 				</div>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => setFiltersOpen(true)}
-					class="relative shrink-0"
-				>
-					<Icon name="filter" size={14} />
-					Filters
-					<Show when={filterCount() > 0}>
-						<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
-							{filterCount()}
-						</Badge>
-					</Show>
-				</Button>
+				<Show when={props.onBulkGrade && selectedJobs().length > 0}>
+					<div class="flex items-center gap-2">
+						<span class="font-mono text-xs tabular-nums text-muted">
+							{selectedJobs().length} selected
+						</span>
+						<Button variant="ghost" size="sm" onClick={() => setSelection({})}>
+							Clear
+						</Button>
+						<Button
+							size="sm"
+							onClick={() => props.onBulkGrade?.(selectedJobs())}
+						>
+							<Icon name="check" size={14} />
+							Grade
+						</Button>
+					</div>
+				</Show>
 			</div>
 
 			<div
@@ -170,6 +218,10 @@ export function JobsDataTable<TData extends Job>(
 								{(row) => (
 									<>
 										<TableRow
+											data-state={row.getIsSelected() ? "selected" : undefined}
+											class={
+												row.getIsSelected() ? "bg-accent-subtle/40" : undefined
+											}
 											data-feedback-job={
 												row.original.SuitabilityScore == null
 													? undefined

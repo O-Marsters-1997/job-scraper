@@ -15,6 +15,8 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onGrade?: () => void;
+	onDismiss?: () => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
@@ -59,6 +61,21 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 							{summary().StatusName || "Edit status"}
 						</DropdownMenuItem>
 					)}
+				</Show>
+				<Show when={props.onGrade || props.onDismiss}>
+					<DropdownMenuSeparator />
+				</Show>
+				<Show when={props.onGrade}>
+					<DropdownMenuItem onSelect={() => props.onGrade?.()}>
+						<Icon name="check" size={14} />
+						Grade…
+					</DropdownMenuItem>
+				</Show>
+				<Show when={props.onDismiss}>
+					<DropdownMenuItem onSelect={() => props.onDismiss?.()}>
+						<Icon name="x" size={14} />
+						Not for me
+					</DropdownMenuItem>
 				</Show>
 			</DropdownMenuContent>
 		</DropdownMenu>

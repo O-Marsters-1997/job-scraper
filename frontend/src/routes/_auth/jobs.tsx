@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createMemo, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { PageHeading } from "@/components/PageHeading";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
-import { DismissToast } from "../../hooks/useDismissJob";
+import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -113,10 +114,23 @@ function JobsPage() {
 					onChange={setFilters}
 					sourceOptions={srcOptions()}
 					wildcards
+					selection={track.selection()}
+					onSelectionChange={track.setSelection}
+					onBulkGrade={track.openGrade}
 				/>
 			</Show>
 
 			<DismissToast />
+
+			<GradeDialog
+				open={track.gradeOpen()}
+				onOpenChange={track.setGradeOpen}
+				jobs={track.gradeJobs()}
+				onSaved={(jobIds, priors) => {
+					track.setSelection({});
+					if (jobIds.length > 1) announceBulkGrading({ jobIds, priors });
+				}}
+			/>
 
 			<TrackApplicationDialog
 				open={track.modalOpen()}
