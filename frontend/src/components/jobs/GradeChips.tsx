@@ -6,9 +6,10 @@ export function GradeChips(props: {
 	selected: GradeReason[];
 	onChange: (reasons: GradeReason[]) => void;
 }) {
+	const isSelected = (reason: GradeReason) => props.selected.includes(reason);
 	const toggle = (reason: GradeReason) =>
 		props.onChange(
-			props.selected.includes(reason)
+			isSelected(reason)
 				? props.selected.filter((r) => r !== reason)
 				: [...props.selected, reason],
 		);
@@ -18,11 +19,11 @@ export function GradeChips(props: {
 				{(reason) => (
 					<button
 						type="button"
-						aria-pressed={props.selected.includes(reason)}
+						aria-pressed={isSelected(reason)}
 						onClick={() => toggle(reason)}
 						class={cn(
 							"rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-							props.selected.includes(reason)
+							isSelected(reason)
 								? "border-accent-border bg-accent-subtle text-accent-text"
 								: "border-border bg-surface text-muted hover:text-foreground",
 						)}

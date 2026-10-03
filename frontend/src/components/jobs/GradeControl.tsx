@@ -15,6 +15,7 @@ export function GradeControl(props: { jobId: string }) {
 	const set = useSetGrade();
 	const clear = useClearGrade();
 	const current = () => grade.data ?? undefined;
+	const isCurrent = (value: GradeValue) => current()?.grade === value;
 
 	return (
 		<div class="flex flex-col gap-2">
@@ -24,11 +25,11 @@ export function GradeControl(props: { jobId: string }) {
 					{(value) => (
 						<Button
 							size="sm"
-							variant={current()?.grade === value ? "default" : "outline"}
-							aria-pressed={current()?.grade === value}
+							variant={isCurrent(value) ? "default" : "outline"}
+							aria-pressed={isCurrent(value)}
 							disabled={set.isPending}
 							onClick={() =>
-								current()?.grade === value
+								isCurrent(value)
 									? clear.mutate(props.jobId)
 									: set.mutate({
 											jobId: props.jobId,
