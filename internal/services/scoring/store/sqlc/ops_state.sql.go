@@ -102,3 +102,41 @@ func (q *Queries) OpsState(ctx context.Context) (OpsStateRow, error) {
 	)
 	return i, err
 }
+
+const uniqueRelevantJobs = `-- name: UniqueRelevantJobs :many
+SELECT source::text AS source, count(*) AS jobs
+FROM (
+    SELECT min(u.source) AS source
+      FROM job_urls u
+     WHERE EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = u.job_id)
+     GROUP BY u.job_id
+    HAVING count(DISTINCT u.source) = 1
+       AND min(u.first_seen_at) > NOW() - INTERVAL '14 days'
+) unique_jobs
+GROUP BY source
+`
+
+type UniqueRelevantJobsRow struct {
+	Source string
+	Jobs   int64
+}
+
+func (q *Queries) UniqueRelevantJobs(ctx context.Context) ([]UniqueRelevantJobsRow, error) {
+	rows, err := q.db.Query(ctx, uniqueRelevantJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UniqueRelevantJobsRow
+	for rows.Next() {
+		var i UniqueRelevantJobsRow
+		if err := rows.Scan(&i.Source, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

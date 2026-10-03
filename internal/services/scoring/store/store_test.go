@@ -589,6 +589,37 @@ func TestOpsState(t *testing.T) {
 		}
 	})
 
+	t.Run("counts unique relevant jobs per source", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		type u struct {
+			source string
+			age    time.Duration
+		}
+		seed := func(fp string, scored bool, urls ...u) {
+			jobID := pgtest.InsertJob(t, pool, fp, fp)
+			if scored {
+				insertScore(t, pool, jobID, userID)
+			}
+			for i, u := range urls {
+				exec(t, pool, `INSERT INTO job_urls (job_id, normalized_url, source, first_seen_at) VALUES ($1, $2, $3, $4)`,
+					jobID, fmt.Sprintf("%s-%d", fp, i), u.source, time.Now().Add(-u.age))
+			}
+		}
+		day := 24 * time.Hour
+		seed("lever-a", true, u{"lever", day})
+		seed("lever-b", true, u{"lever", 2 * day})
+		seed("lever-old", true, u{"lever", 20 * day})
+		seed("lever-unscored", false, u{"lever", day})
+		seed("shared", true, u{"lever", day}, u{"ashby", day})
+		seed("ashby-a", true, u{"ashby", day})
+
+		want := map[string]int64{"lever": 2, "ashby": 1}
+		if diff := cmp.Diff(want, opsState(t, st).UniqueRelevantJobs); diff != "" {
+			t.Errorf("OpsState().UniqueRelevantJobs mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reports harvest age per harvester", func(t *testing.T) {
 		st, pool := newStore(t)
 		now := time.Now()

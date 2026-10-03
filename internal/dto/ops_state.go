@@ -11,4 +11,5 @@ type OpsState struct {
 	SourceTargetsFailed    int64
 	DisabledSourceTargets  map[string]int64
 	HarvestAge             map[string]time.Duration
+	UniqueRelevantJobs     map[string]int64
 }

@@ -38,6 +38,7 @@ func TestStateCollector(t *testing.T) {
 				BoardsFailing:          2,
 				SourceTargetsFailed:    5,
 				DisabledSourceTargets:  map[string]int64{"indeed": 2},
+				UniqueRelevantJobs:     map[string]int64{"lever": 7},
 				HarvestAge:             map[string]time.Duration{"ashby": time.Hour, "lever": 30 * time.Second},
 			}},
 			want: `
@@ -66,6 +67,9 @@ func TestStateCollector(t *testing.T) {
 				# HELP jobscraper_source_targets_failed Source Targets whose last run failed.
 				# TYPE jobscraper_source_targets_failed gauge
 				jobscraper_source_targets_failed 5
+				# HELP jobscraper_source_unique_relevant_jobs Scored Jobs first discovered in the last 14 days whose every URL came from this source.
+				# TYPE jobscraper_source_unique_relevant_jobs gauge
+				jobscraper_source_unique_relevant_jobs{source="lever"} 7
 				# HELP jobscraper_state_up 1 if the last OpsState read succeeded, 0 otherwise.
 				# TYPE jobscraper_state_up gauge
 				jobscraper_state_up 1
