@@ -43,6 +43,8 @@ var (
 		"jobscraper_discovery_relevant_jobs", "Scored Jobs whose primary Board was verified in the last 14 days, per discovery route.", []string{"via"}, nil)
 	harvestAdmittedDesc = prometheus.NewDesc(
 		"jobscraper_harvest_admitted", "Companies tracked as new or kept whose Board came from this harvester.", []string{"harvester"}, nil)
+	fieldCompletenessDesc = prometheus.NewDesc(
+		"jobscraper_field_completeness", "Share of open Jobs scraped in the last 24h with a non-empty value for the field, per source.", []string{"source", "field"}, nil)
 	sourceUniqueRelevantJobsDesc = prometheus.NewDesc(
 		"jobscraper_source_unique_relevant_jobs", "Scored Jobs first discovered in the last 14 days whose every URL came from this source.", []string{"source"}, nil)
 )
@@ -73,6 +75,7 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- discoveryBoardsDesc
 	ch <- discoveryRelevantJobsDesc
 	ch <- harvestAdmittedDesc
+	ch <- fieldCompletenessDesc
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
@@ -112,5 +115,10 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for source, n := range state.EmptiedBoards {
 		ch <- prometheus.MustNewConstMetric(boardsEmptiedDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for source, fields := range state.FieldCompleteness {
+		for field, share := range fields {
+			ch <- prometheus.MustNewConstMetric(fieldCompletenessDesc, prometheus.GaugeValue, share, source, field)
+		}
 	}
 }

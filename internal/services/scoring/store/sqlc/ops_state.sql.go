@@ -139,6 +139,47 @@ func (q *Queries) EmptiedBoards(ctx context.Context) ([]EmptiedBoardsRow, error)
 	return items, nil
 }
 
+const fieldCompleteness = `-- name: FieldCompleteness :many
+SELECT j.source::text AS source, f.field::text AS field,
+       (count(*) FILTER (WHERE f.filled)::float8 / count(*))::float8 AS share
+FROM jobs j
+CROSS JOIN LATERAL (VALUES
+    ('title', j.title <> ''),
+    ('location', j.location <> ''),
+    ('description', j.description <> ''),
+    ('salary_raw', j.salary_raw <> ''),
+    ('work_arrangement', j.work_arrangement <> '')
+) AS f(field, filled)
+WHERE j.closed_at IS NULL AND j.scraped_at > NOW() - INTERVAL '24 hours'
+GROUP BY j.source, f.field
+`
+
+type FieldCompletenessRow struct {
+	Source string
+	Field  string
+	Share  float64
+}
+
+func (q *Queries) FieldCompleteness(ctx context.Context) ([]FieldCompletenessRow, error) {
+	rows, err := q.db.Query(ctx, fieldCompleteness)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FieldCompletenessRow
+	for rows.Next() {
+		var i FieldCompletenessRow
+		if err := rows.Scan(&i.Source, &i.Field, &i.Share); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const harvestAdmitted = `-- name: HarvestAdmitted :many
 SELECT b.discovered_via::text AS harvester, count(DISTINCT tc.company_id) AS companies
 FROM tracked_companies tc

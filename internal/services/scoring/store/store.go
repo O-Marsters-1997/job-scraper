@@ -553,6 +553,17 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState emptied boards: %w", err)
 	}
 	emptiedBySource := countsBy(emptied, func(r sqlc.EmptiedBoardsRow) (string, int64) { return r.Source, r.Boards })
+	completeness, err := s.queries.FieldCompleteness(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState field completeness: %w", err)
+	}
+	completenessBySource := make(map[string]map[string]float64)
+	for _, r := range completeness {
+		if completenessBySource[r.Source] == nil {
+			completenessBySource[r.Source] = make(map[string]float64)
+		}
+		completenessBySource[r.Source][r.Field] = r.Share
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -575,6 +586,7 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		DiscoveryRelevantJobs:  relevantByVia,
 		HarvestAdmitted:        admittedByHarvester,
 		EmptiedBoards:          emptiedBySource,
+		FieldCompleteness:      completenessBySource,
 	}, nil
 }
 
