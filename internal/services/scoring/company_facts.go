@@ -11,7 +11,7 @@ import (
 var (
 	sizeOptionIDs  = []string{"size:startup", "size:scaleup", "size:large", "size:enterprise"}
 	stageOptionIDs = []string{"stage:seed", "stage:series_a", "stage:series_b", "stage:series_c_plus"}
-	headcountRange = regexp.MustCompile(`\d[\d,]*`)
+	headcountRange = regexp.MustCompile(`^\s*(\d[\d,]*)(?:\s*[-–]\s*(\d[\d,]*))?\s*(\+)?`)
 )
 
 // companyFactAnswers answers the size and stage Options from a company
@@ -37,18 +37,22 @@ func addExclusive(out map[string]dto.Answer, ids []string, yes int) {
 	}
 }
 
-// sizeIndex buckets a headcount range such as "201-500" or "5000+" by its
-// upper bound, returning -1 when the text holds no number.
+// sizeIndex buckets a headcount range such as "201-500" or "5000+ employees" by
+// its upper bound, returning -1 when the text does not start with a number.
 func sizeIndex(size string) int {
-	nums := headcountRange.FindAllString(size, -1)
-	if len(nums) == 0 {
+	m := headcountRange.FindStringSubmatch(size)
+	if m == nil {
 		return -1
 	}
-	n, err := strconv.Atoi(strings.ReplaceAll(nums[len(nums)-1], ",", ""))
+	upper := m[1]
+	if m[2] != "" {
+		upper = m[2]
+	}
+	n, err := strconv.Atoi(strings.ReplaceAll(upper, ",", ""))
 	if err != nil {
 		return -1
 	}
-	if strings.HasSuffix(size, "+") {
+	if m[3] != "" {
 		n++
 	}
 	switch {
