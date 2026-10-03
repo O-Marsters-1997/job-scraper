@@ -4,6 +4,7 @@
     "Title": "Senior Backend Engineer",
     "Location": "London, UK",
     "URL": "https://jobs.lever.co/acme/abc123",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -16,13 +17,16 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   },
   {
     "ID": "",
     "Title": "Product Designer",
     "Location": "Remote",
     "URL": "https://jobs.lever.co/acme/def456",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -35,6 +39,8 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   }
 ]
