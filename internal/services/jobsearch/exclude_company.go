@@ -16,11 +16,11 @@ func (m *Module) ExcludeCompany(ctx context.Context, userID string, in dto.Exclu
 	if err != nil {
 		return dto.CompanyExclusion{}, err
 	}
-	added, err := m.scoring.ExcludeCompany(ctx, userID, company.Name)
-	if err != nil {
+	if err := m.setReview(ctx, userID, company.ID, "dismissed"); err != nil {
 		return dto.CompanyExclusion{}, err
 	}
-	if err := m.setReview(ctx, userID, company.ID, "dismissed"); err != nil {
+	added, err := m.scoring.ExcludeCompany(ctx, userID, company.Name)
+	if err != nil {
 		return dto.CompanyExclusion{}, err
 	}
 	return dto.CompanyExclusion{Name: company.Name, Added: added}, nil

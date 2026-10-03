@@ -95,9 +95,11 @@ func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]st
 	if err != nil && !errors.Is(err, data.ErrNotFound) {
 		return nil, err
 	}
-	slugs := make([]string, len(cfg.ExcludedCompanies))
-	for i, name := range cfg.ExcludedCompanies {
-		slugs[i] = slug.Make(name)
+	slugs := make([]string, 0, len(cfg.ExcludedCompanies))
+	for _, name := range cfg.ExcludedCompanies {
+		if s := slug.Make(name); s != "" {
+			slugs = append(slugs, s)
+		}
 	}
 	return slugs, nil
 }
