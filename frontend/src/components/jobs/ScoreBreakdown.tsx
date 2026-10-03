@@ -1,4 +1,6 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
+import { Button } from "@/components/ui/button";
+import { useRevertCorrection, useSetCorrection } from "@/hooks/useCorrections";
 import { MATCHED_COLOUR, MISSING_COLOUR } from "@/lib/scoreColour";
 import { unknownCount } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
@@ -17,18 +19,23 @@ const GROUPS: {
 	class?: string;
 }[] = [
 	{
+		label: "Corrected",
+		keep: (r) => r.corrected === true,
+		class: "bg-accent-subtle text-accent-text border border-accent-border",
+	},
+	{
 		label: "Blocked",
-		keep: (r) => r.effect === "blocked",
+		keep: (r) => !r.corrected && r.effect === "blocked",
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
 		label: "Matched",
-		keep: (r) => r.effect === "meets",
+		keep: (r) => !r.corrected && r.effect === "meets",
 		style: tintedChip(MATCHED_COLOUR),
 	},
 	{
 		label: "Avoid hit",
-		keep: (r) => r.effect === "misses" && r.stance === "avoid",
+		keep: (r) => !r.corrected && r.effect === "misses" && r.stance === "avoid",
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
@@ -38,8 +45,17 @@ const GROUPS: {
 	},
 ];
 
+const canCorrect = (r: ScoreRow) =>
+	r.corrected === true ||
+	(r.resolved === "yes" && r.effect !== "retired" && r.key !== "salary");
+
 export function ScoreBreakdown(props: { job: Job }) {
+	const [selectedKey, setSelectedKey] = createSignal<string>();
+	const setCorrection = useSetCorrection();
+	const revertCorrection = useRevertCorrection();
 	const breakdown = () => props.job.Breakdown ?? [];
+	const selected = () => breakdown().find((r) => r.key === selectedKey());
+	const target = (r: ScoreRow) => ({ jobId: props.job.ID, optionId: r.key });
 	const groups = () =>
 		GROUPS.map((g) => ({ ...g, rows: breakdown().filter(g.keep) })).filter(
 			(g) => g.rows.length > 0,
@@ -58,22 +74,70 @@ export function ScoreBreakdown(props: { job: Job }) {
 							<div class="flex flex-wrap gap-1">
 								<For each={g.rows}>
 									{(r) => (
-										<span
+										<button
+											type="button"
+											disabled={!canCorrect(r)}
+											aria-expanded={selectedKey() === r.key}
 											class={cn(
-												"inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium",
+												"inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium enabled:cursor-pointer",
 												g.class,
 											)}
 											style={g.style}
 											title={r.label}
+											onClick={() =>
+												setSelectedKey(
+													selectedKey() === r.key ? undefined : r.key,
+												)
+											}
 										>
 											{r.label}
-										</span>
+										</button>
 									)}
 								</For>
 							</div>
 						</div>
 					)}
 				</For>
+				<Show when={selected()}>
+					{(row) => (
+						<div class="flex items-center gap-2 text-xs text-muted">
+							<Show
+								when={row().corrected}
+								fallback={
+									<Button
+										variant="outline"
+										size="sm"
+										disabled={setCorrection.isPending}
+										onClick={() => {
+											setCorrection.mutate({
+												...target(row()),
+												value: row().resolved === "yes" ? "no" : "yes",
+											});
+											setSelectedKey(undefined);
+										}}
+									>
+										This is wrong
+									</Button>
+								}
+							>
+								<span>
+									You marked {row().label} as {row().resolved}.
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									disabled={revertCorrection.isPending}
+									onClick={() => {
+										revertCorrection.mutate(target(row()));
+										setSelectedKey(undefined);
+									}}
+								>
+									Revert
+								</Button>
+							</Show>
+						</div>
+					)}
+				</Show>
 				<Show when={unknowns() > 0}>
 					<p class="text-2xs text-faint">
 						{unknowns()} unknown — not stated in the posting

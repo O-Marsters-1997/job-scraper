@@ -43,6 +43,9 @@ type Store interface {
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
 	ListIncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
+	SetAnswerCorrection(ctx context.Context, userID, jobID, optionID, value string) error
+	DeleteAnswerCorrection(ctx context.Context, userID, jobID, optionID string) error
+	ListJobCorrections(ctx context.Context, jobID string) (map[string]map[string]string, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
 	ListCompanyAnswers(ctx context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error)
@@ -190,6 +193,10 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	if err != nil {
 		return fail(fmt.Errorf("load cached answers: %w", err))
 	}
+	corrections, err := s.store.ListJobCorrections(ctx, effect.JobID)
+	if err != nil {
+		return fail(fmt.Errorf("load corrections: %w", err))
+	}
 
 	var missing []string
 	for hash, question := range asked {
@@ -213,9 +220,9 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
-		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, allAnswers)
-		score, rows := compute(picks, job.SalaryRaw, cfg.Preferences.SalaryFloor)
-		scores = append(scores, dto.JobScore{JobID: effect.JobID, UserID: cfg.UserID, Score: score, Rows: rows, Unknowns: countUnknown(rows), Cost: cost})
+		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID])
+		score.Cost = cost
+		scores = append(scores, score)
 	}
 
 	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores)
@@ -379,9 +386,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 
 	scores := make([]dto.JobScore, len(inputs))
 	for i, in := range inputs {
-		picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, in.Answers)
-		score, rows := compute(picks, in.Job.SalaryRaw, cfg.Preferences.SalaryFloor)
-		scores[i] = dto.JobScore{JobID: in.Job.ID, UserID: userID, Score: score, Rows: rows, Unknowns: countUnknown(rows)}
+		scores[i] = scoreJob(userID, cfg, in.Job, byID, in.Answers, in.Corrections)
 	}
 	if err := s.store.SaveScores(ctx, scores); err != nil {
 		return dto.RecomputeResult{}, err
@@ -433,7 +438,13 @@ func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.Se
 	return cfg, nil
 }
 
-func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer) []evaluatedPick {
+func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) dto.JobScore {
+	picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, answers, corrections)
+	score, rows := compute(picks, job.SalaryRaw, cfg.Preferences.SalaryFloor)
+	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Rows: rows, Unknowns: countUnknown(rows)}
+}
+
+func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
 	picks = dedupeBySource(picks)
 	out := make([]evaluatedPick, 0, len(picks))
 	for _, p := range picks {
@@ -442,9 +453,16 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 			continue
 		}
 		answer, known := answers[QuestionHash(opt.Question)]
+		value, corrected := corrections[opt.ID]
+		if corrected {
+			answer, known = dto.Answer{PYes: 1}, true
+			if value == "no" {
+				answer = dto.Answer{PNo: 1}
+			}
+		}
 		out = append(out, evaluatedPick{
 			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
-			answer: answer, known: known, retired: opt.RetiredAt != nil,
+			answer: answer, known: known, retired: opt.RetiredAt != nil, corrected: corrected,
 		})
 	}
 	return out
