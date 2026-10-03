@@ -31,10 +31,11 @@ const (
 )
 
 type Config struct {
-	Name    string
-	Route   Route
-	Header  http.Header // overrides the default request headers for a host that rejects them
-	Cookies bool
+	Name        string
+	Route       Route
+	Header      http.Header // overrides the default request headers for a host that rejects them
+	Cookies     bool
+	NewestFirst bool
 }
 
 // SnapshotSource is implemented by any source that has snapshot-testable parsers.

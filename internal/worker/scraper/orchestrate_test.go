@@ -30,12 +30,15 @@ func (k *knownURLs) NewURLs(_ context.Context, urls []string) ([]string, error) 
 }
 
 type pageSourceStub struct {
-	cards []dto.Job
-	next  string
-	got   *string
+	cards       []dto.Job
+	next        string
+	got         *string
+	newestFirst bool
 }
 
-func (s pageSourceStub) Cfg() sources.Config { return sources.Config{Name: "wis"} }
+func (s pageSourceStub) Cfg() sources.Config {
+	return sources.Config{Name: "wis", NewestFirst: s.newestFirst}
+}
 func (s pageSourceStub) FetchPage(_ context.Context, cursor string) ([]dto.Job, string, error) {
 	*s.got = cursor
 	return s.cards, s.next, nil
@@ -56,8 +59,13 @@ func (noSearchConfig) SearchConfig(context.Context, string) (dto.SearchConfig, e
 
 func scrapePage(t *testing.T, known *knownURLs, cards []dto.Job, cursor string) (next, fetchedCursor string, captured []dto.Job) {
 	t.Helper()
+	return scrapeSource(t, known, cards, cursor, true)
+}
+
+func scrapeSource(t *testing.T, known *knownURLs, cards []dto.Job, cursor string, newestFirst bool) (next, fetchedCursor string, captured []dto.Job) {
+	t.Helper()
 	capture := &capturedCards{}
-	src := pageSourceStub{cards: cards, next: "2:5", got: &fetchedCursor}
+	src := pageSourceStub{cards: cards, next: "2:5", got: &fetchedCursor, newestFirst: newestFirst}
 	orch := scraper.New(known, noSearchConfig{}, func(dto.SourceTarget) (sources.Source, bool) { return src, true }, capture)
 	next, err := orch.ScrapePage(t.Context(), dto.SourceTarget{ID: "target", UserID: "user", Source: "wis"}, cursor)
 	if err != nil {
@@ -71,10 +79,17 @@ func TestScrapePage(t *testing.T) {
 	const aggregator = "https://www.linkedin.com/jobs/view/1?externalUrl=https://boards.greenhouse.io/acme/jobs/9"
 	const rewritten = "https://boards.greenhouse.io/acme/jobs/9"
 
-	t.Run("stops at the known job frontier", func(t *testing.T) {
+	t.Run("stops at the known job frontier when newest first", func(t *testing.T) {
 		next, _, _ := scrapePage(t, &knownURLs{known: []string{plain}}, []dto.Job{{URL: plain}}, "")
 		if next != "" {
 			t.Errorf("next = %q, want empty", next)
+		}
+	})
+
+	t.Run("pages past known jobs when not newest first", func(t *testing.T) {
+		next, _, _ := scrapeSource(t, &knownURLs{known: []string{plain}}, []dto.Job{{URL: plain}}, "", false)
+		if next != "2:5" {
+			t.Errorf("next = %q, want 2:5", next)
 		}
 	})
 

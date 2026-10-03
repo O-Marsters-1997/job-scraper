@@ -132,10 +132,11 @@ var _ sources.DetailFetcher = (*Scraper)(nil)
 func New(search Search) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:    "wis",
-			Route:   sources.RouteTiered,
-			Header:  browserHeader,
-			Cookies: true,
+			Name:        "wis",
+			Route:       sources.RouteTiered,
+			Header:      browserHeader,
+			Cookies:     true,
+			NewestFirst: true,
 		}),
 		search: search,
 	}
