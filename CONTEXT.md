@@ -171,6 +171,17 @@ Answers — no per-Job Jev call, since Suitability is derived entirely from data
 once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
+**Gate**:
+A rule that caps Suitability at the top of Poor (44) without hiding the Job. A Gate dimension
+(seniority, work) fires when every option the User picked in it resolves no and an option they did
+not pick resolves yes; a salary below the floor also fires one. The triggering row shows as `gated`.
+_Avoid_: Block (a block Pick forces 0 and hides the Job), filter
+
+**Band**:
+Great (80+), Good (65+), Fair (45+) or Poor, derived from the Suitability score and stored beside it
+on the Job's score row. The score still sorts the list and checks `notify_threshold`.
+_Avoid_: Tier, grade (a Grade is the User's own verdict)
+
 **Grade**:
 A User's current verdict on one Job (`great`, `ok` or `no`), with optional reason chips from a fixed
 set, stored with the Suitability score and model at the time. One per (User, Job), updated in place

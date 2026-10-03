@@ -191,7 +191,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 
 	saved, err := st.CompleteAnswerEffect(ctx, effect,
 		map[string]dto.Answer{"hash-1": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
-		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Rows: []dto.ScoreRow{}}},
+		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Band: "great", Rows: []dto.ScoreRow{}}},
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
@@ -230,8 +230,8 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 	}
 
 	scores := []dto.JobScore{
-		{JobID: jobID, UserID: alice, Score: 79, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
-		{JobID: jobID, UserID: bob, Score: 21, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
+		{JobID: jobID, UserID: alice, Score: 79, Band: "good", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
+		{JobID: jobID, UserID: bob, Score: 21, Band: "poor", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
 	}
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores)
 	if err != nil {
@@ -259,7 +259,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect,
 		map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
-		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79}},
+		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79, Band: "good"}},
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
@@ -378,12 +378,19 @@ func TestSaveScores(t *testing.T) {
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertScore(t, pool, jobID, userID)
 
-	if err := st.SaveScores(t.Context(), []dto.JobScore{{JobID: jobID, UserID: userID, Score: 90, Rows: []dto.ScoreRow{}}}); err != nil {
+	if err := st.SaveScores(t.Context(), []dto.JobScore{{JobID: jobID, UserID: userID, Score: 90, Band: "great", Rows: []dto.ScoreRow{}}}); err != nil {
 		t.Fatalf("SaveScores() err = %v", err)
 	}
 	got := countRows(t, pool, `SELECT suitability_score FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID)
 	if got != 90 {
 		t.Errorf("suitability_score = %d, want 90", got)
+	}
+	var band string
+	if err := pool.QueryRow(t.Context(), `SELECT band FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID).Scan(&band); err != nil {
+		t.Fatalf("read band: %v", err)
+	}
+	if band != "great" {
+		t.Errorf("band = %q, want great", band)
 	}
 }
 

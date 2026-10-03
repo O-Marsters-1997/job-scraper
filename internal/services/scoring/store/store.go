@@ -435,7 +435,7 @@ func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore,
 		return fmt.Errorf("cost: %w", err)
 	}
 	return queries.UpsertJobScore(ctx, sqlc.UpsertJobScoreParams{
-		JobID: jobID, UserID: userID, Score: int32(sc.Score), Breakdown: breakdown, Cost: cost,
+		JobID: jobID, UserID: userID, Score: int32(sc.Score), Band: sc.Band, Breakdown: breakdown, Cost: cost,
 		Fingerprint: fingerprint, Model: model,
 	})
 }
@@ -500,7 +500,7 @@ func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 			return fmt.Errorf("store.SaveScores: marshal breakdown: %w", err)
 		}
 		if err := s.queries.UpdateJobScoreBreakdown(ctx, sqlc.UpdateJobScoreBreakdownParams{
-			Score: int32(sc.Score), Breakdown: breakdown, JobID: jobID, UserID: userID,
+			Score: int32(sc.Score), Band: sc.Band, Breakdown: breakdown, JobID: jobID, UserID: userID,
 		}); err != nil {
 			return fmt.Errorf("store.SaveScores: %w", err)
 		}

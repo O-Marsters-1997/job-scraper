@@ -209,12 +209,12 @@ func TestCorrectionRoutes(t *testing.T) {
 	}
 
 	set := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "PUT /jobs/job-1/corrections/tech:go", `{"value":"no"}`)
-	if set.Score != 38 || len(set.Rows) != 1 || !set.Rows[0].Corrected {
-		t.Errorf("PUT correction = %+v, want score 38 with one corrected row", set)
+	if set.Score != 17 || len(set.Rows) != 1 || !set.Rows[0].Corrected {
+		t.Errorf("PUT correction = %+v, want score 17 with one corrected row", set)
 	}
 
 	reverted := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "DELETE /jobs/job-1/corrections/tech:go", "")
-	if reverted.Score != 63 || reverted.Rows[0].Corrected {
-		t.Errorf("DELETE correction = %+v, want the uncorrected score 63", reverted)
+	if reverted.Score != 37 || reverted.Rows[0].Corrected {
+		t.Errorf("DELETE correction = %+v, want the uncorrected score 37", reverted)
 	}
 }

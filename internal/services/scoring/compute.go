@@ -9,10 +9,13 @@ import (
 )
 
 const (
-	niceWeight       = 1
 	avoidWeight      = 2
-	priorK           = 3
+	prior            = 1.0
 	resolveThreshold = 0.6
+	gateCap          = 44
+	bandGreatMin     = 80
+	bandGoodMin      = 65
+	bandFairMin      = 45
 )
 
 type evaluatedPick struct {
@@ -40,15 +43,25 @@ func resolveAnswer(a dto.Answer) string {
 	return value
 }
 
-func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []dto.ScoreRow) {
+type niceDimension struct {
+	sumYes, evidence float64
+}
+
+type gateDimension struct {
+	picked, picksNo int
+	pickedRows      []int
+	unpickedYes     bool
+}
+
+func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
 	rows := make([]dto.ScoreRow, 0, len(picks))
-	type dimState struct{ known, matched bool }
-	dims := make(map[dto.Dimension]*dimState)
-	var met, evaluable float64
-	var blocked bool
+	nice := make(map[dto.Dimension]*niceDimension)
+	gates := make(map[dto.Dimension]*gateDimension)
+	var avoidCost float64
+	var blocked, gated bool
 
 	for _, p := range picks {
 		if p.retired {
@@ -64,26 +77,46 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 
 		switch p.stance {
 		case "nice":
-			d, ok := dims[p.dimension]
+			d, ok := nice[p.dimension]
 			if !ok {
-				d = &dimState{}
-				dims[p.dimension] = d
+				d = &niceDimension{}
+				nice[p.dimension] = d
+			}
+			if p.known {
+				d.sumYes += p.answer.PYes
+				d.evidence = max(d.evidence, p.answer.PYes+p.answer.PNo)
 			}
 			switch resolved {
 			case "yes":
-				d.known, d.matched = true, true
 				row.Effect = "meets"
 			case "no":
-				d.known = true
 				row.Effect = "misses"
 			default:
 				row.Effect = "unknown"
 			}
+			if dimensionSpecs[p.dimension].Gate {
+				g, ok := gates[p.dimension]
+				if !ok {
+					g = &gateDimension{}
+					gates[p.dimension] = g
+				}
+				g.picked++
+				g.pickedRows = append(g.pickedRows, len(rows))
+				if resolved == "no" {
+					g.picksNo++
+				}
+			}
 		case "avoid":
+			if p.known {
+				avoidCost += avoidWeight * p.answer.PYes
+			}
 			switch resolved {
 			case "yes":
-				evaluable += avoidWeight
 				row.Effect = "misses"
+				if p.key == salaryKey {
+					row.Effect = "gated"
+					gated = true
+				}
 			case "no":
 				row.Effect = "neutral"
 			default:
@@ -105,21 +138,48 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 		rows = append(rows, row)
 	}
 
-	for _, d := range dims {
-		if !d.known {
-			continue
+	for _, u := range unpicked {
+		if g, ok := gates[u.dimension]; ok && u.known && resolveAnswer(u.answer) == "yes" {
+			g.unpickedYes = true
 		}
-		evaluable += niceWeight
-		if d.matched {
-			met += niceWeight
+	}
+	for _, g := range gates {
+		if g.picksNo == g.picked && g.unpickedYes {
+			gated = true
+			for _, i := range g.pickedRows {
+				rows[i].Effect = "gated"
+			}
 		}
 	}
 
-	score := int(math.Round(100 * (met + 0.5*priorK) / (evaluable + priorK)))
+	var weighted, covered float64
+	for dim, d := range nice {
+		spec := dimensionSpecs[dim]
+		credit := min(1, d.sumYes/float64(spec.Saturation))
+		weighted += spec.Weight * d.evidence
+		covered += spec.Weight * d.evidence * credit
+	}
+
+	score := int(math.Round(100 * (covered + 0.5*prior) / (weighted + avoidCost + prior)))
+	if gated {
+		score = min(score, gateCap)
+	}
 	if blocked {
 		score = 0
 	}
-	return score, rows
+	return score, bandFor(score), rows
+}
+
+func bandFor(score int) string {
+	switch {
+	case score >= bandGreatMin:
+		return "great"
+	case score >= bandGoodMin:
+		return "good"
+	case score >= bandFairMin:
+		return "fair"
+	}
+	return "poor"
 }
 
 func countUnknown(rows []dto.ScoreRow) int {
@@ -141,12 +201,19 @@ func QuestionHash(question string) string {
 
 func pickedQuestionHashes(picks []dto.Pick, byID map[string]dto.ScoringOption) map[string]string {
 	hashes := make(map[string]string, len(picks))
+	gateDims := make(map[dto.Dimension]bool)
 	for _, p := range picks {
 		opt, ok := byID[p.OptionID]
 		if !ok || opt.RetiredAt != nil {
 			continue
 		}
 		hashes[QuestionHash(opt.Question)] = opt.Question
+		gateDims[opt.Dimension] = dimensionSpecs[opt.Dimension].Gate
+	}
+	for _, opt := range byID {
+		if opt.RetiredAt == nil && gateDims[opt.Dimension] {
+			hashes[QuestionHash(opt.Question)] = opt.Question
+		}
 	}
 	return hashes
 }

@@ -8,7 +8,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
-const minAnnualAmount = 10000
+const (
+	minAnnualAmount = 10000
+	salaryKey       = "salary"
+)
 
 var (
 	amountPattern       = regexp.MustCompile(`(?i)\d[\d,]*(?:\.\d+)?\s*k?`)
@@ -75,5 +78,5 @@ func salaryPick(floor dto.Money, salaryRaw string) evaluatedPick {
 			answer = dto.Answer{PNo: 1}
 		}
 	}
-	return evaluatedPick{key: "salary", label: "Salary", stance: "avoid", known: true, answer: answer}
+	return evaluatedPick{key: salaryKey, label: "Salary", stance: "avoid", known: true, answer: answer}
 }

@@ -444,33 +444,57 @@ func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.Se
 }
 
 func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) dto.JobScore {
-	picks := evaluatedPicksFor(cfg.Preferences.Picks, byID, answers, corrections)
-	score, rows := compute(picks, job.SalaryRaw, cfg.Preferences.SalaryFloor)
-	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Rows: rows, Unknowns: countUnknown(rows)}
+	picks := dedupeBySource(cfg.Preferences.Picks)
+	evaluated := evaluatedPicksFor(picks, byID, answers, corrections)
+	unpicked := unpickedGateOptions(picks, byID, answers, corrections)
+	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor)
+	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Band: band, Rows: rows, Unknowns: countUnknown(rows)}
 }
 
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
-	picks = dedupeBySource(picks)
 	out := make([]evaluatedPick, 0, len(picks))
 	for _, p := range picks {
 		opt, ok := byID[p.OptionID]
 		if !ok {
 			continue
 		}
-		answer, known := answers[QuestionHash(opt.Question)]
-		value, corrected := corrections[opt.ID]
-		if corrected {
-			answer, known = dto.Answer{PYes: 1}, true
-			if value == "no" {
-				answer = dto.Answer{PNo: 1}
-			}
-		}
-		out = append(out, evaluatedPick{
-			dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: p.Stance,
-			answer: answer, known: known, retired: opt.RetiredAt != nil, corrected: corrected,
-		})
+		out = append(out, evaluate(opt, p.Stance, answers, corrections))
 	}
 	return out
+}
+
+func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
+	pickedIDs := make(map[string]bool, len(picks))
+	gateDims := make(map[dto.Dimension]bool)
+	for _, p := range picks {
+		pickedIDs[p.OptionID] = true
+		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Gate {
+			gateDims[opt.Dimension] = true
+		}
+	}
+	var out []evaluatedPick
+	for id, opt := range byID {
+		if pickedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+			continue
+		}
+		out = append(out, evaluate(opt, "nice", answers, corrections))
+	}
+	return out
+}
+
+func evaluate(opt dto.ScoringOption, stance string, answers map[string]dto.Answer, corrections map[string]string) evaluatedPick {
+	answer, known := answers[QuestionHash(opt.Question)]
+	value, corrected := corrections[opt.ID]
+	if corrected {
+		answer, known = dto.Answer{PYes: 1}, true
+		if value == "no" {
+			answer = dto.Answer{PNo: 1}
+		}
+	}
+	return evaluatedPick{
+		dimension: opt.Dimension, key: opt.ID, label: opt.Label, stance: stance,
+		answer: answer, known: known, retired: opt.RetiredAt != nil, corrected: corrected,
+	}
 }
 
 func dedupeBySource(picks []dto.Pick) []dto.Pick {
