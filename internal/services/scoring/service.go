@@ -481,7 +481,7 @@ func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]
 	picks := dedupeBySource(cfg.Preferences.Picks)
 	evaluated := evaluatedPicksFor(picks, byID, answers, corrections)
 	unpicked := unpickedGateOptions(picks, byID, answers, corrections)
-	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor)
+	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor, false)
 	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Band: band, Rows: rows, Unknowns: countUnknown(rows)}
 }
 
