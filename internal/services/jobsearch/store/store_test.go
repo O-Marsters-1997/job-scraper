@@ -1387,3 +1387,20 @@ func TestSaveCanonicalLinksCompanyBySlug(t *testing.T) {
 		}
 	})
 }
+
+func TestCompanyFavouritesArePerUser(t *testing.T) {
+	st, pool, alice := newUserStore(t)
+	bob := pgtest.InsertUser(t, pool)
+	ctx := t.Context()
+	companyID := insertCompany(t, pool, "acme")
+
+	if err := st.SetCompanyFavourite(ctx, alice, companyID, true); err != nil {
+		t.Fatalf("SetCompanyFavourite(alice) = %v", err)
+	}
+	for user, want := range map[string]bool{alice: true, bob: false} {
+		got, err := st.GetCompanyForUser(ctx, user, companyID)
+		if err != nil || got.Favourite != want {
+			t.Errorf("GetCompanyForUser(%s).Favourite = %v, %v, want %v", user, got.Favourite, err, want)
+		}
+	}
+}

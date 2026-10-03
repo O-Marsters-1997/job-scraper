@@ -8,6 +8,7 @@ import {
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
+import { useSetCompanyFavourite } from "./useCompanies";
 import { useDismissJob } from "./useDismissJob";
 
 export function useTrackJobs(jobs: () => Job[]) {
@@ -44,11 +45,19 @@ export function useTrackJobs(jobs: () => Job[]) {
 	};
 
 	const dismiss = useDismissJob();
+	const setFavourite = useSetCompanyFavourite();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
 		onGrade: (job) => openGrade([job]),
+		onToggleFavourite: (job) => {
+			if (!job.CompanyID) return;
+			setFavourite.mutate({
+				id: job.CompanyID,
+				favourite: !job.CompanyFavourite,
+			});
+		},
 	});
 
 	return {

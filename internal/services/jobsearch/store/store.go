@@ -336,7 +336,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 	if err != nil {
 		return dto.CompanyPage{}, ErrInvalidID
 	}
-	params := sqlc.PageCompaniesForUserParams{UserID: uid, Search: options.Search, TrackedOnly: options.TrackedOnly, PageLimit: options.Limit}
+	params := sqlc.PageCompaniesForUserParams{UserID: uid, Search: options.Search, TrackedOnly: options.TrackedOnly, FavouriteOnly: options.FavouriteOnly, PageLimit: options.Limit}
 	if options.CursorID != "" {
 		params.CursorID, err = data.UUID(options.CursorID)
 		if err != nil {
@@ -596,6 +596,11 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 	if err != nil {
 		return dto.CompanyTracking{}, data.QueryErr("SetCompanyReviewState", err)
 	}
+	if state == "dismissed" {
+		if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+			return dto.CompanyTracking{}, fmt.Errorf("store.SetCompanyReviewState favourite: %w", err)
+		}
+	}
 	if row.Enabled {
 		if err := queries.BackfillCompanyJobFingerprints(ctx, cid); err != nil {
 			return dto.CompanyTracking{}, fmt.Errorf("backfill tracked company jobs: %w", err)
@@ -611,6 +616,37 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
 		Enabled: row.Enabled, ReviewState: row.ReviewState, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 	}, nil
+}
+
+func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin company favourite: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+	if favourite {
+		if err := queries.AddCompanyFavourite(ctx, sqlc.AddCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+		}
+		if err := queries.KeepNewTrackedCompany(ctx, sqlc.KeepNewTrackedCompanyParams{UserID: uid, CompanyID: cid}); err != nil {
+			return fmt.Errorf("store.SetCompanyFavourite keep: %w", err)
+		}
+	} else if err := queries.RemoveCompanyFavourite(ctx, sqlc.RemoveCompanyFavouriteParams{UserID: uid, CompanyID: cid}); err != nil {
+		return fmt.Errorf("store.SetCompanyFavourite: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit company favourite: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListCompanyBoards(ctx context.Context, companyID string) ([]dto.CompanyBoard, error) {

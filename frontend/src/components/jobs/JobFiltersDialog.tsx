@@ -143,6 +143,17 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 								</div>
 							</div>
 
+							<div class="flex flex-col gap-2">
+								<p class="text-xs font-medium text-muted">Company</p>
+								<div class="flex flex-wrap gap-1.5">
+									<FilterChip
+										label="Favourites"
+										active={props.filters.fav}
+										onClick={() => props.onChange({ fav: !props.filters.fav })}
+									/>
+								</div>
+							</div>
+
 							<Show when={props.sourceOptions.length > 0}>
 								<div class="flex flex-col gap-2">
 									<p class="text-xs font-medium text-muted">Source</p>

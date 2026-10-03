@@ -18,6 +18,7 @@ export interface JobFilters {
 	scored: boolean;
 	graded: GradedFilter;
 	seen: SeenFilter;
+	fav: boolean;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -32,6 +33,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	scored: false,
 	graded: "all",
 	seen: "all",
+	fav: false,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -62,6 +64,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 			raw.scored === 1,
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
+		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
 	};
 }
 
@@ -113,6 +116,7 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 		if (f.graded === "graded" && !j.Grade) return false;
 		if (f.seen === "unseen" && j.Seen) return false;
 		if (f.seen === "seen" && !j.Seen) return false;
+		if (f.fav && !j.CompanyFavourite) return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
 			return false;
@@ -136,6 +140,7 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.sal) n++;
 	if (f.graded !== "all") n++;
 	if (f.seen !== "all") n++;
+	if (f.fav) n++;
 	return n;
 }
 

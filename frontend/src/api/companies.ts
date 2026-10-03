@@ -34,6 +34,7 @@ export class UnresolvableBoardError extends Error {
 export type CompanyPageParams = {
 	q?: string;
 	tracked?: boolean;
+	favourite?: boolean;
 	cursor?: string;
 	limit?: number;
 };
@@ -47,6 +48,7 @@ export async function fetchCompanyPage(
 			const query = new URLSearchParams();
 			if (params.q) query.set("q", params.q);
 			if (params.tracked) query.set("tracked", "1");
+			if (params.favourite) query.set("favourite", "1");
 			if (params.cursor) query.set("cursor", params.cursor);
 			if (params.limit) query.set("limit", String(params.limit));
 			return apiFetch(`/companies?${query}`, companyPageSchema);
@@ -98,6 +100,23 @@ export async function setCompanyTracking(
 					enabled,
 					check_interval_minutes: checkIntervalMinutes,
 				}),
+			),
+	);
+}
+
+export async function setCompanyFavourite(
+	id: string,
+	favourite: boolean,
+): Promise<Company> {
+	return mocked(
+		(db) => db.setCompanyFavourite(id, favourite),
+		() =>
+			apiFetch(
+				`/companies/${encodeURIComponent(id)}/favourite`,
+				companySchema,
+				{
+					method: favourite ? "PUT" : "DELETE",
+				},
 			),
 	);
 }

@@ -15,6 +15,7 @@ export async function fetchAllJobs(): Promise<Job[]> {
 					...job,
 					Grade: db.getGrade(job.ID)?.grade ?? "",
 					Seen: db.isSeen(job.ID),
+					CompanyFavourite: db.isCompanyFavourite(job.CompanyID),
 				})),
 		() => apiFetch("/jobs/all", jobSchema.array()),
 	);
@@ -25,7 +26,11 @@ export async function fetchJob(id: string): Promise<Job> {
 		(db) => {
 			const job = db.getJobs().find((item) => item.ID === id);
 			if (!job) throw new Error("Job not found");
-			return { ...job, Seen: db.isSeen(job.ID) };
+			return {
+				...job,
+				Seen: db.isSeen(job.ID),
+				CompanyFavourite: db.isCompanyFavourite(job.CompanyID),
+			};
 		},
 		() => apiFetch(`/jobs/${encodeURIComponent(id)}`, jobSchema),
 	);

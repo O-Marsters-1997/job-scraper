@@ -23,6 +23,7 @@ type Job struct {
 	Band               string
 	Grade              string
 	Seen               bool
+	CompanyFavourite   bool
 	Breakdown          []ScoreRow
 	Wildcard           bool
 }

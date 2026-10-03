@@ -156,6 +156,36 @@ test.describe("Jobs", () => {
 		await expect(titleLink).toBeHidden();
 	});
 
+	test("starring a company updates its rows, the Favourites filter keeps them, and the Companies page shows the star", async ({
+		page,
+		jobsPage,
+	}) => {
+		const firstRow = jobsPage.rows.first();
+		const star = firstRow.getByRole("button", { name: /^Favourite / });
+		const label = (await star.getAttribute("aria-label")) ?? "";
+		await star.click();
+		await expect(star).toHaveAttribute("aria-pressed", "true");
+
+		const sameCompany = page.getByRole("button", { name: label });
+		await expect(sameCompany.first()).toHaveAttribute("aria-pressed", "true");
+
+		await page.getByRole("button", { name: "Filters" }).click();
+		await page.getByRole("button", { name: "Favourites" }).click();
+		await page.getByRole("button", { name: "Done" }).click();
+		const stars = page.getByRole("button", { name: /^Favourite / });
+		for (const el of await stars.all()) {
+			await expect(el).toHaveAttribute("aria-pressed", "true");
+		}
+
+		await page.getByRole("link", { name: "Companies", exact: true }).click();
+		await expect(
+			page.getByRole("heading", { name: "Companies", level: 1 }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: label, pressed: true }),
+		).toBeVisible();
+	});
+
 	test("shows the job title in the breadcrumb on a direct visit to /jobs/:id", async ({
 		page,
 		jobsPage,

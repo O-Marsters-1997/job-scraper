@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
 import { createRenderEffect, Match, Show, Switch } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ export interface JobTableContext {
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
 	onGrade: (job: Job) => void;
+	onToggleFavourite: (job: Job) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -107,12 +109,21 @@ export function createJobColumns(
 			accessorKey: "CompanySlug",
 			header: "Company",
 			cell: (info) => (
-				<span
-					class="block max-w-[180px] truncate text-muted"
-					title={titleCase(info.getValue() as string)}
-				>
-					{titleCase(info.getValue() as string)}
-				</span>
+				<div class="flex items-center gap-1">
+					<Show when={info.row.original.CompanyID}>
+						<FavouriteStar
+							favourite={info.row.original.CompanyFavourite ?? false}
+							companyName={titleCase(info.getValue() as string)}
+							onToggle={() => ctx.onToggleFavourite(info.row.original)}
+						/>
+					</Show>
+					<span
+						class="block max-w-[160px] truncate text-muted"
+						title={titleCase(info.getValue() as string)}
+					>
+						{titleCase(info.getValue() as string)}
+					</span>
+				</div>
 			),
 		},
 		{

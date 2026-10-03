@@ -162,6 +162,12 @@ type CompanyBoard struct {
 	CreatedAt          pgtype.Timestamptz
 }
 
+type CompanyFavourite struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
 type CompanyProfile struct {
 	CompanyID pgtype.UUID
 	Source    string
