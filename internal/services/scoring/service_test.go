@@ -853,6 +853,20 @@ func TestRecompute(t *testing.T) {
 				},
 			},
 			{
+				name: "employment gate caps the score when a permanent Pick meets a contract role",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionEmployment, "employment:permanent", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionEmployment, "employment:contract", 0.9, 0.05, 0.05),
+				},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "gated"},
+				},
+			},
+			{
 				name: "a gate needs every picked option to resolve no",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),

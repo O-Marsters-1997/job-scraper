@@ -49,6 +49,7 @@ const scoringDimensions: DimensionSpec[] = [
 	{ key: "work", kind: "multi", stances: ["nice"] },
 	{ key: "stage", kind: "multi", stances: ["nice"] },
 	{ key: "size", kind: "multi", stances: ["nice"] },
+	{ key: "employment", kind: "multi", stances: ["nice"] },
 ];
 
 const scoringOptions: ScoringOption[] = [
@@ -90,6 +91,9 @@ const scoringOptions: ScoringOption[] = [
 	{ id: "size:scaleup", dimension: "size", label: "Scale-up" },
 	{ id: "size:large", dimension: "size", label: "Large" },
 	{ id: "size:enterprise", dimension: "size", label: "Enterprise" },
+	{ id: "employment:permanent", dimension: "employment", label: "Permanent" },
+	{ id: "employment:contract", dimension: "employment", label: "Contract" },
+	{ id: "employment:part_time", dimension: "employment", label: "Part-time" },
 ];
 
 export function getScoringConfig(): ScoringConfig {

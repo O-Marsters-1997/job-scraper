@@ -17,6 +17,7 @@ Score = round(100 * (sum(weight * evidence * credit) + 0.5 * prior) / (sum(weigh
   - work: weight 1, saturation 1, Gate
   - stage: weight 1, saturation 1
   - size: weight 1, saturation 1
+  - employment: weight 2, saturation 1, Gate
 - An avoid Pick adds 2 * P(yes) to the denominator and nothing to the numerator.
 - A Gate caps the score at 44: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.
 - A block Pick resolving yes forces the score to 0.
