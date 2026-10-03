@@ -264,6 +264,7 @@ type JobScore struct {
 	JobID            pgtype.UUID
 	UserID           pgtype.UUID
 	SuitabilityScore pgtype.Int4
+	Band             pgtype.Text
 	Breakdown        []byte
 	Cost             pgtype.Numeric
 	ScoreFingerprint pgtype.Text

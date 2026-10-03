@@ -5,14 +5,22 @@
 ## How Suitability is computed
 
 Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.
-An answer resolves to yes, no or unknown: the top of P(yes), P(no) and P(not stated) wins when it reaches 0.6, otherwise unknown.
+An answer resolves to yes, no or unknown for the checklist rows: the top of P(yes), P(no) and P(not stated) wins when it reaches 0.6, otherwise unknown. The score itself uses the probabilities.
 
-Score = round(100 * (met + 0.5 * 3) / (evaluable + 3)).
+Score = round(100 * (sum(weight * evidence * credit) + 0.5 * prior) / (sum(weight * evidence) + avoid cost + prior)), with prior = 1.
 
-- A nice Pick counts per dimension: 1 to evaluable once any of the dimension's nice Picks resolves yes or no, and 1 to met if one resolves yes.
-- An avoid Pick resolving yes adds 2 to evaluable and nothing to met.
+- Per nice dimension, credit = min(1, sum of P(yes) over its Picks / saturation) and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:
+  - tech: weight 2, saturation 3
+  - role: weight 3, saturation 1
+  - domain: weight 2, saturation 1
+  - seniority: weight 3, saturation 1, Gate
+  - work: weight 1, saturation 1, Gate
+  - stage: weight 1, saturation 1
+- An avoid Pick adds 2 * P(yes) to the denominator and nothing to the numerator.
+- A Gate caps the score at 44: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.
 - A block Pick resolving yes forces the score to 0.
-- Unknown counts on neither side.
+- Bands: Great from 80, Good from 65, Fair from 45, Poor below.
+- A dimension with no evidence counts on neither side.
 
 Current Picks:
 
@@ -24,7 +32,7 @@ Current Picks:
 
 ## Levers you may change
 
-- Weights: niceWeight (1), avoidWeight (2), priorK (3)
+- Dimension weights and saturation, avoidWeight (2), prior (1), gateCap (44)
 - resolveThreshold (0.6)
 - Question wording
 - New or retired Options

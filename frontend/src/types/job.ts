@@ -12,6 +12,7 @@ export const scoreRowSchema = z.object({
 		"neutral",
 		"retired",
 		"blocked",
+		"gated",
 	]),
 	overridden: z.boolean(),
 	corrected: z.boolean().optional(),

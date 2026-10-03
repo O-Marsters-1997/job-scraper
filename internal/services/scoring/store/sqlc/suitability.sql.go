@@ -429,12 +429,13 @@ func (q *Queries) ListScoringInputJobs(ctx context.Context, userID pgtype.UUID) 
 }
 
 const updateJobScoreBreakdown = `-- name: UpdateJobScoreBreakdown :exec
-UPDATE job_scores SET suitability_score = $1::int, breakdown = $2::jsonb, updated_at = NOW()
-WHERE job_id = $3::uuid AND user_id = $4::uuid
+UPDATE job_scores SET suitability_score = $1::int, band = $2::text, breakdown = $3::jsonb, updated_at = NOW()
+WHERE job_id = $4::uuid AND user_id = $5::uuid
 `
 
 type UpdateJobScoreBreakdownParams struct {
 	Score     int32
+	Band      string
 	Breakdown []byte
 	JobID     pgtype.UUID
 	UserID    pgtype.UUID
@@ -443,6 +444,7 @@ type UpdateJobScoreBreakdownParams struct {
 func (q *Queries) UpdateJobScoreBreakdown(ctx context.Context, arg UpdateJobScoreBreakdownParams) error {
 	_, err := q.db.Exec(ctx, updateJobScoreBreakdown,
 		arg.Score,
+		arg.Band,
 		arg.Breakdown,
 		arg.JobID,
 		arg.UserID,
@@ -451,11 +453,11 @@ func (q *Queries) UpdateJobScoreBreakdown(ctx context.Context, arg UpdateJobScor
 }
 
 const upsertJobScore = `-- name: UpsertJobScore :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, cost, score_fingerprint, score_model)
-VALUES ($1::uuid, $2::uuid, $3::int, $4::jsonb,
-    $5::numeric, $6::text, $7::text)
+INSERT INTO job_scores (job_id, user_id, suitability_score, band, breakdown, cost, score_fingerprint, score_model)
+VALUES ($1::uuid, $2::uuid, $3::int, $4::text, $5::jsonb,
+    $6::numeric, $7::text, $8::text)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
+    suitability_score = EXCLUDED.suitability_score, band = EXCLUDED.band, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
     score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model, updated_at = NOW()
 `
 
@@ -463,6 +465,7 @@ type UpsertJobScoreParams struct {
 	JobID       pgtype.UUID
 	UserID      pgtype.UUID
 	Score       int32
+	Band        string
 	Breakdown   []byte
 	Cost        pgtype.Numeric
 	Fingerprint string
@@ -474,6 +477,7 @@ func (q *Queries) UpsertJobScore(ctx context.Context, arg UpsertJobScoreParams) 
 		arg.JobID,
 		arg.UserID,
 		arg.Score,
+		arg.Band,
 		arg.Breakdown,
 		arg.Cost,
 		arg.Fingerprint,

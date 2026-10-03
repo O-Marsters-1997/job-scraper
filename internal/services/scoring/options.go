@@ -9,13 +9,21 @@ import (
 // Dimensions is the fixed set of dimensions the bank's options are grouped
 // into, with the kind and stances the frontend and validation both need.
 var Dimensions = []dto.DimensionSpec{
-	{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "avoid"}},
-	{Key: dto.DimensionRole, Kind: "pair", Stances: []string{"nice", "avoid"}},
-	{Key: dto.DimensionDomain, Kind: "pair", Stances: []string{"nice", "avoid", "block"}},
-	{Key: dto.DimensionSeniority, Kind: "multi", Stances: []string{"nice"}},
-	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice"}},
-	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice"}},
+	{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "avoid"}, Weight: 2, Saturation: 3},
+	{Key: dto.DimensionRole, Kind: "pair", Stances: []string{"nice", "avoid"}, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionDomain, Kind: "pair", Stances: []string{"nice", "avoid", "block"}, Weight: 2, Saturation: 1},
+	{Key: dto.DimensionSeniority, Kind: "multi", Stances: []string{"nice"}, Gate: true, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice"}, Gate: true, Weight: 1, Saturation: 1},
+	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice"}, Weight: 1, Saturation: 1},
 }
+
+var dimensionSpecs = func() map[dto.Dimension]dto.DimensionSpec {
+	specs := make(map[dto.Dimension]dto.DimensionSpec, len(Dimensions))
+	for _, d := range Dimensions {
+		specs[d.Key] = d
+	}
+	return specs
+}()
 
 // Options returns the dimensions and every non-retired bank option, without
 // question text.

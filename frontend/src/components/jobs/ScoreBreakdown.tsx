@@ -29,6 +29,11 @@ const GROUPS: {
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
+		label: "Gated",
+		keep: (r) => !r.corrected && r.effect === "gated",
+		style: tintedChip(MISSING_COLOUR),
+	},
+	{
 		label: "Matched",
 		keep: (r) => !r.corrected && r.effect === "meets",
 		style: tintedChip(MATCHED_COLOUR),

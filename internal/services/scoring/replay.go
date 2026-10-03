@@ -26,6 +26,7 @@ type replayRow struct {
 	Positive bool
 	Source   string
 	Score    int
+	Band     string
 	Rank     int
 }
 
@@ -76,12 +77,13 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
 	var labelled []replayRow
 	for i, in := range inputs {
-		score := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections).Score
+		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections)
+		score := scored.Score
 		report.Scores[i] = score
 		if l, ok := labels[in.Job.ID]; ok {
 			labelled = append(labelled, replayRow{
 				JobID: in.Job.ID, Title: in.Job.Title, Company: in.Job.CompanySlug,
-				Positive: l.positive, Source: l.source, Score: score,
+				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band,
 			})
 		}
 	}
@@ -131,9 +133,9 @@ func renderReplay(r replayReport) string {
 	if len(r.Labelled) == 0 {
 		return sb.String()
 	}
-	sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Rank |\n|---|---|---|---|---|---|\n")
+	sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Band | Rank |\n|---|---|---|---|---|---|---|\n")
 	for _, row := range r.Labelled {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Rank)
+		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
 	}
 	return sb.String()
 }

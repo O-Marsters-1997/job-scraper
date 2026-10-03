@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     suitability_score    INT,
+    band                 TEXT        CHECK (band IN ('great', 'good', 'fair', 'poor')),
     breakdown            JSONB       NOT NULL DEFAULT '[]',
     cost                 NUMERIC,
     score_fingerprint    TEXT,

@@ -49,15 +49,15 @@ WHERE option_answers.job_id = j.id
 DELETE FROM option_answers WHERE job_id = ANY(sqlc.arg(job_ids)::uuid[]);
 
 -- name: UpsertJobScore :exec
-INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, cost, score_fingerprint, score_model)
-VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(user_id)::uuid, sqlc.arg(score)::int, sqlc.arg(breakdown)::jsonb,
+INSERT INTO job_scores (job_id, user_id, suitability_score, band, breakdown, cost, score_fingerprint, score_model)
+VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(user_id)::uuid, sqlc.arg(score)::int, sqlc.arg(band)::text, sqlc.arg(breakdown)::jsonb,
     sqlc.narg(cost)::numeric, sqlc.arg(fingerprint)::text, sqlc.arg(model)::text)
 ON CONFLICT (job_id, user_id) DO UPDATE SET
-    suitability_score = EXCLUDED.suitability_score, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
+    suitability_score = EXCLUDED.suitability_score, band = EXCLUDED.band, breakdown = EXCLUDED.breakdown, cost = EXCLUDED.cost,
     score_fingerprint = EXCLUDED.score_fingerprint, score_model = EXCLUDED.score_model, updated_at = NOW();
 
 -- name: UpdateJobScoreBreakdown :exec
-UPDATE job_scores SET suitability_score = sqlc.arg(score)::int, breakdown = sqlc.arg(breakdown)::jsonb, updated_at = NOW()
+UPDATE job_scores SET suitability_score = sqlc.arg(score)::int, band = sqlc.arg(band)::text, breakdown = sqlc.arg(breakdown)::jsonb, updated_at = NOW()
 WHERE job_id = sqlc.arg(job_id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 
 -- name: ListScoringInputJobs :many
