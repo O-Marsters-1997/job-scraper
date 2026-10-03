@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
@@ -69,19 +70,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 		return replayReport{}, err
 	}
 
-	type label struct {
-		positive bool
-		source   string
-	}
-	labels := make(map[string]label, len(grades)+len(implied))
-	for _, g := range grades {
-		labels[g.JobID] = label{positive: g.Grade != replayGradeNegative, source: replaySourceGrade}
-	}
-	for _, l := range implied {
-		if _, ok := labels[l.JobID]; !ok {
-			labels[l.JobID] = label{positive: true, source: l.Source}
-		}
-	}
+	labels := replayLabels(grades, implied)
 
 	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
 	var labelled []replayRow
@@ -103,6 +92,24 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 	})
 	report.Labelled = labelled
 	return report, nil
+}
+
+type replayLabelInfo struct {
+	positive bool
+	source   string
+}
+
+func replayLabels(grades []dto.Grade, implied []dto.ImpliedLabel) map[string]replayLabelInfo {
+	labels := make(map[string]replayLabelInfo, len(grades)+len(implied))
+	for _, g := range grades {
+		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade}
+	}
+	for _, l := range implied {
+		if _, ok := labels[l.JobID]; !ok {
+			labels[l.JobID] = replayLabelInfo{positive: true, source: l.Source}
+		}
+	}
+	return labels
 }
 
 func countWhere[T any](xs []T, pred func(T) bool) int {
@@ -156,13 +163,9 @@ func writeReplaySummary(sb *strings.Builder, r replayReport) {
 	for i, p := range positives {
 		pcts[i] = p.rankPct(r.Total)
 	}
-	slices.Sort(pcts)
-	median := pcts[len(pcts)/2]
-	if len(pcts)%2 == 0 {
-		median = (pcts[len(pcts)/2-1] + pcts[len(pcts)/2]) / 2
-	}
+	medianPct := median(pcts)
 	inTop := countWhere(positives, func(p replayRow) bool { return p.Rank <= replayTopN })
-	fmt.Fprintf(sb, "- Positive rank: median rank percentile %.0f (lower is better), %d of %d in the top %d\n", median, inTop, len(positives), replayTopN)
+	fmt.Fprintf(sb, "- Positive rank: median rank percentile %.0f (lower is better), %d of %d in the top %d\n", medianPct, inTop, len(positives), replayTopN)
 
 	var low []string
 	for _, p := range positives {
@@ -177,21 +180,34 @@ func writeReplaySummary(sb *strings.Builder, r replayReport) {
 	}
 
 	if len(negatives) >= replayMinNegatives {
-		var wins float64
-		for _, p := range positives {
-			for _, n := range negatives {
-				switch {
-				case p.Score > n.Score:
-					wins++
-				case p.Score == n.Score:
-					wins += 0.5
-				}
-			}
-		}
-		fmt.Fprintf(sb, "- Concordance: %.0f%% of positive/negative pairs score the positive higher\n", 100*wins/float64(len(positives)*len(negatives)))
+		fmt.Fprintf(sb, "- Concordance: %.0f%% of positive/negative pairs score the positive higher\n", 100*concordance(positives, negatives))
 	}
 
 	top := slices.Max(r.Scores)
 	distinct := len(slices.Compact(slices.Sorted(slices.Values(r.Scores))))
 	fmt.Fprintf(sb, "- Distinct scores: %d, with %d jobs tied at the top score of %d\n", distinct, countWhere(r.Scores, func(s int) bool { return s == top }), top)
+}
+
+func median(xs []float64) float64 {
+	slices.Sort(xs)
+	mid := len(xs) / 2
+	if len(xs)%2 == 0 {
+		return (xs[mid-1] + xs[mid]) / 2
+	}
+	return xs[mid]
+}
+
+func concordance(positives, negatives []replayRow) float64 {
+	var wins float64
+	for _, p := range positives {
+		for _, n := range negatives {
+			switch {
+			case p.Score > n.Score:
+				wins++
+			case p.Score == n.Score:
+				wins += 0.5
+			}
+		}
+	}
+	return wins / float64(len(positives)*len(negatives))
 }
