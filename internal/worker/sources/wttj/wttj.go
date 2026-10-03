@@ -107,9 +107,10 @@ const DiscoverTimeout = 3 * time.Minute
 // Discovery is what a first look at a company yields: its real name, its Jobs, and
 // whether the company is in the UK.
 type Discovery struct {
-	Name string
-	Jobs []dto.Job
-	UK   bool
+	Name    string
+	Jobs    []dto.Job
+	UK      bool
+	Profile *dto.CompanyProfile
 }
 
 func (s *Source) Discover(ctx context.Context) (Discovery, error) {
@@ -117,7 +118,7 @@ func (s *Source) Discover(ctx context.Context) (Discovery, error) {
 	if err != nil {
 		return Discovery{}, err
 	}
-	return Discovery{Name: company.Name, Jobs: res.Jobs, UK: company.inUK()}, nil
+	return Discovery{Name: company.Name, Jobs: res.Jobs, UK: company.inUK(), Profile: company.Profile}, nil
 }
 
 func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error) {

@@ -242,7 +242,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		if oldFingerprint == job.ContentFingerprint {
 			status = "unchanged"
 			err = queries.UpdateUnchangedCanonicalJob(ctx, sqlc.UpdateUnchangedCanonicalJobParams{
-				CompanyID: companyID, BoardID: boardID, PostingID: postingID,
+				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID,
 				Fingerprint: fingerprint, ID: jobID,
 			})
 		} else {
@@ -251,7 +251,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 				Title: job.Title, Location: job.Location, UpdatedAt: updatedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
-				CompanyID: companyID, BoardID: boardID, PostingID: postingID, ID: jobID,
+				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
 			})
 		}
 		if err != nil {
