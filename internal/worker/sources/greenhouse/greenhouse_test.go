@@ -16,3 +16,7 @@ func TestPollBoard_Reported(t *testing.T) {
 		t.Errorf("PollBoard(%s).Reported = %d, want %d", "board_acme.json", got, want)
 	}
 }
+
+func TestFetchPage_GoldenPayTransparency(t *testing.T) {
+	sourcetest.RunGolden(t, "board_reddit.json", greenhouse.New("reddit"))
+}
