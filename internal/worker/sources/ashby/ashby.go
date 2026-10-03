@@ -12,7 +12,7 @@ import (
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "ashby",
-		URL:         fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", token),
+		URL:         fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s?includeCompensation=true", token),
 		CompanySlug: token,
 		Parse:       parse,
 		Count:       sources.JSONArrayLen("jobs"),
@@ -30,6 +30,16 @@ type jobPosting struct {
 	JobURL          string `json:"jobUrl"`
 	DescriptionHTML string `json:"descriptionHtml"`
 	PublishedAt     string `json:"publishedAt"`
+	WorkplaceType   string `json:"workplaceType"`
+	Compensation    struct {
+		TierSummary string `json:"compensationTierSummary"`
+	} `json:"compensation"`
+}
+
+var workArrangements = map[string]string{
+	"Remote": "remote",
+	"Hybrid": "hybrid",
+	"OnSite": "onsite",
 }
 
 func parse(body []byte) ([]dto.Job, error) {
@@ -46,6 +56,8 @@ func parse(body []byte) ([]dto.Job, error) {
 			URL:               jp.JobURL,
 			ProviderPostingID: jp.ID,
 			Description:       jp.DescriptionHTML,
+			SalaryRaw:         jp.Compensation.TierSummary,
+			WorkArrangement:   workArrangements[jp.WorkplaceType],
 			UpdatedAt:         sources.RFC3339OrNow(jp.PublishedAt),
 		})
 	}
