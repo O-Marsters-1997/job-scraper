@@ -13,6 +13,7 @@ import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs } from "../../hooks/useJobs";
+import { SeenToast } from "../../hooks/useSeenToast";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 
@@ -117,10 +118,13 @@ function JobsPage() {
 					selection={track.selection()}
 					onSelectionChange={track.setSelection}
 					onBulkGrade={track.openGrade}
+					onBulkSeen={track.bulkSeen}
+					onMarkAllSeen={track.markAllSeen}
 				/>
 			</Show>
 
 			<DismissToast />
+			<SeenToast />
 
 			<GradeDialog
 				open={track.gradeOpen()}

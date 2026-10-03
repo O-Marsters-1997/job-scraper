@@ -41,6 +41,8 @@ interface JobsDataTableProps<TData extends Job> {
 	selection?: RowSelectionState;
 	onSelectionChange?: (next: RowSelectionState) => void;
 	onBulkGrade?: (jobs: TData[]) => void;
+	onBulkSeen?: (jobs: TData[], seen: boolean) => void;
+	onMarkAllSeen?: (jobs: TData[]) => void;
 }
 
 export function JobsDataTable<TData extends Job>(
@@ -105,6 +107,7 @@ export function JobsDataTable<TData extends Job>(
 
 	const selectedJobs = () =>
 		props.data.filter((job) => selection()[job.ID] === true);
+	const unseenJobs = () => props.data.filter((job) => !job.Seen);
 	const filterCount = () => activeFilterCount(props.filters);
 
 	return (
@@ -143,6 +146,16 @@ export function JobsDataTable<TData extends Job>(
 							</Badge>
 						</Show>
 					</Button>
+					<Show when={props.onMarkAllSeen && unseenJobs().length > 0}>
+						<Button
+							variant="outline"
+							size="sm"
+							class="shrink-0"
+							onClick={() => props.onMarkAllSeen?.(unseenJobs())}
+						>
+							Mark {unseenJobs().length} as seen
+						</Button>
+					</Show>
 				</div>
 				<Show when={props.onBulkGrade && selectedJobs().length > 0}>
 					<div class="flex items-center gap-2">
@@ -159,6 +172,22 @@ export function JobsDataTable<TData extends Job>(
 							<Icon name="check" size={14} />
 							Grade
 						</Button>
+						<Show when={props.onBulkSeen}>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => props.onBulkSeen?.(selectedJobs(), true)}
+							>
+								Mark seen
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => props.onBulkSeen?.(selectedJobs(), false)}
+							>
+								Mark unseen
+							</Button>
+						</Show>
 					</div>
 				</Show>
 			</div>

@@ -173,6 +173,44 @@ test.describe("Jobs", () => {
 		await expect(titleLink).toBeHidden();
 	});
 
+	test("bulk seen toggle handles a selection in both directions", async ({
+		page,
+		jobsPage,
+	}) => {
+		const bold = page.locator("tbody a.font-bold");
+		const before = await bold.count();
+		await jobsPage.selectRows(2);
+		await page.getByRole("button", { name: "Mark seen" }).click();
+		await expect(bold).toHaveCount(before - 2);
+
+		await jobsPage.selectRows(2);
+		await page.getByRole("button", { name: "Mark unseen" }).click();
+		await expect(bold).toHaveCount(before);
+	});
+
+	test("Mark N as seen covers the filtered view and undo restores it", async ({
+		page,
+		jobsPage,
+	}) => {
+		await page.getByRole("button", { name: "Filters" }).click();
+		await page.getByRole("button", { name: "Unseen" }).click();
+		await page.getByRole("button", { name: "Done" }).click();
+		await jobsPage.search("engineer");
+		const button = page.getByRole("button", { name: /^Mark \d+ as seen$/ });
+		const n = Number(((await button.textContent()) ?? "").match(/\d+/)?.[0]);
+		expect(n).toBeGreaterThan(0);
+
+		await button.click();
+		await expect(button).toBeHidden();
+		await page
+			.getByRole("status")
+			.getByRole("button", { name: "Undo" })
+			.dispatchEvent("click");
+		await expect(
+			page.getByRole("button", { name: `Mark ${n} as seen` }),
+		).toBeVisible();
+	});
+
 	test("starring a company updates its rows, the Favourites filter keeps them, and the Companies page shows the star", async ({
 		page,
 		jobsPage,

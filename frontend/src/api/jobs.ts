@@ -36,16 +36,24 @@ export async function fetchJob(id: string): Promise<Job> {
 	);
 }
 
+const MAX_SEEN_JOB_IDS = 5000;
+
 export async function markJobsSeen(input: {
 	jobIds: string[];
 	seen: boolean;
 }): Promise<void> {
 	return mocked(
 		(db) => db.markJobsSeen(input.jobIds, input.seen),
-		() =>
-			apiFetchVoid(
-				"/jobs/seen",
-				jsonInit("POST", { JobIDs: input.jobIds, Seen: input.seen }),
-			),
+		async () => {
+			for (let i = 0; i < input.jobIds.length; i += MAX_SEEN_JOB_IDS) {
+				await apiFetchVoid(
+					"/jobs/seen",
+					jsonInit("POST", {
+						JobIDs: input.jobIds.slice(i, i + MAX_SEEN_JOB_IDS),
+						Seen: input.seen,
+					}),
+				);
+			}
+		},
 	);
 }
