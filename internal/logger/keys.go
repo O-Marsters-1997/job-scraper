@@ -6,6 +6,7 @@ const (
 	KeyRoute         = "route"
 	KeyMethod        = "method"
 	KeyStatus        = "status"
+	KeyReason        = "reason"
 	KeyDurationMS    = "duration_ms"
 	KeyWaitMS        = "wait_ms"
 	KeyRequestID     = "request_id"
