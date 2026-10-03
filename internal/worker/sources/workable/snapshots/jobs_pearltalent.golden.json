@@ -4,6 +4,7 @@
     "Title": "Pearl Talent- Finance Operations Associate - I021",
     "Location": "Cape Town",
     "URL": "https://apply.workable.com/pearltalent/j/2D4246C5C3/",
+    "ApplyURL": "",
     "CompanySlug": "pearltalent",
     "CompanyID": "",
     "BoardID": "",
@@ -14,15 +15,18 @@
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "",
     "SalaryRaw": "",
-    "WorkArrangement": "",
+    "WorkArrangement": "remote",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   },
   {
     "ID": "",
     "Title": "Remote Credentialing Specialist for Healthcare Company",
     "Location": "",
     "URL": "https://apply.workable.com/pearltalent/j/986DE1BC83/",
+    "ApplyURL": "",
     "CompanySlug": "pearltalent",
     "CompanyID": "",
     "BoardID": "",
@@ -33,8 +37,10 @@
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "",
     "SalaryRaw": "",
-    "WorkArrangement": "",
+    "WorkArrangement": "remote",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   }
 ]

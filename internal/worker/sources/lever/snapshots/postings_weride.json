@@ -1,0 +1,65 @@
+[
+  {
+    "categories": {
+      "commitment": "Full-time",
+      "location": "San Jose, CA",
+      "team": "Software Engineering",
+      "allLocations": [
+        "San Jose, CA"
+      ]
+    },
+    "createdAt": 1547696817397,
+    "descriptionPlain": "Established in 2017, WeRide (NASDAQ: WRD) is a leading global commercial-stage company that develops autonomous driving technologies from Level 2 to Level 4 and is the world's first publicly listed au",
+    "id": "82955de9-485d-4db0-8fd9-1c018489fc8d",
+    "salaryRange": {
+      "min": 90000,
+      "max": 120000,
+      "currency": "USD",
+      "interval": "per-year-salary"
+    },
+    "text": "Application Engineer",
+    "country": "US",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/weride/82955de9-485d-4db0-8fd9-1c018489fc8d"
+  },
+  {
+    "categories": {
+      "commitment": "Contract",
+      "location": "San Jose, CA",
+      "team": "People",
+      "allLocations": [
+        "San Jose, CA"
+      ]
+    },
+    "createdAt": 1650933809292,
+    "descriptionPlain": "Established in 2017, WeRide (NASDAQ: WRD) is a leading global commercial-stage company that develops autonomous driving technologies from Level 2 to Level 4 and is the world's first publicly listed au",
+    "id": "af4a2599-d08e-434f-aedc-f409d2071769",
+    "salaryRange": {
+      "min": 20,
+      "currency": "USD",
+      "interval": "per-hour-wage",
+      "max": 30
+    },
+    "text": "Talent Acquisition Specialist (Contractor)",
+    "country": "US",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/weride/af4a2599-d08e-434f-aedc-f409d2071769"
+  },
+  {
+    "categories": {
+      "commitment": "Full-time",
+      "location": "United Arab Emirates",
+      "team": "Product",
+      "allLocations": [
+        "United Arab Emirates"
+      ]
+    },
+    "createdAt": 1781639780700,
+    "descriptionPlain": "",
+    "id": "fecb0fd0-7f66-4010-af00-b6500e0ef680",
+    "text": "Data Annotation QA",
+    "country": "AE",
+    "workplaceType": "onsite",
+    "hostedUrl": "https://jobs.lever.co/weride/fecb0fd0-7f66-4010-af00-b6500e0ef680"
+  }
+]

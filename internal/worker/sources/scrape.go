@@ -36,6 +36,31 @@ func ParseSalaryRaw(text string) string {
 	return strings.TrimSpace(salaryRe.FindString(text))
 }
 
+// SalaryRange renders a structured pay range as raw text such as
+// "GBP 50000 - 70000 / year". It returns "" when both ends are zero, and omits
+// an empty currency or period.
+func SalaryRange(low, high int, currency, period string) string {
+	if low == 0 && high == 0 {
+		return ""
+	}
+	var amount string
+	switch {
+	case high == 0:
+		amount = fmt.Sprintf("%d+", low)
+	case low == 0:
+		amount = fmt.Sprintf("up to %d", high)
+	default:
+		amount = fmt.Sprintf("%d - %d", low, high)
+	}
+	if currency != "" {
+		amount = currency + " " + amount
+	}
+	if period != "" {
+		amount += " / " + period
+	}
+	return amount
+}
+
 // DetectWorkArrangement classifies free text as remote/hybrid/onsite, or "" when no
 // signal is present. Sources with an authoritative structured signal (e.g. a badge)
 // should check that first and use this only as a text fallback.
