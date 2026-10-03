@@ -548,6 +548,11 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest admitted: %w", err)
 	}
 	admittedByHarvester := countsBy(admitted, func(r sqlc.HarvestAdmittedRow) (string, int64) { return r.Harvester, r.Companies })
+	emptied, err := s.queries.EmptiedBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState emptied boards: %w", err)
+	}
+	emptiedBySource := countsBy(emptied, func(r sqlc.EmptiedBoardsRow) (string, int64) { return r.Source, r.Boards })
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -569,6 +574,7 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		DiscoveryBoards:        boardsByVia,
 		DiscoveryRelevantJobs:  relevantByVia,
 		HarvestAdmitted:        admittedByHarvester,
+		EmptiedBoards:          emptiedBySource,
 	}, nil
 }
 

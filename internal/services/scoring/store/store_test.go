@@ -687,6 +687,37 @@ func TestOpsState(t *testing.T) {
 	})
 }
 
+func TestOpsStateEmptiedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, emptyPolls int, completedAgo time.Duration) {
+		var companyID, boardID string
+		if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+			t.Fatalf("insert company: %v", err)
+		}
+		if err := pool.QueryRow(t.Context(),
+			`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at)
+			 VALUES ($1, $2, $3, $4, 'manual', NOW()) RETURNING id`,
+			companyID, source, slug, status).Scan(&boardID); err != nil {
+			t.Fatalf("insert board: %v", err)
+		}
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, consecutive_complete_empty, last_completed_at) VALUES ($1, $2, $3)`,
+			boardID, emptyPolls, time.Now().Add(-completedAgo))
+	}
+	day := 24 * time.Hour
+	seed("two-empty", "greenhouse", "verified", 2, day)
+	seed("many-empty", "greenhouse", "verified", 5, day)
+	seed("one-empty", "greenhouse", "verified", 1, day)
+	seed("not-observed", "greenhouse", "verified", 3, 8*day)
+	seed("retired", "greenhouse", "retired", 3, day)
+	seed("lever-empty", "lever", "verified", 2, day)
+
+	got := opsState(t, st).EmptiedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().EmptiedBoards mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestQueueMissingAnswers(t *testing.T) {
 	const model = "typesafe/jev-1.13"
 

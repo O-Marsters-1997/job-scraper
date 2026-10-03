@@ -488,6 +488,42 @@ rules:
                 type: gt
                 params: [0]
 
+  - uid: boards-emptied
+    title: Boards emptied
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $values.A }} verified {{ $labels.source }} Boards parsed empty on 2+ consecutive polls"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_boards_emptied{env="prod"}
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
   - uid: harvest-stale
     title: Harvest stale
     condition: C

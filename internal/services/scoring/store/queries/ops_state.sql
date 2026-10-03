@@ -51,3 +51,10 @@ FROM tracked_companies tc
 JOIN company_boards b ON b.company_id = tc.company_id
 WHERE tc.review_state IN ('new', 'kept') AND b.discovered_via IN (SELECT harvester FROM harvest_runs)
 GROUP BY b.discovered_via;
+
+-- name: EmptiedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.consecutive_complete_empty >= 2 AND ps.last_completed_at > NOW() - INTERVAL '7 days'
+GROUP BY b.source;

@@ -29,6 +29,8 @@ var (
 		"jobscraper_boards_overdue", "Verified, unleased Boards whose next_due_at has passed.", nil, nil)
 	boardsFailingDesc = prometheus.NewDesc(
 		"jobscraper_boards_failing", "Verified Boards with at least 3 consecutive failed polls.", nil, nil)
+	boardsEmptiedDesc = prometheus.NewDesc(
+		"jobscraper_boards_emptied", "Verified Boards with at least 2 consecutive complete-but-empty polls, observed in the last 7 days, per source.", []string{"source"}, nil)
 	sourceTargetsFailedDesc = prometheus.NewDesc(
 		"jobscraper_source_targets_failed", "Source Targets whose last run failed.", nil, nil)
 	sourceTargetsDisabledDesc = prometheus.NewDesc(
@@ -63,6 +65,7 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- outboxFailedDesc
 	ch <- boardsOverdueDesc
 	ch <- boardsFailingDesc
+	ch <- boardsEmptiedDesc
 	ch <- sourceTargetsFailedDesc
 	ch <- sourceTargetsDisabledDesc
 	ch <- harvestAgeSecondsDesc
@@ -106,5 +109,8 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for harvester, n := range state.HarvestAdmitted {
 		ch <- prometheus.MustNewConstMetric(harvestAdmittedDesc, prometheus.GaugeValue, float64(n), harvester)
+	}
+	for source, n := range state.EmptiedBoards {
+		ch <- prometheus.MustNewConstMetric(boardsEmptiedDesc, prometheus.GaugeValue, float64(n), source)
 	}
 }
