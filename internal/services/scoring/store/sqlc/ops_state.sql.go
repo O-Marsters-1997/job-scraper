@@ -106,6 +106,39 @@ func (q *Queries) DiscoveryRelevantJobs(ctx context.Context) ([]DiscoveryRelevan
 	return items, nil
 }
 
+const emptiedBoards = `-- name: EmptiedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.consecutive_complete_empty >= 2 AND ps.last_completed_at > NOW() - INTERVAL '7 days'
+GROUP BY b.source
+`
+
+type EmptiedBoardsRow struct {
+	Source string
+	Boards int64
+}
+
+func (q *Queries) EmptiedBoards(ctx context.Context) ([]EmptiedBoardsRow, error) {
+	rows, err := q.db.Query(ctx, emptiedBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EmptiedBoardsRow
+	for rows.Next() {
+		var i EmptiedBoardsRow
+		if err := rows.Scan(&i.Source, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const harvestAdmitted = `-- name: HarvestAdmitted :many
 SELECT b.discovered_via::text AS harvester, count(DISTINCT tc.company_id) AS companies
 FROM tracked_companies tc

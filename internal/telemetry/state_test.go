@@ -42,9 +42,13 @@ func TestStateCollector(t *testing.T) {
 				DiscoveryBoards:        map[string]int64{"linkedin": 4},
 				DiscoveryRelevantJobs:  map[string]int64{"linkedin": 9},
 				HarvestAdmitted:        map[string]int64{"ashby": 3},
+				EmptiedBoards:          map[string]int64{"greenhouse": 2},
 				HarvestAge:             map[string]time.Duration{"ashby": time.Hour, "lever": 30 * time.Second},
 			}},
 			want: `
+				# HELP jobscraper_boards_emptied Verified Boards with at least 2 consecutive complete-but-empty polls, observed in the last 7 days, per source.
+				# TYPE jobscraper_boards_emptied gauge
+				jobscraper_boards_emptied{source="greenhouse"} 2
 				# HELP jobscraper_boards_failing Verified Boards with at least 3 consecutive failed polls.
 				# TYPE jobscraper_boards_failing gauge
 				jobscraper_boards_failing 2
