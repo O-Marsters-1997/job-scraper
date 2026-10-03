@@ -16,4 +16,5 @@ type OpsState struct {
 	DiscoveryRelevantJobs  map[string]int64
 	HarvestAdmitted        map[string]int64
 	EmptiedBoards          map[string]int64
+	FieldCompleteness      map[string]map[string]float64
 }

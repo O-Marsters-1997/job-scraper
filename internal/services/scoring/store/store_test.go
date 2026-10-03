@@ -987,3 +987,33 @@ func TestListJobScoresForCollection(t *testing.T) {
 		t.Errorf("ListJobScoresForCollection() (-want +got):\n%s", diff)
 	}
 }
+
+func TestOpsStateFieldCompleteness(t *testing.T) {
+	st, pool := newStore(t)
+	insert := func(n int, source, location, salary string, scrapedAgo time.Duration, closed bool) {
+		var closedAt *time.Time
+		if closed {
+			now := time.Now()
+			closedAt = &now
+		}
+		exec(t, pool,
+			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, closed_at)
+			 VALUES ('Engineer', $1, $2, 'acme', $3, NOW(), $4, 'desc', $5, $6)`,
+			location, fmt.Sprintf("https://example.com/%s/%d", source, n), source, time.Now().Add(-scrapedAgo), salary, closedAt)
+	}
+	insert(1, "sparse", "London", "", time.Hour, false)
+	insert(2, "sparse", "", "", time.Hour, false)
+	insert(3, "sparse", "", "", time.Hour, false)
+	insert(4, "sparse", "", "", time.Hour, false)
+	insert(5, "sparse", "London", "£50k", 48*time.Hour, false)
+	insert(6, "sparse", "London", "£50k", time.Hour, true)
+	insert(1, "full", "London", "£50k", time.Hour, false)
+
+	want := map[string]map[string]float64{
+		"sparse": {"title": 1, "location": 0.25, "description": 1, "salary_raw": 0, "work_arrangement": 0},
+		"full":   {"title": 1, "location": 1, "description": 1, "salary_raw": 1, "work_arrangement": 0},
+	}
+	if diff := cmp.Diff(want, opsState(t, st).FieldCompleteness); diff != "" {
+		t.Errorf("OpsState().FieldCompleteness mismatch (-want +got):\n%s", diff)
+	}
+}
