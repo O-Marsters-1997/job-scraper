@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
@@ -13,7 +13,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job } from "@/types/job";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
-import { jobQueryOptions, useJob } from "../../hooks/useJobs";
+import {
+	jobQueryOptions,
+	useJob,
+	useMarkJobsSeen,
+} from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
@@ -39,6 +43,14 @@ function JobDetailPage() {
 		await dismiss(job);
 		navigate({ to: "/jobs" });
 	};
+	const markSeen = useMarkJobsSeen();
+	let markedId: string | undefined;
+	createEffect(() => {
+		const job = jobsQuery.data;
+		if (!job || job.Seen || markedId === job.ID) return;
+		markedId = job.ID;
+		markSeen.mutate({ jobIds: [job.ID], seen: true });
+	});
 	const track = useTrackJobs(() => (jobsQuery.data ? [jobsQuery.data] : []));
 
 	const app = () =>

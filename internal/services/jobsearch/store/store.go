@@ -142,6 +142,28 @@ func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, erro
 	return job, nil
 }
 
+func (s *Store) MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	ids := make([]pgtype.UUID, len(jobIDs))
+	for i, id := range jobIDs {
+		if ids[i], err = data.UUID(id); err != nil {
+			return ErrInvalidID
+		}
+	}
+	if seen {
+		err = s.queries.MarkJobsSeen(ctx, sqlc.MarkJobsSeenParams{UserID: uid, JobIds: ids})
+	} else {
+		err = s.queries.MarkJobsUnseen(ctx, sqlc.MarkJobsUnseenParams{UserID: uid, JobIds: ids})
+	}
+	if err != nil {
+		return fmt.Errorf("store.MarkJobsSeen: %w", err)
+	}
+	return nil
+}
+
 func normalizeJobURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {

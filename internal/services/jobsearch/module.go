@@ -37,6 +37,7 @@ type Store interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
 	ListJobs(ctx context.Context, userID string) ([]dto.Job, error)
+	MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
 	SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error)
 	PageCompaniesForUser(ctx context.Context, userID string, options dto.CompanyPageOptions) (dto.CompanyPage, error)

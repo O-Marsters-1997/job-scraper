@@ -33,6 +33,7 @@ type FakeStore struct {
 	seq int
 
 	jobs     map[string]dto.Job
+	seen     map[string]map[string]bool
 	jobOrder []string
 	byURL    map[string]string
 	byBoard  map[string]string
@@ -59,6 +60,7 @@ type FakeStore struct {
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		jobs:           make(map[string]dto.Job),
+		seen:           make(map[string]map[string]bool),
 		byURL:          make(map[string]string),
 		byBoard:        make(map[string]string),
 		companies:      make(map[string]dto.Company),
@@ -160,7 +162,12 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	return job, status, nil
 }
 
-func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions) (dto.JobPage, error) {
+func (f *FakeStore) withSeen(userID string, job dto.Job) dto.Job {
+	job.Seen = f.seen[userID][job.ID]
+	return job
+}
+
+func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	items := make([]dto.Job, 0, len(f.jobOrder))
@@ -176,7 +183,7 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
 			continue
 		}
-		items = append(items, job)
+		items = append(items, f.withSeen(userID, job))
 	}
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
@@ -184,18 +191,41 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 	return dto.JobPage{Items: items}, nil
 }
 
-func (f *FakeStore) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) {
+func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return lookup(f.jobs, jobID)
+	job, err := lookup(f.jobs, jobID)
+	if err != nil {
+		return dto.Job{}, err
+	}
+	return f.withSeen(userID, job), nil
 }
 
-func (f *FakeStore) ListJobs(_ context.Context, _ string) ([]dto.Job, error) {
+func (f *FakeStore) MarkJobsSeen(_ context.Context, userID string, jobIDs []string, seen bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.seen[userID] == nil {
+		f.seen[userID] = make(map[string]bool)
+	}
+	for _, id := range jobIDs {
+		if _, ok := f.jobs[id]; !ok {
+			continue
+		}
+		if seen {
+			f.seen[userID][id] = true
+		} else {
+			delete(f.seen[userID], id)
+		}
+	}
+	return nil
+}
+
+func (f *FakeStore) ListJobs(_ context.Context, userID string) ([]dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]dto.Job, 0, len(f.jobOrder))
 	for _, id := range f.jobOrder {
-		out = append(out, f.jobs[id])
+		out = append(out, f.withSeen(userID, f.jobs[id]))
 	}
 	return out, nil
 }

@@ -7,6 +7,7 @@ export * from "./jobs";
 export * from "./push";
 export * from "./scoreFeedback";
 export * from "./scoring";
+export * from "./seen";
 export * from "./settings";
 export * from "./sources";
 export * from "./tailoring";

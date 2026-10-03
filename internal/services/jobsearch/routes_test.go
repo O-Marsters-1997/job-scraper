@@ -1,6 +1,7 @@
 package jobsearch_test
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ func TestRoutesRequireAuth(t *testing.T) {
 	r := chi.NewRouter()
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	handlerstest.RequiresAuth(t, r,
-		"GET /jobs", "GET /jobs/all", "GET /jobs/{id}",
+		"GET /jobs", "POST /jobs/seen", "GET /jobs/all", "GET /jobs/{id}",
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
@@ -123,4 +124,37 @@ func TestListCompaniesHandlerReadsQueryParams(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0].Name != "Alpha" || page.NextCursor == "" {
 		t.Errorf("GET /companies?limit=1&q=a = %+v, want Alpha and a next cursor", page)
 	}
+}
+
+func TestMarkSeenHandler(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	saved, _, err := st.SaveCanonical(t.Context(), dto.Job{Title: "Engineer", URL: "https://example.com/jobs/seen"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(st)).Routes(r)
+	seen := func() bool {
+		return handlerstest.Do[dto.Job](t, r, http.StatusOK, "GET /jobs/"+saved.ID, "").Seen
+	}
+
+	handlerstest.RejectsMalformedBody(t, r, "POST /jobs/seen")
+
+	t.Run("seen true then false toggles Job.Seen", func(t *testing.T) {
+		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /jobs/seen", fmt.Sprintf(`{"JobIDs":[%q],"Seen":true}`, saved.ID))
+		if !seen() {
+			t.Error("Job.Seen after Seen:true = false, want true")
+		}
+		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /jobs/seen", fmt.Sprintf(`{"JobIDs":[%q],"Seen":false}`, saved.ID))
+		if seen() {
+			t.Error("Job.Seen after Seen:false = true, want false")
+		}
+	})
+
+	t.Run("more than 5000 IDs is invalid", func(t *testing.T) {
+		ids := strings.TrimSuffix(strings.Repeat(`"`+saved.ID+`",`, 5001), ",")
+		if w := handlerstest.Serve(t, r, "POST /jobs/seen", `{"JobIDs":[`+ids+`],"Seen":true}`); w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
 }

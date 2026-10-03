@@ -159,6 +159,14 @@ func jobGrades(jobs []dto.Job) map[string]string {
 	return grades
 }
 
+func jobSeen(jobs []dto.Job) map[string]bool {
+	seen := make(map[string]bool, len(jobs))
+	for _, job := range jobs {
+		seen[job.ID] = job.Seen
+	}
+	return seen
+}
+
 func TestPage(t *testing.T) {
 	t.Run("keeps position when a newer job is inserted", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
@@ -341,6 +349,51 @@ func TestPage(t *testing.T) {
 		}
 		if diff := cmp.Diff(want, jobGrades(all)); diff != "" {
 			t.Errorf("ListJobs() grades (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("seen is per user and reported by Page, ListJobs and GetJob", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		viewed := insertJob(t, pool, company, 1, time.Now(), false)
+		unviewed := insertJob(t, pool, company, 2, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{viewed, unviewed} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		if err := st.MarkJobsSeen(ctx, other, []string{viewed, unviewed}, true); err != nil {
+			t.Fatalf("MarkJobsSeen(other) err = %v", err)
+		}
+		if err := st.MarkJobsSeen(ctx, userID, []string{viewed}, true); err != nil {
+			t.Fatalf("MarkJobsSeen(user) err = %v", err)
+		}
+
+		want := map[string]bool{viewed: true, unviewed: false}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobSeen(page.Items)); diff != "" {
+			t.Errorf("Page() seen (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobSeen(all)); diff != "" {
+			t.Errorf("ListJobs() seen (-want +got):\n%s", diff)
+		}
+		got, err := st.GetJob(ctx, unviewed, userID)
+		if err != nil || got.Seen {
+			t.Errorf("GetJob(unviewed) = %+v, %v, want unseen", got, err)
+		}
+
+		if err := st.MarkJobsSeen(ctx, userID, []string{viewed}, false); err != nil {
+			t.Fatalf("MarkJobsSeen(false) err = %v", err)
+		}
+		if got, _ := st.GetJob(ctx, viewed, other); !got.Seen {
+			t.Error("unmarking one user's view removed another user's, want kept")
 		}
 	})
 
