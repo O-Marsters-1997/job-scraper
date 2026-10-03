@@ -86,7 +86,7 @@ INSERT INTO jobs (title, location, url, company_slug, source, updated_at, descri
     content_fingerprint, content_changed_at)
 VALUES ($1, $2, $3, $4,
     $5, $6, $7, $8,
-    $9, $10::uuid,
+    $9, COALESCE($10::uuid, (SELECT id FROM companies WHERE slug = $4)),
     $11::uuid, $12,
     $13, NOW())
 RETURNING id
@@ -164,11 +164,11 @@ UPDATE jobs SET title = $1, location = $2,
     updated_at = $3, description = $4,
     salary_raw = $5, work_arrangement = $6,
     content_fingerprint = $7, content_changed_at = NOW(),
-    company_id = COALESCE($8::uuid, company_id),
-    primary_board_id = COALESCE($9::uuid, primary_board_id),
-    provider_posting_id = COALESCE($10, provider_posting_id),
+    company_id = COALESCE($8::uuid, (SELECT id FROM companies WHERE slug = $9), company_id),
+    primary_board_id = COALESCE($10::uuid, primary_board_id),
+    provider_posting_id = COALESCE($11, provider_posting_id),
     scraped_at = NOW()
-WHERE id = $11::uuid
+WHERE id = $12::uuid
 `
 
 type UpdateChangedCanonicalJobParams struct {
@@ -180,6 +180,7 @@ type UpdateChangedCanonicalJobParams struct {
 	WorkArrangement string
 	Fingerprint     pgtype.Text
 	CompanyID       pgtype.UUID
+	CompanySlug     string
 	BoardID         pgtype.UUID
 	PostingID       pgtype.Text
 	ID              pgtype.UUID
@@ -195,6 +196,7 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 		arg.WorkArrangement,
 		arg.Fingerprint,
 		arg.CompanyID,
+		arg.CompanySlug,
 		arg.BoardID,
 		arg.PostingID,
 		arg.ID,
@@ -203,15 +205,16 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 }
 
 const updateUnchangedCanonicalJob = `-- name: UpdateUnchangedCanonicalJob :exec
-UPDATE jobs SET company_id = COALESCE($1::uuid, company_id),
-    primary_board_id = COALESCE($2::uuid, primary_board_id),
-    provider_posting_id = COALESCE($3, provider_posting_id),
-    content_fingerprint = COALESCE(content_fingerprint, $4)
-WHERE id = $5::uuid
+UPDATE jobs SET company_id = COALESCE($1::uuid, (SELECT id FROM companies WHERE slug = $2), company_id),
+    primary_board_id = COALESCE($3::uuid, primary_board_id),
+    provider_posting_id = COALESCE($4, provider_posting_id),
+    content_fingerprint = COALESCE(content_fingerprint, $5)
+WHERE id = $6::uuid
 `
 
 type UpdateUnchangedCanonicalJobParams struct {
 	CompanyID   pgtype.UUID
+	CompanySlug string
 	BoardID     pgtype.UUID
 	PostingID   pgtype.Text
 	Fingerprint pgtype.Text
@@ -221,6 +224,7 @@ type UpdateUnchangedCanonicalJobParams struct {
 func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnchangedCanonicalJobParams) error {
 	_, err := q.db.Exec(ctx, updateUnchangedCanonicalJob,
 		arg.CompanyID,
+		arg.CompanySlug,
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,

@@ -198,6 +198,11 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return err
 	}
+	if found.Profile != nil {
+		if err := p.js.SaveCompanyProfile(ctx, companyID, task.Source, *found.Profile); err != nil {
+			return err
+		}
+	}
 	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
 }
 

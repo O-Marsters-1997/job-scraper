@@ -1216,3 +1216,41 @@ func TestDeleteExpiredFetches(t *testing.T) {
 		t.Error("LookupFetch(fresh) miss, want hit")
 	}
 }
+
+func TestSaveCanonicalLinksCompanyBySlug(t *testing.T) {
+	st, pool := newStore(t)
+	companyID := insertCompany(t, pool, "acme")
+	linked := func(job dto.Job) string {
+		t.Helper()
+		saved, _ := saveJob(t, st, job)
+		var got *string
+		if err := pool.QueryRow(t.Context(), "SELECT company_id::text FROM jobs WHERE id = $1", saved.ID).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got == nil {
+			return ""
+		}
+		return *got
+	}
+
+	t.Run("a new job with only a slug is linked", func(t *testing.T) {
+		if got := linked(dto.Job{Title: "Engineer", URL: "https://example.com/a", CompanySlug: "acme"}); got != companyID {
+			t.Errorf("company_id = %q, want %q", got, companyID)
+		}
+	})
+	t.Run("a resaved job gains its link", func(t *testing.T) {
+		job := dto.Job{Title: "Engineer", URL: "https://example.com/b"}
+		if got := linked(job); got != "" {
+			t.Fatalf("company_id = %q, want none", got)
+		}
+		job.CompanySlug = "acme"
+		if got := linked(job); got != companyID {
+			t.Errorf("company_id = %q, want %q", got, companyID)
+		}
+	})
+	t.Run("an unknown slug stays unlinked", func(t *testing.T) {
+		if got := linked(dto.Job{Title: "Engineer", URL: "https://example.com/c", CompanySlug: "nobody"}); got != "" {
+			t.Errorf("company_id = %q, want none", got)
+		}
+	})
+}
