@@ -18,3 +18,15 @@ SELECT harvester, last_succeeded_at FROM harvest_runs;
 
 -- name: DisabledSourceTargets :many
 SELECT source, count(*) AS disabled FROM source_targets WHERE disabled_reason <> '' GROUP BY source;
+
+-- name: UniqueRelevantJobs :many
+SELECT source::text AS source, count(*) AS jobs
+FROM (
+    SELECT min(u.source) AS source
+      FROM job_urls u
+     WHERE EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = u.job_id)
+     GROUP BY u.job_id
+    HAVING count(DISTINCT u.source) = 1
+       AND min(u.first_seen_at) > NOW() - INTERVAL '14 days'
+) unique_jobs
+GROUP BY source;

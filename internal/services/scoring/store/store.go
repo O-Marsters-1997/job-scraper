@@ -522,6 +522,14 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 	for _, d := range disabled {
 		disabledBySource[d.Source] = d.Disabled
 	}
+	unique, err := s.queries.UniqueRelevantJobs(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState unique relevant jobs: %w", err)
+	}
+	uniqueBySource := make(map[string]int64, len(unique))
+	for _, u := range unique {
+		uniqueBySource[u.Source] = u.Jobs
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -539,6 +547,7 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		SourceTargetsFailed:    row.SourceTargetsFailed,
 		DisabledSourceTargets:  disabledBySource,
 		HarvestAge:             harvestAge,
+		UniqueRelevantJobs:     uniqueBySource,
 	}, nil
 }
 
