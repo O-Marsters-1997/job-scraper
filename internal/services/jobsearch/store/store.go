@@ -605,15 +605,16 @@ func (s *Store) ListCompanyBoards(ctx context.Context, companyID string) ([]dto.
 	if err != nil {
 		return nil, fmt.Errorf("store.ListCompanyBoards checks: %w", err)
 	}
-	completed := make(map[string]pgtype.Timestamptz, len(checks))
+	checkByID := make(map[string]sqlc.ListBoardChecksRow, len(checks))
 	for _, check := range checks {
-		completed[check.ID.String()] = check.LastCompletedAt
+		checkByID[check.ID.String()] = check
 	}
 	for i, row := range rows {
 		boards[i] = toCompanyBoardDTO(row)
-		if last := completed[boards[i].ID]; last.Valid {
-			boards[i].LastCompletedAt = &last.Time
-		}
+		check := checkByID[boards[i].ID]
+		boards[i].LastCompletedAt = data.TimePtr(check.LastCompletedAt)
+		boards[i].LastReportedTotal = int(check.LastReportedTotal)
+		boards[i].LastParsed = int(check.LastParsed)
 	}
 	return boards, nil
 }
@@ -1257,7 +1258,7 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 			return fmt.Errorf("retire board: %w", err)
 		}
 	}
-	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
+	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, Reported: int32(snapshot.Reported), Parsed: int32(len(snapshot.Jobs)), BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
 		return fmt.Errorf("complete board state: %w", err)
 	}

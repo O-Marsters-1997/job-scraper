@@ -23,6 +23,8 @@ type boardPollState struct {
 	leaseOwner   string
 	leaseExpires time.Time
 	version      int64
+	reported     int
+	parsed       int
 }
 
 type FakeStore struct {
@@ -500,6 +502,9 @@ func (f *FakeStore) ListCompanyBoards(_ context.Context, companyID string) ([]dt
 	out := make([]dto.CompanyBoard, 0)
 	for _, b := range f.boards {
 		if b.CompanyID == companyID {
+			if st := f.pollState[b.ID]; st != nil {
+				b.LastReportedTotal, b.LastParsed = st.reported, st.parsed
+			}
 			out = append(out, b)
 		}
 	}
@@ -655,6 +660,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 		return store.ErrBoardClaimUnavailable
 	}
 	st.leaseOwner = ""
+	st.reported, st.parsed = snapshot.Reported, len(snapshot.Jobs)
 	return nil
 }
 
