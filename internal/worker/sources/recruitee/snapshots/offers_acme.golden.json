@@ -4,6 +4,7 @@
     "Title": "Go Engineer",
     "Location": "London, UK",
     "URL": "https://acme.recruitee.com/o/go-engineer",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -16,13 +17,16 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   },
   {
     "ID": "",
     "Title": "ML Engineer",
     "Location": "Remote",
     "URL": "https://acme.recruitee.com/o/ml-engineer",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -35,6 +39,8 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   }
 ]
