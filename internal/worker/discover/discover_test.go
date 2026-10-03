@@ -220,3 +220,34 @@ func TestRunner_CompanyWithVerifiedOtherBoardGetsNoCandidate(t *testing.T) {
 		t.Errorf("published = %+v, want none", pub.tasks)
 	}
 }
+
+func TestRunner_VerifiedHarvestedBoardIsSkippedUnlessRecheck(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		recheck bool
+		want    int
+	}{
+		{"verified board is dropped", false, 0},
+		{"recheck republishes it", true, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := jobsearchtest.NewFakeStore()
+			company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "ashby", "acme")
+			_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "ashby", "acme", "ashby-origin")
+			h := &fakeHarvester{name: "x", interval: time.Hour, found: discover.Harvest{
+				Boards:  []discover.Board{{Source: "ashby", Token: "acme"}},
+				Recheck: tt.recheck,
+			}}
+
+			pub, err := runOnceWith(t, catalog, newFakeGate(), h)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(pub.tasks) != tt.want {
+				t.Errorf("published = %+v, want %d", pub.tasks, tt.want)
+			}
+		})
+	}
+}
