@@ -2,6 +2,7 @@ import type {
 	AddCompanyPayload,
 	Company,
 	CompanyBoard,
+	CompanyExclusion,
 	CompanyPage,
 	CompanyTracking,
 	NewCompany,
@@ -10,6 +11,7 @@ import type {
 } from "../types/company";
 import {
 	companyBoardSchema,
+	companyExclusionSchema,
 	companyPageSchema,
 	companySchema,
 	companyTrackingSchema,
@@ -132,6 +134,33 @@ export async function setCompanyReview(
 				`/companies/${id}/review`,
 				companyTrackingSchema,
 				jsonInit("PUT", { state }),
+			),
+	);
+}
+
+export async function excludeCompany(id: string): Promise<CompanyExclusion> {
+	return mocked(
+		(db) => db.excludeCompany(id),
+		() =>
+			apiFetch(
+				`/companies/${id}/exclusion`,
+				companyExclusionSchema,
+				jsonInit("PUT", {}),
+			),
+	);
+}
+
+export async function unexcludeCompany(
+	id: string,
+	removeName: boolean,
+): Promise<CompanyExclusion> {
+	return mocked(
+		(db) => db.unexcludeCompany(id, removeName),
+		() =>
+			apiFetch(
+				`/companies/${id}/exclusion/undo`,
+				companyExclusionSchema,
+				jsonInit("POST", { removeName }),
 			),
 	);
 }

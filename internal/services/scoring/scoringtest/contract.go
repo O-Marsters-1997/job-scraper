@@ -71,6 +71,69 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("excluding a company adds it once and keeps other entries", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user := f.NewUser()
+		if _, err := f.Store.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: user, NotifyThreshold: 70, ExcludedCompanies: []string{"globex"}}); err != nil {
+			t.Fatalf("UpsertSearchConfig() = %v", err)
+		}
+
+		first, err := f.Store.AddExcludedCompany(ctx, user, "acme")
+		if err != nil || !first {
+			t.Fatalf("AddExcludedCompany(acme) = %v, %v, want true, nil", first, err)
+		}
+		again, err := f.Store.AddExcludedCompany(ctx, user, "acme")
+		if err != nil || again {
+			t.Fatalf("AddExcludedCompany(acme) again = %v, %v, want false, nil", again, err)
+		}
+
+		cfg, err := f.Store.GetSearchConfig(ctx, user)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{"globex", "acme"}, cfg.ExcludedCompanies); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("excluding a company for a user with no config creates one", func(t *testing.T) {
+		f := newFixture(t)
+		user := f.NewUser()
+		added, err := f.Store.AddExcludedCompany(t.Context(), user, "acme")
+		if err != nil || !added {
+			t.Fatalf("AddExcludedCompany(acme) = %v, %v, want true, nil", added, err)
+		}
+		cfg, err := f.Store.GetSearchConfig(t.Context(), user)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{"acme"}, cfg.ExcludedCompanies); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("removing an excluded company leaves the others", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user := f.NewUser()
+		for _, name := range []string{"globex", "acme"} {
+			if _, err := f.Store.AddExcludedCompany(ctx, user, name); err != nil {
+				t.Fatalf("AddExcludedCompany(%s) err = %v", name, err)
+			}
+		}
+		if err := f.Store.RemoveExcludedCompany(ctx, user, "acme"); err != nil {
+			t.Fatalf("RemoveExcludedCompany(acme) err = %v", err)
+		}
+		cfg, err := f.Store.GetSearchConfig(ctx, user)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{"globex"}, cfg.ExcludedCompanies); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reword an unknown option returns not found", func(t *testing.T) {
 		st := newStore(t)
 		err := st.RewordScoringOption(t.Context(), missingID, "question")

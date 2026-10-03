@@ -44,6 +44,8 @@ type Store interface {
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
 	ListIncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
+	AddExcludedCompany(ctx context.Context, userID, name string) (bool, error)
+	RemoveExcludedCompany(ctx context.Context, userID, name string) error
 	ListScoringInputs(ctx context.Context, userID, model string) ([]store.ScoringInput, error)
 	ListCompanyScoringInputs(ctx context.Context, tx pgx.Tx, userID, companyID, model string) ([]store.ScoringInput, error)
 	IsJobCompanyFavourite(ctx context.Context, userID, jobID string) (bool, error)

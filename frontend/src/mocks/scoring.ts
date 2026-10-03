@@ -5,6 +5,7 @@ import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../types/scoringOptions";
+import { slugify } from "./helpers";
 
 let scoringConfig: ScoringConfig = {
 	notifyThreshold: 70,
@@ -98,6 +99,32 @@ const scoringOptions: ScoringOption[] = [
 
 export function getScoringConfig(): ScoringConfig {
 	return structuredClone(scoringConfig);
+}
+
+export function excludeCompanyName(name: string): boolean {
+	const entry = name.trim().toLowerCase();
+	if (scoringConfig.excludedCompanies.includes(entry)) return false;
+	scoringConfig = {
+		...scoringConfig,
+		excludedCompanies: [...scoringConfig.excludedCompanies, entry],
+	};
+	return true;
+}
+
+export function unexcludeCompanyName(name: string): void {
+	const entry = name.trim().toLowerCase();
+	scoringConfig = {
+		...scoringConfig,
+		excludedCompanies: scoringConfig.excludedCompanies.filter(
+			(c) => c !== entry,
+		),
+	};
+}
+
+export function isCompanyExcluded(companySlug: string): boolean {
+	return scoringConfig.excludedCompanies.some(
+		(c) => slugify(c) === companySlug,
+	);
 }
 
 export function getScoringOptions(): ScoringOptionsView {

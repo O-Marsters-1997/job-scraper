@@ -1,13 +1,14 @@
 -- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
-JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
-LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1
-LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = sqlc.arg(user_id)::uuid
 WHERE j.closed_at IS NULL
   AND j.updated_at > now() - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
   AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
-  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1 AND g.grade = 'no')
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = sqlc.arg(user_id)::uuid AND g.grade = 'no')
 ORDER BY js.suitability_score DESC, j.scraped_at DESC;
 
 -- name: PageJobs :many
@@ -21,6 +22,7 @@ WHERE (sqlc.narg(cursor_time)::timestamptz IS NULL OR (j.scraped_at, j.id) < (sq
   AND (sqlc.arg(availability)::text = 'all' OR (sqlc.arg(availability)::text = 'open' AND j.closed_at IS NULL) OR (sqlc.arg(availability)::text = 'closed' AND j.closed_at IS NOT NULL))
   AND (NOT sqlc.arg(scored_only)::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = sqlc.arg(user_id)::uuid))
   AND (sqlc.arg(since_days)::int = 0 OR j.updated_at >= now() - make_interval(days => sqlc.arg(since_days)::int))
+  AND COALESCE(j.company_slug, '') <> ALL(sqlc.arg(excluded_company_slugs)::text[])
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
   AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = sqlc.arg(user_id)::uuid AND g.grade = 'no')
 ORDER BY j.scraped_at DESC, j.id DESC

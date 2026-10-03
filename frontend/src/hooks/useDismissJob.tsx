@@ -2,6 +2,7 @@ import { createSignal, Show } from "solid-js";
 import { GradeChips } from "@/components/jobs/GradeChips";
 import { undoPlan } from "@/lib/gradeBatch";
 import type { Grade, GradeReason } from "@/types/grade";
+import { useExcludeCompany, useUnexcludeCompany } from "./useCompanies";
 import { useClearGrade, useSetGrade } from "./useGrades";
 import { useMarkSeenAfterGrade } from "./useJobs";
 
@@ -18,6 +19,13 @@ interface BulkGrading {
 	priors: Record<string, Grade | null>;
 }
 
+interface Exclusion {
+	companyId: string;
+	name: string;
+	added: boolean;
+}
+
+const [exclusion, setExclusion] = createSignal<Exclusion | null>(null);
 const [dismissal, setDismissal] = createSignal<Dismissal | null>(null);
 const [bulkGrading, setBulkGrading] = createSignal<BulkGrading | null>(null);
 let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -25,6 +33,7 @@ let hideTimer: ReturnType<typeof setTimeout> | undefined;
 function showFor(next: Dismissal | null) {
 	clearTimeout(hideTimer);
 	setBulkGrading(null);
+	setExclusion(null);
 	setDismissal(next);
 	if (next) hideTimer = setTimeout(() => setDismissal(null), TOAST_MS);
 }
@@ -32,6 +41,7 @@ function showFor(next: Dismissal | null) {
 export function announceBulkGrading(next: BulkGrading) {
 	clearTimeout(hideTimer);
 	setDismissal(null);
+	setExclusion(null);
 	setBulkGrading(next);
 	hideTimer = setTimeout(() => setBulkGrading(null), TOAST_MS);
 }
@@ -56,6 +66,52 @@ export function useDismissJob() {
 			if (current) showFor({ ...current, reasons });
 		},
 	};
+}
+
+function showExclusion(next: Exclusion | null) {
+	clearTimeout(hideTimer);
+	setDismissal(null);
+	setBulkGrading(null);
+	setExclusion(next);
+	if (next) hideTimer = setTimeout(() => setExclusion(null), TOAST_MS);
+}
+
+export function useExcludeJobCompany() {
+	const exclude = useExcludeCompany();
+	return {
+		exclude: async (job: { CompanyID?: string | undefined }) => {
+			if (!job.CompanyID) return;
+			const result = await exclude.mutateAsync(job.CompanyID);
+			showExclusion({ companyId: job.CompanyID, ...result });
+		},
+	};
+}
+
+function ExcludeCompanyToast() {
+	const unexclude = useUnexcludeCompany();
+	const undo = async (e: Exclusion) => {
+		try {
+			await unexclude.mutateAsync({ id: e.companyId, removeName: e.added });
+		} finally {
+			setExclusion(null);
+		}
+	};
+	return (
+		<Show when={exclusion()}>
+			{(e) => (
+				<output class="fixed inset-x-4 bottom-20 z-50 flex items-center gap-3 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">
+					<span class="truncate">Excluded “{e().name}”.</span>
+					<button
+						type="button"
+						onClick={() => undo(e())}
+						class="ml-auto shrink-0 rounded text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						Undo
+					</button>
+				</output>
+			)}
+		</Show>
+	);
 }
 
 function BulkGradeToast() {
@@ -95,6 +151,7 @@ export function DismissToast() {
 	return (
 		<>
 			<BulkGradeToast />
+			<ExcludeCompanyToast />
 			<Show when={dismissal()}>
 				{(d) => (
 					<output class="fixed inset-x-4 bottom-20 z-50 flex flex-col gap-2 rounded-lg border border-border-strong bg-surface px-4 py-3 text-sm text-foreground shadow-md md:bottom-4 md:left-auto md:max-w-sm">

@@ -2,6 +2,8 @@ package jobsearchtest
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -37,6 +39,26 @@ func (s *NoopScoring) CompanyProfiles(_ context.Context, _ string, companyIDs []
 
 func (s *NoopScoring) SeedProfile(companyID string, profile []dto.CompanyProfileEntry) {
 	s.profiles[companyID] = profile
+}
+
+func (s *NoopScoring) ExcludeCompany(_ context.Context, userID, name string) (bool, error) {
+	cfg := s.configs[userID]
+	name = strings.ToLower(strings.TrimSpace(name))
+	if slices.Contains(cfg.ExcludedCompanies, name) {
+		return false, nil
+	}
+	cfg.UserID = userID
+	cfg.ExcludedCompanies = append(slices.Clone(cfg.ExcludedCompanies), name)
+	s.configs[userID] = cfg
+	return true, nil
+}
+
+func (s *NoopScoring) UnexcludeCompany(_ context.Context, userID, name string) error {
+	cfg := s.configs[userID]
+	name = strings.ToLower(strings.TrimSpace(name))
+	cfg.ExcludedCompanies = slices.DeleteFunc(slices.Clone(cfg.ExcludedCompanies), func(c string) bool { return c == name })
+	s.configs[userID] = cfg
+	return nil
 }
 
 func (s *NoopScoring) JobsChanged(context.Context, pgx.Tx, []string, bool) error { return nil }

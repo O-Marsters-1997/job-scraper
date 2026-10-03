@@ -10,6 +10,8 @@ type JobPageOptions struct {
 	CompanyID    string
 	ScoredOnly   bool
 	SinceDays    int32
+
+	ExcludedCompanySlugs []string
 }
 
 type JobPage struct {

@@ -9,7 +9,7 @@ import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
 import { useSetCompanyFavourite } from "./useCompanies";
-import { useDismissJob } from "./useDismissJob";
+import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
 import { useMarkJobsSeen } from "./useJobs";
 import { announceBulkSeen } from "./useSeenToast";
 
@@ -59,6 +59,7 @@ export function useTrackJobs(jobs: () => Job[]) {
 
 	const dismiss = useDismissJob();
 	const setFavourite = useSetCompanyFavourite();
+	const exclude = useExcludeJobCompany();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
@@ -71,6 +72,7 @@ export function useTrackJobs(jobs: () => Job[]) {
 				favourite: !job.CompanyFavourite,
 			});
 		},
+		onExcludeCompany: exclude.exclude,
 	});
 
 	return {

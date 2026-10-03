@@ -18,3 +18,18 @@ ON CONFLICT (user_id) DO UPDATE SET
     preferences             = EXCLUDED.preferences,
     updated_at              = NOW()
 RETURNING *;
+
+-- name: AddExcludedCompany :one
+INSERT INTO search_config (user_id, excluded_companies)
+VALUES (sqlc.arg(user_id), ARRAY[sqlc.arg(name)::text])
+ON CONFLICT (user_id) DO UPDATE SET
+    excluded_companies = array_append(search_config.excluded_companies, sqlc.arg(name)::text),
+    updated_at         = NOW()
+WHERE NOT (sqlc.arg(name)::text = ANY(search_config.excluded_companies))
+RETURNING user_id;
+
+-- name: RemoveExcludedCompany :exec
+UPDATE search_config
+SET excluded_companies = array_remove(excluded_companies, sqlc.arg(name)::text),
+    updated_at         = NOW()
+WHERE user_id = sqlc.arg(user_id) AND sqlc.arg(name)::text = ANY(excluded_companies);

@@ -14,6 +14,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
 const (
@@ -29,12 +31,13 @@ type jobCursor struct {
 }
 
 type Service struct {
-	store Store
-	queue QueuePublisher
+	store   Store
+	queue   QueuePublisher
+	configs sourcetargets.SearchConfigReader
 }
 
-func NewService(store Store, q QueuePublisher) *Service {
-	return &Service{store: store, queue: q}
+func NewService(store Store, q QueuePublisher, configs sourcetargets.SearchConfigReader) *Service {
+	return &Service{store: store, queue: q, configs: configs}
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {
@@ -64,6 +67,11 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		options.CursorTime, options.CursorID = decoded.Time, decoded.ID
 	}
 
+	options.ExcludedCompanySlugs, err = s.excludedCompanySlugs(ctx, userID)
+	if err != nil {
+		return dto.JobPage{}, err
+	}
+
 	page, err := s.store.Page(ctx, userID, options)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidID) {
@@ -81,6 +89,20 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		page.Items = []dto.Job{}
 	}
 	return page, nil
+}
+
+func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]string, error) {
+	cfg, err := s.configs.SearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
+		return nil, err
+	}
+	slugs := make([]string, 0, len(cfg.ExcludedCompanies))
+	for _, name := range cfg.ExcludedCompanies {
+		if s := slug.Make(name); s != "" {
+			slugs = append(slugs, s)
+		}
+	}
+	return slugs, nil
 }
 
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {

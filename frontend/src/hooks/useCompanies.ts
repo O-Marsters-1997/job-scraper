@@ -7,6 +7,7 @@ import {
 import {
 	addCompany,
 	addCompanyBoard,
+	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
 	fetchCompanyPage,
@@ -15,6 +16,7 @@ import {
 	setCompanyFavourite,
 	setCompanyReview,
 	setCompanyTracking,
+	unexcludeCompany,
 } from "../api/companies";
 import { keys } from "../api/keys";
 import type { CompanyBoard, ReviewState } from "../types/company";
@@ -128,6 +130,24 @@ export function useSetCompanyFavourite() {
 		({ id, favourite }: { id: string; favourite: boolean }) =>
 			setCompanyFavourite(id, favourite),
 		[keys.companies.all, keys.jobs.all],
+	);
+}
+
+const excludeInvalidations = [
+	keys.companies.all,
+	keys.jobs.all,
+	keys.scoringConfig,
+];
+
+export function useExcludeCompany() {
+	return useInvalidatingMutation(excludeCompany, excludeInvalidations);
+}
+
+export function useUnexcludeCompany() {
+	return useInvalidatingMutation(
+		({ id, removeName }: { id: string; removeName: boolean }) =>
+			unexcludeCompany(id, removeName),
+		excludeInvalidations,
 	);
 }
 

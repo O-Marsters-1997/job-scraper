@@ -281,6 +281,31 @@ func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) 
 	return cfg, nil
 }
 
+func (f *FakeStore) AddExcludedCompany(_ context.Context, userID, name string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cfg := f.search[userID]
+	if slices.Contains(cfg.ExcludedCompanies, name) {
+		return false, nil
+	}
+	cfg.UserID = userID
+	cfg.ExcludedCompanies = append(slices.Clone(cfg.ExcludedCompanies), name)
+	f.search[userID] = cfg
+	return true, nil
+}
+
+func (f *FakeStore) RemoveExcludedCompany(_ context.Context, userID, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cfg, ok := f.search[userID]
+	if !ok {
+		return nil
+	}
+	cfg.ExcludedCompanies = slices.DeleteFunc(slices.Clone(cfg.ExcludedCompanies), func(c string) bool { return c == name })
+	f.search[userID] = cfg
+	return nil
+}
+
 func (f *FakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]store.ScoringInput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
