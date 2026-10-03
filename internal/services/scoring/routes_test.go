@@ -156,3 +156,27 @@ func TestCollectionFeedbackRoute(t *testing.T) {
 		t.Errorf("POST /scoring-feedback/collection = %+v, want a collection entry ranking the scored Job", created)
 	}
 }
+
+func TestCorrectionRoutes(t *testing.T) {
+	st := newFakeStore()
+	seedScoredJob(st, handlerstest.UserID, "tech:go")
+	r := chi.NewRouter()
+	scoring.Build(newDeps(t, st)).Routes(r)
+
+	handlerstest.RequiresAuth(t, r, "PUT /jobs/{id}/corrections/{optionId}", "DELETE /jobs/{id}/corrections/{optionId}")
+	handlerstest.RejectsMalformedBody(t, r, "PUT /jobs/{id}/corrections/{optionId}")
+
+	if rec := handlerstest.Serve(t, r, "PUT /jobs/job-1/corrections/tech:go", `{"value":"maybe"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("PUT bad value status = %d, want 400", rec.Code)
+	}
+
+	set := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "PUT /jobs/job-1/corrections/tech:go", `{"value":"no"}`)
+	if set.Score != 38 || len(set.Rows) != 1 || !set.Rows[0].Corrected {
+		t.Errorf("PUT correction = %+v, want score 38 with one corrected row", set)
+	}
+
+	reverted := handlerstest.Do[dto.JobScore](t, r, http.StatusOK, "DELETE /jobs/job-1/corrections/tech:go", "")
+	if reverted.Score != 63 || reverted.Rows[0].Corrected {
+		t.Errorf("DELETE correction = %+v, want the uncorrected score 63", reverted)
+	}
+}

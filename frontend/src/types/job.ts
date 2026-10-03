@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const scoreRowSchema = z.object({
+export const scoreRowSchema = z.object({
 	key: z.string(),
 	label: z.string(),
 	stance: z.string(),
@@ -14,6 +14,7 @@ const scoreRowSchema = z.object({
 		"blocked",
 	]),
 	overridden: z.boolean(),
+	corrected: z.boolean().optional(),
 });
 
 export type ScoreRow = z.infer<typeof scoreRowSchema>;

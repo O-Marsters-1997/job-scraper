@@ -2,10 +2,10 @@ package dto
 
 // JobScore is one user's computed Suitability for one job.
 type JobScore struct {
-	JobID    string
-	UserID   string
-	Score    int
-	Rows     []ScoreRow
-	Unknowns int
-	Cost     float64
+	JobID    string     `json:"jobId"`
+	UserID   string     `json:"-"`
+	Score    int        `json:"score"`
+	Rows     []ScoreRow `json:"rows"`
+	Unknowns int        `json:"unknowns"`
+	Cost     float64    `json:"-"`
 }

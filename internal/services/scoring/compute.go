@@ -23,6 +23,7 @@ type evaluatedPick struct {
 	answer    dto.Answer
 	known     bool
 	retired   bool
+	corrected bool
 }
 
 func resolveAnswer(a dto.Answer) string {
@@ -59,7 +60,7 @@ func compute(picks []evaluatedPick, salaryRaw string, floor *dto.Money) (int, []
 		if p.known {
 			resolved = resolveAnswer(p.answer)
 		}
-		row := dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: resolved}
+		row := dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: resolved, Corrected: p.corrected}
 
 		switch p.stance {
 		case "nice":

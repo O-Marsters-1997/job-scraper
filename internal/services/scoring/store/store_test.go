@@ -878,3 +878,52 @@ func TestListJobScoresForCollection(t *testing.T) {
 		t.Errorf("ListJobScoresForCollection() (-want +got):\n%s", diff)
 	}
 }
+
+func TestAnswerCorrections(t *testing.T) {
+	const model = "typesafe/jev-1.13"
+	st, pool := newStore(t)
+	ctx := t.Context()
+	user, other := pgtest.InsertUser(t, pool), pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	insertScore(t, pool, jobID, user)
+	exec(t, pool, `INSERT INTO scoring_options (id, dimension, label, question) VALUES ('work:remote', 'work', 'Remote', 'Is it remote?')`)
+
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "yes"); err != nil {
+		t.Fatalf("SetAnswerCorrection() err = %v", err)
+	}
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "no"); err != nil {
+		t.Fatalf("SetAnswerCorrection() overwrite err = %v", err)
+	}
+	if err := st.SetAnswerCorrection(ctx, other, jobID, "work:remote", "yes"); err != nil {
+		t.Fatalf("SetAnswerCorrection(other) err = %v", err)
+	}
+
+	got, err := st.ListJobCorrections(ctx, jobID)
+	if err != nil {
+		t.Fatalf("ListJobCorrections() err = %v", err)
+	}
+	want := map[string]map[string]string{user: {"work:remote": "no"}, other: {"work:remote": "yes"}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListJobCorrections() (-want +got):\n%s", diff)
+	}
+
+	inputs, err := st.ListScoringInputs(ctx, user, model)
+	if err != nil || len(inputs) != 1 {
+		t.Fatalf("ListScoringInputs() = %+v, %v, want one job", inputs, err)
+	}
+	if diff := cmp.Diff(map[string]string{"work:remote": "no"}, inputs[0].Corrections); diff != "" {
+		t.Errorf("ListScoringInputs() corrections (-want +got):\n%s", diff)
+	}
+
+	if err := st.DeleteAnswerCorrection(ctx, user, jobID, "work:remote"); err != nil {
+		t.Fatalf("DeleteAnswerCorrection() err = %v", err)
+	}
+	got, _ = st.ListJobCorrections(ctx, jobID)
+	if diff := cmp.Diff(map[string]map[string]string{other: {"work:remote": "yes"}}, got); diff != "" {
+		t.Errorf("ListJobCorrections() after delete (-want +got):\n%s", diff)
+	}
+
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "maybe"); err == nil {
+		t.Error("SetAnswerCorrection(maybe) err = nil, want the CHECK to reject it")
+	}
+}
