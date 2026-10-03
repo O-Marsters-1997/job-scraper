@@ -553,6 +553,11 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState emptied boards: %w", err)
 	}
 	emptiedBySource := countsBy(emptied, func(r sqlc.EmptiedBoardsRow) (string, int64) { return r.Source, r.Boards })
+	underparsed, err := s.queries.UnderparsedBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState underparsed boards: %w", err)
+	}
+	underparsedBySource := countsBy(underparsed, func(r sqlc.UnderparsedBoardsRow) (string, int64) { return r.Source, r.Boards })
 	completeness, err := s.queries.FieldCompleteness(ctx)
 	if err != nil {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState field completeness: %w", err)
@@ -586,6 +591,7 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		DiscoveryRelevantJobs:  relevantByVia,
 		HarvestAdmitted:        admittedByHarvester,
 		EmptiedBoards:          emptiedBySource,
+		UnderparsedBoards:      underparsedBySource,
 		FieldCompleteness:      completenessBySource,
 	}, nil
 }

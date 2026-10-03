@@ -687,19 +687,25 @@ func TestOpsState(t *testing.T) {
 	})
 }
 
+func insertManualBoard(t *testing.T, pool *pgxpool.Pool, slug, source, status string) string {
+	t.Helper()
+	var companyID, boardID string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+	if err := pool.QueryRow(t.Context(),
+		`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at)
+		 VALUES ($1, $2, $3, $4, 'manual', NOW()) RETURNING id`,
+		companyID, source, slug, status).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
+	}
+	return boardID
+}
+
 func TestOpsStateEmptiedBoards(t *testing.T) {
 	st, pool := newStore(t)
 	seed := func(slug, source, status string, emptyPolls int, completedAgo time.Duration) {
-		var companyID, boardID string
-		if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
-			t.Fatalf("insert company: %v", err)
-		}
-		if err := pool.QueryRow(t.Context(),
-			`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at)
-			 VALUES ($1, $2, $3, $4, 'manual', NOW()) RETURNING id`,
-			companyID, source, slug, status).Scan(&boardID); err != nil {
-			t.Fatalf("insert board: %v", err)
-		}
+		boardID := insertManualBoard(t, pool, slug, source, status)
 		exec(t, pool,
 			`INSERT INTO board_poll_state (board_id, consecutive_complete_empty, last_completed_at) VALUES ($1, $2, $3)`,
 			boardID, emptyPolls, time.Now().Add(-completedAgo))
@@ -715,6 +721,28 @@ func TestOpsStateEmptiedBoards(t *testing.T) {
 	got := opsState(t, st).EmptiedBoards
 	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
 		t.Errorf("OpsState().EmptiedBoards mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpsStateUnderparsedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, reported, parsed int) {
+		boardID := insertManualBoard(t, pool, slug, source, status)
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, last_reported_total, last_parsed) VALUES ($1, $2, $3)`,
+			boardID, reported, parsed)
+	}
+	seed("truncated", "greenhouse", "verified", 100, 50)
+	seed("just-under", "greenhouse", "verified", 100, 97)
+	seed("at-threshold", "greenhouse", "verified", 100, 98)
+	seed("complete", "greenhouse", "verified", 100, 100)
+	seed("unknown-total", "greenhouse", "verified", 0, 0)
+	seed("retired", "greenhouse", "retired", 100, 10)
+	seed("lever-truncated", "lever", "verified", 10, 5)
+
+	got := opsState(t, st).UnderparsedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().UnderparsedBoards mismatch (-want +got):\n%s", diff)
 	}
 }
 
