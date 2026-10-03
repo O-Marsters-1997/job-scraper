@@ -16,8 +16,8 @@ export function SuitabilityScoreValue(props: {
 			fallback={<p class="text-xs text-faint">Not yet scored.</p>}
 		>
 			<div class="flex items-center gap-2">
-				<Show when={props.band}>
-					{(band) => <BandChip band={band() as Band} />}
+				<Show when={props.band || undefined}>
+					{(band) => <BandChip band={band()} />}
 				</Show>
 				<span
 					class={cn(

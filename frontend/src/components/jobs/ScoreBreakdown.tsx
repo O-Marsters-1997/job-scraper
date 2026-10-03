@@ -5,6 +5,9 @@ import { MATCHED_COLOUR, MISSING_COLOUR, tintedChip } from "@/lib/scoreColour";
 import { cn } from "@/lib/utils";
 import type { Job, ScoreRow } from "@/types/job";
 
+const CORRECTED_CLASS =
+	"bg-accent-subtle text-accent-text border border-accent-border";
+
 const GROUPS: {
 	label: string;
 	keep: (row: ScoreRow) => boolean;
@@ -32,14 +35,16 @@ const GROUPS: {
 		class: "bg-surface-muted text-muted border border-border",
 	},
 	{
+		label: "Corrected",
+		keep: (r) => r.corrected === true && r.effect === "neutral",
+		class: CORRECTED_CLASS,
+	},
+	{
 		label: "Retired",
 		keep: (r) => r.effect === "retired",
 		class: "bg-surface-muted text-muted",
 	},
 ];
-
-const CORRECTED_CLASS =
-	"bg-accent-subtle text-accent-text border border-accent-border";
 
 const canCorrect = (r: ScoreRow) =>
 	r.corrected === true ||

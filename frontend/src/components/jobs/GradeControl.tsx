@@ -51,12 +51,11 @@ export function GradeControl(props: {
 			<Show when={current()}>
 				{(g) => (
 					<>
-						<Show when={props.band}>
+						<Show when={props.band || undefined}>
 							{(band) => (
 								<p class="text-xs text-muted">
-									Graded {LABELS[g().grade]} · scored{" "}
-									{BAND_LABEL[band() as Band]}:{" "}
-									{gradeDirection(g().grade, band() as Band)}
+									Graded {LABELS[g().grade]} · scored {BAND_LABEL[band()]}:{" "}
+									{gradeDirection(g().grade, band())}
 								</p>
 							)}
 						</Show>
