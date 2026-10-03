@@ -14,6 +14,7 @@ func TestParseSalary(t *testing.T) {
 		{"£40.00/hr - £60.00/hr", 0, false},
 		{"£50 per hour", 0, false},
 		{"£50 hourly", 0, false},
+		{"£45 per hr", 0, false},
 		{"£500 per day", 0, false},
 	}
 	for _, tt := range tests {
