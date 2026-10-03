@@ -112,6 +112,8 @@ type BoardPollState struct {
 	LastSnapshotVersion      int64
 	ConsecutiveCompleteEmpty int32
 	ConsecutiveFailures      int32
+	LastReportedTotal        int32
+	LastParsed               int32
 	LeaseOwner               pgtype.Text
 	LeaseUntil               pgtype.Timestamptz
 	NextDueAt                pgtype.Timestamptz
@@ -156,6 +158,7 @@ type CompanyBoard struct {
 	LastLinkedAt       pgtype.Timestamptz
 	RetiredAt          pgtype.Timestamptz
 	SupersededAt       pgtype.Timestamptz
+	DiscoveredVia      pgtype.Text
 	CreatedAt          pgtype.Timestamptz
 }
 

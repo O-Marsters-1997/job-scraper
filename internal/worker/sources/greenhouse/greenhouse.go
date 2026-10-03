@@ -16,6 +16,7 @@ func New(token string) *sources.BoardSource {
 		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token),
 		CompanySlug: token,
 		Parse:       parse,
+		Count:       count,
 	})
 }
 
@@ -35,6 +36,18 @@ type boardJob struct {
 
 type jobLocation struct {
 	Name string `json:"name"`
+}
+
+func count(body []byte) (int, error) {
+	var resp struct {
+		Meta struct {
+			Total int `json:"total"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, fmt.Errorf("parse json: %w", err)
+	}
+	return resp.Meta.Total, nil
 }
 
 func parse(body []byte) ([]dto.Job, error) {

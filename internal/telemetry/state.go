@@ -29,12 +29,26 @@ var (
 		"jobscraper_boards_overdue", "Verified, unleased Boards whose next_due_at has passed.", nil, nil)
 	boardsFailingDesc = prometheus.NewDesc(
 		"jobscraper_boards_failing", "Verified Boards with at least 3 consecutive failed polls.", nil, nil)
+	boardsEmptiedDesc = prometheus.NewDesc(
+		"jobscraper_boards_emptied", "Verified Boards with at least 2 consecutive complete-but-empty polls, observed in the last 7 days, per source.", []string{"source"}, nil)
+	boardsUnderparsedDesc = prometheus.NewDesc(
+		"jobscraper_boards_underparsed", "Verified Boards whose last poll parsed under 98% of the reported total, per source.", []string{"source"}, nil)
 	sourceTargetsFailedDesc = prometheus.NewDesc(
 		"jobscraper_source_targets_failed", "Source Targets whose last run failed.", nil, nil)
 	sourceTargetsDisabledDesc = prometheus.NewDesc(
 		"jobscraper_source_targets_disabled", "Source Targets that were disabled with a reason, per source.", []string{"source"}, nil)
 	harvestAgeSecondsDesc = prometheus.NewDesc(
 		"jobscraper_harvest_age_seconds", "Seconds since each catalog harvester last succeeded.", []string{"harvester"}, nil)
+	discoveryBoardsDesc = prometheus.NewDesc(
+		"jobscraper_discovery_boards", "Boards verified in the last 14 days, per discovery route.", []string{"via"}, nil)
+	discoveryRelevantJobsDesc = prometheus.NewDesc(
+		"jobscraper_discovery_relevant_jobs", "Scored Jobs whose primary Board was verified in the last 14 days, per discovery route.", []string{"via"}, nil)
+	harvestAdmittedDesc = prometheus.NewDesc(
+		"jobscraper_harvest_admitted", "Companies tracked as new or kept whose Board came from this harvester.", []string{"harvester"}, nil)
+	fieldCompletenessDesc = prometheus.NewDesc(
+		"jobscraper_field_completeness", "Share of open Jobs scraped in the last 24h with a non-empty value for the field, per source.", []string{"source", "field"}, nil)
+	sourceUniqueRelevantJobsDesc = prometheus.NewDesc(
+		"jobscraper_source_unique_relevant_jobs", "Scored Jobs first discovered in the last 14 days whose every URL came from this source.", []string{"source"}, nil)
 )
 
 type stateCollector struct {
@@ -55,9 +69,16 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- outboxFailedDesc
 	ch <- boardsOverdueDesc
 	ch <- boardsFailingDesc
+	ch <- boardsEmptiedDesc
+	ch <- boardsUnderparsedDesc
 	ch <- sourceTargetsFailedDesc
 	ch <- sourceTargetsDisabledDesc
 	ch <- harvestAgeSecondsDesc
+	ch <- sourceUniqueRelevantJobsDesc
+	ch <- discoveryBoardsDesc
+	ch <- discoveryRelevantJobsDesc
+	ch <- harvestAdmittedDesc
+	ch <- fieldCompletenessDesc
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
@@ -82,5 +103,28 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for harvester, age := range state.HarvestAge {
 		ch <- prometheus.MustNewConstMetric(harvestAgeSecondsDesc, prometheus.GaugeValue, age.Seconds(), harvester)
+	}
+	for source, n := range state.UniqueRelevantJobs {
+		ch <- prometheus.MustNewConstMetric(sourceUniqueRelevantJobsDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for via, n := range state.DiscoveryBoards {
+		ch <- prometheus.MustNewConstMetric(discoveryBoardsDesc, prometheus.GaugeValue, float64(n), via)
+	}
+	for via, n := range state.DiscoveryRelevantJobs {
+		ch <- prometheus.MustNewConstMetric(discoveryRelevantJobsDesc, prometheus.GaugeValue, float64(n), via)
+	}
+	for harvester, n := range state.HarvestAdmitted {
+		ch <- prometheus.MustNewConstMetric(harvestAdmittedDesc, prometheus.GaugeValue, float64(n), harvester)
+	}
+	for source, n := range state.EmptiedBoards {
+		ch <- prometheus.MustNewConstMetric(boardsEmptiedDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for source, n := range state.UnderparsedBoards {
+		ch <- prometheus.MustNewConstMetric(boardsUnderparsedDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for source, fields := range state.FieldCompleteness {
+		for field, share := range fields {
+			ch <- prometheus.MustNewConstMetric(fieldCompletenessDesc, prometheus.GaugeValue, share, source, field)
+		}
 	}
 }

@@ -44,14 +44,16 @@ func (q *Queries) GetVerifiedBoardID(ctx context.Context, arg GetVerifiedBoardID
 }
 
 const listBoardChecks = `-- name: ListBoardChecks :many
-SELECT b.id, s.last_completed_at FROM company_boards b
+SELECT b.id, s.last_completed_at, COALESCE(s.last_reported_total, 0)::int AS last_reported_total, COALESCE(s.last_parsed, 0)::int AS last_parsed FROM company_boards b
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.company_id = $1
 `
 
 type ListBoardChecksRow struct {
-	ID              pgtype.UUID
-	LastCompletedAt pgtype.Timestamptz
+	ID                pgtype.UUID
+	LastCompletedAt   pgtype.Timestamptz
+	LastReportedTotal int32
+	LastParsed        int32
 }
 
 func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([]ListBoardChecksRow, error) {
@@ -63,7 +65,12 @@ func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([
 	var items []ListBoardChecksRow
 	for rows.Next() {
 		var i ListBoardChecksRow
-		if err := rows.Scan(&i.ID, &i.LastCompletedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.LastCompletedAt,
+			&i.LastReportedTotal,
+			&i.LastParsed,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -75,7 +82,7 @@ func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([
 }
 
 const listCompanyBoards = `-- name: ListCompanyBoards :many
-SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
+SELECT id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at FROM company_boards WHERE company_id = $1 ORDER BY created_at, id
 `
 
 func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) ([]CompanyBoard, error) {
@@ -98,6 +105,7 @@ func (q *Queries) ListCompanyBoards(ctx context.Context, companyID pgtype.UUID) 
 			&i.LastLinkedAt,
 			&i.RetiredAt,
 			&i.SupersededAt,
+			&i.DiscoveredVia,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -153,7 +161,7 @@ func (q *Queries) ListTrackedCompanyBoards(ctx context.Context, userID pgtype.UU
 }
 
 const listUntrackedDiscoveredBoards = `-- name: ListUntrackedDiscoveredBoards :many
-SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.created_at FROM company_boards cb
+SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.discovered_via, cb.created_at FROM company_boards cb
 WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
 ORDER BY cb.created_at, cb.id
@@ -179,6 +187,7 @@ func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyB
 			&i.LastLinkedAt,
 			&i.RetiredAt,
 			&i.SupersededAt,
+			&i.DiscoveredVia,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -264,7 +273,7 @@ INSERT INTO company_boards (company_id, source, board_token)
 VALUES ($1, $2, $3)
 ON CONFLICT (source, board_token) DO UPDATE SET source = EXCLUDED.source
 WHERE company_boards.company_id = EXCLUDED.company_id
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at
 `
 
 type UpsertCandidateBoardParams struct {
@@ -287,6 +296,7 @@ func (q *Queries) UpsertCandidateBoard(ctx context.Context, arg UpsertCandidateB
 		&i.LastLinkedAt,
 		&i.RetiredAt,
 		&i.SupersededAt,
+		&i.DiscoveredVia,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -294,9 +304,9 @@ func (q *Queries) UpsertCandidateBoard(ctx context.Context, arg UpsertCandidateB
 
 const verifyCompanyBoard = `-- name: VerifyCompanyBoard :one
 UPDATE company_boards
-SET status = 'verified', verification_method = $4, verified_at = NOW()
+SET status = 'verified', verification_method = $4, verified_at = NOW(), discovered_via = NULLIF($5::text, '')
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
-RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, created_at
+RETURNING id, company_id, source, board_token, status, verification_method, verified_at, last_linked_at, retired_at, superseded_at, discovered_via, created_at
 `
 
 type VerifyCompanyBoardParams struct {
@@ -304,6 +314,7 @@ type VerifyCompanyBoardParams struct {
 	Source             string
 	BoardToken         string
 	VerificationMethod pgtype.Text
+	Via                string
 }
 
 func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoardParams) (CompanyBoard, error) {
@@ -312,6 +323,7 @@ func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoard
 		arg.Source,
 		arg.BoardToken,
 		arg.VerificationMethod,
+		arg.Via,
 	)
 	var i CompanyBoard
 	err := row.Scan(
@@ -325,6 +337,7 @@ func (q *Queries) VerifyCompanyBoard(ctx context.Context, arg VerifyCompanyBoard
 		&i.LastLinkedAt,
 		&i.RetiredAt,
 		&i.SupersededAt,
+		&i.DiscoveredVia,
 		&i.CreatedAt,
 	)
 	return i, err

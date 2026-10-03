@@ -488,6 +488,78 @@ rules:
                 type: gt
                 params: [0]
 
+  - uid: boards-emptied
+    title: Boards emptied
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $values.A }} verified {{ $labels.source }} Boards parsed empty on 2+ consecutive polls"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_boards_emptied{env="prod"}
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
+  - uid: boards-underparsed
+    title: Boards underparsed
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $values.A }} verified {{ $labels.source }} Boards parsed under 98% of their reported total"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_boards_underparsed{env="prod"}
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
   - uid: harvest-stale
     title: Harvest stale
     condition: C
@@ -595,3 +667,39 @@ rules:
             - evaluator:
                 type: gt
                 params: [0]
+
+  - uid: field-completeness-drop
+    title: Field completeness drop
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: warning
+    annotations:
+      summary: "{{ $labels.source }} {{ $labels.field }} completeness fell {{ $values.A }} against its average from 7 days ago"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: jobscraper_field_completeness{env="prod"} - avg_over_time(jobscraper_field_completeness{env="prod"}[7d] offset 7d)
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: lt
+                params: [-0.2]

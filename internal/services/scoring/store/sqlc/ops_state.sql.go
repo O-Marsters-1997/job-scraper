@@ -40,6 +40,179 @@ func (q *Queries) DisabledSourceTargets(ctx context.Context) ([]DisabledSourceTa
 	return items, nil
 }
 
+const discoveryBoards = `-- name: DiscoveryBoards :many
+SELECT discovered_via::text AS via, count(*) AS boards
+FROM company_boards
+WHERE status = 'verified' AND discovered_via IS NOT NULL AND verified_at > NOW() - INTERVAL '14 days'
+GROUP BY discovered_via
+`
+
+type DiscoveryBoardsRow struct {
+	Via    string
+	Boards int64
+}
+
+func (q *Queries) DiscoveryBoards(ctx context.Context) ([]DiscoveryBoardsRow, error) {
+	rows, err := q.db.Query(ctx, discoveryBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryBoardsRow
+	for rows.Next() {
+		var i DiscoveryBoardsRow
+		if err := rows.Scan(&i.Via, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const discoveryRelevantJobs = `-- name: DiscoveryRelevantJobs :many
+SELECT b.discovered_via::text AS via, count(*) AS jobs
+FROM jobs j
+JOIN company_boards b ON b.id = j.primary_board_id
+WHERE b.status = 'verified' AND b.discovered_via IS NOT NULL AND b.verified_at > NOW() - INTERVAL '14 days'
+  AND EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id)
+GROUP BY b.discovered_via
+`
+
+type DiscoveryRelevantJobsRow struct {
+	Via  string
+	Jobs int64
+}
+
+func (q *Queries) DiscoveryRelevantJobs(ctx context.Context) ([]DiscoveryRelevantJobsRow, error) {
+	rows, err := q.db.Query(ctx, discoveryRelevantJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DiscoveryRelevantJobsRow
+	for rows.Next() {
+		var i DiscoveryRelevantJobsRow
+		if err := rows.Scan(&i.Via, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const emptiedBoards = `-- name: EmptiedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.consecutive_complete_empty >= 2 AND ps.last_completed_at > NOW() - INTERVAL '7 days'
+GROUP BY b.source
+`
+
+type EmptiedBoardsRow struct {
+	Source string
+	Boards int64
+}
+
+func (q *Queries) EmptiedBoards(ctx context.Context) ([]EmptiedBoardsRow, error) {
+	rows, err := q.db.Query(ctx, emptiedBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EmptiedBoardsRow
+	for rows.Next() {
+		var i EmptiedBoardsRow
+		if err := rows.Scan(&i.Source, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fieldCompleteness = `-- name: FieldCompleteness :many
+SELECT j.source::text AS source, f.field::text AS field,
+       (count(*) FILTER (WHERE f.filled)::float8 / count(*))::float8 AS share
+FROM jobs j
+CROSS JOIN LATERAL (VALUES
+    ('title', j.title <> ''),
+    ('location', j.location <> ''),
+    ('description', j.description <> ''),
+    ('salary_raw', j.salary_raw <> ''),
+    ('work_arrangement', j.work_arrangement <> '')
+) AS f(field, filled)
+WHERE j.closed_at IS NULL AND j.scraped_at > NOW() - INTERVAL '24 hours'
+GROUP BY j.source, f.field
+`
+
+type FieldCompletenessRow struct {
+	Source string
+	Field  string
+	Share  float64
+}
+
+func (q *Queries) FieldCompleteness(ctx context.Context) ([]FieldCompletenessRow, error) {
+	rows, err := q.db.Query(ctx, fieldCompleteness)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FieldCompletenessRow
+	for rows.Next() {
+		var i FieldCompletenessRow
+		if err := rows.Scan(&i.Source, &i.Field, &i.Share); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const harvestAdmitted = `-- name: HarvestAdmitted :many
+SELECT b.discovered_via::text AS harvester, count(DISTINCT tc.company_id) AS companies
+FROM tracked_companies tc
+JOIN company_boards b ON b.company_id = tc.company_id
+WHERE tc.review_state IN ('new', 'kept') AND b.discovered_via IN (SELECT harvester FROM harvest_runs)
+GROUP BY b.discovered_via
+`
+
+type HarvestAdmittedRow struct {
+	Harvester string
+	Companies int64
+}
+
+func (q *Queries) HarvestAdmitted(ctx context.Context) ([]HarvestAdmittedRow, error) {
+	rows, err := q.db.Query(ctx, harvestAdmitted)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []HarvestAdmittedRow
+	for rows.Next() {
+		var i HarvestAdmittedRow
+		if err := rows.Scan(&i.Harvester, &i.Companies); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const harvestRuns = `-- name: HarvestRuns :many
 SELECT harvester, last_succeeded_at FROM harvest_runs
 `
@@ -101,4 +274,75 @@ func (q *Queries) OpsState(ctx context.Context) (OpsStateRow, error) {
 		&i.SourceTargetsFailed,
 	)
 	return i, err
+}
+
+const underparsedBoards = `-- name: UnderparsedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.last_reported_total > 0 AND ps.last_parsed < 0.98 * ps.last_reported_total
+GROUP BY b.source
+`
+
+type UnderparsedBoardsRow struct {
+	Source string
+	Boards int64
+}
+
+func (q *Queries) UnderparsedBoards(ctx context.Context) ([]UnderparsedBoardsRow, error) {
+	rows, err := q.db.Query(ctx, underparsedBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UnderparsedBoardsRow
+	for rows.Next() {
+		var i UnderparsedBoardsRow
+		if err := rows.Scan(&i.Source, &i.Boards); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const uniqueRelevantJobs = `-- name: UniqueRelevantJobs :many
+SELECT source::text AS source, count(*) AS jobs
+FROM (
+    SELECT min(u.source) AS source
+      FROM job_urls u
+     WHERE EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = u.job_id)
+     GROUP BY u.job_id
+    HAVING count(DISTINCT u.source) = 1
+       AND min(u.first_seen_at) > NOW() - INTERVAL '14 days'
+) unique_jobs
+GROUP BY source
+`
+
+type UniqueRelevantJobsRow struct {
+	Source string
+	Jobs   int64
+}
+
+func (q *Queries) UniqueRelevantJobs(ctx context.Context) ([]UniqueRelevantJobsRow, error) {
+	rows, err := q.db.Query(ctx, uniqueRelevantJobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UniqueRelevantJobsRow
+	for rows.Next() {
+		var i UniqueRelevantJobsRow
+		if err := rows.Scan(&i.Source, &i.Jobs); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

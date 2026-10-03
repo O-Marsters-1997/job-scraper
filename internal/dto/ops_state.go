@@ -11,4 +11,11 @@ type OpsState struct {
 	SourceTargetsFailed    int64
 	DisabledSourceTargets  map[string]int64
 	HarvestAge             map[string]time.Duration
+	UniqueRelevantJobs     map[string]int64
+	DiscoveryBoards        map[string]int64
+	DiscoveryRelevantJobs  map[string]int64
+	HarvestAdmitted        map[string]int64
+	EmptiedBoards          map[string]int64
+	UnderparsedBoards      map[string]int64
+	FieldCompleteness      map[string]map[string]float64
 }

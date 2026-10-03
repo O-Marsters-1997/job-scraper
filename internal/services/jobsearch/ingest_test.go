@@ -22,7 +22,7 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 		{
 			name: "unseen ATS apply url publishes one task",
 			jobs: []dto.Job{{Title: "Eng", URL: ashbyURL, Source: "linkedin"}},
-			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}},
+			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "linkedin"}},
 		},
 		{
 			name: "same board twice in a batch publishes once",
@@ -30,7 +30,7 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 				{Title: "Eng", URL: ashbyURL, Source: "linkedin"},
 				{Title: "PM", URL: "https://jobs.ashbyhq.com/acme/456", Source: "linkedin"},
 			},
-			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}},
+			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "linkedin"}},
 		},
 		{
 			name:     "verified board publishes none",
@@ -44,7 +44,7 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 		{
 			name: "apply url on another host publishes its board",
 			jobs: []dto.Job{{Title: "Eng", URL: "https://app.welcometothejungle.com/jobs/x", ApplyURL: ashbyURL, Source: "wttj"}},
-			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}},
+			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "wttj"}},
 		},
 		{
 			name: "unresolved apply url publishes none",
@@ -64,7 +64,7 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 				if _, err := st.UpsertCandidateBoard(t.Context(), company.ID, "ashby", "acme"); err != nil {
 					t.Fatalf("UpsertCandidateBoard err = %v", err)
 				}
-				if _, err := st.VerifyCompanyBoard(t.Context(), company.ID, "ashby", "acme", "test"); err != nil {
+				if _, err := st.VerifyCompanyBoard(t.Context(), company.ID, "ashby", "acme", "test", ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard err = %v", err)
 				}
 			}
@@ -75,7 +75,7 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 
 			var got []queue.Task
 			for _, task := range rec.Tasks() {
-				got = append(got, queue.Task{Source: task.Source, Kind: task.Kind, BoardToken: task.BoardToken})
+				got = append(got, queue.Task{Source: task.Source, Kind: task.Kind, BoardToken: task.BoardToken, Via: task.Via})
 			}
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("published tasks (-want +got):\n%s", diff)

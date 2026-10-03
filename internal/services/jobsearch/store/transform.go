@@ -121,6 +121,7 @@ func toCompanyBoardDTO(row sqlc.CompanyBoard) dto.CompanyBoard {
 		BoardToken:         row.BoardToken,
 		Status:             dto.BoardStatus(row.Status),
 		VerificationMethod: row.VerificationMethod.String,
+		DiscoveredVia:      row.DiscoveredVia.String,
 		CreatedAt:          row.CreatedAt.Time,
 	}
 	board.VerifiedAt = data.TimePtr(row.VerifiedAt)

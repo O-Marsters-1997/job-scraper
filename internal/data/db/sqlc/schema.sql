@@ -311,6 +311,7 @@ CREATE TABLE IF NOT EXISTS company_boards (
     last_linked_at TIMESTAMPTZ,
     retired_at TIMESTAMPTZ,
     superseded_at TIMESTAMPTZ,
+    discovered_via TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (source, board_token)
 );
@@ -323,6 +324,8 @@ CREATE TABLE board_poll_state (
     last_snapshot_version BIGINT NOT NULL DEFAULT 0,
     consecutive_complete_empty INT NOT NULL DEFAULT 0,
     consecutive_failures INT NOT NULL DEFAULT 0,
+    last_reported_total INT NOT NULL DEFAULT 0,
+    last_parsed INT NOT NULL DEFAULT 0,
     lease_owner TEXT,
     lease_until TIMESTAMPTZ,
     next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

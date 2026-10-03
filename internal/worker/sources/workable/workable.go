@@ -17,6 +17,7 @@ func New(token string) *sources.BoardSource {
 		URL:         fmt.Sprintf("https://apply.workable.com/api/v3/accounts/%s/jobs", token),
 		CompanySlug: token,
 		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
+		Count:       count,
 	})
 }
 
@@ -32,6 +33,16 @@ type jobResult struct {
 
 type jobLocation struct {
 	City string `json:"city"`
+}
+
+func count(body []byte) (int, error) {
+	var resp struct {
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, fmt.Errorf("parse json: %w", err)
+	}
+	return resp.Total, nil
 }
 
 // Workable's list API returns no job URL or description; the URL here is

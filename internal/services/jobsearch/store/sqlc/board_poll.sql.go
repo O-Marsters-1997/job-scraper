@@ -75,15 +75,18 @@ SET last_completed_at = NOW(),
     last_scheduled_at = CASE WHEN $1::boolean THEN last_scheduled_at ELSE NOW() END,
     next_due_at = CASE WHEN $1::boolean THEN next_due_at ELSE NOW() + $2::int * INTERVAL '1 minute' END,
     consecutive_complete_empty = CASE WHEN $3::boolean THEN consecutive_complete_empty + 1 ELSE 0 END,
-    consecutive_failures = 0, lease_owner = NULL, lease_until = NULL
-WHERE board_id = $4::uuid AND lease_owner = $5::text
-  AND last_snapshot_version = $6::bigint
+    consecutive_failures = 0, lease_owner = NULL, lease_until = NULL,
+    last_reported_total = $4::int, last_parsed = $5::int
+WHERE board_id = $6::uuid AND lease_owner = $7::text
+  AND last_snapshot_version = $8::bigint
 `
 
 type CompletePollStateParams struct {
 	Manual          bool
 	IntervalMinutes int32
 	Empty           bool
+	Reported        int32
+	Parsed          int32
 	BoardID         pgtype.UUID
 	LeaseOwner      string
 	Version         int64
@@ -94,6 +97,8 @@ func (q *Queries) CompletePollState(ctx context.Context, arg CompletePollStatePa
 		arg.Manual,
 		arg.IntervalMinutes,
 		arg.Empty,
+		arg.Reported,
+		arg.Parsed,
 		arg.BoardID,
 		arg.LeaseOwner,
 		arg.Version,
@@ -299,7 +304,7 @@ func (q *Queries) ListDueBoards(ctx context.Context) ([]ListDueBoardsRow, error)
 }
 
 const lockPollState = `-- name: LockPollState :one
-SELECT board_id, last_completed_at, last_scheduled_at, last_started_at, last_snapshot_version, consecutive_complete_empty, consecutive_failures, lease_owner, lease_until, next_due_at FROM board_poll_state WHERE board_id = $1 FOR UPDATE
+SELECT board_id, last_completed_at, last_scheduled_at, last_started_at, last_snapshot_version, consecutive_complete_empty, consecutive_failures, last_reported_total, last_parsed, lease_owner, lease_until, next_due_at FROM board_poll_state WHERE board_id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockPollState(ctx context.Context, boardID pgtype.UUID) (BoardPollState, error) {
@@ -313,6 +318,8 @@ func (q *Queries) LockPollState(ctx context.Context, boardID pgtype.UUID) (Board
 		&i.LastSnapshotVersion,
 		&i.ConsecutiveCompleteEmpty,
 		&i.ConsecutiveFailures,
+		&i.LastReportedTotal,
+		&i.LastParsed,
 		&i.LeaseOwner,
 		&i.LeaseUntil,
 		&i.NextDueAt,

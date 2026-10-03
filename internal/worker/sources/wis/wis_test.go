@@ -1,19 +1,32 @@
 package wis_test
 
 import (
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 )
 
+func newScraper(tb testing.TB, search wis.Search) *wis.Scraper {
+	tb.Helper()
+	tb.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
+	tb.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@localhost:7001")
+	return wis.New(search)
+}
+
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, wis.New(wis.Search{}))
+	sourcetest.RunSnapshotTests(t, newScraper(t, wis.Search{}))
 }
 
 func FuzzParse(f *testing.F) {
-	sourcetest.FuzzSnapshots(f, wis.New(wis.Search{}))
+	sourcetest.FuzzSnapshots(f, newScraper(f, wis.Search{}))
 }
 
 func TestSearchURL(t *testing.T) {
@@ -89,7 +102,7 @@ func TestFetchPage_RecencyParam(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := wis.New(wis.Search{Keywords: "go", Recency: tt.recency})
+			src := newScraper(t, wis.Search{Keywords: "go", Recency: tt.recency})
 			recorder := sourcetest.Respond(`<span data-cy-count="0"></span>`)
 			src.Client().Transport = recorder
 			if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
@@ -101,6 +114,78 @@ func TestFetchPage_RecencyParam(t *testing.T) {
 			}
 			if q.Has("f") != (tt.want != "") {
 				t.Errorf("f present = %v, want %v", q.Has("f"), tt.want != "")
+			}
+		})
+	}
+}
+
+type countingTransport struct {
+	status     int
+	retryAfter string
+	requests   []*http.Request
+}
+
+func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	c.requests = append(c.requests, req)
+	h := http.Header{}
+	if c.retryAfter != "" {
+		h.Set("Retry-After", c.retryAfter)
+	}
+	return &http.Response{
+		StatusCode: c.status,
+		Status:     fmt.Sprintf("%d %s", c.status, http.StatusText(c.status)),
+		Header:     h,
+		Body:       io.NopCloser(strings.NewReader(`<span data-cy-count="0"></span>`)),
+	}, nil
+}
+
+func TestRequests_BrowserHeaders(t *testing.T) {
+	wis.ResetLimiter()
+	src := newScraper(t, wis.Search{Keywords: "go"})
+	tr := &countingTransport{status: http.StatusOK}
+	src.Client().Transport = tr
+	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); err == nil {
+		t.Fatal("GetDetails on a listing body = nil error, want a parse error")
+	}
+	list, detail := tr.requests[0].Header, tr.requests[1].Header
+	if !strings.Contains(list.Get("User-Agent"), "Chrome/153") || list.Get("Sec-Ch-Ua-Platform") == "" {
+		t.Errorf("listing headers = %v, want Chrome UA and client hints", list)
+	}
+	if list.Get("Sec-Fetch-Site") != "none" || list.Get("Referer") != "" {
+		t.Errorf("first request Sec-Fetch-Site/Referer = %q/%q, want none and no referer", list.Get("Sec-Fetch-Site"), list.Get("Referer"))
+	}
+	if detail.Get("Sec-Fetch-Site") != "same-origin" || detail.Get("Referer") != tr.requests[0].URL.String() {
+		t.Errorf("detail Sec-Fetch-Site/Referer = %q/%q, want same-origin and the listing URL", detail.Get("Sec-Fetch-Site"), detail.Get("Referer"))
+	}
+}
+
+func TestRateLimit(t *testing.T) {
+	for _, tt := range []struct{ name, retryAfter string }{
+		{"429 with Retry-After blocks later requests", "120"},
+		{"429 without Retry-After blocks later requests", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			wis.ResetLimiter()
+			src := newScraper(t, wis.Search{Keywords: "go"})
+			tr := &countingTransport{status: http.StatusTooManyRequests, retryAfter: tt.retryAfter}
+			src.Client().Transport = tr
+
+			_, _, err := src.FetchPage(t.Context(), "")
+			var se *sources.StatusError
+			if !errors.As(err, &se) || se.Code != http.StatusTooManyRequests {
+				t.Fatalf("FetchPage = %v, want a 429 StatusError", err)
+			}
+			if _, _, err := src.FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrDeferred) {
+				t.Errorf("listing after 429 = %v, want ErrDeferred", err)
+			}
+			if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); !errors.Is(err, sources.ErrDeferred) {
+				t.Errorf("detail after 429 = %v, want ErrDeferred", err)
+			}
+			if len(tr.requests) != 1 {
+				t.Errorf("sent %d requests, want only the one that was refused", len(tr.requests))
 			}
 		})
 	}

@@ -15,13 +15,13 @@ SELECT id FROM company_boards WHERE source = $1 AND board_token = $2 AND status 
 SELECT company_id FROM company_boards WHERE source = $1 AND board_token = $2;
 
 -- name: ListBoardChecks :many
-SELECT b.id, s.last_completed_at FROM company_boards b
+SELECT b.id, s.last_completed_at, COALESCE(s.last_reported_total, 0)::int AS last_reported_total, COALESCE(s.last_parsed, 0)::int AS last_parsed FROM company_boards b
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.company_id = $1;
 
 -- name: VerifyCompanyBoard :one
 UPDATE company_boards
-SET status = 'verified', verification_method = $4, verified_at = NOW()
+SET status = 'verified', verification_method = $4, verified_at = NOW(), discovered_via = NULLIF(sqlc.arg(via)::text, '')
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
 RETURNING *;
 

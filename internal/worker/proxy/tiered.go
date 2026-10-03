@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -22,16 +23,24 @@ type tieredTransport struct {
 	unlocker    http.RoundTripper
 	cache       Cache
 
-	session atomic.Value
-	source  string
+	session   atomic.Value
+	rotations atomic.Int64
+	source    string
 }
 
 func newSession() string {
 	return strconv.FormatUint(rand.Uint64(), 36)
 }
 
-func (t *tieredTransport) rotate(stale string) {
-	t.session.CompareAndSwap(stale, newSession())
+func (t *tieredTransport) rotate(ctx context.Context, stale, reason string, status int) {
+	if t.session.CompareAndSwap(stale, newSession()) {
+		slog.InfoContext(ctx, "residential session rotated",
+			slog.String(logger.KeySource, t.source),
+			slog.String(logger.KeyReason, reason),
+			slog.Int(logger.KeyStatus, status),
+			slog.Int64(logger.KeyCount, t.rotations.Add(1)),
+		)
+	}
 	t.residential.CloseIdleConnections()
 }
 
@@ -112,13 +121,13 @@ func (t *tieredTransport) residentialAttempt(req *http.Request) (*http.Response,
 	record(req, t.source, routeResidential, resp, err)
 	if err != nil {
 		if req.Context().Err() == nil {
-			t.rotate(session)
+			t.rotate(req.Context(), session, "error", 0)
 		}
 		release()
 		return nil, err
 	}
 	if blocked(req, resp) {
-		t.rotate(session)
+		t.rotate(req.Context(), session, "blocked", resp.StatusCode)
 	}
 	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
 	return resp, nil

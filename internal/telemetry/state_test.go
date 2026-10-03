@@ -38,15 +38,32 @@ func TestStateCollector(t *testing.T) {
 				BoardsFailing:          2,
 				SourceTargetsFailed:    5,
 				DisabledSourceTargets:  map[string]int64{"indeed": 2},
+				UniqueRelevantJobs:     map[string]int64{"lever": 7},
+				DiscoveryBoards:        map[string]int64{"linkedin": 4},
+				DiscoveryRelevantJobs:  map[string]int64{"linkedin": 9},
+				HarvestAdmitted:        map[string]int64{"ashby": 3},
+				EmptiedBoards:          map[string]int64{"greenhouse": 2},
 				HarvestAge:             map[string]time.Duration{"ashby": time.Hour, "lever": 30 * time.Second},
 			}},
 			want: `
+				# HELP jobscraper_boards_emptied Verified Boards with at least 2 consecutive complete-but-empty polls, observed in the last 7 days, per source.
+				# TYPE jobscraper_boards_emptied gauge
+				jobscraper_boards_emptied{source="greenhouse"} 2
 				# HELP jobscraper_boards_failing Verified Boards with at least 3 consecutive failed polls.
 				# TYPE jobscraper_boards_failing gauge
 				jobscraper_boards_failing 2
 				# HELP jobscraper_boards_overdue Verified, unleased Boards whose next_due_at has passed.
 				# TYPE jobscraper_boards_overdue gauge
 				jobscraper_boards_overdue 4
+				# HELP jobscraper_discovery_boards Boards verified in the last 14 days, per discovery route.
+				# TYPE jobscraper_discovery_boards gauge
+				jobscraper_discovery_boards{via="linkedin"} 4
+				# HELP jobscraper_discovery_relevant_jobs Scored Jobs whose primary Board was verified in the last 14 days, per discovery route.
+				# TYPE jobscraper_discovery_relevant_jobs gauge
+				jobscraper_discovery_relevant_jobs{via="linkedin"} 9
+				# HELP jobscraper_harvest_admitted Companies tracked as new or kept whose Board came from this harvester.
+				# TYPE jobscraper_harvest_admitted gauge
+				jobscraper_harvest_admitted{harvester="ashby"} 3
 				# HELP jobscraper_harvest_age_seconds Seconds since each catalog harvester last succeeded.
 				# TYPE jobscraper_harvest_age_seconds gauge
 				jobscraper_harvest_age_seconds{harvester="ashby"} 3600
@@ -66,6 +83,9 @@ func TestStateCollector(t *testing.T) {
 				# HELP jobscraper_source_targets_failed Source Targets whose last run failed.
 				# TYPE jobscraper_source_targets_failed gauge
 				jobscraper_source_targets_failed 5
+				# HELP jobscraper_source_unique_relevant_jobs Scored Jobs first discovered in the last 14 days whose every URL came from this source.
+				# TYPE jobscraper_source_unique_relevant_jobs gauge
+				jobscraper_source_unique_relevant_jobs{source="lever"} 7
 				# HELP jobscraper_state_up 1 if the last OpsState read succeeded, 0 otherwise.
 				# TYPE jobscraper_state_up gauge
 				jobscraper_state_up 1

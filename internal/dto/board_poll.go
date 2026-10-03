@@ -21,4 +21,6 @@ type BoardSnapshot struct {
 	Complete bool
 	// NextPollIn, when positive, replaces the default interval before the next poll.
 	NextPollIn time.Duration
+	// Reported is how many jobs the ATS says the board holds; 0 means unknown.
+	Reported int
 }

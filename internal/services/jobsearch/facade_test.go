@@ -41,7 +41,7 @@ func seedBoards(t *testing.T, st *jobsearchtest.FakeStore) (verified, candidate 
 	if _, err = st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
 		t.Fatal(err)
 	}
-	if verified, err = st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "user_confirmed"); err != nil {
+	if verified, err = st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "user_confirmed", ""); err != nil {
 		t.Fatal(err)
 	}
 	if candidate, err = st.UpsertCandidateBoard(ctx, company.ID, "lever", "acme"); err != nil {
@@ -148,7 +148,7 @@ func TestRecoverRuns(t *testing.T) {
 		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme"); err != nil {
 			t.Fatal(err)
 		}
-		board, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "test")
+		board, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "test", "")
 		if err != nil {
 			t.Fatal(err)
 		}

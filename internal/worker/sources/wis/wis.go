@@ -3,12 +3,15 @@ package wis
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -23,6 +26,9 @@ const (
 	baseURL  = "https://workinstartups.com/search"
 	pageSize = 50
 
+	wisGap          = 2 * time.Second
+	wisDefaultBlock = 5 * time.Minute
+
 	selJobCard     = `div[data-aid]`
 	selJobLink     = `h2 a`
 	selTotalCount  = `span[data-cy-count]`
@@ -33,6 +39,21 @@ const (
 	selDescription = `.adp-body`
 	selBadge       = `.inline-flex.flex-wrap span`
 )
+
+// WIS sits behind a CloudFront rule that 403s anything without a complete Chrome header set.
+var browserHeader = http.Header{
+	"User-Agent":                {"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"},
+	"Accept":                    {"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"},
+	"Sec-Ch-Ua":                 {`"Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"`},
+	"Sec-Ch-Ua-Mobile":          {"?0"},
+	"Sec-Ch-Ua-Platform":        {`"macOS"`},
+	"Sec-Fetch-Dest":            {"document"},
+	"Sec-Fetch-Mode":            {"navigate"},
+	"Sec-Fetch-User":            {"?1"},
+	"Upgrade-Insecure-Requests": {"1"},
+}
+
+var limiter = sources.NewGate(wisGap, wisDefaultBlock)
 
 // DetectWorkArrangement checks the REMOTE badge first — it's the authoritative signal —
 // then falls back to detecting hybrid/onsite from the description text.
@@ -101,7 +122,8 @@ func pageURL(s Search, page int) string {
 
 type Scraper struct {
 	sources.PaginatedBase
-	search Search
+	search      Search
+	lastListing atomic.Pointer[string]
 }
 
 var _ sources.Source = (*Scraper)(nil)
@@ -110,7 +132,10 @@ var _ sources.DetailFetcher = (*Scraper)(nil)
 func New(search Search) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name: "wis",
+			Name:    "wis",
+			Route:   sources.RouteTiered,
+			Header:  browserHeader,
+			Cookies: true,
 		}),
 		search: search,
 	}
@@ -124,6 +149,23 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 	return ParseJobDetail(r, url)
 }
 
+func (s *Scraper) get(ctx context.Context, url, referer string) ([]byte, error) {
+	if err := limiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+	header := http.Header{"Sec-Fetch-Site": {"none"}}
+	if referer != "" {
+		header.Set("Sec-Fetch-Site", "same-origin")
+		header.Set("Referer", referer)
+	}
+	body, err := s.GetHeader(ctx, url, header)
+	var statusErr *sources.StatusError
+	if errors.As(err, &statusErr) && statusErr.Code == http.StatusTooManyRequests {
+		limiter.Block(statusErr.RetryAfter)
+	}
+	return body, err
+}
+
 func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
 	page, totalPages := 1, 0
 	if cursor != "" {
@@ -131,10 +173,16 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid wis cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, pageURL(s.search, page))
+	listingURL := pageURL(s.search, page)
+	referer := ""
+	if page > 1 {
+		referer = pageURL(s.search, page-1)
+	}
+	body, err := s.get(ctx, listingURL, referer)
 	if err != nil {
 		return nil, "", err
 	}
+	s.lastListing.Store(&listingURL)
 	jobs, err := ParseURLs(bytes.NewReader(body))
 	if err != nil {
 		return nil, "", err
@@ -153,7 +201,11 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.Get(ctx, url)
+	referer := ""
+	if last := s.lastListing.Load(); last != nil {
+		referer = *last
+	}
+	body, err := s.get(ctx, url, referer)
 	if err != nil {
 		return dto.Job{}, err
 	}

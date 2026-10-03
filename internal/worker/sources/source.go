@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"strconv"
 	"time"
 
@@ -30,8 +31,10 @@ const (
 )
 
 type Config struct {
-	Name  string
-	Route Route
+	Name    string
+	Route   Route
+	Header  http.Header // overrides the default request headers for a host that rejects them
+	Cookies bool
 }
 
 // SnapshotSource is implemented by any source that has snapshot-testable parsers.
@@ -69,6 +72,8 @@ type BoardResult struct {
 	Jobs       []dto.Job
 	NextPollIn time.Duration
 	Profile    *dto.CompanyProfile
+	// Reported is how many jobs the ATS says the board holds; 0 means unknown.
+	Reported int
 }
 
 // BoardPoller is implemented by a Source that reports a next-poll hint or a profile.
@@ -91,10 +96,14 @@ type PaginatedBase struct {
 
 func NewBase(cfg Config) PaginatedBase {
 	transport, err := proxy.Fetcher(cfg.Route, cfg.Name)
+	var jar http.CookieJar
+	if cfg.Cookies {
+		jar, _ = cookiejar.New(nil)
+	}
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,
-		client: &http.Client{Timeout: DefaultTimeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client: &http.Client{Jar: jar, Timeout: DefaultTimeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
 			}
@@ -109,6 +118,11 @@ func (b *PaginatedBase) Client() *http.Client { return b.client }
 
 func (b *PaginatedBase) Get(ctx context.Context, url string) ([]byte, error) {
 	return b.do(ctx, http.MethodGet, url, nil, nil)
+}
+
+// GetHeader is Get with header entries overriding the defaults.
+func (b *PaginatedBase) GetHeader(ctx context.Context, url string, header http.Header) ([]byte, error) {
+	return b.do(ctx, http.MethodGet, url, nil, header)
 }
 
 // PostJSON sends body as JSON; header entries override the defaults.
@@ -139,8 +153,10 @@ func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte,
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	for k, v := range header {
-		req.Header[k] = v
+	for _, h := range []http.Header{b.cfg.Header, header} {
+		for k, v := range h {
+			req.Header[k] = v
+		}
 	}
 
 	resp, err := b.client.Do(req)

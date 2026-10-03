@@ -130,7 +130,7 @@ func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
 		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method); err != nil {
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, task.CompanyID, task.Source, task.BoardToken, verified.Method, task.Via); err != nil {
 		return err
 	}
 	return p.nameCompany(ctx, task.CompanyID, verified.CompanyName)
@@ -154,6 +154,7 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	found, err := p.discover(ctx, task.Source, task.BoardToken)
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
+		logBoardDiscover(ctx, task, "failed")
 		return nil
 	}
 	companyID, err := p.discoveryCompanyID(ctx, task, found.Name)
@@ -167,12 +168,16 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if !found.Recheck {
 		method = scraper.MethodWTTJOrigin
 	}
-	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method); err != nil && !errors.Is(err, data.ErrNotFound) {
+	if _, err := p.js.Boards().VerifyCompanyBoard(ctx, companyID, task.Source, task.BoardToken, method, task.Via); err != nil && !errors.Is(err, data.ErrNotFound) {
 		return err
 	}
-	pivoted, err := p.pivotToATS(ctx, task.Source, companyID, found.Jobs)
-	if err != nil || pivoted {
+	pivoted, err := p.pivotToATS(ctx, task.Source, cmp.Or(task.Via, task.Source), companyID, found.Jobs)
+	if err != nil {
 		return err
+	}
+	if pivoted {
+		logBoardDiscover(ctx, task, "pivoted")
+		return nil
 	}
 	configs, err := p.scoring.IncludeFilterConfigs(ctx)
 	if err != nil {
@@ -189,8 +194,10 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		tracked = true
 	}
 	if !tracked {
+		logBoardDiscover(ctx, task, "untracked")
 		return nil
 	}
+	logBoardDiscover(ctx, task, "tracked")
 	boardID, err := p.js.Boards().GetVerifiedBoardID(ctx, task.Source, task.BoardToken)
 	if errors.Is(err, data.ErrNotFound) {
 		return nil
@@ -206,7 +213,13 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
 }
 
-func (p *Processor) pivotToATS(ctx context.Context, source, companyID string, jobs []dto.Job) (bool, error) {
+func logBoardDiscover(ctx context.Context, task queue.Task, outcome string) {
+	slog.InfoContext(ctx, "board discovered",
+		slog.String(logger.KeyEvent, "board_discover"), slog.String(logger.KeySource, task.Source),
+		slog.String("via", task.Via), slog.String(logger.KeyOutcome, outcome))
+}
+
+func (p *Processor) pivotToATS(ctx context.Context, source, via, companyID string, jobs []dto.Job) (bool, error) {
 	pivoted := false
 	seen := map[string]bool{}
 	for _, job := range jobs {
@@ -232,7 +245,7 @@ func (p *Processor) pivotToATS(ctx context.Context, source, companyID string, jo
 		case !errors.Is(err, data.ErrNotFound):
 			return false, err
 		}
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: atsSource, Kind: queue.BoardDiscoverTask, BoardToken: token, CompanyID: companyID, Via: via}
 		if err := p.broker.Publish(ctx, task); err != nil {
 			return false, err
 		}

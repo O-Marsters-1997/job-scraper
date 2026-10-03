@@ -603,6 +603,37 @@ func TestOpsState(t *testing.T) {
 		}
 	})
 
+	t.Run("counts unique relevant jobs per source", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		type u struct {
+			source string
+			age    time.Duration
+		}
+		seed := func(fp string, scored bool, urls ...u) {
+			jobID := pgtest.InsertJob(t, pool, fp, fp)
+			if scored {
+				insertScore(t, pool, jobID, userID)
+			}
+			for i, u := range urls {
+				exec(t, pool, `INSERT INTO job_urls (job_id, normalized_url, source, first_seen_at) VALUES ($1, $2, $3, $4)`,
+					jobID, fmt.Sprintf("%s-%d", fp, i), u.source, time.Now().Add(-u.age))
+			}
+		}
+		day := 24 * time.Hour
+		seed("lever-a", true, u{"lever", day})
+		seed("lever-b", true, u{"lever", 2 * day})
+		seed("lever-old", true, u{"lever", 20 * day})
+		seed("lever-unscored", false, u{"lever", day})
+		seed("shared", true, u{"lever", day}, u{"ashby", day})
+		seed("ashby-a", true, u{"ashby", day})
+
+		want := map[string]int64{"lever": 2, "ashby": 1}
+		if diff := cmp.Diff(want, opsState(t, st).UniqueRelevantJobs); diff != "" {
+			t.Errorf("OpsState().UniqueRelevantJobs mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("reports harvest age per harvester", func(t *testing.T) {
 		st, pool := newStore(t)
 		now := time.Now()
@@ -621,6 +652,112 @@ func TestOpsState(t *testing.T) {
 			t.Errorf("OpsState().HarvestAge[lever] = %s, want ~1m", age)
 		}
 	})
+
+	t.Run("gauges boards, relevant jobs and admitted companies by discovery route", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		exec(t, pool, `INSERT INTO harvest_runs (harvester, last_succeeded_at) VALUES ('ashby', NOW())`)
+		day := 24 * time.Hour
+		seed := func(slug, via, status string, verifiedAgo time.Duration, reviewState string, scoredJobs int) {
+			var companyID, boardID string
+			if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+				t.Fatalf("insert company: %v", err)
+			}
+			if err := pool.QueryRow(t.Context(),
+				`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at, discovered_via)
+				 VALUES ($1, 'greenhouse', $2, $3, 'manual', $4, NULLIF($5, '')) RETURNING id`,
+				companyID, slug, status, time.Now().Add(-verifiedAgo), via).Scan(&boardID); err != nil {
+				t.Fatalf("insert board: %v", err)
+			}
+			if reviewState != "" {
+				exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, review_state) VALUES ($1, $2, $3)`, userID, companyID, reviewState)
+			}
+			for i := range scoredJobs {
+				jobID := pgtest.InsertJob(t, pool, slug, fmt.Sprintf("%s-%d", slug, i))
+				exec(t, pool, `UPDATE jobs SET primary_board_id = $1 WHERE id = $2`, boardID, jobID)
+				insertScore(t, pool, jobID, userID)
+			}
+		}
+		seed("li-a", "linkedin", "verified", day, "", 2)
+		seed("li-b", "linkedin", "verified", 2*day, "", 1)
+		seed("li-stale", "linkedin", "verified", 20*day, "", 1)
+		seed("li-retired", "linkedin", "retired", day, "", 1)
+		seed("ashby-kept", "ashby", "verified", day, "kept", 1)
+		seed("ashby-new", "ashby", "verified", day, "new", 0)
+		seed("ashby-dismissed", "ashby", "verified", day, "dismissed", 0)
+		seed("linkedin-tracked", "linkedin", "verified", day, "kept", 0)
+		seed("unattributed", "", "verified", day, "kept", 1)
+
+		state := opsState(t, st)
+		if diff := cmp.Diff(map[string]int64{"linkedin": 3, "ashby": 3}, state.DiscoveryBoards); diff != "" {
+			t.Errorf("OpsState().DiscoveryBoards mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string]int64{"linkedin": 3, "ashby": 1}, state.DiscoveryRelevantJobs); diff != "" {
+			t.Errorf("OpsState().DiscoveryRelevantJobs mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(map[string]int64{"ashby": 2}, state.HarvestAdmitted); diff != "" {
+			t.Errorf("OpsState().HarvestAdmitted mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func insertManualBoard(t *testing.T, pool *pgxpool.Pool, slug, source, status string) string {
+	t.Helper()
+	var companyID, boardID string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+	if err := pool.QueryRow(t.Context(),
+		`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at)
+		 VALUES ($1, $2, $3, $4, 'manual', NOW()) RETURNING id`,
+		companyID, source, slug, status).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
+	}
+	return boardID
+}
+
+func TestOpsStateEmptiedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, emptyPolls int, completedAgo time.Duration) {
+		boardID := insertManualBoard(t, pool, slug, source, status)
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, consecutive_complete_empty, last_completed_at) VALUES ($1, $2, $3)`,
+			boardID, emptyPolls, time.Now().Add(-completedAgo))
+	}
+	day := 24 * time.Hour
+	seed("two-empty", "greenhouse", "verified", 2, day)
+	seed("many-empty", "greenhouse", "verified", 5, day)
+	seed("one-empty", "greenhouse", "verified", 1, day)
+	seed("not-observed", "greenhouse", "verified", 3, 8*day)
+	seed("retired", "greenhouse", "retired", 3, day)
+	seed("lever-empty", "lever", "verified", 2, day)
+
+	got := opsState(t, st).EmptiedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().EmptiedBoards mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpsStateUnderparsedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, reported, parsed int) {
+		boardID := insertManualBoard(t, pool, slug, source, status)
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, last_reported_total, last_parsed) VALUES ($1, $2, $3)`,
+			boardID, reported, parsed)
+	}
+	seed("truncated", "greenhouse", "verified", 100, 50)
+	seed("just-under", "greenhouse", "verified", 100, 97)
+	seed("at-threshold", "greenhouse", "verified", 100, 98)
+	seed("complete", "greenhouse", "verified", 100, 100)
+	seed("unknown-total", "greenhouse", "verified", 0, 0)
+	seed("retired", "greenhouse", "retired", 100, 10)
+	seed("lever-truncated", "lever", "verified", 10, 5)
+
+	got := opsState(t, st).UnderparsedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().UnderparsedBoards mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestQueueMissingAnswers(t *testing.T) {
@@ -977,5 +1114,35 @@ func TestGetCompanyProfile_ReturnsNewestProfile(t *testing.T) {
 	want := dto.CompanyProfile{Size: "201-500", FundingRounds: 2}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("GetCompanyProfile() (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpsStateFieldCompleteness(t *testing.T) {
+	st, pool := newStore(t)
+	insert := func(n int, source, location, salary string, scrapedAgo time.Duration, closed bool) {
+		var closedAt *time.Time
+		if closed {
+			now := time.Now()
+			closedAt = &now
+		}
+		exec(t, pool,
+			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, closed_at)
+			 VALUES ('Engineer', $1, $2, 'acme', $3, NOW(), $4, 'desc', $5, $6)`,
+			location, fmt.Sprintf("https://example.com/%s/%d", source, n), source, time.Now().Add(-scrapedAgo), salary, closedAt)
+	}
+	insert(1, "sparse", "London", "", time.Hour, false)
+	insert(2, "sparse", "", "", time.Hour, false)
+	insert(3, "sparse", "", "", time.Hour, false)
+	insert(4, "sparse", "", "", time.Hour, false)
+	insert(5, "sparse", "London", "£50k", 48*time.Hour, false)
+	insert(6, "sparse", "London", "£50k", time.Hour, true)
+	insert(1, "full", "London", "£50k", time.Hour, false)
+
+	want := map[string]map[string]float64{
+		"sparse": {"title": 1, "location": 0.25, "description": 1, "salary_raw": 0, "work_arrangement": 0},
+		"full":   {"title": 1, "location": 1, "description": 1, "salary_raw": 1, "work_arrangement": 0},
+	}
+	if diff := cmp.Diff(want, opsState(t, st).FieldCompleteness); diff != "" {
+		t.Errorf("OpsState().FieldCompleteness mismatch (-want +got):\n%s", diff)
 	}
 }

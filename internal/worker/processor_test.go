@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -108,8 +107,8 @@ func (discardCards) CapturePage(context.Context, dto.SourceTarget, []dto.Job, dt
 
 type oneBoardJob struct{}
 
-func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, time.Duration, error) {
-	return []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}, 0, nil
+func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResult, error) {
+	return sources.BoardResult{Jobs: []dto.Job{{Title: "Engineer", URL: "https://example.com/1"}}}, nil
 }
 
 type ingest struct {
@@ -616,7 +615,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 			t.Fatal(err)
 		}
 		tasks := f.published.Tasks()
-		if len(tasks) != 1 || tasks[0].Kind != queue.BoardDiscoverTask || tasks[0].Source != "ashby" || tasks[0].BoardToken != "acme" || tasks[0].CompanyID != company.ID {
+		if len(tasks) != 1 || tasks[0].Kind != queue.BoardDiscoverTask || tasks[0].Source != "ashby" || tasks[0].BoardToken != "acme" || tasks[0].CompanyID != company.ID || tasks[0].Via != "wttj" {
 			t.Fatalf("published = %+v, want one ashby/acme discover for company %s", tasks, company.ID)
 		}
 		tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
@@ -637,7 +636,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if _, err := f.store.UpsertCandidateBoard(ctx, company.ID, "ashby", "acme"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.store.VerifyCompanyBoard(ctx, company.ID, "ashby", "acme", "discovered"); err != nil {
+		if _, err := f.store.VerifyCompanyBoard(ctx, company.ID, "ashby", "acme", "discovered", ""); err != nil {
 			t.Fatal(err)
 		}
 		viaAshby := func(context.Context, string, string) (scraper.Discovery, error) {
