@@ -244,6 +244,12 @@ function ScoringForm(props: {
 						isOn={isNice}
 						toggle={toggleNice}
 					/>
+					<ChoiceGroup
+						legend="Company size"
+						options={optionsFor("size")}
+						isOn={isNice}
+						toggle={toggleNice}
+					/>
 				</Match>
 				<Match when={params().section === "filters"}>
 					<FiltersSection filters={filters} />

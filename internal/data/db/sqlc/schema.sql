@@ -378,7 +378,7 @@ CREATE TABLE IF NOT EXISTS candidate_assessments (
     PRIMARY KEY (candidate_id, user_id)
 );
 
-CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage');
+CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage', 'size');
 
 CREATE TABLE scoring_options (
     id         TEXT PRIMARY KEY,

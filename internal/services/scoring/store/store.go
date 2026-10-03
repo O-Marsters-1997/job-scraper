@@ -287,6 +287,24 @@ func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, er
 	return toJobDTO(row), nil
 }
 
+// GetCompanyProfile returns the most recently fetched profile of companyID,
+// or data.ErrNotFound when it has none.
+func (s *Store) GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return dto.CompanyProfile{}, data.ErrNotFound
+	}
+	raw, err := s.queries.GetCompanyProfile(ctx, cid)
+	if err != nil {
+		return dto.CompanyProfile{}, data.QueryErr("GetCompanyProfile", err)
+	}
+	var profile dto.CompanyProfile
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		return dto.CompanyProfile{}, fmt.Errorf("store.GetCompanyProfile: unmarshal: %w", err)
+	}
+	return profile, nil
+}
+
 func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {

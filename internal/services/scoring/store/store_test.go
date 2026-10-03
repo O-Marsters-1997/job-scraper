@@ -963,3 +963,19 @@ func TestListImpliedPositives(t *testing.T) {
 		t.Errorf("ListImpliedPositives() mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestGetCompanyProfile_ReturnsNewestProfile(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, _ := insertTrackedCompany(t, pool, "acme")
+	exec(t, pool, `INSERT INTO company_profiles (company_id, source, data, fetched_at) VALUES ($1, 'old', '{"size":"1-10"}', NOW() - INTERVAL '1 day')`, companyID)
+	exec(t, pool, `INSERT INTO company_profiles (company_id, source, data) VALUES ($1, 'new', '{"size":"201-500","funding_rounds":2}')`, companyID)
+
+	got, err := st.GetCompanyProfile(t.Context(), companyID)
+	if err != nil {
+		t.Fatalf("GetCompanyProfile() err = %v", err)
+	}
+	want := dto.CompanyProfile{Size: "201-500", FundingRounds: 2}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("GetCompanyProfile() (-want +got):\n%s", diff)
+	}
+}
