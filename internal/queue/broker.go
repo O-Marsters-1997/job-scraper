@@ -155,7 +155,7 @@ func (b *Broker) Publish(ctx context.Context, task Task) (err error) {
 		}
 	}
 	priority := uint8(1)
-	if task.Kind != DetailTask {
+	if task.Kind != DetailTask && task.Kind != BoardDiscoverTask {
 		priority = 8
 	}
 	ctx, span := otel.Tracer(tracerName).Start(ctx, "publish "+task.Source, trace.WithSpanKind(trace.SpanKindProducer))

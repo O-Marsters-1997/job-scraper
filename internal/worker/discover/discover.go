@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -30,11 +31,13 @@ type Company struct {
 }
 
 // Harvest is what one harvester run found. Skipped counts candidates that
-// resolved to no board or an unsupported source.
+// resolved to no board or an unsupported source. Recheck publishes Boards that
+// are already verified; otherwise they are dropped.
 type Harvest struct {
 	Boards    []Board
 	Companies []Company
 	Skipped   int
+	Recheck   bool
 }
 
 // Get fetches url with client and returns the body of a 200 response. A non-empty
@@ -82,6 +85,7 @@ type Publisher interface {
 type Catalog interface {
 	UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error)
 	ListVerifiedCompanySlugs(ctx context.Context, slugs []string) ([]string, error)
+	GetVerifiedBoardID(ctx context.Context, source, token string) (string, error)
 	UpsertCandidateBoard(ctx context.Context, companyID, source, token string) (dto.CompanyBoard, error)
 }
 
@@ -138,6 +142,16 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 
 	published := 0
 	for _, b := range found.Boards {
+		if !found.Recheck {
+			_, err := r.catalog.GetVerifiedBoardID(ctx, b.Source, b.Token)
+			if err == nil {
+				found.Skipped++
+				continue
+			}
+			if !errors.Is(err, data.ErrNotFound) {
+				log.WarnContext(ctx, "could not check board verified, publishing", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
+			}
+		}
 		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name()}
 		if err := r.publisher.Publish(ctx, task); err != nil {
 			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
@@ -146,9 +160,9 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 		published++
 	}
 	recorded := r.recordUndiscovered(ctx, log, h.Name(), found.Companies, verified)
-	log.InfoContext(ctx, "harvest: completed",
-		slog.Int(logger.KeyCount, len(found.Boards)+len(found.Companies)), slog.Int("published", published),
-		slog.Int("recorded", recorded), slog.Int("verified", len(verified)), slog.Int("skipped", found.Skipped))
+	log.InfoContext(ctx, "harvest: completed", slog.String("event", "harvest.run"),
+		slog.Int("candidates", len(found.Boards)+len(found.Companies)), slog.Int("resolved", published+recorded),
+		slog.Int("skipped", found.Skipped))
 
 	if err := r.gate.SetLastScraped(ctx, key); err != nil {
 		log.ErrorContext(ctx, "could not set last harvested", slog.Any(logger.KeyErr, err))

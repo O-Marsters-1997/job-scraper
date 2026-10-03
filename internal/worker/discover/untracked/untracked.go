@@ -33,7 +33,7 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 	if err != nil {
 		return discover.Harvest{}, fmt.Errorf("list untracked boards: %w", err)
 	}
-	out := discover.Harvest{Boards: make([]discover.Board, len(rows))}
+	out := discover.Harvest{Boards: make([]discover.Board, len(rows)), Recheck: true}
 	for i, b := range rows {
 		out.Boards[i] = discover.Board{Source: b.Source, Token: b.BoardToken}
 	}
