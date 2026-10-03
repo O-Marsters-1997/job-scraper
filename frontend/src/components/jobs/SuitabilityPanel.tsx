@@ -18,12 +18,13 @@ export function SuitabilityPanel(props: { job: Job }) {
 			<CardContent class="gap-3">
 				<SuitabilityScoreValue
 					score={props.job.SuitabilityScore}
+					band={props.job.Band}
 					breakdown={props.job.Breakdown}
 					size="lg"
 				/>
 				<ScoreBreakdown job={props.job} />
 				<ExperienceMatch jobId={props.job.ID} />
-				<GradeControl jobId={props.job.ID} />
+				<GradeControl jobId={props.job.ID} band={props.job.Band} />
 			</CardContent>
 		</Card>
 	);

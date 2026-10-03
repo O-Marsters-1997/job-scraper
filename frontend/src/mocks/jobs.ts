@@ -52,5 +52,5 @@ export function correctAnswer(
 		};
 	});
 	jobs = jobs.map((j) => (j.ID === jobId ? { ...j, Breakdown: rows } : j));
-	return { jobId, score: job.SuitabilityScore, rows };
+	return { jobId, score: job.SuitabilityScore, band: job.Band, rows };
 }

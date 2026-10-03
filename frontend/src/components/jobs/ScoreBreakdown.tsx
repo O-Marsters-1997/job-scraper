@@ -1,16 +1,12 @@
 import { createSignal, For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { useRevertCorrection, useSetCorrection } from "@/hooks/useCorrections";
-import { MATCHED_COLOUR, MISSING_COLOUR } from "@/lib/scoreColour";
-import { unknownCount } from "@/lib/scoreRows";
+import { MATCHED_COLOUR, MISSING_COLOUR, tintedChip } from "@/lib/scoreColour";
 import { cn } from "@/lib/utils";
 import type { Job, ScoreRow } from "@/types/job";
 
-const tintedChip = (colour: string) => ({
-	background: `color-mix(in srgb, ${colour} 12%, white)`,
-	color: `color-mix(in srgb, ${colour} 80%, black)`,
-	border: `1px solid color-mix(in srgb, ${colour} 28%, white)`,
-});
+const CORRECTED_CLASS =
+	"bg-accent-subtle text-accent-text border border-accent-border";
 
 const GROUPS: {
 	label: string;
@@ -19,29 +15,29 @@ const GROUPS: {
 	class?: string;
 }[] = [
 	{
-		label: "Corrected",
-		keep: (r) => r.corrected === true,
-		class: "bg-accent-subtle text-accent-text border border-accent-border",
-	},
-	{
-		label: "Blocked",
-		keep: (r) => !r.corrected && r.effect === "blocked",
+		label: "Gates",
+		keep: (r) => r.effect === "gated" || r.effect === "blocked",
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
-		label: "Gated",
-		keep: (r) => !r.corrected && r.effect === "gated",
-		style: tintedChip(MISSING_COLOUR),
-	},
-	{
-		label: "Matched",
-		keep: (r) => !r.corrected && r.effect === "meets",
+		label: "Met",
+		keep: (r) => r.effect === "meets",
 		style: tintedChip(MATCHED_COLOUR),
 	},
 	{
-		label: "Avoid hit",
-		keep: (r) => !r.corrected && r.effect === "misses" && r.stance === "avoid",
+		label: "Missed",
+		keep: (r) => r.effect === "misses",
 		style: tintedChip(MISSING_COLOUR),
+	},
+	{
+		label: "Unknown",
+		keep: (r) => r.effect === "unknown",
+		class: "bg-surface-muted text-muted border border-border",
+	},
+	{
+		label: "Corrected",
+		keep: (r) => r.corrected === true && r.effect === "neutral",
+		class: CORRECTED_CLASS,
 	},
 	{
 		label: "Retired",
@@ -65,10 +61,9 @@ export function ScoreBreakdown(props: { job: Job }) {
 		GROUPS.map((g) => ({ ...g, rows: breakdown().filter(g.keep) })).filter(
 			(g) => g.rows.length > 0,
 		);
-	const unknowns = () => unknownCount(props.job.Breakdown);
 
 	return (
-		<Show when={groups().length > 0 || unknowns() > 0}>
+		<Show when={groups().length > 0}>
 			<div class="flex flex-col gap-2.5">
 				<For each={groups()}>
 					{(g) => (
@@ -85,10 +80,10 @@ export function ScoreBreakdown(props: { job: Job }) {
 											aria-expanded={selectedKey() === r.key}
 											class={cn(
 												"inline-flex max-w-[240px] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium enabled:cursor-pointer",
-												g.class,
+												r.corrected ? CORRECTED_CLASS : g.class,
 											)}
-											style={g.style}
-											title={r.label}
+											style={r.corrected ? undefined : g.style}
+											title={r.corrected ? `${r.label} (corrected)` : r.label}
 											onClick={() =>
 												setSelectedKey(
 													selectedKey() === r.key ? undefined : r.key,
@@ -142,11 +137,6 @@ export function ScoreBreakdown(props: { job: Job }) {
 							</Show>
 						</div>
 					)}
-				</Show>
-				<Show when={unknowns() > 0}>
-					<p class="text-2xs text-faint">
-						{unknowns()} unknown — not stated in the posting
-					</p>
 				</Show>
 			</div>
 		</Show>

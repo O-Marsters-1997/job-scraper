@@ -10,7 +10,7 @@ import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
-import { ScoreCircle } from "./ScoreCircle";
+import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
@@ -124,10 +124,13 @@ export function createJobColumns(
 							e.stopPropagation();
 							meta?.toggleExpanded(rowId);
 						}}
-						class={`rounded-full transition-all hover:opacity-80${expanded() ? " ring-2 ring-primary ring-offset-1" : ""}`}
+						class={`rounded-md transition-all hover:opacity-80${expanded() ? " ring-2 ring-primary ring-offset-1" : ""}`}
 					>
 						{val != null ? (
-							<ScoreCircle value={val} />
+							<SuitabilityScoreValue
+								score={val}
+								band={info.row.original.Band}
+							/>
 						) : (
 							<span class="inline-flex size-7 items-center justify-center text-faint">
 								—
