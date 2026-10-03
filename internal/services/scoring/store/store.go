@@ -548,6 +548,27 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		return dto.OpsState{}, fmt.Errorf("store.OpsState harvest admitted: %w", err)
 	}
 	admittedByHarvester := countsBy(admitted, func(r sqlc.HarvestAdmittedRow) (string, int64) { return r.Harvester, r.Companies })
+	emptied, err := s.queries.EmptiedBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState emptied boards: %w", err)
+	}
+	emptiedBySource := countsBy(emptied, func(r sqlc.EmptiedBoardsRow) (string, int64) { return r.Source, r.Boards })
+	underparsed, err := s.queries.UnderparsedBoards(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState underparsed boards: %w", err)
+	}
+	underparsedBySource := countsBy(underparsed, func(r sqlc.UnderparsedBoardsRow) (string, int64) { return r.Source, r.Boards })
+	completeness, err := s.queries.FieldCompleteness(ctx)
+	if err != nil {
+		return dto.OpsState{}, fmt.Errorf("store.OpsState field completeness: %w", err)
+	}
+	completenessBySource := make(map[string]map[string]float64)
+	for _, r := range completeness {
+		if completenessBySource[r.Source] == nil {
+			completenessBySource[r.Source] = make(map[string]float64)
+		}
+		completenessBySource[r.Source][r.Field] = r.Share
+	}
 	var oldestPendingAge time.Duration
 	if row.OldestPendingCreatedAt.Valid {
 		oldestPendingAge = time.Since(row.OldestPendingCreatedAt.Time)
@@ -569,6 +590,9 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 		DiscoveryBoards:        boardsByVia,
 		DiscoveryRelevantJobs:  relevantByVia,
 		HarvestAdmitted:        admittedByHarvester,
+		EmptiedBoards:          emptiedBySource,
+		UnderparsedBoards:      underparsedBySource,
+		FieldCompleteness:      completenessBySource,
 	}, nil
 }
 

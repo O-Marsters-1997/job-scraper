@@ -10,3 +10,9 @@ import (
 func TestFetchPage_Golden(t *testing.T) {
 	sourcetest.RunGolden(t, "board_acme.json", greenhouse.New("acme"))
 }
+
+func TestPollBoard_Reported(t *testing.T) {
+	if got, want := sourcetest.PollReported(t, "board_acme.json", greenhouse.New("acme")), 2; got != want {
+		t.Errorf("PollBoard(%s).Reported = %d, want %d", "board_acme.json", got, want)
+	}
+}

@@ -16,6 +16,7 @@ func New(token string) *sources.BoardSource {
 		URL:         fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", token),
 		CompanySlug: token,
 		Parse:       parse,
+		Count:       sources.JSONArrayLen(""),
 	})
 }
 

@@ -15,6 +15,7 @@ func New(token string) *sources.BoardSource {
 		URL:         fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", token),
 		CompanySlug: token,
 		Parse:       parse,
+		Count:       sources.JSONArrayLen("jobs"),
 	})
 }
 

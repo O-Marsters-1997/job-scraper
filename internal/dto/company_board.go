@@ -22,7 +22,10 @@ type CompanyBoard struct {
 	LastLinkedAt       *time.Time
 	RetiredAt          *time.Time
 	LastCompletedAt    *time.Time
-	CreatedAt          time.Time
+	// LastReportedTotal is how many jobs the ATS said the Board held on its last poll; 0 means unknown.
+	LastReportedTotal int
+	LastParsed        int
+	CreatedAt         time.Time
 }
 
 // CardBoard is a verified Board of the Company a discovery card names.

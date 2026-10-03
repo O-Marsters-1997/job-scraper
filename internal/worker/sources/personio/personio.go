@@ -17,6 +17,7 @@ func New(token string) *sources.BoardSource {
 		URL:         fmt.Sprintf("https://%s.jobs.personio.com/xml", token),
 		CompanySlug: token,
 		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
+		Count:       count,
 	})
 }
 
@@ -34,6 +35,14 @@ type personioJob struct {
 
 type jobDescription struct {
 	Value string `xml:"value"`
+}
+
+func count(body []byte) (int, error) {
+	var root workzagJobs
+	if err := xml.Unmarshal(body, &root); err != nil {
+		return 0, fmt.Errorf("parse xml: %w", err)
+	}
+	return len(root.Positions), nil
 }
 
 func parse(body []byte, token string) ([]dto.Job, error) {

@@ -44,14 +44,16 @@ func (q *Queries) GetVerifiedBoardID(ctx context.Context, arg GetVerifiedBoardID
 }
 
 const listBoardChecks = `-- name: ListBoardChecks :many
-SELECT b.id, s.last_completed_at FROM company_boards b
+SELECT b.id, s.last_completed_at, COALESCE(s.last_reported_total, 0)::int AS last_reported_total, COALESCE(s.last_parsed, 0)::int AS last_parsed FROM company_boards b
 LEFT JOIN board_poll_state s ON s.board_id = b.id
 WHERE b.company_id = $1
 `
 
 type ListBoardChecksRow struct {
-	ID              pgtype.UUID
-	LastCompletedAt pgtype.Timestamptz
+	ID                pgtype.UUID
+	LastCompletedAt   pgtype.Timestamptz
+	LastReportedTotal int32
+	LastParsed        int32
 }
 
 func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([]ListBoardChecksRow, error) {
@@ -63,7 +65,12 @@ func (q *Queries) ListBoardChecks(ctx context.Context, companyID pgtype.UUID) ([
 	var items []ListBoardChecksRow
 	for rows.Next() {
 		var i ListBoardChecksRow
-		if err := rows.Scan(&i.ID, &i.LastCompletedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.LastCompletedAt,
+			&i.LastReportedTotal,
+			&i.LastParsed,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

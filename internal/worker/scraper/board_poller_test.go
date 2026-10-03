@@ -1,13 +1,19 @@
 package scraper_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 type boardStoreStub struct {
@@ -30,13 +36,14 @@ func (s *boardStoreStub) FailBoard(context.Context, dto.BoardPoll) error {
 }
 
 type boardFetcherStub struct {
-	jobs []dto.Job
-	hint time.Duration
-	err  error
+	jobs     []dto.Job
+	hint     time.Duration
+	reported int
+	err      error
 }
 
-func (f boardFetcherStub) FetchBoard(context.Context, dto.BoardPoll) ([]dto.Job, time.Duration, error) {
-	return f.jobs, f.hint, f.err
+func (f boardFetcherStub) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResult, error) {
+	return sources.BoardResult{Jobs: f.jobs, NextPollIn: f.hint, Reported: f.reported}, f.err
 }
 
 type boardIngesterStub struct {
@@ -125,5 +132,53 @@ func TestPollPrefetchedCompletesTheFullListWithHint(t *testing.T) {
 	}
 	if store.state != "completed" || !store.snapshot.Complete || store.snapshot.NextPollIn != hint {
 		t.Errorf("state = %q, snapshot = %+v, want a complete snapshot with hint %v", store.state, store.snapshot, hint)
+	}
+}
+
+func TestBoardPollLogsUnderparsedOnlyWhenShort(t *testing.T) {
+	jobs := func(n int) []dto.Job {
+		out := make([]dto.Job, n)
+		for i := range out {
+			out[i] = dto.Job{Title: "Engineer", URL: fmt.Sprintf("https://example.com/%d", i)}
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		name      string
+		parsed    int
+		reported  int
+		wantEvent bool
+	}{
+		{"short poll", 90, 100, true},
+		{"full poll", 100, 100, false},
+		{"within tolerance", 99, 100, false},
+		{"unknown reported", 3, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			store := &boardStoreStub{board: dto.BoardPoll{ID: "board"}}
+			poller := scraper.NewBoardPoller(store, boardFetcherStub{jobs: jobs(tc.parsed), reported: tc.reported}, &boardIngesterStub{})
+			if err := poller.PollBoard(t.Context(), "board", false); err != nil {
+				t.Fatal(err)
+			}
+
+			var logged bool
+			for line := range bytes.SplitSeq(buf.Bytes(), []byte("\n")) {
+				var rec map[string]any
+				if json.Unmarshal(line, &rec) == nil && rec["event"] == telemetry.EventBoardUnderparsed {
+					logged = true
+				}
+			}
+			if logged != tc.wantEvent {
+				t.Errorf("board.underparsed logged = %t, want %t", logged, tc.wantEvent)
+			}
+			if store.snapshot.Reported != tc.reported {
+				t.Errorf("snapshot Reported = %d, want %d", store.snapshot.Reported, tc.reported)
+			}
+		})
 	}
 }

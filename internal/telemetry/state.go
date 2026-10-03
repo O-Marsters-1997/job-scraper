@@ -29,6 +29,10 @@ var (
 		"jobscraper_boards_overdue", "Verified, unleased Boards whose next_due_at has passed.", nil, nil)
 	boardsFailingDesc = prometheus.NewDesc(
 		"jobscraper_boards_failing", "Verified Boards with at least 3 consecutive failed polls.", nil, nil)
+	boardsEmptiedDesc = prometheus.NewDesc(
+		"jobscraper_boards_emptied", "Verified Boards with at least 2 consecutive complete-but-empty polls, observed in the last 7 days, per source.", []string{"source"}, nil)
+	boardsUnderparsedDesc = prometheus.NewDesc(
+		"jobscraper_boards_underparsed", "Verified Boards whose last poll parsed under 98% of the reported total, per source.", []string{"source"}, nil)
 	sourceTargetsFailedDesc = prometheus.NewDesc(
 		"jobscraper_source_targets_failed", "Source Targets whose last run failed.", nil, nil)
 	sourceTargetsDisabledDesc = prometheus.NewDesc(
@@ -41,6 +45,8 @@ var (
 		"jobscraper_discovery_relevant_jobs", "Scored Jobs whose primary Board was verified in the last 14 days, per discovery route.", []string{"via"}, nil)
 	harvestAdmittedDesc = prometheus.NewDesc(
 		"jobscraper_harvest_admitted", "Companies tracked as new or kept whose Board came from this harvester.", []string{"harvester"}, nil)
+	fieldCompletenessDesc = prometheus.NewDesc(
+		"jobscraper_field_completeness", "Share of open Jobs scraped in the last 24h with a non-empty value for the field, per source.", []string{"source", "field"}, nil)
 	sourceUniqueRelevantJobsDesc = prometheus.NewDesc(
 		"jobscraper_source_unique_relevant_jobs", "Scored Jobs first discovered in the last 14 days whose every URL came from this source.", []string{"source"}, nil)
 )
@@ -63,6 +69,8 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- outboxFailedDesc
 	ch <- boardsOverdueDesc
 	ch <- boardsFailingDesc
+	ch <- boardsEmptiedDesc
+	ch <- boardsUnderparsedDesc
 	ch <- sourceTargetsFailedDesc
 	ch <- sourceTargetsDisabledDesc
 	ch <- harvestAgeSecondsDesc
@@ -70,6 +78,7 @@ func (c *stateCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- discoveryBoardsDesc
 	ch <- discoveryRelevantJobsDesc
 	ch <- harvestAdmittedDesc
+	ch <- fieldCompletenessDesc
 }
 
 func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
@@ -106,5 +115,16 @@ func (c *stateCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 	for harvester, n := range state.HarvestAdmitted {
 		ch <- prometheus.MustNewConstMetric(harvestAdmittedDesc, prometheus.GaugeValue, float64(n), harvester)
+	}
+	for source, n := range state.EmptiedBoards {
+		ch <- prometheus.MustNewConstMetric(boardsEmptiedDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for source, n := range state.UnderparsedBoards {
+		ch <- prometheus.MustNewConstMetric(boardsUnderparsedDesc, prometheus.GaugeValue, float64(n), source)
+	}
+	for source, fields := range state.FieldCompleteness {
+		for field, share := range fields {
+			ch <- prometheus.MustNewConstMetric(fieldCompletenessDesc, prometheus.GaugeValue, share, source, field)
+		}
 	}
 }

@@ -51,3 +51,31 @@ FROM tracked_companies tc
 JOIN company_boards b ON b.company_id = tc.company_id
 WHERE tc.review_state IN ('new', 'kept') AND b.discovered_via IN (SELECT harvester FROM harvest_runs)
 GROUP BY b.discovered_via;
+
+-- name: EmptiedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.consecutive_complete_empty >= 2 AND ps.last_completed_at > NOW() - INTERVAL '7 days'
+GROUP BY b.source;
+
+-- name: UnderparsedBoards :many
+SELECT b.source::text AS source, count(*) AS boards
+FROM board_poll_state ps
+JOIN company_boards b ON b.id = ps.board_id
+WHERE b.status = 'verified' AND ps.last_reported_total > 0 AND ps.last_parsed < 0.98 * ps.last_reported_total
+GROUP BY b.source;
+
+-- name: FieldCompleteness :many
+SELECT j.source::text AS source, f.field::text AS field,
+       (count(*) FILTER (WHERE f.filled)::float8 / count(*))::float8 AS share
+FROM jobs j
+CROSS JOIN LATERAL (VALUES
+    ('title', j.title <> ''),
+    ('location', j.location <> ''),
+    ('description', j.description <> ''),
+    ('salary_raw', j.salary_raw <> ''),
+    ('work_arrangement', j.work_arrangement <> '')
+) AS f(field, filled)
+WHERE j.closed_at IS NULL AND j.scraped_at > NOW() - INTERVAL '24 hours'
+GROUP BY j.source, f.field;

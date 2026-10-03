@@ -687,6 +687,65 @@ func TestOpsState(t *testing.T) {
 	})
 }
 
+func insertManualBoard(t *testing.T, pool *pgxpool.Pool, slug, source, status string) string {
+	t.Helper()
+	var companyID, boardID string
+	if err := pool.QueryRow(t.Context(), `INSERT INTO companies (slug, name) VALUES ($1, $1) RETURNING id`, slug).Scan(&companyID); err != nil {
+		t.Fatalf("insert company: %v", err)
+	}
+	if err := pool.QueryRow(t.Context(),
+		`INSERT INTO company_boards (company_id, source, board_token, status, verification_method, verified_at)
+		 VALUES ($1, $2, $3, $4, 'manual', NOW()) RETURNING id`,
+		companyID, source, slug, status).Scan(&boardID); err != nil {
+		t.Fatalf("insert board: %v", err)
+	}
+	return boardID
+}
+
+func TestOpsStateEmptiedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, emptyPolls int, completedAgo time.Duration) {
+		boardID := insertManualBoard(t, pool, slug, source, status)
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, consecutive_complete_empty, last_completed_at) VALUES ($1, $2, $3)`,
+			boardID, emptyPolls, time.Now().Add(-completedAgo))
+	}
+	day := 24 * time.Hour
+	seed("two-empty", "greenhouse", "verified", 2, day)
+	seed("many-empty", "greenhouse", "verified", 5, day)
+	seed("one-empty", "greenhouse", "verified", 1, day)
+	seed("not-observed", "greenhouse", "verified", 3, 8*day)
+	seed("retired", "greenhouse", "retired", 3, day)
+	seed("lever-empty", "lever", "verified", 2, day)
+
+	got := opsState(t, st).EmptiedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().EmptiedBoards mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpsStateUnderparsedBoards(t *testing.T) {
+	st, pool := newStore(t)
+	seed := func(slug, source, status string, reported, parsed int) {
+		boardID := insertManualBoard(t, pool, slug, source, status)
+		exec(t, pool,
+			`INSERT INTO board_poll_state (board_id, last_reported_total, last_parsed) VALUES ($1, $2, $3)`,
+			boardID, reported, parsed)
+	}
+	seed("truncated", "greenhouse", "verified", 100, 50)
+	seed("just-under", "greenhouse", "verified", 100, 97)
+	seed("at-threshold", "greenhouse", "verified", 100, 98)
+	seed("complete", "greenhouse", "verified", 100, 100)
+	seed("unknown-total", "greenhouse", "verified", 0, 0)
+	seed("retired", "greenhouse", "retired", 100, 10)
+	seed("lever-truncated", "lever", "verified", 10, 5)
+
+	got := opsState(t, st).UnderparsedBoards
+	if diff := cmp.Diff(map[string]int64{"greenhouse": 2, "lever": 1}, got); diff != "" {
+		t.Errorf("OpsState().UnderparsedBoards mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestQueueMissingAnswers(t *testing.T) {
 	const model = "typesafe/jev-1.13"
 
@@ -954,5 +1013,35 @@ func TestListJobScoresForCollection(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b dto.CollectionJobScore) bool { return a.Title < b.Title })); diff != "" {
 		t.Errorf("ListJobScoresForCollection() (-want +got):\n%s", diff)
+	}
+}
+
+func TestOpsStateFieldCompleteness(t *testing.T) {
+	st, pool := newStore(t)
+	insert := func(n int, source, location, salary string, scrapedAgo time.Duration, closed bool) {
+		var closedAt *time.Time
+		if closed {
+			now := time.Now()
+			closedAt = &now
+		}
+		exec(t, pool,
+			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, closed_at)
+			 VALUES ('Engineer', $1, $2, 'acme', $3, NOW(), $4, 'desc', $5, $6)`,
+			location, fmt.Sprintf("https://example.com/%s/%d", source, n), source, time.Now().Add(-scrapedAgo), salary, closedAt)
+	}
+	insert(1, "sparse", "London", "", time.Hour, false)
+	insert(2, "sparse", "", "", time.Hour, false)
+	insert(3, "sparse", "", "", time.Hour, false)
+	insert(4, "sparse", "", "", time.Hour, false)
+	insert(5, "sparse", "London", "£50k", 48*time.Hour, false)
+	insert(6, "sparse", "London", "£50k", time.Hour, true)
+	insert(1, "full", "London", "£50k", time.Hour, false)
+
+	want := map[string]map[string]float64{
+		"sparse": {"title": 1, "location": 0.25, "description": 1, "salary_raw": 0, "work_arrangement": 0},
+		"full":   {"title": 1, "location": 1, "description": 1, "salary_raw": 1, "work_arrangement": 0},
+	}
+	if diff := cmp.Diff(want, opsState(t, st).FieldCompleteness); diff != "" {
+		t.Errorf("OpsState().FieldCompleteness mismatch (-want +got):\n%s", diff)
 	}
 }
