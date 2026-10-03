@@ -1,10 +1,10 @@
 export const MATCHED_COLOUR = "#059669";
 export const MISSING_COLOUR = "#dc2626";
-const WARNING_COLOUR = "#d97706";
+export const GOOD_COLOUR = "#10b981";
+export const WARNING_COLOUR = "#d97706";
 
-export function scoreColour(n: number): string {
-	if (n >= 80) return MATCHED_COLOUR;
-	if (n >= 65) return "#10b981";
-	if (n >= 50) return WARNING_COLOUR;
-	return MISSING_COLOUR;
-}
+export const tintedChip = (colour: string) => ({
+	background: `color-mix(in srgb, ${colour} 12%, white)`,
+	color: `color-mix(in srgb, ${colour} 80%, black)`,
+	border: `1px solid color-mix(in srgb, ${colour} 28%, white)`,
+});

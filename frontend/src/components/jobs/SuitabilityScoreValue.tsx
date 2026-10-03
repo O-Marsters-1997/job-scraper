@@ -1,10 +1,12 @@
 import { Show } from "solid-js";
 import { unknownCount } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
-import type { ScoreRow } from "@/types/job";
+import type { Band, ScoreRow } from "@/types/job";
+import { BandChip } from "./BandChip";
 
 export function SuitabilityScoreValue(props: {
 	score: number | null;
+	band?: Band | "" | undefined;
 	breakdown?: ScoreRow[] | null | undefined;
 	size?: "sm" | "lg";
 }) {
@@ -13,16 +15,19 @@ export function SuitabilityScoreValue(props: {
 			when={props.score != null}
 			fallback={<p class="text-xs text-faint">Not yet scored.</p>}
 		>
-			<div class="flex items-baseline gap-1.5">
+			<div class="flex items-center gap-2">
+				<Show when={props.band}>
+					{(band) => <BandChip band={band() as Band} />}
+				</Show>
 				<span
 					class={cn(
-						"font-mono font-semibold tabular-nums text-foreground",
-						props.size === "lg" ? "text-lg" : "text-sm",
+						"font-mono tabular-nums",
+						props.band ? "text-xs text-faint" : "text-sm font-semibold",
+						!props.band && props.size === "lg" && "text-lg",
 					)}
 				>
 					{props.score}
 				</span>
-				<span class="text-xs text-faint">/ 100</span>
 				<Show when={unknownCount(props.breakdown) > 0}>
 					<span class="text-2xs text-faint">
 						· {unknownCount(props.breakdown)} unknown

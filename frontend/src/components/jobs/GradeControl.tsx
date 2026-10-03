@@ -1,7 +1,9 @@
 import { For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { useClearGrade, useGrade, useSetGrade } from "@/hooks/useGrades";
+import { BAND_LABEL, gradeDirection } from "@/lib/band";
 import { GRADES, type GradeValue } from "@/types/grade";
+import type { Band } from "@/types/job";
 import { GradeChips } from "./GradeChips";
 
 const LABELS: Record<GradeValue, string> = {
@@ -10,7 +12,10 @@ const LABELS: Record<GradeValue, string> = {
 	no: "No",
 };
 
-export function GradeControl(props: { jobId: string }) {
+export function GradeControl(props: {
+	jobId: string;
+	band?: Band | "" | undefined;
+}) {
 	const grade = useGrade(() => props.jobId);
 	const set = useSetGrade();
 	const clear = useClearGrade();
@@ -45,12 +50,23 @@ export function GradeControl(props: { jobId: string }) {
 			</div>
 			<Show when={current()}>
 				{(g) => (
-					<GradeChips
-						selected={g().reasons}
-						onChange={(reasons) =>
-							set.mutate({ jobId: props.jobId, grade: g().grade, reasons })
-						}
-					/>
+					<>
+						<Show when={props.band}>
+							{(band) => (
+								<p class="text-xs text-muted">
+									Graded {LABELS[g().grade]} · scored{" "}
+									{BAND_LABEL[band() as Band]}:{" "}
+									{gradeDirection(g().grade, band() as Band)}
+								</p>
+							)}
+						</Show>
+						<GradeChips
+							selected={g().reasons}
+							onChange={(reasons) =>
+								set.mutate({ jobId: props.jobId, grade: g().grade, reasons })
+							}
+						/>
+					</>
 				)}
 			</Show>
 		</div>

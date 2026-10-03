@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { scoreRowSchema } from "./job";
+import { bandSchema, scoreRowSchema } from "./job";
 
 export const scoringStatusSchema = z.object({
 	pending: z.number().int(),
@@ -16,6 +16,7 @@ export type RecomputeResult = z.infer<typeof recomputeResultSchema>;
 export const jobScoreSchema = z.object({
 	jobId: z.string(),
 	score: z.number().int(),
+	band: bandSchema.optional(),
 	rows: z.array(scoreRowSchema),
 });
 
