@@ -13,11 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job } from "@/types/job";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
-import {
-	jobQueryOptions,
-	useJob,
-	useMarkJobsSeen,
-} from "../../hooks/useJobs";
+import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
