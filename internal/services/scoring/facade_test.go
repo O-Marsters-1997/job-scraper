@@ -230,3 +230,15 @@ func TestReplay(t *testing.T) {
 		assertGolden(t, "testdata/replay.golden.md", got)
 	})
 }
+
+func TestReplay_UnscoredLabel(t *testing.T) {
+	st := newFakeStore()
+	st.SeedImpliedPositives("user-1", dto.ImpliedLabel{JobID: "never-scored", Source: "application"})
+	got, err := scoring.Build(newDeps(t, st)).Replay(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("Replay() err = %v", err)
+	}
+	if !strings.Contains(got, "1 labelled jobs without a score excluded") {
+		t.Errorf("Replay() = %q, want the unscored label counted", got)
+	}
+}

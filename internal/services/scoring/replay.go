@@ -35,6 +35,7 @@ type replayReport struct {
 	Total    int
 	Scores   []int
 	Labelled []replayRow
+	Unscored int
 }
 
 // Replay re-runs compute over userID's cached answers for every scored job
@@ -91,6 +92,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 		return cmp.Or(cmp.Compare(a.Rank, b.Rank), cmp.Compare(a.JobID, b.JobID))
 	})
 	report.Labelled = labelled
+	report.Unscored = len(labels) - len(labelled)
 	return report, nil
 }
 
@@ -152,7 +154,11 @@ func writeReplaySummary(sb *strings.Builder, r replayReport) {
 			negatives = append(negatives, row)
 		}
 	}
-	fmt.Fprintf(sb, "%d scored jobs · %d positives · %d negatives\n\n", r.Total, len(positives), len(negatives))
+	fmt.Fprintf(sb, "%d scored jobs · %d positives · %d negatives", r.Total, len(positives), len(negatives))
+	if r.Unscored > 0 {
+		fmt.Fprintf(sb, " · %d labelled jobs without a score excluded", r.Unscored)
+	}
+	sb.WriteString("\n\n")
 
 	if len(positives) == 0 {
 		sb.WriteString("No positives yet: grade a job great or ok, apply, or keep a tailored CV.\n")
