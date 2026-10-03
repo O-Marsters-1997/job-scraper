@@ -21,6 +21,7 @@ const (
 	feedbackHigher         = "higher"
 	feedbackLower          = "lower"
 	maxFeedbackPage        = 100000
+	maxCollectionJobs      = 500
 	feedbackPageSize       = 20
 	exportAllFeedback      = math.MaxInt32
 )
@@ -123,7 +124,7 @@ func feedbackOptions(picks []dto.Pick, b bank, answers map[string]dto.Answer) []
 }
 
 // ListFeedback returns one page of userID's log, newest first, with the total
-// matching q.Kind.
+// matching q. Outdated entries are listed only when q.Outdated is "true".
 func (s *Service) ListFeedback(ctx context.Context, userID string, q dto.ScoreFeedbackQuery) (dto.ScoreFeedbackPage, error) {
 	switch q.Kind {
 	case "", feedbackKindJob, feedbackKindCollection, feedbackKindOverall:
@@ -138,15 +139,20 @@ func (s *Service) ListFeedback(ctx context.Context, userID string, q dto.ScoreFe
 		}
 		page = n
 	}
-	entries, err := s.store.ListScoreFeedback(ctx, userID, q.Kind, feedbackPageSize, (page-1)*feedbackPageSize)
+	f := dto.ScoreFeedbackFilter{Kind: q.Kind, Model: jev.Model, IncludeOutdated: q.Outdated == "true"}
+	entries, err := s.store.ListScoreFeedback(ctx, userID, f, feedbackPageSize, (page-1)*feedbackPageSize)
 	if err != nil {
 		return dto.ScoreFeedbackPage{}, err
 	}
-	total, err := s.store.CountScoreFeedback(ctx, userID, q.Kind)
+	current, outdated, err := s.store.CountScoreFeedback(ctx, userID, f)
 	if err != nil {
 		return dto.ScoreFeedbackPage{}, err
 	}
-	return dto.ScoreFeedbackPage{Entries: entries, Total: total}, nil
+	total := current
+	if f.IncludeOutdated {
+		total += outdated
+	}
+	return dto.ScoreFeedbackPage{Entries: entries, Total: total, CurrentCount: current, OutdatedCount: outdated}, nil
 }
 
 // DeleteFeedback removes one of userID's entries.
@@ -158,9 +164,15 @@ func (s *Service) DeleteFeedback(ctx context.Context, userID, id string) error {
 	return err
 }
 
-// ExportFeedback renders userID's whole log as a Feedback Pack.
-func (s *Service) ExportFeedback(ctx context.Context, userID string) (string, error) {
-	entries, err := s.store.ListScoreFeedback(ctx, userID, "", exportAllFeedback, 0)
+// ExportFeedback renders userID's log as a Feedback Pack. Outdated entries
+// are left out, and counted in the header, unless includeOutdated.
+func (s *Service) ExportFeedback(ctx context.Context, userID string, includeOutdated bool) (string, error) {
+	f := dto.ScoreFeedbackFilter{Model: jev.Model, IncludeOutdated: includeOutdated}
+	entries, err := s.store.ListScoreFeedback(ctx, userID, f, exportAllFeedback, 0)
+	if err != nil {
+		return "", err
+	}
+	_, outdated, err := s.store.CountScoreFeedback(ctx, userID, f)
 	if err != nil {
 		return "", err
 	}
@@ -172,10 +184,56 @@ func (s *Service) ExportFeedback(ctx context.Context, userID string) (string, er
 	if err != nil {
 		return "", err
 	}
-	return renderPack(entries, packPicks(cfg.Preferences.Picks, b)), nil
+	return renderPack(entries, packPicks(cfg.Preferences.Picks, b), outdated, includeOutdated), nil
 }
 
 // ClearFeedback hard-deletes userID's log and returns how many entries went.
 func (s *Service) ClearFeedback(ctx context.Context, userID string) (int64, error) {
 	return s.store.ClearScoreFeedback(ctx, userID)
+}
+
+// AppendCollectionFeedback logs a reason about the ranking of in.JobIDs as the
+// user saw it. Each rank keeps the submitted position and the score the DB
+// holds; the browser sends none of that.
+func (s *Service) AppendCollectionFeedback(ctx context.Context, userID string, in dto.CollectionFeedbackInput) (dto.ScoreFeedback, error) {
+	reason := strings.TrimSpace(in.Reason)
+	if reason == "" {
+		return dto.ScoreFeedback{}, apperr.Invalid("reason must not be blank")
+	}
+	if n := len(in.JobIDs); n < 1 || n > maxCollectionJobs {
+		return dto.ScoreFeedback{}, apperr.Invalid(fmt.Sprintf("jobIds must hold between 1 and %d ids", maxCollectionJobs))
+	}
+	scores, err := s.store.ListJobScoresForCollection(ctx, userID, in.JobIDs)
+	if err != nil {
+		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendCollectionFeedback: load scores: %w", err)
+	}
+	cfg, err := s.searchConfigOrZero(ctx, userID)
+	if err != nil {
+		return dto.ScoreFeedback{}, err
+	}
+	picks := cfg.Preferences.Picks
+	if picks == nil {
+		picks = []dto.Pick{}
+	}
+	return s.store.InsertScoreFeedback(ctx, userID, dto.ScoreFeedback{
+		Kind: feedbackKindCollection, Reason: reason, Picks: picks, Model: jev.Model,
+		Snapshot: dto.ScoreFeedbackSnapshot{Filters: in.Filters, Ranking: rankJobs(in.JobIDs, scores)},
+	})
+}
+
+func rankJobs(jobIDs []string, scores []dto.CollectionJobScore) []dto.RankedJob {
+	byID := make(map[string]dto.CollectionJobScore, len(scores))
+	for _, sc := range scores {
+		byID[sc.JobID] = sc
+	}
+	ranking := make([]dto.RankedJob, len(jobIDs))
+	for i, id := range jobIDs {
+		sc := byID[id]
+		effects := make([]string, 0, len(sc.Breakdown))
+		for _, row := range sc.Breakdown {
+			effects = append(effects, row.Label+" "+row.Effect)
+		}
+		ranking[i] = dto.RankedJob{Rank: i + 1, JobID: id, Title: sc.Title, Company: sc.Company, Score: sc.Score, Effects: effects}
+	}
+	return ranking
 }

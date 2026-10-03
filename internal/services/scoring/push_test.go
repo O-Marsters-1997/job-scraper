@@ -17,11 +17,13 @@ import (
 type fakePusher struct {
 	gone  map[string]bool
 	sent  []string
+	msgs  []dto.PushMessage
 	other error
 }
 
-func (p *fakePusher) Send(_ context.Context, sub dto.PushSubscriptionInput, _ dto.PushMessage) error {
+func (p *fakePusher) Send(_ context.Context, sub dto.PushSubscriptionInput, msg dto.PushMessage) error {
 	p.sent = append(p.sent, sub.Endpoint)
+	p.msgs = append(p.msgs, msg)
 	if p.gone[sub.Endpoint] {
 		return notify.ErrSubscriptionGone
 	}

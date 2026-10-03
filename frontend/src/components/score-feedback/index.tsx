@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
 import {
+	useAppendCollectionFeedback,
 	useAppendJobFeedback,
 	useAppendOverallFeedback,
 	useDeleteScoreFeedback,
@@ -34,7 +35,7 @@ const KIND_CHIPS: { label: string; kind?: ScoreFeedbackKind }[] = [
 	{ label: "Overall", kind: "overall" },
 ];
 
-const TARGET_SELECTOR = "[data-feedback-job]";
+const TARGET_SELECTOR = "[data-feedback-job], [data-feedback-collection]";
 
 type JobTarget = {
 	id: string;
@@ -43,7 +44,12 @@ type JobTarget = {
 	breakdown: ScoreRow[];
 };
 
-type Composing = { kind: "overall" } | { kind: "job"; target: JobTarget };
+type CollectionTarget = { jobIds: string[]; filters: Record<string, string> };
+
+type Composing =
+	| { kind: "overall" }
+	| { kind: "job"; target: JobTarget }
+	| { kind: "collection"; target: CollectionTarget };
 
 const DIRECTIONS: { value: FeedbackDirection; label: string }[] = [
 	{ value: "higher", label: "Should be higher" },
@@ -68,9 +74,15 @@ export default function ScoreFeedbackPanel() {
 	);
 	const [kind, setKind] = createSignal<ScoreFeedbackKind | undefined>();
 	const [page, setPage] = createSignal(1);
-	const feedback = useScoreFeedback(kind, page);
+	const [showOutdated, setShowOutdated] = createSignal(false);
+	const feedback = useScoreFeedback(kind, page, showOutdated);
+	const pill = useScoreFeedback(
+		() => undefined,
+		() => 1,
+	);
 	const appendOverall = useAppendOverallFeedback();
 	const appendJob = useAppendJobFeedback();
+	const appendCollection = useAppendCollectionFeedback();
 	const lastPage = () =>
 		Math.max(
 			1,
@@ -109,6 +121,16 @@ export default function ScoreFeedbackPanel() {
 		});
 	}
 
+	function startCollection(ids: string) {
+		setComposing({
+			kind: "collection",
+			target: {
+				jobIds: ids === "" ? [] : ids.split(","),
+				filters: Object.fromEntries(new URLSearchParams(location.search)),
+			},
+		});
+	}
+
 	function close() {
 		setComposing(null);
 		setReason("");
@@ -119,6 +141,11 @@ export default function ScoreFeedbackPanel() {
 		const current = composing();
 		if (current?.kind === "overall") {
 			await appendOverall.mutateAsync({ reason: reason() });
+		} else if (current?.kind === "collection") {
+			await appendCollection.mutateAsync({
+				...current.target,
+				reason: reason(),
+			});
 		} else if (current?.kind === "job") {
 			const dir = direction();
 			if (dir == null) return;
@@ -145,7 +172,11 @@ export default function ScoreFeedbackPanel() {
 				e.preventDefault();
 				e.stopPropagation();
 				setTargeting(false);
-				startJob(el.dataset.feedbackJob ?? "");
+				if (el.dataset.feedbackJob !== undefined) {
+					startJob(el.dataset.feedbackJob);
+				} else {
+					startCollection(el.dataset.feedbackCollection ?? "");
+				}
 			};
 			const onKey = (e: KeyboardEvent) => {
 				if (e.key === "Escape") setTargeting(false);
@@ -174,6 +205,7 @@ export default function ScoreFeedbackPanel() {
 				onClick={() => setOpen(true)}
 			>
 				Score feedback
+				<Show when={pill.data}>{(p) => ` (${p().currentCount})`}</Show>
 			</button>
 			<Show when={hovered()}>
 				{(rect) => (
@@ -208,7 +240,9 @@ export default function ScoreFeedbackPanel() {
 									variant={targeting() ? "default" : "outline"}
 									onClick={() => setTargeting(!targeting())}
 								>
-									{targeting() ? "Pick a Job (Esc to cancel)" : "Target"}
+									{targeting()
+										? "Pick a Job or list (Esc to cancel)"
+										: "Target"}
 								</Button>
 								<Button
 									variant="outline"
@@ -224,6 +258,9 @@ export default function ScoreFeedbackPanel() {
 								<FormFeedback error={form.error()} />
 								<Show when={jobTarget(current())}>
 									{(target) => <JobEvidence target={target()} />}
+								</Show>
+								<Show when={collectionTarget(current())}>
+									{(target) => <CollectionSummary target={target()} />}
 								</Show>
 								<Show when={current().kind === "job"}>
 									<div class="flex gap-2" role="radiogroup">
@@ -280,6 +317,20 @@ export default function ScoreFeedbackPanel() {
 						</For>
 					</div>
 
+					<Show when={(feedback.data?.outdatedCount ?? 0) > 0}>
+						<label class="flex items-center gap-2 text-xs text-muted">
+							<input
+								type="checkbox"
+								checked={showOutdated()}
+								onChange={(e) => {
+									setShowOutdated(e.currentTarget.checked);
+									setPage(1);
+								}}
+							/>
+							Show {feedback.data?.outdatedCount} outdated
+						</label>
+					</Show>
+
 					<ul class="flex flex-col gap-2">
 						<For
 							each={feedback.data?.entries}
@@ -320,6 +371,28 @@ function jobTarget(composing: Composing): JobTarget | null {
 	return composing.kind === "job" ? composing.target : null;
 }
 
+function collectionTarget(composing: Composing): CollectionTarget | null {
+	return composing.kind === "collection" ? composing.target : null;
+}
+
+function CollectionSummary(props: { target: CollectionTarget }): JSX.Element {
+	const filters = () => Object.entries(props.target.filters);
+	return (
+		<div class="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
+			<span class="font-medium text-foreground">
+				{props.target.jobIds.length} Jobs, in displayed order
+			</span>
+			<span class="text-2xs text-faint">
+				{filters().length === 0
+					? "No filters"
+					: filters()
+							.map(([k, v]) => `${k}=${v}`)
+							.join(", ")}
+			</span>
+		</div>
+	);
+}
+
 function JobEvidence(props: { target: JobTarget }): JSX.Element {
 	return (
 		<div class="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
@@ -347,6 +420,16 @@ function FeedbackEntry(props: { entry: ScoreFeedback }): JSX.Element {
 				{props.entry.direction ? ` · ${props.entry.direction}` : ""} ·{" "}
 				{new Date(props.entry.createdAt).toLocaleString()}
 			</span>
+			<Show when={props.entry.picksChanged || props.entry.modelChanged}>
+				<span class="text-2xs font-medium text-muted">
+					{[
+						props.entry.picksChanged && "picks changed",
+						props.entry.modelChanged && "model changed",
+					]
+						.filter(Boolean)
+						.join(" · ")}
+				</span>
+			</Show>
 			<p class="text-sm whitespace-pre-wrap text-foreground">
 				{props.entry.reason}
 			</p>

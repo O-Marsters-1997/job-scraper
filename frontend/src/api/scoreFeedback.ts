@@ -1,4 +1,5 @@
 import {
+	type CollectionFeedbackInput,
 	type JobFeedbackInput,
 	type OverallFeedbackInput,
 	type ScoreFeedback,
@@ -13,12 +14,14 @@ import { mocked } from "./config";
 export async function fetchScoreFeedback(
 	kind: ScoreFeedbackKind | undefined,
 	page: number,
+	outdated: boolean,
 ): Promise<ScoreFeedbackPage> {
 	return mocked(
 		(db) => db.listScoreFeedback(kind, page),
 		() => {
 			const params = new URLSearchParams({ page: String(page) });
 			if (kind) params.set("kind", kind);
+			if (outdated) params.set("outdated", "true");
 			return apiFetch(`/scoring-feedback?${params}`, scoreFeedbackPageSchema);
 		},
 	);
@@ -53,6 +56,20 @@ export async function appendJobFeedback(
 		() =>
 			apiFetch(
 				"/scoring-feedback/job",
+				scoreFeedbackSchema,
+				jsonInit("POST", input),
+			),
+	);
+}
+
+export async function appendCollectionFeedback(
+	input: CollectionFeedbackInput,
+): Promise<ScoreFeedback> {
+	return mocked(
+		(db) => db.appendCollectionFeedback(input),
+		() =>
+			apiFetch(
+				"/scoring-feedback/collection",
 				scoreFeedbackSchema,
 				jsonInit("POST", input),
 			),

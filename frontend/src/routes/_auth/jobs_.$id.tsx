@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
 import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_auth/jobs_/$id")({
 
 function JobDetailPage() {
 	const params = Route.useParams();
+	const [cvOpen, setCvOpen] = createSignal(false);
 	const jobsQuery = useJob(() => params().id);
 	const track = useTrackJobs(() => (jobsQuery.data ? [jobsQuery.data] : []));
 
@@ -132,14 +134,11 @@ function JobDetailPage() {
 						</div>
 					</div>
 
+					<CvSheet job={j()} open={cvOpen()} onOpenChange={setCvOpen} />
 					<JobActionBar
 						job={j()}
 						app={app()}
-						onCv={() =>
-							document
-								.getElementById("job-drafts")
-								?.scrollIntoView({ behavior: "smooth" })
-						}
+						onCv={() => setCvOpen(true)}
 						onTrack={() => track.openTrack(params().id)}
 					/>
 

@@ -24,7 +24,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
-	fmt.Fprintln(os.Stderr, "       admin scoring-feedback export <username>")
+	fmt.Fprintln(os.Stderr, "       admin scoring-feedback export <username> [--include-outdated]")
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
 	os.Exit(1)
 }
@@ -139,10 +139,14 @@ func runOptions(args []string) {
 }
 
 func runScoringFeedback(args []string) {
-	if len(args) != 2 || (args[0] != "export" && args[0] != "clear") {
+	if len(args) < 2 || (args[0] != "export" && args[0] != "clear") {
 		usage()
 	}
-	action, username := args[0], args[1]
+	action, username, flags := args[0], args[1], args[2:]
+	includeOutdated := action == "export" && len(flags) == 1 && flags[0] == "--include-outdated"
+	if len(flags) > 0 && !includeOutdated {
+		usage()
+	}
 
 	ctx := context.Background()
 	pool := connectDB(ctx)
@@ -161,7 +165,7 @@ func runScoringFeedback(args []string) {
 		fmt.Fprintf(os.Stderr, "Cleared %d entries\n", n)
 		return
 	}
-	pack, err := m.ExportFeedback(ctx, userID)
+	pack, err := m.ExportFeedback(ctx, userID, includeOutdated)
 	if err != nil {
 		fatal("export feedback", err)
 	}

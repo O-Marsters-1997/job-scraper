@@ -1,4 +1,5 @@
 import {
+	type CollectionFeedbackInput,
 	type JobFeedbackInput,
 	SCORE_FEEDBACK_PAGE_SIZE,
 	type ScoreFeedback,
@@ -19,6 +20,8 @@ export function listScoreFeedback(
 	return structuredClone({
 		entries: matching.slice(start, start + SCORE_FEEDBACK_PAGE_SIZE),
 		total: matching.length,
+		currentCount: matching.length,
+		outdatedCount: 0,
 	});
 }
 
@@ -33,6 +36,8 @@ export function appendOverallFeedback(reason: string): ScoreFeedback {
 		reason,
 		model: "typesafe/jev-1.13",
 		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
 	};
 	entries = [entry, ...entries];
 	return structuredClone(entry);
@@ -63,6 +68,39 @@ export function appendJobFeedback(input: JobFeedbackInput): ScoreFeedback {
 			})),
 		},
 		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
+	};
+	entries = [entry, ...entries];
+	return structuredClone(entry);
+}
+
+export function appendCollectionFeedback(
+	input: CollectionFeedbackInput,
+): ScoreFeedback {
+	const jobs = getJobs();
+	const entry: ScoreFeedback = {
+		id: `feedback-${nextId++}`,
+		kind: "collection",
+		reason: input.reason,
+		model: "typesafe/jev-1.13",
+		snapshot: {
+			filters: input.filters,
+			ranking: input.jobIds.map((id, i) => {
+				const job = jobs.find((j) => j.ID === id);
+				return {
+					rank: i + 1,
+					jobId: id,
+					title: job?.Title ?? "",
+					company: job?.CompanySlug ?? "",
+					score: job?.SuitabilityScore ?? null,
+					effects: (job?.Breakdown ?? []).map((r) => `${r.label} ${r.effect}`),
+				};
+			}),
+		},
+		createdAt: new Date().toISOString(),
+		picksChanged: false,
+		modelChanged: false,
 	};
 	entries = [entry, ...entries];
 	return structuredClone(entry);

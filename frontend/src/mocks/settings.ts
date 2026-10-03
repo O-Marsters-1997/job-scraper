@@ -23,7 +23,11 @@ const disconnectedGoogle: GoogleStatus = {
 	canWrite: false,
 	canEditDocs: false,
 };
-let googleStatus = disconnectedGoogle;
+let googleStatus: GoogleStatus = {
+	connected: true,
+	canWrite: true,
+	canEditDocs: true,
+};
 
 export function getGoogleStatus(): GoogleStatus {
 	return structuredClone(googleStatus);

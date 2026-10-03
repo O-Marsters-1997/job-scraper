@@ -13,10 +13,9 @@ const TanStackRouterDevtools = import.meta.env.DEV
 		)
 	: () => null;
 
-const ScoreFeedback =
-	import.meta.env.VITE_SCORING_FEEDBACK === "true"
-		? lazy(() => import("@/components/score-feedback"))
-		: () => null;
+const ScoreFeedback = import.meta.env.DEV
+	? lazy(() => import("@/components/score-feedback"))
+	: () => null;
 
 export const Route = createRootRoute({
 	component: RootComponent,

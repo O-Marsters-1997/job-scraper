@@ -116,8 +116,8 @@ migrate-create name:
 # ── Score Feedback ────────────────────────────────────────────────────────────
 
 # print a user's Feedback Pack to stdout
-scoring-feedback-export user:
-    go run ./cmd/admin scoring-feedback export {{user}}
+scoring-feedback-export user *flags:
+    go run ./cmd/admin scoring-feedback export {{user}} {{flags}}
 
 # hard-delete a user's Score Feedback and print the count
 scoring-feedback-clear user:
