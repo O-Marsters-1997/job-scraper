@@ -25,6 +25,7 @@ type Discovery struct {
 	Name    string
 	Jobs    []dto.Job
 	Recheck bool
+	Profile *dto.CompanyProfile
 }
 
 // DiscoverBoard fetches a Board's Jobs and its display name, falling back to
@@ -71,7 +72,7 @@ func discoverWTTJ(ctx context.Context, token string) (Discovery, error) {
 	if name == "" {
 		name = token
 	}
-	return Discovery{Name: name, Jobs: d.Jobs, Recheck: d.UK}, nil
+	return Discovery{Name: name, Jobs: d.Jobs, Recheck: d.UK, Profile: d.Profile}, nil
 }
 
 func greenhouseName(ctx context.Context, base *sources.PaginatedBase, token string) string {
