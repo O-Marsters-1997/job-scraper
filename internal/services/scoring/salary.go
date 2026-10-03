@@ -8,16 +8,19 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+const minAnnualAmount = 10000
+
 var (
 	amountPattern       = regexp.MustCompile(`(?i)\d[\d,]*(?:\.\d+)?\s*k?`)
 	currencyCodePattern = regexp.MustCompile(`\b(GBP|USD|EUR|CAD|AUD|NZD|CHF)\b`)
 	dayRatePattern      = regexp.MustCompile(`(?i)per\s*day|/\s*day|a\s*day|daily|day\s*rate`)
+	hourRatePattern     = regexp.MustCompile(`(?i)per\s*hour|/\s*h(?:ou)?r|an?\s*hour|hourly`)
 	currencySymbols     = map[string]string{"£": "GBP", "$": "USD", "€": "EUR"}
 )
 
 func parseSalary(raw string) (amount int, currency string, ok bool) {
 	raw = strings.TrimSpace(raw)
-	if raw == "" || dayRatePattern.MatchString(raw) {
+	if raw == "" || dayRatePattern.MatchString(raw) || hourRatePattern.MatchString(raw) {
 		return 0, "", false
 	}
 
@@ -31,7 +34,7 @@ func parseSalary(raw string) (amount int, currency string, ok bool) {
 			amount = v
 		}
 	}
-	if amount == 0 {
+	if amount < minAnnualAmount {
 		return 0, "", false
 	}
 	return amount, currency, true
