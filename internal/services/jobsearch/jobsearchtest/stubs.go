@@ -45,6 +45,10 @@ func (s *NoopScoring) CompanyTracked(context.Context, pgx.Tx, string, string) er
 	return nil
 }
 
+func (s *NoopScoring) CompanyFavouriteChanged(context.Context, pgx.Tx, string, string) error {
+	return nil
+}
+
 var _ jobsearch.ScoringPort = (*NoopScoring)(nil)
 
 type NoopQueue struct{}

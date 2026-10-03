@@ -17,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/scoringtest"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
@@ -495,6 +496,165 @@ func TestCompanyTracked(t *testing.T) {
 			}
 		})
 	}
+}
+
+func insertCompanyJob(t *testing.T, pool *pgxpool.Pool, companyID, slug, url string) string {
+	t.Helper()
+	var jobID string
+	err := pool.QueryRow(t.Context(),
+		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
+		 VALUES ('Engineer', 'Remote', $1, $2, $3, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
+		url, slug, companyID).Scan(&jobID)
+	if err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	return jobID
+}
+
+func favourite(t *testing.T, pool *pgxpool.Pool, userID, companyID string) {
+	t.Helper()
+	exec(t, pool, `INSERT INTO company_favourites (user_id, company_id) VALUES ($1, $2)`, userID, companyID)
+}
+
+func storedScore(t *testing.T, pool *pgxpool.Pool, jobID, userID string) int {
+	t.Helper()
+	return countRows(t, pool, `SELECT suitability_score FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID)
+}
+
+func TestListInterestedConfigs_FlagsFavouriteCompany(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, userID := insertTrackedCompany(t, pool, "acme")
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+
+	for _, starred := range []bool{false, true} {
+		if starred {
+			favourite(t, pool, userID, companyID)
+		}
+		configs, err := st.ListInterestedConfigs(t.Context(), jobID)
+		if err != nil || len(configs) != 1 {
+			t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+		}
+		if configs[0].CompanyIsFavourite != starred {
+			t.Errorf("CompanyIsFavourite = %v, want %v", configs[0].CompanyIsFavourite, starred)
+		}
+	}
+}
+
+func TestListScoringInputs_FlagsFavourite(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, userID := insertTrackedCompany(t, pool, "acme")
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+	insertScore(t, pool, jobID, userID)
+
+	for _, starred := range []bool{false, true} {
+		if starred {
+			favourite(t, pool, userID, companyID)
+		}
+		inputs, err := st.ListScoringInputs(t.Context(), userID, "typesafe/jev-1.13")
+		if err != nil || len(inputs) != 1 {
+			t.Fatalf("ListScoringInputs() = %+v, %v, want one input", inputs, err)
+		}
+		if inputs[0].Favourite != starred {
+			t.Errorf("Favourite = %v, want %v", inputs[0].Favourite, starred)
+		}
+	}
+}
+
+func TestIsJobCompanyFavourite(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, userID := insertTrackedCompany(t, pool, "acme")
+	other := pgtest.InsertUser(t, pool)
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+	favourite(t, pool, userID, companyID)
+
+	for user, want := range map[string]bool{userID: true, other: false} {
+		got, err := st.IsJobCompanyFavourite(t.Context(), user, jobID)
+		if err != nil || got != want {
+			t.Errorf("IsJobCompanyFavourite(%s) = %v, %v, want %v", user, got, err, want)
+		}
+	}
+}
+
+type favouriteFixture struct {
+	port                                *scoring.Module
+	pool                                *pgxpool.Pool
+	companyID, alice, bob               string
+	openJob, closedJob, otherCompanyJob string
+}
+
+func newFavouriteFixture(t *testing.T) favouriteFixture {
+	t.Helper()
+	st, pool := newStore(t)
+	companyID, alice := insertTrackedCompany(t, pool, "acme")
+	bob := pgtest.InsertUser(t, pool)
+	otherID, _ := insertTrackedCompany(t, pool, "other")
+	f := favouriteFixture{
+		port: scoring.Build(scoring.Deps{Store: st}), pool: pool, companyID: companyID, alice: alice, bob: bob,
+		openJob:         insertCompanyJob(t, pool, companyID, "acme", "https://example.com/open"),
+		closedJob:       insertCompanyJob(t, pool, companyID, "acme", "https://example.com/closed"),
+		otherCompanyJob: insertCompanyJob(t, pool, otherID, "other", "https://example.com/other"),
+	}
+	closeJob(t, pool, f.closedJob)
+	for _, jobID := range []string{f.openJob, f.closedJob, f.otherCompanyJob} {
+		insertScore(t, pool, jobID, alice)
+	}
+	insertScore(t, pool, f.openJob, bob)
+	for _, userID := range []string{alice, bob} {
+		favourite(t, pool, userID, companyID)
+		favourite(t, pool, userID, otherID)
+	}
+	return f
+}
+
+func (f favouriteFixture) rescore(t *testing.T, commit bool) {
+	t.Helper()
+	pgtest.InTx(t, f.pool, commit, func(tx pgx.Tx) error {
+		return f.port.CompanyFavouriteChanged(t.Context(), tx, f.alice, f.companyID)
+	})
+}
+
+func TestCompanyFavouriteChanged(t *testing.T) {
+	t.Run("commit re-scores only that user's open jobs at that company", func(t *testing.T) {
+		f := newFavouriteFixture(t)
+		f.rescore(t, true)
+
+		if got := storedScore(t, f.pool, f.openJob, f.alice); got <= 50 {
+			t.Errorf("alice's open job score = %d, want a favourite lift above 50", got)
+		}
+		untouched := map[string]struct{ jobID, userID string }{
+			"alice's closed job":            {f.closedJob, f.alice},
+			"alice's other-company job":     {f.otherCompanyJob, f.alice},
+			"bob's job at the same company": {f.openJob, f.bob},
+		}
+		for name, c := range untouched {
+			if got := storedScore(t, f.pool, c.jobID, c.userID); got != 50 {
+				t.Errorf("%s score = %d, want it untouched at 50", name, got)
+			}
+		}
+		if got := countRows(t, f.pool, `SELECT count(*) FROM effect_outbox`); got != 0 {
+			t.Errorf("effects = %d, want none queued", got)
+		}
+	})
+
+	t.Run("rollback leaves every score untouched", func(t *testing.T) {
+		f := newFavouriteFixture(t)
+		f.rescore(t, false)
+
+		if got := storedScore(t, f.pool, f.openJob, f.alice); got != 50 {
+			t.Errorf("score after rollback = %d, want 50", got)
+		}
+	})
+
+	t.Run("un-starring returns the job to its non-favourite score", func(t *testing.T) {
+		f := newFavouriteFixture(t)
+		f.rescore(t, true)
+		exec(t, f.pool, `DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2`, f.alice, f.companyID)
+		f.rescore(t, true)
+
+		if got := storedScore(t, f.pool, f.openJob, f.alice); got != 50 {
+			t.Errorf("score after un-star = %d, want 50", got)
+		}
+	})
 }
 
 func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, createdAt time.Time) {
