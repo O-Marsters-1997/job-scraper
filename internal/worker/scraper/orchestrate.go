@@ -81,7 +81,7 @@ func (o *Orchestrator) ScrapePage(ctx context.Context, target dto.SourceTarget, 
 		if err != nil {
 			return "", err
 		}
-		if len(newURLs) == 0 {
+		if len(newURLs) == 0 && src.Cfg().NewestFirst {
 			next = ""
 		}
 	}
