@@ -184,7 +184,11 @@ func (s *Service) ExportFeedback(ctx context.Context, userID string, includeOutd
 	if err != nil {
 		return "", err
 	}
-	return renderPack(entries, packPicks(cfg.Preferences.Picks, b), outdated, includeOutdated), nil
+	replay, err := s.replayReport(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	return renderPack(entries, packPicks(cfg.Preferences.Picks, b), replay, outdated, includeOutdated), nil
 }
 
 // ClearFeedback hard-deletes userID's log and returns how many entries went.

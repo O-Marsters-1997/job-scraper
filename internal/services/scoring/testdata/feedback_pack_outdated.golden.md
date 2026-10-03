@@ -36,6 +36,12 @@ Current Picks:
 
 > Scores run hot.
 
+## Replay
+
+0 scored jobs · 0 positives · 0 negatives
+
+No positives yet: grade a job great or ok, apply, or keep a tailored CV.
+
 ## Job entries
 
 ### Backend Engineer, acme: score 72, should be lower [picks changed]

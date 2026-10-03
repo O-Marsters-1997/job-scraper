@@ -52,6 +52,7 @@ type FakeStore struct {
 	feedbackSeq int
 	evidence    map[string]dto.JobScoreEvidence
 	grades      map[string]map[string]dto.Grade
+	implied     map[string][]dto.ImpliedLabel
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -594,4 +595,20 @@ func (f *FakeStore) ListGrades(_ context.Context, userID string) ([]dto.Grade, e
 		return b.UpdatedAt.Compare(a.UpdatedAt)
 	})
 	return out, nil
+}
+
+// SeedImpliedPositives stores the applications and kept CVs ListImpliedPositives returns.
+func (f *FakeStore) SeedImpliedPositives(userID string, labels ...dto.ImpliedLabel) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.implied == nil {
+		f.implied = make(map[string][]dto.ImpliedLabel)
+	}
+	f.implied[userID] = labels
+}
+
+func (f *FakeStore) ListImpliedPositives(_ context.Context, userID string) ([]dto.ImpliedLabel, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.implied[userID]), nil
 }

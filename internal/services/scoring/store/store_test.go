@@ -934,3 +934,25 @@ func TestAnswerCorrections(t *testing.T) {
 		t.Error("SetAnswerCorrection(maybe) err = nil, want the CHECK to reject it")
 	}
 }
+
+func TestListImpliedPositives(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	other := pgtest.InsertUser(t, pool)
+	applied := pgtest.InsertJob(t, pool, "Applied", "fp-1")
+	kept := pgtest.InsertJob(t, pool, "Kept", "fp-2")
+	discarded := pgtest.InsertJob(t, pool, "Discarded", "fp-3")
+	exec(t, pool, `INSERT INTO applications (user_id, job_id) VALUES ($1, $2), ($3, $2)`, userID, applied, other)
+	for _, c := range []struct{ jobID, outcome string }{{kept, "kept"}, {discarded, "discarded"}} {
+		exec(t, pool, `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, outcome) VALUES ($1, $2, 'd', 't', '{}', $3)`, userID, c.jobID, c.outcome)
+	}
+
+	got, err := st.ListImpliedPositives(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListImpliedPositives() err = %v", err)
+	}
+	want := []dto.ImpliedLabel{{JobID: applied, Source: "application"}, {JobID: kept, Source: "kept_cv"}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListImpliedPositives() mismatch (-want +got):\n%s", diff)
+	}
+}

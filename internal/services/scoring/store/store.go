@@ -826,6 +826,24 @@ func (s *Store) ListGrades(ctx context.Context, userID string) ([]dto.Grade, err
 	return out, nil
 }
 
+// ListImpliedPositives returns userID's applications and kept tailored CVs
+// as implied positive labels.
+func (s *Store) ListImpliedPositives(ctx context.Context, userID string) ([]dto.ImpliedLabel, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListImpliedPositives(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListImpliedPositives: %w", err)
+	}
+	out := make([]dto.ImpliedLabel, len(rows))
+	for i, row := range rows {
+		out[i] = dto.ImpliedLabel{JobID: row.JobID.String(), Source: row.Source}
+	}
+	return out, nil
+}
+
 func (s *Store) SetAnswerCorrection(ctx context.Context, userID, jobID, optionID, value string) error {
 	uid, jid, err := userAndJob(userID, jobID)
 	if err != nil {
