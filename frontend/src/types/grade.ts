@@ -3,6 +3,12 @@ import { z } from "zod";
 export const GRADES = ["great", "ok", "no"] as const;
 export type GradeValue = (typeof GRADES)[number];
 
+export const GRADE_LABEL: Record<GradeValue, string> = {
+	great: "Great",
+	ok: "OK",
+	no: "No",
+};
+
 export const GRADE_REASONS = [
 	"seniority",
 	"role",

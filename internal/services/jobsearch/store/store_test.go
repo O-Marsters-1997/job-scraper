@@ -151,6 +151,14 @@ func jobIDs(jobs []dto.Job) []string {
 	return ids
 }
 
+func jobGrades(jobs []dto.Job) map[string]string {
+	grades := make(map[string]string, len(jobs))
+	for _, job := range jobs {
+		grades[job.ID] = job.Grade
+	}
+	return grades
+}
+
 func TestPage(t *testing.T) {
 	t.Run("keeps position when a newer job is inserted", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
@@ -297,6 +305,42 @@ func TestPage(t *testing.T) {
 		slices.Sort(seen)
 		if diff := cmp.Diff(recent, seen); diff != "" {
 			t.Errorf("paged ids within 90 days (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("returns the caller's own grade on each job", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		graded := insertJob(t, pool, company, 1, time.Now(), false)
+		ungraded := insertJob(t, pool, company, 2, time.Now(), false)
+		othersOnly := insertJob(t, pool, company, 3, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{graded, ungraded, othersOnly} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		for _, g := range []struct{ user, job, grade string }{
+			{userID, graded, "ok"}, {other, graded, "great"}, {other, othersOnly, "ok"},
+		} {
+			if _, err := pool.Exec(ctx, `INSERT INTO job_grades (user_id, job_id, grade) VALUES ($1, $2, $3)`, g.user, g.job, g.grade); err != nil {
+				t.Fatalf("insert grade: %v", err)
+			}
+		}
+
+		want := map[string]string{graded: "ok", ungraded: "", othersOnly: ""}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobGrades(page.Items)); diff != "" {
+			t.Errorf("Page() grades (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobGrades(all)); diff != "" {
+			t.Errorf("ListJobs() grades (-want +got):\n%s", diff)
 		}
 	})
 

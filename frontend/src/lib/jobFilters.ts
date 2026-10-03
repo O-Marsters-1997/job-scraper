@@ -1,5 +1,8 @@
 import type { Job } from "@/types/job";
 
+export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
+export type GradedFilter = (typeof GRADED_OPTIONS)[number];
+
 export interface JobFilters {
 	q: string;
 	suit?: number | undefined;
@@ -10,6 +13,7 @@ export interface JobFilters {
 	salMax?: number | undefined;
 	company?: string | undefined;
 	scored: boolean;
+	graded: GradedFilter;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -22,6 +26,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	salMax: undefined,
 	company: undefined,
 	scored: false,
+	graded: "all",
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -50,6 +55,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 			raw.scored === true ||
 			raw.scored === "1" ||
 			raw.scored === 1,
+		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 	};
 }
 
@@ -97,6 +103,8 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 		if (f.scored && j.SuitabilityScore == null) return false;
 		if (f.suit !== undefined && (j.SuitabilityScore ?? -Infinity) < f.suit)
 			return false;
+		if (f.graded === "ungraded" && j.Grade) return false;
+		if (f.graded === "graded" && !j.Grade) return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
 			return false;
@@ -118,6 +126,7 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.src.length > 0) n++;
 	if (f.work.length > 0) n++;
 	if (f.sal) n++;
+	if (f.graded !== "all") n++;
 	return n;
 }
 

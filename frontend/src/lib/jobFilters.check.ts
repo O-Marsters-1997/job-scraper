@@ -108,6 +108,30 @@ assert.ok(applyJobFilters(jobs, DEFAULT_FILTERS).length === 3);
 	assert.ok((r[0] as { ID: string }).ID === "1");
 }
 
+{
+	const graded = (jobs as object[]).map((j, i) => ({
+		...j,
+		ID: String(i + 1),
+		Grade: i === 0 ? "ok" : "",
+	})) as never[];
+	const ids = (graded_: unknown[]) =>
+		graded_.map((j) => (j as { ID: string }).ID);
+	assert.deepEqual(
+		ids(applyJobFilters(graded, { ...DEFAULT_FILTERS, graded: "ungraded" })),
+		["2", "3"],
+	);
+	assert.deepEqual(
+		ids(applyJobFilters(graded, { ...DEFAULT_FILTERS, graded: "graded" })),
+		["1"],
+	);
+	assert.equal(ids(applyJobFilters(graded, DEFAULT_FILTERS)).length, 3);
+}
+
+assert.equal(parseSearch({}).graded, "all");
+assert.equal(parseSearch({ graded: "ungraded" }).graded, "ungraded");
+assert.equal(parseSearch({ graded: "nonsense" }).graded, "all");
+assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, graded: "ungraded" }), 1);
+
 assert.ok(activeFilterCount(DEFAULT_FILTERS) === 0);
 assert.ok(
 	activeFilterCount({
