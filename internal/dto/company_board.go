@@ -17,6 +17,7 @@ type CompanyBoard struct {
 	BoardToken         string
 	Status             BoardStatus
 	VerificationMethod string
+	DiscoveredVia      string
 	VerifiedAt         *time.Time
 	LastLinkedAt       *time.Time
 	RetiredAt          *time.Time

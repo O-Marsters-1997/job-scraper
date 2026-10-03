@@ -21,7 +21,7 @@ WHERE b.company_id = $1;
 
 -- name: VerifyCompanyBoard :one
 UPDATE company_boards
-SET status = 'verified', verification_method = $4, verified_at = NOW()
+SET status = 'verified', verification_method = $4, verified_at = NOW(), discovered_via = NULLIF(sqlc.arg(via)::text, '')
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
 RETURNING *;
 

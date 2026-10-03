@@ -92,6 +92,9 @@ func TestRunner_PublishesBoardDiscoverTaskPerBoard(t *testing.T) {
 			t.Errorf("published task invalid: %v", err)
 		}
 		got = append(got, discover.Board{Source: task.Source, Token: task.BoardToken})
+		if task.Via != h.name {
+			t.Errorf("task via = %q, want %q", task.Via, h.name)
+		}
 	}
 	if diff := cmp.Diff(h.found.Boards, got); diff != "" {
 		t.Errorf("published boards (-want +got):\n%s", diff)
@@ -187,7 +190,7 @@ func TestRunner_VerifiedBoardIsNotQueuedAgain(t *testing.T) {
 	catalog := jobsearchtest.NewFakeStore()
 	company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})
 	_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "wttj", "faculty")
-	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "wttj", "faculty", "wttj-origin")
+	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "wttj", "faculty", "wttj-origin", "")
 	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
 
 	pub, err := runOnceWith(t, catalog, newFakeGate(), h)
@@ -204,7 +207,7 @@ func TestRunner_CompanyWithVerifiedOtherBoardGetsNoCandidate(t *testing.T) {
 	catalog := jobsearchtest.NewFakeStore()
 	company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})
 	_, _ = catalog.UpsertCandidateBoard(t.Context(), company.ID, "greenhouse", "faculty")
-	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "faculty", "discovered")
+	_, _ = catalog.VerifyCompanyBoard(t.Context(), company.ID, "greenhouse", "faculty", "discovered", "")
 	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{Companies: []discover.Company{wttjCompany("faculty")}}}
 
 	pub, err := runOnceWith(t, catalog, newFakeGate(), h)

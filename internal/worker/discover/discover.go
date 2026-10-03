@@ -138,14 +138,14 @@ func (r *Runner) runIfDue(ctx context.Context, h Harvester) error {
 
 	published := 0
 	for _, b := range found.Boards {
-		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token}
+		task := queue.Task{Version: 1, ID: uuid.NewString(), Source: b.Source, Kind: queue.BoardDiscoverTask, BoardToken: b.Token, Via: h.Name()}
 		if err := r.publisher.Publish(ctx, task); err != nil {
 			log.ErrorContext(ctx, "publish failed", slog.String(logger.KeySource, b.Source), slog.String("token", b.Token), slog.Any(logger.KeyErr, err))
 			continue
 		}
 		published++
 	}
-	recorded := r.recordUndiscovered(ctx, log, found.Companies, verified)
+	recorded := r.recordUndiscovered(ctx, log, h.Name(), found.Companies, verified)
 	log.InfoContext(ctx, "harvest: completed",
 		slog.Int(logger.KeyCount, len(found.Boards)+len(found.Companies)), slog.Int("published", published),
 		slog.Int("recorded", recorded), slog.Int("verified", len(verified)), slog.Int("skipped", found.Skipped))
@@ -172,13 +172,13 @@ func (r *Runner) verifiedSlugs(ctx context.Context, companies []Company) (map[st
 	return verified, nil
 }
 
-func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, companies []Company, verified map[string]bool) int {
+func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, via string, companies []Company, verified map[string]bool) int {
 	recorded := 0
 	for _, c := range companies {
 		if verified[c.Slug] {
 			continue
 		}
-		if err := r.recordCompany(ctx, c); err != nil {
+		if err := r.recordCompany(ctx, via, c); err != nil {
 			log.WarnContext(ctx, "harvest: could not record company", slog.String(logger.KeyCompanySlug, c.Slug), slog.Any(logger.KeyErr, err))
 			continue
 		}
@@ -187,7 +187,7 @@ func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, compa
 	return recorded
 }
 
-func (r *Runner) recordCompany(ctx context.Context, c Company) error {
+func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error {
 	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name})
 	if err != nil {
 		return err
@@ -201,6 +201,6 @@ func (r *Runner) recordCompany(ctx context.Context, c Company) error {
 	}
 	return r.publisher.Publish(ctx, queue.Task{
 		Version: 1, ID: uuid.NewString(), Source: board.Source, Kind: queue.BoardDiscoverTask,
-		CompanyID: company.ID, BoardToken: board.BoardToken,
+		CompanyID: company.ID, BoardToken: board.BoardToken, Via: via,
 	})
 }

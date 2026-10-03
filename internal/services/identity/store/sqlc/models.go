@@ -146,6 +146,7 @@ type CompanyBoard struct {
 	LastLinkedAt       pgtype.Timestamptz
 	RetiredAt          pgtype.Timestamptz
 	SupersededAt       pgtype.Timestamptz
+	DiscoveredVia      pgtype.Text
 	CreatedAt          pgtype.Timestamptz
 }
 

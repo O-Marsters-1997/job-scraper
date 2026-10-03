@@ -308,6 +308,29 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("verifying a board records how it was discovered once", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "via-co", Name: "Via Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", "via-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		board, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "via-co", "discovered", "linkedin")
+		if err != nil || board.DiscoveredVia != "linkedin" {
+			t.Fatalf("VerifyCompanyBoard(via linkedin) = %+v, %v, want DiscoveredVia linkedin", board, err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "via-co", "discovered", "wttj"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("re-VerifyCompanyBoard err = %v, want ErrNotFound", err)
+		}
+		boards, err := st.ListCompanyBoards(ctx, c.ID)
+		if err != nil || len(boards) != 1 || boards[0].DiscoveredVia != "linkedin" {
+			t.Fatalf("ListCompanyBoards() = %+v, %v, want DiscoveredVia linkedin", boards, err)
+		}
+	})
+
 	t.Run("verified boards by slug skip candidates and flag enabled trackers", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
@@ -324,7 +347,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
 			}
 			if tc.verified {
-				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test"); err != nil {
+				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test", ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
 				}
 			}
@@ -358,7 +381,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
 			}
 			if tc.verified {
-				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test"); err != nil {
+				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, "test", ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
 				}
 			}
@@ -465,7 +488,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				t.Fatalf("UpsertCandidateBoard(%s) = %v", tc.slug, err)
 			}
 			if tc.verify {
-				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, tc.method); err != nil {
+				if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", tc.slug, tc.method, ""); err != nil {
 					t.Fatalf("VerifyCompanyBoard(%s) = %v", tc.slug, err)
 				}
 			}
