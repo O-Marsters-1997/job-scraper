@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 // BoardSpec describes one board integration. URL is the API endpoint; Parse decodes
@@ -79,7 +81,7 @@ func (b *BoardSource) PollBoard(ctx context.Context) (BoardResult, error) {
 	if b.spec.Count != nil {
 		reported, err := b.spec.Count(body)
 		if err != nil {
-			return res, fmt.Errorf("%s: count: %w", b.spec.Name, err)
+			slog.WarnContext(ctx, "board reported count unreadable", slog.String(logger.KeySource, b.spec.Name), slog.Any(logger.KeyErr, err))
 		}
 		res.Reported = reported
 	}
@@ -97,6 +99,9 @@ func JSONArrayLen(key string) func([]byte) (int, error) {
 				return 0, fmt.Errorf("parse json: %w", err)
 			}
 			raw = obj[key]
+			if raw == nil {
+				return 0, nil
+			}
 		}
 		var elems []json.RawMessage
 		if err := json.Unmarshal(raw, &elems); err != nil {

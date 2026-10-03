@@ -79,6 +79,9 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 	if err != nil {
 		return errors.Join(err, p.store.FailBoard(ctx, claim))
 	}
+	if err := p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported}); err != nil {
+		return err
+	}
 	if res.Reported > 0 && float64(len(jobs)) < underparsedRatio*float64(res.Reported) {
 		slog.WarnContext(ctx, "board parsed fewer jobs than reported",
 			slog.String(logger.KeyEvent, telemetry.EventBoardUnderparsed),
@@ -87,7 +90,7 @@ func (p *BoardPoller) complete(ctx context.Context, claim dto.BoardPoll, res sou
 			slog.Int("reported", res.Reported),
 			slog.Int("parsed", len(jobs)))
 	}
-	return p.store.CompleteBoard(ctx, dto.BoardSnapshot{Poll: claim, Jobs: jobs, Complete: true, NextPollIn: res.NextPollIn, Reported: res.Reported})
+	return nil
 }
 
 type ProfileSaver interface {

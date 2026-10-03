@@ -660,7 +660,11 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 		return store.ErrBoardClaimUnavailable
 	}
 	st.leaseOwner = ""
-	st.reported, st.parsed = snapshot.Reported, len(snapshot.Jobs)
+	urls := make(map[string]bool, len(snapshot.Jobs))
+	for _, job := range snapshot.Jobs {
+		urls[job.URL] = true
+	}
+	st.reported, st.parsed = snapshot.Reported, len(urls)
 	return nil
 }
 

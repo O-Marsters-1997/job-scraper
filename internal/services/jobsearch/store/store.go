@@ -1258,7 +1258,7 @@ func (s *Store) CompleteBoard(ctx context.Context, snapshot dto.BoardSnapshot) e
 			return fmt.Errorf("retire board: %w", err)
 		}
 	}
-	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, Reported: int32(snapshot.Reported), Parsed: int32(len(snapshot.Jobs)), BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
+	n, err := q.CompletePollState(ctx, sqlc.CompletePollStateParams{Manual: poll.Manual, IntervalMinutes: pollIntervalMinutes(poll, snapshot.NextPollIn), Empty: len(urls) == 0, Reported: int32(snapshot.Reported), Parsed: int32(len(urls)), BoardID: id, LeaseOwner: poll.LeaseOwner, Version: poll.Version})
 	if err != nil {
 		return fmt.Errorf("complete board state: %w", err)
 	}
