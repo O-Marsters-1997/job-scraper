@@ -16,7 +16,7 @@ func TestFavouriteLift(t *testing.T) {
 		{"fair gains most", 50, 59, 61},
 		{"great gains less", 85, 88, 90},
 		{"poor near zero moves at most 2", 0, 0, 2},
-		{"top stays within range", 100, 99, 100},
+		{"top never drops", 100, 100, 100},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := favouriteLift(tt.score)

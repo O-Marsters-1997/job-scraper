@@ -179,7 +179,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 func favouriteLift(score int) int {
 	p := min(max(float64(score)/100, 0.01), 0.99)
 	logit := math.Log(p/(1-p)) + favouriteBeta
-	return int(math.Round(100 / (1 + math.Exp(-logit))))
+	return max(score, int(math.Round(100/(1+math.Exp(-logit)))))
 }
 
 func bandFor(score int) string {
