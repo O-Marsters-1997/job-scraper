@@ -26,3 +26,11 @@ export function useJob(id: () => string) {
 export function useMarkJobsSeen() {
 	return useInvalidatingMutation(markJobsSeen, [keys.jobs.all]);
 }
+
+export function useMarkSeenAfterGrade() {
+	const markSeen = useMarkJobsSeen();
+	return async (jobIds: string[]) => {
+		if (jobIds.length === 0) return;
+		await markSeen.mutateAsync({ jobIds, seen: true }).catch(() => undefined);
+	};
+}

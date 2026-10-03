@@ -109,6 +109,23 @@ test.describe("Jobs", () => {
 		await expect(titleLink).toBeVisible();
 	});
 
+	test("grading an unseen row from the row menu marks it seen", async ({
+		page,
+		jobsPage,
+	}) => {
+		const row = jobsPage.rows.first();
+		const titleLink = row.getByRole("link").first();
+		await expect(titleLink).toHaveClass(/font-bold/);
+
+		await jobsPage.openRowMenu(row);
+		await page.getByRole("menuitem", { name: "Grade…" }).click();
+		const dialog = jobsPage.gradeDialog;
+		await dialog.getByRole("button", { name: /^OK/ }).click();
+		await dialog.getByRole("button", { name: "Save grade" }).click();
+		await expect(dialog).toBeHidden();
+		await expect(titleLink).not.toHaveClass(/font-bold/);
+	});
+
 	test("shows a graded job's grade and drops it from the Ungraded filter", async ({
 		page,
 		jobsPage,
