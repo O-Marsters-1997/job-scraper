@@ -176,8 +176,17 @@ const BREAKDOWN_PICKS: {
 	{ key: "domain:fintech", label: "fintech", stance: "avoid" },
 ];
 
+const FAVOURITE_ROW = {
+	key: "company:favourite",
+	label: "Favourite company",
+	stance: "",
+	resolved: "yes",
+	effect: "favourite",
+	overridden: false,
+} satisfies ScoreRow;
+
 export function mockBreakdown(i: number): ScoreRow[] {
-	return BREAKDOWN_PICKS.map((p, j) => {
+	const rows = BREAKDOWN_PICKS.map((p, j) => {
 		const roll = (i + j) % 3;
 		if (roll === 0) {
 			return {
@@ -210,6 +219,7 @@ export function mockBreakdown(i: number): ScoreRow[] {
 			overridden: false,
 		} satisfies ScoreRow;
 	});
+	return i % 4 === 0 ? [...rows, FAVOURITE_ROW] : rows;
 }
 
 export const ATS_SOURCES = [
