@@ -36,6 +36,7 @@ interface JobsDataTableProps<TData extends Job> {
 	filters: JobFilters;
 	onChange: (patch: Partial<JobFilters>) => void;
 	sourceOptions: string[];
+	wildcards?: boolean;
 }
 
 export function JobsDataTable<TData extends Job>(
@@ -69,7 +70,9 @@ export function JobsDataTable<TData extends Job>(
 		meta: {
 			isExpanded,
 			toggleExpanded,
-			showWildcard: () => isDefaultView(props.filters, sorting().length > 0),
+			showWildcard: () =>
+				props.wildcards === true &&
+				isDefaultView(props.filters, sorting().length > 0),
 		},
 	});
 
