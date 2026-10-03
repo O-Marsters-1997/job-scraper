@@ -1,7 +1,18 @@
 import { z } from "zod";
 
+const dimensionKeySchema = z.enum([
+	"tech",
+	"role",
+	"domain",
+	"seniority",
+	"work",
+	"stage",
+	"size",
+	"employment",
+]);
+
 const dimensionSpecSchema = z.object({
-	key: z.enum(["tech", "role", "domain", "seniority", "work", "stage", "size"]),
+	key: dimensionKeySchema,
 	kind: z.enum(["pair", "multi"]),
 	stances: z.array(z.string()),
 });
@@ -10,15 +21,7 @@ export type DimensionSpec = z.infer<typeof dimensionSpecSchema>;
 
 const scoringOptionSchema = z.object({
 	id: z.string(),
-	dimension: z.enum([
-		"tech",
-		"role",
-		"domain",
-		"seniority",
-		"work",
-		"stage",
-		"size",
-	]),
+	dimension: dimensionKeySchema,
 	label: z.string(),
 });
 

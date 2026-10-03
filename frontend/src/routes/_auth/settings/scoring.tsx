@@ -221,6 +221,12 @@ function ScoringForm(props: {
 						toggle={toggleNice}
 					/>
 					<ChoiceGroup
+						legend="Employment type"
+						options={optionsFor("employment")}
+						isOn={isNice}
+						toggle={toggleNice}
+					/>
+					<ChoiceGroup
 						legend="Working arrangement"
 						options={optionsFor("work")}
 						isOn={isNice}

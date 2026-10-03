@@ -16,6 +16,7 @@ var Dimensions = []dto.DimensionSpec{
 	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice"}, Gate: true, Weight: 1, Saturation: 1},
 	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice"}, Weight: 1, Saturation: 1},
 	{Key: dto.DimensionSize, Kind: "multi", Stances: []string{"nice"}, Weight: 1, Saturation: 1},
+	{Key: dto.DimensionEmployment, Kind: "multi", Stances: []string{"nice"}, Gate: true, Weight: 2, Saturation: 1},
 }
 
 var dimensionSpecs = func() map[dto.Dimension]dto.DimensionSpec {

@@ -14,13 +14,14 @@ import (
 type ScoringDimension string
 
 const (
-	ScoringDimensionTech      ScoringDimension = "tech"
-	ScoringDimensionRole      ScoringDimension = "role"
-	ScoringDimensionDomain    ScoringDimension = "domain"
-	ScoringDimensionSeniority ScoringDimension = "seniority"
-	ScoringDimensionWork      ScoringDimension = "work"
-	ScoringDimensionStage     ScoringDimension = "stage"
-	ScoringDimensionSize      ScoringDimension = "size"
+	ScoringDimensionTech       ScoringDimension = "tech"
+	ScoringDimensionRole       ScoringDimension = "role"
+	ScoringDimensionDomain     ScoringDimension = "domain"
+	ScoringDimensionSeniority  ScoringDimension = "seniority"
+	ScoringDimensionWork       ScoringDimension = "work"
+	ScoringDimensionStage      ScoringDimension = "stage"
+	ScoringDimensionSize       ScoringDimension = "size"
+	ScoringDimensionEmployment ScoringDimension = "employment"
 )
 
 func (e *ScoringDimension) Scan(src interface{}) error {
