@@ -1301,3 +1301,20 @@ func TestCorrections(t *testing.T) {
 		}
 	})
 }
+
+func TestSetCorrectionWhileRescoringKeepsTheStoredScore(t *testing.T) {
+	st := newFakeStore()
+	seedScoredJob(st, "user-1", "tech:go")
+	job := testJob
+	job.ContentFingerprint = "fp-2"
+	st.SeedJob(job, nil)
+
+	_, err := newService(t, st).SetCorrection(t.Context(), "user-1", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "no"})
+
+	if !apperr.IsKind(err, apperr.KindConflict) {
+		t.Errorf("SetCorrection() err = %v, want a conflict", err)
+	}
+	if got := st.Recomputed(); len(got) != 0 {
+		t.Errorf("SetCorrection() saved %+v, want the stored score left alone", got)
+	}
+}

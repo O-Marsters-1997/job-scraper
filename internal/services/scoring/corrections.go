@@ -72,6 +72,9 @@ func (s *Service) rescoreJob(ctx context.Context, userID, jobID string) (dto.Job
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load answers: %w", err)
 	}
+	if len(answers) == 0 {
+		return dto.JobScore{}, apperr.Conflict("job is being re-scored, try again shortly")
+	}
 	corrections, err := s.store.ListJobCorrections(ctx, jobID)
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load corrections: %w", err)

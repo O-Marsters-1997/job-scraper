@@ -46,7 +46,8 @@ const GROUPS: {
 ];
 
 const canCorrect = (r: ScoreRow) =>
-	r.corrected === true || (r.resolved === "yes" && r.effect !== "retired");
+	r.corrected === true ||
+	(r.resolved === "yes" && r.effect !== "retired" && r.key !== "salary");
 
 export function ScoreBreakdown(props: { job: Job }) {
 	const [selectedKey, setSelectedKey] = createSignal<string>();
