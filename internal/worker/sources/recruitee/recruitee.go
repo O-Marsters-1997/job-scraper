@@ -50,10 +50,10 @@ func (o offer) salaryRaw() string {
 
 func (o offer) workArrangement() string {
 	switch {
-	case o.Hybrid:
-		return "hybrid"
 	case o.Remote:
 		return "remote"
+	case o.Hybrid:
+		return "hybrid"
 	case o.OnSite:
 		return "onsite"
 	default:
