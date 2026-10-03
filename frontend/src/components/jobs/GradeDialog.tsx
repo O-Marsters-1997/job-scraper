@@ -23,8 +23,8 @@ import { planSaves } from "@/lib/gradeBatch";
 import { queryClient } from "@/lib/queryClient";
 import { cn, titleCase } from "@/lib/utils";
 import {
-	type Grade,
 	GRADES,
+	type Grade,
 	type GradeReason,
 	type GradeValue,
 } from "@/types/grade";

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
-import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
+import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +25,8 @@ import {
 	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
-import { useAllJobs } from "../../hooks/useJobs";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
+import { useAllJobs } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
