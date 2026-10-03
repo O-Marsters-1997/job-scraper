@@ -159,3 +159,9 @@ func (m *Module) ExportFeedback(ctx context.Context, userID string, includeOutda
 func (m *Module) ClearFeedback(ctx context.Context, userID string) (int64, error) {
 	return m.svc.ClearFeedback(ctx, userID)
 }
+
+// Replay renders where userID's labelled jobs rank under their current Picks,
+// from cached answers alone: it never calls Jev and writes nothing.
+func (m *Module) Replay(ctx context.Context, userID string) (string, error) {
+	return m.svc.Replay(ctx, userID)
+}

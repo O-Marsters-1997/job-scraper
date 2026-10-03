@@ -32,7 +32,7 @@ func packPicks(picks []dto.Pick, b bank) []packPick {
 	return out
 }
 
-func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted int, includeOutdated bool) string {
+func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayReport, outdatedOmitted int, includeOutdated bool) string {
 	var overall, jobs, collections []dto.ScoreFeedback
 	for _, e := range entries {
 		switch e.Kind {
@@ -54,12 +54,17 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted i
 
 	sb.WriteString("## How Suitability is computed\n\n")
 	sb.WriteString("Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.\n")
-	fmt.Fprintf(&sb, "An answer resolves to yes, no or unknown: the top of P(yes), P(no) and P(not stated) wins when it reaches %.1f, otherwise unknown.\n\n", resolveThreshold)
-	fmt.Fprintf(&sb, "Score = round(100 * (met + %.1f * %d) / (evaluable + %d)).\n\n", 0.5, priorK, priorK)
-	fmt.Fprintf(&sb, "- A nice Pick counts per dimension: %d to evaluable once any of the dimension's nice Picks resolves yes or no, and %d to met if one resolves yes.\n", niceWeight, niceWeight)
-	fmt.Fprintf(&sb, "- An avoid Pick resolving yes adds %d to evaluable and nothing to met.\n", avoidWeight)
+	fmt.Fprintf(&sb, "An answer resolves to yes, no or unknown for the checklist rows: the top of P(yes), P(no) and P(not stated) wins when it reaches %.1f, otherwise unknown. The score itself uses the probabilities.\n\n", resolveThreshold)
+	fmt.Fprintf(&sb, "Score = round(100 * (sum(weight * evidence * credit) + %.1f * prior) / (sum(weight * evidence) + avoid cost + prior)), with prior = %.0f.\n\n", 0.5, prior)
+	sb.WriteString("- Per nice dimension, credit = min(1, sum of P(yes) over its Picks / saturation) and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:\n")
+	for _, d := range Dimensions {
+		fmt.Fprintf(&sb, "  - %s: weight %.0f, saturation %d%s\n", d.Key, d.Weight, d.Saturation, gateNote(d))
+	}
+	fmt.Fprintf(&sb, "- An avoid Pick adds %d * P(yes) to the denominator and nothing to the numerator.\n", avoidWeight)
+	fmt.Fprintf(&sb, "- A Gate caps the score at %d: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.\n", gateCap)
 	sb.WriteString("- A block Pick resolving yes forces the score to 0.\n")
-	sb.WriteString("- Unknown counts on neither side.\n\n")
+	fmt.Fprintf(&sb, "- Bands: Great from %d, Good from %d, Fair from %d, Poor below.\n", bandGreatMin, bandGoodMin, bandFairMin)
+	sb.WriteString("- A dimension with no evidence counts on neither side.\n\n")
 
 	sb.WriteString("Current Picks:\n\n")
 	if len(picks) == 0 {
@@ -73,7 +78,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted i
 	}
 
 	sb.WriteString("## Levers you may change\n\n")
-	fmt.Fprintf(&sb, "- Weights: niceWeight (%d), avoidWeight (%d), priorK (%d)\n", niceWeight, avoidWeight, priorK)
+	fmt.Fprintf(&sb, "- Dimension weights and saturation, avoidWeight (%d), prior (%.0f), gateCap (%d)\n", avoidWeight, prior, gateCap)
 	fmt.Fprintf(&sb, "- resolveThreshold (%.1f)\n", resolveThreshold)
 	sb.WriteString("- Question wording\n")
 	sb.WriteString("- New or retired Options\n")
@@ -89,6 +94,10 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, outdatedOmitted i
 		}
 		writeReason(&sb, e.Reason)
 	}
+
+	sb.WriteString("## Replay\n\n")
+	writeReplaySummary(&sb, replay)
+	sb.WriteString("\n")
 
 	sb.WriteString("## Job entries\n\n")
 	if len(jobs) == 0 {
@@ -214,3 +223,10 @@ func longestRun(s string, r rune) int {
 var cellEscaper = strings.NewReplacer("|", `\|`, "\n", " ")
 
 func cell(s string) string { return cellEscaper.Replace(s) }
+
+func gateNote(d dto.DimensionSpec) string {
+	if d.Gate {
+		return ", Gate"
+	}
+	return ""
+}

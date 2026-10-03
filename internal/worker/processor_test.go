@@ -514,6 +514,20 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("a tracked board's discovered profile is saved", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		withProfile := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Jobs: jobs, Recheck: true, Profile: &dto.CompanyProfile{HQ: "London"}}, nil
+		}
+		if err := f.discoverProcessor(withProfile, configsStub{match}).Process(ctx, task); err != nil {
+			t.Fatalf("Process() = %v, want nil", err)
+		}
+		got, err := f.store.ListNewCompanies(ctx, "match")
+		if err != nil || len(got) != 1 || got[0].Profile == nil || got[0].Profile.HQ != "London" {
+			t.Fatalf("ListNewCompanies() = %+v, %v, want one company with the London profile", got, err)
+		}
+	})
+
 	t.Run("a task company attaches the board without upserting by name", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "harvest-slug", Name: "Harvest Slug"})

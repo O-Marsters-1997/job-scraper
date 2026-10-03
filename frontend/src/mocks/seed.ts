@@ -3,7 +3,7 @@ import type { Application } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
 import type { CV } from "@/types/cv";
-import type { Job } from "@/types/job";
+import type { Band, Job } from "@/types/job";
 import type { SourceTarget } from "@/types/sourceTarget";
 import { slugify } from "./helpers";
 import {
@@ -42,6 +42,12 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
 
+function mockBand(score: number): Band {
+	if (score >= 80) return "great";
+	if (score >= 65) return "good";
+	return score >= 45 ? "fair" : "poor";
+}
+
 const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 	const company = faker.helpers.arrayElement(COMPANIES);
 	const location = faker.helpers.arrayElement(LOCATIONS);
@@ -54,6 +60,7 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 				: null;
 	const title = faker.helpers.arrayElement(JOB_TITLES);
 	const scored = i % 5 !== 0;
+	const score = scored ? faker.number.int({ min: 30, max: 100 }) : null;
 	return {
 		ID: faker.string.uuid(),
 		Title: title,
@@ -64,7 +71,8 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		UpdatedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
 		DaysInOffice: daysInOffice,
-		SuitabilityScore: scored ? faker.number.int({ min: 30, max: 100 }) : null,
+		SuitabilityScore: score,
+		Band: score == null ? "" : mockBand(score),
 		Breakdown: scored ? mockBreakdown(i) : null,
 		Description: JOB_DESCRIPTIONS[i % JOB_DESCRIPTIONS.length]!,
 		Skills: SKILL_SETS[i % SKILL_SETS.length]!,

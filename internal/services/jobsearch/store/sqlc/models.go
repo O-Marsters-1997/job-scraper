@@ -14,12 +14,14 @@ import (
 type ScoringDimension string
 
 const (
-	ScoringDimensionTech      ScoringDimension = "tech"
-	ScoringDimensionRole      ScoringDimension = "role"
-	ScoringDimensionDomain    ScoringDimension = "domain"
-	ScoringDimensionSeniority ScoringDimension = "seniority"
-	ScoringDimensionWork      ScoringDimension = "work"
-	ScoringDimensionStage     ScoringDimension = "stage"
+	ScoringDimensionTech       ScoringDimension = "tech"
+	ScoringDimensionRole       ScoringDimension = "role"
+	ScoringDimensionDomain     ScoringDimension = "domain"
+	ScoringDimensionSeniority  ScoringDimension = "seniority"
+	ScoringDimensionWork       ScoringDimension = "work"
+	ScoringDimensionStage      ScoringDimension = "stage"
+	ScoringDimensionSize       ScoringDimension = "size"
+	ScoringDimensionEmployment ScoringDimension = "employment"
 )
 
 func (e *ScoringDimension) Scan(src interface{}) error {
@@ -65,6 +67,14 @@ type Achievement struct {
 	SortOrder  int32
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+}
+
+type AnswerCorrection struct {
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	OptionID  string
+	Value     string
+	CreatedAt pgtype.Timestamptz
 }
 
 type Application struct {
@@ -243,11 +253,23 @@ type JobCandidate struct {
 	DetailState   string
 }
 
+type JobGrade struct {
+	UserID       pgtype.UUID
+	JobID        pgtype.UUID
+	Grade        string
+	Reasons      []string
+	ScoreAtGrade pgtype.Int4
+	ScoreModel   pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type JobScore struct {
 	ID               pgtype.UUID
 	JobID            pgtype.UUID
 	UserID           pgtype.UUID
 	SuitabilityScore pgtype.Int4
+	Band             pgtype.Text
 	Breakdown        []byte
 	Cost             pgtype.Numeric
 	ScoreFingerprint pgtype.Text

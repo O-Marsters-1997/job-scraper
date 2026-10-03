@@ -153,6 +153,12 @@ Shared across every User, keyed on the Job, its content fingerprint, the questio
 the model, so identical questions across Users and Custom questions answer once.
 _Avoid_: Score, judgement — an Answer is a fact about the Job, not a fit verdict
 
+**Correction**:
+One User's yes or no on one Option for one Job, overriding Jev's Answer in that User's score only
+(as certain, `Corrected` on the breakdown row). Stored in `answer_corrections`, kept across
+Recompute and later answer effects, and never visible to other Users.
+_Avoid_: Override (a manual Pick overriding a text Pick), feedback (Score Feedback is free text)
+
 **Hard filter**:
 A company-blocklist or no-go-tech check that runs in code before any Jev spend, at answer-effect
 time rather than at ingest; a Job that trips every interested User's filter is never sent to Jev.
@@ -164,6 +170,34 @@ A 0–100 score per (Job, User) from a pure function over the User's Picks and t
 Answers — no per-Job Jev call, since Suitability is derived entirely from data already fetched
 once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
+
+**Gate**:
+A rule that caps Suitability at the top of Poor (44) without hiding the Job. A Gate dimension
+(seniority, work) fires when every option the User picked in it resolves no and an option they did
+not pick resolves yes; a salary below the floor also fires one. The triggering row shows as `gated`.
+_Avoid_: Block (a block Pick forces 0 and hides the Job), filter
+
+**Band**:
+Great (80+), Good (65+), Fair (45+) or Poor, derived from the Suitability score and stored beside it
+on the Job's score row. The score still sorts the list and checks `notify_threshold`.
+_Avoid_: Tier, grade (a Grade is the User's own verdict)
+
+**Grade**:
+A User's current verdict on one Job (`great`, `ok` or `no`), with optional reason chips from a fixed
+set, stored with the Suitability score and model at the time. One per (User, Job), updated in place
+and deleted to clear. The only explicit label the scoring is tuned against.
+_Avoid_: Rating, vote — keep distinct from Score Feedback, which is a free-text log
+
+**Dismiss**:
+The one-tap "Not for me" that saves Grade `no` and hides the Job from that User's lists, like a
+blocked row. Undo clears the Grade.
+_Avoid_: Hide, archive, delete — nothing is removed and the Job page still opens
+
+**Replay**:
+A report of where a User's labelled Jobs rank under their current Picks, re-scored from cached Answers
+without calling Jev. Positives are Grade `great`/`ok`, an application or a kept tailored CV; negatives
+are Grade `no`. Run as `just eval-scoring <user>`, and summarised in the Feedback Pack.
+_Avoid_: Backtest, eval run
 
 **Search Config**:
 A User's editable search criteria (role, location, keywords), Picks (in `preferences`), and notify threshold — exactly one per User; the single source of truth feeding the

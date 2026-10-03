@@ -24,6 +24,8 @@ import (
 type ScoringInput struct {
 	Job     dto.Job
 	Answers map[string]dto.Answer
+	// Corrections maps option id to the user's "yes" or "no" for this job.
+	Corrections map[string]string
 }
 
 type Store struct {
@@ -276,13 +278,31 @@ func (s *Store) FailAnswerEffect(ctx context.Context, id string, attempts int, f
 func (s *Store) GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {
-		return dto.Job{}, err
+		return dto.Job{}, data.ErrNotFound
 	}
 	row, err := s.queries.GetJobForScoring(ctx, jid)
 	if err != nil {
 		return dto.Job{}, data.QueryErr("GetJobForScoring", err)
 	}
 	return toJobDTO(row), nil
+}
+
+// GetCompanyProfile returns the most recently fetched profile of companyID,
+// or data.ErrNotFound when it has none.
+func (s *Store) GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return dto.CompanyProfile{}, data.ErrNotFound
+	}
+	raw, err := s.queries.GetCompanyProfile(ctx, cid)
+	if err != nil {
+		return dto.CompanyProfile{}, data.QueryErr("GetCompanyProfile", err)
+	}
+	var profile dto.CompanyProfile
+	if err := json.Unmarshal(raw, &profile); err != nil {
+		return dto.CompanyProfile{}, fmt.Errorf("store.GetCompanyProfile: unmarshal: %w", err)
+	}
+	return profile, nil
 }
 
 func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error) {
@@ -433,7 +453,7 @@ func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore,
 		return fmt.Errorf("cost: %w", err)
 	}
 	return queries.UpsertJobScore(ctx, sqlc.UpsertJobScoreParams{
-		JobID: jobID, UserID: userID, Score: int32(sc.Score), Breakdown: breakdown, Cost: cost,
+		JobID: jobID, UserID: userID, Score: int32(sc.Score), Band: sc.Band, Breakdown: breakdown, Cost: cost,
 		Fingerprint: fingerprint, Model: model,
 	})
 }
@@ -462,10 +482,23 @@ func (s *Store) ListScoringInputs(ctx context.Context, userID, model string) ([]
 		}
 	}
 
+	correctionRows, err := s.queries.ListAnswerCorrectionsForUser(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListScoringInputs: corrections: %w", err)
+	}
+	correctionsByJob := make(map[string]map[string]string)
+	for _, c := range correctionRows {
+		jobID := c.JobID.String()
+		if correctionsByJob[jobID] == nil {
+			correctionsByJob[jobID] = make(map[string]string)
+		}
+		correctionsByJob[jobID][c.OptionID] = c.Value
+	}
+
 	inputs := make([]ScoringInput, len(jobRows))
 	for i, row := range jobRows {
 		job := toJobDTO(sqlc.GetJobForScoringRow(row))
-		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID]}
+		inputs[i] = ScoringInput{Job: job, Answers: answersByJob[job.ID], Corrections: correctionsByJob[job.ID]}
 	}
 	return inputs, nil
 }
@@ -485,7 +518,7 @@ func (s *Store) SaveScores(ctx context.Context, scores []dto.JobScore) error {
 			return fmt.Errorf("store.SaveScores: marshal breakdown: %w", err)
 		}
 		if err := s.queries.UpdateJobScoreBreakdown(ctx, sqlc.UpdateJobScoreBreakdownParams{
-			Score: int32(sc.Score), Breakdown: breakdown, JobID: jobID, UserID: userID,
+			Score: int32(sc.Score), Band: sc.Band, Breakdown: breakdown, JobID: jobID, UserID: userID,
 		}); err != nil {
 			return fmt.Errorf("store.SaveScores: %w", err)
 		}
@@ -789,4 +822,152 @@ func (s *Store) ListJobScoresForCollection(ctx context.Context, userID string, j
 		}
 	}
 	return out, nil
+}
+
+// UpsertGrade writes userID's Grade for g.JobID, replacing any earlier one.
+func (s *Store) UpsertGrade(ctx context.Context, userID string, g dto.Grade) (dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	jid, err := data.UUID(g.JobID)
+	if err != nil {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	params := sqlc.UpsertGradeParams{UserID: uid, JobID: jid, Grade: g.Grade, Reasons: nonNilStrings(g.Reasons)}
+	if g.ScoreAtGrade != nil {
+		params.ScoreAtGrade = pgtype.Int4{Int32: int32(*g.ScoreAtGrade), Valid: true}
+	}
+	if g.ScoreModel != "" {
+		params.ScoreModel = data.Text(g.ScoreModel)
+	}
+	row, err := s.queries.UpsertGrade(ctx, params)
+	if err != nil {
+		return dto.Grade{}, fmt.Errorf("store.UpsertGrade: %w", err)
+	}
+	return toGradeDTO(row), nil
+}
+
+// GetGrade returns userID's Grade for jobID, or data.ErrNotFound.
+func (s *Store) GetGrade(ctx context.Context, userID, jobID string) (dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	row, err := s.queries.GetGrade(ctx, sqlc.GetGradeParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return dto.Grade{}, data.QueryErr("GetGrade", err)
+	}
+	return toGradeDTO(row), nil
+}
+
+// DeleteGrade removes userID's Grade for jobID; an ungraded job is a no-op.
+func (s *Store) DeleteGrade(ctx context.Context, userID, jobID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil
+	}
+	if _, err := s.queries.DeleteGrade(ctx, sqlc.DeleteGradeParams{UserID: uid, JobID: jid}); err != nil {
+		return fmt.Errorf("store.DeleteGrade: %w", err)
+	}
+	return nil
+}
+
+// ListGrades returns every Grade userID has given, newest first.
+func (s *Store) ListGrades(ctx context.Context, userID string) ([]dto.Grade, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListGrades(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListGrades: %w", err)
+	}
+	out := make([]dto.Grade, len(rows))
+	for i, row := range rows {
+		out[i] = toGradeDTO(row)
+	}
+	return out, nil
+}
+
+// ListImpliedPositives returns userID's applications and kept tailored CVs
+// as implied positive labels.
+func (s *Store) ListImpliedPositives(ctx context.Context, userID string) ([]dto.ImpliedLabel, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListImpliedPositives(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListImpliedPositives: %w", err)
+	}
+	out := make([]dto.ImpliedLabel, len(rows))
+	for i, row := range rows {
+		out[i] = dto.ImpliedLabel{JobID: row.JobID.String(), Source: row.Source}
+	}
+	return out, nil
+}
+
+func (s *Store) SetAnswerCorrection(ctx context.Context, userID, jobID, optionID, value string) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.UpsertAnswerCorrection(ctx, sqlc.UpsertAnswerCorrectionParams{UserID: uid, JobID: jid, OptionID: optionID, Value: value}); err != nil {
+		return fmt.Errorf("store.SetAnswerCorrection: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteAnswerCorrection(ctx context.Context, userID, jobID, optionID string) error {
+	uid, jid, err := userAndJob(userID, jobID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.DeleteAnswerCorrection(ctx, sqlc.DeleteAnswerCorrectionParams{UserID: uid, JobID: jid, OptionID: optionID}); err != nil {
+		return fmt.Errorf("store.DeleteAnswerCorrection: %w", err)
+	}
+	return nil
+}
+
+// ListJobCorrections returns every user's Corrections for jobID, keyed by
+// user id then option id.
+func (s *Store) ListJobCorrections(ctx context.Context, jobID string) (map[string]map[string]string, error) {
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListAnswerCorrectionsForJob(ctx, jid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobCorrections: %w", err)
+	}
+	out := make(map[string]map[string]string)
+	for _, r := range rows {
+		userID := r.UserID.String()
+		if out[userID] == nil {
+			out[userID] = make(map[string]string)
+		}
+		out[userID][r.OptionID] = r.Value
+	}
+	return out, nil
+}
+
+func userAndJob(userID, jobID string) (pgtype.UUID, pgtype.UUID, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return pgtype.UUID{}, pgtype.UUID{}, err
+	}
+	return uid, jid, nil
 }

@@ -333,7 +333,7 @@ func TestRunTick(t *testing.T) {
 		st := newFakeStore()
 		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		cfg := picking("user-1", "tech:go")
-		cfg.NotifyThreshold = 50
+		cfg.NotifyThreshold = 30
 		seedEffect(st, true, cfg)
 		alerter := &fakeAlerter{}
 
@@ -348,7 +348,7 @@ func TestRunTick(t *testing.T) {
 		st := newFakeStore()
 		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		cfg := picking("user-1", "tech:go")
-		cfg.NotifyThreshold = 50
+		cfg.NotifyThreshold = 30
 		cfg.CompanyIsNew = true
 		seedEffect(st, true, cfg)
 		alerter := &fakeAlerter{}
@@ -371,10 +371,10 @@ func TestRunTick(t *testing.T) {
 			newCo     bool
 			wantPush  bool
 		}{
-			{"qualifying job", true, 50, false, true},
+			{"qualifying job", true, 30, false, true},
 			{"below threshold", true, 101, false, false},
-			{"new company", true, 50, true, false},
-			{"re-ingest", false, 50, false, false},
+			{"new company", true, 30, true, false},
+			{"re-ingest", false, 30, false, false},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -599,6 +599,7 @@ type pickCase struct {
 	dimension dto.Dimension
 	stance    string
 	retired   bool
+	unpicked  bool
 	answer    dto.Answer
 }
 
@@ -612,6 +613,10 @@ func avoidPick(id string, pYes, pNo, pNotStated float64) pickCase {
 
 func blockPick(id string, pYes, pNo, pNotStated float64) pickCase {
 	return pickCase{id: id, dimension: dto.DimensionDomain, stance: "block", answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
+}
+
+func unpickedOption(dim dto.Dimension, id string, pYes, pNo, pNotStated float64) pickCase {
+	return pickCase{id: id, dimension: dim, unpicked: true, answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
 func retiredPick(dim dto.Dimension, id string) pickCase {
@@ -642,8 +647,8 @@ func TestRecompute(t *testing.T) {
 			t.Fatalf("recomputed = %d, want 1", result.Recomputed)
 		}
 		saved := st.Recomputed()
-		if len(saved) != 1 || saved[0].Score != 63 {
-			t.Fatalf("saved scores = %+v, want one score of 63", saved)
+		if len(saved) != 1 || saved[0].Score != 37 {
+			t.Fatalf("saved scores = %+v, want one score of 37", saved)
 		}
 		if len(alerter.notified) != 0 {
 			t.Fatalf("alerter called on recompute: %v", alerter.notified)
@@ -671,8 +676,8 @@ func TestRecompute(t *testing.T) {
 			t.Fatalf("Recompute: %v", err)
 		}
 		saved := st.Recomputed()
-		if len(saved) != 1 || saved[0].Score != 63 {
-			t.Fatalf("saved scores = %+v, want a nice-stance score of 63 (manual overrides text; a text avoid would score 21)", saved)
+		if len(saved) != 1 || saved[0].Score != 37 {
+			t.Fatalf("saved scores = %+v, want a nice-stance score of 37 (manual overrides text; a text avoid would score 18)", saved)
 		}
 	})
 
@@ -683,70 +688,110 @@ func TestRecompute(t *testing.T) {
 			salaryRaw string
 			floor     *dto.Money
 			wantScore int
+			wantBand  string
 			wantRows  []dto.ScoreRow
 		}{
-			{name: "nothing known scores 50", wantScore: 50},
+			{name: "nothing known scores 50", wantScore: 50, wantBand: "fair"},
 			{
-				name:      "one nice match scores 63",
+				name:      "one tech match earns a third of the credit",
 				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05)},
-				wantScore: 63,
+				wantScore: 37,
+				wantBand:  "poor",
 				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "meets"}},
 			},
 			{
-				name: "four nice dimensions all matched scores 79",
+				name: "three tech matches saturate the dimension",
+				picks: []pickCase{
+					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionTech, "tech:rust", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionTech, "tech:kubernetes", 0.9, 0.05, 0.05),
+				},
+				wantScore: 76,
+				wantBand:  "good",
+			},
+			{
+				name:      "one role match saturates the dimension",
+				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05)},
+				wantScore: 80,
+				wantBand:  "great",
+				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "meets"}},
+			},
+			{
+				name: "four nice dimensions all matched weights each dimension",
 				picks: []pickCase{
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.9, 0.05, 0.05),
 				},
-				wantScore: 79,
+				wantScore: 74,
+				wantBand:  "good",
 			},
 			{
-				name: "two avoids hit, nothing else known scores 21",
-				picks: []pickCase{
-					avoidPick("tech:java", 0.9, 0.05, 0.05),
-					avoidPick("tech:php", 0.9, 0.05, 0.05),
-				},
-				wantScore: 21,
+				name:      "a confident miss pulls a dimension to the floor",
+				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.05, 0.9, 0.05)},
+				wantScore: 17,
+				wantBand:  "poor",
+				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "misses"}},
 			},
 			{
-				name: "two nice picks in one dimension with one matched counted once",
+				name:      "weak evidence moves the score less than a confident miss",
+				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.2, 0.2, 0.6)},
+				wantScore: 34,
+				wantBand:  "poor",
+				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+			},
+			{
+				name:      "an answer that is all not stated carries no evidence",
+				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0, 0, 1)},
+				wantScore: 50,
+				wantBand:  "fair",
+				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+			},
+			{
+				name:      "a top probability below 0.6 resolves unknown but still counts as evidence",
+				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.55, 0.35, 0.1)},
+				wantScore: 30,
+				wantBand:  "poor",
+				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+			},
+			{
+				name: "two nice picks in one dimension pool their probability",
 				picks: []pickCase{
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionTech, "tech:rust", 0.05, 0.9, 0.05),
 				},
-				wantScore: 63,
+				wantScore: 38,
+				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "no", Effect: "misses"},
 				},
 			},
 			{
-				name:      "nice pick with every answer unknown is excluded",
-				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.2, 0.2, 0.6)},
-				wantScore: 50,
-				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
+				name: "two avoids hit cost their probability",
+				picks: []pickCase{
+					avoidPick("tech:java", 0.9, 0.05, 0.05),
+					avoidPick("tech:php", 0.9, 0.05, 0.05),
+				},
+				wantScore: 11,
+				wantBand:  "poor",
 			},
 			{
-				name:      "an avoid the job lacks is neutral",
+				name:      "an avoid the job lacks costs only its residual probability",
 				picks:     []pickCase{avoidPick("tech:java", 0.05, 0.9, 0.05)},
-				wantScore: 50,
+				wantScore: 45,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
-			},
-			{
-				name:      "a top probability below 0.6 resolves unknown",
-				picks:     []pickCase{nicePick(dto.DimensionTech, "tech:go", 0.55, 0.35, 0.1)},
-				wantScore: 50,
-				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 			{
 				name: "a block that resolves yes zeroes the score even with nice matches",
 				picks: []pickCase{
-					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
 					blockPick("domain:gambling", 0.9, 0.05, 0.05),
 				},
 				wantScore: 0,
+				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "yes", Effect: "blocked"},
@@ -756,12 +801,14 @@ func TestRecompute(t *testing.T) {
 				name:      "a block the job lacks is neutral",
 				picks:     []pickCase{blockPick("domain:gambling", 0.05, 0.9, 0.05)},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
 				name:      "a retired pick scores as if omitted",
 				picks:     []pickCase{retiredPick(dto.DimensionTech, "tech:cobol")},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "retired", Effect: "retired"}},
 			},
 			{
@@ -770,24 +817,120 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					retiredPick(dto.DimensionRole, "role:backend"),
 				},
-				wantScore: 63,
+				wantScore: 37,
+				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "retired", Effect: "retired"},
 				},
 			},
 			{
-				name:      "salary below floor in the same currency is an avoid hit",
+				name: "seniority gate caps the score when the picked level misses and another level matches",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.9, 0.05, 0.05),
+				},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "gated"},
+				},
+			},
+			{
+				name: "work gate caps the score when the picked arrangement misses and another matches",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionWork, "work:onsite", 0.9, 0.05, 0.05),
+				},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "gated"},
+				},
+			},
+			{
+				name: "employment gate caps the score when a permanent Pick meets a contract role",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionEmployment, "employment:permanent", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionEmployment, "employment:contract", 0.9, 0.05, 0.05),
+				},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "gated"},
+				},
+			},
+			{
+				name: "a gate needs every picked option to resolve no",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
+					nicePick(dto.DimensionSeniority, "seniority:mid", 0.9, 0.05, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.9, 0.05, 0.05),
+				},
+				wantScore: 86,
+				wantBand:  "great",
+			},
+			{
+				name: "a gate needs an unpicked option to resolve yes",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.2, 0.2, 0.6),
+				},
+				wantScore: 48,
+				wantBand:  "fair",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "misses"},
+				},
+			},
+			{
+				name: "a dimension that is not a gate never caps",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionStage, "stage:seed", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionStage, "stage:public", 0.9, 0.05, 0.05),
+				},
+				wantScore: 65,
+				wantBand:  "good",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "misses"},
+				},
+			},
+			{
+				name:      "salary below floor in the same currency gates",
 				salaryRaw: "£40k",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
-				wantScore: 30,
-				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "misses"}},
+				wantScore: 17,
+				wantBand:  "poor",
+				wantRows:  []dto.ScoreRow{{Resolved: "yes", Effect: "gated"}},
+			},
+			{
+				name:      "salary gate caps an otherwise good score",
+				picks:     []pickCase{nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05)},
+				salaryRaw: "£40k",
+				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
+				wantScore: 44,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "yes", Effect: "gated"},
+				},
 			},
 			{
 				name:      "salary above floor in the same currency is neutral",
 				salaryRaw: "£70k",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
@@ -795,6 +938,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "$70k",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 			{
@@ -802,6 +946,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "Competitive",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 			{
@@ -809,6 +954,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "£55k–70k",
 				floor:     &dto.Money{Amount: 60000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
@@ -816,6 +962,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "55,000 - 70,000 GBP per annum",
 				floor:     &dto.Money{Amount: 60000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
@@ -823,6 +970,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "£600 per day",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 			{
@@ -830,6 +978,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "$120k",
 				floor:     &dto.Money{Amount: 100000, Currency: "USD"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "no", Effect: "neutral"}},
 			},
 			{
@@ -837,6 +986,7 @@ func TestRecompute(t *testing.T) {
 				salaryRaw: "",
 				floor:     &dto.Money{Amount: 55000, Currency: "GBP"},
 				wantScore: 50,
+				wantBand:  "fair",
 				wantRows:  []dto.ScoreRow{{Resolved: "unknown", Effect: "unknown"}},
 			},
 		}
@@ -854,7 +1004,9 @@ func TestRecompute(t *testing.T) {
 						opt.RetiredAt = &retiredAt
 					}
 					options = append(options, opt)
-					picks = append(picks, dto.Pick{OptionID: p.id, Stance: p.stance, Source: "manual"})
+					if !p.unpicked {
+						picks = append(picks, dto.Pick{OptionID: p.id, Stance: p.stance, Source: "manual"})
+					}
 					answers[scoring.QuestionHash(question)] = p.answer
 				}
 
@@ -884,6 +1036,9 @@ func TestRecompute(t *testing.T) {
 				if saved[0].Score != tc.wantScore {
 					t.Errorf("score = %d, want %d", saved[0].Score, tc.wantScore)
 				}
+				if saved[0].Band != tc.wantBand {
+					t.Errorf("band = %q, want %q", saved[0].Band, tc.wantBand)
+				}
 				if tc.wantRows != nil {
 					ignore := cmpopts.IgnoreFields(dto.ScoreRow{}, "Key", "Label", "Stance", "Overridden")
 					if diff := cmp.Diff(tc.wantRows, saved[0].Rows, ignore); diff != "" {
@@ -893,6 +1048,26 @@ func TestRecompute(t *testing.T) {
 			})
 		}
 	})
+}
+
+var (
+	seniorityOptions = []dto.ScoringOption{
+		{ID: "seniority:mid", Dimension: dto.DimensionSeniority, Label: "Mid", Question: "Is this a mid-level role?"},
+		{ID: "seniority:staff", Dimension: dto.DimensionSeniority, Label: "Staff", Question: "Is this a Staff role?"},
+	}
+	retiredStaff = dto.ScoringOption{
+		ID: "seniority:principal", Dimension: dto.DimensionSeniority, Label: "Principal", Question: "Is this a Principal role?", RetiredAt: &retiredAt,
+	}
+)
+
+func TestBandFor(t *testing.T) {
+	for score, want := range map[int]string{
+		100: "great", 80: "great", 79: "good", 65: "good", 64: "fair", 45: "fair", 44: "poor", 0: "poor",
+	} {
+		if got := scoring.BandFor(score); got != want {
+			t.Errorf("BandFor(%d) = %q, want %q", score, got, want)
+		}
+	}
 }
 
 func TestFillMissingAnswers(t *testing.T) {
@@ -906,6 +1081,9 @@ func TestFillMissingAnswers(t *testing.T) {
 		{"no picks queues nothing", nil, ptr(picking("user-1")), 0},
 		{"no search config queues nothing", nil, nil, 0},
 		{"a retired pick is never asked", []dto.ScoringOption{retiredCobol}, ptr(picking("user-1", "tech:cobol")), 0},
+		{"a Gate pick asks every live option in its dimension", seniorityOptions, ptr(picking("user-1", "seniority:senior")), 3},
+		{"a Gate pick never asks a retired option in its dimension", append(slices.Clone(seniorityOptions), retiredStaff), ptr(picking("user-1", "seniority:senior")), 3},
+		{"a Gate dimension without a pick asks nothing about it", seniorityOptions, ptr(picking("user-1", "tech:go")), 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1212,4 +1390,262 @@ func TestListFeedback_Outdated(t *testing.T) {
 	if shown.Total != 3 || len(shown.Entries) != 3 || !shown.Entries[1].PicksChanged || shown.Entries[0].PicksChanged {
 		t.Errorf("ListFeedback(outdated) = %+v, want all 3 entries, the two earlier ones tagged picks changed", shown)
 	}
+}
+
+func TestSetGrade(t *testing.T) {
+	const userID = "user-1"
+	svc := func(st *scoringtest.FakeStore) *scoring.Service { return scoring.NewService(newDeps(t, st)) }
+
+	t.Run("records the grade beside the stored score and model, and re-grading replaces it", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+
+		if _, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "ok"}); err != nil {
+			t.Fatalf("SetGrade(ok) err = %v", err)
+		}
+		if _, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "no", Reasons: []string{"tech", "role", "tech"}}); err != nil {
+			t.Fatalf("SetGrade(no) err = %v", err)
+		}
+
+		got, err := svc(st).GetGrade(t.Context(), userID, testJob.ID)
+		score := 72
+		want := &dto.Grade{JobID: testJob.ID, Grade: "no", Reasons: []string{"role", "tech"}, ScoreAtGrade: &score, ScoreModel: "jev-old"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Grade{}, "UpdatedAt")); err != nil || diff != "" {
+			t.Errorf("GetGrade() = %+v, %v (-want +got):\n%s", got, err, diff)
+		}
+		if list, _ := svc(st).ListGrades(t.Context(), userID); len(list) != 1 {
+			t.Errorf("ListGrades() = %+v, want one row", list)
+		}
+	})
+
+	t.Run("an unscored job is graded with no score", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedJob(testJob, nil)
+
+		got, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "great"})
+		if err != nil || got.ScoreAtGrade != nil || got.ScoreModel != "" {
+			t.Errorf("SetGrade() = %+v, %v, want a grade with no score", got, err)
+		}
+	})
+
+	tests := []struct {
+		name string
+		in   dto.GradeInput
+		kind apperr.Kind
+	}{
+		{name: "bad grade is invalid", in: dto.GradeInput{JobID: testJob.ID, Grade: "meh"}, kind: apperr.KindInvalid},
+		{name: "unknown reason is invalid", in: dto.GradeInput{JobID: testJob.ID, Grade: "no", Reasons: []string{"vibes"}}, kind: apperr.KindInvalid},
+		{name: "unknown job is not found", in: dto.GradeInput{JobID: "nope", Grade: "no"}, kind: apperr.KindNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" and writes nothing", func(t *testing.T) {
+			st := newFakeStore()
+			st.SeedJob(testJob, nil)
+
+			if _, err := svc(st).SetGrade(t.Context(), userID, tt.in); !apperr.IsKind(err, tt.kind) {
+				t.Fatalf("SetGrade(%+v) err = %v, want kind %v", tt.in, err, tt.kind)
+			}
+			if list, _ := svc(st).ListGrades(t.Context(), userID); len(list) != 0 {
+				t.Errorf("ListGrades() = %+v, want nothing written", list)
+			}
+		})
+	}
+}
+
+func TestClearGrade(t *testing.T) {
+	st := newFakeStore()
+	st.SeedJob(testJob, nil)
+	svc := scoring.NewService(newDeps(t, st))
+	if _, err := svc.SetGrade(t.Context(), "user-1", dto.GradeInput{JobID: testJob.ID, Grade: "no"}); err != nil {
+		t.Fatalf("SetGrade() err = %v", err)
+	}
+
+	if err := svc.ClearGrade(t.Context(), "user-2", testJob.ID); err != nil {
+		t.Fatalf("ClearGrade(other user) err = %v", err)
+	}
+	if got, _ := svc.GetGrade(t.Context(), "user-1", testJob.ID); got == nil {
+		t.Fatal("ClearGrade(other user) removed user-1's grade")
+	}
+	if err := svc.ClearGrade(t.Context(), "user-1", testJob.ID); err != nil {
+		t.Fatalf("ClearGrade() err = %v", err)
+	}
+	if got, err := svc.GetGrade(t.Context(), "user-1", testJob.ID); got != nil || err != nil {
+		t.Errorf("GetGrade() after clear = %+v, %v, want nil, nil", got, err)
+	}
+}
+
+func TestCorrections(t *testing.T) {
+	const userID = "user-1"
+	goKey := scoring.QuestionHash("Does the role use Go?")
+
+	t.Run("a correction survives Recompute and marks its row", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedSearchConfig(picking(userID, "tech:go"))
+		st.SeedScoringInputs(userID, []store.ScoringInput{{Job: dto.Job{ID: "job-1"}, Answers: map[string]dto.Answer{goKey: {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}}})
+		if err := st.SetAnswerCorrection(t.Context(), userID, "job-1", "tech:go", "no"); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := newService(t, st).Recompute(t.Context(), userID); err != nil {
+			t.Fatalf("Recompute: %v", err)
+		}
+
+		saved := st.Recomputed()
+		if len(saved) != 1 || saved[0].Score != 17 || !saved[0].Rows[0].Corrected || saved[0].Rows[0].Resolved != "no" {
+			t.Fatalf("Recompute saved %+v, want score 17 with a corrected no row", saved)
+		}
+	})
+
+	t.Run("the answer effect applies each user's own corrections", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		seedEffect(st, false, picking("user-1", "tech:go"), picking("user-2", "tech:go"))
+		if err := st.SetAnswerCorrection(t.Context(), "user-1", testJob.ID, "tech:go", "no"); err != nil {
+			t.Fatal(err)
+		}
+
+		runTick(t, st)
+
+		got := map[string]int{}
+		for _, sc := range st.Completed()[0].Scores {
+			got[sc.UserID] = sc.Score
+		}
+		if diff := cmp.Diff(map[string]int{"user-1": 17, "user-2": 37}, got); diff != "" {
+			t.Errorf("effect scores (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("setting then reverting rescores the job", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		svc := newService(t, st)
+
+		set, err := svc.SetCorrection(t.Context(), userID, dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "no"})
+		if err != nil {
+			t.Fatalf("SetCorrection: %v", err)
+		}
+		if set.Score != 17 || !set.Rows[0].Corrected {
+			t.Errorf("SetCorrection = %+v, want score 17 with a corrected row", set)
+		}
+
+		reverted, err := svc.RevertCorrection(t.Context(), userID, dto.RevertCorrectionInput{JobID: testJob.ID, OptionID: "tech:go"})
+		if err != nil {
+			t.Fatalf("RevertCorrection: %v", err)
+		}
+		if reverted.Score != 37 || reverted.Rows[0].Corrected {
+			t.Errorf("RevertCorrection = %+v, want score 37 with no correction", reverted)
+		}
+	})
+
+	t.Run("rejects a bad value, an unknown option and an unscored job", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		svc := newService(t, st)
+		tests := []struct {
+			name string
+			in   dto.CorrectionInput
+			kind apperr.Kind
+		}{
+			{"bad value", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "maybe"}, apperr.KindInvalid},
+			{"unknown option", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:nope", Value: "no"}, apperr.KindNotFound},
+			{"unscored job", dto.CorrectionInput{JobID: "job-9", OptionID: "tech:go", Value: "no"}, apperr.KindNotFound},
+		}
+		for _, tt := range tests {
+			_, err := svc.SetCorrection(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.kind) {
+				t.Errorf("SetCorrection(%s) err = %v, want kind %v", tt.name, err, tt.kind)
+			}
+		}
+		if got := st.Recomputed(); len(got) != 0 {
+			t.Errorf("rejected corrections rescored %+v, want nothing", got)
+		}
+	})
+}
+
+func TestSetCorrectionWhileRescoringKeepsTheStoredScore(t *testing.T) {
+	st := newFakeStore()
+	seedScoredJob(st, "user-1", "tech:go")
+	job := testJob
+	job.ContentFingerprint = "fp-2"
+	st.SeedJob(job, nil)
+
+	_, err := newService(t, st).SetCorrection(t.Context(), "user-1", dto.CorrectionInput{JobID: testJob.ID, OptionID: "tech:go", Value: "no"})
+
+	if !apperr.IsKind(err, apperr.KindConflict) {
+		t.Errorf("SetCorrection() err = %v, want a conflict", err)
+	}
+	if got := st.Recomputed(); len(got) != 0 {
+		t.Errorf("SetCorrection() saved %+v, want the stored score left alone", got)
+	}
+}
+
+func TestRunTick_CompanyProfileAnswers(t *testing.T) {
+	sizeStage := []dto.ScoringOption{
+		{ID: "size:startup", Dimension: dto.DimensionSize, Label: "Startup", Question: "Under 50 employees?"},
+		{ID: "size:scaleup", Dimension: dto.DimensionSize, Label: "Scale-up", Question: "50 to 500 employees?"},
+		{ID: "size:large", Dimension: dto.DimensionSize, Label: "Large", Question: "500 to 5,000 employees?"},
+		{ID: "size:enterprise", Dimension: dto.DimensionSize, Label: "Enterprise", Question: "Over 5,000 employees?"},
+		{ID: "stage:seed", Dimension: dto.DimensionStage, Label: "Seed", Question: "Seed stage?"},
+		{ID: "stage:series_b", Dimension: dto.DimensionStage, Label: "Series B", Question: "Series B stage?"},
+		{ID: "stage:public", Dimension: dto.DimensionStage, Label: "Public", Question: "Publicly listed?"},
+	}
+	setup := func(profile *dto.CompanyProfile) (*scoringtest.FakeStore, *fakeAnswerer) {
+		st := newFakeStore()
+		st.SeedOptions(append(slices.Clone(bank), sizeStage...))
+		job := testJob
+		job.CompanyID = "company-1"
+		st.SeedJob(job, []dto.SearchConfig{picking("user-1", "tech:go", "size:startup", "size:scaleup", "stage:seed", "stage:series_b", "stage:public")})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		if profile != nil {
+			st.SeedCompanyProfile("company-1", *profile)
+		}
+		return st, &fakeAnswerer{}
+	}
+
+	t.Run("a profiled company gets size and stage without asking jev", func(t *testing.T) {
+		st, answerer := setup(&dto.CompanyProfile{Size: "201-500", FundingRounds: 3})
+
+		runTick(t, st, withAnswerer(answerer))
+
+		want := [][]string{{"Does the role use Go?", "Publicly listed?"}}
+		sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+		if diff := cmp.Diff(want, answerer.calls, sortStrings); diff != "" {
+			t.Errorf("Answer calls (-want +got):\n%s", diff)
+		}
+		completed := st.Completed()
+		if len(completed) != 1 {
+			t.Fatalf("completed effects = %d, want 1", len(completed))
+		}
+		wantAnswers := map[string]dto.Answer{
+			scoring.QuestionHash("Under 50 employees?"):  {PNo: 1},
+			scoring.QuestionHash("50 to 500 employees?"): {PYes: 1},
+			scoring.QuestionHash("Seed stage?"):          {PNo: 1},
+			scoring.QuestionHash("Series B stage?"):      {PYes: 1},
+		}
+		for hash, want := range wantAnswers {
+			if got := completed[0].Answers[hash]; got != want {
+				t.Errorf("saved answer for %s = %+v, want %+v", hash, got, want)
+			}
+		}
+	})
+
+	t.Run("a company without a profile is asked as usual", func(t *testing.T) {
+		st, answerer := setup(nil)
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
+			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
+
+	t.Run("a profile that cannot place the company leaves it to jev", func(t *testing.T) {
+		st, answerer := setup(&dto.CompanyProfile{Size: "", FundingRounds: 0})
+
+		runTick(t, st, withAnswerer(answerer))
+
+		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
+			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
 }

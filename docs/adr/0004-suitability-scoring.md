@@ -1,5 +1,7 @@
 # ADR 0004 — Suitability from shared Jev answers and per-user picks
 
+> Superseded in part by [ADR 0021](0021-gates-weighted-coverage-and-bands.md): the "any pick in a dimension matches" credit and the `k=3` prior in "Suitability is a pure function". Everything else here stands.
+
 `jobs` is a shared catalog with no `user_id`. A Suitability score is one User's assessment of a Job, like an Application, so it lives in `job_scores (job_id, user_id)`, never on `jobs`. What the judge learns about a Job is shared; only a User's picks are theirs.
 
 - **The judge.** Jev (`typesafe/jev-1.13` via OpenRouter's `/api/alpha/decisions`) answers typed questions against a `state` object of structured job fields and returns probabilities: no prose to parse, and job text is data rather than instructions. The endpoint is `alpha`, so its request/response structs stay private to scoring's `jev` package (`internal/scoring/internal/jev` under ADR 0011). It bills against each User's own `user_ai_credentials` (provider `"openrouter"`).

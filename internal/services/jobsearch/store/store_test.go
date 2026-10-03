@@ -224,6 +224,42 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("hides jobs the user graded no, but not another user's no or a better grade", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		dismissed := insertJob(t, pool, company, 1, time.Now(), false)
+		liked := insertJob(t, pool, company, 2, time.Now(), false)
+		othersNo := insertJob(t, pool, company, 3, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{dismissed, liked, othersNo} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		for _, g := range []struct{ user, job, grade string }{
+			{userID, dismissed, "no"}, {userID, liked, "ok"}, {other, othersNo, "no"},
+		} {
+			if _, err := pool.Exec(ctx, `INSERT INTO job_grades (user_id, job_id, grade) VALUES ($1, $2, $3)`, g.user, g.job, g.grade); err != nil {
+				t.Fatalf("insert grade: %v", err)
+			}
+		}
+
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		want := []string{othersNo, liked}
+		if diff := cmp.Diff(want, jobIDs(page.Items), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("Page() ids (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobIDs(all), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
+			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("since days windows on updated_at and composes with the cursor", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()
@@ -1215,4 +1251,42 @@ func TestDeleteExpiredFetches(t *testing.T) {
 	if _, ok, _ := st.LookupFetch(ctx, fresh.URL); !ok {
 		t.Error("LookupFetch(fresh) miss, want hit")
 	}
+}
+
+func TestSaveCanonicalLinksCompanyBySlug(t *testing.T) {
+	st, pool := newStore(t)
+	companyID := insertCompany(t, pool, "acme")
+	linked := func(job dto.Job) string {
+		t.Helper()
+		saved, _ := saveJob(t, st, job)
+		var got *string
+		if err := pool.QueryRow(t.Context(), "SELECT company_id::text FROM jobs WHERE id = $1", saved.ID).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got == nil {
+			return ""
+		}
+		return *got
+	}
+
+	t.Run("a new job with only a slug is linked", func(t *testing.T) {
+		if got := linked(dto.Job{Title: "Engineer", URL: "https://example.com/a", CompanySlug: "acme"}); got != companyID {
+			t.Errorf("company_id = %q, want %q", got, companyID)
+		}
+	})
+	t.Run("a resaved job gains its link", func(t *testing.T) {
+		job := dto.Job{Title: "Engineer", URL: "https://example.com/b"}
+		if got := linked(job); got != "" {
+			t.Fatalf("company_id = %q, want none", got)
+		}
+		job.CompanySlug = "acme"
+		if got := linked(job); got != companyID {
+			t.Errorf("company_id = %q, want %q", got, companyID)
+		}
+	})
+	t.Run("an unknown slug stays unlinked", func(t *testing.T) {
+		if got := linked(dto.Job{Title: "Engineer", URL: "https://example.com/c", CompanySlug: "nobody"}); got != "" {
+			t.Errorf("company_id = %q, want none", got)
+		}
+	})
 }

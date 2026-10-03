@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
     job_id               UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     user_id              UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     suitability_score    INT,
+    band                 TEXT        CHECK (band IN ('great', 'good', 'fair', 'poor')),
     breakdown            JSONB       NOT NULL DEFAULT '[]',
     cost                 NUMERIC,
     score_fingerprint    TEXT,
@@ -219,6 +220,15 @@ CREATE TABLE effect_outbox (
 CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerprint, model)
     WHERE status IN ('pending', 'running');
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
+
+CREATE TABLE answer_corrections (
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    option_id  TEXT        NOT NULL REFERENCES scoring_options(id),
+    value      TEXT        NOT NULL CHECK (value IN ('yes', 'no')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, job_id, option_id)
+);
 
 CREATE TABLE IF NOT EXISTS search_config (
     id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -371,7 +381,7 @@ CREATE TABLE IF NOT EXISTS candidate_assessments (
     PRIMARY KEY (candidate_id, user_id)
 );
 
-CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage');
+CREATE TYPE scoring_dimension AS ENUM ('tech', 'role', 'domain', 'seniority', 'work', 'stage', 'size', 'employment');
 
 CREATE TABLE scoring_options (
     id         TEXT PRIMARY KEY,
@@ -436,3 +446,15 @@ CREATE TABLE score_feedback (
     CHECK ((kind = 'job') = (direction IS NOT NULL))
 );
 CREATE INDEX score_feedback_user_created_idx ON score_feedback (user_id, created_at DESC);
+
+CREATE TABLE job_grades (
+    user_id        UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id         UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    grade          TEXT        NOT NULL CHECK (grade IN ('great', 'ok', 'no')),
+    reasons        TEXT[]      NOT NULL DEFAULT '{}',
+    score_at_grade INT,
+    score_model    TEXT,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, job_id)
+);

@@ -87,7 +87,14 @@ func TestScoringStoreContract(t *testing.T) {
 	scoringtest.RunStoreContract(t, func(t *testing.T) scoringtest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
-		return scoringtest.Fixture{Store: st, NewUser: func() string { return pgtest.InsertUser(t, pool) }}
+		return scoringtest.Fixture{
+			Store:   st,
+			NewUser: func() string { return pgtest.InsertUser(t, pool) },
+			NewJob: func() string {
+				n := seedCounter.Add(1)
+				return pgtest.InsertJob(t, pool, "job", fmt.Sprintf("fp-%d", n))
+			},
+		}
 	})
 }
 
@@ -184,7 +191,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 
 	saved, err := st.CompleteAnswerEffect(ctx, effect,
 		map[string]dto.Answer{"hash-1": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
-		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Rows: []dto.ScoreRow{}}},
+		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Band: "great", Rows: []dto.ScoreRow{}}},
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
@@ -223,8 +230,8 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 	}
 
 	scores := []dto.JobScore{
-		{JobID: jobID, UserID: alice, Score: 79, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
-		{JobID: jobID, UserID: bob, Score: 21, Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
+		{JobID: jobID, UserID: alice, Score: 79, Band: "good", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
+		{JobID: jobID, UserID: bob, Score: 21, Band: "poor", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
 	}
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores)
 	if err != nil {
@@ -252,7 +259,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect,
 		map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
-		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79}},
+		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79, Band: "good"}},
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
@@ -371,12 +378,19 @@ func TestSaveScores(t *testing.T) {
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertScore(t, pool, jobID, userID)
 
-	if err := st.SaveScores(t.Context(), []dto.JobScore{{JobID: jobID, UserID: userID, Score: 90, Rows: []dto.ScoreRow{}}}); err != nil {
+	if err := st.SaveScores(t.Context(), []dto.JobScore{{JobID: jobID, UserID: userID, Score: 90, Band: "great", Rows: []dto.ScoreRow{}}}); err != nil {
 		t.Fatalf("SaveScores() err = %v", err)
 	}
 	got := countRows(t, pool, `SELECT suitability_score FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID)
 	if got != 90 {
 		t.Errorf("suitability_score = %d, want 90", got)
+	}
+	var band string
+	if err := pool.QueryRow(t.Context(), `SELECT band FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID).Scan(&band); err != nil {
+		t.Fatalf("read band: %v", err)
+	}
+	if band != "great" {
+		t.Errorf("band = %q, want great", band)
 	}
 }
 
@@ -1013,6 +1027,93 @@ func TestListJobScoresForCollection(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got, cmpopts.SortSlices(func(a, b dto.CollectionJobScore) bool { return a.Title < b.Title })); diff != "" {
 		t.Errorf("ListJobScoresForCollection() (-want +got):\n%s", diff)
+	}
+}
+
+func TestAnswerCorrections(t *testing.T) {
+	const model = "typesafe/jev-1.13"
+	st, pool := newStore(t)
+	ctx := t.Context()
+	user, other := pgtest.InsertUser(t, pool), pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	insertScore(t, pool, jobID, user)
+	exec(t, pool, `INSERT INTO scoring_options (id, dimension, label, question) VALUES ('work:remote', 'work', 'Remote', 'Is it remote?')`)
+
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "yes"); err != nil {
+		t.Fatalf("SetAnswerCorrection() err = %v", err)
+	}
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "no"); err != nil {
+		t.Fatalf("SetAnswerCorrection() overwrite err = %v", err)
+	}
+	if err := st.SetAnswerCorrection(ctx, other, jobID, "work:remote", "yes"); err != nil {
+		t.Fatalf("SetAnswerCorrection(other) err = %v", err)
+	}
+
+	got, err := st.ListJobCorrections(ctx, jobID)
+	if err != nil {
+		t.Fatalf("ListJobCorrections() err = %v", err)
+	}
+	want := map[string]map[string]string{user: {"work:remote": "no"}, other: {"work:remote": "yes"}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListJobCorrections() (-want +got):\n%s", diff)
+	}
+
+	inputs, err := st.ListScoringInputs(ctx, user, model)
+	if err != nil || len(inputs) != 1 {
+		t.Fatalf("ListScoringInputs() = %+v, %v, want one job", inputs, err)
+	}
+	if diff := cmp.Diff(map[string]string{"work:remote": "no"}, inputs[0].Corrections); diff != "" {
+		t.Errorf("ListScoringInputs() corrections (-want +got):\n%s", diff)
+	}
+
+	if err := st.DeleteAnswerCorrection(ctx, user, jobID, "work:remote"); err != nil {
+		t.Fatalf("DeleteAnswerCorrection() err = %v", err)
+	}
+	got, _ = st.ListJobCorrections(ctx, jobID)
+	if diff := cmp.Diff(map[string]map[string]string{other: {"work:remote": "yes"}}, got); diff != "" {
+		t.Errorf("ListJobCorrections() after delete (-want +got):\n%s", diff)
+	}
+
+	if err := st.SetAnswerCorrection(ctx, user, jobID, "work:remote", "maybe"); err == nil {
+		t.Error("SetAnswerCorrection(maybe) err = nil, want the CHECK to reject it")
+	}
+}
+
+func TestListImpliedPositives(t *testing.T) {
+	st, pool := newStore(t)
+	userID := pgtest.InsertUser(t, pool)
+	other := pgtest.InsertUser(t, pool)
+	applied := pgtest.InsertJob(t, pool, "Applied", "fp-1")
+	kept := pgtest.InsertJob(t, pool, "Kept", "fp-2")
+	discarded := pgtest.InsertJob(t, pool, "Discarded", "fp-3")
+	exec(t, pool, `INSERT INTO applications (user_id, job_id) VALUES ($1, $2), ($3, $2)`, userID, applied, other)
+	for _, c := range []struct{ jobID, outcome string }{{kept, "kept"}, {discarded, "discarded"}} {
+		exec(t, pool, `INSERT INTO tailored_cvs (user_id, job_id, base_doc_id, base_tab_id, achievement_ids, outcome) VALUES ($1, $2, 'd', 't', '{}', $3)`, userID, c.jobID, c.outcome)
+	}
+
+	got, err := st.ListImpliedPositives(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListImpliedPositives() err = %v", err)
+	}
+	want := []dto.ImpliedLabel{{JobID: applied, Source: "application"}, {JobID: kept, Source: "kept_cv"}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ListImpliedPositives() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestGetCompanyProfile_ReturnsNewestProfile(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, _ := insertTrackedCompany(t, pool, "acme")
+	exec(t, pool, `INSERT INTO company_profiles (company_id, source, data, fetched_at) VALUES ($1, 'old', '{"size":"1-10"}', NOW() - INTERVAL '1 day')`, companyID)
+	exec(t, pool, `INSERT INTO company_profiles (company_id, source, data) VALUES ($1, 'new', '{"size":"201-500","funding_rounds":2}')`, companyID)
+
+	got, err := st.GetCompanyProfile(t.Context(), companyID)
+	if err != nil {
+		t.Fatalf("GetCompanyProfile() err = %v", err)
+	}
+	want := dto.CompanyProfile{Size: "201-500", FundingRounds: 2}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("GetCompanyProfile() (-want +got):\n%s", diff)
 	}
 }
 

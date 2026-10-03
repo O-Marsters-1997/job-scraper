@@ -37,19 +37,23 @@ type QueuedMissing struct {
 type FakeStore struct {
 	mu sync.Mutex
 
-	effects []dto.AnswerEffect
-	jobs    map[string]dto.Job
-	configs map[string][]dto.SearchConfig
-	answers map[string]map[string]dto.Answer
-	inputs  map[string][]store.ScoringInput
-	options []dto.ScoringOption
-	search  map[string]dto.SearchConfig
-	scored  map[string]bool
-	pushes  map[string][]dto.PushSubscriptionInput
+	effects     []dto.AnswerEffect
+	jobs        map[string]dto.Job
+	profiles    map[string]dto.CompanyProfile
+	configs     map[string][]dto.SearchConfig
+	answers     map[string]map[string]dto.Answer
+	inputs      map[string][]store.ScoringInput
+	options     []dto.ScoringOption
+	search      map[string]dto.SearchConfig
+	scored      map[string]bool
+	corrections map[string]map[string]string
+	pushes      map[string][]dto.PushSubscriptionInput
 
 	feedback    map[string][]dto.ScoreFeedback
 	feedbackSeq int
 	evidence    map[string]dto.JobScoreEvidence
+	grades      map[string]map[string]dto.Grade
+	implied     map[string][]dto.ImpliedLabel
 
 	failed        []dto.ScoringFailure
 	completed     []CompletedEffect
@@ -59,16 +63,19 @@ type FakeStore struct {
 
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
-		jobs:    make(map[string]dto.Job),
-		configs: make(map[string][]dto.SearchConfig),
-		answers: make(map[string]map[string]dto.Answer),
-		inputs:  make(map[string][]store.ScoringInput),
-		search:  make(map[string]dto.SearchConfig),
-		pushes:  make(map[string][]dto.PushSubscriptionInput),
-		scored:  make(map[string]bool),
+		jobs:        make(map[string]dto.Job),
+		profiles:    make(map[string]dto.CompanyProfile),
+		configs:     make(map[string][]dto.SearchConfig),
+		answers:     make(map[string]map[string]dto.Answer),
+		inputs:      make(map[string][]store.ScoringInput),
+		search:      make(map[string]dto.SearchConfig),
+		pushes:      make(map[string][]dto.PushSubscriptionInput),
+		scored:      make(map[string]bool),
+		corrections: make(map[string]map[string]string),
 
 		feedback: make(map[string][]dto.ScoreFeedback),
 		evidence: make(map[string]dto.JobScoreEvidence),
+		grades:   make(map[string]map[string]dto.Grade),
 	}
 }
 
@@ -170,6 +177,23 @@ func (f *FakeStore) GetJobForScoring(_ context.Context, jobID string) (dto.Job, 
 	return job, nil
 }
 
+// SeedCompanyProfile gives companyID a profile.
+func (f *FakeStore) SeedCompanyProfile(companyID string, profile dto.CompanyProfile) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.profiles[companyID] = profile
+}
+
+func (f *FakeStore) GetCompanyProfile(_ context.Context, companyID string) (dto.CompanyProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	profile, ok := f.profiles[companyID]
+	if !ok {
+		return dto.CompanyProfile{}, data.ErrNotFound
+	}
+	return profile, nil
+}
+
 func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string) ([]dto.SearchConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -258,7 +282,43 @@ func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) 
 func (f *FakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]store.ScoringInput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.inputs[userID], nil
+	inputs := slices.Clone(f.inputs[userID])
+	for i, in := range inputs {
+		if c := f.corrections[scoredKey(in.Job.ID, userID)]; c != nil {
+			inputs[i].Corrections = maps.Clone(c)
+		}
+	}
+	return inputs, nil
+}
+
+func (f *FakeStore) SetAnswerCorrection(_ context.Context, userID, jobID, optionID, value string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := scoredKey(jobID, userID)
+	if f.corrections[key] == nil {
+		f.corrections[key] = make(map[string]string)
+	}
+	f.corrections[key][optionID] = value
+	return nil
+}
+
+func (f *FakeStore) DeleteAnswerCorrection(_ context.Context, userID, jobID, optionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.corrections[scoredKey(jobID, userID)], optionID)
+	return nil
+}
+
+func (f *FakeStore) ListJobCorrections(_ context.Context, jobID string) (map[string]map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]map[string]string)
+	for key, c := range f.corrections {
+		if userID, ok := strings.CutPrefix(key, jobID+"|"); ok && len(c) > 0 {
+			out[userID] = maps.Clone(c)
+		}
+	}
+	return out, nil
 }
 
 func (f *FakeStore) SaveScores(_ context.Context, scores []dto.JobScore) error {
@@ -514,4 +574,60 @@ func (f *FakeStore) ListJobScoresForCollection(_ context.Context, userID string,
 		out = append(out, row)
 	}
 	return out, nil
+}
+
+func (f *FakeStore) UpsertGrade(_ context.Context, userID string, g dto.Grade) (dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.grades[userID] == nil {
+		f.grades[userID] = make(map[string]dto.Grade)
+	}
+	if g.Reasons == nil {
+		g.Reasons = []string{}
+	}
+	g.UpdatedAt = time.Now()
+	f.grades[userID][g.JobID] = g
+	return g, nil
+}
+
+func (f *FakeStore) GetGrade(_ context.Context, userID, jobID string) (dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g, ok := f.grades[userID][jobID]
+	if !ok {
+		return dto.Grade{}, data.ErrNotFound
+	}
+	return g, nil
+}
+
+func (f *FakeStore) DeleteGrade(_ context.Context, userID, jobID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.grades[userID], jobID)
+	return nil
+}
+
+func (f *FakeStore) ListGrades(_ context.Context, userID string) ([]dto.Grade, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := slices.SortedFunc(maps.Values(f.grades[userID]), func(a, b dto.Grade) int {
+		return b.UpdatedAt.Compare(a.UpdatedAt)
+	})
+	return out, nil
+}
+
+// SeedImpliedPositives stores the applications and kept CVs ListImpliedPositives returns.
+func (f *FakeStore) SeedImpliedPositives(userID string, labels ...dto.ImpliedLabel) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.implied == nil {
+		f.implied = make(map[string][]dto.ImpliedLabel)
+	}
+	f.implied[userID] = labels
+}
+
+func (f *FakeStore) ListImpliedPositives(_ context.Context, userID string) ([]dto.ImpliedLabel, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.implied[userID]), nil
 }

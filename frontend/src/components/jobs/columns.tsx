@@ -1,18 +1,21 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
 import { Match, Show, Switch } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/datetime";
 import { titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
-import { ScoreCircle } from "./ScoreCircle";
+import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
+	onDismiss: (job: Job) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -20,6 +23,7 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
+		showWildcard: () => boolean;
 	}
 }
 
@@ -31,14 +35,26 @@ export function createJobColumns(
 			accessorKey: "Title",
 			header: "Title",
 			cell: (info) => (
-				<Link
-					to="/jobs/$id"
-					params={{ id: info.row.original.ID }}
-					class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
-					title={info.getValue() as string}
-				>
-					{info.getValue() as string}
-				</Link>
+				<div class="flex items-center gap-2">
+					<Link
+						to="/jobs/$id"
+						params={{ id: info.row.original.ID }}
+						class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
+						title={info.getValue() as string}
+					>
+						{info.getValue() as string}
+					</Link>
+					<Show
+						when={
+							info.row.original.Wildcard &&
+							info.table.options.meta?.showWildcard()
+						}
+					>
+						<Badge variant="secondary" class="shrink-0">
+							Wildcard
+						</Badge>
+					</Show>
+				</div>
 			),
 		},
 		{
@@ -108,10 +124,13 @@ export function createJobColumns(
 							e.stopPropagation();
 							meta?.toggleExpanded(rowId);
 						}}
-						class={`rounded-full transition-all hover:opacity-80${expanded() ? " ring-2 ring-primary ring-offset-1" : ""}`}
+						class={`rounded-md transition-all hover:opacity-80${expanded() ? " ring-2 ring-primary ring-offset-1" : ""}`}
 					>
 						{val != null ? (
-							<ScoreCircle value={val} />
+							<SuitabilityScoreValue
+								score={val}
+								band={info.row.original.Band}
+							/>
 						) : (
 							<span class="inline-flex size-7 items-center justify-center text-faint">
 								—
@@ -165,7 +184,16 @@ export function createJobColumns(
 			enableSorting: false,
 			enableGlobalFilter: false,
 			cell: (info) => (
-				<div class="flex justify-end">
+				<div class="flex items-center justify-end">
+					<button
+						type="button"
+						aria-label="Not for me"
+						title="Not for me"
+						onClick={() => ctx.onDismiss(info.row.original)}
+						class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground"
+					>
+						<Icon name="x" />
+					</button>
 					<JobActionsMenu
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}

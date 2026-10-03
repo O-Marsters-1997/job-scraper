@@ -20,5 +20,7 @@ type Job struct {
 	SalaryRaw          string
 	WorkArrangement    string
 	SuitabilityScore   *int
+	Band               string
 	Breakdown          []ScoreRow
+	Wildcard           bool
 }

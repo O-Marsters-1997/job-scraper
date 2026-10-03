@@ -149,11 +149,7 @@ func newBank(options []dto.ScoringOption) bank {
 			live = append(live, o)
 		}
 	}
-	dimensions := make(map[dto.Dimension]dto.DimensionSpec, len(Dimensions))
-	for _, d := range Dimensions {
-		dimensions[d.Key] = d
-	}
-	return bank{byID: byID, dimensions: dimensions, live: live}
+	return bank{byID: byID, dimensions: dimensionSpecs, live: live}
 }
 
 func validatedPicks(b bank, picks []dto.Pick) ([]dto.Pick, error) {

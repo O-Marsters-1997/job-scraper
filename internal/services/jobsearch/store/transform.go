@@ -46,6 +46,7 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.Band = row.Band.String
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -71,6 +72,7 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 		return dto.Job{}, err
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
+	j.Band = row.Band.String
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String

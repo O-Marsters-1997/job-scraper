@@ -5,17 +5,19 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
 
-// Fixture is a store under test plus a way to mint users the store accepts:
-// the real one needs a users row for each user_id (a foreign key).
+// Fixture is a store under test plus a way to mint users and jobs the store
+// accepts: the real one needs a row for each user_id and job_id (foreign keys).
 type Fixture struct {
 	Store   scoring.Store
 	NewUser func() string
+	NewJob  func() string
 }
 
 // RunStoreContract proves newStore's scoring.Store behaves the same whether
@@ -42,6 +44,22 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		_, err := st.GetJobForScoring(t.Context(), missingID)
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("GetJobForScoring(...) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("get job for scoring on a malformed id returns not found", func(t *testing.T) {
+		st := newStore(t)
+		_, err := st.GetJobForScoring(t.Context(), "not-a-uuid")
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("GetJobForScoring(malformed) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("get company profile on an unknown company returns not found", func(t *testing.T) {
+		st := newStore(t)
+		_, err := st.GetCompanyProfile(t.Context(), missingID)
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("GetCompanyProfile(...) err = %v, want ErrNotFound", err)
 		}
 	})
 
@@ -272,6 +290,57 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		}
 		if n, _, _ := f.Store.CountScoreFeedback(ctx, user, dto.ScoreFeedbackFilter{Model: "m"}); n != 0 {
 			t.Errorf("CountScoreFeedback after delete = %d, want 0", n)
+		}
+	})
+
+	t.Run("grades upsert in place, list newest first and stay per user", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user, other := f.NewUser(), f.NewUser()
+		first, second := f.NewJob(), f.NewJob()
+		score := 71
+		if _, err := f.Store.UpsertGrade(ctx, user, dto.Grade{JobID: first, Grade: "ok", ScoreAtGrade: &score, ScoreModel: "m"}); err != nil {
+			t.Fatalf("UpsertGrade(first) = %v", err)
+		}
+		if _, err := f.Store.UpsertGrade(ctx, user, dto.Grade{JobID: second, Grade: "great"}); err != nil {
+			t.Fatalf("UpsertGrade(second) = %v", err)
+		}
+		if _, err := f.Store.UpsertGrade(ctx, user, dto.Grade{JobID: first, Grade: "no", Reasons: []string{"role"}, ScoreAtGrade: &score, ScoreModel: "m"}); err != nil {
+			t.Fatalf("UpsertGrade(first again) = %v", err)
+		}
+
+		got, err := f.Store.GetGrade(ctx, user, first)
+		want := dto.Grade{JobID: first, Grade: "no", Reasons: []string{"role"}, ScoreAtGrade: &score, ScoreModel: "m"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Grade{}, "UpdatedAt")); err != nil || diff != "" {
+			t.Errorf("GetGrade(first) = %+v, %v (-want +got):\n%s", got, err, diff)
+		}
+		list, err := f.Store.ListGrades(ctx, user)
+		if err != nil || len(list) != 2 || list[0].JobID != first {
+			t.Errorf("ListGrades(user) = %+v, %v, want the re-graded job first of two", list, err)
+		}
+		if _, err := f.Store.GetGrade(ctx, other, first); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetGrade(other user) err = %v, want ErrNotFound", err)
+		}
+		if list, _ := f.Store.ListGrades(ctx, other); len(list) != 0 {
+			t.Errorf("ListGrades(other user) = %+v, want none", list)
+		}
+	})
+
+	t.Run("delete grade removes it and tolerates an ungraded job", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		user, job := f.NewUser(), f.NewJob()
+		if err := f.Store.DeleteGrade(ctx, user, job); err != nil {
+			t.Fatalf("DeleteGrade(ungraded) = %v, want nil", err)
+		}
+		if _, err := f.Store.UpsertGrade(ctx, user, dto.Grade{JobID: job, Grade: "no"}); err != nil {
+			t.Fatalf("UpsertGrade() = %v", err)
+		}
+		if err := f.Store.DeleteGrade(ctx, user, job); err != nil {
+			t.Fatalf("DeleteGrade() = %v", err)
+		}
+		if _, err := f.Store.GetGrade(ctx, user, job); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetGrade after delete err = %v, want ErrNotFound", err)
 		}
 	})
 

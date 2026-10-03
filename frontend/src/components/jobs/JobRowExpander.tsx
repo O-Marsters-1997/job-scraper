@@ -11,6 +11,7 @@ export function JobRowExpander(props: Props) {
 		<div class="flex flex-col gap-2.5 px-4 py-3 bg-surface-muted border-t border-border">
 			<SuitabilityScoreValue
 				score={props.job.SuitabilityScore}
+				band={props.job.Band}
 				breakdown={props.job.Breakdown}
 				size="sm"
 			/>

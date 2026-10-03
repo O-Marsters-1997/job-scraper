@@ -11,6 +11,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Put("/scoring-config", handlers.Update(m.svc.UpdateConfig))
 	r.Get("/scoring-options", handlers.GetAll(m.svc.Options))
 	r.Get("/scores/status", handlers.GetAll(m.store.GetScoringStatus))
+	r.Put("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.SetCorrection))
+	r.Delete("/jobs/{id}/corrections/{optionId}", handlers.Update(m.svc.RevertCorrection))
 	r.Post("/scores/recompute", handlers.GetAll(m.svc.Recompute))
 	r.Get("/push/vapid-public-key", handlers.GetAll(m.svc.VAPIDPublicKey))
 	r.Post("/push/subscriptions", handlers.Create(m.svc.Subscribe))
@@ -21,4 +23,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Post("/scoring-feedback/overall", handlers.Create(m.svc.AppendOverallFeedback))
 	r.Get("/scoring-feedback", handlers.Query(m.svc.ListFeedback))
 	r.Delete("/scoring-feedback/{id}", handlers.Delete(m.svc.DeleteFeedback))
+	r.Put("/jobs/{id}/grade", handlers.Update(m.svc.SetGrade))
+	r.Get("/jobs/{id}/grade", handlers.GetByID(m.svc.GetGrade))
+	r.Delete("/jobs/{id}/grade", handlers.Delete(m.svc.ClearGrade))
 }

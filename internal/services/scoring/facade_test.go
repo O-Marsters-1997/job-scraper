@@ -2,6 +2,7 @@ package scoring_test
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -157,5 +159,86 @@ func TestCompanyProfiles(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("CompanyProfiles() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func replayFixture(t *testing.T, negatives int) *scoring.Module {
+	t.Helper()
+	const userID = "user-1"
+	st := newFakeStore()
+	st.SeedSearchConfig(picking(userID, "tech:go", "tech:rust"))
+	goHash, rustHash := scoring.QuestionHash("Does the role use Go?"), scoring.QuestionHash("Does the role use Rust?")
+	yes := dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
+	no := dto.Answer{PYes: 0.05, PNo: 0.9, PNotStated: 0.05}
+	answers := []map[string]dto.Answer{{goHash: yes, rustHash: yes}, {goHash: yes}, {goHash: no, rustHash: no}, nil}
+
+	var inputs []store.ScoringInput
+	add := func(id, title string, a map[string]dto.Answer) {
+		job := dto.Job{ID: id, Title: title, CompanySlug: "acme", ContentFingerprint: "fp"}
+		st.SeedJob(job, nil)
+		inputs = append(inputs, store.ScoringInput{Job: job, Answers: a})
+	}
+	add("great", "Platform Engineer", answers[0])
+	add("applied", "Go Developer", answers[1])
+	add("low", "COBOL | Maintainer", answers[2])
+	add("plain", "Support Engineer", answers[3])
+	for i := range negatives {
+		add(fmt.Sprintf("no-%d", i), fmt.Sprintf("Dismissed %d", i), answers[i%len(answers)])
+	}
+	st.SeedScoringInputs(userID, inputs)
+
+	svc := scoring.NewService(newDeps(t, st))
+	grade := func(id, g string) {
+		if _, err := svc.SetGrade(t.Context(), userID, dto.GradeInput{JobID: id, Grade: g}); err != nil {
+			t.Fatalf("SetGrade(%s) err = %v", id, err)
+		}
+	}
+	if negatives == 0 {
+		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: "applied", Source: "application"}, dto.ImpliedLabel{JobID: "low", Source: "kept_cv"})
+	} else {
+		grade("great", "great")
+		grade("applied", "ok")
+		grade("low", "ok")
+		for i := range negatives {
+			grade(fmt.Sprintf("no-%d", i), "no")
+		}
+		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: "no-0", Source: "application"})
+	}
+	return scoring.Build(newDeps(t, st))
+}
+
+func TestReplay(t *testing.T) {
+	t.Run("positives only hides concordance", func(t *testing.T) {
+		got, err := replayFixture(t, 0).Replay(t.Context(), "user-1")
+		if err != nil {
+			t.Fatalf("Replay() err = %v", err)
+		}
+		if strings.Contains(got, "Concordance") {
+			t.Errorf("Replay() = %q, want no Concordance line", got)
+		}
+		assertGolden(t, "testdata/replay_positives_only.golden.md", got)
+	})
+
+	t.Run("five negatives show concordance, and a Grade outranks an application", func(t *testing.T) {
+		got, err := replayFixture(t, 5).Replay(t.Context(), "user-1")
+		if err != nil {
+			t.Fatalf("Replay() err = %v", err)
+		}
+		if !strings.Contains(got, "Concordance") {
+			t.Errorf("Replay() = %q, want a Concordance line", got)
+		}
+		assertGolden(t, "testdata/replay.golden.md", got)
+	})
+}
+
+func TestReplay_UnscoredLabel(t *testing.T) {
+	st := newFakeStore()
+	st.SeedImpliedPositives("user-1", dto.ImpliedLabel{JobID: "never-scored", Source: "application"})
+	got, err := scoring.Build(newDeps(t, st)).Replay(t.Context(), "user-1")
+	if err != nil {
+		t.Fatalf("Replay() err = %v", err)
+	}
+	if !strings.Contains(got, "1 labelled jobs without a score excluded") {
+		t.Errorf("Replay() = %q, want the unscored label counted", got)
 	}
 }

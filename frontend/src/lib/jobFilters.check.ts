@@ -4,6 +4,7 @@ import {
 	applyJobFilters,
 	DEFAULT_FILTERS,
 	filterCompanyJobs,
+	isDefaultView,
 	normalizeArrangement,
 	parseSalary,
 	parseSearch,
@@ -132,5 +133,11 @@ assert.deepEqual(
 assert.equal(parseSearch({}).scored, true, "Jobs page defaults scored on");
 assert.equal(parseSearch({ scored: false }).scored, false);
 assert.equal(parseSearch({ scored: "1" }).scored, true);
+
+assert.equal(isDefaultView(DEFAULT_FILTERS, false), true);
+assert.equal(isDefaultView(DEFAULT_FILTERS, true), false);
+assert.equal(isDefaultView({ ...DEFAULT_FILTERS, q: "x" }, false), false);
+assert.equal(isDefaultView({ ...DEFAULT_FILTERS, company: "c" }, false), false);
+assert.equal(isDefaultView({ ...DEFAULT_FILTERS, src: ["a"] }, false), false);
 
 console.log("✓ jobFilters checks passed");

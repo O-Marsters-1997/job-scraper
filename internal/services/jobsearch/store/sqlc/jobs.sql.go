@@ -38,7 +38,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 WHERE j.id = $1
@@ -67,6 +67,7 @@ type GetJobRow struct {
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
+	Band               pgtype.Text
 	Breakdown          []byte
 }
 
@@ -90,18 +91,20 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.ProviderPostingID,
 		&i.ContentFingerprint,
 		&i.SuitabilityScore,
+		&i.Band,
 		&i.Breakdown,
 	)
 	return i, err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
 FROM jobs j
 JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
 WHERE j.closed_at IS NULL
   AND j.updated_at > now() - interval '90 days'
   AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1 AND g.grade = 'no')
 ORDER BY js.suitability_score DESC, j.scraped_at DESC
 `
 
@@ -121,6 +124,7 @@ type ListJobsRow struct {
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
+	Band               pgtype.Text
 	Breakdown          []byte
 }
 
@@ -149,6 +153,7 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 			&i.ProviderPostingID,
 			&i.ContentFingerprint,
 			&i.SuitabilityScore,
+			&i.Band,
 			&i.Breakdown,
 		); err != nil {
 			return nil, err
@@ -162,7 +167,7 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
@@ -171,6 +176,7 @@ WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::u
   AND (NOT $6::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = $1::uuid))
   AND ($7::int = 0 OR j.updated_at >= now() - make_interval(days => $7::int))
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1::uuid AND g.grade = 'no')
 ORDER BY j.scraped_at DESC, j.id DESC
 LIMIT $8::int
 `
@@ -202,6 +208,7 @@ type PageJobsRow struct {
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
 	SuitabilityScore   pgtype.Int4
+	Band               pgtype.Text
 	Breakdown          []byte
 }
 
@@ -239,6 +246,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.ProviderPostingID,
 			&i.ContentFingerprint,
 			&i.SuitabilityScore,
+			&i.Band,
 			&i.Breakdown,
 		); err != nil {
 			return nil, err
