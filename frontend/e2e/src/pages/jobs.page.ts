@@ -5,7 +5,7 @@ export class JobsPage {
 	private readonly heading: Locator;
 	readonly rows: Locator;
 
-	constructor(private readonly page: Page) {
+	constructor(readonly page: Page) {
 		this.searchInput = page.getByPlaceholder("Search by role or company…");
 		this.rows = page.getByRole("row").filter({
 			hasNot: page.getByRole("columnheader"),
@@ -49,5 +49,30 @@ export class JobsPage {
 		const dialog = this.page.getByRole("dialog");
 		await dialog.getByLabel("Status").selectOption({ label: statusName });
 		await dialog.getByRole("button", { name: "Save" }).click();
+	}
+
+	get gradeDialog() {
+		return this.page.getByRole("dialog");
+	}
+
+	async openRowMenu(row: Locator) {
+		await row.getByRole("button", { name: "Job actions" }).click();
+	}
+
+	async selectRows(count: number) {
+		for (let i = 0; i < count; i++) {
+			await this.rows.nth(i).getByRole("checkbox").check();
+		}
+	}
+
+	async openBulkGrade() {
+		await this.page.getByRole("button", { name: "Grade", exact: true }).click();
+	}
+
+	async undoBulkGrade() {
+		await this.page
+			.getByRole("status")
+			.getByRole("button", { name: "Undo" })
+			.dispatchEvent("click");
 	}
 }

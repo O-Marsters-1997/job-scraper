@@ -55,6 +55,60 @@ test.describe("Jobs", () => {
 		);
 	});
 
+	test("grades one job from the row menu and keeps it on reopen", async ({
+		page,
+		jobsPage,
+	}) => {
+		const row = jobsPage.rows.first();
+		await jobsPage.openRowMenu(row);
+		await page.getByRole("menuitem", { name: "Grade…" }).click();
+		const dialog = jobsPage.gradeDialog;
+		await dialog.getByRole("button", { name: /^OK/ }).click();
+		await dialog.getByRole("button", { name: "Salary" }).click();
+		await dialog.getByRole("button", { name: "Save grade" }).click();
+		await expect(dialog).toBeHidden();
+
+		await expect(async () => {
+			await jobsPage.openRowMenu(row);
+			await page.getByRole("menuitem", { name: "Grade…" }).click({
+				timeout: 2000,
+			});
+		}).toPass();
+		await expect(dialog.getByRole("button", { name: /^OK/ })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await expect(
+			dialog.getByRole("button", { name: "Salary" }),
+		).toHaveAttribute("aria-pressed", "true");
+	});
+
+	test("bulk grades the selected rows with one override and undoes it", async ({
+		jobsPage,
+	}) => {
+		const dismissed = jobsPage.rows.nth(1).getByRole("link").first();
+		const title = (await dismissed.textContent()) ?? "";
+		const titleLink = jobsPage.page.getByRole("link", {
+			name: title,
+			exact: true,
+		});
+		await jobsPage.selectRows(3);
+		await jobsPage.openBulkGrade();
+		const dialog = jobsPage.gradeDialog;
+		await dialog
+			.getByRole("group", { name: "Grade for all" })
+			.getByRole("button", { name: "OK" })
+			.click();
+		await dialog.getByRole("button", { name: "Next" }).click();
+		await dialog.getByRole("button", { name: "No 3" }).click();
+		await dialog.getByRole("button", { name: "Grade 3 jobs" }).click();
+		await expect(dialog).toBeHidden();
+
+		await expect(titleLink).toBeHidden();
+		await jobsPage.undoBulkGrade();
+		await expect(titleLink).toBeVisible();
+	});
+
 	test("shows the job title in the breadcrumb on a direct visit to /jobs/:id", async ({
 		page,
 		jobsPage,
