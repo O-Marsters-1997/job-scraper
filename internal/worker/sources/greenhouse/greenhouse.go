@@ -13,7 +13,7 @@ import (
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "greenhouse",
-		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token),
+		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true&pay_transparency=true", token),
 		CompanySlug: token,
 		Parse:       parse,
 		Count:       count,
@@ -32,6 +32,17 @@ type boardJob struct {
 	AbsoluteURL string      `json:"absolute_url"`
 	Content     string      `json:"content"`
 	UpdatedAt   string      `json:"updated_at"`
+	PayRanges   []payRange  `json:"pay_input_ranges"`
+}
+
+type payRange struct {
+	MinCents     int    `json:"min_cents"`
+	MaxCents     int    `json:"max_cents"`
+	CurrencyType string `json:"currency_type"`
+}
+
+func (p payRange) raw() string {
+	return sources.SalaryRange(p.MinCents/100, p.MaxCents/100, p.CurrencyType, "")
 }
 
 type jobLocation struct {
@@ -58,12 +69,18 @@ func parse(body []byte) ([]dto.Job, error) {
 
 	jobs := make([]dto.Job, 0, len(resp.Jobs))
 	for _, bj := range resp.Jobs {
+		var salary string
+		if len(bj.PayRanges) > 0 {
+			salary = bj.PayRanges[0].raw()
+		}
 		jobs = append(jobs, dto.Job{
 			Title:             bj.Title,
 			Location:          bj.Location.Name,
 			URL:               bj.AbsoluteURL,
 			ProviderPostingID: strconv.FormatInt(bj.ID, 10),
 			Description:       bj.Content,
+			SalaryRaw:         salary,
+			WorkArrangement:   sources.DetectWorkArrangement(bj.Location.Name),
 			UpdatedAt:         sources.RFC3339OrNow(bj.UpdatedAt),
 		})
 	}

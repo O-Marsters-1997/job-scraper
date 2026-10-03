@@ -4,6 +4,7 @@
     "Title": "Senior Product Engineer",
     "Location": "London, UK",
     "URL": "https://boards.greenhouse.io/acme/jobs/1001",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -16,13 +17,16 @@
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   },
   {
     "ID": "",
     "Title": "Staff Engineer",
     "Location": "Remote",
     "URL": "https://boards.greenhouse.io/acme/jobs/1002",
+    "ApplyURL": "",
     "CompanySlug": "acme",
     "CompanyID": "",
     "BoardID": "",
@@ -33,8 +37,10 @@
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eJoin our engineering team as a Staff Engineer.\u003c/p\u003e",
     "SalaryRaw": "",
-    "WorkArrangement": "",
+    "WorkArrangement": "remote",
     "SuitabilityScore": null,
-    "Breakdown": null
+    "Band": "",
+    "Breakdown": null,
+    "Wildcard": false
   }
 ]
