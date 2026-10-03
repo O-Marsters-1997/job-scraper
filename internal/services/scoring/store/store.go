@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -164,6 +165,32 @@ func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (d
 		return dto.SearchConfig{}, fmt.Errorf("store.UpsertSearchConfig: %w", err)
 	}
 	return updated, nil
+}
+
+func (s *Store) AddExcludedCompany(ctx context.Context, userID, name string) (bool, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return false, err
+	}
+	_, err = s.queries.AddExcludedCompany(ctx, sqlc.AddExcludedCompanyParams{UserID: uid, Name: name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("store.AddExcludedCompany: %w", err)
+	}
+	return true, nil
+}
+
+func (s *Store) RemoveExcludedCompany(ctx context.Context, userID, name string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.RemoveExcludedCompany(ctx, sqlc.RemoveExcludedCompanyParams{UserID: uid, Name: name}); err != nil {
+		return fmt.Errorf("store.RemoveExcludedCompany: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error) {

@@ -7,6 +7,7 @@ import {
 import {
 	addCompany,
 	addCompanyBoard,
+	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
 	fetchCompanyPage,
@@ -14,6 +15,7 @@ import {
 	fetchTrackedCompanies,
 	setCompanyReview,
 	setCompanyTracking,
+	unexcludeCompany,
 } from "../api/companies";
 import { keys } from "../api/keys";
 import type { CompanyBoard, ReviewState } from "../types/company";
@@ -111,6 +113,24 @@ export function useSetCompanyTracking() {
 			checkIntervalMinutes?: number;
 		}) => setCompanyTracking(id, enabled, checkIntervalMinutes),
 		[keys.companies.all, keys.sourceTargets],
+	);
+}
+
+const excludeInvalidations = [
+	keys.companies.all,
+	keys.jobs.all,
+	keys.scoringConfig,
+];
+
+export function useExcludeCompany() {
+	return useInvalidatingMutation(excludeCompany, excludeInvalidations);
+}
+
+export function useUnexcludeCompany() {
+	return useInvalidatingMutation(
+		({ id, removeName }: { id: string; removeName: boolean }) =>
+			unexcludeCompany(id, removeName),
+		excludeInvalidations,
 	);
 }
 

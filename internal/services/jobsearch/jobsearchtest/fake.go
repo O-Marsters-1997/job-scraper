@@ -176,6 +176,9 @@ func (f *FakeStore) Page(_ context.Context, _ string, options dto.JobPageOptions
 		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
 			continue
 		}
+		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
+			continue
+		}
 		items = append(items, job)
 	}
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
@@ -190,12 +193,14 @@ func (f *FakeStore) GetJob(_ context.Context, jobID, _ string) (dto.Job, error) 
 	return lookup(f.jobs, jobID)
 }
 
-func (f *FakeStore) ListJobs(_ context.Context, _ string) ([]dto.Job, error) {
+func (f *FakeStore) ListJobs(_ context.Context, _ string, excludedCompanySlugs []string) ([]dto.Job, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]dto.Job, 0, len(f.jobOrder))
 	for _, id := range f.jobOrder {
-		out = append(out, f.jobs[id])
+		if !slices.Contains(excludedCompanySlugs, f.jobs[id].CompanySlug) {
+			out = append(out, f.jobs[id])
+		}
 	}
 	return out, nil
 }

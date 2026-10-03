@@ -61,7 +61,16 @@ func optionalUUID(id string) (pgtype.UUID, error) {
 	return data.UUID(id)
 }
 
-func (s *Store) ListJobs(ctx context.Context, userID string) ([]dto.Job, error) {
+// nonNil keeps an empty list from reaching Postgres as NULL, which would make
+// `<> ALL(NULL)` hide every job.
+func nonNil(items []string) []string {
+	if items == nil {
+		return []string{}
+	}
+	return items
+}
+
+func (s *Store) ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error) {
 	var uid pgtype.UUID
 	if userID != "" {
 		var err error
@@ -70,7 +79,7 @@ func (s *Store) ListJobs(ctx context.Context, userID string) ([]dto.Job, error) 
 			return nil, fmt.Errorf("store.ListJobs: %w", err)
 		}
 	}
-	rows, err := s.queries.ListJobs(ctx, uid)
+	rows, err := s.queries.ListJobs(ctx, sqlc.ListJobsParams{UserID: uid, ExcludedCompanySlugs: nonNil(excludedCompanySlugs)})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListJobs: %w", err)
 	}
@@ -90,7 +99,7 @@ func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOpti
 	if err != nil {
 		return dto.JobPage{}, ErrInvalidID
 	}
-	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit, ScoredOnly: options.ScoredOnly, SinceDays: options.SinceDays}
+	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit, ScoredOnly: options.ScoredOnly, SinceDays: options.SinceDays, ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs)}
 	if params.Availability == "" {
 		params.Availability = "open"
 	}
