@@ -53,11 +53,12 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 
 func toApplicationStatusDTO(s sqlc.ApplicationStatus) dto.ApplicationStatus {
 	return dto.ApplicationStatus{
-		ID:        s.ID.String(),
-		UserID:    s.UserID.String(),
-		Name:      s.Name,
-		Colour:    s.Colour,
-		CreatedAt: s.CreatedAt.Time,
+		ID:              s.ID.String(),
+		UserID:          s.UserID.String(),
+		Name:            s.Name,
+		Colour:          s.Colour,
+		ReplyWindowDays: fromInt4(s.ReplyWindowDays),
+		CreatedAt:       s.CreatedAt.Time,
 	}
 }
 
@@ -68,4 +69,19 @@ func toJobApplicationSummaryDTO(r sqlc.GetApplicationsForJobsRow) dto.JobApplica
 		StatusName:    r.StatusName.String,
 		StatusColour:  r.StatusColour.String,
 	}
+}
+
+func toInt4(n *int) pgtype.Int4 {
+	if n == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*n), Valid: true}
+}
+
+func fromInt4(n pgtype.Int4) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int32)
+	return &v
 }

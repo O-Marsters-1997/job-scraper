@@ -35,7 +35,7 @@ func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Appli
 
 func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	t.Helper()
-	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1")
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus(%q) err = %v", name, err)
 	}
@@ -144,12 +144,32 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("update changes name and colour", func(t *testing.T) {
 		f := newStore(t)
 		created := createStatus(t, f, "Offer")
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e")
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(...) err = %v", err)
 		}
 		if got.Name != "Offer!" || got.Colour != "#22c55e" {
 			t.Errorf("UpdateApplicationStatus(...) = %q/%q, want Offer!/#22c55e", got.Name, got.Colour)
+		}
+	})
+
+	t.Run("update sets and clears the reply window", func(t *testing.T) {
+		f := newStore(t)
+		created := createStatus(t, f, "Applied")
+		days := 7
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(set window) err = %v", err)
+		}
+		if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
+			t.Errorf("UpdateApplicationStatus(set window) ReplyWindowDays = %v, want %d", got.ReplyWindowDays, days)
+		}
+		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(clear window) err = %v", err)
+		}
+		if got.ReplyWindowDays != nil {
+			t.Errorf("UpdateApplicationStatus(clear window) ReplyWindowDays = %d, want nil", *got.ReplyWindowDays)
 		}
 	})
 

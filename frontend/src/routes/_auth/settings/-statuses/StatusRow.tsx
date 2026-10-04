@@ -1,7 +1,9 @@
 import { Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseReplyWindow } from "@/lib/replyWindow";
 import type { ApplicationStatus } from "@/types/applicationStatus";
+import { ReplyWindowField } from "./ReplyWindowField";
 import { StatusColourPicker } from "./StatusColourPicker";
 
 export function StatusRow(props: {
@@ -9,9 +11,11 @@ export function StatusRow(props: {
 	editing: boolean;
 	name: string;
 	colour: string;
+	replyWindow: string;
 	pending: boolean;
 	onName: (name: string) => void;
 	onColour: (hex: string) => void;
+	onReplyWindow: (value: string) => void;
 	onEdit: () => void;
 	onCancel: () => void;
 	onDelete: () => void;
@@ -33,6 +37,13 @@ export function StatusRow(props: {
 						<span class="flex-1 text-sm font-medium text-foreground">
 							{props.status.Name}
 						</span>
+						<Show when={props.status.ReplyWindowDays}>
+							{(days) => (
+								<span class="text-xs text-muted-foreground">
+									Reply in {days()} working days
+								</span>
+							)}
+						</Show>
 						<Button
 							type="button"
 							onClick={() => props.onEdit()}
@@ -63,9 +74,16 @@ export function StatusRow(props: {
 						onInput={(e) => props.onName(e.currentTarget.value)}
 					/>
 				</div>
+				<ReplyWindowField
+					value={props.replyWindow}
+					onChange={props.onReplyWindow}
+				/>
 				<Button
 					type="submit"
-					disabled={props.pending}
+					disabled={
+						props.pending ||
+						parseReplyWindow(props.replyWindow).error !== undefined
+					}
 					variant="ghost"
 					size="sm"
 					class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"

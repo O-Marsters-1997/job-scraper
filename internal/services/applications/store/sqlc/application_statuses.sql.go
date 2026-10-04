@@ -29,19 +29,25 @@ func (q *Queries) CountApplicationsUsingStatus(ctx context.Context, arg CountApp
 }
 
 const createApplicationStatus = `-- name: CreateApplicationStatus :one
-INSERT INTO application_statuses (user_id, name, colour)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, name, colour, created_at
+INSERT INTO application_statuses (user_id, name, colour, reply_window_days)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, name, colour, created_at, reply_window_days
 `
 
 type CreateApplicationStatusParams struct {
-	UserID pgtype.UUID
-	Name   string
-	Colour string
+	UserID          pgtype.UUID
+	Name            string
+	Colour          string
+	ReplyWindowDays pgtype.Int4
 }
 
 func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplicationStatusParams) (ApplicationStatus, error) {
-	row := q.db.QueryRow(ctx, createApplicationStatus, arg.UserID, arg.Name, arg.Colour)
+	row := q.db.QueryRow(ctx, createApplicationStatus,
+		arg.UserID,
+		arg.Name,
+		arg.Colour,
+		arg.ReplyWindowDays,
+	)
 	var i ApplicationStatus
 	err := row.Scan(
 		&i.ID,
@@ -49,6 +55,7 @@ func (q *Queries) CreateApplicationStatus(ctx context.Context, arg CreateApplica
 		&i.Name,
 		&i.Colour,
 		&i.CreatedAt,
+		&i.ReplyWindowDays,
 	)
 	return i, err
 }
@@ -69,7 +76,7 @@ func (q *Queries) DeleteApplicationStatus(ctx context.Context, arg DeleteApplica
 }
 
 const listApplicationStatusesByUser = `-- name: ListApplicationStatusesByUser :many
-SELECT id, user_id, name, colour, created_at FROM application_statuses
+SELECT id, user_id, name, colour, created_at, reply_window_days FROM application_statuses
 WHERE user_id = $1
 ORDER BY created_at ASC
 `
@@ -89,6 +96,7 @@ func (q *Queries) ListApplicationStatusesByUser(ctx context.Context, userID pgty
 			&i.Name,
 			&i.Colour,
 			&i.CreatedAt,
+			&i.ReplyWindowDays,
 		); err != nil {
 			return nil, err
 		}
@@ -117,16 +125,17 @@ func (q *Queries) SeedDefaultStatuses(ctx context.Context, userID pgtype.UUID) e
 
 const updateApplicationStatus = `-- name: UpdateApplicationStatus :one
 UPDATE application_statuses
-SET name = $3, colour = $4
+SET name = $3, colour = $4, reply_window_days = $5
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, colour, created_at
+RETURNING id, user_id, name, colour, created_at, reply_window_days
 `
 
 type UpdateApplicationStatusParams struct {
-	ID     pgtype.UUID
-	UserID pgtype.UUID
-	Name   string
-	Colour string
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Name            string
+	Colour          string
+	ReplyWindowDays pgtype.Int4
 }
 
 func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplicationStatusParams) (ApplicationStatus, error) {
@@ -135,6 +144,7 @@ func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplica
 		arg.UserID,
 		arg.Name,
 		arg.Colour,
+		arg.ReplyWindowDays,
 	)
 	var i ApplicationStatus
 	err := row.Scan(
@@ -143,6 +153,7 @@ func (q *Queries) UpdateApplicationStatus(ctx context.Context, arg UpdateApplica
 		&i.Name,
 		&i.Colour,
 		&i.CreatedAt,
+		&i.ReplyWindowDays,
 	)
 	return i, err
 }

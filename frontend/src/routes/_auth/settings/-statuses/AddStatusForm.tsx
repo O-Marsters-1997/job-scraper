@@ -1,13 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseReplyWindow } from "@/lib/replyWindow";
+import { ReplyWindowField } from "./ReplyWindowField";
 import { StatusColourPicker } from "./StatusColourPicker";
 
 export function AddStatusForm(props: {
 	name: string;
 	colour: string;
+	replyWindow: string;
 	pending: boolean;
 	onName: (name: string) => void;
 	onColour: (hex: string) => void;
+	onReplyWindow: (value: string) => void;
 	onCancel: () => void;
 	onSubmit: (e: SubmitEvent) => void;
 }) {
@@ -24,9 +28,17 @@ export function AddStatusForm(props: {
 				value={props.name}
 				onInput={(e) => props.onName(e.currentTarget.value)}
 			/>
+			<ReplyWindowField
+				value={props.replyWindow}
+				onChange={props.onReplyWindow}
+			/>
 			<Button
 				type="submit"
-				disabled={props.pending || !props.name.trim()}
+				disabled={
+					props.pending ||
+					!props.name.trim() ||
+					parseReplyWindow(props.replyWindow).error !== undefined
+				}
 				variant="ghost"
 				size="sm"
 				class="h-auto px-2 py-1 text-xs text-primary hover:text-primary"

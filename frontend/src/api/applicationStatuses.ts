@@ -15,14 +15,15 @@ export async function fetchApplicationStatuses(): Promise<ApplicationStatus[]> {
 export async function createApplicationStatus(
 	name: string,
 	colour: string,
+	replyWindowDays: number | null,
 ): Promise<ApplicationStatus> {
 	return mocked(
-		(db) => db.createStatus(name, colour),
+		(db) => db.createStatus(name, colour, replyWindowDays),
 		() =>
 			apiFetch(
 				"/application-statuses",
 				applicationStatusSchema,
-				jsonInit("POST", { name, colour }),
+				jsonInit("POST", { name, colour, replyWindowDays }),
 			),
 	);
 }
@@ -31,14 +32,15 @@ export async function updateApplicationStatus(
 	id: string,
 	name: string,
 	colour: string,
+	replyWindowDays: number | null,
 ): Promise<ApplicationStatus> {
 	return mocked(
-		(db) => db.updateStatus(id, name, colour),
+		(db) => db.updateStatus(id, name, colour, replyWindowDays),
 		() =>
 			apiFetch(
 				`/application-statuses/${id}`,
 				applicationStatusSchema,
-				jsonInit("PATCH", { name, colour }),
+				jsonInit("PATCH", { name, colour, replyWindowDays }),
 			),
 	);
 }

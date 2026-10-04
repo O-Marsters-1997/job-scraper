@@ -64,7 +64,7 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 	st, pool, userID := newStore(t)
 	matching := pgtest.InsertJob(t, pool, "Match", "Match")
 	other := pgtest.InsertJob(t, pool, "Other", "Other")
-	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1")
+	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus err = %v", err)
 	}
