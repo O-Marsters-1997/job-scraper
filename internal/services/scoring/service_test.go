@@ -1418,6 +1418,16 @@ func TestSetGrade(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts the culture reason", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedJob(testJob, nil)
+
+		got, err := svc(st).SetGrade(t.Context(), userID, dto.GradeInput{JobID: testJob.ID, Grade: "no", Reasons: []string{"culture"}})
+		if err != nil || !slices.Equal(got.Reasons, []string{"culture"}) {
+			t.Errorf("SetGrade(culture) = %+v, %v, want reasons [culture]", got, err)
+		}
+	})
+
 	t.Run("an unscored job is graded with no score", func(t *testing.T) {
 		st := newFakeStore()
 		st.SeedJob(testJob, nil)

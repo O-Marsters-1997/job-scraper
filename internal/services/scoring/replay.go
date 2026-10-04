@@ -28,6 +28,7 @@ type replayRow struct {
 	Score    int
 	Band     string
 	Rank     int
+	Reasons  []string
 }
 
 func (r replayRow) rankPct(total int) float64 { return 100 * float64(r.Rank) / float64(total) }
@@ -83,7 +84,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 		if l, ok := labels[in.Job.ID]; ok {
 			labelled = append(labelled, replayRow{
 				JobID: in.Job.ID, Title: in.Job.Title, Company: in.Job.CompanySlug,
-				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band,
+				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band, Reasons: l.reasons,
 			})
 		}
 	}
@@ -101,12 +102,13 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 type replayLabelInfo struct {
 	positive bool
 	source   string
+	reasons  []string
 }
 
 func replayLabels(grades []dto.Grade, implied []dto.ImpliedLabel) map[string]replayLabelInfo {
 	labels := make(map[string]replayLabelInfo, len(grades)+len(implied))
 	for _, g := range grades {
-		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade}
+		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade, reasons: g.Reasons}
 	}
 	for _, l := range implied {
 		if _, ok := labels[l.JobID]; !ok {
@@ -137,7 +139,30 @@ func renderReplay(r replayReport) string {
 	for _, row := range r.Labelled {
 		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
 	}
+	writeReplayReasons(&sb, r.Labelled)
 	return sb.String()
+}
+
+func writeReplayReasons(sb *strings.Builder, rows []replayRow) {
+	positives, negatives := map[string]int{}, map[string]int{}
+	for _, row := range rows {
+		counts := negatives
+		if row.Positive {
+			counts = positives
+		}
+		for _, reason := range row.Reasons {
+			counts[reason]++
+		}
+	}
+	if len(positives)+len(negatives) == 0 {
+		return
+	}
+	sb.WriteString("\n## Labels by reason\n\n| Reason | Negatives | Positives |\n|---|---|---|\n")
+	for _, reason := range gradeReasons {
+		if n, p := negatives[reason], positives[reason]; n+p > 0 {
+			fmt.Fprintf(sb, "| %s | %d | %d |\n", reason, n, p)
+		}
+	}
 }
 
 func replayLabel(row replayRow) string {

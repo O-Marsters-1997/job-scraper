@@ -19,3 +19,11 @@
 | Dismissed 1 | acme | negative | grade | 37 | poor | 6 |
 | COBOL \| Maintainer | acme | positive | grade | 19 | poor | 8 |
 | Dismissed 2 | acme | negative | grade | 19 | poor | 8 |
+
+## Labels by reason
+
+| Reason | Negatives | Positives |
+|---|---|---|
+| tech | 2 | 1 |
+| salary | 1 | 0 |
+| culture | 4 | 0 |
