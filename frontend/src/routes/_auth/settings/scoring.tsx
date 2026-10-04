@@ -239,6 +239,7 @@ function ScoringForm(props: {
 					/>
 					<ChoiceGroup
 						legend="Working arrangement"
+						hint="To prefer some office days over others, pick the day counts instead of Hybrid."
 						options={optionsFor("work")}
 						choiceOf={choiceOf}
 						cycle={cycleStance("work")}
