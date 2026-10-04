@@ -29,8 +29,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/workablesearch"
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/yc"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
@@ -99,11 +101,13 @@ func main() {
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
+	domainBase := sources.NewBase(sources.Config{Name: "domain-resolver"})
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
 		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL),
 		untracked.New(js.Boards()),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
+		yc.New(&http.Client{Timeout: time.Minute}, yc.CompaniesURL, domainBase.Get),
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
 	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
