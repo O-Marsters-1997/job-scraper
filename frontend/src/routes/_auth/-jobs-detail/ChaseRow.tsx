@@ -22,15 +22,18 @@ export function ChaseRow(props: {
 		setMode("picking");
 	};
 
-	const save = async () => {
+	const save = () => {
 		if (!draft()) return;
-		await setChase.mutateAsync({ id: props.applicationId, chaseBy: draft() });
-		setMode("idle");
+		setChase.mutate(
+			{ id: props.applicationId, chaseBy: draft() },
+			{ onSuccess: () => setMode("idle") },
+		);
 	};
 
-	const markChased = async () => {
-		await clearChase.mutateAsync(props.applicationId);
-		setMode("another");
+	const markChased = () => {
+		clearChase.mutate(props.applicationId, {
+			onSuccess: () => setMode("another"),
+		});
 	};
 
 	return (
