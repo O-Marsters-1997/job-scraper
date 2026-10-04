@@ -1,8 +1,12 @@
 import { z } from "zod";
 
+export const stanceSchema = z.enum(["nice", "ok", "avoid", "block"]);
+
+export type Stance = z.infer<typeof stanceSchema>;
+
 const pickSchema = z.object({
 	optionId: z.string(),
-	stance: z.string(),
+	stance: stanceSchema,
 	source: z.string(),
 	overridden: z.boolean(),
 });

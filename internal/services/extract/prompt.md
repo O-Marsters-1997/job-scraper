@@ -9,6 +9,8 @@ Bank:
 Rules:
 - Only use an id from the bank above. Never invent one.
 - At most one stance per id.
+- Stances: nice = they most want it, ok = they'd be happy with it, avoid = they'd
+  rather not, block = they refuse it outright.
 - Return at most 10 picks total: the ones the text states most clearly.
 - Skip anything the text doesn't clearly state. Never guess.
 
