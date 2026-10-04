@@ -15,6 +15,8 @@ const (
 	Workable
 	Recruitee
 	Personio
+	Pinpoint
+	Teamtailor
 	Aggregator
 )
 
@@ -23,7 +25,7 @@ func Detect(rawURL string) ATSType {
 	if err != nil {
 		return UnknownHTML
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.ToLower(u.Hostname())
 	switch {
 	case strings.Contains(host, "greenhouse.io"):
 		return Greenhouse
@@ -37,6 +39,10 @@ func Detect(rawURL string) ATSType {
 		return Recruitee
 	case strings.Contains(host, "personio.de") || strings.Contains(host, "personio.com"):
 		return Personio
+	case strings.HasSuffix(host, ".pinpointhq.com"):
+		return Pinpoint
+	case strings.HasSuffix(host, ".teamtailor.com"):
+		return Teamtailor
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -51,7 +57,11 @@ var atsSourceName = map[ATSType]string{
 	Workable:   "workable",
 	Recruitee:  "recruitee",
 	Personio:   "personio",
+	Pinpoint:   "pinpoint",
+	Teamtailor: "teamtailor",
 }
+
+var teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
 // URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
@@ -68,10 +78,11 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 
 	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
-	case Recruitee, Personio:
-		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de
+	case Recruitee, Personio, Pinpoint, Teamtailor:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
-		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" {
+		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]])
+		if len(labels) < 3 || reserved {
 			return "", "", false
 		}
 		return source, labels[0], true
@@ -91,7 +102,7 @@ func RewriteToATS(rawURL string) (string, ATSType, bool) {
 	if err != nil {
 		return "", UnknownHTML, false
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.ToLower(u.Hostname())
 
 	var dest string
 	switch {
@@ -122,6 +133,10 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".recruitee.com"
 	case "personio":
 		return "https://" + token + ".jobs.personio.de"
+	case "pinpoint":
+		return "https://" + token + ".pinpointhq.com"
+	case "teamtailor":
+		return "https://" + token + ".teamtailor.com"
 	default:
 		return ""
 	}
