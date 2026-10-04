@@ -28,6 +28,7 @@ func toApplicationDTO(a sqlc.Application) dto.Application {
 		SalaryInfo: a.SalaryInfo.String,
 		CreatedAt:  a.CreatedAt.Time,
 		UpdatedAt:  a.UpdatedAt.Time,
+		ChaseBy:    fromOptionalDate(a.ChaseBy),
 	}
 }
 
@@ -48,6 +49,7 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 		SalaryInfo:     r.SalaryInfo.String,
 		CreatedAt:      r.CreatedAt.Time,
 		UpdatedAt:      r.UpdatedAt.Time,
+		ChaseBy:        fromOptionalDate(r.ChaseBy),
 	}
 }
 

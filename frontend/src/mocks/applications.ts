@@ -61,6 +61,7 @@ export function createApplication(data: CreateApplicationPayload): Application {
 		SalaryInfo: data.salary_info ?? "",
 		CreatedAt: new Date().toISOString(),
 		UpdatedAt: new Date().toISOString(),
+		ChaseBy: null,
 	};
 	applications = [...applications, app];
 	return app;
@@ -88,6 +89,20 @@ export function updateApplication(
 		...applications.slice(idx + 1),
 	];
 	return updated;
+}
+
+export function setChase(id: string, chaseBy: string): Application {
+	const prev = applications.find((a) => a.ID === id);
+	if (!prev) throw new Error("Application not found");
+	const updated: Application = { ...prev, ChaseBy: `${chaseBy}T00:00:00Z` };
+	applications = applications.map((a) => (a.ID === id ? updated : a));
+	return updated;
+}
+
+export function clearChase(id: string): void {
+	applications = applications.map((a) =>
+		a.ID === id ? { ...a, ChaseBy: null } : a,
+	);
 }
 
 export function deleteApplication(id: string): void {

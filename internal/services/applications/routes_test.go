@@ -31,11 +31,13 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /applications/",
 		"PATCH /applications/{id}",
 		"DELETE /applications/{id}",
+		"PUT /applications/{id}/chase",
+		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
-		"POST /applications/", "PATCH /applications/{id}",
+		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
@@ -72,6 +74,23 @@ func TestRoutesHappyPaths(t *testing.T) {
 		"PATCH /applications/"+app.ID, `{"notes":"followed up"}`)
 	if updated.Notes != "followed up" {
 		t.Fatalf("updated notes = %q, want followed up", updated.Notes)
+	}
+
+	chased := handlerstest.Do[dto.Application](t, r, http.StatusOK,
+		"PUT /applications/"+app.ID+"/chase", `{"chase_by":"2026-10-20"}`)
+	if chased.ChaseBy == nil || chased.ChaseBy.Format("2006-01-02") != "2026-10-20" {
+		t.Fatalf("chased ChaseBy = %v, want 2026-10-20", chased.ChaseBy)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest,
+		"PUT /applications/"+app.ID+"/chase", `{"chase_by":"soon"}`)
+	if got := handlerstest.Do[[]dto.ApplicationWithDetails](t, r, http.StatusOK, "GET /applications/?chase=true", ""); len(got) != 1 {
+		t.Fatalf("chase=true listed %d applications, want 1", len(got))
+	}
+	for range 2 {
+		handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID+"/chase", "")
+	}
+	if got := handlerstest.Do[[]dto.ApplicationWithDetails](t, r, http.StatusOK, "GET /applications/?chase=true", ""); len(got) != 0 {
+		t.Fatalf("chase=true after clear listed %d applications, want 0", len(got))
 	}
 
 	summaries := handlerstest.Do[map[string]dto.JobApplicationSummary](t, r, http.StatusOK,

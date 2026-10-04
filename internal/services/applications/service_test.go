@@ -198,3 +198,53 @@ func TestDeleteStatus(t *testing.T) {
 		}
 	})
 }
+
+func TestSetChase(t *testing.T) {
+	svc, st := newService(t)
+	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
+	if err != nil {
+		t.Fatalf("seed CreateApplication err = %v", err)
+	}
+
+	got, err := svc.SetChase(t.Context(), userID, dto.ChaseInput{ID: created.ID, ChaseBy: "2026-10-20"})
+	if err != nil {
+		t.Fatalf("SetChase(...) err = %v", err)
+	}
+	want := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	if got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+		t.Errorf("SetChase(2026-10-20) ChaseBy = %v, want %v", got.ChaseBy, want)
+	}
+}
+
+func TestSetChaseErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       dto.ChaseInput
+		wantKind apperr.Kind
+	}{
+		{
+			name:     "rejects a malformed date",
+			in:       dto.ChaseInput{ID: "app-1", ChaseBy: "20/10/2026"},
+			wantKind: apperr.KindInvalid,
+		},
+		{
+			name:     "rejects an empty date",
+			in:       dto.ChaseInput{ID: "app-1"},
+			wantKind: apperr.KindInvalid,
+		},
+		{
+			name:     "surfaces not found from store",
+			in:       dto.ChaseInput{ID: "missing", ChaseBy: "2026-10-20"},
+			wantKind: apperr.KindNotFound,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, _ := newService(t)
+			_, err := svc.SetChase(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Errorf("SetChase(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+			}
+		})
+	}
+}

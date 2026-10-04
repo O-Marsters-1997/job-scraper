@@ -8,7 +8,9 @@ import { PageHeading } from "@/components/PageHeading";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { ToggleChip } from "@/components/ToggleChip";
 import { Card } from "@/components/ui/card";
+import { formatChaseDate, isChaseOverdue } from "@/lib/chase";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
+import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
 import { useApplications } from "../../hooks/useApplications";
@@ -124,6 +126,20 @@ function ApplicationsPage() {
 											<span class="shrink-0 font-mono text-xs tabular-nums text-faint">
 												{app.AppliedAt}
 											</span>
+										</Show>
+										<Show when={app.ChaseBy}>
+											{(chaseBy) => (
+												<span
+													class={cn(
+														"shrink-0 font-mono text-xs tabular-nums",
+														isChaseOverdue(chaseBy(), new Date())
+															? "text-destructive-strong"
+															: "text-faint",
+													)}
+												>
+													Chase {formatChaseDate(chaseBy())}
+												</span>
+											)}
 										</Show>
 										<button
 											type="button"
