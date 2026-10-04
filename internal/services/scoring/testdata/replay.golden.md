@@ -22,8 +22,8 @@
 
 ## Labels by reason
 
-| Reason | Labels |
-|---|---|
-| tech | 2 |
-| salary | 1 |
-| culture | 4 |
+| Reason | Negatives | Positives |
+|---|---|---|
+| tech | 2 | 1 |
+| salary | 1 | 0 |
+| culture | 4 | 0 |

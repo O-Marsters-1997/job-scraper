@@ -28,6 +28,7 @@ type replayRow struct {
 	Score    int
 	Band     string
 	Rank     int
+	Reasons  []string
 }
 
 func (r replayRow) rankPct(total int) float64 { return 100 * float64(r.Rank) / float64(total) }
@@ -37,7 +38,6 @@ type replayReport struct {
 	Scores   []int
 	Labelled []replayRow
 	Unscored int
-	Reasons  map[string]int
 }
 
 // Replay re-runs compute over userID's cached answers for every scored job
@@ -75,12 +75,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 
 	labels := replayLabels(grades, implied)
 
-	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs)), Reasons: map[string]int{}}
-	for _, g := range grades {
-		for _, r := range g.Reasons {
-			report.Reasons[r]++
-		}
-	}
+	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
 	var labelled []replayRow
 	for i, in := range inputs {
 		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections, in.Favourite)
@@ -89,7 +84,7 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 		if l, ok := labels[in.Job.ID]; ok {
 			labelled = append(labelled, replayRow{
 				JobID: in.Job.ID, Title: in.Job.Title, Company: in.Job.CompanySlug,
-				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band,
+				Positive: l.positive, Source: l.source, Score: score, Band: scored.Band, Reasons: l.reasons,
 			})
 		}
 	}
@@ -107,12 +102,13 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 type replayLabelInfo struct {
 	positive bool
 	source   string
+	reasons  []string
 }
 
 func replayLabels(grades []dto.Grade, implied []dto.ImpliedLabel) map[string]replayLabelInfo {
 	labels := make(map[string]replayLabelInfo, len(grades)+len(implied))
 	for _, g := range grades {
-		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade}
+		labels[g.JobID] = replayLabelInfo{positive: g.Grade != replayGradeNegative, source: replaySourceGrade, reasons: g.Reasons}
 	}
 	for _, l := range implied {
 		if _, ok := labels[l.JobID]; !ok {
@@ -136,24 +132,35 @@ func renderReplay(r replayReport) string {
 	var sb strings.Builder
 	sb.WriteString("# Replay\n\n")
 	writeReplaySummary(&sb, r)
-	if len(r.Labelled) > 0 {
-		sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Band | Rank |\n|---|---|---|---|---|---|---|\n")
-		for _, row := range r.Labelled {
-			fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
-		}
+	if len(r.Labelled) == 0 {
+		return sb.String()
 	}
-	writeReplayReasons(&sb, r.Reasons)
+	sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Band | Rank |\n|---|---|---|---|---|---|---|\n")
+	for _, row := range r.Labelled {
+		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
+	}
+	writeReplayReasons(&sb, r.Labelled)
 	return sb.String()
 }
 
-func writeReplayReasons(sb *strings.Builder, counts map[string]int) {
-	if len(counts) == 0 {
+func writeReplayReasons(sb *strings.Builder, rows []replayRow) {
+	positives, negatives := map[string]int{}, map[string]int{}
+	for _, row := range rows {
+		counts := negatives
+		if row.Positive {
+			counts = positives
+		}
+		for _, reason := range row.Reasons {
+			counts[reason]++
+		}
+	}
+	if len(positives)+len(negatives) == 0 {
 		return
 	}
-	sb.WriteString("\n## Labels by reason\n\n| Reason | Labels |\n|---|---|\n")
+	sb.WriteString("\n## Labels by reason\n\n| Reason | Negatives | Positives |\n|---|---|---|\n")
 	for _, reason := range gradeReasons {
-		if n := counts[reason]; n > 0 {
-			fmt.Fprintf(sb, "| %s | %d |\n", reason, n)
+		if n, p := negatives[reason], positives[reason]; n+p > 0 {
+			fmt.Fprintf(sb, "| %s | %d | %d |\n", reason, n, p)
 		}
 	}
 }

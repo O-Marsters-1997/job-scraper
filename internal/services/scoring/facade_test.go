@@ -196,7 +196,7 @@ func replayFixture(t *testing.T, negatives int) *scoring.Module {
 	if negatives == 0 {
 		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: "applied", Source: "application"}, dto.ImpliedLabel{JobID: "low", Source: "kept_cv"})
 	} else {
-		grade("great", "great")
+		grade("great", "great", "tech")
 		grade("applied", "ok")
 		grade("low", "ok")
 		reasons := [][]string{{"culture"}, {"tech", "culture"}, {"salary"}}
@@ -228,8 +228,8 @@ func TestReplay(t *testing.T) {
 		if !strings.Contains(got, "Concordance") {
 			t.Errorf("Replay() = %q, want a Concordance line", got)
 		}
-		if !strings.Contains(got, "| culture | 4 |") {
-			t.Errorf("Replay() = %q, want 4 labels counted under culture", got)
+		if !strings.Contains(got, "| culture | 4 | 0 |") {
+			t.Errorf("Replay() = %q, want 4 negatives counted under culture", got)
 		}
 		assertGolden(t, "testdata/replay.golden.md", got)
 	})
