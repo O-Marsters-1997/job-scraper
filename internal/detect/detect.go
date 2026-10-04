@@ -81,7 +81,8 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 	case Recruitee, Personio, Pinpoint, Teamtailor:
 		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
-		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]]) {
+		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]])
+		if len(labels) < 3 || reserved {
 			return "", "", false
 		}
 		return source, labels[0], true
