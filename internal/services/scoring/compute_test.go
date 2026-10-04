@@ -119,15 +119,46 @@ func TestComputeMissingEvidence(t *testing.T) {
 		unpicked []evaluatedPick
 		want     int
 	}{
-		{"sparse ad pulls toward 50", slices.Concat(matched, silent), nil, 82},
+		{"sparse ad pulls toward 50", slices.Concat(matched, silent), nil, 83},
 		{"full evidence scores as before", matched, nil, 95},
-		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 82},
+		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 83},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false); got != tt.want {
 				t.Errorf("compute() score = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestComputeOfficeDaysAvoid(t *testing.T) {
+	if w := dimensionSpecs[dto.DimensionWork].Weight; w != 2 {
+		t.Fatalf("work weight = %v, want 2", w)
+	}
+	hybrid := nicePick(dto.DimensionWork, "work:hybrid", dto.Answer{PYes: 1}, true)
+	unpicked := []evaluatedPick{
+		nicePick(dto.DimensionWork, "work:remote", dto.Answer{PNo: 1}, true),
+		nicePick(dto.DimensionWork, "work:onsite", dto.Answer{PNo: 1}, true),
+	}
+	score := func(officeDays dto.Answer) int {
+		office := evaluatedPick{
+			dimension: dto.DimensionWork, key: "work:office_3plus", stance: "avoid",
+			answer: officeDays, known: true,
+		}
+		got, _, _ := compute([]evaluatedPick{hybrid, office}, unpicked, "", nil, false)
+		return got
+	}
+
+	light := score(dto.Answer{PNo: 1})
+	heavy := score(dto.Answer{PYes: 1})
+	if heavy >= light {
+		t.Errorf("3+ office days score = %d, want below the 1-2 day score %d", heavy, light)
+	}
+	if heavy <= gateCap {
+		t.Errorf("3+ office days score = %d, want above the gate cap %d", heavy, gateCap)
+	}
+	if unstated := score(dto.Answer{PNotStated: 1}); unstated != light {
+		t.Errorf("unstated office days score = %d, want %d (the 1-2 day score)", unstated, light)
 	}
 }
 

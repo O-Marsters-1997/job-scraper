@@ -14,7 +14,7 @@ Score = round(100 * (sum(weight * (evidence * credit + 0.5 * missing)) + 0.5 * p
   - role: weight 3, saturation 1
   - domain: weight 2, saturation 1
   - seniority: weight 3, saturation 1, Gate
-  - work: weight 1, saturation 1, Gate
+  - work: weight 2, saturation 1, Gate
   - stage: weight 1, saturation 1
   - size: weight 1, saturation 1
   - employment: weight 2, saturation 1, Gate

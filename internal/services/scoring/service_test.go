@@ -724,7 +724,7 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.9, 0.05, 0.05),
 				},
-				wantScore: 73,
+				wantScore: 74,
 				wantBand:  "good",
 			},
 			{

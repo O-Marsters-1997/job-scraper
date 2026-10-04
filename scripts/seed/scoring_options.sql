@@ -152,6 +152,7 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('work:remote', 'work', 'Remote', 'Is the role fully remote (not hybrid or office-based)?'),
     ('work:hybrid', 'work', 'Hybrid', 'Is the role hybrid, split between home and an office (not fully remote or fully onsite)?'),
     ('work:onsite', 'work', 'Onsite', 'Is the role fully onsite in an office (not remote or hybrid)?'),
+    ('work:office_3plus', 'work', 'Office 3+ days', 'Does the role expect you in an office 3 or more days a week?'),
     ('employment:permanent', 'employment', 'Permanent', 'Is the role a permanent, full-time employment contract (not contract, freelance or part-time)?'),
     ('employment:contract', 'employment', 'Contract', 'Is the role a fixed-term or day-rate contract, (not permanent)?'),
     ('employment:part_time', 'employment', 'Part-time', 'Is the role part-time (not full-time)?'),
