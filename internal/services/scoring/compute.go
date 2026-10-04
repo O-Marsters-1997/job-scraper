@@ -11,6 +11,7 @@ import (
 const (
 	avoidWeight      = 2
 	prior            = 1.0
+	missingAlpha     = 1.0
 	resolveThreshold = 0.6
 	gateCap          = 44
 	bandGreatMin     = 80
@@ -160,8 +161,9 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	for dim, d := range nice {
 		spec := dimensionSpecs[dim]
 		credit := min(1, d.sumYes/float64(spec.Saturation))
-		weighted += spec.Weight * d.evidence
-		covered += spec.Weight * d.evidence * credit
+		missing := missingAlpha * (1 - d.evidence)
+		weighted += spec.Weight * (d.evidence + missing)
+		covered += spec.Weight * (d.evidence*credit + 0.5*missing)
 	}
 
 	score := int(math.Round(100 * (covered + 0.5*prior) / (weighted + avoidCost + prior)))
