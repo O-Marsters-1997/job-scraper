@@ -25,6 +25,9 @@ func TestTitle(t *testing.T) {
 		{"strips bracketed arrangement suffix", "Data Engineer (Remote)", "data engineer"},
 		{"strips bracketed city and arrangement", "Data Engineer (London, Hybrid)", "data engineer"},
 		{"strips remote first suffix", "Platform Engineer - Remote First", "platform engineer"},
+		{"strips hyphenated arrangement suffix", "Platform Engineer - Remote-First", "platform engineer"},
+		{"keeps region suffix", "Sales Director - EMEA", "sales director emea"},
+		{"keeps language symbols", "C++ / C# Developer", "c++ c# developer"},
 		{"keeps specialism suffix", "Software Engineer - Payments", "software engineer payments"},
 		{"keeps bracketed specialism", "Software Engineer (Python)", "software engineer python"},
 		{"keeps a title that is only a location word", "Remote", "remote"},
@@ -53,6 +56,9 @@ func TestTitleKeys(t *testing.T) {
 		{"staff vs unprefixed", "Staff Backend Engineer", "Backend Engineer", false},
 		{"backend vs frontend", "Senior Backend Engineer", "Senior Frontend Engineer", false},
 		{"senior full stack vs full stack", "Senior Full Stack Engineer", "Full Stack Engineer", false},
+		{"c++ vs c#", "C++ Developer", "C# Developer", false},
+		{"c++ vs c", "C++ Developer", "C Developer", false},
+		{"emea vs us territory", "Sales Director - EMEA", "Sales Director - US", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,6 +81,7 @@ func TestLocation(t *testing.T) {
 		{"city, region and country", "London, England, United Kingdom", "london"},
 		{"trims and lowercases", "  Manchester  ", "manchester"},
 		{"drops bracketed arrangement", "London (Hybrid)", "london"},
+		{"drops bracket containing a comma", "London (Hybrid, 3 days), GB", "london"},
 		{"blank", "  ", ""},
 		{"remote", "Remote", "remote"},
 		{"remote with country", "Remote, UK", "remote"},

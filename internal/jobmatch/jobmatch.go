@@ -10,19 +10,18 @@ const remote = "remote"
 
 var (
 	genderTag       = regexp.MustCompile(`[(\[]\s*(?:all genders|[mfwdx*](?:\s*/\s*[mfwdx*])+)\s*[)\]]`)
-	trailingSegment = regexp.MustCompile(`^(.*\S)\s+[-–—|]\s+([^-–—|]+)$`)
+	trailingSegment = regexp.MustCompile(`^(.*\S)\s+[-–—|]\s+(.+)$`)
 	trailingBracket = regexp.MustCompile(`^(.*\S)\s*[(\[]([^()\[\]]*)[)\]]$`)
 	bracketed       = regexp.MustCompile(`[(\[][^()\[\]]*[)\]]`)
-	nonAlnum        = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+	nonWord         = regexp.MustCompile(`[^\p{L}\p{N}+#]+`)
 )
 
 var placeWords = map[string]bool{
 	"remote": true, "hybrid": true, "onsite": true, "on": true, "site": true, "office": true,
 	"first": true, "only": true, "based": true, "fully": true, "flexible": true,
-	"anywhere": true, "worldwide": true, "global": true,
+	"anywhere": true, "worldwide": true,
 	"uk": true, "gb": true, "united": true, "kingdom": true, "england": true, "scotland": true,
-	"wales": true, "ireland": true, "europe": true, "emea": true, "eu": true, "us": true, "usa": true,
-	"london": true, "manchester": true, "edinburgh": true, "glasgow": true, "bristol": true,
+	"wales": true, "london": true, "manchester": true, "edinburgh": true, "glasgow": true, "bristol": true,
 	"cambridge": true, "oxford": true, "leeds": true, "birmingham": true, "belfast": true,
 }
 
@@ -44,8 +43,8 @@ func Location(raw string) string {
 	if mentionsRemote(s) {
 		return remote
 	}
-	city, _, _ := strings.Cut(s, ",")
-	return collapse(bracketed.ReplaceAllString(city, " "))
+	city, _, _ := strings.Cut(bracketed.ReplaceAllString(s, " "), ",")
+	return collapse(city)
 }
 
 func LocationsCompatible(a, b string) bool {
@@ -78,5 +77,5 @@ func onlyPlaceWords(s string) bool {
 }
 
 func collapse(s string) string {
-	return strings.Join(strings.Fields(nonAlnum.ReplaceAllString(s, " ")), " ")
+	return strings.Join(strings.Fields(nonWord.ReplaceAllString(s, " ")), " ")
 }
