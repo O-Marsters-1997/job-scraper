@@ -5,12 +5,14 @@ export class JobDetailPage {
 	readonly applied: Locator;
 	readonly dialog: Locator;
 	readonly cvButton: Locator;
+	readonly alsoOn: Locator;
 
 	constructor(private readonly page: Page) {
 		this.actionBar = page.locator("div.fixed.bottom-0");
 		this.applied = this.actionBar.getByRole("button", { name: "I applied" });
 		this.dialog = page.getByRole("dialog");
 		this.cvButton = this.actionBar.getByRole("button", { name: "CV" });
+		this.alsoOn = page.getByText(/^Also on/);
 	}
 
 	async goto(jobId: string) {

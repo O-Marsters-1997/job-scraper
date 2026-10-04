@@ -112,9 +112,13 @@ func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 		return dto.Job{}, apperr.NotFound("job not found")
 	case errors.Is(err, store.ErrInvalidID):
 		return dto.Job{}, apperr.Invalid("invalid job ID")
-	default:
-		return job, err
+	case err != nil:
+		return dto.Job{}, err
 	}
+	if job.Listings, err = s.store.ListJobListings(ctx, job.ID); err != nil {
+		return dto.Job{}, err
+	}
+	return job, nil
 }
 
 func (s *Service) MarkSeen(ctx context.Context, userID string, in dto.SeenInput) (struct{}, error) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -133,6 +134,49 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		changed, status, err := st.SaveCanonical(ctx, job)
 		if err != nil || status != "changed" || changed.ID != saved.ID {
 			t.Fatalf("changed resave = %+v, %q, %v, want changed with the same ID", changed, status, err)
+		}
+	})
+
+	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		posting := dto.Job{Title: "Engineer", BoardID: "33333333-3333-3333-3333-333333333333", ProviderPostingID: "p-1"}
+		primary, secondary := posting, posting
+		primary.URL, primary.Source = "https://boards.example.com/jobs/1", "greenhouse"
+		secondary.URL, secondary.Source = "https://www.linkedin.com/jobs/view/1?utm_source=x", "linkedin"
+		saved, _, err := st.SaveCanonical(ctx, primary)
+		if err != nil {
+			t.Fatalf("SaveCanonical(primary) = %v", err)
+		}
+		if _, _, err := st.SaveCanonical(ctx, secondary); err != nil {
+			t.Fatalf("SaveCanonical(secondary) = %v", err)
+		}
+		if _, _, err := st.SaveCanonical(ctx, primary); err != nil {
+			t.Fatalf("SaveCanonical(primary replay) = %v", err)
+		}
+
+		got, err := st.ListJobListings(ctx, saved.ID)
+		if err != nil {
+			t.Fatalf("ListJobListings(...) = %v", err)
+		}
+		want := []dto.JobListing{
+			{Source: "greenhouse", URL: "https://boards.example.com/jobs/1"},
+			{Source: "linkedin", URL: "https://www.linkedin.com/jobs/view/1"},
+		}
+		ignoreFirstSeen := cmpopts.IgnoreFields(dto.JobListing{}, "FirstSeenAt")
+		if diff := cmp.Diff(want, got, ignoreFirstSeen); diff != "" {
+			t.Fatalf("ListJobListings (-want +got):\n%s", diff)
+		}
+		if got[0].FirstSeenAt.IsZero() || got[1].FirstSeenAt.Before(got[0].FirstSeenAt) {
+			t.Errorf("FirstSeenAt = %v, %v, want set and ascending", got[0].FirstSeenAt, got[1].FirstSeenAt)
+		}
+	})
+
+	t.Run("listings of an unknown job are empty", func(t *testing.T) {
+		st, _ := newStore(t)
+		got, err := st.ListJobListings(t.Context(), missingID)
+		if err != nil || len(got) != 0 {
+			t.Fatalf("ListJobListings(missing) = %v, %v, want none", got, err)
 		}
 	})
 

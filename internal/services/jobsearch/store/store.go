@@ -152,6 +152,22 @@ func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, erro
 	return job, nil
 }
 
+func (s *Store) ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error) {
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, ErrInvalidID
+	}
+	rows, err := s.queries.ListJobListings(ctx, jid)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobListings: %w", err)
+	}
+	listings := make([]dto.JobListing, len(rows))
+	for i, row := range rows {
+		listings[i] = dto.JobListing{Source: row.Source, URL: row.NormalizedUrl, FirstSeenAt: row.FirstSeenAt.Time}
+	}
+	return listings, nil
+}
+
 func (s *Store) MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {

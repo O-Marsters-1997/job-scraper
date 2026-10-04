@@ -102,6 +102,39 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 	return i, err
 }
 
+const listJobListings = `-- name: ListJobListings :many
+SELECT source, normalized_url, first_seen_at
+FROM job_urls
+WHERE job_id = $1
+ORDER BY first_seen_at, normalized_url
+`
+
+type ListJobListingsRow struct {
+	Source        string
+	NormalizedUrl string
+	FirstSeenAt   pgtype.Timestamptz
+}
+
+func (q *Queries) ListJobListings(ctx context.Context, jobID pgtype.UUID) ([]ListJobListingsRow, error) {
+	rows, err := q.db.Query(ctx, listJobListings, jobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListJobListingsRow
+	for rows.Next() {
+		var i ListJobListingsRow
+		if err := rows.Scan(&i.Source, &i.NormalizedUrl, &i.FirstSeenAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobs = `-- name: ListJobs :many
 SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j

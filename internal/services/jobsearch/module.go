@@ -38,6 +38,7 @@ type QueuePublisher interface {
 type Store interface {
 	Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error)
 	GetJob(ctx context.Context, jobID, userID string) (dto.Job, error)
+	ListJobListings(ctx context.Context, jobID string) ([]dto.JobListing, error)
 	ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error)
 	MarkJobsSeen(ctx context.Context, userID string, jobIDs []string, seen bool) error
 	NewURLs(ctx context.Context, urls []string) ([]string, error)
