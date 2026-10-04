@@ -1,0 +1,6 @@
+[
+  {"name": "Acme UK", "slug": "acme-uk", "website": "https://www.acme.co.uk", "status": "Active", "isHiring": true, "regions": ["United Kingdom", "Europe"], "all_locations": "London, England, United Kingdom"},
+  {"name": "Quiet UK", "slug": "quiet-uk", "website": "https://quiet.co.uk", "status": "Active", "isHiring": false, "regions": ["United Kingdom"], "all_locations": "London, England, United Kingdom"},
+  {"name": "Big US", "slug": "big-us", "website": "https://big.com", "status": "Active", "isHiring": true, "regions": ["United States of America"], "all_locations": "San Francisco, CA, USA"},
+  {"name": "Dead UK", "slug": "dead-uk", "website": "https://dead.co.uk", "status": "Inactive", "isHiring": true, "regions": ["United Kingdom"], "all_locations": "London, England, United Kingdom"}
+]
