@@ -189,3 +189,9 @@ func (m *Module) ClearFeedback(ctx context.Context, userID string) (int64, error
 func (m *Module) Replay(ctx context.Context, userID string) (string, error) {
 	return m.svc.Replay(ctx, userID)
 }
+
+// Fit calibrates userID's Bands and refits their weights from their labels,
+// returning a report of what changed.
+func (m *Module) Fit(ctx context.Context, userID string) (string, error) {
+	return m.svc.Fit(ctx, userID)
+}

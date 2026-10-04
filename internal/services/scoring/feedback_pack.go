@@ -68,7 +68,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayRepo
 	fmt.Fprintf(&sb, "- A Gate caps the score at %d: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.\n", gateCap)
 	fmt.Fprintf(&sb, "- seniority is a ladder instead: Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. The user's tier weights (1-100) give a point (weighted mean level) and a tolerance (weighted spread, at least %g). The job's level is sum(level * P(yes)) / sum(P(yes)) over the tier answers, evidence = min(1, sum(P(yes))), and credit = exp(-d^2 / 2) with d = |job level - point| / tolerance. It gates when evidence reaches %.1f and d exceeds %g.\n", ladderToleranceFloor, resolveThreshold, ladderGateSpread)
 	sb.WriteString("- A block Pick resolving yes forces the score to 0.\n")
-	fmt.Fprintf(&sb, "- Bands: Great from %d, Good from %d, Fair from %d, Poor below.\n", bandGreatMin, bandGoodMin, bandFairMin)
+	fmt.Fprintf(&sb, "- Bands: Great from %d, Good from %d, Fair from %d, Poor below.\n", defaultBands.Great, defaultBands.Good, defaultBands.Fair)
 	sb.WriteString("- A picked dimension's missing evidence counts as a coin flip, pulling the score toward 50. A dimension with no Picks counts on neither side.\n\n")
 
 	sb.WriteString("Current Picks:\n\n")

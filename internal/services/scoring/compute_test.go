@@ -58,8 +58,8 @@ func TestComputeOkStance(t *testing.T) {
 		{"eight ok matches cap at saturation", techPicks("ok", 8), techPicks("nice", 3)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			okScore, _, _ := compute(tt.ok, nil, "", nil, false)
-			niceScore, _, _ := compute(tt.nice, nil, "", nil, false)
+			okScore, _, _ := compute(tt.ok, nil, "", nil, false, nil)
+			niceScore, _, _ := compute(tt.nice, nil, "", nil, false, nil)
 			if okScore != niceScore {
 				t.Errorf("ok score = %d, want %d (the nice score)", okScore, niceScore)
 			}
@@ -67,8 +67,8 @@ func TestComputeOkStance(t *testing.T) {
 	}
 
 	t.Run("one ok match scores below one nice match", func(t *testing.T) {
-		okScore, _, _ := compute(techPicks("ok", 1), nil, "", nil, false)
-		niceScore, _, _ := compute(techPicks("nice", 1), nil, "", nil, false)
+		okScore, _, _ := compute(techPicks("ok", 1), nil, "", nil, false, nil)
+		niceScore, _, _ := compute(techPicks("nice", 1), nil, "", nil, false, nil)
 		if okScore >= niceScore {
 			t.Errorf("ok score = %d, want below %d", okScore, niceScore)
 		}
@@ -83,7 +83,7 @@ func TestComputeOkStance(t *testing.T) {
 			dimension: dto.DimensionWork, key: "work:onsite",
 			answer: dto.Answer{PYes: 1}, known: true,
 		}
-		score, _, rows := compute([]evaluatedPick{remote}, []evaluatedPick{onsite}, "", nil, false)
+		score, _, rows := compute([]evaluatedPick{remote}, []evaluatedPick{onsite}, "", nil, false, nil)
 		if score > gateCap {
 			t.Errorf("score = %d, want at most %d", score, gateCap)
 		}
@@ -125,7 +125,7 @@ func TestComputeMissingEvidence(t *testing.T) {
 		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 83},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false); got != tt.want {
+			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false, nil); got != tt.want {
 				t.Errorf("compute() score = %d, want %d", got, tt.want)
 			}
 		})
@@ -156,7 +156,7 @@ func scoreHybridJob(stances map[string]string, officeDays int) (int, []dto.Score
 			unpicked = append(unpicked, p)
 		}
 	}
-	score, _, rows := compute(picks, unpicked, "", nil, false)
+	score, _, rows := compute(picks, unpicked, "", nil, false, nil)
 	return score, rows
 }
 
@@ -234,7 +234,7 @@ func scoreLadderJob(weights, jobYes map[string]float64) (int, []dto.ScoreRow) {
 			unpicked = append(unpicked, tierPick(key, 0, answer))
 		}
 	}
-	score, _, rows := compute(picks, unpicked, "", nil, false)
+	score, _, rows := compute(picks, unpicked, "", nil, false, nil)
 	return score, rows
 }
 
@@ -305,8 +305,8 @@ func TestComputeFavourite(t *testing.T) {
 	salaryFloor := &dto.Money{Amount: 100000, Currency: "USD"}
 
 	t.Run("favourite lifts and adds its row", func(t *testing.T) {
-		base, _, _ := compute([]evaluatedPick{nice}, nil, "", nil, false)
-		score, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, true)
+		base, _, _ := compute([]evaluatedPick{nice}, nil, "", nil, false, nil)
+		score, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, true, nil)
 		if score <= base {
 			t.Errorf("favourite score = %d, want above %d", score, base)
 		}
@@ -317,7 +317,7 @@ func TestComputeFavourite(t *testing.T) {
 	})
 
 	t.Run("not favourite leaves rows untouched", func(t *testing.T) {
-		_, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, false)
+		_, _, rows := compute([]evaluatedPick{nice}, nil, "", nil, false, nil)
 		for _, r := range rows {
 			if r.Effect == "favourite" {
 				t.Errorf("unexpected favourite row %+v", r)
@@ -326,7 +326,7 @@ func TestComputeFavourite(t *testing.T) {
 	})
 
 	t.Run("blocked favourite stays zero without the row", func(t *testing.T) {
-		score, _, rows := compute([]evaluatedPick{nice, block}, nil, "", nil, true)
+		score, _, rows := compute([]evaluatedPick{nice, block}, nil, "", nil, true, nil)
 		if score != 0 {
 			t.Errorf("score = %d, want 0", score)
 		}
@@ -338,7 +338,7 @@ func TestComputeFavourite(t *testing.T) {
 	})
 
 	t.Run("gated favourite caps at gate", func(t *testing.T) {
-		score, _, _ := compute([]evaluatedPick{nice}, nil, "$50000 a year", salaryFloor, true)
+		score, _, _ := compute([]evaluatedPick{nice}, nil, "$50000 a year", salaryFloor, true, nil)
 		if score > gateCap {
 			t.Errorf("score = %d, want at most %d", score, gateCap)
 		}

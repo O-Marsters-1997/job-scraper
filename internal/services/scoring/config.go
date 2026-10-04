@@ -68,6 +68,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 			SalaryFloor:        floor,
 			PreferenceText:     text,
 			PreferenceTextHash: hash,
+			Scoring:            existing.Preferences.Scoring,
 		},
 	}
 	updated, err := s.store.UpsertSearchConfig(ctx, cfg)

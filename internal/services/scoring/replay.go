@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
+	"github.com/ollymarsters/job-scraper/internal/services/scoring/store"
 )
 
 const (
@@ -38,6 +40,7 @@ type replayReport struct {
 	Scores   []int
 	Labelled []replayRow
 	Unscored int
+	Params   *dto.ScoringParams
 }
 
 // Replay re-runs compute over userID's cached answers for every scored job
@@ -51,34 +54,49 @@ func (s *Service) Replay(ctx context.Context, userID string) (string, error) {
 	return renderReplay(report), nil
 }
 
-func (s *Service) replayReport(ctx context.Context, userID string) (replayReport, error) {
+type labelPool struct {
+	cfg    dto.SearchConfig
+	bank   bank
+	inputs []store.ScoringInput
+	grades []dto.Grade
+	labels map[string]replayLabelInfo
+}
+
+func (s *Service) loadLabelPool(ctx context.Context, userID string) (labelPool, error) {
 	cfg, err := s.searchConfigOrZero(ctx, userID)
 	if err != nil {
-		return replayReport{}, err
+		return labelPool{}, err
 	}
 	bk, err := s.loadBank(ctx)
 	if err != nil {
-		return replayReport{}, err
+		return labelPool{}, err
 	}
 	inputs, err := s.store.ListScoringInputs(ctx, userID, jev.Model)
 	if err != nil {
-		return replayReport{}, err
+		return labelPool{}, err
 	}
 	grades, err := s.store.ListGrades(ctx, userID)
 	if err != nil {
-		return replayReport{}, err
+		return labelPool{}, err
 	}
 	implied, err := s.store.ListImpliedPositives(ctx, userID)
 	if err != nil {
+		return labelPool{}, err
+	}
+	return labelPool{cfg: cfg, bank: bk, inputs: inputs, grades: grades, labels: replayLabels(grades, implied)}, nil
+}
+
+func (s *Service) replayReport(ctx context.Context, userID string) (replayReport, error) {
+	pool, err := s.loadLabelPool(ctx, userID)
+	if err != nil {
 		return replayReport{}, err
 	}
+	cfg, labels := pool.cfg, pool.labels
 
-	labels := replayLabels(grades, implied)
-
-	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
+	report := replayReport{Total: len(pool.inputs), Scores: make([]int, len(pool.inputs)), Params: cfg.Preferences.Scoring}
 	var labelled []replayRow
-	for i, in := range inputs {
-		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections, in.Favourite)
+	for i, in := range pool.inputs {
+		scored := scoreJob(userID, cfg, in.Job, pool.bank.byID, in.Answers, in.Corrections, in.Favourite)
 		score := scored.Score
 		report.Scores[i] = score
 		if l, ok := labels[in.Job.ID]; ok {
@@ -131,6 +149,7 @@ func countWhere[T any](xs []T, pred func(T) bool) int {
 func renderReplay(r replayReport) string {
 	var sb strings.Builder
 	sb.WriteString("# Replay\n\n")
+	writeReplayParams(&sb, r.Params)
 	writeReplaySummary(&sb, r)
 	if len(r.Labelled) == 0 {
 		return sb.String()
@@ -243,4 +262,25 @@ func concordance(positives, negatives []replayRow) float64 {
 		}
 	}
 	return wins / float64(len(positives)*len(negatives))
+}
+
+func writeReplayParams(sb *strings.Builder, p *dto.ScoringParams) {
+	if p == nil {
+		sb.WriteString("Scoring: default weights and Bands\n\n")
+		return
+	}
+	fmt.Fprintf(sb, "Scoring: fitted %s from %d grades\n", p.FittedAt.Format(time.DateOnly), p.GradeCount)
+	if len(p.Weights) == 0 {
+		sb.WriteString("- Weights: defaults\n")
+	} else {
+		parts := make([]string, 0, len(p.Weights))
+		for _, d := range Dimensions {
+			if w, ok := p.Weights[d.Key]; ok {
+				parts = append(parts, fmt.Sprintf("%s %.2f", d.Key, w))
+			}
+		}
+		fmt.Fprintf(sb, "- Weights: fitted: %s\n", strings.Join(parts, ", "))
+	}
+	b := bandsFor(p)
+	fmt.Fprintf(sb, "- Bands: Great from %d, Good from %d, Fair from %d\n\n", b.Great, b.Good, b.Fair)
 }
