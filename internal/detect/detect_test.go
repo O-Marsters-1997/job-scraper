@@ -21,6 +21,7 @@ func TestDetect(t *testing.T) {
 		{"personio", "https://acme.personio.de/job/software-engineer-123", detect.Personio},
 		{"pinpoint job", "https://acme.pinpointhq.com/en/postings/ce6c9e5c-a2d3", detect.Pinpoint},
 		{"pinpoint board", "https://acme.pinpointhq.com/", detect.Pinpoint},
+		{"pinpoint with port", "https://acme.pinpointhq.com:443/", detect.Pinpoint},
 		{"linkedin is an aggregator", "https://www.linkedin.com/jobs/view/1234567890", detect.Aggregator},
 		{"indeed is an aggregator", "https://indeed.com/viewjob?jk=abc123", detect.Aggregator},
 		{"unknown host", "https://workinstartups.com/job-board/job/12345/software-engineer", detect.UnknownHTML},

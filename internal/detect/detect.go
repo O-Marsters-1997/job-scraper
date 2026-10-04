@@ -24,7 +24,7 @@ func Detect(rawURL string) ATSType {
 	if err != nil {
 		return UnknownHTML
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.ToLower(u.Hostname())
 	switch {
 	case strings.Contains(host, "greenhouse.io"):
 		return Greenhouse
@@ -95,7 +95,7 @@ func RewriteToATS(rawURL string) (string, ATSType, bool) {
 	if err != nil {
 		return "", UnknownHTML, false
 	}
-	host := strings.ToLower(u.Host)
+	host := strings.ToLower(u.Hostname())
 
 	var dest string
 	switch {
