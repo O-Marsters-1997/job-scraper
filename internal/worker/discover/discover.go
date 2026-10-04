@@ -26,8 +26,8 @@ type Board struct {
 
 // Company is a company a harvester found, with the candidate Board it would be polled through.
 type Company struct {
-	Slug, Name string
-	Board      Board
+	Slug, Name, Domain string
+	Board              Board
 }
 
 // Harvest is what one harvester run found. Skipped counts candidates that
@@ -202,7 +202,7 @@ func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, via s
 }
 
 func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error {
-	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name})
+	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name, Domain: c.Domain})
 	if err != nil {
 		return err
 	}
