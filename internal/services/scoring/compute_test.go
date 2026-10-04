@@ -199,7 +199,7 @@ func TestComputeOfficeDays(t *testing.T) {
 		twoDays, _ := scoreHybridJob(stances, 2)
 		threeDays, _ := scoreHybridJob(stances, 3)
 		fourDays, _ := scoreHybridJob(stances, 4)
-		if !(twoDays > threeDays && threeDays > gateCap && fourDays <= gateCap) {
+		if twoDays <= threeDays || threeDays <= gateCap || fourDays > gateCap {
 			t.Errorf("scores 2/3/4 days = %d/%d/%d, want 2 > 3 > gate cap %d >= 4", twoDays, threeDays, fourDays, gateCap)
 		}
 	})
