@@ -17,6 +17,7 @@ const (
 	Personio
 	Pinpoint
 	Teamtailor
+	HiBob
 	Aggregator
 )
 
@@ -43,6 +44,8 @@ func Detect(rawURL string) ATSType {
 		return Pinpoint
 	case strings.HasSuffix(host, ".teamtailor.com"):
 		return Teamtailor
+	case strings.HasSuffix(host, ".careers.hibob.com"):
+		return HiBob
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -59,9 +62,13 @@ var atsSourceName = map[ATSType]string{
 	Personio:   "personio",
 	Pinpoint:   "pinpoint",
 	Teamtailor: "teamtailor",
+	HiBob:      "hibob",
 }
 
-var teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
+var (
+	teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
+	hibobReserved      = map[string]bool{"app": true, "api": true}
+)
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
 // URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
@@ -78,10 +85,10 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 
 	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
-	case Recruitee, Personio, Pinpoint, Teamtailor:
-		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com
+	case Recruitee, Personio, Pinpoint, Teamtailor, HiBob:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com / {token}.careers.hibob.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
-		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]])
+		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]]) || (t == HiBob && hibobReserved[labels[0]])
 		if len(labels) < 3 || reserved {
 			return "", "", false
 		}
@@ -137,6 +144,8 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".pinpointhq.com"
 	case "teamtailor":
 		return "https://" + token + ".teamtailor.com"
+	case "hibob":
+		return "https://" + token + ".careers.hibob.com"
 	default:
 		return ""
 	}

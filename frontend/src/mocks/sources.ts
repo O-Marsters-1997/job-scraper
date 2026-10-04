@@ -78,6 +78,14 @@ const SOURCE_INFOS: SourceInfo[] = [
 		filters: [],
 	},
 	{
+		name: "hibob",
+		label: "HiBob",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://careers.hibob.com",
+		filters: [],
+	},
+	{
 		name: "wis",
 		label: "Work in Startups",
 		kind: "filter",
