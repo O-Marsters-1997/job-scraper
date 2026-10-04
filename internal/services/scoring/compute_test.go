@@ -2,6 +2,7 @@ package scoring
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -89,6 +90,45 @@ func TestComputeOkStance(t *testing.T) {
 			t.Errorf("row effect = %q, want gated", rows[0].Effect)
 		}
 	})
+}
+
+func nicePick(dim dto.Dimension, key string, answer dto.Answer, known bool) evaluatedPick {
+	return evaluatedPick{dimension: dim, key: key, stance: "nice", answer: answer, known: known}
+}
+
+func TestComputeMissingEvidence(t *testing.T) {
+	yes := dto.Answer{PYes: 1}
+	matched := append(techPicks("nice", 3),
+		nicePick(dto.DimensionRole, "role:backend", yes, true),
+		nicePick(dto.DimensionSeniority, "seniority:senior", yes, true),
+		nicePick(dto.DimensionWork, "work:remote", yes, true),
+	)
+	silent := []evaluatedPick{
+		nicePick(dto.DimensionDomain, "domain:fintech", dto.Answer{PNotStated: 1}, true),
+		nicePick(dto.DimensionStage, "stage:seed", dto.Answer{}, false),
+		nicePick(dto.DimensionSize, "size:small", dto.Answer{}, false),
+	}
+	unpicked := []evaluatedPick{
+		nicePick(dto.DimensionDomain, "domain:gaming", yes, true),
+		nicePick(dto.DimensionEmployment, "employment:contract", yes, true),
+	}
+
+	for _, tt := range []struct {
+		name     string
+		picks    []evaluatedPick
+		unpicked []evaluatedPick
+		want     int
+	}{
+		{"sparse ad pulls toward 50", slices.Concat(matched, silent), nil, 82},
+		{"full evidence scores as before", matched, nil, 95},
+		{"unpicked dimensions never count", slices.Concat(matched, silent), unpicked, 82},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, _, _ := compute(tt.picks, tt.unpicked, "", nil, false); got != tt.want {
+				t.Errorf("compute() score = %d, want %d", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestComputeFavourite(t *testing.T) {
