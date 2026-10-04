@@ -51,6 +51,10 @@ const ATS_BOARDS: Record<string, { host: string; url: (t: string) => string }> =
 			host: "pinpointhq.com",
 			url: (t) => `https://${t}.pinpointhq.com`,
 		},
+		teamtailor: {
+			host: "teamtailor.com",
+			url: (t) => `https://${t}.teamtailor.com`,
+		},
 	};
 
 const atsSourceForHost = (hostname: string) =>

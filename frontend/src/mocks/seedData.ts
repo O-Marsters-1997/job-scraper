@@ -230,6 +230,7 @@ export const ATS_SOURCES = [
 	"recruitee",
 	"personio",
 	"pinpoint",
+	"teamtailor",
 ];
 
 export const APP_DISTRIBUTION: Array<{ statusIndex: number; count: number }> = [

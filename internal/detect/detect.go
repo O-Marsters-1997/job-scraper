@@ -16,6 +16,7 @@ const (
 	Recruitee
 	Personio
 	Pinpoint
+	Teamtailor
 	Aggregator
 )
 
@@ -40,6 +41,8 @@ func Detect(rawURL string) ATSType {
 		return Personio
 	case strings.HasSuffix(host, ".pinpointhq.com"):
 		return Pinpoint
+	case strings.HasSuffix(host, ".teamtailor.com"):
+		return Teamtailor
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -55,7 +58,10 @@ var atsSourceName = map[ATSType]string{
 	Recruitee:  "recruitee",
 	Personio:   "personio",
 	Pinpoint:   "pinpoint",
+	Teamtailor: "teamtailor",
 }
+
+var teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
 // URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
@@ -72,10 +78,10 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 
 	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
-	case Recruitee, Personio, Pinpoint:
-		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com
+	case Recruitee, Personio, Pinpoint, Teamtailor:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
-		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" {
+		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]]) {
 			return "", "", false
 		}
 		return source, labels[0], true
@@ -128,6 +134,8 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".jobs.personio.de"
 	case "pinpoint":
 		return "https://" + token + ".pinpointhq.com"
+	case "teamtailor":
+		return "https://" + token + ".teamtailor.com"
 	default:
 		return ""
 	}

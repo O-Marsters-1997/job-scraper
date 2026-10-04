@@ -27,6 +27,8 @@ function boardURLFor(board: CompanyBoard): string {
 			return `https://${board.BoardToken}.jobs.personio.de`;
 		case "pinpoint":
 			return `https://${board.BoardToken}.pinpointhq.com`;
+		case "teamtailor":
+			return `https://${board.BoardToken}.teamtailor.com`;
 		default:
 			return "";
 	}

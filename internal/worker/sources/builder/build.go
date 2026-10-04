@@ -19,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/recruitee"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remoteok"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remotive"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
@@ -41,6 +42,7 @@ var registry = map[string]entry{
 	"recruitee":  boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
 	"personio":   boardEntry(func(v string) sources.Source { return personio.New(v) }),
 	"pinpoint":   boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
+	"teamtailor": boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
 	"wttj":       {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
 	"indeed":     {build: func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value, t.Filters) }},
 	"remoteok":   {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},

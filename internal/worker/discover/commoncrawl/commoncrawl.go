@@ -43,12 +43,14 @@ var patterns = []string{
 	"*.recruitee.com",
 	"*.jobs.personio.de",
 	"*.pinpointhq.com",
+	"*.teamtailor.com",
 }
 
 var notBoards = map[string]map[string]bool{
-	"workable":  {"j": true, "api": true},
-	"pinpoint":  {"www": true, "app": true, "api": true, "support": true, "help": true, "blog": true, "careers": true, "docs": true, "status": true, "developers": true, "community": true, "learn": true, "marketplace": true},
-	"recruitee": {"www": true, "app": true, "api": true, "support": true, "blog": true, "careers": true},
+	"workable":   {"j": true, "api": true},
+	"pinpoint":   {"www": true, "app": true, "api": true, "support": true, "help": true, "blog": true, "careers": true, "docs": true, "status": true, "developers": true, "community": true, "learn": true, "marketplace": true},
+	"teamtailor": {"www": true, "app": true, "career": true, "api": true},
+	"recruitee":  {"www": true, "app": true, "api": true, "support": true, "blog": true, "careers": true},
 }
 
 type Harvester struct {
