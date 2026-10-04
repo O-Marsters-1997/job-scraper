@@ -536,7 +536,7 @@ func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, an
 	}
 	var out []evaluatedPick
 	for id, opt := range byID {
-		if wantedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+		if wantedIDs[id] || demandOptions[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
 			continue
 		}
 		out = append(out, evaluate(opt, "nice", answers, corrections))

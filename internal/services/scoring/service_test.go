@@ -855,6 +855,21 @@ func TestRecompute(t *testing.T) {
 				},
 			},
 			{
+				name: "seniority demands are never gate alternatives, avoided or untouched",
+				picks: []pickCase{
+					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
+					{id: "seniority:years_6plus", dimension: dto.DimensionSeniority, stance: "avoid", answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+					unpickedOption(dto.DimensionSeniority, "seniority:people_lead", 0.9, 0.05, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.05, 0.9, 0.05),
+				},
+				wantScore: 12,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "no", Effect: "misses"},
+					{Resolved: "yes", Effect: "misses"},
+				},
+			},
+			{
 				name: "work gate caps the score when the picked arrangement misses and another matches",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
