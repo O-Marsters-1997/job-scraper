@@ -171,4 +171,6 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('seniority:junior', 'seniority', 'Junior', 'Is the role pitched at Junior or graduate level (not Mid, Senior or above)?'),
     ('seniority:mid', 'seniority', 'Mid', 'Is the role pitched at Mid level (not Junior, Senior, Staff, Principal, Lead or Head of)?'),
     ('seniority:senior', 'seniority', 'Senior', 'Is the role pitched at Senior level (not Staff, Principal, Lead or Head of)?'),
-    ('seniority:staff', 'seniority', 'Staff', 'Is the role pitched at Staff level or above (Staff, Principal, Lead or Head of)?') ON CONFLICT (id) DO NOTHING;
+    ('seniority:staff', 'seniority', 'Staff', 'Is the role pitched at Staff level or above (Staff, Principal, Lead or Head of)?'),
+    ('seniority:years_6plus', 'seniority', '6+ years', 'Does the role require 6 or more years of professional experience?'),
+    ('seniority:people_lead', 'seniority', 'People lead', 'Is leading or line-managing other engineers a core part of the role?') ON CONFLICT (id) DO NOTHING;

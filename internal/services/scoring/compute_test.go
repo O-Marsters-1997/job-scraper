@@ -215,6 +215,34 @@ func TestComputeOfficeDays(t *testing.T) {
 	})
 }
 
+func TestComputeSeniorityYearsAvoid(t *testing.T) {
+	if stances := dimensionSpecs[dto.DimensionSeniority].Stances; !slices.Contains(stances, "avoid") {
+		t.Fatalf("seniority stances = %v, want avoid allowed", stances)
+	}
+	senior := nicePick(dto.DimensionSeniority, "seniority:senior", dto.Answer{PYes: 1}, true)
+	unpicked := []evaluatedPick{
+		nicePick(dto.DimensionSeniority, "seniority:mid", dto.Answer{PNo: 1}, true),
+		nicePick(dto.DimensionSeniority, "seniority:staff", dto.Answer{PNo: 1}, true),
+	}
+	score := func(years dto.Answer) int {
+		yearsPick := evaluatedPick{
+			dimension: dto.DimensionSeniority, key: "seniority:years_6plus", stance: "avoid",
+			answer: years, known: true,
+		}
+		got, _, _ := compute([]evaluatedPick{senior, yearsPick}, unpicked, "", nil, false)
+		return got
+	}
+
+	under := score(dto.Answer{PNo: 1})
+	over := score(dto.Answer{PYes: 1})
+	if over >= under {
+		t.Errorf("6+ years score = %d, want below the under-6 score %d", over, under)
+	}
+	if over <= gateCap {
+		t.Errorf("6+ years score = %d, want above the gate cap %d", over, gateCap)
+	}
+}
+
 func TestComputeFavourite(t *testing.T) {
 	nice := evaluatedPick{
 		dimension: dto.Dimension("tech"), key: "tech:go", label: "Go", stance: "nice",

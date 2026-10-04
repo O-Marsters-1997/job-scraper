@@ -12,7 +12,7 @@ var Dimensions = []dto.DimensionSpec{
 	{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 2, Saturation: 3},
 	{Key: dto.DimensionRole, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 3, Saturation: 1},
 	{Key: dto.DimensionDomain, Kind: "pair", Stances: []string{"nice", "ok", "avoid", "block"}, Weight: 2, Saturation: 1},
-	{Key: dto.DimensionSeniority, Kind: "multi", Stances: []string{"nice", "ok"}, Gate: true, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionSeniority, Kind: "multi", Stances: []string{"nice", "ok", "avoid"}, Gate: true, Weight: 3, Saturation: 1},
 	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice", "ok", "avoid"}, Gate: true, Weight: 2, Saturation: 1},
 	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
 	{Key: dto.DimensionSize, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
