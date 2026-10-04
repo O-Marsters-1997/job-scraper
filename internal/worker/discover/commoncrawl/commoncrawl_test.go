@@ -202,8 +202,8 @@ func TestHarvest_DoesNotRetryClientErrors(t *testing.T) {
 
 func TestHarvest_UnionsNewestThreeCrawls(t *testing.T) {
 	srv := crawlServer(t, []string{"c4", "c3", "c2", "c1"}, func(w http.ResponseWriter, id, pattern string) {
-		switch {
-		case pattern == "pages":
+		switch pattern {
+		case "pages":
 			_, _ = w.Write([]byte(`{"pages":1}`))
 		default:
 			_, _ = w.Write([]byte(leverRow("shared") + leverRow("only-"+id)))
