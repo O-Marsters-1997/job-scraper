@@ -15,7 +15,7 @@ import (
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
 		for _, excluded := range cfg.ExcludedCompanies {
-			if slug.Make(excluded) == job.CompanySlug {
+			if slug.Company(excluded) == job.CompanySlug {
 				return fmt.Sprintf("company: %s", job.CompanySlug), true
 			}
 		}

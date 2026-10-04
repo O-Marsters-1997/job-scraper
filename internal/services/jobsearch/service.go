@@ -98,7 +98,7 @@ func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]st
 	}
 	slugs := make([]string, 0, len(cfg.ExcludedCompanies))
 	for _, name := range cfg.ExcludedCompanies {
-		if s := slug.Make(name); s != "" {
+		if s := slug.Company(name); s != "" {
 			slugs = append(slugs, s)
 		}
 	}

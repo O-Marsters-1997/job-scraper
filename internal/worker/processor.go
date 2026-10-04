@@ -275,7 +275,7 @@ func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, nam
 	if !errors.Is(err, data.ErrNotFound) {
 		return "", err
 	}
-	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Make(name), Name: name})
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Company(name), Name: name})
 	return company.ID, err
 }
 

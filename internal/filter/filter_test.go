@@ -39,9 +39,9 @@ func TestReject(t *testing.T) {
 			},
 			{
 				name:       "excluded company matches by slug",
-				job:        dto.Job{Title: "Engineer", CompanySlug: "acme-corp"},
+				job:        dto.Job{Title: "Engineer", CompanySlug: "acme"},
 				cfg:        dto.SearchConfig{ExcludedCompanies: []string{"Acme Corp"}},
-				wantReason: "company: acme-corp",
+				wantReason: "company: acme",
 			},
 			{
 				name:       "excluded location matches a term in the location string",
@@ -127,7 +127,7 @@ func TestReject(t *testing.T) {
 			},
 			{
 				name: "near-miss company passes",
-				job:  dto.Job{Title: "Engineer", CompanySlug: "acme-corp"},
+				job:  dto.Job{Title: "Engineer", CompanySlug: "acme"},
 				cfg:  dto.SearchConfig{ExcludedCompanies: []string{"Acme Industries"}},
 			},
 			{

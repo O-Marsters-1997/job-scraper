@@ -56,7 +56,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Title:           fj.Title,
 			Location:        fj.Location,
 			URL:             fj.URL,
-			CompanySlug:     slug.Make(fj.CompanyName),
+			CompanySlug:     slug.Company(fj.CompanyName),
 			Description:     fj.Description,
 			SalaryRaw:       fj.Salary,
 			WorkArrangement: "remote",
