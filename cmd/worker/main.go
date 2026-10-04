@@ -27,6 +27,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/workablesearch"
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
 	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
@@ -102,6 +103,7 @@ func main() {
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
 		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL),
 		untracked.New(js.Boards()),
+		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
 	go schedule.Every(ctx, "harvest", time.Hour, harvest.RunOnce)
