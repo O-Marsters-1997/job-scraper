@@ -86,6 +86,14 @@ const SOURCE_INFOS: SourceInfo[] = [
 		filters: [],
 	},
 	{
+		name: "smartrecruiters",
+		label: "SmartRecruiters",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://jobs.smartrecruiters.com",
+		filters: [],
+	},
+	{
 		name: "wis",
 		label: "Work in Startups",
 		kind: "filter",

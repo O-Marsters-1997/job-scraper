@@ -1,0 +1,268 @@
+{
+  "offset": 0,
+  "limit": 2,
+  "totalFound": 3,
+  "content": [
+    {
+      "id": "744000153370939",
+      "name": "Card Disputes Specialist",
+      "uuid": "f56b60bd-c6e2-4390-854a-b8ee712036b6",
+      "jobAdId": "5759f995-62e7-4517-92c1-826754035f0f",
+      "defaultJobAd": true,
+      "refNumber": "R10281",
+      "company": {
+        "identifier": "Wise",
+        "name": "Wise"
+      },
+      "releasedDate": "2026-10-04T10:56:31.948Z",
+      "location": {
+        "city": "Hyderabad",
+        "country": "in",
+        "address": "Table Space Suites, Raheja Mindspace, Building 4, HITEC City",
+        "postalCode": "500081",
+        "remote": false,
+        "hybrid": false,
+        "fullLocation": "Hyderabad, , India"
+      },
+      "industry": {
+        "id": "financial_services",
+        "label": "Financial Services"
+      },
+      "department": {},
+      "function": {
+        "id": "other",
+        "label": "Other"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "customField": [
+        {
+          "fieldId": "65d3d0e0d37044292ef9549b",
+          "fieldLabel": "Job Profile",
+          "valueId": "a857a0647d6e1000aa0fd8c043c80000",
+          "valueLabel": "Payment Operations Specialist - Scheduled - JP101264"
+        },
+        {
+          "fieldId": "65d3d0a7d37044292ef9549a",
+          "fieldLabel": "Job Family",
+          "valueId": "031d60c1f3b201961c3b7585bc005100",
+          "valueLabel": "Payment Operations"
+        },
+        {
+          "fieldId": "COUNTRY",
+          "fieldLabel": "Country/Region",
+          "valueId": "in",
+          "valueLabel": "India"
+        },
+        {
+          "fieldId": "65d3d05c735007771b14e932",
+          "fieldLabel": "Worker Type",
+          "valueId": "EE",
+          "valueLabel": "Wiser"
+        },
+        {
+          "fieldId": "65cea5ac287e8d0651481809",
+          "fieldLabel": "Time Type",
+          "valueId": "d2f4dafccd5101059b6cf09e12278400",
+          "valueLabel": "Full time"
+        },
+        {
+          "fieldId": "65d3d06b2865b46cfa4f0ec3",
+          "fieldLabel": "Worker Sub Type",
+          "valueId": "046034784a4d016f1889ba8863278f0d",
+          "valueLabel": "Permanent"
+        },
+        {
+          "fieldId": "65d3d141c86c2f3257de414c",
+          "fieldLabel": "Cost Center Hierarchy",
+          "valueId": "6d8f1bd75a700172edee9b31c712a31c",
+          "valueLabel": "Operations"
+        },
+        {
+          "fieldId": "658553f79a81b00900831a80",
+          "fieldLabel": "Brands",
+          "valueId": "default",
+          "valueLabel": "Wise"
+        },
+        {
+          "fieldId": "65d3d0374c34974b271801f9",
+          "fieldLabel": "Management Level",
+          "valueId": "e82698b94195016f133d61d1f100d410",
+          "valueLabel": "3"
+        },
+        {
+          "fieldId": "65d3d0926435ba43bdb089ac",
+          "fieldLabel": "Job Family Group",
+          "valueId": "cf8ed98297e2015c704c2f07ba008614",
+          "valueLabel": "Operations"
+        },
+        {
+          "fieldId": "65d3d151a5d3185b4341a7ab",
+          "fieldLabel": "Cost Center",
+          "valueId": "3e83bcc693211000bb18990271880000",
+          "valueLabel": "Operations Spend"
+        },
+        {
+          "fieldId": "65cec407735007771b14e92d",
+          "fieldLabel": "Company",
+          "valueId": "8928081b6a9e014945dcd4299c012074",
+          "valueLabel": "Wise Payments India Private Limited"
+        },
+        {
+          "fieldId": "65d90823f2e6436af25814c2",
+          "fieldLabel": "Job Ad Salary Range",
+          "valueLabel": "750000 - 950000 INR Annual"
+        },
+        {
+          "fieldId": "65d9080b4aa2f46927dfc1f3",
+          "fieldLabel": "WD Target Hire Date",
+          "valueLabel": "2026-09-01"
+        }
+      ],
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/Wise/postings/744000153370939",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    },
+    {
+      "id": "744000153257599",
+      "name": "Senior Business CRM Manager - Americas",
+      "uuid": "0ea1b5c1-d117-44b6-b08d-e23d15b0e734",
+      "jobAdId": "5dfa9483-880d-44a1-9b16-ad499fdaa94e",
+      "defaultJobAd": true,
+      "refNumber": "R10482",
+      "company": {
+        "identifier": "Wise",
+        "name": "Wise"
+      },
+      "releasedDate": "2026-10-02T19:00:54.268Z",
+      "location": {
+        "city": "Austin",
+        "country": "us",
+        "address": "Domain Tower 2, 10025 Alterra Parkway, Floor 23",
+        "postalCode": "78758",
+        "remote": false,
+        "hybrid": true,
+        "hybridDescription": "Onsite Requirement is 3x/weekly",
+        "fullLocation": "Austin, , United States"
+      },
+      "industry": {
+        "id": "financial_services",
+        "label": "Financial Services"
+      },
+      "department": {},
+      "function": {
+        "id": "marketing",
+        "label": "Marketing"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "customField": [
+        {
+          "fieldId": "65d3d0e0d37044292ef9549b",
+          "fieldLabel": "Job Profile",
+          "valueId": "6893d1dd16cf011a7eb916c4aa00a519",
+          "valueLabel": "CRM Senior Manager - JP100659"
+        },
+        {
+          "fieldId": "65d3d0a7d37044292ef9549a",
+          "fieldLabel": "Job Family",
+          "valueId": "740e026f1d1201806a121ac2cc00e554",
+          "valueLabel": "Organic Acquisition"
+        },
+        {
+          "fieldId": "COUNTRY",
+          "fieldLabel": "Country/Region",
+          "valueId": "us",
+          "valueLabel": "United States"
+        },
+        {
+          "fieldId": "65d3d05c735007771b14e932",
+          "fieldLabel": "Worker Type",
+          "valueId": "EE",
+          "valueLabel": "Wiser"
+        },
+        {
+          "fieldId": "65cea5ac287e8d0651481809",
+          "fieldLabel": "Time Type",
+          "valueId": "d2f4dafccd5101059b6cf09e12278400",
+          "valueLabel": "Full time"
+        },
+        {
+          "fieldId": "65d3d06b2865b46cfa4f0ec3",
+          "fieldLabel": "Worker Sub Type",
+          "valueId": "046034784a4d016f1889ba8863278f0d",
+          "valueLabel": "Permanent"
+        },
+        {
+          "fieldId": "65d3d141c86c2f3257de414c",
+          "fieldLabel": "Cost Center Hierarchy",
+          "valueId": "6d8f1bd75a7001c77bd4ac31c712b21c",
+          "valueLabel": "Marketing"
+        },
+        {
+          "fieldId": "658553f79a81b00900831a80",
+          "fieldLabel": "Brands",
+          "valueId": "default",
+          "valueLabel": "Wise"
+        },
+        {
+          "fieldId": "65d3d0374c34974b271801f9",
+          "fieldLabel": "Management Level",
+          "valueId": "e82698b941950185dfe774d4f100d610",
+          "valueLabel": "5"
+        },
+        {
+          "fieldId": "65d3d0926435ba43bdb089ac",
+          "fieldLabel": "Job Family Group",
+          "valueId": "cf8ed98297e201b264e34202ba008414",
+          "valueLabel": "Marketing"
+        },
+        {
+          "fieldId": "65d3d151a5d3185b4341a7ab",
+          "fieldLabel": "Cost Center",
+          "valueId": "927aec3939e010014cf831bc30fe0000",
+          "valueLabel": "Business Marketing"
+        },
+        {
+          "fieldId": "65cec407735007771b14e92d",
+          "fieldLabel": "Company",
+          "valueId": "046034784a4d01d74632134764274f17",
+          "valueLabel": "Wise US Inc"
+        },
+        {
+          "fieldId": "65d90823f2e6436af25814c2",
+          "fieldLabel": "Job Ad Salary Range",
+          "valueLabel": "109000 - 139000 USD Annual"
+        },
+        {
+          "fieldId": "65d9080b4aa2f46927dfc1f3",
+          "fieldLabel": "WD Target Hire Date",
+          "valueLabel": "2026-10-15"
+        }
+      ],
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/Wise/postings/744000153257599",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    }
+  ]
+}

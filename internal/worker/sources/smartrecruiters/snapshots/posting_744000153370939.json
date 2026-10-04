@@ -1,0 +1,162 @@
+{
+  "id": "744000153370939",
+  "name": "Card Disputes Specialist",
+  "uuid": "f56b60bd-c6e2-4390-854a-b8ee712036b6",
+  "jobId": "7e33db62-164d-408a-a5dd-e82bb1b0a802",
+  "jobAdId": "5759f995-62e7-4517-92c1-826754035f0f",
+  "defaultJobAd": true,
+  "refNumber": "R10281",
+  "company": {
+    "name": "Wise",
+    "identifier": "Wise"
+  },
+  "location": {
+    "city": "Hyderabad",
+    "country": "in",
+    "address": "Table Space Suites, Raheja Mindspace, Building 4, HITEC City",
+    "postalCode": "500081",
+    "remote": false,
+    "hybrid": false,
+    "fullLocation": "Hyderabad, , India"
+  },
+  "customField": [
+    {
+      "fieldId": "65d3d0e0d37044292ef9549b",
+      "fieldLabel": "Job Profile",
+      "valueId": "a857a0647d6e1000aa0fd8c043c80000",
+      "valueLabel": "Payment Operations Specialist - Scheduled - JP101264"
+    },
+    {
+      "fieldId": "65cea5ac287e8d0651481809",
+      "fieldLabel": "Time Type",
+      "valueId": "d2f4dafccd5101059b6cf09e12278400",
+      "valueLabel": "Full time"
+    },
+    {
+      "fieldId": "65d3d06b2865b46cfa4f0ec3",
+      "fieldLabel": "Worker Sub Type",
+      "valueId": "046034784a4d016f1889ba8863278f0d",
+      "valueLabel": "Permanent"
+    },
+    {
+      "fieldId": "65d3d141c86c2f3257de414c",
+      "fieldLabel": "Cost Center Hierarchy",
+      "valueId": "6d8f1bd75a700172edee9b31c712a31c",
+      "valueLabel": "Operations"
+    },
+    {
+      "fieldId": "658553f79a81b00900831a80",
+      "fieldLabel": "Brands",
+      "valueId": "default",
+      "valueLabel": "Wise"
+    },
+    {
+      "fieldId": "65d3d0374c34974b271801f9",
+      "fieldLabel": "Management Level",
+      "valueId": "e82698b94195016f133d61d1f100d410",
+      "valueLabel": "3"
+    },
+    {
+      "fieldId": "65d3d151a5d3185b4341a7ab",
+      "fieldLabel": "Cost Center",
+      "valueId": "3e83bcc693211000bb18990271880000",
+      "valueLabel": "Operations Spend"
+    },
+    {
+      "fieldId": "65d3d0a7d37044292ef9549a",
+      "fieldLabel": "Job Family",
+      "valueId": "031d60c1f3b201961c3b7585bc005100",
+      "valueLabel": "Payment Operations"
+    },
+    {
+      "fieldId": "COUNTRY",
+      "fieldLabel": "Country/Region",
+      "valueId": "in",
+      "valueLabel": "India"
+    },
+    {
+      "fieldId": "65d3d05c735007771b14e932",
+      "fieldLabel": "Worker Type",
+      "valueId": "EE",
+      "valueLabel": "Wiser"
+    },
+    {
+      "fieldId": "65d90823f2e6436af25814c2",
+      "fieldLabel": "Job Ad Salary Range",
+      "valueLabel": "750000 - 950000 INR Annual"
+    },
+    {
+      "fieldId": "65d3d0926435ba43bdb089ac",
+      "fieldLabel": "Job Family Group",
+      "valueId": "cf8ed98297e2015c704c2f07ba008614",
+      "valueLabel": "Operations"
+    },
+    {
+      "fieldId": "65cec407735007771b14e92d",
+      "fieldLabel": "Company",
+      "valueId": "8928081b6a9e014945dcd4299c012074",
+      "valueLabel": "Wise Payments India Private Limited"
+    },
+    {
+      "fieldId": "65d9080b4aa2f46927dfc1f3",
+      "fieldLabel": "WD Target Hire Date",
+      "valueLabel": "2026-09-01"
+    }
+  ],
+  "releasedDate": "2026-10-04T10:56:31.948Z",
+  "creator": {
+    "name": "",
+    "avatarUrl": ""
+  },
+  "postingUrl": "https://jobs.smartrecruiters.com/Wise/744000153370939-card-disputes-specialist",
+  "applyUrl": "https://jobs.smartrecruiters.com/Wise/744000153370939-card-disputes-specialist?oga=true",
+  "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/Wise/publication/f56b60bd-c6e2-4390-854a-b8ee712036b6?dcr_ci=Wise",
+  "jobAd": {
+    "sections": {
+      "companyDescription": {
+        "title": "Company Description",
+        "text": "<p>Wise is a global technology company, building the best way to move and manage the world’s money.<br>\n<strong>Min fees. Max ease. Full speed.</strong></p><p>Whether people and businesses are sending money to another country, spending abroad, or making and receiving international payments, Wise is on a mission to make their lives easier and save them money.</p><p>As part of our team, you will be helping us create an entirely new network for the world's money.<br>\n<strong>For everyone, everywhere.</strong></p><p>More about <strong><a href=\"https://wise.jobs/our-mission\" rel=\"noopener noreferrer\" target=\"_blank\">our mission</a></strong> and <strong><a href=\"https://wise.jobs/what-we-offer\" rel=\"noopener noreferrer\" target=\"_blank\">what we offer</a></strong>.</p>"
+      },
+      "jobDescription": {
+        "title": "Job Description",
+        "text": "<p>We’re looking for a Card Disputes Associate Specialist to join our team in the Hyderabad office. This role is a unique opportunity to have an impact on Wise’s mission, help save millions more people money and work in a disruptive, fast-growing and fun environment.</p><p><strong>Here’s how you’ll be contributing to Card Disputes team:&#xa0;</strong></p><p>As a Card Disputes Associate Specialist, you are a frontline expert responsible for the heartbeat of our daily operations and are the executor of the workload directly contributing to SLAs.</p><ul><li><p>Maintaining consistent and high-level execution of daily tasks and recurring responsibilities within Card Disputes;</p></li><li><p>Supporting own team in reaching main performance metrics targets and SLAs set to Operations organisation;</p></li><li><p>Meeting individual SLAs and KPIs set for the role;</p></li><li><p>Detecting and escalating domain related problems and complex issues, ensuring timely and relevant communication with stakeholders;</p></li><li><p>Following Operational procedures and keeping track of critical updates.</p></li><li><p>Execute the end-to-end investigation and resolution of complex Card Fraud (CF) and Non-Fraud (NF) disputes, ensuring every decision is strictly compliant with card scheme rules and regulatory requirements.</p></li><li><p>Actively identify weaknesses or \"friction points\" in daily workflows, proposing and helping implement practical solutions that make our operations more scalable and efficient.</p></li><li><p>Maintain a high bar for accuracy and security in every case handled, upholding detailed records and ensuring all reporting responsibilities are met with factual precision.</p></li><li><p>Work closely with Customer Support, Compliance, and Product teams to gather evidence, resolve high-priority escalations, and provide frontline insights into emerging fraud trends.</p></li></ul><p><strong>A bit about you:</strong></p><ul><li><p>Possess excellent verbal and written communication skills, with the ability to express thoughts concisely and justify independent judgment calls with confidence.</p></li><li><p>You have experience in an operational environment, preferably in payments, financial services, or back-office processing.</p></li><li><p>You demonstrate strong attention to detail and commitment to maintaining high quality and accuracy in processing.</p></li><li><p>You have good problem-solving and analytical skills to investigate and resolve dispute cases.</p></li><li><p>You are a self-starter, capable of managing daily workload and prioritizing effectively to meet deadlines.</p></li><li><p>Thrive under pressure by multitasking efficiently and taking full responsibility for tasks, whether working as a collaborative team player or independently.</p></li><li><p>Exhibit a proactive, growth-oriented attitude by being keen to learn and valuing constructive feedback to continuously improve performance.</p></li></ul>"
+      },
+      "qualifications": {
+        "title": "Qualifications",
+        "text": ""
+      },
+      "additionalInformation": {
+        "title": "Additional Information",
+        "text": "<div sr-tagline=\"\"></div><p>For everyone, everywhere. We're people building money without borders&#xa0; — without judgement or prejudice, too. We believe teams are strongest when they are diverse, equitable and inclusive.</p><p>We're proud to have a truly international team, and we celebrate our differences.<br>\nInclusive teams help us live our values and make sure every Wiser feels respected, empowered to contribute towards our mission and able to progress in their careers.</p><p>If you want to find out more about what it's like to work at Wise visit&#xa0;<a href=\"https://www.wise.jobs/\" rel=\"noopener noreferrer\" target=\"_blank\">Wise.Jobs</a>.</p><p>Keep up to date with life at Wise by following us on&#xa0;<a href=\"https://www.linkedin.com/company/1769571/\" rel=\"noopener noreferrer\" target=\"_blank\">LinkedIn</a>&#xa0;and&#xa0;<a href=\"https://www.instagram.com/wisecareers/\" rel=\"noopener noreferrer\" target=\"_blank\">Instagram</a>.</p>"
+      }
+    }
+  },
+  "compensation": {
+    "min": 750000,
+    "currency": "INR",
+    "period": "YEARLY"
+  },
+  "active": true,
+  "visibility": "PUBLIC",
+  "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+  },
+  "function": {
+    "id": "other",
+    "label": "Other"
+  },
+  "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+  },
+  "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+  },
+  "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+  }
+}

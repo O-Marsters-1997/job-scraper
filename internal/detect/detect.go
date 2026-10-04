@@ -18,6 +18,7 @@ const (
 	Pinpoint
 	Teamtailor
 	HiBob
+	SmartRecruiters
 	Aggregator
 )
 
@@ -46,6 +47,8 @@ func Detect(rawURL string) ATSType {
 		return Teamtailor
 	case strings.HasSuffix(host, ".careers.hibob.com"):
 		return HiBob
+	case host == "jobs.smartrecruiters.com" || host == "careers.smartrecruiters.com":
+		return SmartRecruiters
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -54,15 +57,16 @@ func Detect(rawURL string) ATSType {
 }
 
 var atsSourceName = map[ATSType]string{
-	Greenhouse: "greenhouse",
-	Lever:      "lever",
-	Ashby:      "ashby",
-	Workable:   "workable",
-	Recruitee:  "recruitee",
-	Personio:   "personio",
-	Pinpoint:   "pinpoint",
-	Teamtailor: "teamtailor",
-	HiBob:      "hibob",
+	Greenhouse:      "greenhouse",
+	Lever:           "lever",
+	Ashby:           "ashby",
+	Workable:        "workable",
+	Recruitee:       "recruitee",
+	Personio:        "personio",
+	Pinpoint:        "pinpoint",
+	Teamtailor:      "teamtailor",
+	HiBob:           "hibob",
+	SmartRecruiters: "smartrecruiters",
 }
 
 var (
@@ -146,6 +150,8 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".teamtailor.com"
 	case "hibob":
 		return "https://" + token + ".careers.hibob.com"
+	case "smartrecruiters":
+		return "https://jobs.smartrecruiters.com/" + token
 	default:
 		return ""
 	}

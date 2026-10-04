@@ -232,6 +232,7 @@ export const ATS_SOURCES = [
 	"pinpoint",
 	"teamtailor",
 	"hibob",
+	"smartrecruiters",
 ];
 
 export const APP_DISTRIBUTION: Array<{ statusIndex: number; count: number }> = [

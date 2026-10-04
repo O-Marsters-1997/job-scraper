@@ -1,0 +1,175 @@
+{
+  "id": "744000153239979",
+  "name": "Backend Engineer - Contacts Team",
+  "uuid": "b50c42a3-aec2-4ed1-b4cd-1213d019cf29",
+  "jobId": "ded5f621-a0c2-4755-a2e4-a11c54a2a64d",
+  "jobAdId": "7711e5bc-ac18-4fef-ad99-546e158f61b5",
+  "defaultJobAd": true,
+  "refNumber": "R10635",
+  "company": {
+    "name": "Wise",
+    "identifier": "Wise"
+  },
+  "location": {
+    "city": "London",
+    "country": "gb",
+    "address": "Worship Square, 65 Clifton Street",
+    "postalCode": "EC2A 4JE",
+    "remote": false,
+    "hybrid": true,
+    "fullLocation": "London, , United Kingdom"
+  },
+  "customField": [
+    {
+      "fieldId": "65d3d0e0d37044292ef9549b",
+      "fieldLabel": "Job Profile",
+      "valueId": "d840bf80cda1100200746ba303cc0000",
+      "valueLabel": "Engineer IC2 - JP101084"
+    },
+    {
+      "fieldId": "65cea5ac287e8d0651481809",
+      "fieldLabel": "Time Type",
+      "valueId": "d2f4dafccd5101059b6cf09e12278400",
+      "valueLabel": "Full time"
+    },
+    {
+      "fieldId": "65d3d06b2865b46cfa4f0ec3",
+      "fieldLabel": "Worker Sub Type",
+      "valueId": "046034784a4d016f1889ba8863278f0d",
+      "valueLabel": "Permanent"
+    },
+    {
+      "fieldId": "65d3d141c86c2f3257de414c",
+      "fieldLabel": "Cost Center Hierarchy",
+      "valueId": "6d8f1bd75a7001b7185a4531c7125d1c",
+      "valueLabel": "Engineering"
+    },
+    {
+      "fieldId": "65d3d1796435ba43bdb089ad",
+      "fieldLabel": "Squad",
+      "valueId": "c23f18fabbcf1001b62c5b30baab0001",
+      "valueLabel": "Send (Squad)"
+    },
+    {
+      "fieldId": "658553f79a81b00900831a80",
+      "fieldLabel": "Brands",
+      "valueId": "default",
+      "valueLabel": "Wise"
+    },
+    {
+      "fieldId": "65d3d0374c34974b271801f9",
+      "fieldLabel": "Management Level",
+      "valueId": "e82698b94195019ad99d30d3f100d510",
+      "valueLabel": "4"
+    },
+    {
+      "fieldId": "65d3d16de5ae4c7be012a87e",
+      "fieldLabel": "Tribe",
+      "valueId": "2508138664ba1001b4eeef7e41fa0000",
+      "valueLabel": "Global Product (Tribe)"
+    },
+    {
+      "fieldId": "65d3d151a5d3185b4341a7ab",
+      "fieldLabel": "Cost Center",
+      "valueId": "c0b389e7c7791001a9f9657260e60000",
+      "valueLabel": "Onboarding & Send"
+    },
+    {
+      "fieldId": "65d3d0a7d37044292ef9549a",
+      "fieldLabel": "Job Family",
+      "valueId": "e380f86fa0b2011d520d2e87bc004000",
+      "valueLabel": "Engineering"
+    },
+    {
+      "fieldId": "COUNTRY",
+      "fieldLabel": "Country/Region",
+      "valueId": "gb",
+      "valueLabel": "United Kingdom"
+    },
+    {
+      "fieldId": "65d3d05c735007771b14e932",
+      "fieldLabel": "Worker Type",
+      "valueId": "EE",
+      "valueLabel": "Wiser"
+    },
+    {
+      "fieldId": "65d90823f2e6436af25814c2",
+      "fieldLabel": "Job Ad Salary Range",
+      "valueLabel": "68000 - 87500 GBP Annual"
+    },
+    {
+      "fieldId": "65d3d0926435ba43bdb089ac",
+      "fieldLabel": "Job Family Group",
+      "valueId": "cf8ed98297e201fc81857d1fba008e14",
+      "valueLabel": "Technology"
+    },
+    {
+      "fieldId": "65cec407735007771b14e92d",
+      "fieldLabel": "Company",
+      "valueId": "046034784a4d01f4134f114764273117",
+      "valueLabel": "Wise Payments Limited"
+    },
+    {
+      "fieldId": "65d9080b4aa2f46927dfc1f3",
+      "fieldLabel": "WD Target Hire Date",
+      "valueLabel": "2026-10-31"
+    }
+  ],
+  "releasedDate": "2026-10-02T17:01:45.208Z",
+  "creator": {
+    "name": "",
+    "avatarUrl": ""
+  },
+  "postingUrl": "https://jobs.smartrecruiters.com/Wise/744000153239979-backend-engineer-contacts-team",
+  "applyUrl": "https://jobs.smartrecruiters.com/Wise/744000153239979-backend-engineer-contacts-team?oga=true",
+  "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/Wise/publication/b50c42a3-aec2-4ed1-b4cd-1213d019cf29?dcr_ci=Wise",
+  "jobAd": {
+    "sections": {
+      "companyDescription": {
+        "title": "Company Description",
+        "text": "<p>Wise is a global technology company, building the best way to move and manage the world’s money.<br>\n<strong>Min fees. Max ease. Full speed.</strong></p><p>Whether people and businesses are sending money to another country, spending abroad, or making and receiving international payments, Wise is on a mission to make their lives easier and save them money.</p><p>As part of our team, you will be helping us create an entirely new network for the world's money.<br>\n<strong>For everyone, everywhere.</strong></p><p>More about <strong><a href=\"https://wise.jobs/our-mission\" rel=\"noopener noreferrer\" target=\"_blank\">our mission</a></strong> and <strong><a href=\"https://wise.jobs/what-we-offer\" rel=\"noopener noreferrer\" target=\"_blank\">what we offer</a></strong>.</p>"
+      },
+      "jobDescription": {
+        "title": "Job Description",
+        "text": "<p>The Contacts team is a core team at Wise, dedicated to making adding, finding, and managing your recipients as easy as possible. We own this experience end-to-end: from the scalable platform securing tens of millions of bank accounts customers send to, to the intelligent search algorithms and local integrations (like Pix) that power discovery, all the way to the customer-facing screens where users interact with their counterparties. The team is integral to Wise’s day-to-day operations — if our services go down, Wise goes down.</p><p><strong>How we work</strong></p><p>We work in an agile fashion, with engineers closely collaborating with designers, the product manager, and the analyst. The team operates across our Tallinn and London offices.&#xa0;</p><p><strong>What will you be working on?</strong></p><p>You will be part of an autonomous team, and help build the&#xa0; backend solutions that power how our customers interact with recipients</p>"
+      },
+      "qualifications": {
+        "title": "Qualifications",
+        "text": "<p><strong>What do you need?</strong></p><p>We are fully aware that it is uncommon for a candidate to have all skills required and we fully support everyone in learning new skills with us. So if you have some of those listed below and are eager to learn more, we do want to hear from you!</p><ul><li><p>You get things done</p></li><li><p>You have experience working with large scale distributed systems</p></li><li><p>You have strong experience with Java or a similar object-oriented language</p></li><li><p>You have experience working with relational and non-relational databases, query optimisation and designing schemas</p></li><li><p>You have a strong product mindset and passion for customer experience, you prioritise work with the customers in mind and make data-driven decisions to fix customer pain-points</p></li><li><p>You enjoy collaborating with others and bringing people together to solve a problem</p></li><li><p>You have experience in designing, deploying and maintaining clean RESTful APIs</p></li><li><p>You believe in and follow best coding practices, code reviews and open feedback</p></li><li><p>You enjoy writing testable code and believe in Test Driven Development</p></li></ul><p><strong>Nice to have:&#xa0;</strong></p><ul><li><p>You have experience with Spring boot</p></li><li><p>You have worked with BFFs (Backend-for-Frontends)</p></li></ul>"
+      },
+      "additionalInformation": {
+        "title": "Additional Information",
+        "text": "<p><strong>Interested? Find out more:</strong></p><ul><li><p><strong><a href=\"https://wise.jobs/how-we-work\" rel=\"noopener noreferrer\">How we work - a practical guide</a></strong></p></li><li><p><strong><a href=\"https://wise.jobs/diversity-equity-and-inclusion\" rel=\"noopener noreferrer\">DEI @ Wise</a></strong></p></li><li><p><strong><a href=\"https://medium.com/wise-engineering/wise-tech-stack-2025-update-d0e63fe718c7\" rel=\"noopener noreferrer\">Wise Tech Stack (2025 update)</a></strong></p></li><li><p><strong><a href=\"http://youtube.com/watch?v=XNMeFMoqBEA&amp;feature=youtu.be\" rel=\"noopener noreferrer\">See what it’s like to work at Wise London</a></strong></p></li><li><p><strong><a href=\"https://wise.jobs/engineering-career-map\" rel=\"noopener noreferrer\">Our engineering career map</a></strong></p></li></ul><p><strong>Wise Engineering –<a href=\"https://medium.com/wise-engineering\" rel=\"noopener noreferrer\"> https://medium.com/wise-engineering</a></strong></p><p><strong>What do we offer:&#xa0;</strong></p><ul><li><p><strong>Starting salary: </strong>£68,000 - £87,500 + RSUs</p></li><li><p><strong><a href=\"https://wise.jobs/what-we-offer\" rel=\"noopener noreferrer\">Wise Benefits</a></strong></p></li></ul><div sr-tagline=\"\"></div><p>For everyone, everywhere. We're people building money without borders&#xa0; — without judgement or prejudice, too. We believe teams are strongest when they are diverse, equitable and inclusive.</p><p>We're proud to have a truly international team, and we celebrate our differences.<br>\nInclusive teams help us live our values and make sure every Wiser feels respected, empowered to contribute towards our mission and able to progress in their careers.</p><p>If you want to find out more about what it's like to work at Wise visit&#xa0;<a href=\"https://www.wise.jobs/\" rel=\"noopener noreferrer\" target=\"_blank\">Wise.Jobs</a>.</p><p>Keep up to date with life at Wise by following us on&#xa0;<a href=\"https://www.linkedin.com/company/1769571/\" rel=\"noopener noreferrer\" target=\"_blank\">LinkedIn</a>&#xa0;and&#xa0;<a href=\"https://www.instagram.com/wisecareers/\" rel=\"noopener noreferrer\" target=\"_blank\">Instagram</a>.</p>"
+      }
+    }
+  },
+  "compensation": {
+    "min": 68000,
+    "max": 87500,
+    "currency": "GBP",
+    "period": "YEARLY"
+  },
+  "active": true,
+  "visibility": "PUBLIC",
+  "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+  },
+  "function": {
+    "id": "engineering",
+    "label": "Engineering"
+  },
+  "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+  },
+  "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+  },
+  "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+  }
+}
