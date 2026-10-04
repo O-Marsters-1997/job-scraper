@@ -94,13 +94,18 @@ export function deleteApplication(id: string): void {
 	applications = applications.filter((a) => a.ID !== id);
 }
 
-export function createStatus(name: string, colour: string): ApplicationStatus {
+export function createStatus(
+	name: string,
+	colour: string,
+	replyWindowDays: number | null,
+): ApplicationStatus {
 	failIfRequested("createStatus");
 	const status: ApplicationStatus = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
 		Name: name,
 		Colour: colour,
+		ReplyWindowDays: replyWindowDays,
 		CreatedAt: new Date().toISOString(),
 	};
 	statuses = [...statuses, status];
@@ -111,10 +116,16 @@ export function updateStatus(
 	id: string,
 	name: string,
 	colour: string,
+	replyWindowDays: number | null,
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
-	const updated = { ...statuses[idx]!, Name: name, Colour: colour };
+	const updated = {
+		...statuses[idx]!,
+		Name: name,
+		Colour: colour,
+		ReplyWindowDays: replyWindowDays,
+	};
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;
 }

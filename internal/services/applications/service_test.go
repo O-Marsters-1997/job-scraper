@@ -2,6 +2,7 @@ package applications_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -149,6 +150,33 @@ func TestCreateStatus(t *testing.T) {
 	}
 }
 
+func TestCreateStatusReplyWindowBounds(t *testing.T) {
+	for _, days := range []int{1, 60} {
+		t.Run(fmt.Sprintf("accepts %d", days), func(t *testing.T) {
+			svc, _ := newService(t)
+			got, err := svc.CreateStatus(t.Context(), userID, dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(days)})
+			if err != nil {
+				t.Fatalf("CreateStatus(window %d) err = %v", days, err)
+			}
+			if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
+				t.Errorf("CreateStatus(window %d) ReplyWindowDays = %v, want %d", days, got.ReplyWindowDays, days)
+			}
+		})
+	}
+}
+
+func TestUpdateStatusRejectsOutOfRangeWindow(t *testing.T) {
+	svc, st := newService(t)
+	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	if err != nil {
+		t.Fatalf("seed CreateApplicationStatus err = %v", err)
+	}
+	in := dto.ApplicationStatusInput{ID: created.ID, Name: "Applied", Colour: "#6366f1", ReplyWindowDays: new(61)}
+	if _, err := svc.UpdateStatus(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("UpdateStatus(window 61) err = %v, want kind %v", err, apperr.KindInvalid)
+	}
+}
+
 func TestCreateStatusErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -156,6 +184,8 @@ func TestCreateStatusErrors(t *testing.T) {
 	}{
 		{name: "requires name", in: dto.ApplicationStatusInput{Colour: "#00ff00"}},
 		{name: "requires colour", in: dto.ApplicationStatusInput{Name: "Offer"}},
+		{name: "rejects a window below 1", in: dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(0)}},
+		{name: "rejects a window above 60", in: dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(61)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,7 +201,7 @@ func TestCreateStatusErrors(t *testing.T) {
 func TestDeleteStatus(t *testing.T) {
 	t.Run("refuses a status in use", func(t *testing.T) {
 		svc, st := newService(t)
-		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1")
+		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
 		if err != nil {
 			t.Fatalf("seed CreateApplicationStatus err = %v", err)
 		}

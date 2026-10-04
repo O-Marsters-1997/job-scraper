@@ -29,11 +29,12 @@ type ApplicationsForJobsQuery struct {
 }
 
 type ApplicationStatus struct {
-	ID        string
-	UserID    string
-	Name      string
-	Colour    string
-	CreatedAt time.Time
+	ID              string
+	UserID          string
+	Name            string
+	Colour          string
+	ReplyWindowDays *int
+	CreatedAt       time.Time
 }
 
 type Application struct {

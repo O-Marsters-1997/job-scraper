@@ -1,6 +1,6 @@
 -- name: CreateApplicationStatus :one
-INSERT INTO application_statuses (user_id, name, colour)
-VALUES ($1, $2, $3)
+INSERT INTO application_statuses (user_id, name, colour, reply_window_days)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: SeedDefaultStatuses :exec
@@ -19,7 +19,7 @@ ORDER BY created_at ASC;
 
 -- name: UpdateApplicationStatus :one
 UPDATE application_statuses
-SET name = $3, colour = $4
+SET name = $3, colour = $4, reply_window_days = $5
 WHERE id = $1 AND user_id = $2
 RETURNING *;
 

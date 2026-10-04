@@ -39,6 +39,7 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	UserID: "user-1",
 	Name: s.name,
 	Colour: s.colour,
+	ReplyWindowDays: null,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
 

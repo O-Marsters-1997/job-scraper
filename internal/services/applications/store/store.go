@@ -187,15 +187,16 @@ func (s *Store) SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID strin
 	return nil
 }
 
-func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
+func (s *Store) CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
 	}
 	st, err := s.queries.CreateApplicationStatus(ctx, sqlc.CreateApplicationStatusParams{
-		UserID: uid,
-		Name:   name,
-		Colour: colour,
+		UserID:          uid,
+		Name:            name,
+		Colour:          colour,
+		ReplyWindowDays: toInt4(replyWindowDays),
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.CreateApplicationStatus: %w", err)
@@ -219,7 +220,7 @@ func (s *Store) ListApplicationStatusesByUser(ctx context.Context, userID string
 	return out, nil
 }
 
-func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error) {
+func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
 	sid, err := data.UUID(id)
 	if err != nil {
 		return dto.ApplicationStatus{}, err
@@ -229,10 +230,11 @@ func (s *Store) UpdateApplicationStatus(ctx context.Context, id, userID, name, c
 		return dto.ApplicationStatus{}, err
 	}
 	st, err := s.queries.UpdateApplicationStatus(ctx, sqlc.UpdateApplicationStatusParams{
-		ID:     sid,
-		UserID: uid,
-		Name:   name,
-		Colour: colour,
+		ID:              sid,
+		UserID:          uid,
+		Name:            name,
+		Colour:          colour,
+		ReplyWindowDays: toInt4(replyWindowDays),
 	})
 	if err != nil {
 		return dto.ApplicationStatus{}, fmt.Errorf("store.UpdateApplicationStatus: %w", err)

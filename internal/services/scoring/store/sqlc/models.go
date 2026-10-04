@@ -90,11 +90,12 @@ type Application struct {
 }
 
 type ApplicationStatus struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
-	Name      string
-	Colour    string
-	CreatedAt pgtype.Timestamptz
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Name            string
+	Colour          string
+	CreatedAt       pgtype.Timestamptz
+	ReplyWindowDays pgtype.Int4
 }
 
 type BoardJobObservation struct {
