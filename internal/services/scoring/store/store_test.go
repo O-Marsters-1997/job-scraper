@@ -3,6 +3,8 @@ package store_test
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -120,6 +122,69 @@ func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
 	}
 	if got.UserID != userID || got.NotifyThreshold != 70 || len(got.Preferences.Picks) != 1 {
 		t.Errorf("GetSearchConfig() = %+v, want user %q, threshold 70, one pick", got, userID)
+	}
+}
+
+func migrationSection(t *testing.T, path, section string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	up, down, ok := strings.Cut(string(raw), "-- +goose Down")
+	if !ok {
+		t.Fatalf("migration %s has no Down section", path)
+	}
+	if section == "Down" {
+		return down
+	}
+	return strings.TrimPrefix(up, "-- +goose Up")
+}
+
+func TestSeniorityLadderMigration(t *testing.T) {
+	const path = "scripts/migrations/20261004162905_seniority_ladder.sql"
+	st, pool := newStore(t)
+	ctx := t.Context()
+	userID := pgtest.InsertUser(t, pool)
+	if _, err := st.UpsertSearchConfig(ctx, dto.SearchConfig{UserID: userID, Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "seniority:mid", Stance: "nice", Source: "manual"},
+		{OptionID: "seniority:senior", Stance: "ok", Source: "text"},
+		{OptionID: "seniority:staff", Stance: "ok", Source: "manual"},
+	}}}); err != nil {
+		t.Fatalf("UpsertSearchConfig() err = %v", err)
+	}
+	picks := func() []dto.Pick {
+		t.Helper()
+		cfg, err := st.GetSearchConfig(ctx, userID)
+		if err != nil {
+			t.Fatalf("GetSearchConfig() err = %v", err)
+		}
+		return cfg.Preferences.Picks
+	}
+
+	exec(t, pool, migrationSection(t, path, "Up"))
+	wantUp := []dto.Pick{
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+		{OptionID: "seniority:mid", Stance: "nice", Weight: 100, Source: "manual"},
+		{OptionID: "seniority:senior", Stance: "nice", Weight: 50, Source: "text"},
+		{OptionID: "seniority:lead_staff", Stance: "nice", Weight: 50, Source: "manual"},
+		{OptionID: "seniority:principal_head", Stance: "nice", Weight: 50, Source: "manual"},
+	}
+	if diff := cmp.Diff(wantUp, picks()); diff != "" {
+		t.Errorf("picks after Up (-want +got):\n%s", diff)
+	}
+
+	exec(t, pool, migrationSection(t, path, "Down"))
+	wantDown := []dto.Pick{
+		{OptionID: "seniority:mid", Stance: "nice", Source: "manual"},
+		{OptionID: "seniority:senior", Stance: "ok", Source: "text"},
+		{OptionID: "seniority:staff", Stance: "ok", Source: "manual"},
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+	}
+	sortPicks := cmpopts.SortSlices(func(a, b dto.Pick) bool { return a.OptionID < b.OptionID })
+	if diff := cmp.Diff(wantDown, picks(), sortPicks); diff != "" {
+		t.Errorf("picks after Down (-want +got):\n%s", diff)
 	}
 }
 

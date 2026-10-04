@@ -111,7 +111,11 @@ func (s *Service) textPicks(ctx context.Context, userID, text string, existing d
 		if !ok || opt.RetiredAt != nil || !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
 			continue
 		}
-		picks = append(picks, dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "text"})
+		pick := dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "text"}
+		if b.dimensions[opt.Dimension].Kind == ladderKind {
+			pick.Weight = maxLadderWeight
+		}
+		picks = append(picks, pick)
 	}
 	return picks, hash, nil
 }
@@ -159,10 +163,18 @@ func validatedPicks(b bank, picks []dto.Pick) ([]dto.Pick, error) {
 		if !ok || opt.RetiredAt != nil {
 			return nil, apperr.Invalid("unknown or retired option: " + p.OptionID)
 		}
-		if !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
+		spec := b.dimensions[opt.Dimension]
+		if !stanceAllowed(spec, p.Stance) {
 			return nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
 		}
-		out[i] = dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "manual"}
+		isLadder := spec.Kind == ladderKind
+		if isLadder && (p.Weight < 1 || p.Weight > maxLadderWeight) {
+			return nil, apperr.Invalid(fmt.Sprintf("weight for %s must be between 1 and %d", p.OptionID, maxLadderWeight))
+		}
+		if !isLadder && p.Weight != 0 {
+			return nil, apperr.Invalid("weight is only allowed on ladder dimensions: " + p.OptionID)
+		}
+		out[i] = dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Weight: p.Weight, Source: "manual"}
 	}
 	return out, nil
 }

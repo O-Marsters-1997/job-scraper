@@ -19,6 +19,7 @@ export const scoreRowSchema = z.object({
 		"blocked",
 		"gated",
 		"favourite",
+		"level",
 	]),
 	overridden: z.boolean(),
 	corrected: z.boolean().optional(),

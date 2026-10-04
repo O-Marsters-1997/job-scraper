@@ -168,9 +168,8 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('size:scaleup', 'size', 'Scale-up', 'Does the company have 50 to 500 employees (not under 50, or over 500)?'),
     ('size:large', 'size', 'Large', 'Does the company have 500 to 5,000 employees (not under 500, or over 5,000)?'),
     ('size:enterprise', 'size', 'Enterprise', 'Does the company have over 5,000 employees (not 5,000 or fewer)?'),
-    ('seniority:junior', 'seniority', 'Junior', 'Is the role pitched at Junior or graduate level (not Mid, Senior or above)?'),
-    ('seniority:mid', 'seniority', 'Mid', 'Is the role pitched at Mid level (not Junior, Senior, Staff, Principal, Lead or Head of)?'),
-    ('seniority:senior', 'seniority', 'Senior', 'Is the role pitched at Senior level (not Staff, Principal, Lead or Head of)?'),
-    ('seniority:staff', 'seniority', 'Staff', 'Is the role pitched at Staff level or above (Staff, Principal, Lead or Head of)?'),
-    ('seniority:years_6plus', 'seniority', '6+ years', 'Does the role require 6 or more years of professional experience?'),
-    ('seniority:people_lead', 'seniority', 'People lead', 'Is leading or line-managing other engineers a core part of the role?') ON CONFLICT (id) DO NOTHING;
+    ('seniority:junior', 'seniority', 'Junior', 'Weighing title, required years and scope together, is the role Junior level (Junior or Graduate, about 0-2 years, works under guidance)?'),
+    ('seniority:mid', 'seniority', 'Mid', 'Weighing title, required years and scope together, is the role Mid level (about 2-5 years, delivers independently, no Senior or higher title)?'),
+    ('seniority:senior', 'seniority', 'Senior', 'Weighing title, required years and scope together, is the role Senior level (Senior title or about 5-8 years, owns features and mentors, not leading a team)?'),
+    ('seniority:lead_staff', 'seniority', 'Lead / Staff', 'Weighing title, required years and scope together, is the role Lead or Staff level (Lead, Staff or Tech Lead, about 8+ years, leads a team or owns cross-team technical scope)?'),
+    ('seniority:principal_head', 'seniority', 'Principal / Head', 'Weighing title, required years and scope together, is the role Principal or Head level (Principal, Head of or Director, organisation-wide scope or manages managers)?') ON CONFLICT (id) DO NOTHING;

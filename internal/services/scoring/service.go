@@ -520,7 +520,9 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 		if !ok {
 			continue
 		}
-		out = append(out, evaluate(opt, p.Stance, answers, corrections))
+		e := evaluate(opt, p.Stance, answers, corrections)
+		e.weight = float64(p.Weight)
+		out = append(out, e)
 	}
 	return out
 }
@@ -536,7 +538,7 @@ func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, an
 	}
 	var out []evaluatedPick
 	for id, opt := range byID {
-		if wantedIDs[id] || demandOptions[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+		if wantedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
 			continue
 		}
 		out = append(out, evaluate(opt, "nice", answers, corrections))

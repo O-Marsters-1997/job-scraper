@@ -14,7 +14,7 @@ const dimensionKeySchema = z.enum([
 
 const dimensionSpecSchema = z.object({
 	key: dimensionKeySchema,
-	kind: z.enum(["pair", "multi"]),
+	kind: z.enum(["pair", "multi", "ladder"]),
 	stances: z.array(stanceSchema),
 });
 
@@ -24,6 +24,7 @@ const scoringOptionSchema = z.object({
 	id: z.string(),
 	dimension: dimensionKeySchema,
 	label: z.string(),
+	level: z.number().int().optional(),
 });
 
 export type ScoringOption = z.infer<typeof scoringOptionSchema>;

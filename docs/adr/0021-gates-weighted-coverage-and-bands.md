@@ -40,3 +40,17 @@ denominator += w * (evidence + missing)
 The same sparse ad scores `(9 + 2 + 0.5) / (9 + 4 + 1) = 82`. A dimension with full evidence scores as before, and a dimension with no Picks still counts on neither side. `α` is `missingAlpha` in `compute.go`, set to 1 by hand; #623 fits it against Grades.
 
 Replay for the one labelled user (5 positives, 3 negatives): Great Jobs went from 78 to 56 of 380, the top score from 95 (4 tied) to 93 (1), and positives in the top 20 from 3 to 4. Median positive rank percentile moved from 0 to 4, since the top-tied positives now spread out. The mid-level negative (volition) still ties the lowest-scored senior positives at 86. Band cut-offs are unchanged; #623 recalibrates them on this distribution.
+
+## Amendment: seniority is a point on a ladder
+
+Seniority was a multi Gate: four level options, each nice or ok. It couldn't say "mostly Mid, some Senior", and `seniority:senior` met heavyweight Senior and "Senior Lead" roles alike (#701, replacing the avoid options tried in #715).
+
+Seniority now has `Kind: "ladder"` on its `DimensionSpec`. Five tiers carry fixed levels in Go (`ladderLevels`): Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. Their questions weigh title, required years and scope together. `seniority:staff` is retired. A ladder Pick stays a `dto.Pick` with stance `nice`, plus a `Weight` from 1 to 100, so storage, text extraction, dedupe and corrections didn't change. Validation demands a weight on a ladder Pick and rejects one anywhere else.
+
+- **User side.** The point is the weighted mean level. The tolerance is the weighted standard deviation, floored at 0.5 tier (`ladderToleranceFloor`).
+- **Job side.** The level is `sum(level * P(yes)) / sum(P(yes))` over every live tier's answer, and the evidence is `min(1, sum(P(yes)))`.
+- **Credit** is `exp(-d^2 / 2)` with `d = |job level - point| / tolerance`. It falls the same way above and below the point. It enters the score like any nice dimension, so evidence and the α shrink work as before. Unknown tiers give evidence 0, which shrinks seniority to 50.
+- **Gate.** It fires only when the evidence reaches 0.6 and `d > 2` (`ladderGateSpread`). An unpicked tier answering yes no longer fires it on its own.
+- **Breakdown.** One `seniority` row reads `Seniority: job ≈ 2.6 · you 2.3 ± 0.4`, with Effect meets (d ≤ 1), misses, gated or unknown. Each tier answering yes adds a `level` row, which the user can correct as before.
+
+Existing configs migrated: nice became weight 100, ok became 50, and an old Staff Pick carried to both Lead/Staff and Principal/Head. The reworded questions have new hashes, so every Job's tiers are asked again. The 0.5 floor, the 2× Gate and the Gaussian shape are hand picks that #623 can fit.

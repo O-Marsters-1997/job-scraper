@@ -7,6 +7,7 @@ export type Stance = z.infer<typeof stanceSchema>;
 const pickSchema = z.object({
 	optionId: z.string(),
 	stance: stanceSchema,
+	weight: z.number().int().min(1).max(100).optional(),
 	source: z.string(),
 	overridden: z.boolean(),
 });

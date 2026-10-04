@@ -1,11 +1,12 @@
 package dto
 
-// Pick is a user's stance on one bank option. Overridden is computed for
-// display only: true for a "text" pick whose option also has a "manual" pick,
-// which always wins.
+// Pick is a user's stance on one bank option; Weight (1-100) is set only on a
+// ladder dimension's Picks. Overridden is display-only: a "text" pick whose
+// option also has a "manual" pick, which always wins.
 type Pick struct {
 	OptionID   string `json:"optionId"`
 	Stance     string `json:"stance"`
+	Weight     int    `json:"weight,omitempty"`
 	Source     string `json:"source"`
 	Overridden bool   `json:"overridden"`
 }

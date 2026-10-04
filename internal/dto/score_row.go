@@ -7,7 +7,7 @@ type ScoreRow struct {
 	Label      string `json:"label"`
 	Stance     string `json:"stance"`
 	Resolved   string `json:"resolved"` // "yes" | "no" | "unknown" | "retired"
-	Effect     string `json:"effect"`   // "meets" | "misses" | "unknown" | "neutral" | "retired" | "blocked" | "gated" | "favourite"
+	Effect     string `json:"effect"`   // "meets" | "misses" | "unknown" | "neutral" | "retired" | "blocked" | "gated" | "favourite" | "level"
 	Overridden bool   `json:"overridden"`
 	Corrected  bool   `json:"corrected"`
 }

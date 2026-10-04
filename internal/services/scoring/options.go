@@ -12,7 +12,7 @@ var Dimensions = []dto.DimensionSpec{
 	{Key: dto.DimensionTech, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 2, Saturation: 3},
 	{Key: dto.DimensionRole, Kind: "pair", Stances: []string{"nice", "ok", "avoid"}, Weight: 3, Saturation: 1},
 	{Key: dto.DimensionDomain, Kind: "pair", Stances: []string{"nice", "ok", "avoid", "block"}, Weight: 2, Saturation: 1},
-	{Key: dto.DimensionSeniority, Kind: "multi", Stances: []string{"nice", "ok", "avoid"}, Gate: true, Weight: 3, Saturation: 1},
+	{Key: dto.DimensionSeniority, Kind: ladderKind, Stances: []string{"nice"}, Gate: true, Weight: 3, Saturation: 1},
 	{Key: dto.DimensionWork, Kind: "multi", Stances: []string{"nice", "ok", "avoid"}, Gate: true, Weight: 2, Saturation: 1},
 	{Key: dto.DimensionStage, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
 	{Key: dto.DimensionSize, Kind: "multi", Stances: []string{"nice", "ok"}, Weight: 1, Saturation: 1},
@@ -27,9 +27,17 @@ var dimensionSpecs = func() map[dto.Dimension]dto.DimensionSpec {
 	return specs
 }()
 
-var demandOptions = map[string]bool{
-	"seniority:years_6plus": true,
-	"seniority:people_lead": true,
+const (
+	ladderKind      = "ladder"
+	maxLadderWeight = 100
+)
+
+var ladderLevels = map[string]int{
+	"seniority:junior":         1,
+	"seniority:mid":            2,
+	"seniority:senior":         3,
+	"seniority:lead_staff":     4,
+	"seniority:principal_head": 5,
 }
 
 // Options returns the dimensions and every non-retired bank option, without
@@ -42,7 +50,7 @@ func (s *Service) Options(ctx context.Context, _ string) (dto.ScoringOptionsView
 	live := bk.live
 	out := make([]dto.ScoringOption, len(live))
 	for i, o := range live {
-		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label}
+		out[i] = dto.ScoringOption{ID: o.ID, Dimension: o.Dimension, Label: o.Label, Level: ladderLevels[o.ID]}
 	}
 	return dto.ScoringOptionsView{Dimensions: Dimensions, Options: out}, nil
 }
