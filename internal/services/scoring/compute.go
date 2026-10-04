@@ -16,9 +16,6 @@ const (
 	missingAlpha     = 1.0
 	resolveThreshold = 0.6
 	gateCap          = 44
-	bandGreatMin     = 80
-	bandGoodMin      = 65
-	bandFairMin      = 45
 	favouriteBeta    = 0.4
 	favouriteKey     = "company:favourite"
 
@@ -27,6 +24,24 @@ const (
 )
 
 var pickStrength = map[string]float64{"nice": 1, "ok": 0.5}
+
+var defaultBands = dto.BandCuts{Great: 80, Good: 65, Fair: 45}
+
+func weightFor(p *dto.ScoringParams, dim dto.Dimension) float64 {
+	if p != nil {
+		if w, ok := p.Weights[dim]; ok {
+			return w
+		}
+	}
+	return dimensionSpecs[dim].Weight
+}
+
+func bandsFor(p *dto.ScoringParams) dto.BandCuts {
+	if p != nil && p.Bands != nil {
+		return *p.Bands
+	}
+	return defaultBands
+}
 
 type evaluatedPick struct {
 	dimension dto.Dimension
@@ -64,7 +79,7 @@ type gateDimension struct {
 	unpickedYes     bool
 }
 
-func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool) (int, string, []dto.ScoreRow) {
+func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool, params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
@@ -188,7 +203,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 
 	var weighted, covered float64
 	for dim, c := range coverage {
-		w := dimensionSpecs[dim].Weight
+		w := weightFor(params, dim)
 		missing := missingAlpha * (1 - c.evidence)
 		weighted += w * (c.evidence + missing)
 		covered += w * (c.evidence*c.credit + 0.5*missing)
@@ -205,7 +220,7 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	if blocked {
 		score = 0
 	}
-	return score, bandFor(score), rows
+	return score, bandFor(score, bandsFor(params)), rows
 }
 
 type dimensionCoverage struct {
@@ -290,13 +305,13 @@ func favouriteLift(score int) int {
 	return max(score, int(math.Round(100/(1+math.Exp(-logit)))))
 }
 
-func bandFor(score int) string {
+func bandFor(score int, cuts dto.BandCuts) string {
 	switch {
-	case score >= bandGreatMin:
+	case score >= cuts.Great:
 		return "great"
-	case score >= bandGoodMin:
+	case score >= cuts.Good:
 		return "good"
-	case score >= bandFairMin:
+	case score >= cuts.Fair:
 		return "fair"
 	}
 	return "poor"

@@ -1,5 +1,7 @@
 # Replay
 
+Scoring: default weights and Bands
+
 4 scored jobs · 2 positives · 0 negatives
 
 - Positive rank: median rank percentile 88 (lower is better), 2 of 2 in the top 20

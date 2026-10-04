@@ -27,6 +27,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback export <username> [--include-outdated]")
 	fmt.Fprintln(os.Stderr, "       admin scoring-feedback clear <username>")
 	fmt.Fprintln(os.Stderr, "       admin scoring replay <username>")
+	fmt.Fprintln(os.Stderr, "       admin scoring fit <username>")
 	os.Exit(1)
 }
 
@@ -176,7 +177,7 @@ func runScoringFeedback(args []string) {
 }
 
 func runScoring(args []string) {
-	if len(args) != 2 || args[0] != "replay" {
+	if len(args) != 2 || (args[0] != "replay" && args[0] != "fit") {
 		usage()
 	}
 
@@ -188,9 +189,14 @@ func runScoring(args []string) {
 	if err != nil {
 		fatal("find user", err)
 	}
-	report, err := scoring.NewFacade(pool).Replay(ctx, userID)
+	m := scoring.NewFacade(pool)
+	run := m.Replay
+	if args[0] == "fit" {
+		run = m.Fit
+	}
+	report, err := run(ctx, userID)
 	if err != nil {
-		fatal("replay", err)
+		fatal(args[0], err)
 	}
 	fmt.Print(report)
 }

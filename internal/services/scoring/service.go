@@ -506,11 +506,30 @@ func scoreInputs(userID string, cfg dto.SearchConfig, byID map[string]dto.Scorin
 }
 
 func scoreJob(userID string, cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) dto.JobScore {
-	picks := dedupeBySource(cfg.Preferences.Picks)
-	evaluated := evaluatedPicksFor(picks, byID, answers, corrections)
-	unpicked := unpickedGateOptions(picks, byID, answers, corrections)
-	score, band, rows := compute(evaluated, unpicked, job.SalaryRaw, cfg.Preferences.SalaryFloor, favourite)
+	score, band, rows := prepareJob(cfg, job, byID, answers, corrections, favourite).compute(cfg.Preferences.Scoring)
 	return dto.JobScore{JobID: job.ID, UserID: userID, Score: score, Band: band, Rows: rows, Unknowns: countUnknown(rows)}
+}
+
+type preparedJob struct {
+	picks, unpicked []evaluatedPick
+	salaryRaw       string
+	floor           *dto.Money
+	favourite       bool
+}
+
+func prepareJob(cfg dto.SearchConfig, job dto.Job, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string, favourite bool) preparedJob {
+	picks := dedupeBySource(cfg.Preferences.Picks)
+	return preparedJob{
+		picks:     evaluatedPicksFor(picks, byID, answers, corrections),
+		unpicked:  unpickedGateOptions(picks, byID, answers, corrections),
+		salaryRaw: job.SalaryRaw,
+		floor:     cfg.Preferences.SalaryFloor,
+		favourite: favourite,
+	}
+}
+
+func (p preparedJob) compute(params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
+	return compute(p.picks, p.unpicked, p.salaryRaw, p.floor, p.favourite, params)
 }
 
 func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {

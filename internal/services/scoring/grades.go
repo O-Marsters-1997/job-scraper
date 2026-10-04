@@ -37,7 +37,12 @@ func (s *Service) SetGrade(ctx context.Context, userID string, in dto.GradeInput
 	case !notFound(err):
 		return dto.Grade{}, fmt.Errorf("scoring.SetGrade: load score: %w", err)
 	}
-	return s.store.UpsertGrade(ctx, userID, grade)
+	saved, err := s.store.UpsertGrade(ctx, userID, grade)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	s.refitIfDue(ctx, userID)
+	return saved, nil
 }
 
 // GetGrade returns userID's Grade for jobID, or nil when ungraded.

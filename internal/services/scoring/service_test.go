@@ -1114,7 +1114,7 @@ func TestBandFor(t *testing.T) {
 	for score, want := range map[int]string{
 		100: "great", 80: "great", 79: "good", 65: "good", 64: "fair", 45: "fair", 44: "poor", 0: "poor",
 	} {
-		if got := scoring.BandFor(score); got != want {
+		if got := scoring.BandFor(score, dto.BandCuts{Great: 80, Good: 65, Fair: 45}); got != want {
 			t.Errorf("BandFor(%d) = %q, want %q", score, got, want)
 		}
 	}
