@@ -40,6 +40,8 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 });
 
 type StanceMap = Record<string, Stance | undefined>;
+
+const PICKER_STANCES: (Stance | undefined)[] = ["nice", "ok", "avoid"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -161,7 +163,8 @@ function ScoringForm(props: {
 		<MultiCombobox
 			label={label}
 			options={optionsFor(dim).filter(
-				(o) => stances[o.id] === undefined || stances[o.id] === stance,
+				(o) =>
+					stances[o.id] === stance || !PICKER_STANCES.includes(stances[o.id]),
 			)}
 			value={idsWith(dim, stance)}
 			onChange={(ids) => setStance(dim, stance, ids)}
