@@ -25,14 +25,15 @@ import {
 	useUpdateScoringConfig,
 } from "../../../hooks/useScoringConfig";
 import { useScoringOptions } from "../../../hooks/useScoringOptions";
-import type { ScoringConfig } from "../../../types/scoringConfig";
+import type { ScoringConfig, Stance } from "../../../types/scoringConfig";
 import type {
 	ScoringOption,
 	ScoringOptionsView,
 } from "../../../types/scoringOptions";
 import { FiltersSection } from "./-scoring/FiltersSection";
 import { RecomputeControls } from "./-scoring/RecomputeControls";
-import { STANCE_TONE, type Stance } from "./-scoring/stance";
+import { SeniorityLadder } from "./-scoring/SeniorityLadder";
+import { STANCE_LABEL, STANCE_TONE } from "./-scoring/stance";
 import { useExclusionFilters } from "./-scoring/useExclusionFilters";
 
 export const Route = createFileRoute("/_auth/settings/scoring")({
@@ -40,6 +41,8 @@ export const Route = createFileRoute("/_auth/settings/scoring")({
 });
 
 type StanceMap = Record<string, Stance | undefined>;
+
+const PICKER_STANCES: (Stance | undefined)[] = ["nice", "ok", "avoid"];
 type Dim = ScoringOption["dimension"];
 
 function ScoringPage() {
@@ -67,8 +70,15 @@ function ScoringForm(props: {
 	const [stances, setStances] = createStore<StanceMap>(
 		Object.fromEntries(
 			initialConfig.preferences.picks
-				.filter((p) => p.source === "manual")
-				.map((p) => [p.optionId, p.stance as Stance]),
+				.filter((p) => p.source === "manual" && p.weight === undefined)
+				.map((p) => [p.optionId, p.stance]),
+		),
+	);
+	const [weights, setWeights] = createStore<Record<string, number>>(
+		Object.fromEntries(
+			initialConfig.preferences.picks
+				.filter((p) => p.source === "manual" && p.weight !== undefined)
+				.map((p) => [p.optionId, p.weight ?? 0]),
 		),
 	);
 
@@ -84,9 +94,17 @@ function ScoringForm(props: {
 			else if (stances[o.id] === stance) setStances(o.id, undefined);
 		}
 	};
-	const isNice = (id: string) => stances[id] === "nice";
-	const toggleNice = (id: string) =>
-		setStances(id, isNice(id) ? undefined : "nice");
+	const choiceOf = (id: string) => {
+		const stance = stances[id];
+		return stance && { label: STANCE_LABEL[stance], tone: STANCE_TONE[stance] };
+	};
+	const cycleStance = (dim: Dim) => (id: string) => {
+		const order = [
+			undefined,
+			...(props.options().dimensions.find((d) => d.key === dim)?.stances ?? []),
+		];
+		setStances(id, order[(order.indexOf(stances[id]) + 1) % order.length]);
+	};
 
 	const textPicks = createMemo(() =>
 		props.config().preferences.picks.filter((p) => p.source === "text"),
@@ -124,14 +142,25 @@ function ScoringForm(props: {
 				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
 				requiredTitleKeywords: filters.requiredTitleKeywords(),
 				preferences: {
-					picks: Object.entries(stances)
-						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
-						.map(([optionId, stance]) => ({
-							optionId,
-							stance,
-							source: "manual",
-							overridden: false,
-						})),
+					picks: [
+						...Object.entries(stances)
+							.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
+							.map(([optionId, stance]) => ({
+								optionId,
+								stance,
+								source: "manual",
+								overridden: false,
+							})),
+						...Object.entries(weights)
+							.filter(([, weight]) => weight > 0)
+							.map(([optionId, weight]) => ({
+								optionId,
+								stance: "nice" as const,
+								weight,
+								source: "manual",
+								overridden: false,
+							})),
+					],
 					salaryFloor: salaryFloor()
 						? { amount: Number(salaryFloor()), currency: "GBP" }
 						: null,
@@ -149,22 +178,23 @@ function ScoringForm(props: {
 		}
 	};
 
-	const pairPickers = (dim: Dim, like: string, avoid: string) => (
+	const stancePicker = (dim: Dim, stance: Stance, label: string) => (
+		<MultiCombobox
+			label={label}
+			options={optionsFor(dim).filter(
+				(o) =>
+					stances[o.id] === stance || !PICKER_STANCES.includes(stances[o.id]),
+			)}
+			value={idsWith(dim, stance)}
+			onChange={(ids) => setStance(dim, stance, ids)}
+			chipClass={STANCE_TONE[stance]}
+		/>
+	);
+	const pairPickers = (dim: Dim, noun: string, want: string) => (
 		<>
-			<MultiCombobox
-				label={like}
-				options={optionsFor(dim).filter((o) => stances[o.id] !== "avoid")}
-				value={idsWith(dim, "nice")}
-				onChange={(ids) => setStance(dim, "nice", ids)}
-				chipClass={STANCE_TONE.nice}
-			/>
-			<MultiCombobox
-				label={avoid}
-				options={optionsFor(dim).filter((o) => stances[o.id] !== "nice")}
-				value={idsWith(dim, "avoid")}
-				onChange={(ids) => setStance(dim, "avoid", ids)}
-				chipClass={STANCE_TONE.avoid}
-			/>
+			{stancePicker(dim, "nice", `${noun} you most want to ${want}`)}
+			{stancePicker(dim, "ok", `${noun} you'd be happy with`)}
+			{stancePicker(dim, "avoid", `${noun} to avoid`)}
 		</>
 	);
 
@@ -189,8 +219,8 @@ function ScoringForm(props: {
 					<ChoiceGroup
 						legend="Which roles are you looking for?"
 						options={optionsFor("role")}
-						isOn={isNice}
-						toggle={toggleNice}
+						choiceOf={choiceOf}
+						cycle={cycleStance("role")}
 					/>
 					<Field
 						label="Minimum salary"
@@ -213,48 +243,39 @@ function ScoringForm(props: {
 							/>
 						</div>
 					</Field>
-					<ChoiceGroup
-						legend="Seniority"
-						hint="Postings that don't state a level are never penalised."
-						options={optionsFor("seniority")}
-						isOn={isNice}
-						toggle={toggleNice}
+					<SeniorityLadder
+						tiers={optionsFor("seniority")}
+						weightOf={(id) => weights[id] ?? 0}
+						setWeight={(id, weight) => setWeights(id, weight)}
 					/>
 					<ChoiceGroup
 						legend="Employment type"
 						options={optionsFor("employment")}
-						isOn={isNice}
-						toggle={toggleNice}
+						choiceOf={choiceOf}
+						cycle={cycleStance("employment")}
 					/>
 					<ChoiceGroup
 						legend="Working arrangement"
+						hint="To prefer some office days over others, pick the day counts instead of Hybrid."
 						options={optionsFor("work")}
-						isOn={isNice}
-						toggle={toggleNice}
+						choiceOf={choiceOf}
+						cycle={cycleStance("work")}
 					/>
 				</Match>
 				<Match when={params().section === "stack"}>
-					{pairPickers(
-						"tech",
-						"Technologies you'd enjoy",
-						"Technologies to avoid",
-					)}
-					{pairPickers(
-						"domain",
-						"Industries you'd enjoy",
-						"Industries to avoid",
-					)}
+					{pairPickers("tech", "Technologies", "work with")}
+					{pairPickers("domain", "Industries", "work in")}
 					<ChoiceGroup
 						legend="Company stage"
 						options={optionsFor("stage")}
-						isOn={isNice}
-						toggle={toggleNice}
+						choiceOf={choiceOf}
+						cycle={cycleStance("stage")}
 					/>
 					<ChoiceGroup
 						legend="Company size"
 						options={optionsFor("size")}
-						isOn={isNice}
-						toggle={toggleNice}
+						choiceOf={choiceOf}
+						cycle={cycleStance("size")}
 					/>
 				</Match>
 				<Match when={params().section === "filters"}>
@@ -283,8 +304,7 @@ function ScoringForm(props: {
 											"inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium",
 											p.overridden
 												? "border-border text-faint line-through"
-												: (STANCE_TONE[p.stance as Stance] ??
-														"border-border-strong bg-surface-muted text-muted"),
+												: STANCE_TONE[p.stance],
 										)}
 									>
 										{labelFor(p.optionId)}

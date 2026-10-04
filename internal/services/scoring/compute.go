@@ -3,7 +3,9 @@ package scoring
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"math"
+	"slices"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
@@ -11,20 +13,42 @@ import (
 const (
 	avoidWeight      = 2
 	prior            = 1.0
+	missingAlpha     = 1.0
 	resolveThreshold = 0.6
 	gateCap          = 44
-	bandGreatMin     = 80
-	bandGoodMin      = 65
-	bandFairMin      = 45
 	favouriteBeta    = 0.4
 	favouriteKey     = "company:favourite"
+
+	ladderToleranceFloor = 0.5
+	ladderGateSpread     = 2.0
 )
+
+var pickStrength = map[string]float64{"nice": 1, "ok": 0.5}
+
+var defaultBands = dto.BandCuts{Great: 80, Good: 65, Fair: 45}
+
+func weightFor(p *dto.ScoringParams, dim dto.Dimension) float64 {
+	if p != nil {
+		if w, ok := p.Weights[dim]; ok {
+			return w
+		}
+	}
+	return dimensionSpecs[dim].Weight
+}
+
+func bandsFor(p *dto.ScoringParams) dto.BandCuts {
+	if p != nil && p.Bands != nil {
+		return *p.Bands
+	}
+	return defaultBands
+}
 
 type evaluatedPick struct {
 	dimension dto.Dimension
 	key       string
 	label     string
 	stance    string
+	weight    float64
 	answer    dto.Answer
 	known     bool
 	retired   bool
@@ -55,19 +79,24 @@ type gateDimension struct {
 	unpickedYes     bool
 }
 
-func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool) (int, string, []dto.ScoreRow) {
+func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool, params *dto.ScoringParams) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
 	rows := make([]dto.ScoreRow, 0, len(picks))
 	nice := make(map[dto.Dimension]*niceDimension)
 	gates := make(map[dto.Dimension]*gateDimension)
+	ladders := make(map[dto.Dimension][]evaluatedPick)
 	var avoidCost float64
 	var blocked, gated bool
 
 	for _, p := range picks {
 		if p.retired {
 			rows = append(rows, dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: "retired", Effect: "retired"})
+			continue
+		}
+		if dimensionSpecs[p.dimension].Kind == ladderKind {
+			ladders[p.dimension] = append(ladders[p.dimension], p)
 			continue
 		}
 
@@ -78,14 +107,14 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 		row := dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: resolved, Corrected: p.corrected}
 
 		switch p.stance {
-		case "nice":
+		case "nice", "ok":
 			d, ok := nice[p.dimension]
 			if !ok {
 				d = &niceDimension{}
 				nice[p.dimension] = d
 			}
 			if p.known {
-				d.sumYes += p.answer.PYes
+				d.sumYes += pickStrength[p.stance] * p.answer.PYes
 				d.evidence = max(d.evidence, p.answer.PYes+p.answer.PNo)
 			}
 			switch resolved {
@@ -141,6 +170,10 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	}
 
 	for _, u := range unpicked {
+		if tiers, ok := ladders[u.dimension]; ok {
+			ladders[u.dimension] = append(tiers, u)
+			continue
+		}
 		if g, ok := gates[u.dimension]; ok && u.known && resolveAnswer(u.answer) == "yes" {
 			g.unpickedYes = true
 		}
@@ -154,12 +187,26 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 		}
 	}
 
-	var weighted, covered float64
+	coverage := make(map[dto.Dimension]dimensionCoverage, len(nice)+len(ladders))
 	for dim, d := range nice {
-		spec := dimensionSpecs[dim]
-		credit := min(1, d.sumYes/float64(spec.Saturation))
-		weighted += spec.Weight * d.evidence
-		covered += spec.Weight * d.evidence * credit
+		coverage[dim] = dimensionCoverage{credit: min(1, d.sumYes/float64(dimensionSpecs[dim].Saturation)), evidence: d.evidence}
+	}
+	for dim, tiers := range ladders {
+		l, ok := scoreLadder(dim, tiers)
+		if !ok {
+			continue
+		}
+		coverage[dim] = l.coverage
+		gated = gated || l.gated
+		rows = append(rows, l.rows...)
+	}
+
+	var weighted, covered float64
+	for dim, c := range coverage {
+		w := weightFor(params, dim)
+		missing := missingAlpha * (1 - c.evidence)
+		weighted += w * (c.evidence + missing)
+		covered += w * (c.evidence*c.credit + 0.5*missing)
 	}
 
 	score := int(math.Round(100 * (covered + 0.5*prior) / (weighted + avoidCost + prior)))
@@ -173,7 +220,83 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	if blocked {
 		score = 0
 	}
-	return score, bandFor(score), rows
+	return score, bandFor(score, bandsFor(params)), rows
+}
+
+type dimensionCoverage struct {
+	credit, evidence float64
+}
+
+type ladderResult struct {
+	coverage dimensionCoverage
+	gated    bool
+	rows     []dto.ScoreRow
+}
+
+func scoreLadder(dim dto.Dimension, tiers []evaluatedPick) (ladderResult, bool) {
+	slices.SortFunc(tiers, func(a, b evaluatedPick) int { return ladderLevels[a.key] - ladderLevels[b.key] })
+	var weightSum, weightedLevel, yesSum, yesLevel float64
+	for _, t := range tiers {
+		level := float64(ladderLevels[t.key])
+		if level == 0 {
+			continue
+		}
+		weightSum += t.weight
+		weightedLevel += t.weight * level
+		if t.known {
+			yesSum += t.answer.PYes
+			yesLevel += t.answer.PYes * level
+		}
+	}
+	if weightSum == 0 {
+		return ladderResult{}, false
+	}
+	point := weightedLevel / weightSum
+	var spread float64
+	for _, t := range tiers {
+		if level := float64(ladderLevels[t.key]); level != 0 {
+			spread += t.weight * (level - point) * (level - point)
+		}
+	}
+	tolerance := max(ladderToleranceFloor, math.Sqrt(spread/weightSum))
+
+	summary := dto.ScoreRow{
+		Key: string(dim), Stance: "nice", Resolved: "unknown", Effect: "unknown",
+		Label: fmt.Sprintf("Seniority: job unknown · you %.1f ± %.1f", point, tolerance),
+	}
+	result := ladderResult{coverage: dimensionCoverage{evidence: min(1, yesSum)}}
+	if yesSum > 0 {
+		jobLevel := yesLevel / yesSum
+		distance := math.Abs(jobLevel-point) / tolerance
+		result.coverage.credit = math.Exp(-distance * distance / 2)
+		summary.Label = fmt.Sprintf("Seniority: job ≈ %.1f · you %.1f ± %.1f", jobLevel, point, tolerance)
+		if result.coverage.evidence >= resolveThreshold {
+			summary.Resolved = "yes"
+			switch {
+			case distance > ladderGateSpread:
+				summary.Effect = "gated"
+				result.gated = true
+			case distance > 1:
+				summary.Effect = "misses"
+			default:
+				summary.Effect = "meets"
+			}
+		}
+	}
+	result.rows = append(result.rows, summary)
+	for _, t := range tiers {
+		resolved := "unknown"
+		if t.known {
+			resolved = resolveAnswer(t.answer)
+		}
+		switch {
+		case resolved == "yes":
+			result.rows = append(result.rows, dto.ScoreRow{Key: t.key, Label: t.label, Stance: t.stance, Resolved: resolved, Effect: "level", Corrected: t.corrected})
+		case t.corrected:
+			result.rows = append(result.rows, dto.ScoreRow{Key: t.key, Label: t.label, Stance: t.stance, Resolved: resolved, Effect: "neutral", Corrected: true})
+		}
+	}
+	return result, true
 }
 
 func favouriteLift(score int) int {
@@ -182,13 +305,13 @@ func favouriteLift(score int) int {
 	return max(score, int(math.Round(100/(1+math.Exp(-logit)))))
 }
 
-func bandFor(score int) string {
+func bandFor(score int, cuts dto.BandCuts) string {
 	switch {
-	case score >= bandGreatMin:
+	case score >= cuts.Great:
 		return "great"
-	case score >= bandGoodMin:
+	case score >= cuts.Good:
 		return "good"
-	case score >= bandFairMin:
+	case score >= cuts.Fair:
 		return "fair"
 	}
 	return "poor"

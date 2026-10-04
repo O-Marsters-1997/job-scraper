@@ -11,7 +11,7 @@ import (
 
 var (
 	gradeValues  = []string{"great", "ok", "no"}
-	gradeReasons = []string{"seniority", "role", "tech", "domain", "location", "salary", "contract", "company_size", "recruiter", "other"}
+	gradeReasons = []string{"seniority", "role", "tech", "domain", "location", "salary", "contract", "company_size", "recruiter", "culture", "other"}
 )
 
 // SetGrade records userID's Grade for in.JobID, replacing any earlier one,
@@ -37,7 +37,12 @@ func (s *Service) SetGrade(ctx context.Context, userID string, in dto.GradeInput
 	case !notFound(err):
 		return dto.Grade{}, fmt.Errorf("scoring.SetGrade: load score: %w", err)
 	}
-	return s.store.UpsertGrade(ctx, userID, grade)
+	saved, err := s.store.UpsertGrade(ctx, userID, grade)
+	if err != nil {
+		return dto.Grade{}, err
+	}
+	s.refitIfDue(ctx, userID)
+	return saved, nil
 }
 
 // GetGrade returns userID's Grade for jobID, or nil when ungraded.

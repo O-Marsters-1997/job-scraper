@@ -15,6 +15,11 @@ clearGrade("j1");
 assert.equal(getGrade("j1"), null, "clearing removes the grade");
 assert.equal(isDismissed("j1"), false, "clearing restores the job");
 
+const culture = gradeSchema.parse(
+	setGrade({ jobId: "j2", grade: "no", reasons: ["culture"] }),
+);
+assert.deepEqual(culture.reasons, ["culture"], "culture reason persists");
+
 assert.throws(
 	() => gradeSchema.parse({ ...regraded, reasons: ["vibes"] }),
 	"unknown reason rejected",

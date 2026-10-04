@@ -188,19 +188,20 @@ func replayFixture(t *testing.T, negatives int) *scoring.Module {
 	st.SeedScoringInputs(userID, inputs)
 
 	svc := scoring.NewService(newDeps(t, st))
-	grade := func(id, g string) {
-		if _, err := svc.SetGrade(t.Context(), userID, dto.GradeInput{JobID: id, Grade: g}); err != nil {
+	grade := func(id, g string, reasons ...string) {
+		if _, err := svc.SetGrade(t.Context(), userID, dto.GradeInput{JobID: id, Grade: g, Reasons: reasons}); err != nil {
 			t.Fatalf("SetGrade(%s) err = %v", id, err)
 		}
 	}
 	if negatives == 0 {
 		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: "applied", Source: "application"}, dto.ImpliedLabel{JobID: "low", Source: "kept_cv"})
 	} else {
-		grade("great", "great")
+		grade("great", "great", "tech")
 		grade("applied", "ok")
 		grade("low", "ok")
+		reasons := [][]string{{"culture"}, {"tech", "culture"}, {"salary"}}
 		for i := range negatives {
-			grade(fmt.Sprintf("no-%d", i), "no")
+			grade(fmt.Sprintf("no-%d", i), "no", reasons[i%len(reasons)]...)
 		}
 		st.SeedImpliedPositives(userID, dto.ImpliedLabel{JobID: "no-0", Source: "application"})
 	}
@@ -226,6 +227,9 @@ func TestReplay(t *testing.T) {
 		}
 		if !strings.Contains(got, "Concordance") {
 			t.Errorf("Replay() = %q, want a Concordance line", got)
+		}
+		if !strings.Contains(got, "| culture | 4 | 0 |") {
+			t.Errorf("Replay() = %q, want 4 negatives counted under culture", got)
 		}
 		assertGolden(t, "testdata/replay.golden.md", got)
 	})

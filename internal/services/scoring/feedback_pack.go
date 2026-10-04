@@ -27,7 +27,11 @@ func packPicks(picks []dto.Pick, b bank) []packPick {
 		if opt.RetiredAt != nil {
 			label += " (retired)"
 		}
-		out = append(out, packPick{Label: label, Stance: p.Stance, Question: opt.Question})
+		stance := p.Stance
+		if p.Weight > 0 {
+			stance = fmt.Sprintf("weight %d", p.Weight)
+		}
+		out = append(out, packPick{Label: label, Stance: stance, Question: opt.Question})
 	}
 	return out
 }
@@ -55,16 +59,17 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayRepo
 	sb.WriteString("## How Suitability is computed\n\n")
 	sb.WriteString("Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.\n")
 	fmt.Fprintf(&sb, "An answer resolves to yes, no or unknown for the checklist rows: the top of P(yes), P(no) and P(not stated) wins when it reaches %.1f, otherwise unknown. The score itself uses the probabilities.\n\n", resolveThreshold)
-	fmt.Fprintf(&sb, "Score = round(100 * (sum(weight * evidence * credit) + %.1f * prior) / (sum(weight * evidence) + avoid cost + prior)), with prior = %.0f.\n\n", 0.5, prior)
-	sb.WriteString("- Per nice dimension, credit = min(1, sum of P(yes) over its Picks / saturation) and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:\n")
+	fmt.Fprintf(&sb, "Score = round(100 * (sum(weight * (evidence * credit + %[1]g * missing)) + %[1]g * prior) / (sum(weight * (evidence + missing)) + avoid cost + prior)), with missing = alpha * (1 - evidence), alpha = %[2]g and prior = %[3]g.\n\n", 0.5, missingAlpha, prior)
+	fmt.Fprintf(&sb, "- Per dimension with nice or ok Picks, credit = min(1, sum of strength * P(yes) over its Picks / saturation), with strength %g for nice and %g for ok, and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:\n", pickStrength["nice"], pickStrength["ok"])
 	for _, d := range Dimensions {
 		fmt.Fprintf(&sb, "  - %s: weight %.0f, saturation %d%s\n", d.Key, d.Weight, d.Saturation, gateNote(d))
 	}
 	fmt.Fprintf(&sb, "- An avoid Pick adds %d * P(yes) to the denominator and nothing to the numerator.\n", avoidWeight)
 	fmt.Fprintf(&sb, "- A Gate caps the score at %d: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.\n", gateCap)
+	fmt.Fprintf(&sb, "- seniority is a ladder instead: Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. The user's tier weights (1-100) give a point (weighted mean level) and a tolerance (weighted spread, at least %g). The job's level is sum(level * P(yes)) / sum(P(yes)) over the tier answers, evidence = min(1, sum(P(yes))), and credit = exp(-d^2 / 2) with d = |job level - point| / tolerance. It gates when evidence reaches %.1f and d exceeds %g.\n", ladderToleranceFloor, resolveThreshold, ladderGateSpread)
 	sb.WriteString("- A block Pick resolving yes forces the score to 0.\n")
-	fmt.Fprintf(&sb, "- Bands: Great from %d, Good from %d, Fair from %d, Poor below.\n", bandGreatMin, bandGoodMin, bandFairMin)
-	sb.WriteString("- A dimension with no evidence counts on neither side.\n\n")
+	fmt.Fprintf(&sb, "- Bands: Great from %d, Good from %d, Fair from %d, Poor below.\n", defaultBands.Great, defaultBands.Good, defaultBands.Fair)
+	sb.WriteString("- A picked dimension's missing evidence counts as a coin flip, pulling the score toward 50. A dimension with no Picks counts on neither side.\n\n")
 
 	sb.WriteString("Current Picks:\n\n")
 	if len(picks) == 0 {
@@ -78,7 +83,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayRepo
 	}
 
 	sb.WriteString("## Levers you may change\n\n")
-	fmt.Fprintf(&sb, "- Dimension weights and saturation, avoidWeight (%d), prior (%.0f), gateCap (%d)\n", avoidWeight, prior, gateCap)
+	fmt.Fprintf(&sb, "- Dimension weights and saturation, avoidWeight (%d), prior (%.0f), alpha (%g), gateCap (%d)\n", avoidWeight, prior, missingAlpha, gateCap)
 	fmt.Fprintf(&sb, "- resolveThreshold (%.1f)\n", resolveThreshold)
 	sb.WriteString("- Question wording\n")
 	sb.WriteString("- New or retired Options\n")

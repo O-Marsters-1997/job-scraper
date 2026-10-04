@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { stanceSchema } from "./scoringConfig";
 
 const dimensionKeySchema = z.enum([
 	"tech",
@@ -13,8 +14,8 @@ const dimensionKeySchema = z.enum([
 
 const dimensionSpecSchema = z.object({
 	key: dimensionKeySchema,
-	kind: z.enum(["pair", "multi"]),
-	stances: z.array(z.string()),
+	kind: z.enum(["pair", "multi", "ladder"]),
+	stances: z.array(stanceSchema),
 });
 
 export type DimensionSpec = z.infer<typeof dimensionSpecSchema>;
@@ -23,6 +24,7 @@ const scoringOptionSchema = z.object({
 	id: z.string(),
 	dimension: dimensionKeySchema,
 	label: z.string(),
+	level: z.number().int().optional(),
 });
 
 export type ScoringOption = z.infer<typeof scoringOptionSchema>;

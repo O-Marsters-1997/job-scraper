@@ -9,7 +9,7 @@ Suitability resolved each answer to yes, no or unknown at 0.6 and counted a dime
 ## Decision
 
 - **Credit per nice dimension** is `min(1, sum of P(yes) / saturation)` over its picks: 3 for `tech`, 1 elsewhere. **Evidence** is the largest `P(yes) + P(no)` over its picks, so a dimension the judge couldn't read adds little either way. Both use the probabilities. The 0.6 threshold now only labels checklist rows.
-- **Score** is `100 * (sum(w * evidence * credit) + 0.5 * prior) / (sum(w * evidence) + avoid cost + prior)` with `prior = 1`. Weights are Go data on `DimensionSpec`: role 3, seniority 3, tech 2, domain 2, work 1, stage 1. An avoid pick costs `2 * P(yes)` in the denominator, so an avoid the job almost certainly lacks still costs a little.
+- **Score** is `100 * (sum(w * evidence * credit) + 0.5 * prior) / (sum(w * evidence) + avoid cost + prior)` with `prior = 1`. Weights are Go data on `DimensionSpec`: role 3, seniority 3, tech 2, domain 2, work 1, stage 1. An avoid pick costs `2 * P(yes)` in the denominator, so an avoid the job almost certainly lacks still costs a little. A picked dimension's missing evidence now counts as a coin flip (see the amendment below).
 - **Gates cap, they don't zero.** A Gate dimension (seniority, work) caps the score at 44 when every pick the user made in it resolves no and an option they did not pick resolves yes: the job is positively something else. A salary below the floor fires one too, and still pays its avoid cost. The triggering rows get `Effect: "gated"`. A cap keeps the Job visible and sortable, unlike `block`, which still means 0 and hidden. An unknown pick or an unknown unpicked option never fires a Gate, because no answer is not an answer.
 - **Gates need the unpicked options answered.** For a Gate dimension with a live pick, `pickedQuestionHashes` covers every live option in the dimension, so the effect asks about them and `FillMissingAnswers` backfills them. That is about 10 extra questions per job. This is also why `multi` dimensions ask every option rather than one enum question: each answer stays atomic and cacheable.
 - **Bands** are Great at 80, Good at 65, Fair at 45, Poor below. They are stored in `job_scores.band` by `CompleteAnswerEffect` and `SaveScores`, and are the primary signal in the UI. The number still sorts and checks `notify_threshold`. Cut-offs are hand picks, to be calibrated against Grades.
@@ -25,3 +25,32 @@ Suitability resolved each answer to yes, no or unknown at 0.6 and counted a dime
 A favourite Company lifts the pre-gate score in log-odds: `p = clamp(score / 100, 0.01, 0.99)`, `score' = round(100 * sigmoid(logit(p) + β))`, never below the unlifted score. It applies before the Gate cap and the block, so a favourite never rescues a gated or blocked Job, and it adds a `company:favourite` row with `Effect: "favourite"`. The shift is near zero at either end and largest across Fair and Good. `β` is `favouriteBeta` in `compute.go`.
 
 β is 0.4: about +10 at a score of 50 and +5 at 85. Replay against 46 Grades (28 positive, 18 negative) with 25 favourites, one per Company graded great or ok, gave concordance of 62% at β 0, 66% at 0.2, 71% at 0.4, 77% at 0.6, 82% at 0.8 and 85% at 1.2, and positives in the top 20 of 8, 9, 9, 11, 13 and 13. Those gains are inflated, since the favourites were picked from the same Grades, and only one `no` Job sat at a favourite Company (hunter-bond, rank 43 at β 0, 28 at 0.4, 20 at 0.8). At 1.2, nine Jobs tie at 98. The data can't separate 0.4 from higher values, so the plan's starting value stands. Re-run `just eval-scoring` once real favourites exist and raise β only if positives at favourite Companies still rank below their Grades.
+
+## Amendment: missing evidence counts as a coin flip (α)
+
+A nice or ok dimension the judge couldn't read used to drop out of both sides. A sparse ad that matched role, seniority, tech and work and said nothing about domain, stage or size scored `(9 + 0.5) / (9 + 1) = 95`, so 95 only meant "everything we know matches", and 78 of 380 open Jobs were Great.
+
+Each picked dimension now also adds `missing = α * (1 - evidence)` at half credit:
+
+```
+numerator   += w * (evidence * credit + 0.5 * missing)
+denominator += w * (evidence + missing)
+```
+
+The same sparse ad scores `(9 + 2 + 0.5) / (9 + 4 + 1) = 82`. A dimension with full evidence scores as before, and a dimension with no Picks still counts on neither side. `α` is `missingAlpha` in `compute.go`, set to 1 by hand; #623 fits it against Grades.
+
+Replay for the one labelled user (5 positives, 3 negatives): Great Jobs went from 78 to 56 of 380, the top score from 95 (4 tied) to 93 (1), and positives in the top 20 from 3 to 4. Median positive rank percentile moved from 0 to 4, since the top-tied positives now spread out. The mid-level negative (volition) still ties the lowest-scored senior positives at 86. Band cut-offs are unchanged; #623 recalibrates them on this distribution.
+
+## Amendment: seniority is a point on a ladder
+
+Seniority was a multi Gate: four level options, each nice or ok. It couldn't say "mostly Mid, some Senior", and `seniority:senior` met heavyweight Senior and "Senior Lead" roles alike (#701, replacing the avoid options tried in #715).
+
+Seniority now has `Kind: "ladder"` on its `DimensionSpec`. Five tiers carry fixed levels in Go (`ladderLevels`): Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. Their questions weigh title, required years and scope together. `seniority:staff` is retired. A ladder Pick stays a `dto.Pick` with stance `nice`, plus a `Weight` from 1 to 100, so storage, dedupe and corrections didn't change. The sliders are the only way to set tier weights: text extraction skips ladder tiers, and the migration turned existing text seniority Picks into manual ones. Validation demands a weight on a ladder Pick and rejects one anywhere else.
+
+- **User side.** The point is the weighted mean level. The tolerance is the weighted standard deviation, floored at 0.5 tier (`ladderToleranceFloor`).
+- **Job side.** The level is `sum(level * P(yes)) / sum(P(yes))` over every live tier's answer, and the evidence is `min(1, sum(P(yes)))`.
+- **Credit** is `exp(-d^2 / 2)` with `d = |job level - point| / tolerance`. It falls the same way above and below the point. It enters the score like any nice dimension, so evidence and the α shrink work as before. Unknown tiers give evidence 0, which shrinks seniority to 50.
+- **Gate.** It fires only when the evidence reaches 0.6 and `d > 2` (`ladderGateSpread`). An unpicked tier answering yes no longer fires it on its own.
+- **Breakdown.** One `seniority` row reads `Seniority: job ≈ 2.6 · you 2.3 ± 0.4`, with Effect meets (d ≤ 1), misses, gated or unknown. Each tier answering yes adds a `level` row, which the user can correct as before.
+
+Existing configs migrated: nice became weight 100, ok became 50, and an old Staff Pick carried to both Lead/Staff and Principal/Head. The reworded questions have new hashes, so every Job's tiers are asked again. The 0.5 floor, the 2× Gate and the Gaussian shape are hand picks that #623 can fit.

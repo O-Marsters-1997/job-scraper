@@ -152,6 +152,10 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('work:remote', 'work', 'Remote', 'Is the role fully remote (not hybrid or office-based)?'),
     ('work:hybrid', 'work', 'Hybrid', 'Is the role hybrid, split between home and an office (not fully remote or fully onsite)?'),
     ('work:onsite', 'work', 'Onsite', 'Is the role fully onsite in an office (not remote or hybrid)?'),
+    ('work:office_1', 'work', '1 office day/week', 'Does the role expect you in an office exactly 1 day a week? A range that includes 1, like "1-2 days", counts as yes.'),
+    ('work:office_2', 'work', '2 office days/week', 'Does the role expect you in an office exactly 2 days a week? A range that includes 2, like "2-3 days", counts as yes.'),
+    ('work:office_3', 'work', '3 office days/week', 'Does the role expect you in an office exactly 3 days a week? A range that includes 3, like "2-3 days", counts as yes.'),
+    ('work:office_4plus', 'work', '4+ office days/week', 'Does the role expect you in an office 4 or more days a week? A range that reaches 4 or more, like "3-4 days", counts as yes.'),
     ('employment:permanent', 'employment', 'Permanent', 'Is the role a permanent, full-time employment contract (not contract, freelance or part-time)?'),
     ('employment:contract', 'employment', 'Contract', 'Is the role a fixed-term or day-rate contract, (not permanent)?'),
     ('employment:part_time', 'employment', 'Part-time', 'Is the role part-time (not full-time)?'),
@@ -164,7 +168,8 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('size:scaleup', 'size', 'Scale-up', 'Does the company have 50 to 500 employees (not under 50, or over 500)?'),
     ('size:large', 'size', 'Large', 'Does the company have 500 to 5,000 employees (not under 500, or over 5,000)?'),
     ('size:enterprise', 'size', 'Enterprise', 'Does the company have over 5,000 employees (not 5,000 or fewer)?'),
-    ('seniority:junior', 'seniority', 'Junior', 'Is the role pitched at Junior or graduate level (not Mid, Senior or above)?'),
-    ('seniority:mid', 'seniority', 'Mid', 'Is the role pitched at Mid level (not Junior, Senior, Staff, Principal, Lead or Head of)?'),
-    ('seniority:senior', 'seniority', 'Senior', 'Is the role pitched at Senior level (not Staff, Principal, Lead or Head of)?'),
-    ('seniority:staff', 'seniority', 'Staff', 'Is the role pitched at Staff level or above (Staff, Principal, Lead or Head of)?') ON CONFLICT (id) DO NOTHING;
+    ('seniority:junior', 'seniority', 'Junior', 'Weighing title, required years and scope together, is the role Junior level (Junior or Graduate, about 0-2 years, works under guidance)?'),
+    ('seniority:mid', 'seniority', 'Mid', 'Weighing title, required years and scope together, is the role Mid level (about 2-5 years, delivers independently, no Senior or higher title)?'),
+    ('seniority:senior', 'seniority', 'Senior', 'Weighing title, required years and scope together, is the role Senior level (Senior title or about 5-8 years, owns features and mentors, not leading a team)?'),
+    ('seniority:lead_staff', 'seniority', 'Lead / Staff', 'Weighing title, required years and scope together, is the role Lead or Staff level (Lead, Staff or Tech Lead, about 8+ years, leads a team or owns cross-team technical scope)?'),
+    ('seniority:principal_head', 'seniority', 'Principal / Head', 'Weighing title, required years and scope together, is the role Principal or Head level (Principal, Head of or Director, organisation-wide scope or manages managers)?') ON CONFLICT (id) DO NOTHING;

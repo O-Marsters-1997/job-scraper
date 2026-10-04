@@ -7,22 +7,23 @@
 Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.
 An answer resolves to yes, no or unknown for the checklist rows: the top of P(yes), P(no) and P(not stated) wins when it reaches 0.6, otherwise unknown. The score itself uses the probabilities.
 
-Score = round(100 * (sum(weight * evidence * credit) + 0.5 * prior) / (sum(weight * evidence) + avoid cost + prior)), with prior = 1.
+Score = round(100 * (sum(weight * (evidence * credit + 0.5 * missing)) + 0.5 * prior) / (sum(weight * (evidence + missing)) + avoid cost + prior)), with missing = alpha * (1 - evidence), alpha = 1 and prior = 1.
 
-- Per nice dimension, credit = min(1, sum of P(yes) over its Picks / saturation) and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:
+- Per dimension with nice or ok Picks, credit = min(1, sum of strength * P(yes) over its Picks / saturation), with strength 1 for nice and 0.5 for ok, and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:
   - tech: weight 2, saturation 3
   - role: weight 3, saturation 1
   - domain: weight 2, saturation 1
   - seniority: weight 3, saturation 1, Gate
-  - work: weight 1, saturation 1, Gate
+  - work: weight 2, saturation 1, Gate
   - stage: weight 1, saturation 1
   - size: weight 1, saturation 1
   - employment: weight 2, saturation 1, Gate
 - An avoid Pick adds 2 * P(yes) to the denominator and nothing to the numerator.
 - A Gate caps the score at 44: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.
+- seniority is a ladder instead: Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. The user's tier weights (1-100) give a point (weighted mean level) and a tolerance (weighted spread, at least 0.5). The job's level is sum(level * P(yes)) / sum(P(yes)) over the tier answers, evidence = min(1, sum(P(yes))), and credit = exp(-d^2 / 2) with d = |job level - point| / tolerance. It gates when evidence reaches 0.6 and d exceeds 2.
 - A block Pick resolving yes forces the score to 0.
 - Bands: Great from 80, Good from 65, Fair from 45, Poor below.
-- A dimension with no evidence counts on neither side.
+- A picked dimension's missing evidence counts as a coin flip, pulling the score toward 50. A dimension with no Picks counts on neither side.
 
 Current Picks:
 
@@ -34,7 +35,7 @@ Current Picks:
 
 ## Levers you may change
 
-- Dimension weights and saturation, avoidWeight (2), prior (1), gateCap (44)
+- Dimension weights and saturation, avoidWeight (2), prior (1), alpha (1), gateCap (44)
 - resolveThreshold (0.6)
 - Question wording
 - New or retired Options
