@@ -22,26 +22,36 @@ type Company struct {
 	LastCheckedAt        *time.Time
 }
 
+type CompanySort string
+
+const (
+	CompanySortRelevance    CompanySort = "relevance"
+	CompanySortAlphabetical CompanySort = "alphabetical"
+)
+
 type CompaniesQuery struct {
 	Limit     string `json:"limit"`
-	Cursor    string `json:"cursor"`
+	Offset    string `json:"offset"`
 	Q         string `json:"q"`
 	Tracked   string `json:"tracked"`
 	Favourite string `json:"favourite"`
+	NoBoard   string `json:"no_board"`
+	Sort      string `json:"sort"`
 }
 
 type CompanyPageOptions struct {
 	Limit         int32
-	CursorName    string
-	CursorID      string
+	Offset        int32
 	Search        string
 	TrackedOnly   bool
 	FavouriteOnly bool
+	NoBoardOnly   bool
+	Sort          CompanySort
 }
 
 type CompanyPage struct {
-	Items      []Company `json:"items"`
-	NextCursor string    `json:"next_cursor"`
+	Items []Company `json:"items"`
+	Total int       `json:"total"`
 }
 
 type CompanyTracking struct {

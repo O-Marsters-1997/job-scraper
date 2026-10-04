@@ -121,8 +121,8 @@ func TestListCompaniesHandlerReadsQueryParams(t *testing.T) {
 	jobsearch.Build(jobsearchtest.NewDeps(st)).Routes(r)
 
 	page := handlerstest.Do[dto.CompanyPage](t, r, http.StatusOK, "GET /companies?limit=1&q=a", "")
-	if len(page.Items) != 1 || page.Items[0].Name != "Alpha" || page.NextCursor == "" {
-		t.Errorf("GET /companies?limit=1&q=a = %+v, want Alpha and a next cursor", page)
+	if len(page.Items) != 1 || page.Items[0].Name != "Alpha" || page.Total != 2 {
+		t.Errorf("GET /companies?limit=1&q=a = %+v, want Alpha of total 2", page)
 	}
 }
 

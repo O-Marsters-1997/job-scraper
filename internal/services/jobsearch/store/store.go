@@ -346,21 +346,28 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 	if err != nil {
 		return dto.CompanyPage{}, ErrInvalidID
 	}
-	params := sqlc.PageCompaniesForUserParams{UserID: uid, Search: options.Search, TrackedOnly: options.TrackedOnly, FavouriteOnly: options.FavouriteOnly, PageLimit: options.Limit}
-	if options.CursorID != "" {
-		params.CursorID, err = data.UUID(options.CursorID)
-		if err != nil {
-			return dto.CompanyPage{}, ErrInvalidID
-		}
-		params.CursorName = pgtype.Text{String: options.CursorName, Valid: true}
-	}
-	rows, err := s.queries.PageCompaniesForUser(ctx, params)
+	rows, err := s.queries.PageCompaniesForUser(ctx, sqlc.PageCompaniesForUserParams{
+		UserID:        uid,
+		Search:        options.Search,
+		TrackedOnly:   options.TrackedOnly,
+		FavouriteOnly: options.FavouriteOnly,
+		NoBoardOnly:   options.NoBoardOnly,
+		Sort:          string(options.Sort),
+		PageLimit:     options.Limit,
+		PageOffset:    options.Offset,
+	})
 	if err != nil {
 		return dto.CompanyPage{}, fmt.Errorf("store.PageCompaniesForUser: %w", err)
 	}
 	page := dto.CompanyPage{Items: make([]dto.Company, len(rows))}
 	for i, r := range rows {
-		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow(r))
+		page.Total = int(r.Total)
+		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow{
+			ID: r.ID, Slug: r.Slug, Name: r.Name, AtsSource: r.AtsSource, AtsToken: r.AtsToken,
+			Domain: r.Domain, LinkedinCompanyID: r.LinkedinCompanyID, LastCrawledAt: r.LastCrawledAt,
+			FirstSeenAt: r.FirstSeenAt, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
+			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
+		})
 	}
 	return page, nil
 }

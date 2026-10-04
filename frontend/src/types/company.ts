@@ -27,7 +27,7 @@ export type CompanyExclusion = z.infer<typeof companyExclusionSchema>;
 
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
-	next_cursor: z.string(),
+	total: z.number(),
 });
 
 export type CompanyPage = z.infer<typeof companyPageSchema>;

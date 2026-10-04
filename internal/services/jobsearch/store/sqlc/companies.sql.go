@@ -326,7 +326,7 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 }
 
 const pageCompaniesForUser = `-- name: PageCompaniesForUser :many
-SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
      WHERE j.company_id = c.id AND j.closed_at IS NULL
@@ -340,27 +340,34 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = $1::uuid AND tc.company_id = c.id
-WHERE ($2::uuid IS NULL OR (c.name, c.id) > ($3::text, $2::uuid))
-  AND ($4::text = ''
-       OR strpos(lower(c.name), lower($4::text)) > 0
-       OR strpos(c.slug, lower($4::text)) > 0)
-  AND (NOT $5::bool OR COALESCE(tc.enabled, FALSE))
-  AND (NOT $6::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id))
-ORDER BY c.name, c.id
-LIMIT $7::int
+WHERE ($2::text = ''
+       OR strpos(lower(c.name), lower($2::text)) > 0
+       OR strpos(c.slug, lower($2::text)) > 0)
+  AND (NOT $3::bool OR COALESCE(tc.enabled, FALSE))
+  AND (NOT $4::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id))
+  AND (NOT $5::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
+ORDER BY
+    CASE WHEN $6::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN $6::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+          AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
+         THEN 0 ELSE 1 END,
+    c.name, c.id
+LIMIT $8::int OFFSET $7::int
 `
 
 type PageCompaniesForUserParams struct {
 	UserID        pgtype.UUID
-	CursorID      pgtype.UUID
-	CursorName    pgtype.Text
 	Search        string
 	TrackedOnly   bool
 	FavouriteOnly bool
+	NoBoardOnly   bool
+	Sort          string
+	PageOffset    int32
 	PageLimit     int32
 }
 
 type PageCompaniesForUserRow struct {
+	Total                int64
 	ID                   pgtype.UUID
 	Slug                 string
 	Name                 string
@@ -381,11 +388,12 @@ type PageCompaniesForUserRow struct {
 func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesForUserParams) ([]PageCompaniesForUserRow, error) {
 	rows, err := q.db.Query(ctx, pageCompaniesForUser,
 		arg.UserID,
-		arg.CursorID,
-		arg.CursorName,
 		arg.Search,
 		arg.TrackedOnly,
 		arg.FavouriteOnly,
+		arg.NoBoardOnly,
+		arg.Sort,
+		arg.PageOffset,
 		arg.PageLimit,
 	)
 	if err != nil {
@@ -396,6 +404,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 	for rows.Next() {
 		var i PageCompaniesForUserRow
 		if err := rows.Scan(
+			&i.Total,
 			&i.ID,
 			&i.Slug,
 			&i.Name,

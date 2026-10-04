@@ -225,7 +225,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("paging companies visits each once in name then id order", func(t *testing.T) {
+	t.Run("paging companies by offset visits each once in name then id order and reports the total", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
 		for _, c := range []dto.CompanyUpsert{
@@ -243,12 +243,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 			if err != nil {
 				t.Fatalf("PageCompaniesForUser(%+v) = %v", options, err)
 			}
+			if page.Total != 5 {
+				t.Fatalf("PageCompaniesForUser(%+v).Total = %d, want 5", options, page.Total)
+			}
 			got = append(got, page.Items...)
 			if len(page.Items) < int(options.Limit) {
 				break
 			}
-			last := page.Items[len(page.Items)-1]
-			options.CursorName, options.CursorID = last.Name, last.ID
+			options.Offset += options.Limit
 		}
 		names := make([]string, len(got))
 		ids := map[string]bool{}
@@ -261,7 +263,66 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
-	t.Run("companies search and tracked filters compose with the cursor", func(t *testing.T) {
+	t.Run("relevance puts tracked companies first then their favourites, alphabetical ignores both", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		ids := map[string]string{}
+		for _, name := range []string{"Alpha", "Beta", "Gamma", "Delta"} {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: strings.ToLower(name), Name: name})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", name, err)
+			}
+			ids[name] = c.ID
+		}
+		for _, name := range []string{"Beta", "Gamma"} {
+			if _, err := st.SetCompanyTracking(ctx, userID, ids[name], true, 180); err != nil {
+				t.Fatalf("SetCompanyTracking(%q) = %v", name, err)
+			}
+		}
+		for _, name := range []string{"Gamma", "Delta"} {
+			if err := st.SetCompanyFavourite(ctx, userID, ids[name], true); err != nil {
+				t.Fatalf("SetCompanyFavourite(%q) = %v", name, err)
+			}
+		}
+		names := func(sort dto.CompanySort) []string {
+			page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Sort: sort})
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%q) = %v", sort, err)
+			}
+			var out []string
+			for _, c := range page.Items {
+				out = append(out, c.Name)
+			}
+			return out
+		}
+		if got, want := names(dto.CompanySortRelevance), []string{"Gamma", "Beta", "Alpha", "Delta"}; !slices.Equal(got, want) {
+			t.Errorf("relevance = %v, want %v (an untracked favourite gets no boost)", got, want)
+		}
+		if got, want := names(dto.CompanySortAlphabetical), []string{"Alpha", "Beta", "Delta", "Gamma"}; !slices.Equal(got, want) {
+			t.Errorf("alphabetical = %v, want %v", got, want)
+		}
+	})
+
+	t.Run("no-board filter keeps companies without any board and counts only them", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		withBoard, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "with-board", Name: "With Board"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "bare", Name: "Bare"}); err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, withBoard.ID, "greenhouse", "with-board"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, NoBoardOnly: true})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "bare" || page.Total != 1 {
+			t.Fatalf("PageCompaniesForUser(no board) = %+v, %v, want only bare with total 1", page, err)
+		}
+	})
+
+	t.Run("companies search and tracked filters compose with the offset", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
 		var acme dto.Company
@@ -291,8 +352,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, Search: "ACME"}), []string{"acme", "acme-labs", "zeta"}; !slices.Equal(got, want) {
 			t.Errorf("search ACME = %v, want %v (name or slug, case-insensitive)", got, want)
 		}
-		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, Search: "acme", CursorName: acme.Name, CursorID: acme.ID}), []string{"acme-labs", "zeta"}; !slices.Equal(got, want) {
-			t.Errorf("search acme after Acme = %v, want %v", got, want)
+		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, Search: "acme", Offset: 1}), []string{"acme-labs", "zeta"}; !slices.Equal(got, want) {
+			t.Errorf("search acme from offset 1 = %v, want %v", got, want)
 		}
 		if got, want := slugs(dto.CompanyPageOptions{Limit: 10, TrackedOnly: true}), []string{"acme"}; !slices.Equal(got, want) {
 			t.Errorf("tracked only = %v, want %v", got, want)

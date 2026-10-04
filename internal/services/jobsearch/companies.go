@@ -3,6 +3,8 @@ package jobsearch
 import (
 	"context"
 	"errors"
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -46,42 +48,62 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 	return company, nil
 }
 
-type companyCursor struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
-}
-
 func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.CompaniesQuery) (dto.CompanyPage, error) {
 	limit, err := parsePageLimit(q.Limit)
 	if err != nil {
 		return dto.CompanyPage{}, err
 	}
-	options := dto.CompanyPageOptions{Limit: int32(limit + 1), Search: strings.TrimSpace(q.Q), TrackedOnly: q.Tracked == "1", FavouriteOnly: q.Favourite == "1"}
-	if q.Cursor != "" {
-		var decoded companyCursor
-		if err := decodeCursor(q.Cursor, &decoded); err != nil || decoded.ID == "" {
-			return dto.CompanyPage{}, apperr.Invalid("invalid cursor")
-		}
-		options.CursorName, options.CursorID = decoded.Name, decoded.ID
+	offset, err := parsePageOffset(q.Offset)
+	if err != nil {
+		return dto.CompanyPage{}, err
+	}
+	sort, err := parseCompanySort(q.Sort)
+	if err != nil {
+		return dto.CompanyPage{}, err
+	}
+	options := dto.CompanyPageOptions{
+		Limit:         int32(limit),
+		Offset:        int32(offset),
+		Search:        strings.TrimSpace(q.Q),
+		TrackedOnly:   q.Tracked == "1",
+		FavouriteOnly: q.Favourite == "1",
+		NoBoardOnly:   q.NoBoard == "1",
+		Sort:          sort,
 	}
 
 	page, err := s.store.PageCompaniesForUser(ctx, userID, options)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidID) {
-			return dto.CompanyPage{}, apperr.Invalid("invalid cursor ID")
+			return dto.CompanyPage{}, apperr.Invalid("invalid user ID")
 		}
 		return dto.CompanyPage{}, err
-	}
-
-	if len(page.Items) > limit {
-		page.Items = page.Items[:limit]
-		last := page.Items[limit-1]
-		page.NextCursor = encodeCursor(companyCursor{Name: last.Name, ID: last.ID})
 	}
 	if page.Items == nil {
 		page.Items = []dto.Company{}
 	}
 	return page, nil
+}
+
+func parsePageOffset(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	offset, err := strconv.Atoi(raw)
+	if err != nil || offset < 0 || offset > math.MaxInt32 {
+		return 0, apperr.Invalid("offset must be a non-negative integer")
+	}
+	return offset, nil
+}
+
+func parseCompanySort(raw string) (dto.CompanySort, error) {
+	switch sort := dto.CompanySort(raw); sort {
+	case "":
+		return dto.CompanySortRelevance, nil
+	case dto.CompanySortRelevance, dto.CompanySortAlphabetical:
+		return sort, nil
+	default:
+		return "", apperr.Invalid("sort must be relevance or alphabetical")
+	}
 }
 
 func (s *Service) GetCompany(ctx context.Context, userID, id string) (dto.Company, error) {

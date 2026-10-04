@@ -1,5 +1,4 @@
 import {
-	createInfiniteQuery,
 	createQuery,
 	keepPreviousData,
 	queryOptions,
@@ -7,6 +6,7 @@ import {
 import {
 	addCompany,
 	addCompanyBoard,
+	type CompanyPageParams,
 	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
@@ -22,20 +22,12 @@ import { keys } from "../api/keys";
 import type { CompanyBoard, ReviewState } from "../types/company";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export function useCompanyPages(
-	q: () => string,
-	favourite: () => boolean = () => false,
-) {
-	return createInfiniteQuery(() => ({
-		queryKey: keys.companies.list(q(), favourite()),
-		queryFn: ({ pageParam }) =>
-			fetchCompanyPage({
-				q: q(),
-				favourite: favourite(),
-				cursor: pageParam,
-			}),
-		initialPageParam: "",
-		getNextPageParam: (last) => last.next_cursor || undefined,
+export const COMPANY_PAGE_SIZE = 50;
+
+export function useCompanyPages(params: () => CompanyPageParams) {
+	return createQuery(() => ({
+		queryKey: keys.companies.list(params()),
+		queryFn: () => fetchCompanyPage({ ...params(), limit: COMPANY_PAGE_SIZE }),
 		placeholderData: keepPreviousData,
 	}));
 }

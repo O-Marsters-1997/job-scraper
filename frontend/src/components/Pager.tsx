@@ -15,9 +15,12 @@ export function Pager(props: {
 			<span class="mr-auto text-xs text-faint" aria-live="polite">
 				<Show when={props.total > 0} fallback={`No ${props.noun}`}>
 					<span class="font-mono tabular-nums">
-						{props.from}–{props.to}
+						{props.from.toLocaleString()}–{props.to.toLocaleString()}
 					</span>{" "}
-					of <span class="font-mono tabular-nums">{props.total}</span>{" "}
+					of{" "}
+					<span class="font-mono tabular-nums">
+						{props.total.toLocaleString()}
+					</span>{" "}
 					{props.noun}
 				</Show>
 			</span>
