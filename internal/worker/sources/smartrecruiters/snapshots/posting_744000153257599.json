@@ -1,0 +1,176 @@
+{
+  "id": "744000153257599",
+  "name": "Senior Business CRM Manager - Americas",
+  "uuid": "0ea1b5c1-d117-44b6-b08d-e23d15b0e734",
+  "jobId": "b5e933aa-e4e3-45b5-a1f5-f9381296767d",
+  "jobAdId": "5dfa9483-880d-44a1-9b16-ad499fdaa94e",
+  "defaultJobAd": true,
+  "refNumber": "R10482",
+  "company": {
+    "name": "Wise",
+    "identifier": "Wise"
+  },
+  "location": {
+    "city": "Austin",
+    "country": "us",
+    "address": "Domain Tower 2, 10025 Alterra Parkway, Floor 23",
+    "postalCode": "78758",
+    "remote": false,
+    "hybrid": true,
+    "hybridDescription": "Onsite Requirement is 3x/weekly",
+    "fullLocation": "Austin, , United States"
+  },
+  "customField": [
+    {
+      "fieldId": "65d3d0e0d37044292ef9549b",
+      "fieldLabel": "Job Profile",
+      "valueId": "6893d1dd16cf011a7eb916c4aa00a519",
+      "valueLabel": "CRM Senior Manager - JP100659"
+    },
+    {
+      "fieldId": "65cea5ac287e8d0651481809",
+      "fieldLabel": "Time Type",
+      "valueId": "d2f4dafccd5101059b6cf09e12278400",
+      "valueLabel": "Full time"
+    },
+    {
+      "fieldId": "65d3d06b2865b46cfa4f0ec3",
+      "fieldLabel": "Worker Sub Type",
+      "valueId": "046034784a4d016f1889ba8863278f0d",
+      "valueLabel": "Permanent"
+    },
+    {
+      "fieldId": "65d3d141c86c2f3257de414c",
+      "fieldLabel": "Cost Center Hierarchy",
+      "valueId": "6d8f1bd75a7001c77bd4ac31c712b21c",
+      "valueLabel": "Marketing"
+    },
+    {
+      "fieldId": "658553f79a81b00900831a80",
+      "fieldLabel": "Brands",
+      "valueId": "default",
+      "valueLabel": "Wise"
+    },
+    {
+      "fieldId": "65d3d0374c34974b271801f9",
+      "fieldLabel": "Management Level",
+      "valueId": "e82698b941950185dfe774d4f100d610",
+      "valueLabel": "5"
+    },
+    {
+      "fieldId": "65d3d151a5d3185b4341a7ab",
+      "fieldLabel": "Cost Center",
+      "valueId": "927aec3939e010014cf831bc30fe0000",
+      "valueLabel": "Business Marketing"
+    },
+    {
+      "fieldId": "697ecac4054e02cef8c7a2ce",
+      "fieldLabel": "ORGANIZATION_TYPE-3-84 L1",
+      "valueId": "1a996433adb41001d77f89dee2560000",
+      "valueLabel": "Wise Start"
+    },
+    {
+      "fieldId": "65d3d0a7d37044292ef9549a",
+      "fieldLabel": "Job Family",
+      "valueId": "740e026f1d1201806a121ac2cc00e554",
+      "valueLabel": "Organic Acquisition"
+    },
+    {
+      "fieldId": "COUNTRY",
+      "fieldLabel": "Country/Region",
+      "valueId": "us",
+      "valueLabel": "United States"
+    },
+    {
+      "fieldId": "65d3d05c735007771b14e932",
+      "fieldLabel": "Worker Type",
+      "valueId": "EE",
+      "valueLabel": "Wiser"
+    },
+    {
+      "fieldId": "65d90823f2e6436af25814c2",
+      "fieldLabel": "Job Ad Salary Range",
+      "valueLabel": "109000 - 139000 USD Annual"
+    },
+    {
+      "fieldId": "697ecac2a597b90c91f0575a",
+      "fieldLabel": "Matrix L1",
+      "valueId": "96f473f16f7a1001051277e92e010000",
+      "valueLabel": "APAC Regional Operations"
+    },
+    {
+      "fieldId": "65d3d0926435ba43bdb089ac",
+      "fieldLabel": "Job Family Group",
+      "valueId": "cf8ed98297e201b264e34202ba008414",
+      "valueLabel": "Marketing"
+    },
+    {
+      "fieldId": "65cec407735007771b14e92d",
+      "fieldLabel": "Company",
+      "valueId": "046034784a4d01d74632134764274f17",
+      "valueLabel": "Wise US Inc"
+    },
+    {
+      "fieldId": "65d9080b4aa2f46927dfc1f3",
+      "fieldLabel": "WD Target Hire Date",
+      "valueLabel": "2026-10-15"
+    }
+  ],
+  "releasedDate": "2026-10-02T19:00:54.268Z",
+  "creator": {
+    "name": "",
+    "avatarUrl": ""
+  },
+  "postingUrl": "https://jobs.smartrecruiters.com/Wise/744000153257599-senior-business-crm-manager-americas",
+  "applyUrl": "https://jobs.smartrecruiters.com/Wise/744000153257599-senior-business-crm-manager-americas?oga=true",
+  "referralUrl": "https://jobs.smartrecruiters.com/external-referrals/company/Wise/publication/0ea1b5c1-d117-44b6-b08d-e23d15b0e734?dcr_ci=Wise",
+  "jobAd": {
+    "sections": {
+      "companyDescription": {
+        "title": "Company Description",
+        "text": "<p>Wise is a global technology company, building the best way to move and manage the world’s money.<br>\n<strong>Min fees. Max ease. Full speed.</strong></p><p>Whether people and businesses are sending money to another country, spending abroad, or making and receiving international payments, Wise is on a mission to make their lives easier and save them money.</p><p>As part of our team, you will be helping us create an entirely new network for the world's money.<br>\n<strong>For everyone, everywhere.</strong></p><p>More about <strong><a href=\"https://wise.jobs/our-mission\" rel=\"noopener noreferrer\" target=\"_blank\">our mission</a></strong> and <strong><a href=\"https://wise.jobs/what-we-offer\" rel=\"noopener noreferrer\" target=\"_blank\">what we offer</a></strong>.</p>"
+      },
+      "jobDescription": {
+        "title": "Job Description",
+        "text": "<p>The CRM team at Wise is expanding to consolidate our efforts to develop our Americas regional communications for business. We’re all about bringing value to our customers who deserve first-class communications so they make the most of their Wise account that helps them grow their business with the least friction.</p><p>We are hiring a <strong>Senior Regional CRM </strong>owner to grow Wise Business across North America and Latin America. Acquisition and conquest are central: helping businesses discover Wise, understand the value of switching from an existing provider and become active customers.</p><p>The person will work closely with Sales and regional Marketing, including above-the-line (ATL) and Brand teams, to build a repeatable lead pipeline and acquisition programme. They will own regional content adaptation and hands-on CRM delivery. We are seeking someone who sets direction independently, communicates clearly and builds the relationships needed to deliver through a global organisation.</p><p><strong>Your Mission:</strong></p><ul><li><p>Own a prioritised regional B2B CRM roadmap, balancing acquisition, onboarding and activation with longer-term customer value.</p></li><li><p>Partner with Sales on target audiences, qualification, lead handover, follow-up and feedback on lead quality and objections.</p></li><li><p>Connect ATL and Brand campaigns to relevant lead capture, nurture and conversion journeys.</p></li><li><p>Build acquisition and switching journeys, adapting propositions, proof points, tone, creative and channel choices for local business audiences.</p></li><li><p>Deliver email, push and in-app campaigns end to end, including segmentation, personalisation, testing and QA.</p></li><li><p>Work with Analytics to assess qualified pipeline, conversion, activation and incremental commercial impact, with clear definitions and outcome windows.</p></li><li><p>Own campaign prioritisation, stakeholder communication, calendar coordination, deliverability and adherence to agreed customer-contact standards.</p></li></ul>"
+      },
+      "qualifications": {
+        "title": "Qualifications",
+        "text": "<p><strong>About You:</strong></p><ul><li><p>5+ years CRM or lifecycle marketing experience, including B2B acquisition or nurture programmes with measurable commercial outcomes and clear personal ownership.</p></li><li><p>2+ years of experience with leading and growing a high growth CRM team.</p></li><li><p>Strong track record of successful cross-channel (email, push, in-app messages etc.) lifecycle comms.</p></li><li><p>End-to-end planning, development and execution of large-scale engaging lifecycle campaigns.</p></li><li><p>Customer-first attitude: can demonstrate ability to put yourself in customer shoes and have a deep understanding of customer segmentation.</p></li><li><p>Excellent verbal and written communication skills and strive to have a customer-first mindset.</p></li><li><p>Comfortable working with different departments and senior stakeholders. You can build relationships and alignment but are not afraid to push ahead on your vision.</p></li><li><p>Self-starter and impact-driven: you enjoy taking ownership of projects with limited oversight. You thrive more on autonomy than structure. You’re not afraid to take responsibility and ownership of your work. You come ready equipped with perseverance and a sizable sense of humour.</p></li><li><p>Technically-savvy with a creative eye. You’re comfortable with technical matters, but you also care about how your comms look and what message you send to your customers.&#xa0;</p></li><li><p>Quick learner and problem solver with a strong analytical mindset and eager to learn and develop with a passion for using data to improve campaign performance.</p></li><li><p>Regional or global experience with meaningful responsibility with evidence of adapting strategy between markets/regions.</p></li><li><p>Hands-on campaign delivery and analytical judgement, including segmentation, experimentation, customer insight and regional content adaptation.</p></li><li><p>Experience partnering with Sales and Marketing on pipeline, qualification, nurture and conversion; understanding how CRM follows through on demand created by broader campaigns.</p></li></ul>"
+      },
+      "additionalInformation": {
+        "title": "Additional Information",
+        "text": "<p><strong>Nice-To-Have:</strong></p><ul><li><p>Experience specifically for both North American and Latin American markets.&#xa0;</p></li><li><p>Additional language skills - ideally Spanish &amp; Portuguese.&#xa0;</p></li><li><p>Coding skills e.g. SQL, Liquid etc.</p></li></ul><div sr-tagline=\"\"></div><p>For everyone, everywhere. We're people building money without borders&#xa0; — without judgement or prejudice, too. We believe teams are strongest when they are diverse, equitable and inclusive.</p><p>We're proud to have a truly international team, and we celebrate our differences.<br>\nInclusive teams help us live our values and make sure every Wiser feels respected, empowered to contribute towards our mission and able to progress in their careers.</p><p>If you want to find out more about what it's like to work at Wise visit&#xa0;<a href=\"https://www.wise.jobs/\" rel=\"noopener noreferrer\" target=\"_blank\">Wise.Jobs</a>.</p><p>Keep up to date with life at Wise by following us on&#xa0;<a href=\"https://www.linkedin.com/company/1769571/\" rel=\"noopener noreferrer\" target=\"_blank\">LinkedIn</a>&#xa0;and&#xa0;<a href=\"https://www.instagram.com/wisecareers/\" rel=\"noopener noreferrer\" target=\"_blank\">Instagram</a>.</p>"
+      }
+    }
+  },
+  "compensation": {
+    "min": 109000,
+    "max": 139000,
+    "currency": "USD",
+    "period": "YEARLY"
+  },
+  "active": true,
+  "visibility": "PUBLIC",
+  "industry": {
+    "id": "financial_services",
+    "label": "Financial Services"
+  },
+  "function": {
+    "id": "marketing",
+    "label": "Marketing"
+  },
+  "experienceLevel": {
+    "id": "mid_senior_level",
+    "label": "Mid-Senior Level"
+  },
+  "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+  },
+  "language": {
+    "code": "en",
+    "label": "English",
+    "labelNative": "English (US)"
+  }
+}

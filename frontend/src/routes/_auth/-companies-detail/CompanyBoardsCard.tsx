@@ -31,6 +31,8 @@ function boardURLFor(board: CompanyBoard): string {
 			return `https://${board.BoardToken}.teamtailor.com`;
 		case "hibob":
 			return `https://${board.BoardToken}.careers.hibob.com`;
+		case "smartrecruiters":
+			return `https://jobs.smartrecruiters.com/${board.BoardToken}`;
 		default:
 			return "";
 	}

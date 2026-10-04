@@ -30,6 +30,7 @@ func fixtureKind(pattern string) string {
 		{"pinpoint", "pinpoint"},
 		{"teamtailor", "teamtailor"},
 		{"hibob", "hibob"},
+		{"smartrecruiters", "smartrecruiters"},
 	} {
 		if strings.Contains(pattern, kind.host) {
 			return kind.name
@@ -94,8 +95,9 @@ func TestHarvest_ResolvesEveryATSPatternAndSkipsNonBoards(t *testing.T) {
 			{Source: "pinpoint", Token: "nu"},
 			{Source: "teamtailor", Token: "xi"},
 			{Source: "hibob", Token: "omicron"},
+			{Source: "smartrecruiters", Token: "Pi"},
 		},
-		Skipped: 14,
+		Skipped: 15,
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Harvest() (-want +got):\n%s", diff)

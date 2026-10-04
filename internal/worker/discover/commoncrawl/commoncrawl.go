@@ -45,6 +45,7 @@ var patterns = []string{
 	"*.pinpointhq.com",
 	"*.teamtailor.com",
 	"*.careers.hibob.com",
+	"jobs.smartrecruiters.com/*",
 }
 
 var notBoards = map[string]map[string]bool{

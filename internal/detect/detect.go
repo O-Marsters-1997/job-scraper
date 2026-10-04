@@ -18,6 +18,7 @@ const (
 	Pinpoint
 	Teamtailor
 	HiBob
+	SmartRecruiters
 	Aggregator
 )
 
@@ -46,6 +47,8 @@ func Detect(rawURL string) ATSType {
 		return Teamtailor
 	case strings.HasSuffix(host, ".careers.hibob.com"):
 		return HiBob
+	case host == "jobs.smartrecruiters.com" || host == "careers.smartrecruiters.com":
+		return SmartRecruiters
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -54,15 +57,16 @@ func Detect(rawURL string) ATSType {
 }
 
 var atsSourceName = map[ATSType]string{
-	Greenhouse: "greenhouse",
-	Lever:      "lever",
-	Ashby:      "ashby",
-	Workable:   "workable",
-	Recruitee:  "recruitee",
-	Personio:   "personio",
-	Pinpoint:   "pinpoint",
-	Teamtailor: "teamtailor",
-	HiBob:      "hibob",
+	Greenhouse:      "greenhouse",
+	Lever:           "lever",
+	Ashby:           "ashby",
+	Workable:        "workable",
+	Recruitee:       "recruitee",
+	Personio:        "personio",
+	Pinpoint:        "pinpoint",
+	Teamtailor:      "teamtailor",
+	HiBob:           "hibob",
+	SmartRecruiters: "smartrecruiters",
 }
 
 var (
@@ -93,6 +97,18 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 			return "", "", false
 		}
 		return source, labels[0], true
+	case SmartRecruiters:
+		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if segs[0] == "oneclick-ui" {
+			if len(segs) >= 3 && segs[1] == "company" && segs[2] != "" {
+				return source, segs[2], true
+			}
+			return "", "", false
+		}
+		if segs[0] == "" {
+			return "", "", false
+		}
+		return source, segs[0], true
 	default:
 		for seg := range strings.SplitSeq(u.Path, "/") {
 			if seg != "" && seg != "embed" {
@@ -146,6 +162,8 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".teamtailor.com"
 	case "hibob":
 		return "https://" + token + ".careers.hibob.com"
+	case "smartrecruiters":
+		return "https://jobs.smartrecruiters.com/" + token
 	default:
 		return ""
 	}

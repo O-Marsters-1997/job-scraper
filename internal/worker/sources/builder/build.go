@@ -20,6 +20,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/recruitee"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remoteok"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/remotive"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
@@ -36,19 +37,20 @@ func boardEntry(newSource func(token string) sources.Source) entry {
 }
 
 var registry = map[string]entry{
-	"greenhouse": boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
-	"lever":      boardEntry(func(v string) sources.Source { return lever.New(v) }),
-	"ashby":      boardEntry(func(v string) sources.Source { return ashby.New(v) }),
-	"workable":   boardEntry(func(v string) sources.Source { return workable.New(v) }),
-	"recruitee":  boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
-	"personio":   boardEntry(func(v string) sources.Source { return personio.New(v) }),
-	"pinpoint":   boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
-	"teamtailor": boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
-	"hibob":      boardEntry(func(v string) sources.Source { return hibob.New(v) }),
-	"wttj":       {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
-	"indeed":     {build: func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value, t.Filters) }},
-	"remoteok":   {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
-	"remotive":   {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+	"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
+	"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
+	"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
+	"workable":        boardEntry(func(v string) sources.Source { return workable.New(v) }),
+	"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
+	"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
+	"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
+	"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
+	"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
+	"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
+	"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
+	"indeed":          {build: func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value, t.Filters) }},
+	"remoteok":        {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+	"remotive":        {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 	"wis": {
 		build: func(t dto.SourceTarget) sources.Source {
 			return wis.New(wis.Search{

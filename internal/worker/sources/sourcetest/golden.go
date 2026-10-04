@@ -3,6 +3,7 @@ package sourcetest
 import (
 	"encoding/json"
 	"flag"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,24 +19,36 @@ import (
 var update = flag.Bool("update", false, "rewrite golden files from parser output")
 
 // RunGolden serves snapshots/<fixture> as src's API response and compares the fetched jobs to
-// snapshots/<fixture minus extension>.golden.json. Run with -update to rewrite it.
-func RunGolden(t *testing.T, fixture string, src *sources.BoardSource) {
+// snapshots/<fixture minus extension>.golden.json. Run with -update to rewrite it. src must
+// expose its HTTP client, as every Source built on sources.PaginatedBase does.
+func RunGolden(t *testing.T, fixture string, src sources.Source) {
 	t.Helper()
 
 	body, err := os.ReadFile(filepath.Join("snapshots", fixture))
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-
-	src.Client().Transport = Respond(string(body))
+	withClient, ok := src.(interface{ Client() *http.Client })
+	if !ok {
+		t.Fatalf("%T does not expose Client()", src)
+	}
+	withClient.Client().Transport = Respond(string(body))
 
 	start := time.Now()
 	got, _, err := src.FetchPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("FetchPage(%s) error: %v", fixture, err)
 	}
-	clearTimeNowFallbacks(got, start)
+	MatchGolden(t, fixture, got, start)
+}
 
+// MatchGolden compares got to snapshots/<fixture minus extension>.golden.json, ignoring
+// UpdatedAt values that fell back to the time of the fetch begun at start. Run with -update
+// to rewrite the golden.
+func MatchGolden(t *testing.T, fixture string, got []dto.Job, start time.Time) {
+	t.Helper()
+
+	clearTimeNowFallbacks(got, start)
 	goldenPath := filepath.Join("snapshots", strings.TrimSuffix(fixture, filepath.Ext(fixture))+".golden.json")
 	if *update {
 		out, err := json.MarshalIndent(got, "", "  ")

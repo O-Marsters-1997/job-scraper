@@ -67,7 +67,7 @@ A Verified Board whose next check under its Check Frequency is more than an hour
 _Avoid_: Stale Board, late Board, failed Board
 
 **ATS**:
-An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio, Pinpoint, Teamtailor, HiBob) exposing a public, unauthenticated jobs API — the Tier-1 source of truth, extracted via API not HTML.
+An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Personio, Pinpoint, Teamtailor, HiBob, SmartRecruiters) exposing a public, unauthenticated jobs API — the Tier-1 source of truth, extracted via API not HTML.
 _Avoid_: Platform (when ambiguous), provider
 
 **Aggregator**:
