@@ -58,7 +58,7 @@ type DetailFetcher interface {
 	GetDetails(ctx context.Context, url string) (dto.Job, error)
 }
 
-// StatusError is returned by Get and PostEmptyJSON for any non-200 response other than 404 or 410.
+// StatusError is returned by Get and PostJSON for any non-200 response other than 404 or 410.
 type StatusError struct {
 	Code       int
 	Status     string
@@ -82,7 +82,7 @@ type BoardPoller interface {
 	PollBoard(ctx context.Context) (BoardResult, error)
 }
 
-// ErrGone is returned by Get and PostEmptyJSON for a 404 or 410 response.
+// ErrGone is returned by Get and PostJSON for a 404 or 410 response.
 var ErrGone = errors.New("gone")
 
 // ErrSourceKeyRejected is returned by a keyed Source when the provider refuses
@@ -129,11 +129,6 @@ func (b *PaginatedBase) GetHeader(ctx context.Context, url string, header http.H
 // PostJSON sends body as JSON; header entries override the defaults.
 func (b *PaginatedBase) PostJSON(ctx context.Context, url string, body []byte, header http.Header) ([]byte, error) {
 	return b.do(ctx, http.MethodPost, url, body, header)
-}
-
-// PostEmptyJSON exists because some ATS list APIs (e.g. Workable) only respond to POST.
-func (b *PaginatedBase) PostEmptyJSON(ctx context.Context, url string) ([]byte, error) {
-	return b.do(ctx, http.MethodPost, url, []byte("{}"), nil)
 }
 
 func (b *PaginatedBase) do(ctx context.Context, method, url string, body []byte, header http.Header) ([]byte, error) {

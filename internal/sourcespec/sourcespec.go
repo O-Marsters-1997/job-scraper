@@ -66,6 +66,7 @@ var entries = []registryEntry{
 	{name: "personio", label: "Personio", kind: kindBoard, role: RoleATS, urlPrefix: "https://personio.de"},
 	{name: "pinpoint", label: "Pinpoint", kind: kindBoard, role: RoleATS, urlPrefix: "https://pinpointhq.com"},
 	{name: "teamtailor", label: "Teamtailor", kind: kindBoard, role: RoleATS, urlPrefix: "https://teamtailor.com"},
+	{name: "hibob", label: "HiBob", kind: kindBoard, role: RoleATS, urlPrefix: "https://careers.hibob.com"},
 	{name: "wttj", label: "Welcome to the Jungle", kind: kindBoard, role: RoleATS, urlPrefix: "https://app.welcometothejungle.com/companies"},
 	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "loc", Param: "loc", Label: "Location", Options: []FilterOption{

@@ -26,7 +26,7 @@ The worker needs `API_BASE_URL` and the same `INGEST_SERVICE_TOKEN` as the API. 
 
 ## Source Targets and Boards
 
-Discovery searches start when created and can be rerun with `POST /source-targets/{id}/scrape`. Supported discovery Sources are `wis`, `linkedin`, `indeed`, `remoteok`, and `remotive`. ATS Sources are `greenhouse`, `lever`, `ashby`, `workable`, `recruitee`, `personio`, `pinpoint`, and `teamtailor`; they require a verified Board and are polled when due for a tracked Company. Source Targets, user ownership, and check frequencies remain in PostgreSQL. The authenticated API exposes `GET/POST /source-targets`, `PATCH/DELETE /source-targets/{id}`, and Company tracking routes.
+Discovery searches start when created and can be rerun with `POST /source-targets/{id}/scrape`. Supported discovery Sources are `wis`, `linkedin`, `indeed`, `remoteok`, and `remotive`. ATS Sources are `greenhouse`, `lever`, `ashby`, `workable`, `recruitee`, `personio`, `pinpoint`, `teamtailor`, and `hibob`; they require a verified Board and are polled when due for a tracked Company. Source Targets, user ownership, and check frequencies remain in PostgreSQL. The authenticated API exposes `GET/POST /source-targets`, `PATCH/DELETE /source-targets/{id}`, and Company tracking routes.
 
 An HTML Source implements `DetailFetcher`; ATS Sources return complete Jobs. Listing cards are saved as Candidates and assessed against the user's search config before detail publication. The worker fetches details using the task's Source identity and sends completed Jobs to `/ingest`. The API's canonical URL and provider identity rules deduplicate repeated deliveries.
 

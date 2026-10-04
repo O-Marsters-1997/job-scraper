@@ -108,7 +108,7 @@ func (b *BoardSource) fetchPage(ctx context.Context, postBody []byte) ([]byte, [
 	case postBody != nil:
 		body, err = b.PostJSON(ctx, b.spec.URL, postBody, nil)
 	case b.spec.Post:
-		body, err = b.PostEmptyJSON(ctx, b.spec.URL)
+		body, err = b.PostJSON(ctx, b.spec.URL, []byte("{}"), nil)
 	default:
 		body, err = b.Get(ctx, b.spec.URL)
 	}
