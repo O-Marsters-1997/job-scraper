@@ -96,8 +96,9 @@ func (s *Source) PollBoard(ctx context.Context) (sources.BoardResult, error) {
 	current := make(map[string]dto.Job, len(listed))
 	var missing []listing
 	for _, l := range listed {
-		if job, ok := known[l.cacheKey()]; ok {
-			current[l.cacheKey()] = job
+		key := l.cacheKey()
+		if job, ok := known[key]; ok {
+			current[key] = job
 		} else {
 			missing = append(missing, l)
 		}
@@ -178,8 +179,7 @@ func (s *Source) fetchDetails(ctx context.Context, missing []listing) (map[strin
 			return nil
 		})
 	}
-	err := group.Wait()
-	return fetched, err
+	return fetched, group.Wait()
 }
 
 type detail struct {
