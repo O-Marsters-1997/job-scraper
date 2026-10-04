@@ -202,7 +202,7 @@ func TestListScored(t *testing.T) {
 func TestListHidesExcludedCompanies(t *testing.T) {
 	st := jobsearchtest.NewFakeStore()
 	for _, job := range []dto.Job{
-		{Title: "Role", URL: "https://example.com/acme", CompanySlug: "acme-corp"},
+		{Title: "Role", URL: "https://example.com/acme", CompanySlug: "acme"},
 		{Title: "Role", URL: "https://example.com/globex", CompanySlug: "globex"},
 	} {
 		job.ScrapedAt, job.UpdatedAt = time.Now(), time.Now()

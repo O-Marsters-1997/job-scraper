@@ -21,6 +21,27 @@ func TestMake(t *testing.T) {
 	}
 }
 
+func TestCompany(t *testing.T) {
+	tests := map[string]string{
+		"Acme Ltd":             "acme",
+		"Acme Limited":         "acme",
+		"Acme, Inc.":           "acme",
+		"Acme":                 "acme",
+		"Ltd":                  "ltd",
+		"Acme Holdings Co Ltd": "acme-holdings",
+		"Acme - Ltd":           "acme",
+		"Co Ltd":               "co",
+		"Ltd Acme":             "ltd-acme",
+		"Acme Corporate":       "acme-corporate",
+		"":                     "",
+	}
+	for in, want := range tests {
+		if got := slug.Company(in); got != want {
+			t.Errorf("Company(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestHumanize(t *testing.T) {
 	tests := map[string]string{"acme-corp": "Acme Corp", "1password": "1password", "a--b": "A  B"}
 	for in, want := range tests {

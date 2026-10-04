@@ -22,6 +22,23 @@ func Make(s string) string {
 	return strings.Trim(b.String(), "-")
 }
 
+var legalSuffixes = map[string]bool{
+	"ltd": true, "limited": true, "inc": true, "incorporated": true, "llc": true, "llp": true,
+	"gmbh": true, "plc": true, "corp": true, "corporation": true, "co": true, "sa": true,
+	"bv": true, "ag": true, "pty": true,
+}
+
+func Company(name string) string {
+	s := Make(name)
+	for {
+		cut := strings.LastIndexByte(s, '-')
+		if cut < 0 || !legalSuffixes[s[cut+1:]] {
+			return s
+		}
+		s = strings.TrimRight(s[:cut], "-")
+	}
+}
+
 // Humanize turns a slug into a display name by capitalising each hyphen-separated
 // word, e.g. "acme-corp" -> "Acme Corp".
 func Humanize(slug string) string {

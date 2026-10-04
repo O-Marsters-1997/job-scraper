@@ -260,7 +260,7 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 			Title:       title,
 			Location:    location,
 			URL:         href,
-			CompanySlug: slug.Make(company),
+			CompanySlug: slug.Company(company),
 		})
 	})
 	return jobs, nil
@@ -316,7 +316,7 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		Title:           title,
 		Location:        location,
 		URL:             url,
-		CompanySlug:     slug.Make(company),
+		CompanySlug:     slug.Company(company),
 		Source:          "wis",
 		UpdatedAt:       updatedAt,
 		Description:     description,

@@ -14,8 +14,9 @@ import (
 // the location include list.
 func Reject(job dto.Job, cfg dto.SearchConfig) (reason string, rejected bool) {
 	if job.CompanySlug != "" {
+		jobCompany := slug.Company(job.CompanySlug)
 		for _, excluded := range cfg.ExcludedCompanies {
-			if slug.Make(excluded) == job.CompanySlug {
+			if slug.Company(excluded) == jobCompany {
 				return fmt.Sprintf("company: %s", job.CompanySlug), true
 			}
 		}

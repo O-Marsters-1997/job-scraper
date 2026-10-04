@@ -189,7 +189,7 @@ func parse(body []byte) ([]dto.Job, string, error) {
 			Title:           j.Title,
 			Location:        j.Location.Formatted.Long,
 			URL:             url,
-			CompanySlug:     slug.Make(company),
+			CompanySlug:     slug.Company(company),
 			Description:     j.Description.HTML,
 			SalaryRaw:       formatSalary(j),
 			WorkArrangement: sources.DetectWorkArrangement(j.Title + " " + j.Location.Formatted.Long + " " + j.Description.HTML),
