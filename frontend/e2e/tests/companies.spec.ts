@@ -44,7 +44,12 @@ test.describe("Companies", () => {
 	test("should toggle tracking for a company with a known ATS board", async ({
 		companiesPage,
 	}) => {
-		const toggle = companiesPage.rows.first().getByRole("group");
+		const name = await companiesPage.firstCompanyNameLink().textContent();
+		if (!name) throw new Error("Could not read first company name");
+		const toggle = companiesPage.rows
+			.filter({ hasText: name.trim() })
+			.first()
+			.getByRole("group");
 		await expect(toggle).toBeVisible();
 
 		const wasChecked = await toggle.evaluate((el) =>
