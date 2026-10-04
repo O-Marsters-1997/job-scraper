@@ -15,6 +15,7 @@ const (
 	Workable
 	Recruitee
 	Personio
+	Pinpoint
 	Aggregator
 )
 
@@ -37,6 +38,8 @@ func Detect(rawURL string) ATSType {
 		return Recruitee
 	case strings.Contains(host, "personio.de") || strings.Contains(host, "personio.com"):
 		return Personio
+	case strings.HasSuffix(host, ".pinpointhq.com"):
+		return Pinpoint
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -51,6 +54,7 @@ var atsSourceName = map[ATSType]string{
 	Workable:   "workable",
 	Recruitee:  "recruitee",
 	Personio:   "personio",
+	Pinpoint:   "pinpoint",
 }
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
@@ -68,8 +72,8 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 
 	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
-	case Recruitee, Personio:
-		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de
+	case Recruitee, Personio, Pinpoint:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
 		if len(labels) < 3 || labels[0] == "www" || labels[0] == "jobs" {
 			return "", "", false
@@ -122,6 +126,8 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".recruitee.com"
 	case "personio":
 		return "https://" + token + ".jobs.personio.de"
+	case "pinpoint":
+		return "https://" + token + ".pinpointhq.com"
 	default:
 		return ""
 	}

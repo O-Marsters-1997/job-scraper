@@ -62,6 +62,14 @@ const SOURCE_INFOS: SourceInfo[] = [
 		filters: [],
 	},
 	{
+		name: "pinpoint",
+		label: "Pinpoint",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://pinpointhq.com",
+		filters: [],
+	},
+	{
 		name: "wis",
 		label: "Work in Startups",
 		kind: "filter",

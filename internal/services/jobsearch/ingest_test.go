@@ -47,6 +47,11 @@ func TestIngestJobsPublishesBoardDiscover(t *testing.T) {
 			want: []queue.Task{{Source: "ashby", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "wttj"}},
 		},
 		{
+			name: "pinpoint apply url publishes its board",
+			jobs: []dto.Job{{Title: "Eng", URL: "https://app.welcometothejungle.com/jobs/x", ApplyURL: "https://acme.pinpointhq.com/en/postings/ce6c9e5c-a2d3", Source: "wttj"}},
+			want: []queue.Task{{Source: "pinpoint", Kind: queue.BoardDiscoverTask, BoardToken: "acme", Via: "wttj"}},
+		},
+		{
 			name: "unresolved apply url publishes none",
 			jobs: []dto.Job{{Title: "Eng", URL: "https://app.welcometothejungle.com/jobs/x", ApplyURL: "https://x.wd1.myworkdayjobs.com/j/1", Source: "wttj"}},
 		},
