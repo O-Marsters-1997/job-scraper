@@ -143,8 +143,13 @@ A User's stance (nice, avoid, or block for `domain`) on one Option. Nice Picks i
 Dimension are alternatives — a Job matching any one earns that Dimension's boost once; avoid Picks
 cost a Job only when the Job has them; a block Pick that resolves yes zeroes Suitability and drops
 the Job from the User's list — unlike a Hard filter, it runs after Jev answers, since domain needs
-Jev to decide.
+Jev to decide. On the seniority Ladder a Pick is instead a 1–100 weight on one tier.
 _Avoid_: Preference (too broad), rule
+
+**Ladder**:
+The seniority Dimension's ordered tiers (Junior 1 to Principal/Head 5). The User's tier weights give
+a point and a tolerance band; the Job's tier Answers give its level, and credit falls with distance.
+_Avoid_: Range, level filter
 
 **Answer**:
 Jev's reply to one Option's question about one Job — three probabilities (yes/no/not_stated) plus
@@ -173,8 +178,9 @@ _Avoid_: Relevance, fit score — keep distinct from Relevance
 
 **Gate**:
 A rule that caps Suitability at the top of Poor (44) without hiding the Job. A Gate dimension
-(seniority, work) fires when every option the User picked in it resolves no and an option they did
-not pick resolves yes; a salary below the floor also fires one. The triggering row shows as `gated`.
+(work, employment) fires when every option the User picked in it resolves no and an option they did
+not pick resolves yes; the seniority Ladder fires when the Job sits more than twice the tolerance
+from the User's point; a salary below the floor also fires one. The triggering row shows as `gated`.
 _Avoid_: Block (a block Pick forces 0 and hides the Job), filter
 
 **Band**:

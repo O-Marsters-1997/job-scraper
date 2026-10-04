@@ -32,6 +32,7 @@ import type {
 } from "../../../types/scoringOptions";
 import { FiltersSection } from "./-scoring/FiltersSection";
 import { RecomputeControls } from "./-scoring/RecomputeControls";
+import { SeniorityLadder } from "./-scoring/SeniorityLadder";
 import { STANCE_LABEL, STANCE_TONE } from "./-scoring/stance";
 import { useExclusionFilters } from "./-scoring/useExclusionFilters";
 
@@ -69,8 +70,15 @@ function ScoringForm(props: {
 	const [stances, setStances] = createStore<StanceMap>(
 		Object.fromEntries(
 			initialConfig.preferences.picks
-				.filter((p) => p.source === "manual")
+				.filter((p) => p.source === "manual" && p.weight === undefined)
 				.map((p) => [p.optionId, p.stance]),
+		),
+	);
+	const [weights, setWeights] = createStore<Record<string, number>>(
+		Object.fromEntries(
+			initialConfig.preferences.picks
+				.filter((p) => p.source === "manual" && p.weight !== undefined)
+				.map((p) => [p.optionId, p.weight ?? 0]),
 		),
 	);
 
@@ -134,14 +142,25 @@ function ScoringForm(props: {
 				requiredLocations: uniqueCapitalised(filters.requiredLocations()),
 				requiredTitleKeywords: filters.requiredTitleKeywords(),
 				preferences: {
-					picks: Object.entries(stances)
-						.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
-						.map(([optionId, stance]) => ({
-							optionId,
-							stance,
-							source: "manual",
-							overridden: false,
-						})),
+					picks: [
+						...Object.entries(stances)
+							.filter((entry): entry is [string, Stance] => Boolean(entry[1]))
+							.map(([optionId, stance]) => ({
+								optionId,
+								stance,
+								source: "manual",
+								overridden: false,
+							})),
+						...Object.entries(weights)
+							.filter(([, weight]) => weight > 0)
+							.map(([optionId, weight]) => ({
+								optionId,
+								stance: "nice" as const,
+								weight,
+								source: "manual",
+								overridden: false,
+							})),
+					],
 					salaryFloor: salaryFloor()
 						? { amount: Number(salaryFloor()), currency: "GBP" }
 						: null,
@@ -224,12 +243,10 @@ function ScoringForm(props: {
 							/>
 						</div>
 					</Field>
-					<ChoiceGroup
-						legend="Seniority"
-						hint="Postings that don't state a level are never penalised."
-						options={optionsFor("seniority")}
-						choiceOf={choiceOf}
-						cycle={cycleStance("seniority")}
+					<SeniorityLadder
+						tiers={optionsFor("seniority")}
+						weightOf={(id) => weights[id] ?? 0}
+						setWeight={(id, weight) => setWeights(id, weight)}
 					/>
 					<ChoiceGroup
 						legend="Employment type"

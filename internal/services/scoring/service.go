@@ -520,7 +520,9 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 		if !ok {
 			continue
 		}
-		out = append(out, evaluate(opt, p.Stance, answers, corrections))
+		e := evaluate(opt, p.Stance, answers, corrections)
+		e.weight = float64(p.Weight)
+		out = append(out, e)
 	}
 	return out
 }

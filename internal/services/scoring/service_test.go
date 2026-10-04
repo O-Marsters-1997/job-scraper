@@ -520,9 +520,23 @@ func TestUpdateConfigTextExtraction(t *testing.T) {
 		}
 	})
 
+	t.Run("a text pick on a ladder tier is dropped, since only the sliders set tier weights", func(t *testing.T) {
+		svc, _ := newExtractingService(t, goPick, dto.Pick{OptionID: "seniority:senior", Stance: "nice", Source: "text"})
+		got, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
+			Preferences: dto.Preferences{PreferenceText: "senior Go roles please"},
+		})
+		if err != nil {
+			t.Fatalf("UpdateConfig() err = %v", err)
+		}
+		want := []dto.Pick{goPick}
+		if diff := cmp.Diff(want, got.Preferences.Picks); diff != "" {
+			t.Errorf("picks (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("re-extraction replaces text picks and keeps manual ones", func(t *testing.T) {
 		svc, extractor := newExtractingService(t, goPick)
-		manual := dto.Pick{OptionID: "seniority:senior", Stance: "nice"}
+		manual := dto.Pick{OptionID: "role:backend", Stance: "nice"}
 		if _, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
 			Preferences: dto.Preferences{Picks: []dto.Pick{manual}, PreferenceText: "I know Go"},
 		}); err != nil {
@@ -538,7 +552,7 @@ func TestUpdateConfigTextExtraction(t *testing.T) {
 		}
 
 		want := []dto.Pick{
-			{OptionID: "seniority:senior", Stance: "nice", Source: "manual"},
+			{OptionID: "role:backend", Stance: "nice", Source: "manual"},
 			{OptionID: "domain:gambling", Stance: "avoid", Source: "text"},
 		}
 		if diff := cmp.Diff(want, got.Preferences.Picks); diff != "" {
@@ -598,6 +612,7 @@ type pickCase struct {
 	id        string
 	dimension dto.Dimension
 	stance    string
+	weight    int
 	retired   bool
 	unpicked  bool
 	answer    dto.Answer
@@ -605,6 +620,10 @@ type pickCase struct {
 
 func nicePick(dim dto.Dimension, id string, pYes, pNo, pNotStated float64) pickCase {
 	return pickCase{id: id, dimension: dim, stance: "nice", answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
+}
+
+func tierPick(id string, weight int, pYes, pNo, pNotStated float64) pickCase {
+	return pickCase{id: id, dimension: dto.DimensionSeniority, stance: "nice", weight: weight, answer: dto.Answer{PYes: pYes, PNo: pNo, PNotStated: pNotStated}}
 }
 
 func avoidPick(id string, pYes, pNo, pNotStated float64) pickCase {
@@ -721,10 +740,10 @@ func TestRecompute(t *testing.T) {
 				picks: []pickCase{
 					nicePick(dto.DimensionTech, "tech:go", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
+					tierPick("seniority:senior", 100, 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.9, 0.05, 0.05),
 				},
-				wantScore: 74,
+				wantScore: 76,
 				wantBand:  "good",
 			},
 			{
@@ -825,17 +844,33 @@ func TestRecompute(t *testing.T) {
 				},
 			},
 			{
-				name: "seniority gate caps the score when the picked level misses and another level matches",
+				name: "seniority gate caps the score when the job sits far above the weighted tiers",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
-					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.9, 0.05, 0.05),
+					tierPick("seniority:senior", 100, 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:principal_head", 0.9, 0.05, 0.05),
 				},
 				wantScore: 44,
 				wantBand:  "poor",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
-					{Resolved: "no", Effect: "gated"},
+					{Resolved: "yes", Effect: "gated"},
+					{Resolved: "yes", Effect: "level"},
+				},
+			},
+			{
+				name: "seniority one tier above a tight point misses without gating",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					tierPick("seniority:mid", 100, 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
+				},
+				wantScore: 53,
+				wantBand:  "fair",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "yes", Effect: "misses"},
+					{Resolved: "yes", Effect: "level"},
 				},
 			},
 			{
@@ -885,21 +920,21 @@ func TestRecompute(t *testing.T) {
 				name: "a gate needs every picked option to resolve no",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
-					nicePick(dto.DimensionSeniority, "seniority:mid", 0.9, 0.05, 0.05),
-					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
+					nicePick(dto.DimensionWork, "work:hybrid", 0.9, 0.05, 0.05),
+					unpickedOption(dto.DimensionWork, "work:onsite", 0.9, 0.05, 0.05),
 				},
-				wantScore: 85,
+				wantScore: 83,
 				wantBand:  "great",
 			},
 			{
 				name: "a gate needs an unpicked option to resolve yes",
 				picks: []pickCase{
 					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
-					nicePick(dto.DimensionSeniority, "seniority:senior", 0.05, 0.9, 0.05),
-					unpickedOption(dto.DimensionSeniority, "seniority:staff", 0.2, 0.2, 0.6),
+					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
+					unpickedOption(dto.DimensionWork, "work:onsite", 0.2, 0.2, 0.6),
 				},
-				wantScore: 48,
+				wantScore: 55,
 				wantBand:  "fair",
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
@@ -1020,7 +1055,7 @@ func TestRecompute(t *testing.T) {
 					}
 					options = append(options, opt)
 					if !p.unpicked {
-						picks = append(picks, dto.Pick{OptionID: p.id, Stance: p.stance, Source: "manual"})
+						picks = append(picks, dto.Pick{OptionID: p.id, Stance: p.stance, Weight: p.weight, Source: "manual"})
 					}
 					answers[scoring.QuestionHash(question)] = p.answer
 				}

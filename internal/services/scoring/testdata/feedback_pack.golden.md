@@ -20,6 +20,7 @@ Score = round(100 * (sum(weight * (evidence * credit + 0.5 * missing)) + 0.5 * p
   - employment: weight 2, saturation 1, Gate
 - An avoid Pick adds 2 * P(yes) to the denominator and nothing to the numerator.
 - A Gate caps the score at 44: every Pick in a Gate dimension resolves no and an option the user did not pick resolves yes. A salary below the floor also gates.
+- seniority is a ladder instead: Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. The user's tier weights (1-100) give a point (weighted mean level) and a tolerance (weighted spread, at least 0.5). The job's level is sum(level * P(yes)) / sum(P(yes)) over the tier answers, evidence = min(1, sum(P(yes))), and credit = exp(-d^2 / 2) with d = |job level - point| / tolerance. It gates when evidence reaches 0.6 and d exceeds 2.
 - A block Pick resolving yes forces the score to 0.
 - Bands: Great from 80, Good from 65, Fair from 45, Poor below.
 - A picked dimension's missing evidence counts as a coin flip, pulling the score toward 50. A dimension with no Picks counts on neither side.

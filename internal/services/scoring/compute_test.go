@@ -75,15 +75,15 @@ func TestComputeOkStance(t *testing.T) {
 	})
 
 	t.Run("ok pick resolving no still gates", func(t *testing.T) {
-		mid := evaluatedPick{
-			dimension: dto.DimensionSeniority, key: "seniority:mid", stance: "ok",
+		remote := evaluatedPick{
+			dimension: dto.DimensionWork, key: "work:remote", stance: "ok",
 			answer: dto.Answer{PNo: 1}, known: true,
 		}
-		senior := evaluatedPick{
-			dimension: dto.DimensionSeniority, key: "seniority:senior",
+		onsite := evaluatedPick{
+			dimension: dto.DimensionWork, key: "work:onsite",
 			answer: dto.Answer{PYes: 1}, known: true,
 		}
-		score, _, rows := compute([]evaluatedPick{mid}, []evaluatedPick{senior}, "", nil, false)
+		score, _, rows := compute([]evaluatedPick{remote}, []evaluatedPick{onsite}, "", nil, false)
 		if score > gateCap {
 			t.Errorf("score = %d, want at most %d", score, gateCap)
 		}
@@ -101,7 +101,7 @@ func TestComputeMissingEvidence(t *testing.T) {
 	yes := dto.Answer{PYes: 1}
 	matched := append(techPicks("nice", 3),
 		nicePick(dto.DimensionRole, "role:backend", yes, true),
-		nicePick(dto.DimensionSeniority, "seniority:senior", yes, true),
+		tierPick("seniority:senior", 100, yes),
 		nicePick(dto.DimensionWork, "work:remote", yes, true),
 	)
 	silent := []evaluatedPick{
@@ -211,6 +211,84 @@ func TestComputeOfficeDays(t *testing.T) {
 		hybridOnly, _ := scoreHybridJob(map[string]string{"work:hybrid": "nice"}, 0)
 		if withBuckets != hybridOnly {
 			t.Errorf("unstated score = %d, want %d (hybrid with no buckets picked)", withBuckets, hybridOnly)
+		}
+	})
+}
+
+func tierPick(key string, weight float64, answer dto.Answer) evaluatedPick {
+	return evaluatedPick{dimension: dto.DimensionSeniority, key: key, stance: "nice", weight: weight, answer: answer, known: true}
+}
+
+var tierKeys = []string{"seniority:junior", "seniority:mid", "seniority:senior", "seniority:lead_staff", "seniority:principal_head"}
+
+func scoreLadderJob(weights, jobYes map[string]float64) (int, []dto.ScoreRow) {
+	var picks, unpicked []evaluatedPick
+	for _, key := range tierKeys {
+		answer := dto.Answer{PYes: jobYes[key], PNo: 1 - jobYes[key]}
+		if jobYes == nil {
+			answer = dto.Answer{PNotStated: 1}
+		}
+		if w, ok := weights[key]; ok {
+			picks = append(picks, tierPick(key, w, answer))
+		} else {
+			unpicked = append(unpicked, tierPick(key, 0, answer))
+		}
+	}
+	score, _, rows := compute(picks, unpicked, "", nil, false)
+	return score, rows
+}
+
+func TestComputeSeniorityLadder(t *testing.T) {
+	tight := map[string]float64{"seniority:mid": 70, "seniority:senior": 30}
+	wide := map[string]float64{"seniority:junior": 15, "seniority:mid": 55, "seniority:senior": 15, "seniority:lead_staff": 15}
+	between := map[string]float64{"seniority:mid": 0.7, "seniority:senior": 0.3}
+	pureMid := map[string]float64{"seniority:mid": 1}
+	pureSenior := map[string]float64{"seniority:senior": 1}
+	pureLead := map[string]float64{"seniority:lead_staff": 1}
+
+	t.Run("a job at the point outscores a pure Mid job, which outscores a pure Senior job", func(t *testing.T) {
+		atPoint, _ := scoreLadderJob(tight, between)
+		mid, _ := scoreLadderJob(tight, pureMid)
+		senior, _ := scoreLadderJob(tight, pureSenior)
+		if atPoint <= mid || mid <= senior {
+			t.Errorf("scores at point/mid/senior = %d/%d/%d, want strictly falling", atPoint, mid, senior)
+		}
+	})
+
+	t.Run("a wider spread narrows the gaps", func(t *testing.T) {
+		tightPoint, _ := scoreLadderJob(tight, between)
+		tightSenior, _ := scoreLadderJob(tight, pureSenior)
+		widePoint, _ := scoreLadderJob(wide, between)
+		wideSenior, _ := scoreLadderJob(wide, pureSenior)
+		if widePoint-wideSenior >= tightPoint-tightSenior {
+			t.Errorf("wide gap = %d, want below the tight gap %d", widePoint-wideSenior, tightPoint-tightSenior)
+		}
+	})
+
+	t.Run("a Lead/Staff job trips the gate on a tight band but not a wide one", func(t *testing.T) {
+		if score, rows := scoreLadderJob(tight, pureLead); score > gateCap || len(gatedRows(rows)) != 1 {
+			t.Errorf("tight score = %d, gated rows %v, want at most %d and the seniority row gated", score, gatedRows(rows), gateCap)
+		}
+		if _, rows := scoreLadderJob(wide, pureLead); len(gatedRows(rows)) > 0 {
+			t.Errorf("wide gated rows = %v, want none", gatedRows(rows))
+		}
+	})
+
+	t.Run("unknown tier answers shrink to 50 and never gate", func(t *testing.T) {
+		score, rows := scoreLadderJob(tight, nil)
+		if score != 50 || len(gatedRows(rows)) > 0 {
+			t.Errorf("score = %d, gated rows %v, want 50 and none gated", score, gatedRows(rows))
+		}
+		if rows[0].Effect != "unknown" {
+			t.Errorf("seniority row effect = %q, want unknown", rows[0].Effect)
+		}
+	})
+
+	t.Run("the summary row shows the job level against the point and band", func(t *testing.T) {
+		_, rows := scoreLadderJob(tight, between)
+		want := "Seniority: job ≈ 2.3 · you 2.3 ± 0.5"
+		if rows[0].Label != want || rows[0].Effect != "meets" {
+			t.Errorf("summary row = %+v, want label %q meeting", rows[0], want)
 		}
 	})
 }

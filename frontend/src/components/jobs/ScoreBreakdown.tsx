@@ -35,6 +35,11 @@ const GROUPS: {
 		style: tintedChip(MISSING_COLOUR),
 	},
 	{
+		label: "Level",
+		keep: (r) => r.effect === "level",
+		class: "bg-surface text-muted border border-border",
+	},
+	{
 		label: "Unknown",
 		keep: (r) => r.effect === "unknown",
 		class: "bg-surface-muted text-muted border border-border",
@@ -56,7 +61,7 @@ const canCorrect = (r: ScoreRow) =>
 	(r.resolved === "yes" &&
 		r.effect !== "retired" &&
 		r.effect !== "favourite" &&
-		r.key !== "salary");
+		r.key.includes(":"));
 
 export function ScoreBreakdown(props: { job: Job }) {
 	const [selectedKey, setSelectedKey] = createSignal<string>();
