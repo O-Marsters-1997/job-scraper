@@ -57,6 +57,28 @@ export async function updateApplication(
 	);
 }
 
+export async function setChase(
+	id: string,
+	chaseBy: string,
+): Promise<Application> {
+	return mocked(
+		(db) => db.setChase(id, chaseBy),
+		() =>
+			apiFetch(
+				`/applications/${id}/chase`,
+				applicationSchema,
+				jsonInit("PUT", { chase_by: chaseBy }),
+			),
+	);
+}
+
+export async function clearChase(id: string): Promise<void> {
+	return mocked(
+		(db) => db.clearChase(id),
+		() => apiFetchVoid(`/applications/${id}/chase`, { method: "DELETE" }),
+	);
+}
+
 export async function deleteApplication(id: string): Promise<void> {
 	return mocked(
 		(db) => db.deleteApplication(id),

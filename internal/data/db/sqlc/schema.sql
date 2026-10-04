@@ -86,8 +86,11 @@ CREATE TABLE IF NOT EXISTS applications (
     salary_info TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    chase_by    DATE,
     UNIQUE (user_id, job_id)
 );
+
+CREATE INDEX applications_chase_idx ON applications (user_id, chase_by) WHERE chase_by IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tracked_docs (
     id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

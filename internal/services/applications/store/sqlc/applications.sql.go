@@ -11,10 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearApplicationChase = `-- name: ClearApplicationChase :exec
+UPDATE applications
+SET chase_by = NULL
+WHERE id = $1 AND user_id = $2
+`
+
+type ClearApplicationChaseParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicationChaseParams) error {
+	_, err := q.db.Exec(ctx, clearApplicationChase, arg.ID, arg.UserID)
+	return err
+}
+
 const createApplication = `-- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at
+RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type CreateApplicationParams struct {
@@ -46,6 +62,7 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		&i.SalaryInfo,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ChaseBy,
 	)
 	return i, err
 }
@@ -119,7 +136,7 @@ func (q *Queries) GetApplicationsForJobs(ctx context.Context, arg GetApplication
 const listApplications = `-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at,
+    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
@@ -131,12 +148,16 @@ JOIN jobs j ON a.job_id = j.id
 LEFT JOIN application_statuses s ON a.status_id = s.id
 WHERE a.user_id = $1
   AND ($2::uuid IS NULL OR a.status_id = $2)
-ORDER BY a.updated_at DESC
+  AND (NOT $3::boolean OR a.chase_by IS NOT NULL)
+ORDER BY
+    CASE WHEN $3::boolean THEN a.chase_by END ASC,
+    a.updated_at DESC
 `
 
 type ListApplicationsParams struct {
 	UserID   pgtype.UUID
 	StatusID pgtype.UUID
+	Chase    bool
 }
 
 type ListApplicationsRow struct {
@@ -149,6 +170,7 @@ type ListApplicationsRow struct {
 	SalaryInfo     pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
+	ChaseBy        pgtype.Date
 	JobTitle       string
 	JobCompanySlug string
 	JobLocation    string
@@ -158,7 +180,7 @@ type ListApplicationsRow struct {
 }
 
 func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsParams) ([]ListApplicationsRow, error) {
-	rows, err := q.db.Query(ctx, listApplications, arg.UserID, arg.StatusID)
+	rows, err := q.db.Query(ctx, listApplications, arg.UserID, arg.StatusID, arg.Chase)
 	if err != nil {
 		return nil, err
 	}
@@ -176,6 +198,7 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.SalaryInfo,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ChaseBy,
 			&i.JobTitle,
 			&i.JobCompanySlug,
 			&i.JobLocation,
@@ -193,11 +216,42 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 	return items, nil
 }
 
+const setApplicationChase = `-- name: SetApplicationChase :one
+UPDATE applications
+SET chase_by = $3
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+`
+
+type SetApplicationChaseParams struct {
+	ID      pgtype.UUID
+	UserID  pgtype.UUID
+	ChaseBy pgtype.Date
+}
+
+func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationChaseParams) (Application, error) {
+	row := q.db.QueryRow(ctx, setApplicationChase, arg.ID, arg.UserID, arg.ChaseBy)
+	var i Application
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.StatusID,
+		&i.Notes,
+		&i.AppliedAt,
+		&i.SalaryInfo,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ChaseBy,
+	)
+	return i, err
+}
+
 const updateApplication = `-- name: UpdateApplication :one
 UPDATE applications
 SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at
+RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type UpdateApplicationParams struct {
@@ -229,6 +283,7 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		&i.SalaryInfo,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ChaseBy,
 	)
 	return i, err
 }

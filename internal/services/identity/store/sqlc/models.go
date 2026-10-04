@@ -87,6 +87,7 @@ type Application struct {
 	SalaryInfo pgtype.Text
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	ChaseBy    pgtype.Date
 }
 
 type ApplicationStatus struct {

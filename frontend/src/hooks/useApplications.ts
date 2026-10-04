@@ -1,8 +1,10 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
+	clearChase,
 	createApplication,
 	deleteApplication,
 	fetchApplications,
+	setChase,
 	updateApplication,
 } from "../api/applications";
 import { keys } from "../api/keys";
@@ -39,4 +41,15 @@ export function useDeleteApplication() {
 		keys.applications.all,
 		keys.jobs.all,
 	]);
+}
+
+export function useSetChase() {
+	return useInvalidatingMutation(
+		({ id, chaseBy }: { id: string; chaseBy: string }) => setChase(id, chaseBy),
+		[keys.applications.all],
+	);
+}
+
+export function useClearChase() {
+	return useInvalidatingMutation(clearChase, [keys.applications.all]);
 }

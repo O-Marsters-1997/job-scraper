@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -75,14 +76,14 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 	return toApplicationDTO(a), nil
 }
 
-func (s *Store) ListApplications(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
+func (s *Store) ListApplications(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return nil, err
 	}
-	params := sqlc.ListApplicationsParams{UserID: uid}
-	if statusID != "" {
-		if params.StatusID, err = data.UUID(statusID); err != nil {
+	params := sqlc.ListApplicationsParams{UserID: uid, Chase: q.Chase}
+	if q.StatusID != "" {
+		if params.StatusID, err = data.UUID(q.StatusID); err != nil {
 			return nil, err
 		}
 	}
@@ -129,6 +130,44 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 		return dto.Application{}, data.QueryErr("UpdateApplication", err)
 	}
 	return toApplicationDTO(a), nil
+}
+
+func (s *Store) SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error) {
+	aid, err := data.UUID(id)
+	if err != nil {
+		return dto.Application{}, err
+	}
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Application{}, err
+	}
+	a, err := s.queries.SetApplicationChase(ctx, sqlc.SetApplicationChaseParams{
+		ID:      aid,
+		UserID:  uid,
+		ChaseBy: pgtype.Date{Time: chaseBy, Valid: true},
+	})
+	if err != nil {
+		return dto.Application{}, data.QueryErr("SetApplicationChase", err)
+	}
+	return toApplicationDTO(a), nil
+}
+
+func (s *Store) ClearChase(ctx context.Context, userID, id string) error {
+	aid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.ClearApplicationChase(ctx, sqlc.ClearApplicationChaseParams{
+		ID:     aid,
+		UserID: uid,
+	}); err != nil {
+		return fmt.Errorf("store.ClearChase: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) DeleteApplication(ctx context.Context, userID, id string) error {

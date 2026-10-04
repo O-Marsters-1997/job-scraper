@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/datetime";
 import type { ApplicationWithDetails } from "@/types/application";
+import { ChaseRow } from "./ChaseRow";
 
 export function ApplicationCard(props: {
 	app: ApplicationWithDetails | undefined;
@@ -56,6 +57,7 @@ export function ApplicationCard(props: {
 								</p>
 							)}
 						</Show>
+						<ChaseRow applicationId={a().ID} chaseBy={a().ChaseBy} />
 						<div class="pt-0.5">
 							<Button
 								variant="outline"

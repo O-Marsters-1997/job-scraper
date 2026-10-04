@@ -154,6 +154,7 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			SalaryInfo: "",
 			CreatedAt: faker.date.recent({ days: 25 }).toISOString(),
 			UpdatedAt: faker.date.recent({ days: 10 }).toISOString(),
+			ChaseBy: null,
 		});
 	}
 }

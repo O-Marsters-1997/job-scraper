@@ -22,6 +22,12 @@ type UpdateApplicationInput struct {
 
 type ApplicationsQuery struct {
 	StatusID string `json:"status_id"`
+	Chase    bool   `json:"chase,string"`
+}
+
+type ChaseInput struct {
+	ID      string `json:"-" path:"id"`
+	ChaseBy string `json:"chase_by"`
 }
 
 type ApplicationsForJobsQuery struct {
@@ -47,6 +53,7 @@ type Application struct {
 	SalaryInfo string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+	ChaseBy    *time.Time
 }
 
 type ApplicationWithDetails struct {
@@ -65,6 +72,7 @@ type ApplicationWithDetails struct {
 	SalaryInfo     string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	ChaseBy        *time.Time
 }
 
 type JobApplicationSummary struct {
