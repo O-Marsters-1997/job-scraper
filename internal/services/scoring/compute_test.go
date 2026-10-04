@@ -131,34 +131,61 @@ func TestComputeMissingEvidence(t *testing.T) {
 	}
 }
 
-func TestComputeOfficeDaysAvoid(t *testing.T) {
+func workPick(key, stance string, answer dto.Answer) evaluatedPick {
+	return evaluatedPick{dimension: dto.DimensionWork, key: key, stance: stance, answer: answer, known: true}
+}
+
+func scoreHybridJobForTwoDayAvoidFourUser(officeDays func(bucket string) dto.Answer) (int, []dto.ScoreRow) {
+	picks := []evaluatedPick{
+		workPick("work:hybrid", "nice", dto.Answer{PYes: 1}),
+		workPick("work:office_2", "nice", officeDays("work:office_2")),
+		workPick("work:office_4plus", "avoid", officeDays("work:office_4plus")),
+	}
+	unpicked := []evaluatedPick{
+		workPick("work:remote", "nice", dto.Answer{PNo: 1}),
+		workPick("work:onsite", "nice", dto.Answer{PNo: 1}),
+		workPick("work:office_1", "nice", officeDays("work:office_1")),
+		workPick("work:office_3", "nice", officeDays("work:office_3")),
+	}
+	score, _, rows := compute(picks, unpicked, "", nil, false)
+	return score, rows
+}
+
+func onlyBucketYes(yes string) func(string) dto.Answer {
+	return func(bucket string) dto.Answer {
+		if bucket == yes {
+			return dto.Answer{PYes: 1}
+		}
+		return dto.Answer{PNo: 1}
+	}
+}
+
+func TestComputeOfficeDays(t *testing.T) {
 	if w := dimensionSpecs[dto.DimensionWork].Weight; w != 2 {
 		t.Fatalf("work weight = %v, want 2", w)
 	}
-	hybrid := nicePick(dto.DimensionWork, "work:hybrid", dto.Answer{PYes: 1}, true)
-	unpicked := []evaluatedPick{
-		nicePick(dto.DimensionWork, "work:remote", dto.Answer{PNo: 1}, true),
-		nicePick(dto.DimensionWork, "work:onsite", dto.Answer{PNo: 1}, true),
-	}
-	score := func(officeDays dto.Answer) int {
-		office := evaluatedPick{
-			dimension: dto.DimensionWork, key: "work:office_3plus", stance: "avoid",
-			answer: officeDays, known: true,
-		}
-		got, _, _ := compute([]evaluatedPick{hybrid, office}, unpicked, "", nil, false)
-		return got
-	}
+	twoDays, _ := scoreHybridJobForTwoDayAvoidFourUser(onlyBucketYes("work:office_2"))
+	fourDays, _ := scoreHybridJobForTwoDayAvoidFourUser(onlyBucketYes("work:office_4plus"))
+	threeDays, threeDayRows := scoreHybridJobForTwoDayAvoidFourUser(onlyBucketYes("work:office_3"))
+	unstated, _ := scoreHybridJobForTwoDayAvoidFourUser(func(string) dto.Answer { return dto.Answer{PNotStated: 1} })
+	hybridOnly, _, _ := compute([]evaluatedPick{workPick("work:hybrid", "nice", dto.Answer{PYes: 1})}, nil, "", nil, false)
 
-	light := score(dto.Answer{PNo: 1})
-	heavy := score(dto.Answer{PYes: 1})
-	if heavy >= light {
-		t.Errorf("3+ office days score = %d, want below the 1-2 day score %d", heavy, light)
+	if fourDays >= twoDays {
+		t.Errorf("4-day job score = %d, want below the 2-day job score %d", fourDays, twoDays)
 	}
-	if heavy <= gateCap {
-		t.Errorf("3+ office days score = %d, want above the gate cap %d", heavy, gateCap)
+	if fourDays <= gateCap {
+		t.Errorf("4-day job score = %d, want above the gate cap %d", fourDays, gateCap)
 	}
-	if unstated := score(dto.Answer{PNotStated: 1}); unstated != light {
-		t.Errorf("unstated office days score = %d, want %d (the 1-2 day score)", unstated, light)
+	if unstated != hybridOnly {
+		t.Errorf("unstated office days score = %d, want %d (hybrid with no buckets picked)", unstated, hybridOnly)
+	}
+	if threeDays <= gateCap {
+		t.Errorf("3-day job score = %d, want above the gate cap %d", threeDays, gateCap)
+	}
+	for _, row := range threeDayRows {
+		if row.Effect == "gated" {
+			t.Errorf("3-day job row %s gated, want no gate while hybrid matches", row.Key)
+		}
 	}
 }
 
