@@ -11,7 +11,7 @@ import (
 
 var (
 	gradeValues  = []string{"great", "ok", "no"}
-	gradeReasons = []string{"seniority", "role", "tech", "domain", "location", "salary", "contract", "company_size", "recruiter", "other"}
+	gradeReasons = []string{"seniority", "role", "tech", "domain", "location", "salary", "contract", "company_size", "recruiter", "culture", "other"}
 )
 
 // SetGrade records userID's Grade for in.JobID, replacing any earlier one,

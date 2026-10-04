@@ -37,6 +37,7 @@ type replayReport struct {
 	Scores   []int
 	Labelled []replayRow
 	Unscored int
+	Reasons  map[string]int
 }
 
 // Replay re-runs compute over userID's cached answers for every scored job
@@ -74,7 +75,12 @@ func (s *Service) replayReport(ctx context.Context, userID string) (replayReport
 
 	labels := replayLabels(grades, implied)
 
-	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs))}
+	report := replayReport{Total: len(inputs), Scores: make([]int, len(inputs)), Reasons: map[string]int{}}
+	for _, g := range grades {
+		for _, r := range g.Reasons {
+			report.Reasons[r]++
+		}
+	}
 	var labelled []replayRow
 	for i, in := range inputs {
 		scored := scoreJob(userID, cfg, in.Job, bk.byID, in.Answers, in.Corrections, in.Favourite)
@@ -130,14 +136,26 @@ func renderReplay(r replayReport) string {
 	var sb strings.Builder
 	sb.WriteString("# Replay\n\n")
 	writeReplaySummary(&sb, r)
-	if len(r.Labelled) == 0 {
-		return sb.String()
+	if len(r.Labelled) > 0 {
+		sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Band | Rank |\n|---|---|---|---|---|---|---|\n")
+		for _, row := range r.Labelled {
+			fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
+		}
 	}
-	sb.WriteString("\n## Labelled jobs\n\n| Job | Company | Label | Source | Score | Band | Rank |\n|---|---|---|---|---|---|---|\n")
-	for _, row := range r.Labelled {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %d | %s | %d |\n", cell(row.Title), cell(row.Company), replayLabel(row), row.Source, row.Score, row.Band, row.Rank)
-	}
+	writeReplayReasons(&sb, r.Reasons)
 	return sb.String()
+}
+
+func writeReplayReasons(sb *strings.Builder, counts map[string]int) {
+	if len(counts) == 0 {
+		return
+	}
+	sb.WriteString("\n## Labels by reason\n\n| Reason | Labels |\n|---|---|\n")
+	for _, reason := range gradeReasons {
+		if n := counts[reason]; n > 0 {
+			fmt.Fprintf(sb, "| %s | %d |\n", reason, n)
+		}
+	}
 }
 
 func replayLabel(row replayRow) string {

@@ -19,6 +19,7 @@ export const GRADE_REASONS = [
 	"contract",
 	"company_size",
 	"recruiter",
+	"culture",
 	"other",
 ] as const;
 export type GradeReason = (typeof GRADE_REASONS)[number];
