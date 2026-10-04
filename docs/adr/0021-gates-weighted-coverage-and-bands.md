@@ -45,7 +45,7 @@ Replay for the one labelled user (5 positives, 3 negatives): Great Jobs went fro
 
 Seniority was a multi Gate: four level options, each nice or ok. It couldn't say "mostly Mid, some Senior", and `seniority:senior` met heavyweight Senior and "Senior Lead" roles alike (#701, replacing the avoid options tried in #715).
 
-Seniority now has `Kind: "ladder"` on its `DimensionSpec`. Five tiers carry fixed levels in Go (`ladderLevels`): Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. Their questions weigh title, required years and scope together. `seniority:staff` is retired. A ladder Pick stays a `dto.Pick` with stance `nice`, plus a `Weight` from 1 to 100, so storage, text extraction, dedupe and corrections didn't change. Validation demands a weight on a ladder Pick and rejects one anywhere else.
+Seniority now has `Kind: "ladder"` on its `DimensionSpec`. Five tiers carry fixed levels in Go (`ladderLevels`): Junior 1, Mid 2, Senior 3, Lead/Staff 4, Principal/Head 5. Their questions weigh title, required years and scope together. `seniority:staff` is retired. A ladder Pick stays a `dto.Pick` with stance `nice`, plus a `Weight` from 1 to 100, so storage, dedupe and corrections didn't change. The sliders are the only way to set tier weights: text extraction skips ladder tiers, and the migration turned existing text seniority Picks into manual ones. Validation demands a weight on a ladder Pick and rejects one anywhere else.
 
 - **User side.** The point is the weighted mean level. The tolerance is the weighted standard deviation, floored at 0.5 tier (`ladderToleranceFloor`).
 - **Job side.** The level is `sum(level * P(yes)) / sum(P(yes))` over every live tier's answer, and the evidence is `min(1, sum(P(yes)))`.

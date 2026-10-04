@@ -151,6 +151,7 @@ func TestSeniorityLadderMigration(t *testing.T) {
 		{OptionID: "seniority:mid", Stance: "nice", Source: "manual"},
 		{OptionID: "seniority:senior", Stance: "ok", Source: "text"},
 		{OptionID: "seniority:staff", Stance: "ok", Source: "manual"},
+		{OptionID: "seniority:mid", Stance: "ok", Source: "text"},
 	}}}); err != nil {
 		t.Fatalf("UpsertSearchConfig() err = %v", err)
 	}
@@ -167,7 +168,7 @@ func TestSeniorityLadderMigration(t *testing.T) {
 	wantUp := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
 		{OptionID: "seniority:mid", Stance: "nice", Weight: 100, Source: "manual"},
-		{OptionID: "seniority:senior", Stance: "nice", Weight: 50, Source: "text"},
+		{OptionID: "seniority:senior", Stance: "nice", Weight: 50, Source: "manual"},
 		{OptionID: "seniority:lead_staff", Stance: "nice", Weight: 50, Source: "manual"},
 		{OptionID: "seniority:principal_head", Stance: "nice", Weight: 50, Source: "manual"},
 	}
@@ -178,7 +179,7 @@ func TestSeniorityLadderMigration(t *testing.T) {
 	exec(t, pool, migrationSection(t, path, "Down"))
 	wantDown := []dto.Pick{
 		{OptionID: "seniority:mid", Stance: "nice", Source: "manual"},
-		{OptionID: "seniority:senior", Stance: "ok", Source: "text"},
+		{OptionID: "seniority:senior", Stance: "ok", Source: "manual"},
 		{OptionID: "seniority:staff", Stance: "ok", Source: "manual"},
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
 	}

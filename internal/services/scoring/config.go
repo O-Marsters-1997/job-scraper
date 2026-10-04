@@ -108,14 +108,10 @@ func (s *Service) textPicks(ctx context.Context, userID, text string, existing d
 	picks := make([]dto.Pick, 0, len(extracted))
 	for _, p := range extracted {
 		opt, ok := b.byID[p.OptionID]
-		if !ok || opt.RetiredAt != nil || !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
+		if !ok || opt.RetiredAt != nil || b.dimensions[opt.Dimension].Kind == ladderKind || !stanceAllowed(b.dimensions[opt.Dimension], p.Stance) {
 			continue
 		}
-		pick := dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "text"}
-		if b.dimensions[opt.Dimension].Kind == ladderKind {
-			pick.Weight = maxLadderWeight
-		}
-		picks = append(picks, pick)
+		picks = append(picks, dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Source: "text"})
 	}
 	return picks, hash, nil
 }

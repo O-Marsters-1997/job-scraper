@@ -520,15 +520,15 @@ func TestUpdateConfigTextExtraction(t *testing.T) {
 		}
 	})
 
-	t.Run("a text pick on a ladder tier gets the full weight", func(t *testing.T) {
-		svc, _ := newExtractingService(t, dto.Pick{OptionID: "seniority:senior", Stance: "nice", Source: "text"})
+	t.Run("a text pick on a ladder tier is dropped, since only the sliders set tier weights", func(t *testing.T) {
+		svc, _ := newExtractingService(t, goPick, dto.Pick{OptionID: "seniority:senior", Stance: "nice", Source: "text"})
 		got, err := svc.UpdateConfig(ctx, "user-1", dto.ScoringConfigView{
-			Preferences: dto.Preferences{PreferenceText: "senior roles please"},
+			Preferences: dto.Preferences{PreferenceText: "senior Go roles please"},
 		})
 		if err != nil {
 			t.Fatalf("UpdateConfig() err = %v", err)
 		}
-		want := []dto.Pick{{OptionID: "seniority:senior", Stance: "nice", Weight: 100, Source: "text"}}
+		want := []dto.Pick{goPick}
 		if diff := cmp.Diff(want, got.Preferences.Picks); diff != "" {
 			t.Errorf("picks (-want +got):\n%s", diff)
 		}

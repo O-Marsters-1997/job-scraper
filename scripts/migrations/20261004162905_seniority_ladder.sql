@@ -15,6 +15,7 @@ SET preferences = jsonb_set(sc.preferences, '{picks}', COALESCE((
             WHEN p.pick->>'optionId' LIKE 'seniority:%' THEN p.pick || jsonb_build_object(
                 'optionId', tier,
                 'stance', 'nice',
+                'source', 'manual',
                 'weight', CASE p.pick->>'stance' WHEN 'nice' THEN 100 ELSE 50 END)
             ELSE p.pick
         END ORDER BY p.ord, tier)
@@ -22,7 +23,9 @@ SET preferences = jsonb_set(sc.preferences, '{picks}', COALESCE((
     CROSS JOIN LATERAL unnest(CASE p.pick->>'optionId'
         WHEN 'seniority:staff' THEN ARRAY['seniority:lead_staff', 'seniority:principal_head']
         ELSE ARRAY[p.pick->>'optionId'] END) AS tier
-    WHERE p.pick->>'optionId' NOT LIKE 'seniority:%' OR p.pick->>'stance' IN ('nice', 'ok')
+    WHERE p.pick->>'optionId' NOT LIKE 'seniority:%'
+        OR (p.pick->>'stance' IN ('nice', 'ok') AND NOT (p.pick->>'source' = 'text' AND sc.preferences->'picks' @> jsonb_build_array(
+            jsonb_build_object('optionId', p.pick->>'optionId', 'source', 'manual'))))
 ), '[]'::jsonb))
 WHERE jsonb_path_exists(sc.preferences, '$.picks[*] ? (@.optionId starts with "seniority:")');
 
