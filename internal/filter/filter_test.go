@@ -44,6 +44,12 @@ func TestReject(t *testing.T) {
 				wantReason: "company: acme",
 			},
 			{
+				name:       "excluded company matches a board token with a legal suffix",
+				job:        dto.Job{Title: "Engineer", CompanySlug: "acme-inc"},
+				cfg:        dto.SearchConfig{ExcludedCompanies: []string{"Acme"}},
+				wantReason: "company: acme-inc",
+			},
+			{
 				name:       "excluded location matches a term in the location string",
 				job:        dto.Job{Title: "Engineer", Location: "New York, United States"},
 				cfg:        dto.SearchConfig{ExcludedLocations: []string{"united states"}},
