@@ -147,19 +147,57 @@ func TestGetCompany(t *testing.T) {
 }
 
 func TestListCompanies(t *testing.T) {
-	t.Run("pages through every company via next_cursor", func(t *testing.T) {
+	t.Run("pages by offset and reports the total", func(t *testing.T) {
 		svc, st := newCompanyService(queuetest.NewRecorder())
 		for _, name := range []string{"Alpha", "Beta", "Gamma"} {
 			seedCompany(t, st, dto.CompanyUpsert{Slug: strings.ToLower(name), Name: name})
 		}
 
 		first, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Limit: "2"})
-		if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
-			t.Fatalf("ListCompanies(limit 2) = %+v, %v, want two items and a cursor", first, err)
+		if err != nil || len(first.Items) != 2 || first.Total != 3 {
+			t.Fatalf("ListCompanies(limit 2) = %+v, %v, want two items of total 3", first, err)
 		}
-		second, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Limit: "2", Cursor: first.NextCursor})
-		if err != nil || len(second.Items) != 1 || second.Items[0].Name != "Gamma" || second.NextCursor != "" {
-			t.Fatalf("ListCompanies(cursor) = %+v, %v, want Gamma and no cursor", second, err)
+		second, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Limit: "2", Offset: "2"})
+		if err != nil || len(second.Items) != 1 || second.Items[0].Name != "Gamma" || second.Total != 3 {
+			t.Fatalf("ListCompanies(offset 2) = %+v, %v, want Gamma of total 3", second, err)
+		}
+	})
+
+	t.Run("defaults to relevance and honours the alphabetical sort", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		alpha := seedCompany(t, st, dto.CompanyUpsert{Slug: "alpha", Name: "Alpha"})
+		beta := seedCompany(t, st, dto.CompanyUpsert{Slug: "beta", Name: "Beta"})
+		if _, err := st.SetCompanyTracking(t.Context(), userID, beta.ID, true, 180); err != nil {
+			t.Fatal(err)
+		}
+
+		relevant, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{})
+		if err != nil || relevant.Items[0].ID != beta.ID {
+			t.Fatalf("ListCompanies() = %+v, %v, want tracked Beta first", relevant, err)
+		}
+		alphabetical, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Sort: "alphabetical"})
+		if err != nil || alphabetical.Items[0].ID != alpha.ID {
+			t.Fatalf("ListCompanies(alphabetical) = %+v, %v, want Alpha first", alphabetical, err)
+		}
+	})
+
+	t.Run("no-board and favourite filters combine", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		fav := seedCompany(t, st, dto.CompanyUpsert{Slug: "fav", Name: "Fav"})
+		favWithBoard := seedCompany(t, st, dto.CompanyUpsert{Slug: "fav-board", Name: "Fav Board"})
+		seedCompany(t, st, dto.CompanyUpsert{Slug: "other", Name: "Other"})
+		for _, id := range []string{fav.ID, favWithBoard.ID} {
+			if err := st.SetCompanyFavourite(t.Context(), userID, id, true); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := st.UpsertCandidateBoard(t.Context(), favWithBoard.ID, "greenhouse", "fav-board"); err != nil {
+			t.Fatal(err)
+		}
+
+		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{NoBoard: "1", Favourite: "1"})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != fav.ID || page.Total != 1 {
+			t.Fatalf("ListCompanies(no board, favourite) = %+v, %v, want only Fav", page, err)
 		}
 	})
 
@@ -178,7 +216,8 @@ func TestListCompanies(t *testing.T) {
 		}{
 			{"limit above the maximum", dto.CompaniesQuery{Limit: "101"}},
 			{"non-numeric limit", dto.CompaniesQuery{Limit: "x"}},
-			{"malformed cursor", dto.CompaniesQuery{Cursor: "!!"}},
+			{"negative offset", dto.CompaniesQuery{Offset: "-1"}},
+			{"unknown sort", dto.CompaniesQuery{Sort: "newest"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

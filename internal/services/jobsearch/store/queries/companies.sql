@@ -13,7 +13,7 @@ RETURNING *;
 SELECT * FROM companies WHERE id = $1;
 
 -- name: PageCompaniesForUser :many
-SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
+SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
     c.last_crawled_at, c.first_seen_at,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
      WHERE j.company_id = c.id AND j.closed_at IS NULL
@@ -27,14 +27,19 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE cb.company_id = c.id AND cb.status = 'verified') AS last_checked_at
 FROM companies c
 LEFT JOIN tracked_companies tc ON tc.user_id = sqlc.arg(user_id)::uuid AND tc.company_id = c.id
-WHERE (sqlc.narg(cursor_id)::uuid IS NULL OR (c.name, c.id) > (sqlc.narg(cursor_name)::text, sqlc.narg(cursor_id)::uuid))
-  AND (sqlc.arg(search)::text = ''
+WHERE (sqlc.arg(search)::text = ''
        OR strpos(lower(c.name), lower(sqlc.arg(search)::text)) > 0
        OR strpos(c.slug, lower(sqlc.arg(search)::text)) > 0)
   AND (NOT sqlc.arg(tracked_only)::bool OR COALESCE(tc.enabled, FALSE))
   AND (NOT sqlc.arg(favourite_only)::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id))
-ORDER BY c.name, c.id
-LIMIT sqlc.arg(page_limit)::int;
+  AND (NOT sqlc.arg(no_board_only)::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
+ORDER BY
+    CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+          AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id)
+         THEN 0 ELSE 1 END,
+    c.name, c.id
+LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
 
 -- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,

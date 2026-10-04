@@ -66,23 +66,32 @@ export function getCompanies(): Company[] {
 
 export function getCompanyPage(params: CompanyPageParams): {
 	items: Company[];
-	next_cursor: string;
+	total: number;
 } {
 	failIfRequested("getCompanies");
 	const q = (params.q ?? "").toLowerCase();
+	const boardedCompanyIds = new Set(companyBoards.map((b) => b.CompanyID));
+	const byName = (a: Company, b: Company) =>
+		a.Name.localeCompare(b.Name) || a.ID.localeCompare(b.ID);
+	const rank = (first: boolean) => (first ? 0 : 1);
+	const byRelevance = (a: Company, b: Company) =>
+		rank(a.Tracked) - rank(b.Tracked) ||
+		rank(Boolean(a.Favourite) && a.Tracked) -
+			rank(Boolean(b.Favourite) && b.Tracked) ||
+		byName(a, b);
 	const matches = getCompanies()
 		.filter((c) => !params.tracked || c.Tracked)
 		.filter((c) => !params.favourite || c.Favourite)
+		.filter((c) => !params.noBoard || !boardedCompanyIds.has(c.ID))
 		.filter(
 			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
 		)
-		.sort((a, b) => a.Name.localeCompare(b.Name) || a.ID.localeCompare(b.ID));
-	const start = Number(params.cursor ?? 0);
-	const end = start + (params.limit ?? 50);
+		.sort(params.sort === "alphabetical" ? byName : byRelevance);
+	const start = params.offset ?? 0;
 	return {
-		items: matches.slice(start, end),
-		next_cursor: end < matches.length ? String(end) : "",
+		items: matches.slice(start, start + (params.limit ?? 50)),
+		total: matches.length,
 	};
 }
 

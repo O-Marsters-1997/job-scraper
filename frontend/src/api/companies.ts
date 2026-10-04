@@ -33,11 +33,15 @@ export class UnresolvableBoardError extends Error {
 	}
 }
 
+export type CompanySort = "relevance" | "alphabetical";
+
 export type CompanyPageParams = {
 	q?: string;
 	tracked?: boolean;
 	favourite?: boolean;
-	cursor?: string;
+	noBoard?: boolean;
+	sort?: CompanySort;
+	offset?: number;
 	limit?: number;
 };
 
@@ -51,7 +55,9 @@ export async function fetchCompanyPage(
 			if (params.q) query.set("q", params.q);
 			if (params.tracked) query.set("tracked", "1");
 			if (params.favourite) query.set("favourite", "1");
-			if (params.cursor) query.set("cursor", params.cursor);
+			if (params.noBoard) query.set("no_board", "1");
+			if (params.sort) query.set("sort", params.sort);
+			if (params.offset) query.set("offset", String(params.offset));
 			if (params.limit) query.set("limit", String(params.limit));
 			return apiFetch(`/companies?${query}`, companyPageSchema);
 		},

@@ -311,19 +311,43 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 		if options.FavouriteOnly && !c.Favourite {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
+		if options.NoBoardOnly && f.hasBoard(c.ID) {
 			continue
 		}
-		if options.CursorID != "" && cmp.Or(cmp.Compare(c.Name, options.CursorName), cmp.Compare(c.ID, options.CursorID)) <= 0 {
+		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
 			continue
 		}
 		items = append(items, c)
 	}
-	slices.SortFunc(items, func(a, b dto.Company) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID)) })
+	slices.SortFunc(items, func(a, b dto.Company) int {
+		byName := cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID))
+		if options.Sort != dto.CompanySortRelevance {
+			return byName
+		}
+		return cmp.Or(cmp.Compare(rank(a.Tracked), rank(b.Tracked)), cmp.Compare(rank(a.Tracked && a.Favourite), rank(b.Tracked && b.Favourite)), byName)
+	})
+	total := len(items)
+	items = items[min(int(options.Offset), total):]
 	if limit := int(options.Limit); limit > 0 && limit < len(items) {
 		items = items[:limit]
 	}
-	return dto.CompanyPage{Items: items}, nil
+	return dto.CompanyPage{Items: items, Total: total}, nil
+}
+
+func (f *FakeStore) hasBoard(companyID string) bool {
+	for _, b := range f.boards {
+		if b.CompanyID == companyID {
+			return true
+		}
+	}
+	return false
+}
+
+func rank(first bool) int {
+	if first {
+		return 0
+	}
+	return 1
 }
 
 func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto.Company, error) {
