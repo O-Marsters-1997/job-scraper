@@ -1,5 +1,5 @@
-// Package commoncrawl harvests Ashby and Greenhouse board tokens from the
-// latest Common Crawl index.
+// Package commoncrawl harvests ATS board tokens from the latest Common Crawl
+// index.
 package commoncrawl
 
 import (
@@ -27,7 +27,23 @@ const (
 	interval  = 30 * 24 * time.Hour
 )
 
-var patterns = []string{"jobs.ashbyhq.com/*", "boards.greenhouse.io/*"}
+var patterns = []string{
+	"jobs.ashbyhq.com/*",
+	"boards.greenhouse.io/*",
+	"job-boards.greenhouse.io/*",
+	"job-boards.eu.greenhouse.io/*",
+	"jobs.lever.co/*",
+	"apply.workable.com/*",
+	"*.recruitee.com",
+	"*.jobs.personio.de",
+}
+
+// notBoards holds hostnames and path segments on ATS domains that are not
+// company boards, keyed by source.
+var notBoards = map[string]map[string]bool{
+	"workable":  {"j": true, "api": true},
+	"recruitee": {"www": true, "app": true, "api": true, "support": true, "blog": true, "careers": true},
+}
 
 type Harvester struct {
 	client      *http.Client
@@ -121,7 +137,10 @@ func collect(body []byte, seen map[discover.Board]bool, out *discover.Harvest) {
 
 func resolve(rawURL string) (discover.Board, bool) {
 	source, token, ok := detect.ResolveBoard(rawURL)
-	if !ok || source != "ashby" && source != "greenhouse" {
+	if !ok {
+		return discover.Board{}, false
+	}
+	if role, known := sourcespec.SourceRole(source); !known || role != sourcespec.RoleATS || notBoards[source][token] {
 		return discover.Board{}, false
 	}
 	if u, err := url.Parse(rawURL); err == nil && source == "greenhouse" {
