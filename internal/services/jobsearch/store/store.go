@@ -281,14 +281,14 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		jobID = previous.ID
 		job.URL = previous.Url
 	case errors.Is(err, pgx.ErrNoRows):
-		matchID, matchURL, matched, err := findMatch(ctx, queries, job, companyID, matchTitle, matchLocation)
+		match, found, err := findMatch(ctx, queries, job, companyID, matchTitle, matchLocation)
 		if err != nil {
 			return dto.Job{}, "", err
 		}
-		if matched && !trusted {
+		if found && !trusted {
 			status = "merged"
-			jobID = matchID
-			job.URL = matchURL
+			jobID = match.ID
+			job.URL = match.Url
 			break
 		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
@@ -354,25 +354,23 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	return job, status, nil
 }
 
-// findMatch takes the match lock, then returns the one open Job the listing
-// duplicates, if exactly one does.
-func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string) (id pgtype.UUID, url string, matched bool, err error) {
+func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string) (sqlc.FindMatchCandidatesRow, bool, error) {
 	if err := queries.LockCanonicalJob(ctx, "match:"+job.CompanySlug+"|"+matchTitle); err != nil {
-		return id, "", false, fmt.Errorf("lock match: %w", err)
+		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("lock match: %w", err)
 	}
 	candidates, err := queries.FindMatchCandidates(ctx, sqlc.FindMatchCandidatesParams{
 		MatchTitle: pgtype.Text{String: matchTitle, Valid: true}, CompanySlug: job.CompanySlug, CompanyID: companyID,
 	})
 	if err != nil {
-		return id, "", false, fmt.Errorf("find match candidates: %w", err)
+		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("find match candidates: %w", err)
 	}
 	candidates = slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
 		return !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
 	})
 	if len(candidates) != 1 {
-		return id, "", false, nil
+		return sqlc.FindMatchCandidatesRow{}, false, nil
 	}
-	return candidates[0].ID, candidates[0].Url, true, nil
+	return candidates[0], true, nil
 }
 
 func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
