@@ -17,6 +17,8 @@ const (
 	Personio
 	Pinpoint
 	Teamtailor
+	HiBob
+	SmartRecruiters
 	Aggregator
 )
 
@@ -43,6 +45,10 @@ func Detect(rawURL string) ATSType {
 		return Pinpoint
 	case strings.HasSuffix(host, ".teamtailor.com"):
 		return Teamtailor
+	case strings.HasSuffix(host, ".careers.hibob.com"):
+		return HiBob
+	case host == "jobs.smartrecruiters.com" || host == "careers.smartrecruiters.com":
+		return SmartRecruiters
 	case strings.Contains(host, "linkedin.com") || strings.Contains(host, "indeed.com"):
 		return Aggregator
 	default:
@@ -51,17 +57,22 @@ func Detect(rawURL string) ATSType {
 }
 
 var atsSourceName = map[ATSType]string{
-	Greenhouse: "greenhouse",
-	Lever:      "lever",
-	Ashby:      "ashby",
-	Workable:   "workable",
-	Recruitee:  "recruitee",
-	Personio:   "personio",
-	Pinpoint:   "pinpoint",
-	Teamtailor: "teamtailor",
+	Greenhouse:      "greenhouse",
+	Lever:           "lever",
+	Ashby:           "ashby",
+	Workable:        "workable",
+	Recruitee:       "recruitee",
+	Personio:        "personio",
+	Pinpoint:        "pinpoint",
+	Teamtailor:      "teamtailor",
+	HiBob:           "hibob",
+	SmartRecruiters: "smartrecruiters",
 }
 
-var teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
+var (
+	teamtailorReserved = map[string]bool{"app": true, "career": true, "api": true}
+	hibobReserved      = map[string]bool{"app": true, "api": true}
+)
 
 // ResolveBoard extracts the source name and board token from a direct ATS board
 // URL (e.g. https://boards.greenhouse.io/acmecorp -> "greenhouse", "acmecorp").
@@ -78,14 +89,26 @@ func ResolveBoard(rawURL string) (source, token string, ok bool) {
 
 	//exhaustive:ignore — default handles all path-based ATSes; only subdomain ones are special-cased
 	switch t {
-	case Recruitee, Personio, Pinpoint, Teamtailor:
-		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com
+	case Recruitee, Personio, Pinpoint, Teamtailor, HiBob:
+		// Token is the leading host label: {token}.recruitee.com / {token}.[jobs.]personio.de / {token}.pinpointhq.com / {token}.teamtailor.com / {token}.careers.hibob.com
 		labels := strings.Split(strings.ToLower(u.Host), ".")
-		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]])
+		reserved := labels[0] == "www" || labels[0] == "jobs" || (t == Teamtailor && teamtailorReserved[labels[0]]) || (t == HiBob && hibobReserved[labels[0]])
 		if len(labels) < 3 || reserved {
 			return "", "", false
 		}
 		return source, labels[0], true
+	case SmartRecruiters:
+		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if segs[0] == "oneclick-ui" {
+			if len(segs) >= 3 && segs[1] == "company" && segs[2] != "" {
+				return source, segs[2], true
+			}
+			return "", "", false
+		}
+		if segs[0] == "" {
+			return "", "", false
+		}
+		return source, segs[0], true
 	default:
 		for seg := range strings.SplitSeq(u.Path, "/") {
 			if seg != "" && seg != "embed" {
@@ -137,6 +160,10 @@ func BoardURL(source, token string) string {
 		return "https://" + token + ".pinpointhq.com"
 	case "teamtailor":
 		return "https://" + token + ".teamtailor.com"
+	case "hibob":
+		return "https://" + token + ".careers.hibob.com"
+	case "smartrecruiters":
+		return "https://jobs.smartrecruiters.com/" + token
 	default:
 		return ""
 	}

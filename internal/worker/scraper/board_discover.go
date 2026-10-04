@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
@@ -57,6 +59,8 @@ func DiscoverBoard(ctx context.Context, source, token string) (Discovery, error)
 		name = ashbyName(ctx, &base, token)
 	case "teamtailor":
 		name = teamtailorName(ctx, &base, token)
+	case "smartrecruiters":
+		name = smartrecruitersName(ctx, &base, token)
 	}
 	if name == "" {
 		name = token
@@ -114,4 +118,12 @@ func teamtailorName(ctx context.Context, base *sources.PaginatedBase, token stri
 		return ""
 	}
 	return teamtailor.BoardName(body)
+}
+
+func smartrecruitersName(ctx context.Context, base *sources.PaginatedBase, token string) string {
+	body, err := base.Get(ctx, fmt.Sprintf("https://api.smartrecruiters.com/v1/companies/%s/postings?limit=1", url.PathEscape(token)))
+	if err != nil {
+		return ""
+	}
+	return smartrecruiters.BoardName(body)
 }

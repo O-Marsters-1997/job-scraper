@@ -55,6 +55,14 @@ const ATS_BOARDS: Record<string, { host: string; url: (t: string) => string }> =
 			host: "teamtailor.com",
 			url: (t) => `https://${t}.teamtailor.com`,
 		},
+		hibob: {
+			host: "careers.hibob.com",
+			url: (t) => `https://${t}.careers.hibob.com`,
+		},
+		smartrecruiters: {
+			host: "jobs.smartrecruiters.com",
+			url: (t) => `https://jobs.smartrecruiters.com/${t}`,
+		},
 	};
 
 const atsSourceForHost = (hostname: string) =>

@@ -1,0 +1,149 @@
+{
+  "offset": 2,
+  "limit": 2,
+  "totalFound": 3,
+  "content": [
+    {
+      "id": "744000153239979",
+      "name": "Backend Engineer - Contacts Team",
+      "uuid": "b50c42a3-aec2-4ed1-b4cd-1213d019cf29",
+      "jobAdId": "7711e5bc-ac18-4fef-ad99-546e158f61b5",
+      "defaultJobAd": true,
+      "refNumber": "R10635",
+      "company": {
+        "identifier": "Wise",
+        "name": "Wise"
+      },
+      "releasedDate": "2026-10-02T17:01:45.208Z",
+      "location": {
+        "city": "London",
+        "country": "gb",
+        "address": "Worship Square, 65 Clifton Street",
+        "postalCode": "EC2A 4JE",
+        "remote": false,
+        "hybrid": true,
+        "fullLocation": "London, , United Kingdom"
+      },
+      "industry": {
+        "id": "financial_services",
+        "label": "Financial Services"
+      },
+      "department": {},
+      "function": {
+        "id": "engineering",
+        "label": "Engineering"
+      },
+      "typeOfEmployment": {
+        "id": "permanent",
+        "label": "Full-time"
+      },
+      "experienceLevel": {
+        "id": "mid_senior_level",
+        "label": "Mid-Senior Level"
+      },
+      "customField": [
+        {
+          "fieldId": "65d3d0e0d37044292ef9549b",
+          "fieldLabel": "Job Profile",
+          "valueId": "d840bf80cda1100200746ba303cc0000",
+          "valueLabel": "Engineer IC2 - JP101084"
+        },
+        {
+          "fieldId": "65cea5ac287e8d0651481809",
+          "fieldLabel": "Time Type",
+          "valueId": "d2f4dafccd5101059b6cf09e12278400",
+          "valueLabel": "Full time"
+        },
+        {
+          "fieldId": "65d3d06b2865b46cfa4f0ec3",
+          "fieldLabel": "Worker Sub Type",
+          "valueId": "046034784a4d016f1889ba8863278f0d",
+          "valueLabel": "Permanent"
+        },
+        {
+          "fieldId": "65d3d141c86c2f3257de414c",
+          "fieldLabel": "Cost Center Hierarchy",
+          "valueId": "6d8f1bd75a7001b7185a4531c7125d1c",
+          "valueLabel": "Engineering"
+        },
+        {
+          "fieldId": "65d3d1796435ba43bdb089ad",
+          "fieldLabel": "Squad",
+          "valueId": "c23f18fabbcf1001b62c5b30baab0001",
+          "valueLabel": "Send (Squad)"
+        },
+        {
+          "fieldId": "658553f79a81b00900831a80",
+          "fieldLabel": "Brands",
+          "valueId": "default",
+          "valueLabel": "Wise"
+        },
+        {
+          "fieldId": "65d3d0374c34974b271801f9",
+          "fieldLabel": "Management Level",
+          "valueId": "e82698b94195019ad99d30d3f100d510",
+          "valueLabel": "4"
+        },
+        {
+          "fieldId": "65d3d16de5ae4c7be012a87e",
+          "fieldLabel": "Tribe",
+          "valueId": "2508138664ba1001b4eeef7e41fa0000",
+          "valueLabel": "Global Product (Tribe)"
+        },
+        {
+          "fieldId": "65d3d151a5d3185b4341a7ab",
+          "fieldLabel": "Cost Center",
+          "valueId": "c0b389e7c7791001a9f9657260e60000",
+          "valueLabel": "Onboarding & Send"
+        },
+        {
+          "fieldId": "65d3d0a7d37044292ef9549a",
+          "fieldLabel": "Job Family",
+          "valueId": "e380f86fa0b2011d520d2e87bc004000",
+          "valueLabel": "Engineering"
+        },
+        {
+          "fieldId": "COUNTRY",
+          "fieldLabel": "Country/Region",
+          "valueId": "gb",
+          "valueLabel": "United Kingdom"
+        },
+        {
+          "fieldId": "65d3d05c735007771b14e932",
+          "fieldLabel": "Worker Type",
+          "valueId": "EE",
+          "valueLabel": "Wiser"
+        },
+        {
+          "fieldId": "65d3d0926435ba43bdb089ac",
+          "fieldLabel": "Job Family Group",
+          "valueId": "cf8ed98297e201fc81857d1fba008e14",
+          "valueLabel": "Technology"
+        },
+        {
+          "fieldId": "65cec407735007771b14e92d",
+          "fieldLabel": "Company",
+          "valueId": "046034784a4d01f4134f114764273117",
+          "valueLabel": "Wise Payments Limited"
+        },
+        {
+          "fieldId": "65d90823f2e6436af25814c2",
+          "fieldLabel": "Job Ad Salary Range",
+          "valueLabel": "68000 - 87500 GBP Annual"
+        },
+        {
+          "fieldId": "65d9080b4aa2f46927dfc1f3",
+          "fieldLabel": "WD Target Hire Date",
+          "valueLabel": "2026-10-31"
+        }
+      ],
+      "visibility": "PUBLIC",
+      "ref": "https://api.smartrecruiters.com/v1/companies/Wise/postings/744000153239979",
+      "language": {
+        "code": "en",
+        "label": "English",
+        "labelNative": "English (US)"
+      }
+    }
+  ]
+}
