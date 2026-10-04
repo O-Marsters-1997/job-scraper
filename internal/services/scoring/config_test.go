@@ -110,6 +110,7 @@ func TestUpdateConfig(t *testing.T) {
 			Picks: []dto.Pick{
 				{OptionID: "tech:go", Stance: "nice", Source: "text"},
 				{OptionID: "domain:gambling", Stance: "block"},
+				{OptionID: "tech:kubernetes", Stance: "ok"},
 			},
 			SalaryFloor: &dto.Money{Amount: 55000, Currency: "gbp"},
 		},
@@ -123,6 +124,7 @@ func TestUpdateConfig(t *testing.T) {
 	wantPicks := []dto.Pick{
 		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
 		{OptionID: "domain:gambling", Stance: "block", Source: "manual"},
+		{OptionID: "tech:kubernetes", Stance: "ok", Source: "manual"},
 	}
 	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
 		t.Errorf("picks, source forced to manual (-want +got):\n%s", diff)
@@ -131,8 +133,8 @@ func TestUpdateConfig(t *testing.T) {
 	if diff := cmp.Diff(wantFloor, got.Preferences.SalaryFloor); diff != "" {
 		t.Errorf("salary floor, currency uppercased (-want +got):\n%s", diff)
 	}
-	if got.BackfillQueued != 2 {
-		t.Errorf("BackfillQueued = %d, want 2", got.BackfillQueued)
+	if got.BackfillQueued != 3 {
+		t.Errorf("BackfillQueued = %d, want 3", got.BackfillQueued)
 	}
 }
 

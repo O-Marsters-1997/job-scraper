@@ -56,7 +56,7 @@ func renderPack(entries []dto.ScoreFeedback, picks []packPick, replay replayRepo
 	sb.WriteString("Each Job is scored 0-100 from the user's Picks and Jev's cached answers to each Option's question.\n")
 	fmt.Fprintf(&sb, "An answer resolves to yes, no or unknown for the checklist rows: the top of P(yes), P(no) and P(not stated) wins when it reaches %.1f, otherwise unknown. The score itself uses the probabilities.\n\n", resolveThreshold)
 	fmt.Fprintf(&sb, "Score = round(100 * (sum(weight * evidence * credit) + %.1f * prior) / (sum(weight * evidence) + avoid cost + prior)), with prior = %.0f.\n\n", 0.5, prior)
-	sb.WriteString("- Per nice dimension, credit = min(1, sum of P(yes) over its Picks / saturation) and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:\n")
+	fmt.Fprintf(&sb, "- Per dimension with nice or ok Picks, credit = min(1, sum of strength * P(yes) over its Picks / saturation), with strength %g for nice and %g for ok, and evidence = the largest P(yes) + P(no) over its Picks. Dimension weights and saturation:\n", pickStrength["nice"], pickStrength["ok"])
 	for _, d := range Dimensions {
 		fmt.Fprintf(&sb, "  - %s: weight %.0f, saturation %d%s\n", d.Key, d.Weight, d.Saturation, gateNote(d))
 	}

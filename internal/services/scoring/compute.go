@@ -20,6 +20,8 @@ const (
 	favouriteKey     = "company:favourite"
 )
 
+var pickStrength = map[string]float64{"nice": 1, "ok": 0.5}
+
 type evaluatedPick struct {
 	dimension dto.Dimension
 	key       string
@@ -78,14 +80,14 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 		row := dto.ScoreRow{Key: p.key, Label: p.label, Stance: p.stance, Resolved: resolved, Corrected: p.corrected}
 
 		switch p.stance {
-		case "nice":
+		case "nice", "ok":
 			d, ok := nice[p.dimension]
 			if !ok {
 				d = &niceDimension{}
 				nice[p.dimension] = d
 			}
 			if p.known {
-				d.sumYes += p.answer.PYes
+				d.sumYes += pickStrength[p.stance] * p.answer.PYes
 				d.evidence = max(d.evidence, p.answer.PYes+p.answer.PNo)
 			}
 			switch resolved {

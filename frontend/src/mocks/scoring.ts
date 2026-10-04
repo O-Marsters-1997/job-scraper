@@ -43,14 +43,14 @@ let scoringConfig: ScoringConfig = {
 };
 
 const scoringDimensions: DimensionSpec[] = [
-	{ key: "tech", kind: "pair", stances: ["nice", "avoid"] },
-	{ key: "role", kind: "pair", stances: ["nice", "avoid"] },
-	{ key: "domain", kind: "pair", stances: ["nice", "avoid", "block"] },
-	{ key: "seniority", kind: "multi", stances: ["nice"] },
-	{ key: "work", kind: "multi", stances: ["nice"] },
-	{ key: "stage", kind: "multi", stances: ["nice"] },
-	{ key: "size", kind: "multi", stances: ["nice"] },
-	{ key: "employment", kind: "multi", stances: ["nice"] },
+	{ key: "tech", kind: "pair", stances: ["nice", "ok", "avoid"] },
+	{ key: "role", kind: "pair", stances: ["nice", "ok", "avoid"] },
+	{ key: "domain", kind: "pair", stances: ["nice", "ok", "avoid", "block"] },
+	{ key: "seniority", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "work", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "stage", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "size", kind: "multi", stances: ["nice", "ok"] },
+	{ key: "employment", kind: "multi", stances: ["nice", "ok"] },
 ];
 
 const scoringOptions: ScoringOption[] = [

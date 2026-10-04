@@ -27,7 +27,7 @@ export function recomputeScores(): RecomputeResult {
 }
 
 function correctedEffect(stance: string, hit: boolean): ScoreRow["effect"] {
-	if (stance === "nice") return hit ? "meets" : "misses";
+	if (stance === "nice" || stance === "ok") return hit ? "meets" : "misses";
 	return hit ? "misses" : "neutral";
 }
 

@@ -1,6 +1,7 @@
 package scoring
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -31,6 +32,63 @@ func TestFavouriteLiftShrinksTowardsTop(t *testing.T) {
 	if fair, great := favouriteLift(50)-50, favouriteLift(85)-85; fair <= great {
 		t.Errorf("fair lift %d, great lift %d, want fair > great", fair, great)
 	}
+}
+
+func techPicks(stance string, n int) []evaluatedPick {
+	picks := make([]evaluatedPick, n)
+	for i := range picks {
+		picks[i] = evaluatedPick{
+			dimension: dto.DimensionTech, key: fmt.Sprintf("tech:%d", i), stance: stance,
+			answer: dto.Answer{PYes: 1}, known: true,
+		}
+	}
+	return picks
+}
+
+func TestComputeOkStance(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		ok, nice []evaluatedPick
+	}{
+		{"two ok matches credit like one nice", techPicks("ok", 2), techPicks("nice", 1)},
+		{"four ok matches credit like two nice", techPicks("ok", 4), techPicks("nice", 2)},
+		{"six ok matches saturate like three nice", techPicks("ok", 6), techPicks("nice", 3)},
+		{"eight ok matches cap at saturation", techPicks("ok", 8), techPicks("nice", 3)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			okScore, _, _ := compute(tt.ok, nil, "", nil, false)
+			niceScore, _, _ := compute(tt.nice, nil, "", nil, false)
+			if okScore != niceScore {
+				t.Errorf("ok score = %d, want %d (the nice score)", okScore, niceScore)
+			}
+		})
+	}
+
+	t.Run("one ok match scores below one nice match", func(t *testing.T) {
+		okScore, _, _ := compute(techPicks("ok", 1), nil, "", nil, false)
+		niceScore, _, _ := compute(techPicks("nice", 1), nil, "", nil, false)
+		if okScore >= niceScore {
+			t.Errorf("ok score = %d, want below %d", okScore, niceScore)
+		}
+	})
+
+	t.Run("ok pick resolving no still gates", func(t *testing.T) {
+		mid := evaluatedPick{
+			dimension: dto.DimensionSeniority, key: "seniority:mid", stance: "ok",
+			answer: dto.Answer{PNo: 1}, known: true,
+		}
+		senior := evaluatedPick{
+			dimension: dto.DimensionSeniority, key: "seniority:senior",
+			answer: dto.Answer{PYes: 1}, known: true,
+		}
+		score, _, rows := compute([]evaluatedPick{mid}, []evaluatedPick{senior}, "", nil, false)
+		if score > gateCap {
+			t.Errorf("score = %d, want at most %d", score, gateCap)
+		}
+		if rows[0].Effect != "gated" {
+			t.Errorf("row effect = %q, want gated", rows[0].Effect)
+		}
+	})
 }
 
 func TestComputeFavourite(t *testing.T) {
