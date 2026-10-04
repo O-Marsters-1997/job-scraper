@@ -47,6 +47,7 @@ type FakeStore struct {
 	search      map[string]dto.SearchConfig
 	scored      map[string]bool
 	corrections map[string]map[string]string
+	favourites  map[string]bool
 	pushes      map[string][]dto.PushSubscriptionInput
 
 	feedback    map[string][]dto.ScoreFeedback
@@ -72,6 +73,7 @@ func NewFakeStore() *FakeStore {
 		pushes:      make(map[string][]dto.PushSubscriptionInput),
 		scored:      make(map[string]bool),
 		corrections: make(map[string]map[string]string),
+		favourites:  make(map[string]bool),
 
 		feedback: make(map[string][]dto.ScoreFeedback),
 		evidence: make(map[string]dto.JobScoreEvidence),
@@ -279,6 +281,31 @@ func (f *FakeStore) UpsertSearchConfig(_ context.Context, cfg dto.SearchConfig) 
 	return cfg, nil
 }
 
+func (f *FakeStore) AddExcludedCompany(_ context.Context, userID, name string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cfg := f.search[userID]
+	if slices.Contains(cfg.ExcludedCompanies, name) {
+		return false, nil
+	}
+	cfg.UserID = userID
+	cfg.ExcludedCompanies = append(slices.Clone(cfg.ExcludedCompanies), name)
+	f.search[userID] = cfg
+	return true, nil
+}
+
+func (f *FakeStore) RemoveExcludedCompany(_ context.Context, userID, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cfg, ok := f.search[userID]
+	if !ok {
+		return nil
+	}
+	cfg.ExcludedCompanies = slices.DeleteFunc(slices.Clone(cfg.ExcludedCompanies), func(c string) bool { return c == name })
+	f.search[userID] = cfg
+	return nil
+}
+
 func (f *FakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]store.ScoringInput, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -289,6 +316,30 @@ func (f *FakeStore) ListScoringInputs(_ context.Context, userID, _ string) ([]st
 		}
 	}
 	return inputs, nil
+}
+
+func (f *FakeStore) ListCompanyScoringInputs(ctx context.Context, _ pgx.Tx, userID, companyID, model string) ([]store.ScoringInput, error) {
+	inputs, err := f.ListScoringInputs(ctx, userID, model)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(inputs, func(in store.ScoringInput) bool { return in.Job.CompanyID != companyID }), nil
+}
+
+func (f *FakeStore) SaveScoresTx(ctx context.Context, _ pgx.Tx, scores []dto.JobScore) error {
+	return f.SaveScores(ctx, scores)
+}
+
+func (f *FakeStore) SeedFavouriteJob(userID, jobID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.favourites[scoredKey(jobID, userID)] = true
+}
+
+func (f *FakeStore) IsJobCompanyFavourite(_ context.Context, userID, jobID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.favourites[scoredKey(jobID, userID)], nil
 }
 
 func (f *FakeStore) SetAnswerCorrection(_ context.Context, userID, jobID, optionID, value string) error {

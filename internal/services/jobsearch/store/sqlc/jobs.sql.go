@@ -38,9 +38,10 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $2
 WHERE j.id = $1
 LIMIT 1
 `
@@ -69,6 +70,8 @@ type GetJobRow struct {
 	SuitabilityScore   pgtype.Int4
 	Band               pgtype.Text
 	Breakdown          []byte
+	Seen               bool
+	CompanyFavourite   bool
 }
 
 func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, error) {
@@ -93,20 +96,30 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.SuitabilityScore,
 		&i.Band,
 		&i.Breakdown,
+		&i.Seen,
+		&i.CompanyFavourite,
 	)
 	return i, err
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
-JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
+JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
 WHERE j.closed_at IS NULL
   AND j.updated_at > now() - interval '90 days'
+  AND COALESCE(j.company_slug, '') <> ALL($2::text[])
   AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb
-  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1 AND g.grade = 'no')
+  AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1::uuid AND g.grade = 'no')
 ORDER BY js.suitability_score DESC, j.scraped_at DESC
 `
+
+type ListJobsParams struct {
+	UserID               pgtype.UUID
+	ExcludedCompanySlugs []string
+}
 
 type ListJobsRow struct {
 	ID                 pgtype.UUID
@@ -126,10 +139,13 @@ type ListJobsRow struct {
 	SuitabilityScore   pgtype.Int4
 	Band               pgtype.Text
 	Breakdown          []byte
+	Grade              string
+	Seen               bool
+	CompanyFavourite   bool
 }
 
-func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsRow, error) {
-	rows, err := q.db.Query(ctx, listJobs, userID)
+func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsRow, error) {
+	rows, err := q.db.Query(ctx, listJobs, arg.UserID, arg.ExcludedCompanySlugs)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +171,9 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 			&i.SuitabilityScore,
 			&i.Band,
 			&i.Breakdown,
+			&i.Grade,
+			&i.Seen,
+			&i.CompanyFavourite,
 		); err != nil {
 			return nil, err
 		}
@@ -166,30 +185,67 @@ func (q *Queries) ListJobs(ctx context.Context, userID pgtype.UUID) ([]ListJobsR
 	return items, nil
 }
 
+const markJobsSeen = `-- name: MarkJobsSeen :exec
+INSERT INTO job_views (user_id, job_id)
+SELECT $1::uuid, j.id
+FROM jobs j
+WHERE j.id = ANY($2::uuid[])
+ON CONFLICT DO NOTHING
+`
+
+type MarkJobsSeenParams struct {
+	UserID pgtype.UUID
+	JobIds []pgtype.UUID
+}
+
+func (q *Queries) MarkJobsSeen(ctx context.Context, arg MarkJobsSeenParams) error {
+	_, err := q.db.Exec(ctx, markJobsSeen, arg.UserID, arg.JobIds)
+	return err
+}
+
+const markJobsUnseen = `-- name: MarkJobsUnseen :exec
+DELETE FROM job_views
+WHERE user_id = $1::uuid AND job_id = ANY($2::uuid[])
+`
+
+type MarkJobsUnseenParams struct {
+	UserID pgtype.UUID
+	JobIds []pgtype.UUID
+}
+
+func (q *Queries) MarkJobsUnseen(ctx context.Context, arg MarkJobsUnseenParams) error {
+	_, err := q.db.Exec(ctx, markJobsUnseen, arg.UserID, arg.JobIds)
+	return err
+}
+
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
+LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
+LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $1::uuid
 WHERE ($2::timestamptz IS NULL OR (j.scraped_at, j.id) < ($2::timestamptz, $3::uuid))
   AND ($4::uuid IS NULL OR j.company_id = $4::uuid OR (j.company_id IS NULL AND j.company_slug = (SELECT slug FROM companies WHERE id = $4::uuid)))
   AND ($5::text = 'all' OR ($5::text = 'open' AND j.closed_at IS NULL) OR ($5::text = 'closed' AND j.closed_at IS NOT NULL))
   AND (NOT $6::bool OR EXISTS (SELECT 1 FROM job_scores s WHERE s.job_id = j.id AND s.user_id = $1::uuid))
   AND ($7::int = 0 OR j.updated_at >= now() - make_interval(days => $7::int))
+  AND COALESCE(j.company_slug, '') <> ALL($8::text[])
   AND NOT COALESCE(js.breakdown @> '[{"effect":"blocked"}]'::jsonb, false)
   AND NOT EXISTS (SELECT 1 FROM job_grades g WHERE g.job_id = j.id AND g.user_id = $1::uuid AND g.grade = 'no')
 ORDER BY j.scraped_at DESC, j.id DESC
-LIMIT $8::int
+LIMIT $9::int
 `
 
 type PageJobsParams struct {
-	UserID       pgtype.UUID
-	CursorTime   pgtype.Timestamptz
-	CursorID     pgtype.UUID
-	CompanyID    pgtype.UUID
-	Availability string
-	ScoredOnly   bool
-	SinceDays    int32
-	PageLimit    int32
+	UserID               pgtype.UUID
+	CursorTime           pgtype.Timestamptz
+	CursorID             pgtype.UUID
+	CompanyID            pgtype.UUID
+	Availability         string
+	ScoredOnly           bool
+	SinceDays            int32
+	ExcludedCompanySlugs []string
+	PageLimit            int32
 }
 
 type PageJobsRow struct {
@@ -210,6 +266,9 @@ type PageJobsRow struct {
 	SuitabilityScore   pgtype.Int4
 	Band               pgtype.Text
 	Breakdown          []byte
+	Grade              string
+	Seen               bool
+	CompanyFavourite   bool
 }
 
 func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsRow, error) {
@@ -221,6 +280,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 		arg.Availability,
 		arg.ScoredOnly,
 		arg.SinceDays,
+		arg.ExcludedCompanySlugs,
 		arg.PageLimit,
 	)
 	if err != nil {
@@ -248,6 +308,9 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.SuitabilityScore,
 			&i.Band,
 			&i.Breakdown,
+			&i.Grade,
+			&i.Seen,
+			&i.CompanyFavourite,
 		); err != nil {
 			return nil, err
 		}

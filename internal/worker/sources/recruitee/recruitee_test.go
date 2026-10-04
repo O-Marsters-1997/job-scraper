@@ -16,3 +16,7 @@ func TestPollBoard_Reported(t *testing.T) {
 		t.Errorf("PollBoard(%s).Reported = %d, want %d", "offers_acme.json", got, want)
 	}
 }
+
+func TestFetchPage_GoldenSalaryAndArrangement(t *testing.T) {
+	sourcetest.RunGolden(t, "offers_tellent.json", recruitee.New("tellent"))
+}

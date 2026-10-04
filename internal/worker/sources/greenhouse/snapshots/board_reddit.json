@@ -1,0 +1,56 @@
+{
+  "jobs": [
+    {
+      "id": 8089959,
+      "title": "3rd Party Partnerships Manager - Signals",
+      "location": {
+        "name": "New York City, NY"
+      },
+      "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/8089959",
+      "content": "<p>trimmed</p>",
+      "updated_at": "2026-10-03T08:09:17-04:00",
+      "pay_input_ranges": [
+        {
+          "min_cents": 18900000,
+          "max_cents": 26460000,
+          "currency_type": "USD",
+          "title": "The base salary range for this position is:",
+          "blurb": "<p>trimmed</p>"
+        }
+      ]
+    },
+    {
+      "id": 7792848,
+      "title": "Ads Conversion Modeling, Machine Learning Engineering Manager",
+      "location": {
+        "name": "Remote - United States"
+      },
+      "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/7792848",
+      "content": "<p>trimmed</p>",
+      "updated_at": "2026-10-01T03:25:11-04:00",
+      "pay_input_ranges": [
+        {
+          "min_cents": 23000000,
+          "max_cents": 32200000,
+          "currency_type": "USD",
+          "title": "The base salary range for this position is:",
+          "blurb": "<p>trimmed</p>"
+        }
+      ]
+    },
+    {
+      "id": 8249259,
+      "title": "Chief of Staff, Global Sales",
+      "location": {
+        "name": "London, United Kingdom"
+      },
+      "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/8249259",
+      "content": "<p>trimmed</p>",
+      "updated_at": "2026-10-03T08:09:17-04:00",
+      "pay_input_ranges": []
+    }
+  ],
+  "meta": {
+    "total": 3
+  }
+}

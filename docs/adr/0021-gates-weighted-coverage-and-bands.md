@@ -19,3 +19,9 @@ Suitability resolved each answer to yes, no or unknown at 0.6 and counted a dime
 - Scores spread out and the top ties break up. A single tech match now scores low on its own, since it is a third of the dimension's credit.
 - Existing `job_scores` rows have a null Band until the next Recompute or answer effect.
 - Gates and weights are Go constants with no per-user override, as in ADR 0004.
+
+## Amendment: favourite Companies (β)
+
+A favourite Company lifts the pre-gate score in log-odds: `p = clamp(score / 100, 0.01, 0.99)`, `score' = round(100 * sigmoid(logit(p) + β))`, never below the unlifted score. It applies before the Gate cap and the block, so a favourite never rescues a gated or blocked Job, and it adds a `company:favourite` row with `Effect: "favourite"`. The shift is near zero at either end and largest across Fair and Good. `β` is `favouriteBeta` in `compute.go`.
+
+β is 0.4: about +10 at a score of 50 and +5 at 85. Replay against 46 Grades (28 positive, 18 negative) with 25 favourites, one per Company graded great or ok, gave concordance of 62% at β 0, 66% at 0.2, 71% at 0.4, 77% at 0.6, 82% at 0.8 and 85% at 1.2, and positives in the top 20 of 8, 9, 9, 11, 13 and 13. Those gains are inflated, since the favourites were picked from the same Grades, and only one `no` Job sat at a favourite Company (hunter-bond, rank 43 at β 0, 28 at 0.4, 20 at 0.8). At 1.2, nine Jobs tie at 98. The data can't separate 0.4 from higher values, so the plan's starting value stands. Re-run `just eval-scoring` once real favourites exist and raise β only if positives at favourite Companies still rank below their Grades.

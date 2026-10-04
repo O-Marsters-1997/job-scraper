@@ -151,6 +151,22 @@ func jobIDs(jobs []dto.Job) []string {
 	return ids
 }
 
+func jobGrades(jobs []dto.Job) map[string]string {
+	grades := make(map[string]string, len(jobs))
+	for _, job := range jobs {
+		grades[job.ID] = job.Grade
+	}
+	return grades
+}
+
+func jobSeen(jobs []dto.Job) map[string]bool {
+	seen := make(map[string]bool, len(jobs))
+	for _, job := range jobs {
+		seen[job.ID] = job.Seen
+	}
+	return seen
+}
+
 func TestPage(t *testing.T) {
 	t.Run("keeps position when a newer job is inserted", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
@@ -215,12 +231,39 @@ func TestPage(t *testing.T) {
 		if diff := cmp.Diff([]string{open}, jobIDs(page.Items)); diff != "" {
 			t.Errorf("Page() ids (-want +got):\n%s", diff)
 		}
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
 		if diff := cmp.Diff([]string{open}, jobIDs(all)); diff != "" {
 			t.Errorf("ListJobs() ids (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("hides jobs of excluded company slugs from the page and the full list", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		company := insertCompany(t, pool, "acme")
+		scoreJob(t, pool, insertJob(t, pool, company, 1, time.Now(), false), userID, `[]`)
+
+		for _, tt := range []struct {
+			name     string
+			slugs    []string
+			wantJobs bool
+		}{{"none excluded", nil, true}, {"another company excluded", []string{"globex"}, true}, {"its slug excluded", []string{"globex", "acme"}, false}} {
+			page, err := st.Page(t.Context(), userID, dto.JobPageOptions{Limit: 10, Availability: "open", ExcludedCompanySlugs: tt.slugs})
+			if err != nil {
+				t.Fatalf("Page(%s) err = %v", tt.name, err)
+			}
+			all, err := st.ListJobs(t.Context(), userID, tt.slugs)
+			if err != nil {
+				t.Fatalf("ListJobs(%s) err = %v", tt.name, err)
+			}
+			if got := len(page.Items) > 0; got != tt.wantJobs {
+				t.Errorf("Page(%s) has jobs = %v, want %v", tt.name, got, tt.wantJobs)
+			}
+			if got := len(all) > 0; got != tt.wantJobs {
+				t.Errorf("ListJobs(%s) has jobs = %v, want %v", tt.name, got, tt.wantJobs)
+			}
 		}
 	})
 
@@ -251,7 +294,7 @@ func TestPage(t *testing.T) {
 		if diff := cmp.Diff(want, jobIDs(page.Items), cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 			t.Errorf("Page() ids (-want +got):\n%s", diff)
 		}
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -300,6 +343,87 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("returns the caller's own grade on each job", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		graded := insertJob(t, pool, company, 1, time.Now(), false)
+		ungraded := insertJob(t, pool, company, 2, time.Now(), false)
+		othersOnly := insertJob(t, pool, company, 3, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{graded, ungraded, othersOnly} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		for _, g := range []struct{ user, job, grade string }{
+			{userID, graded, "ok"}, {other, graded, "great"}, {other, othersOnly, "ok"},
+		} {
+			if _, err := pool.Exec(ctx, `INSERT INTO job_grades (user_id, job_id, grade) VALUES ($1, $2, $3)`, g.user, g.job, g.grade); err != nil {
+				t.Fatalf("insert grade: %v", err)
+			}
+		}
+
+		want := map[string]string{graded: "ok", ungraded: "", othersOnly: ""}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobGrades(page.Items)); diff != "" {
+			t.Errorf("Page() grades (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID, nil)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobGrades(all)); diff != "" {
+			t.Errorf("ListJobs() grades (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("seen is per user and reported by Page, ListJobs and GetJob", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		viewed := insertJob(t, pool, company, 1, time.Now(), false)
+		unviewed := insertJob(t, pool, company, 2, time.Now(), false)
+		other := pgtest.InsertUser(t, pool)
+		for _, id := range []string{viewed, unviewed} {
+			scoreJob(t, pool, id, userID, `[]`)
+		}
+		if err := st.MarkJobsSeen(ctx, other, []string{viewed, unviewed}, true); err != nil {
+			t.Fatalf("MarkJobsSeen(other) err = %v", err)
+		}
+		if err := st.MarkJobsSeen(ctx, userID, []string{viewed}, true); err != nil {
+			t.Fatalf("MarkJobsSeen(user) err = %v", err)
+		}
+
+		want := map[string]bool{viewed: true, unviewed: false}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10, Availability: "open"})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobSeen(page.Items)); diff != "" {
+			t.Errorf("Page() seen (-want +got):\n%s", diff)
+		}
+		all, err := st.ListJobs(ctx, userID, nil)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		if diff := cmp.Diff(want, jobSeen(all)); diff != "" {
+			t.Errorf("ListJobs() seen (-want +got):\n%s", diff)
+		}
+		got, err := st.GetJob(ctx, unviewed, userID)
+		if err != nil || got.Seen {
+			t.Errorf("GetJob(unviewed) = %+v, %v, want unseen", got, err)
+		}
+
+		if err := st.MarkJobsSeen(ctx, userID, []string{viewed}, false); err != nil {
+			t.Fatalf("MarkJobsSeen(false) err = %v", err)
+		}
+		if got, _ := st.GetJob(ctx, viewed, other); !got.Seen {
+			t.Error("unmarking one user's view removed another user's, want kept")
+		}
+	})
+
 	t.Run("ListJobs keeps only scored jobs updated within 90 days", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()
@@ -310,7 +434,7 @@ func TestPage(t *testing.T) {
 		scoreJob(t, pool, recent, userID, `[]`)
 		scoreJob(t, pool, stale, userID, `[]`)
 
-		all, err := st.ListJobs(ctx, userID)
+		all, err := st.ListJobs(ctx, userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -367,7 +491,7 @@ func TestSaveCanonical(t *testing.T) {
 		}
 
 		scoreJob(t, pool, saved.ID, userID, `[]`)
-		jobs, err := st.ListJobs(t.Context(), userID)
+		jobs, err := st.ListJobs(t.Context(), userID, nil)
 		if err != nil {
 			t.Fatalf("ListJobs() err = %v", err)
 		}
@@ -1289,4 +1413,21 @@ func TestSaveCanonicalLinksCompanyBySlug(t *testing.T) {
 			t.Errorf("company_id = %q, want none", got)
 		}
 	})
+}
+
+func TestCompanyFavouritesArePerUser(t *testing.T) {
+	st, pool, alice := newUserStore(t)
+	bob := pgtest.InsertUser(t, pool)
+	ctx := t.Context()
+	companyID := insertCompany(t, pool, "acme")
+
+	if err := st.SetCompanyFavourite(ctx, alice, companyID, true); err != nil {
+		t.Fatalf("SetCompanyFavourite(alice) = %v", err)
+	}
+	for user, want := range map[string]bool{alice: true, bob: false} {
+		got, err := st.GetCompanyForUser(ctx, user, companyID)
+		if err != nil || got.Favourite != want {
+			t.Errorf("GetCompanyForUser(%s).Favourite = %v, %v, want %v", user, got.Favourite, err, want)
+		}
+	}
 }

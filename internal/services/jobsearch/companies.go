@@ -56,7 +56,7 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 	if err != nil {
 		return dto.CompanyPage{}, err
 	}
-	options := dto.CompanyPageOptions{Limit: int32(limit + 1), Search: strings.TrimSpace(q.Q), TrackedOnly: q.Tracked == "1"}
+	options := dto.CompanyPageOptions{Limit: int32(limit + 1), Search: strings.TrimSpace(q.Q), TrackedOnly: q.Tracked == "1", FavouriteOnly: q.Favourite == "1"}
 	if q.Cursor != "" {
 		var decoded companyCursor
 		if err := decodeCursor(q.Cursor, &decoded); err != nil || decoded.ID == "" {
@@ -94,6 +94,24 @@ func (s *Service) GetCompany(ctx context.Context, userID, id string) (dto.Compan
 	default:
 		return company, err
 	}
+}
+
+func (s *Service) FavouriteCompany(ctx context.Context, userID, companyID string) (dto.Company, error) {
+	return s.setCompanyFavourite(ctx, userID, companyID, true)
+}
+
+func (s *Service) UnfavouriteCompany(ctx context.Context, userID, companyID string) (dto.Company, error) {
+	return s.setCompanyFavourite(ctx, userID, companyID, false)
+}
+
+func (s *Service) setCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) (dto.Company, error) {
+	if _, err := s.GetCompany(ctx, userID, companyID); err != nil {
+		return dto.Company{}, err
+	}
+	if err := s.store.SetCompanyFavourite(ctx, userID, companyID, favourite); err != nil {
+		return dto.Company{}, err
+	}
+	return s.GetCompany(ctx, userID, companyID)
 }
 
 func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.SetCompanyTrackingInput) (dto.CompanyTracking, error) {

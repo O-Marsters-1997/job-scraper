@@ -60,6 +60,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 		jobs = append(jobs, dto.Job{
 			Title:             p.Name,
 			Location:          p.Office,
+			WorkArrangement:   sources.DetectWorkArrangement(p.Office),
 			URL:               fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
 			ProviderPostingID: p.ID,
 			Description:       sb.String(),

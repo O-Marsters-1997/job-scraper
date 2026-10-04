@@ -162,6 +162,12 @@ type CompanyBoard struct {
 	CreatedAt          pgtype.Timestamptz
 }
 
+type CompanyFavourite struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
 type CompanyProfile struct {
 	CompanyID pgtype.UUID
 	Source    string
@@ -284,6 +290,12 @@ type JobUrl struct {
 	Source        string
 	FirstSeenAt   pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
+}
+
+type JobView struct {
+	UserID pgtype.UUID
+	JobID  pgtype.UUID
+	SeenAt pgtype.Timestamptz
 }
 
 type NotificationDigest struct {

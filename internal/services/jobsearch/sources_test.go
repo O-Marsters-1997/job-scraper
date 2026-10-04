@@ -11,7 +11,7 @@ import (
 )
 
 func TestListSources(t *testing.T) {
-	got, err := jobsearch.NewService(nil, nil).ListSources(t.Context(), userID)
+	got, err := jobsearch.NewService(nil, nil, nil).ListSources(t.Context(), userID)
 	if err != nil {
 		t.Fatalf("ListSources() err = %v", err)
 	}
@@ -21,7 +21,7 @@ func TestListSources(t *testing.T) {
 }
 
 func TestResolveBoard(t *testing.T) {
-	svc := jobsearch.NewService(nil, nil)
+	svc := jobsearch.NewService(nil, nil, nil)
 
 	t.Run("resolves", func(t *testing.T) {
 		tests := []struct {

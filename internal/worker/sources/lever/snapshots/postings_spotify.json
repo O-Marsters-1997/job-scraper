@@ -1,0 +1,39 @@
+[
+  {
+    "categories": {
+      "commitment": "Permanent",
+      "department": "Operations and Business Support",
+      "location": "New York, NY",
+      "team": "Audio Books & Gated Content",
+      "allLocations": [
+        "New York, NY"
+      ]
+    },
+    "createdAt": 1783608935950,
+    "descriptionPlain": "The Audiobooks Mission is a team in the Product & Technology organisation focused on the ecosystem and strategies of Audiobooks on Spotify. We work across both the creator and consumer audiobooks ecos",
+    "id": "4310f31c-90e1-4e8d-bdcf-dce39c145b8c",
+    "text": "Associate \u2013 Audiobook Licensing & Author Partnerships",
+    "country": "US",
+    "workplaceType": "remote",
+    "hostedUrl": "https://jobs.lever.co/spotify/4310f31c-90e1-4e8d-bdcf-dce39c145b8c"
+  },
+  {
+    "categories": {
+      "commitment": "Permanent",
+      "department": "Engineering",
+      "location": "London",
+      "team": "Experience",
+      "allLocations": [
+        "London",
+        "Stockholm"
+      ]
+    },
+    "createdAt": 1782214185805,
+    "descriptionPlain": "We design Spotify\u2019s consumer experience\u2014end to end, moment to moment, across every screen, platform, and partner integration. Our mission is to make listening feel effortless, personal, and joyful for",
+    "id": "2193db3f-77c5-43b8-b030-8f92c9882bf1",
+    "text": "Android Engineer - Experience",
+    "country": "GB",
+    "workplaceType": "hybrid",
+    "hostedUrl": "https://jobs.lever.co/spotify/2193db3f-77c5-43b8-b030-8f92c9882bf1"
+  }
+]

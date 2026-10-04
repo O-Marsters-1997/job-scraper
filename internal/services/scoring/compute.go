@@ -16,6 +16,8 @@ const (
 	bandGreatMin     = 80
 	bandGoodMin      = 65
 	bandFairMin      = 45
+	favouriteBeta    = 0.4
+	favouriteKey     = "company:favourite"
 )
 
 type evaluatedPick struct {
@@ -53,7 +55,7 @@ type gateDimension struct {
 	unpickedYes     bool
 }
 
-func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money) (int, string, []dto.ScoreRow) {
+func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money, favourite bool) (int, string, []dto.ScoreRow) {
 	if floor != nil {
 		picks = append(picks, salaryPick(*floor, salaryRaw))
 	}
@@ -161,6 +163,10 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 	}
 
 	score := int(math.Round(100 * (covered + 0.5*prior) / (weighted + avoidCost + prior)))
+	if favourite && !blocked {
+		score = favouriteLift(score)
+		rows = append(rows, dto.ScoreRow{Key: favouriteKey, Label: "Favourite company", Resolved: "yes", Effect: "favourite"})
+	}
 	if gated {
 		score = min(score, gateCap)
 	}
@@ -168,6 +174,12 @@ func compute(picks, unpicked []evaluatedPick, salaryRaw string, floor *dto.Money
 		score = 0
 	}
 	return score, bandFor(score), rows
+}
+
+func favouriteLift(score int) int {
+	p := min(max(float64(score)/100, 0.01), 0.99)
+	logit := math.Log(p/(1-p)) + favouriteBeta
+	return max(score, int(math.Round(100/(1+math.Exp(-logit)))))
 }
 
 func bandFor(score int) string {

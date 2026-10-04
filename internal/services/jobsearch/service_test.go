@@ -41,7 +41,7 @@ func TestList(t *testing.T) {
 			{"huge since_days", dto.JobsQuery{SinceDays: "2147483647"}},
 			{"non-numeric since_days", dto.JobsQuery{SinceDays: "week"}},
 		}
-		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil)
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				_, err := svc.List(t.Context(), userID, tt.query)
@@ -61,7 +61,7 @@ func TestList(t *testing.T) {
 				t.Fatalf("SaveCanonical(%s) err = %v", url, err)
 			}
 		}
-		svc := jobsearch.NewService(st, nil)
+		svc := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring())
 
 		for _, tt := range []struct {
 			query dto.JobsQuery
@@ -82,7 +82,7 @@ func TestList(t *testing.T) {
 	})
 
 	t.Run("paginates", func(t *testing.T) {
-		svc := jobsearch.NewService(seedJobs(t, 3), nil)
+		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
 
 		page, err := svc.List(t.Context(), userID, dto.JobsQuery{Limit: "2"})
 		if err != nil {
@@ -103,7 +103,7 @@ func TestList(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil)
+	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
 	_, err := svc.Get(t.Context(), userID, "missing")
 	if !apperr.IsKind(err, apperr.KindNotFound) {
 		t.Fatalf("Get(missing) err = %v, want kind %v", err, apperr.KindNotFound)
@@ -125,7 +125,7 @@ func TestListScored(t *testing.T) {
 	}
 	list := func(t *testing.T, st *jobsearchtest.FakeStore, user string) []dto.Job {
 		t.Helper()
-		jobs, err := jobsearch.NewService(st, nil).ListScored(t.Context(), user)
+		jobs, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).ListScored(t.Context(), user)
 		if err != nil {
 			t.Fatalf("ListScored() err = %v", err)
 		}
@@ -197,4 +197,27 @@ func TestListScored(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestListHidesExcludedCompanies(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	for _, job := range []dto.Job{
+		{Title: "Role", URL: "https://example.com/acme", CompanySlug: "acme-corp"},
+		{Title: "Role", URL: "https://example.com/globex", CompanySlug: "globex"},
+	} {
+		job.ScrapedAt, job.UpdatedAt = time.Now(), time.Now()
+		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
+			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
+		}
+	}
+	scoring := jobsearchtest.NewNoopScoring()
+	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedCompanies: []string{"Acme Corp"}})
+
+	page, err := jobsearch.NewService(st, nil, scoring).List(t.Context(), userID, dto.JobsQuery{})
+	if err != nil {
+		t.Fatalf("List() err = %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].CompanySlug != "globex" {
+		t.Errorf("List() = %+v, want only the globex job", page.Items)
+	}
 }

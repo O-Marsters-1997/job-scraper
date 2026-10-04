@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs>
+  <position>
+    <id>1</id>
+    <office>Remote</office>
+    <name>Support Engineer</name>
+    <jobDescriptions>
+      <jobDescription>
+        <name><![CDATA[Job Description]]></name>
+        <value><![CDATA[<p>Fully remote friendly role.</p>]]></value>
+      </jobDescription>
+    </jobDescriptions>
+    <createdAt>2026-06-01T09:00:00+02:00</createdAt>
+  </position>
+  <position>
+    <id>2</id>
+    <office>Berlin (Hybrid)</office>
+    <name>Product Designer</name>
+    <jobDescriptions>
+      <jobDescription>
+        <name><![CDATA[Job Description]]></name>
+        <value><![CDATA[<p>Fully remote friendly role.</p>]]></value>
+      </jobDescription>
+    </jobDescriptions>
+    <createdAt>2026-06-01T09:00:00+02:00</createdAt>
+  </position>
+  <position>
+    <id>3</id>
+    <office>Amsterdam</office>
+    <name>Account Manager</name>
+    <jobDescriptions>
+      <jobDescription>
+        <name><![CDATA[Job Description]]></name>
+        <value><![CDATA[<p>Fully remote friendly role.</p>]]></value>
+      </jobDescription>
+    </jobDescriptions>
+    <createdAt>2026-06-01T09:00:00+02:00</createdAt>
+  </position>
+</workzag-jobs>

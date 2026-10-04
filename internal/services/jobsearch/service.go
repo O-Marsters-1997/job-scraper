@@ -14,12 +14,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/slug"
 )
 
 const (
 	defaultPageLimit = 50
 	defaultSinceDays = 90
 	maxSinceDays     = 36500
+	maxSeenJobIDs    = 5000
 )
 
 type jobCursor struct {
@@ -28,12 +31,13 @@ type jobCursor struct {
 }
 
 type Service struct {
-	store Store
-	queue QueuePublisher
+	store   Store
+	queue   QueuePublisher
+	configs sourcetargets.SearchConfigReader
 }
 
-func NewService(store Store, q QueuePublisher) *Service {
-	return &Service{store: store, queue: q}
+func NewService(store Store, q QueuePublisher, configs sourcetargets.SearchConfigReader) *Service {
+	return &Service{store: store, queue: q, configs: configs}
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto.JobPage, error) {
@@ -63,6 +67,11 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 		options.CursorTime, options.CursorID = decoded.Time, decoded.ID
 	}
 
+	options.ExcludedCompanySlugs, err = s.excludedCompanySlugs(ctx, userID)
+	if err != nil {
+		return dto.JobPage{}, err
+	}
+
 	page, err := s.store.Page(ctx, userID, options)
 	if err != nil {
 		if errors.Is(err, store.ErrInvalidID) {
@@ -82,6 +91,20 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	return page, nil
 }
 
+func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]string, error) {
+	cfg, err := s.configs.SearchConfig(ctx, userID)
+	if err != nil && !errors.Is(err, data.ErrNotFound) {
+		return nil, err
+	}
+	slugs := make([]string, 0, len(cfg.ExcludedCompanies))
+	for _, name := range cfg.ExcludedCompanies {
+		if s := slug.Make(name); s != "" {
+			slugs = append(slugs, s)
+		}
+	}
+	return slugs, nil
+}
+
 func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	job, err := s.store.GetJob(ctx, id, userID)
 	switch {
@@ -92,6 +115,17 @@ func (s *Service) Get(ctx context.Context, userID, id string) (dto.Job, error) {
 	default:
 		return job, err
 	}
+}
+
+func (s *Service) MarkSeen(ctx context.Context, userID string, in dto.SeenInput) (struct{}, error) {
+	if len(in.JobIDs) > maxSeenJobIDs {
+		return struct{}{}, apperr.Invalid("too many job IDs")
+	}
+	err := s.store.MarkJobsSeen(ctx, userID, in.JobIDs, in.Seen)
+	if errors.Is(err, store.ErrInvalidID) {
+		return struct{}{}, apperr.Invalid("invalid job ID")
+	}
+	return struct{}{}, err
 }
 
 func parsePageLimit(raw string) (int, error) {

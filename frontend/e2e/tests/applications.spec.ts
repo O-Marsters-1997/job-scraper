@@ -6,7 +6,7 @@ async function openFirstRowApplicationDialog(page: Page) {
 		.getByRole("row")
 		.filter({ hasNot: page.getByRole("columnheader") });
 	await rows.first().getByRole("button", { name: "Job actions" }).click();
-	await page.getByRole("menuitem").last().click();
+	await page.getByRole("menuitem").nth(1).click();
 	return page.getByRole("dialog");
 }
 

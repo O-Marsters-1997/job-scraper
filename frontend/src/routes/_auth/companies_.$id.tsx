@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { createMemo, createSignal, Show } from "solid-js";
+import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -24,6 +25,7 @@ import {
 	useSetCompanyReview,
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
+import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
@@ -169,6 +171,9 @@ function CompanyDetailPage() {
 										filters={filters()}
 										onChange={setFilterPatch}
 										sourceOptions={sourceOptions(jobsForCompany())}
+										selection={track.selection()}
+										onSelectionChange={track.setSelection}
+										onBulkGrade={track.openGrade}
 									/>
 								</Show>
 							</CardContent>
@@ -179,6 +184,16 @@ function CompanyDetailPage() {
 							<CompanyDetailsCard company={c()} />
 						</div>
 					</div>
+					<DismissToast />
+					<GradeDialog
+						open={track.gradeOpen()}
+						onOpenChange={track.setGradeOpen}
+						jobs={track.gradeJobs()}
+						onSaved={(jobIds, priors) => {
+							track.setSelection({});
+							if (jobIds.length > 1) announceBulkGrading({ jobIds, priors });
+						}}
+					/>
 					<TrackApplicationDialog
 						open={track.modalOpen()}
 						onOpenChange={track.setModalOpen}

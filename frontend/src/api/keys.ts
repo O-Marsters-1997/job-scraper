@@ -23,7 +23,8 @@ export const keys = {
 	statuses: ["application-statuses"] as const,
 	companies: {
 		all: companiesAll,
-		list: (q: string) => [...companiesAll, "list", q] as const,
+		list: (q: string, favourite = false) =>
+			[...companiesAll, "list", q, favourite] as const,
 		search: (q: string) => [...companiesAll, "search", q] as const,
 		detail: (id: string) => [...companiesAll, "detail", id] as const,
 		tracked: [...companiesAll, "tracked"] as const,

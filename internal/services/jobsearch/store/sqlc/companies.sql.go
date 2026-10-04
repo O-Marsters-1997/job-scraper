@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addCompanyFavourite = `-- name: AddCompanyFavourite :exec
+INSERT INTO company_favourites (user_id, company_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddCompanyFavouriteParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) AddCompanyFavourite(ctx context.Context, arg AddCompanyFavouriteParams) error {
+	_, err := q.db.Exec(ctx, addCompanyFavourite, arg.UserID, arg.CompanyID)
+	return err
+}
+
 const deleteCompanyTracking = `-- name: DeleteCompanyTracking :execrows
 DELETE FROM tracked_companies WHERE user_id = $1 AND company_id = $2
 `
@@ -58,6 +74,7 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
+    EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1 AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
@@ -85,6 +102,7 @@ type GetCompanyForUserRow struct {
 	FirstSeenAt          pgtype.Timestamptz
 	JobCount             int64
 	Tracked              bool
+	Favourite            bool
 	ReviewState          string
 	CheckIntervalMinutes pgtype.Int4
 	LastCheckedAt        pgtype.Timestamptz
@@ -105,11 +123,28 @@ func (q *Queries) GetCompanyForUser(ctx context.Context, arg GetCompanyForUserPa
 		&i.FirstSeenAt,
 		&i.JobCount,
 		&i.Tracked,
+		&i.Favourite,
 		&i.ReviewState,
 		&i.CheckIntervalMinutes,
 		&i.LastCheckedAt,
 	)
 	return i, err
+}
+
+const keepNewTrackedCompany = `-- name: KeepNewTrackedCompany :exec
+UPDATE tracked_companies
+SET review_state = 'kept', updated_at = NOW()
+WHERE user_id = $1 AND company_id = $2 AND review_state = 'new'
+`
+
+type KeepNewTrackedCompanyParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) KeepNewTrackedCompany(ctx context.Context, arg KeepNewTrackedCompanyParams) error {
+	_, err := q.db.Exec(ctx, keepNewTrackedCompany, arg.UserID, arg.CompanyID)
+	return err
 }
 
 const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
@@ -297,6 +332,7 @@ SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_com
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
     COALESCE(tc.enabled, FALSE) AS tracked,
+    EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id) AS favourite,
     COALESCE(tc.review_state, '')::text AS review_state,
     tc.check_interval_minutes,
     (SELECT MAX(bps.last_completed_at)::timestamptz FROM company_boards cb
@@ -309,17 +345,19 @@ WHERE ($2::uuid IS NULL OR (c.name, c.id) > ($3::text, $2::uuid))
        OR strpos(lower(c.name), lower($4::text)) > 0
        OR strpos(c.slug, lower($4::text)) > 0)
   AND (NOT $5::bool OR COALESCE(tc.enabled, FALSE))
+  AND (NOT $6::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id))
 ORDER BY c.name, c.id
-LIMIT $6::int
+LIMIT $7::int
 `
 
 type PageCompaniesForUserParams struct {
-	UserID      pgtype.UUID
-	CursorID    pgtype.UUID
-	CursorName  pgtype.Text
-	Search      string
-	TrackedOnly bool
-	PageLimit   int32
+	UserID        pgtype.UUID
+	CursorID      pgtype.UUID
+	CursorName    pgtype.Text
+	Search        string
+	TrackedOnly   bool
+	FavouriteOnly bool
+	PageLimit     int32
 }
 
 type PageCompaniesForUserRow struct {
@@ -334,6 +372,7 @@ type PageCompaniesForUserRow struct {
 	FirstSeenAt          pgtype.Timestamptz
 	JobCount             int64
 	Tracked              bool
+	Favourite            bool
 	ReviewState          string
 	CheckIntervalMinutes pgtype.Int4
 	LastCheckedAt        pgtype.Timestamptz
@@ -346,6 +385,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 		arg.CursorName,
 		arg.Search,
 		arg.TrackedOnly,
+		arg.FavouriteOnly,
 		arg.PageLimit,
 	)
 	if err != nil {
@@ -367,6 +407,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 			&i.FirstSeenAt,
 			&i.JobCount,
 			&i.Tracked,
+			&i.Favourite,
 			&i.ReviewState,
 			&i.CheckIntervalMinutes,
 			&i.LastCheckedAt,
@@ -379,6 +420,20 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 		return nil, err
 	}
 	return items, nil
+}
+
+const removeCompanyFavourite = `-- name: RemoveCompanyFavourite :exec
+DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2
+`
+
+type RemoveCompanyFavouriteParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) RemoveCompanyFavourite(ctx context.Context, arg RemoveCompanyFavouriteParams) error {
+	_, err := q.db.Exec(ctx, removeCompanyFavourite, arg.UserID, arg.CompanyID)
+	return err
 }
 
 const renameCompany = `-- name: RenameCompany :exec

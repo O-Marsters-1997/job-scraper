@@ -15,6 +15,7 @@ type Company struct {
 
 	JobCount             int
 	Tracked              bool
+	Favourite            bool
 	ReviewState          string
 	TargetID             string
 	CheckIntervalMinutes int
@@ -22,18 +23,20 @@ type Company struct {
 }
 
 type CompaniesQuery struct {
-	Limit   string `json:"limit"`
-	Cursor  string `json:"cursor"`
-	Q       string `json:"q"`
-	Tracked string `json:"tracked"`
+	Limit     string `json:"limit"`
+	Cursor    string `json:"cursor"`
+	Q         string `json:"q"`
+	Tracked   string `json:"tracked"`
+	Favourite string `json:"favourite"`
 }
 
 type CompanyPageOptions struct {
-	Limit       int32
-	CursorName  string
-	CursorID    string
-	Search      string
-	TrackedOnly bool
+	Limit         int32
+	CursorName    string
+	CursorID      string
+	Search        string
+	TrackedOnly   bool
+	FavouriteOnly bool
 }
 
 type CompanyPage struct {

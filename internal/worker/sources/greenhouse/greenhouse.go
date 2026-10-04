@@ -13,7 +13,7 @@ import (
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
 		Name:        "greenhouse",
-		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", token),
+		URL:         fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true&pay_transparency=true", token),
 		CompanySlug: token,
 		Parse:       parse,
 		Count:       count,
@@ -32,6 +32,21 @@ type boardJob struct {
 	AbsoluteURL string      `json:"absolute_url"`
 	Content     string      `json:"content"`
 	UpdatedAt   string      `json:"updated_at"`
+	PayRanges   []payRange  `json:"pay_input_ranges"`
+}
+
+type payRange struct {
+	MinCents     int    `json:"min_cents"`
+	MaxCents     int    `json:"max_cents"`
+	CurrencyType string `json:"currency_type"`
+}
+
+func (b boardJob) salary() string {
+	if len(b.PayRanges) == 0 {
+		return ""
+	}
+	pay := b.PayRanges[0]
+	return sources.SalaryRange(pay.MinCents/100, pay.MaxCents/100, pay.CurrencyType, "")
 }
 
 type jobLocation struct {
@@ -64,6 +79,8 @@ func parse(body []byte) ([]dto.Job, error) {
 			URL:               bj.AbsoluteURL,
 			ProviderPostingID: strconv.FormatInt(bj.ID, 10),
 			Description:       bj.Content,
+			SalaryRaw:         bj.salary(),
+			WorkArrangement:   sources.DetectWorkArrangement(bj.Location.Name),
 			UpdatedAt:         sources.RFC3339OrNow(bj.UpdatedAt),
 		})
 	}

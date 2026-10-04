@@ -3,6 +3,7 @@ import type { CompanyPageParams } from "@/api/companies";
 import type {
 	Company,
 	CompanyBoard,
+	CompanyExclusion,
 	CompanyTracking,
 	NewCompany,
 	ReviewState,
@@ -12,8 +13,10 @@ import type {
 	SourceTarget,
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
+import { isCompanyFavourite, setCompanyFavouriteFlag } from "./favourites";
 import { failIfRequested, hostMatches, humanizeSlug, slugify } from "./helpers";
 import { getJobs } from "./jobs";
+import { excludeCompanyName, unexcludeCompanyName } from "./scoring";
 import { seed } from "./seed";
 import { mockUser } from "./user";
 
@@ -51,9 +54,14 @@ const atsSourceForHost = (hostname: string) =>
 		hostMatches(hostname, host),
 	)?.[0];
 
+const withFavourite = (c: Company): Company => ({
+	...c,
+	Favourite: isCompanyFavourite(c.ID),
+});
+
 export function getCompanies(): Company[] {
 	failIfRequested("getCompanies");
-	return companies;
+	return companies.map(withFavourite);
 }
 
 export function getCompanyPage(params: CompanyPageParams): {
@@ -62,8 +70,9 @@ export function getCompanyPage(params: CompanyPageParams): {
 } {
 	failIfRequested("getCompanies");
 	const q = (params.q ?? "").toLowerCase();
-	const matches = companies
+	const matches = getCompanies()
 		.filter((c) => !params.tracked || c.Tracked)
+		.filter((c) => !params.favourite || c.Favourite)
 		.filter(
 			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
@@ -170,6 +179,18 @@ export function untrackCompany(id: string): void {
 	);
 }
 
+export function setCompanyFavourite(id: string, favourite: boolean): Company {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	setCompanyFavouriteFlag(id, favourite);
+	const updated: Company =
+		favourite && company.ReviewState === "new"
+			? { ...company, ReviewState: "kept" }
+			: company;
+	companies = companies.map((c) => (c.ID === id ? updated : c));
+	return withFavourite(updated);
+}
+
 export function setCompanyReview(
 	id: string,
 	state: ReviewState,
@@ -183,12 +204,32 @@ export function setCompanyReview(
 		ReviewState: state,
 	};
 	companies = companies.map((c) => (c.ID === id ? updated : c));
+	if (state === "dismissed") setCompanyFavouriteFlag(id, false);
 	return {
 		CompanyID: id,
 		UserID: mockUser.id,
 		Enabled: updated.Tracked,
 		CheckIntervalMinutes: updated.CheckIntervalMinutes,
 	};
+}
+
+export function excludeCompany(id: string): CompanyExclusion {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	const added = excludeCompanyName(company.Name);
+	if (trackedCompanyIds.has(id)) setCompanyReview(id, "dismissed");
+	return { name: company.Name, added };
+}
+
+export function unexcludeCompany(
+	id: string,
+	removeName: boolean,
+): CompanyExclusion {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	if (removeName) unexcludeCompanyName(company.Name);
+	if (trackedCompanyIds.has(id)) setCompanyReview(id, "new");
+	return { name: company.Name, added: false };
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {

@@ -47,6 +47,9 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
 	j.Band = row.Band.String
+	j.Grade = row.Grade
+	j.Seen = row.Seen
+	j.CompanyFavourite = row.CompanyFavourite
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -73,6 +76,8 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 	}
 	j.SuitabilityScore = optionalInt32(row.SuitabilityScore)
 	j.Band = row.Band.String
+	j.Seen = row.Seen
+	j.CompanyFavourite = row.CompanyFavourite
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -106,6 +111,7 @@ func toCompanyForUserDTO(row sqlc.GetCompanyForUserRow) dto.Company {
 		FirstSeenAt:          row.FirstSeenAt.Time,
 		JobCount:             int(row.JobCount),
 		Tracked:              row.Tracked,
+		Favourite:            row.Favourite,
 		ReviewState:          row.ReviewState,
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes.Int32),
 		LastCheckedAt:        data.TimePtr(row.LastCheckedAt),

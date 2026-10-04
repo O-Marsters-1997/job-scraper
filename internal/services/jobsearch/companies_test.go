@@ -26,7 +26,7 @@ const (
 
 func newCompanyService(q jobsearch.QueuePublisher) (*jobsearch.Service, *jobsearchtest.FakeStore) {
 	st := jobsearchtest.NewFakeStore()
-	return jobsearch.NewService(st, q), st
+	return jobsearch.NewService(st, q, jobsearchtest.NewNoopScoring()), st
 }
 
 func seedCompany(t *testing.T, st *jobsearchtest.FakeStore, in dto.CompanyUpsert) dto.Company {
@@ -132,8 +132,8 @@ func TestGetCompany(t *testing.T) {
 			svc      *jobsearch.Service
 			wantKind apperr.Kind
 		}{
-			{"unknown company", jobsearch.NewService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder()), apperr.KindNotFound},
-			{"malformed id", jobsearch.NewService(invalidIDStore{}, queuetest.NewRecorder()), apperr.KindInvalid},
+			{"unknown company", jobsearch.NewService(jobsearchtest.NewFakeStore(), queuetest.NewRecorder(), jobsearchtest.NewNoopScoring()), apperr.KindNotFound},
+			{"malformed id", jobsearch.NewService(invalidIDStore{}, queuetest.NewRecorder(), jobsearchtest.NewNoopScoring()), apperr.KindInvalid},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -456,6 +456,102 @@ func TestSetCompanyReview(t *testing.T) {
 			if got.ReviewState != tt.state || got.Enabled != tt.wantEnabled {
 				t.Errorf("SetCompanyReview(%s) = %+v, want enabled %v", tt.state, got, tt.wantEnabled)
 			}
+		}
+	})
+}
+
+func TestExcludeCompany(t *testing.T) {
+	newModule := func(t *testing.T, scoring *jobsearchtest.NoopScoring) (*jobsearch.Module, *jobsearchtest.FakeStore, dto.Company) {
+		t.Helper()
+		st := jobsearchtest.NewFakeStore()
+		deps := jobsearchtest.NewDeps(st)
+		deps.Scoring = scoring
+		company := seedAcme(t, st)
+		if _, err := st.SetCompanyTracking(t.Context(), userID, company.ID, true, 0); err != nil {
+			t.Fatal(err)
+		}
+		return jobsearch.Build(deps), st, company
+	}
+	excluded := func(t *testing.T, scoring *jobsearchtest.NoopScoring) []string {
+		t.Helper()
+		cfg, err := scoring.SearchConfig(t.Context(), userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.ExcludedCompanies
+	}
+	reviewState := func(t *testing.T, st *jobsearchtest.FakeStore) string {
+		t.Helper()
+		tracked, err := st.ListTrackedCompaniesForUser(t.Context(), userID)
+		if err != nil || len(tracked) != 1 {
+			t.Fatalf("ListTrackedCompaniesForUser() = %v, %v, want one company", tracked, err)
+		}
+		return tracked[0].ReviewState
+	}
+
+	t.Run("dismisses the company and excludes its name once, however often it repeats", func(t *testing.T) {
+		scoring := jobsearchtest.NewNoopScoring()
+		m, st, company := newModule(t, scoring)
+		in := dto.ExcludeCompanyInput{CompanyID: company.ID}
+
+		first, err := m.ExcludeCompany(t.Context(), userID, in)
+		if err != nil || !first.Added {
+			t.Fatalf("ExcludeCompany() = %+v, %v, want Added", first, err)
+		}
+		again, err := m.ExcludeCompany(t.Context(), userID, in)
+		if err != nil || again.Added {
+			t.Fatalf("ExcludeCompany() again = %+v, %v, want not Added", again, err)
+		}
+
+		if got := reviewState(t, st); got != "dismissed" {
+			t.Errorf("review state = %q, want dismissed", got)
+		}
+		if diff := cmp.Diff([]string{"acme"}, excluded(t, scoring)); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("undo restores new and removes only a name the action added", func(t *testing.T) {
+		scoring := jobsearchtest.NewNoopScoring()
+		m, st, company := newModule(t, scoring)
+		added, err := m.ExcludeCompany(t.Context(), userID, dto.ExcludeCompanyInput{CompanyID: company.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := m.UnexcludeCompany(t.Context(), userID, dto.UnexcludeCompanyInput{CompanyID: company.ID, RemoveName: added.Added}); err != nil {
+			t.Fatalf("UnexcludeCompany() err = %v", err)
+		}
+		if got := reviewState(t, st); got != "new" {
+			t.Errorf("review state = %q, want new", got)
+		}
+		if got := excluded(t, scoring); len(got) != 0 {
+			t.Errorf("ExcludedCompanies = %v, want empty", got)
+		}
+	})
+
+	t.Run("undo keeps a name the user already had", func(t *testing.T) {
+		scoring := jobsearchtest.NewNoopScoring()
+		scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedCompanies: []string{"acme"}})
+		m, _, company := newModule(t, scoring)
+		excluded0, err := m.ExcludeCompany(t.Context(), userID, dto.ExcludeCompanyInput{CompanyID: company.ID})
+		if err != nil || excluded0.Added {
+			t.Fatalf("ExcludeCompany() = %+v, %v, want not Added", excluded0, err)
+		}
+
+		if _, err := m.UnexcludeCompany(t.Context(), userID, dto.UnexcludeCompanyInput{CompanyID: company.ID, RemoveName: excluded0.Added}); err != nil {
+			t.Fatalf("UnexcludeCompany() err = %v", err)
+		}
+		if diff := cmp.Diff([]string{"acme"}, excluded(t, scoring)); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("unknown company is not found", func(t *testing.T) {
+		m, _, _ := newModule(t, jobsearchtest.NewNoopScoring())
+		_, err := m.ExcludeCompany(t.Context(), userID, dto.ExcludeCompanyInput{CompanyID: "missing"})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("ExcludeCompany() err = %v, want ErrNotFound", err)
 		}
 	})
 }

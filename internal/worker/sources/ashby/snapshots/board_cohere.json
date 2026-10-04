@@ -1,0 +1,53 @@
+{
+  "jobs": [
+    {
+      "id": "7133d205-5421-4336-a8e2-6037b5f55073",
+      "title": "Senior Full-Stack Engineer, Internal Applications ",
+      "location": "Toronto",
+      "jobUrl": "https://jobs.ashbyhq.com/cohere/7133d205-5421-4336-a8e2-6037b5f55073",
+      "descriptionHtml": "<p>trimmed</p>",
+      "publishedAt": "2026-09-15T18:21:37.401+00:00",
+      "workplaceType": "Remote",
+      "compensation": {
+        "compensationTierSummary": "CA$215K \u2013 CA$310K \u2022 Offers Equity"
+      }
+    },
+    {
+      "id": "291e5dee-dcda-49e6-a1b6-dae0d48f80af",
+      "title": "Forward Deployed Engineer, Infrastructure Specialist (Middle East)",
+      "location": "Middle East",
+      "jobUrl": "https://jobs.ashbyhq.com/cohere/291e5dee-dcda-49e6-a1b6-dae0d48f80af",
+      "descriptionHtml": "<p>trimmed</p>",
+      "publishedAt": "2026-09-10T09:55:34.718+00:00",
+      "workplaceType": "Hybrid",
+      "compensation": {
+        "compensationTierSummary": null
+      }
+    },
+    {
+      "id": "b9306620-a110-46b5-b4c4-7363e1d03a8d",
+      "title": "Member of Technical Staff - Sovereign AI",
+      "location": "Canada",
+      "jobUrl": "https://jobs.ashbyhq.com/cohere/b9306620-a110-46b5-b4c4-7363e1d03a8d",
+      "descriptionHtml": "<p>trimmed</p>",
+      "publishedAt": "2025-11-12T14:58:28.312+00:00",
+      "workplaceType": "OnSite",
+      "compensation": {
+        "compensationTierSummary": "CA$295K \u2013 CA$535K"
+      }
+    },
+    {
+      "id": "a3a69960-3c85-4b11-b9b7-d4056d406c2e",
+      "title": "Business Operations Lead",
+      "location": "New York",
+      "jobUrl": "https://jobs.ashbyhq.com/cohere/a3a69960-3c85-4b11-b9b7-d4056d406c2e",
+      "descriptionHtml": "<p>trimmed</p>",
+      "publishedAt": "2026-09-17T20:15:34.634+00:00",
+      "workplaceType": null,
+      "compensation": {
+        "compensationTierSummary": "CA$140K \u2013 CA$260K \u2022 Offers Equity \u2022 Multiple Ranges"
+      }
+    }
+  ],
+  "apiVersion": "1"
+}

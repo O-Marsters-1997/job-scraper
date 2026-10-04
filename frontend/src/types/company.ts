@@ -9,6 +9,7 @@ export const companySchema = z.object({
 	FirstSeenAt: z.string(),
 	JobCount: z.number(),
 	Tracked: z.boolean(),
+	Favourite: z.boolean().optional(),
 	ReviewState: z.enum(["", "new", "kept", "dismissed"]),
 	TargetID: z.string(),
 	CheckIntervalMinutes: z.number(),
@@ -16,6 +17,13 @@ export const companySchema = z.object({
 });
 
 export type Company = z.infer<typeof companySchema>;
+
+export const companyExclusionSchema = z.object({
+	name: z.string(),
+	added: z.boolean(),
+});
+
+export type CompanyExclusion = z.infer<typeof companyExclusionSchema>;
 
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),

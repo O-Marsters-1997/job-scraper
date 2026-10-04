@@ -15,9 +15,13 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onGrade?: () => void;
+	onDismiss?: () => void;
+	onExcludeCompany?: () => void;
 }
 
 export function JobActionsMenu(props: JobActionsMenuProps) {
+	const canExclude = () => !!props.onExcludeCompany && !!props.job.CompanyID;
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
@@ -59,6 +63,27 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 							{summary().StatusName || "Edit status"}
 						</DropdownMenuItem>
 					)}
+				</Show>
+				<Show when={props.onGrade || props.onDismiss || canExclude()}>
+					<DropdownMenuSeparator />
+				</Show>
+				<Show when={props.onGrade}>
+					<DropdownMenuItem onSelect={() => props.onGrade?.()}>
+						<Icon name="check" size={14} />
+						Grade…
+					</DropdownMenuItem>
+				</Show>
+				<Show when={props.onDismiss}>
+					<DropdownMenuItem onSelect={() => props.onDismiss?.()}>
+						<Icon name="x" size={14} />
+						Not for me
+					</DropdownMenuItem>
+				</Show>
+				<Show when={canExclude()}>
+					<DropdownMenuItem onSelect={() => props.onExcludeCompany?.()}>
+						<Icon name="x" size={14} />
+						Exclude company
+					</DropdownMenuItem>
 				</Show>
 			</DropdownMenuContent>
 		</DropdownMenu>

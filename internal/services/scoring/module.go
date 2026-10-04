@@ -2,6 +2,7 @@ package scoring
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -87,6 +88,22 @@ func NewFacade(pool *pgxpool.Pool) *Module {
 	return Build(Deps{Store: store.New(pool)})
 }
 
+// ExcludeCompany adds name to userID's ExcludedCompanies, reporting whether
+// it was absent; the name is stored trimmed and lowercased like every
+// Search Config list.
+func (m *Module) ExcludeCompany(ctx context.Context, userID, name string) (bool, error) {
+	return m.store.AddExcludedCompany(ctx, userID, normalizeCompany(name))
+}
+
+// UnexcludeCompany removes name from userID's ExcludedCompanies.
+func (m *Module) UnexcludeCompany(ctx context.Context, userID, name string) error {
+	return m.store.RemoveExcludedCompany(ctx, userID, normalizeCompany(name))
+}
+
+func normalizeCompany(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
 // Run drains the answer-effect queue until ctx is cancelled.
 func (m *Module) Run(ctx context.Context) error {
 	return m.svc.Run(ctx)
@@ -128,6 +145,13 @@ func (m *Module) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) err
 // own transaction, without alerting (ADR 0011).
 func (m *Module) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
 	return m.store.CompanyTracked(ctx, tx, userID, companyID)
+}
+
+// CompanyFavouriteChanged is scoring's tx-scoped port for a user starring or
+// un-starring a company: it re-scores their open Jobs there from cached
+// answers within the caller's own transaction, without alerting (ADR 0011).
+func (m *Module) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	return m.svc.CompanyFavouriteChanged(ctx, tx, userID, companyID)
 }
 
 // Ask answers arbitrary questions about a job, reusing cached Jev answers

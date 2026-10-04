@@ -3,6 +3,7 @@ package lever
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -27,6 +28,36 @@ type posting struct {
 	HostedURL        string            `json:"hostedUrl"`
 	DescriptionPlain string            `json:"descriptionPlain"`
 	CreatedAt        int64             `json:"createdAt"`
+	WorkplaceType    string            `json:"workplaceType"`
+	SalaryRange      salaryRange       `json:"salaryRange"`
+}
+
+type salaryRange struct {
+	Min      float64 `json:"min"`
+	Max      float64 `json:"max"`
+	Currency string  `json:"currency"`
+	Interval string  `json:"interval"`
+}
+
+func (r salaryRange) String() string {
+	return sources.SalaryRange(int(math.Round(r.Min)), int(math.Round(r.Max)), r.Currency, salaryPeriods[r.Interval])
+}
+
+func workArrangement(workplaceType string) string {
+	switch workplaceType {
+	case "remote", "hybrid", "onsite":
+		return workplaceType
+	default:
+		return ""
+	}
+}
+
+var salaryPeriods = map[string]string{
+	"per-year-salary":  "year",
+	"per-month-salary": "month",
+	"per-week-salary":  "week",
+	"per-day-wage":     "day",
+	"per-hour-wage":    "hour",
 }
 
 type postingCategories struct {
@@ -52,6 +83,8 @@ func parse(body []byte) ([]dto.Job, error) {
 			URL:               p.HostedURL,
 			ProviderPostingID: p.ID,
 			Description:       p.DescriptionPlain,
+			SalaryRaw:         p.SalaryRange.String(),
+			WorkArrangement:   workArrangement(p.WorkplaceType),
 			UpdatedAt:         updatedAt,
 		})
 	}

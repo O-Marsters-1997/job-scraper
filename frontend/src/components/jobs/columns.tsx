@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/solid-router";
 import type { ColumnDef } from "@tanstack/solid-table";
-import { Match, Show, Switch } from "solid-js";
-import { Icon } from "@/components/Icon";
+import { createRenderEffect, Match, Show, Switch } from "solid-js";
+import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/datetime";
-import { titleCase } from "@/lib/utils";
+import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
+import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
@@ -16,6 +17,9 @@ export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
+	onGrade: (job: Job) => void;
+	onToggleFavourite: (job: Job) => void;
+	onExcludeCompany: (job: Job) => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -32,18 +36,63 @@ export function createJobColumns(
 ): ColumnDef<Job, unknown>[] {
 	return [
 		{
+			id: "select",
+			enableSorting: false,
+			enableGlobalFilter: false,
+			header: (info) => (
+				<input
+					type="checkbox"
+					aria-label="Select all jobs on this page"
+					class="size-4 cursor-pointer align-middle accent-primary"
+					checked={info.table.getIsAllPageRowsSelected()}
+					ref={(el) =>
+						createRenderEffect(() => {
+							el.indeterminate = info.table.getIsSomePageRowsSelected();
+						})
+					}
+					onChange={info.table.getToggleAllPageRowsSelectedHandler()}
+				/>
+			),
+			cell: (info) => (
+				<input
+					type="checkbox"
+					aria-label={`Select ${info.row.original.Title}`}
+					class="size-4 cursor-pointer align-middle accent-primary"
+					checked={info.row.getIsSelected()}
+					onChange={info.row.getToggleSelectedHandler()}
+				/>
+			),
+		},
+		{
 			accessorKey: "Title",
 			header: "Title",
 			cell: (info) => (
 				<div class="flex items-center gap-2">
+					<Show when={!info.row.original.Seen}>
+						<span
+							role="img"
+							aria-label="Unseen"
+							class="size-1.5 shrink-0 rounded-full bg-primary"
+						/>
+					</Show>
 					<Link
 						to="/jobs/$id"
 						params={{ id: info.row.original.ID }}
-						class="block max-w-[260px] truncate font-medium text-foreground transition-colors hover:text-primary"
+						class={cn(
+							"block max-w-[260px] truncate text-foreground transition-colors hover:text-primary",
+							info.row.original.Seen ? "font-medium" : "font-bold",
+						)}
 						title={info.getValue() as string}
 					>
 						{info.getValue() as string}
 					</Link>
+					<Show when={info.row.original.Grade || undefined}>
+						{(grade) => (
+							<Badge variant="outline" class="shrink-0">
+								{GRADE_LABEL[grade()]}
+							</Badge>
+						)}
+					</Show>
 					<Show
 						when={
 							info.row.original.Wildcard &&
@@ -61,12 +110,21 @@ export function createJobColumns(
 			accessorKey: "CompanySlug",
 			header: "Company",
 			cell: (info) => (
-				<span
-					class="block max-w-[180px] truncate text-muted"
-					title={titleCase(info.getValue() as string)}
-				>
-					{titleCase(info.getValue() as string)}
-				</span>
+				<div class="flex items-center gap-1">
+					<Show when={info.row.original.CompanyID}>
+						<FavouriteStar
+							favourite={info.row.original.CompanyFavourite ?? false}
+							companyName={titleCase(info.getValue() as string)}
+							onToggle={() => ctx.onToggleFavourite(info.row.original)}
+						/>
+					</Show>
+					<span
+						class="block max-w-[160px] truncate text-muted"
+						title={titleCase(info.getValue() as string)}
+					>
+						{titleCase(info.getValue() as string)}
+					</span>
+				</div>
 			),
 		},
 		{
@@ -185,19 +243,13 @@ export function createJobColumns(
 			enableGlobalFilter: false,
 			cell: (info) => (
 				<div class="flex items-center justify-end">
-					<button
-						type="button"
-						aria-label="Not for me"
-						title="Not for me"
-						onClick={() => ctx.onDismiss(info.row.original)}
-						class="flex h-8 w-8 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground"
-					>
-						<Icon name="x" />
-					</button>
 					<JobActionsMenu
 						job={info.row.original}
 						appSummary={ctx.appsForJobs()?.[info.row.original.ID]}
 						onTrack={() => ctx.onTrack(info.row.original.ID)}
+						onGrade={() => ctx.onGrade(info.row.original)}
+						onDismiss={() => ctx.onDismiss(info.row.original)}
+						onExcludeCompany={() => ctx.onExcludeCompany(info.row.original)}
 					/>
 				</div>
 			),

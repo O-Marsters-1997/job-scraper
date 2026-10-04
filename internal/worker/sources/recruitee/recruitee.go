@@ -31,6 +31,34 @@ type offer struct {
 	Location    string `json:"location"`
 	CareersURL  string `json:"careers_url"`
 	Description string `json:"description"`
+	Remote      bool   `json:"remote"`
+	Hybrid      bool   `json:"hybrid"`
+	OnSite      bool   `json:"on_site"`
+	Salary      struct {
+		Min      string `json:"min"`
+		Max      string `json:"max"`
+		Currency string `json:"currency"`
+		Period   string `json:"period"`
+	} `json:"salary"`
+}
+
+func (o offer) salaryRaw() string {
+	low, _ := strconv.Atoi(o.Salary.Min)
+	high, _ := strconv.Atoi(o.Salary.Max)
+	return sources.SalaryRange(low, high, o.Salary.Currency, o.Salary.Period)
+}
+
+func (o offer) workArrangement() string {
+	switch {
+	case o.Remote:
+		return "remote"
+	case o.Hybrid:
+		return "hybrid"
+	case o.OnSite:
+		return "onsite"
+	default:
+		return ""
+	}
 }
 
 func parse(body []byte) ([]dto.Job, error) {
@@ -47,6 +75,8 @@ func parse(body []byte) ([]dto.Job, error) {
 			URL:               o.CareersURL,
 			ProviderPostingID: strconv.FormatInt(o.ID, 10),
 			Description:       o.Description,
+			SalaryRaw:         o.salaryRaw(),
+			WorkArrangement:   o.workArrangement(),
 			UpdatedAt:         time.Now().UTC(),
 		})
 	}
