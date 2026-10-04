@@ -75,6 +75,8 @@ func TestResolveBoard(t *testing.T) {
 		{"hibob www rejected", "https://www.careers.hibob.com/", "", "", false},
 		{"smartrecruiters job url keeps case", "https://jobs.smartrecruiters.com/Wise/744000153370939-card-disputes-specialist", "smartrecruiters", "Wise", true},
 		{"smartrecruiters board url", "https://careers.smartrecruiters.com/Wise", "smartrecruiters", "Wise", true},
+		{"smartrecruiters oneclick-ui company url", "https://jobs.smartrecruiters.com/oneclick-ui/company/Wise/publication/abc", "smartrecruiters", "Wise", true},
+		{"smartrecruiters oneclick-ui without company rejected", "https://jobs.smartrecruiters.com/oneclick-ui/assets/app.js", "", "", false},
 		{"bare smartrecruiters host rejected", "https://jobs.smartrecruiters.com/", "", "", false},
 		{"aggregator rejected", "https://www.linkedin.com/jobs/view/123", "", "", false},
 		{"unknown html rejected", "https://workinstartups.com/job-board", "", "", false},
