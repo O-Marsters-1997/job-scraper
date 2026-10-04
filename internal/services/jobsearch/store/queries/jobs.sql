@@ -51,3 +51,9 @@ ON CONFLICT DO NOTHING;
 -- name: MarkJobsUnseen :exec
 DELETE FROM job_views
 WHERE user_id = sqlc.arg(user_id)::uuid AND job_id = ANY(sqlc.arg(job_ids)::uuid[]);
+
+-- name: ListJobListings :many
+SELECT source, normalized_url, first_seen_at
+FROM job_urls
+WHERE job_id = $1
+ORDER BY first_seen_at, normalized_url;

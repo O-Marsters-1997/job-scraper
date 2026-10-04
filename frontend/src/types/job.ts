@@ -27,6 +27,14 @@ export const scoreRowSchema = z.object({
 
 export type ScoreRow = z.infer<typeof scoreRowSchema>;
 
+export const jobListingSchema = z.object({
+	source: z.string(),
+	url: z.string(),
+	first_seen_at: z.string(),
+});
+
+export type JobListing = z.infer<typeof jobListingSchema>;
+
 export const jobSchema = z.object({
 	ID: z.string(),
 	Title: z.string(),
@@ -47,6 +55,7 @@ export const jobSchema = z.object({
 	CompanyFavourite: z.boolean().optional(),
 	Wildcard: z.boolean().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
+	Listings: z.array(jobListingSchema).nullable().optional(),
 	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description: z.string().optional(),
 	Skills: z.array(z.string()).optional(),

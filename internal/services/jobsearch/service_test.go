@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -103,11 +104,47 @@ func TestList(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
-	_, err := svc.Get(t.Context(), userID, "missing")
-	if !apperr.IsKind(err, apperr.KindNotFound) {
-		t.Fatalf("Get(missing) err = %v, want kind %v", err, apperr.KindNotFound)
-	}
+	t.Run("missing job is not found", func(t *testing.T) {
+		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
+		_, err := svc.Get(t.Context(), userID, "missing")
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("Get(missing) err = %v, want kind %v", err, apperr.KindNotFound)
+		}
+	})
+
+	t.Run("returns every listing in first-seen order", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		posting := dto.Job{Title: "Engineer", BoardID: "board-1", ProviderPostingID: "p-1"}
+		var saved dto.Job
+		for _, listing := range []struct{ url, source string }{
+			{"https://boards.example.com/jobs/1", "greenhouse"},
+			{"https://www.linkedin.com/jobs/view/1", "linkedin"},
+			{"https://workinstartups.com/details/1", "workinstartups"},
+			{"https://www.linkedin.com/jobs/view/1", "linkedin"},
+		} {
+			posting.URL, posting.Source = listing.url, listing.source
+			var err error
+			if saved, _, err = st.SaveCanonical(t.Context(), posting); err != nil {
+				t.Fatalf("SaveCanonical(%s) err = %v", listing.url, err)
+			}
+		}
+
+		job, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).Get(t.Context(), userID, saved.ID)
+		if err != nil {
+			t.Fatalf("Get() err = %v", err)
+		}
+		want := []dto.JobListing{
+			{Source: "greenhouse", URL: "https://boards.example.com/jobs/1"},
+			{Source: "linkedin", URL: "https://www.linkedin.com/jobs/view/1"},
+			{Source: "workinstartups", URL: "https://workinstartups.com/details/1"},
+		}
+		if diff := cmp.Diff(want, job.Listings, cmpopts.IgnoreFields(dto.JobListing{}, "FirstSeenAt")); diff != "" {
+			t.Errorf("Get().Listings (-want +got):\n%s", diff)
+		}
+		if job.URL != want[0].URL {
+			t.Errorf("Get().URL = %q, want the primary %q", job.URL, want[0].URL)
+		}
+	})
 }
 
 func TestListScored(t *testing.T) {
