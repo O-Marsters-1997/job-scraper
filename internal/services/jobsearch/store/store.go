@@ -22,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -266,19 +267,42 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
 	}
 
+	matchTitle := jobmatch.Title(job.Title)
+	matchLocation := jobmatch.Location(job.Location)
+	trusted := boardID.Valid && postingID.Valid
+	isSecondaryListing := err == nil && previous.Url != normalizedURL &&
+		(!trusted || previous.PrimaryBoardID != boardID || previous.ProviderPostingID != postingID)
+
 	status := "new"
 	var jobID pgtype.UUID
-	if errors.Is(err, pgx.ErrNoRows) {
+	switch {
+	case isSecondaryListing:
+		status = "unchanged"
+		jobID = previous.ID
+		job.URL = previous.Url
+	case errors.Is(err, pgx.ErrNoRows):
+		matchID, matchURL, matched, err := findMatch(ctx, queries, job, companyID, matchTitle, matchLocation)
+		if err != nil {
+			return dto.Job{}, "", err
+		}
+		if matched && !trusted {
+			status = "merged"
+			jobID = matchID
+			job.URL = matchURL
+			break
+		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
 			Source: job.Source, UpdatedAt: updatedAt, Description: job.Description,
 			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
 			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
+			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
+			MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
 		})
 		if err != nil {
 			return dto.Job{}, "", fmt.Errorf("insert canonical job: %w", err)
 		}
-	} else {
+	default:
 		jobID = previous.ID
 		oldFingerprint := previous.ContentFingerprint
 		if oldFingerprint == "" {
@@ -318,7 +342,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if rows != 1 {
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", ErrCanonicalConflict)
 	}
-	if status != "unchanged" {
+	if status == "new" || status == "changed" {
 		if err := s.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
 			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
 		}
@@ -328,6 +352,27 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	job.ID = id
 	return job, status, nil
+}
+
+// findMatch takes the match lock, then returns the one open Job the listing
+// duplicates, if exactly one does.
+func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string) (id pgtype.UUID, url string, matched bool, err error) {
+	if err := queries.LockCanonicalJob(ctx, "match:"+job.CompanySlug+"|"+matchTitle); err != nil {
+		return id, "", false, fmt.Errorf("lock match: %w", err)
+	}
+	candidates, err := queries.FindMatchCandidates(ctx, sqlc.FindMatchCandidatesParams{
+		MatchTitle: pgtype.Text{String: matchTitle, Valid: true}, CompanySlug: job.CompanySlug, CompanyID: companyID,
+	})
+	if err != nil {
+		return id, "", false, fmt.Errorf("find match candidates: %w", err)
+	}
+	candidates = slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
+		return !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
+	})
+	if len(candidates) != 1 {
+		return id, "", false, nil
+	}
+	return candidates[0].ID, candidates[0].Url, true, nil
 }
 
 func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {

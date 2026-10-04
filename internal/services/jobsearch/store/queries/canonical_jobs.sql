@@ -17,12 +17,12 @@ LIMIT 1 FOR UPDATE OF j;
 -- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, updated_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
-    content_fingerprint, content_changed_at)
+    content_fingerprint, content_changed_at, match_title, match_location)
 VALUES (sqlc.arg(title), sqlc.arg(location), sqlc.arg(url), sqlc.arg(company_slug),
     sqlc.arg(source), sqlc.arg(updated_at), sqlc.arg(description), sqlc.arg(salary_raw),
     sqlc.arg(work_arrangement), COALESCE(sqlc.narg(company_id)::uuid, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     sqlc.narg(board_id)::uuid, sqlc.narg(posting_id),
-    sqlc.arg(fingerprint), NOW())
+    sqlc.arg(fingerprint), NOW(), sqlc.arg(match_title), sqlc.arg(match_location))
 RETURNING id;
 
 -- name: UpdateChangedCanonicalJob :exec
@@ -30,11 +30,21 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
     updated_at = sqlc.arg(updated_at), description = sqlc.arg(description),
     salary_raw = sqlc.arg(salary_raw), work_arrangement = sqlc.arg(work_arrangement),
     content_fingerprint = sqlc.arg(fingerprint), content_changed_at = NOW(),
+    match_title = sqlc.arg(match_title), match_location = sqlc.arg(match_location),
     company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     primary_board_id = COALESCE(sqlc.narg(board_id)::uuid, primary_board_id),
     provider_posting_id = COALESCE(sqlc.narg(posting_id), provider_posting_id),
     scraped_at = NOW()
 WHERE id = sqlc.arg(id)::uuid;
+
+-- name: FindMatchCandidates :many
+SELECT id, url, COALESCE(match_location, '') AS match_location
+FROM jobs
+WHERE match_title = sqlc.arg(match_title)
+    AND (company_slug = sqlc.arg(company_slug) OR company_id = sqlc.narg(company_id)::uuid)
+    AND closed_at IS NULL
+    AND updated_at > NOW() - INTERVAL '90 days'
+FOR UPDATE;
 
 -- name: UpdateUnchangedCanonicalJob :exec
 UPDATE jobs SET company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
