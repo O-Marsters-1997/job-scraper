@@ -1,0 +1,10 @@
+{
+  "totalSize": 8,
+  "nextPageToken": "page2token==",
+  "jobs": [
+    {"id": "1", "title": "Customer Success Account Manager", "url": "https://jobs.workable.com/view/g8aLqXvhXdqNtpb9sCk6Nc/remote-customer-success-account-manager-in-united-kingdom-at-bask-health", "company": {"title": "Bask Health"}},
+    {"id": "2", "title": "Client Success Manager", "url": "https://jobs.workable.com/view/6VVsT8s2DUFTfjw1hnmRt6/remote-client-success-manager-in-united-kingdom-at-bask-health", "company": {"title": "Bask Health"}},
+    {"id": "3", "title": "Founding Head of Sales", "url": "https://jobs.workable.com/view/8ED6NoQgbP8HcG7u4XvKU5/remote-founding-head-of-sales-in-london-at-orchard", "company": {"title": "Orchard"}},
+    {"id": "4", "title": "Support Engineer", "url": "https://apply.workable.com/acme-direct/j/ABC123/", "company": {"title": "Acme Direct Ltd"}}
+  ]
+}
