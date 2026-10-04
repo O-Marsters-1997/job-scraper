@@ -5,6 +5,7 @@ export const applicationStatusSchema = z.object({
 	UserID: z.string(),
 	Name: z.string(),
 	Colour: z.string(),
+	ReplyWindowDays: z.number().int().nullable(),
 	CreatedAt: z.string(),
 });
 

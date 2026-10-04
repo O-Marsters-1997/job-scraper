@@ -13,13 +13,15 @@ import (
 
 type Store interface {
 	CreateApplication(ctx context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error)
-	ListApplications(ctx context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error)
+	ListApplications(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error)
 	UpdateApplication(ctx context.Context, userID, id string, in dto.UpdateApplicationInput) (dto.Application, error)
+	SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error)
+	ClearChase(ctx context.Context, userID, id string) error
 	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 
-	CreateApplicationStatus(ctx context.Context, userID, name, colour string) (dto.ApplicationStatus, error)
-	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error)
+	CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
+	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
 	DeleteApplicationStatus(ctx context.Context, id, userID string) error
 	CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error)
 	ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error)
@@ -52,7 +54,15 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateApplic
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
-	return s.store.ListApplications(ctx, userID, q.StatusID)
+	return s.store.ListApplications(ctx, userID, q)
+}
+
+func (s *Service) SetChase(ctx context.Context, userID string, in dto.ChaseInput) (dto.Application, error) {
+	chaseBy, err := time.Parse(time.DateOnly, in.ChaseBy)
+	if err != nil {
+		return dto.Application{}, apperr.Invalid("invalid chase_by date")
+	}
+	return s.store.SetChase(ctx, userID, in.ID, chaseBy)
 }
 
 // ForJobs returns each of q.JobIDs's application summary, keyed by job ID.

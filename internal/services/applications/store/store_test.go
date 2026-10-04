@@ -27,6 +27,7 @@ func TestStoreContract(t *testing.T) {
 			Store:  st,
 			UserID: userID,
 			JobID:  pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
+			NewJob: func() string { return pgtest.InsertJob(t, pool, "Other Job", "Other Job") },
 		}
 	})
 }
@@ -51,7 +52,7 @@ func TestListApplicationsJoinsJobDetails(t *testing.T) {
 		t.Fatalf("CreateApplication err = %v", err)
 	}
 
-	got, err := st.ListApplications(t.Context(), userID, "")
+	got, err := st.ListApplications(t.Context(), userID, dto.ApplicationsQuery{})
 	if err != nil {
 		t.Fatalf("ListApplications err = %v", err)
 	}
@@ -64,7 +65,7 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 	st, pool, userID := newStore(t)
 	matching := pgtest.InsertJob(t, pool, "Match", "Match")
 	other := pgtest.InsertJob(t, pool, "Other", "Other")
-	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1")
+	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus err = %v", err)
 	}
@@ -77,7 +78,7 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 		}
 	}
 
-	got, err := st.ListApplications(t.Context(), userID, status.ID)
+	got, err := st.ListApplications(t.Context(), userID, dto.ApplicationsQuery{StatusID: status.ID})
 	if err != nil {
 		t.Fatalf("ListApplications err = %v", err)
 	}

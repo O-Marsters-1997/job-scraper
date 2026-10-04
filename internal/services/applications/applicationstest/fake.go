@@ -3,6 +3,7 @@ package applicationstest
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -42,16 +43,42 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 	return app, nil
 }
 
-func (f *FakeStore) ListApplications(_ context.Context, userID, statusID string) ([]dto.ApplicationWithDetails, error) {
+func (f *FakeStore) ListApplications(_ context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := []dto.ApplicationWithDetails{}
 	for _, a := range f.apps {
-		if a.UserID == userID && (statusID == "" || a.StatusID == statusID) {
-			out = append(out, toDetails(a))
+		if a.UserID != userID || (q.StatusID != "" && a.StatusID != q.StatusID) || (q.Chase && a.ChaseBy == nil) {
+			continue
 		}
+		out = append(out, toDetails(a))
+	}
+	if q.Chase {
+		slices.SortFunc(out, func(a, b dto.ApplicationWithDetails) int { return a.ChaseBy.Compare(*b.ChaseBy) })
 	}
 	return out, nil
+}
+
+func (f *FakeStore) SetChase(_ context.Context, userID, id string, chaseBy time.Time) (dto.Application, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	app, ok := f.apps[id]
+	if !ok || app.UserID != userID {
+		return dto.Application{}, data.ErrNotFound
+	}
+	app.ChaseBy = &chaseBy
+	f.apps[id] = app
+	return app, nil
+}
+
+func (f *FakeStore) ClearChase(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if app, ok := f.apps[id]; ok && app.UserID == userID {
+		app.ChaseBy = nil
+		f.apps[id] = app
+	}
+	return nil
 }
 
 func parseDate(s *string) *time.Time {
@@ -68,7 +95,7 @@ func parseDate(s *string) *time.Time {
 func toDetails(a dto.Application) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID: a.ID, UserID: a.UserID, JobID: a.JobID, StatusID: a.StatusID,
-		Notes: a.Notes, AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo,
+		Notes: a.Notes, AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo, ChaseBy: a.ChaseBy,
 	}
 }
 
@@ -112,22 +139,22 @@ func (f *FakeStore) GetApplicationsForJobs(_ context.Context, userID string, job
 	return out, nil
 }
 
-func (f *FakeStore) CreateApplicationStatus(_ context.Context, userID, name, colour string) (dto.ApplicationStatus, error) {
+func (f *FakeStore) CreateApplicationStatus(_ context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name, Colour: colour}
+	s := dto.ApplicationStatus{ID: fmt.Sprintf("status-%d", len(f.statuses)+1), UserID: userID, Name: name, Colour: colour, ReplyWindowDays: replyWindowDays}
 	f.statuses[s.ID] = s
 	return s, nil
 }
 
-func (f *FakeStore) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string) (dto.ApplicationStatus, error) {
+func (f *FakeStore) UpdateApplicationStatus(_ context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	s, ok := f.statuses[id]
 	if !ok || s.UserID != userID {
 		return dto.ApplicationStatus{}, apperr.NotFound("status not found")
 	}
-	s.Name, s.Colour = name, colour
+	s.Name, s.Colour, s.ReplyWindowDays = name, colour, replyWindowDays
 	f.statuses[id] = s
 	return s, nil
 }

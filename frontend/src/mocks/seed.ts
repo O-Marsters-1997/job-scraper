@@ -39,6 +39,7 @@ const statuses: ApplicationStatus[] = STATUS_DEFINITIONS.map((s, i) => ({
 	UserID: "user-1",
 	Name: s.name,
 	Colour: s.colour,
+	ReplyWindowDays: null,
 	CreatedAt: new Date("2024-01-01").toISOString(),
 }));
 
@@ -153,6 +154,7 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			SalaryInfo: "",
 			CreatedAt: faker.date.recent({ days: 25 }).toISOString(),
 			UpdatedAt: faker.date.recent({ days: 10 }).toISOString(),
+			ChaseBy: null,
 		});
 	}
 }

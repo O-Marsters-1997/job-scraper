@@ -7,6 +7,7 @@ import { SettingsActions } from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
+import { parseReplyWindow } from "@/lib/replyWindow";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
 	useApplicationStatuses,
@@ -34,19 +35,25 @@ function StatusesPage() {
 		STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR,
 	);
 
+	const [newReplyWindow, setNewReplyWindow] = createSignal("");
+
 	const [editingId, setEditingId] = createSignal<string | null>(null);
 	const [editName, setEditName] = createSignal("");
 	const [editColour, setEditColour] = createSignal("");
+	const [editReplyWindow, setEditReplyWindow] = createSignal("");
 
 	const [deleteError, setDeleteError] = createSignal<string | null>(null);
 
 	const addForm = useFormSubmit(async () => {
-		if (!newName().trim()) return;
+		const window = parseReplyWindow(newReplyWindow());
+		if (!newName().trim() || window.error !== undefined) return;
 		await createMutation.mutateAsync({
 			name: newName().trim(),
 			colour: newColour(),
+			replyWindowDays: window.days,
 		});
 		setNewName("");
+		setNewReplyWindow("");
 		setNewColour(STATUS_PALETTE[0]?.hex ?? STATUS_FALLBACK_COLOUR);
 		setShowAdd(false);
 	});
@@ -56,15 +63,18 @@ function StatusesPage() {
 		setEditingId(s.ID);
 		setEditName(s.Name);
 		setEditColour(s.Colour);
+		setEditReplyWindow(s.ReplyWindowDays?.toString() ?? "");
 	};
 
 	const editForm = useFormSubmit(async () => {
 		const id = editingId();
-		if (!id || !editName().trim()) return;
+		const window = parseReplyWindow(editReplyWindow());
+		if (!id || !editName().trim() || window.error !== undefined) return;
 		await updateMutation.mutateAsync({
 			id,
 			name: editName().trim(),
 			colour: editColour(),
+			replyWindowDays: window.days,
 		});
 		setEditingId(null);
 	});
@@ -108,9 +118,11 @@ function StatusesPage() {
 										editing={editingId() === status.ID}
 										name={editName()}
 										colour={editColour()}
+										replyWindow={editReplyWindow()}
 										pending={editForm.pending()}
 										onName={setEditName}
 										onColour={setEditColour}
+										onReplyWindow={setEditReplyWindow}
 										onEdit={() => startEdit(status)}
 										onCancel={() => setEditingId(null)}
 										onDelete={() => handleDelete(status.ID)}
@@ -123,12 +135,15 @@ function StatusesPage() {
 								<AddStatusForm
 									name={newName()}
 									colour={newColour()}
+									replyWindow={newReplyWindow()}
 									pending={addForm.pending()}
 									onName={setNewName}
 									onColour={setNewColour}
+									onReplyWindow={setNewReplyWindow}
 									onCancel={() => {
 										setShowAdd(false);
 										setNewName("");
+										setNewReplyWindow("");
 										addForm.setError(null);
 									}}
 									onSubmit={addForm.submit}

@@ -87,14 +87,16 @@ type Application struct {
 	SalaryInfo pgtype.Text
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
+	ChaseBy    pgtype.Date
 }
 
 type ApplicationStatus struct {
-	ID        pgtype.UUID
-	UserID    pgtype.UUID
-	Name      string
-	Colour    string
-	CreatedAt pgtype.Timestamptz
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Name            string
+	Colour          string
+	CreatedAt       pgtype.Timestamptz
+	ReplyWindowDays pgtype.Int4
 }
 
 type BoardJobObservation struct {

@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS application_statuses (
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name       TEXT        NOT NULL,
     colour     TEXT        NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reply_window_days INT  CHECK (reply_window_days BETWEEN 1 AND 60)
 );
 
 CREATE TABLE IF NOT EXISTS notification_digests (
@@ -85,8 +86,11 @@ CREATE TABLE IF NOT EXISTS applications (
     salary_info TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    chase_by    DATE,
     UNIQUE (user_id, job_id)
 );
+
+CREATE INDEX applications_chase_idx ON applications (user_id, chase_by) WHERE chase_by IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tracked_docs (
     id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -19,16 +19,32 @@ export function useApplicationStatuses() {
 
 export function useCreateApplicationStatus() {
 	return useInvalidatingMutation(
-		({ name, colour }: { name: string; colour: string }) =>
-			createApplicationStatus(name, colour),
+		({
+			name,
+			colour,
+			replyWindowDays,
+		}: {
+			name: string;
+			colour: string;
+			replyWindowDays: number | null;
+		}) => createApplicationStatus(name, colour, replyWindowDays),
 		[keys.statuses, keys.applications.all],
 	);
 }
 
 export function useUpdateApplicationStatus() {
 	return useInvalidatingMutation(
-		({ id, name, colour }: { id: string; name: string; colour: string }) =>
-			updateApplicationStatus(id, name, colour),
+		({
+			id,
+			name,
+			colour,
+			replyWindowDays,
+		}: {
+			id: string;
+			name: string;
+			colour: string;
+			replyWindowDays: number | null;
+		}) => updateApplicationStatus(id, name, colour, replyWindowDays),
 		[keys.statuses, keys.applications.all],
 	);
 }

@@ -21,6 +21,7 @@ type Fixture struct {
 	Store  applications.Store
 	UserID string
 	JobID  string
+	NewJob func() string
 }
 
 func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Application {
@@ -35,7 +36,7 @@ func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Appli
 
 func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	t.Helper()
-	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1")
+	got, err := f.Store.CreateApplicationStatus(t.Context(), f.UserID, name, "#6366f1", nil)
 	if err != nil {
 		t.Fatalf("CreateApplicationStatus(%q) err = %v", name, err)
 	}
@@ -72,12 +73,100 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("list returns the user's applications", func(t *testing.T) {
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
-		got, err := f.Store.ListApplications(t.Context(), f.UserID, "")
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
 		if err != nil {
 			t.Fatalf("ListApplications(...) err = %v", err)
 		}
 		if len(got) != 1 || got[0].ID != created.ID {
 			t.Errorf("ListApplications(...) = %+v, want [%+v]", got, created)
+		}
+	})
+
+	t.Run("set chase stores the date", func(t *testing.T) {
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		want := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+		got, err := f.Store.SetChase(t.Context(), f.UserID, created.ID, want)
+		if err != nil {
+			t.Fatalf("SetChase(...) err = %v", err)
+		}
+		if got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("SetChase(2026-10-20) ChaseBy = %v, want %v", got.ChaseBy, want)
+		}
+	})
+
+	t.Run("set chase on a missing application returns not found", func(t *testing.T) {
+		f := newStore(t)
+		_, err := f.Store.SetChase(t.Context(), f.UserID, missingID, time.Now())
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("SetChase(missing) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("clear chase nulls the date and is idempotent", func(t *testing.T) {
+		f := newStore(t)
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		if _, err := f.Store.SetChase(t.Context(), f.UserID, created.ID, time.Now()); err != nil {
+			t.Fatalf("SetChase(...) err = %v", err)
+		}
+		for range 2 {
+			if err := f.Store.ClearChase(t.Context(), f.UserID, created.ID); err != nil {
+				t.Fatalf("ClearChase(...) err = %v", err)
+			}
+		}
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
+		if err != nil {
+			t.Fatalf("ListApplications(...) err = %v", err)
+		}
+		if len(got) != 1 || got[0].ChaseBy != nil {
+			t.Errorf("ListApplications after ClearChase = %+v, want one row with nil ChaseBy", got)
+		}
+	})
+
+	t.Run("list with chase keeps chased rows, oldest first, narrowed by status", func(t *testing.T) {
+		f := newStore(t)
+		applied := createStatus(t, f, "Applied")
+		offer := createStatus(t, f, "Offer")
+		late := f.NewJob()
+		early := f.NewJob()
+		other := f.NewJob()
+		unchased := f.NewJob()
+		mk := func(jobID, statusID string, chaseBy *time.Time) dto.Application {
+			t.Helper()
+			app, err := f.Store.CreateApplication(t.Context(), f.UserID, dto.CreateApplicationInput{JobID: jobID, StatusID: statusID})
+			if err != nil {
+				t.Fatalf("CreateApplication(job=%s) err = %v", jobID, err)
+			}
+			if chaseBy != nil {
+				if _, err := f.Store.SetChase(t.Context(), f.UserID, app.ID, *chaseBy); err != nil {
+					t.Fatalf("SetChase(...) err = %v", err)
+				}
+			}
+			return app
+		}
+		d := func(day int) *time.Time { v := time.Date(2026, 10, day, 0, 0, 0, 0, time.UTC); return &v }
+		lateApp := mk(late, applied.ID, d(25))
+		earlyApp := mk(early, applied.ID, d(10))
+		otherApp := mk(other, offer.ID, d(15))
+		mk(unchased, applied.ID, nil)
+
+		ids := func(q dto.ApplicationsQuery) []string {
+			t.Helper()
+			rows, err := f.Store.ListApplications(t.Context(), f.UserID, q)
+			if err != nil {
+				t.Fatalf("ListApplications(%+v) err = %v", q, err)
+			}
+			out := make([]string, len(rows))
+			for i, r := range rows {
+				out[i] = r.ID
+			}
+			return out
+		}
+		if diff := cmp.Diff([]string{earlyApp.ID, otherApp.ID, lateApp.ID}, ids(dto.ApplicationsQuery{Chase: true})); diff != "" {
+			t.Errorf("ListApplications(chase) mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{earlyApp.ID, lateApp.ID}, ids(dto.ApplicationsQuery{Chase: true, StatusID: applied.ID})); diff != "" {
+			t.Errorf("ListApplications(chase, status) mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -107,7 +196,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err := f.Store.DeleteApplication(t.Context(), f.UserID, created.ID); err != nil {
 			t.Fatalf("DeleteApplication(...) err = %v", err)
 		}
-		got, err := f.Store.ListApplications(t.Context(), f.UserID, "")
+		got, err := f.Store.ListApplications(t.Context(), f.UserID, dto.ApplicationsQuery{})
 		if err != nil {
 			t.Fatalf("ListApplications(...) err = %v", err)
 		}
@@ -144,12 +233,32 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Run("update changes name and colour", func(t *testing.T) {
 		f := newStore(t)
 		created := createStatus(t, f, "Offer")
-		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e")
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Offer!", "#22c55e", nil)
 		if err != nil {
 			t.Fatalf("UpdateApplicationStatus(...) err = %v", err)
 		}
 		if got.Name != "Offer!" || got.Colour != "#22c55e" {
 			t.Errorf("UpdateApplicationStatus(...) = %q/%q, want Offer!/#22c55e", got.Name, got.Colour)
+		}
+	})
+
+	t.Run("update sets and clears the reply window", func(t *testing.T) {
+		f := newStore(t)
+		created := createStatus(t, f, "Applied")
+		days := 7
+		got, err := f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", &days)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(set window) err = %v", err)
+		}
+		if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
+			t.Errorf("UpdateApplicationStatus(set window) ReplyWindowDays = %v, want %d", got.ReplyWindowDays, days)
+		}
+		got, err = f.Store.UpdateApplicationStatus(t.Context(), created.ID, f.UserID, "Applied", "#6366f1", nil)
+		if err != nil {
+			t.Fatalf("UpdateApplicationStatus(clear window) err = %v", err)
+		}
+		if got.ReplyWindowDays != nil {
+			t.Errorf("UpdateApplicationStatus(clear window) ReplyWindowDays = %d, want nil", *got.ReplyWindowDays)
 		}
 	})
 

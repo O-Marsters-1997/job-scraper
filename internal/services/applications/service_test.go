@@ -2,6 +2,7 @@ package applications_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -149,6 +150,33 @@ func TestCreateStatus(t *testing.T) {
 	}
 }
 
+func TestCreateStatusReplyWindowBounds(t *testing.T) {
+	for _, days := range []int{1, 60} {
+		t.Run(fmt.Sprintf("accepts %d", days), func(t *testing.T) {
+			svc, _ := newService(t)
+			got, err := svc.CreateStatus(t.Context(), userID, dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(days)})
+			if err != nil {
+				t.Fatalf("CreateStatus(window %d) err = %v", days, err)
+			}
+			if got.ReplyWindowDays == nil || *got.ReplyWindowDays != days {
+				t.Errorf("CreateStatus(window %d) ReplyWindowDays = %v, want %d", days, got.ReplyWindowDays, days)
+			}
+		})
+	}
+}
+
+func TestUpdateStatusRejectsOutOfRangeWindow(t *testing.T) {
+	svc, st := newService(t)
+	created, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	if err != nil {
+		t.Fatalf("seed CreateApplicationStatus err = %v", err)
+	}
+	in := dto.ApplicationStatusInput{ID: created.ID, Name: "Applied", Colour: "#6366f1", ReplyWindowDays: new(61)}
+	if _, err := svc.UpdateStatus(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("UpdateStatus(window 61) err = %v, want kind %v", err, apperr.KindInvalid)
+	}
+}
+
 func TestCreateStatusErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -156,6 +184,8 @@ func TestCreateStatusErrors(t *testing.T) {
 	}{
 		{name: "requires name", in: dto.ApplicationStatusInput{Colour: "#00ff00"}},
 		{name: "requires colour", in: dto.ApplicationStatusInput{Name: "Offer"}},
+		{name: "rejects a window below 1", in: dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(0)}},
+		{name: "rejects a window above 60", in: dto.ApplicationStatusInput{Name: "Offer", Colour: "#00ff00", ReplyWindowDays: new(61)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,7 +201,7 @@ func TestCreateStatusErrors(t *testing.T) {
 func TestDeleteStatus(t *testing.T) {
 	t.Run("refuses a status in use", func(t *testing.T) {
 		svc, st := newService(t)
-		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1")
+		status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
 		if err != nil {
 			t.Fatalf("seed CreateApplicationStatus err = %v", err)
 		}
@@ -197,4 +227,54 @@ func TestDeleteStatus(t *testing.T) {
 			t.Errorf("DeleteStatus(unused) err = %v", err)
 		}
 	})
+}
+
+func TestSetChase(t *testing.T) {
+	svc, st := newService(t)
+	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: "job-1"})
+	if err != nil {
+		t.Fatalf("seed CreateApplication err = %v", err)
+	}
+
+	got, err := svc.SetChase(t.Context(), userID, dto.ChaseInput{ID: created.ID, ChaseBy: "2026-10-20"})
+	if err != nil {
+		t.Fatalf("SetChase(...) err = %v", err)
+	}
+	want := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	if got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+		t.Errorf("SetChase(2026-10-20) ChaseBy = %v, want %v", got.ChaseBy, want)
+	}
+}
+
+func TestSetChaseErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       dto.ChaseInput
+		wantKind apperr.Kind
+	}{
+		{
+			name:     "rejects a malformed date",
+			in:       dto.ChaseInput{ID: "app-1", ChaseBy: "20/10/2026"},
+			wantKind: apperr.KindInvalid,
+		},
+		{
+			name:     "rejects an empty date",
+			in:       dto.ChaseInput{ID: "app-1"},
+			wantKind: apperr.KindInvalid,
+		},
+		{
+			name:     "surfaces not found from store",
+			in:       dto.ChaseInput{ID: "missing", ChaseBy: "2026-10-20"},
+			wantKind: apperr.KindNotFound,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, _ := newService(t)
+			_, err := svc.SetChase(t.Context(), userID, tt.in)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Errorf("SetChase(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+			}
+		})
+	}
 }

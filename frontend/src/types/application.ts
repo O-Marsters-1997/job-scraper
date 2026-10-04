@@ -10,6 +10,7 @@ export const applicationSchema = z.object({
 	SalaryInfo: z.string(),
 	CreatedAt: z.string(),
 	UpdatedAt: z.string(),
+	ChaseBy: z.string().nullable(),
 });
 
 export type Application = z.infer<typeof applicationSchema>;

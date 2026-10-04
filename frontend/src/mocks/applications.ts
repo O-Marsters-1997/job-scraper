@@ -61,6 +61,7 @@ export function createApplication(data: CreateApplicationPayload): Application {
 		SalaryInfo: data.salary_info ?? "",
 		CreatedAt: new Date().toISOString(),
 		UpdatedAt: new Date().toISOString(),
+		ChaseBy: null,
 	};
 	applications = [...applications, app];
 	return app;
@@ -90,17 +91,36 @@ export function updateApplication(
 	return updated;
 }
 
+export function setChase(id: string, chaseBy: string): Application {
+	const prev = applications.find((a) => a.ID === id);
+	if (!prev) throw new Error("Application not found");
+	const updated: Application = { ...prev, ChaseBy: `${chaseBy}T00:00:00Z` };
+	applications = applications.map((a) => (a.ID === id ? updated : a));
+	return updated;
+}
+
+export function clearChase(id: string): void {
+	applications = applications.map((a) =>
+		a.ID === id ? { ...a, ChaseBy: null } : a,
+	);
+}
+
 export function deleteApplication(id: string): void {
 	applications = applications.filter((a) => a.ID !== id);
 }
 
-export function createStatus(name: string, colour: string): ApplicationStatus {
+export function createStatus(
+	name: string,
+	colour: string,
+	replyWindowDays: number | null,
+): ApplicationStatus {
 	failIfRequested("createStatus");
 	const status: ApplicationStatus = {
 		ID: faker.string.uuid(),
 		UserID: "user-1",
 		Name: name,
 		Colour: colour,
+		ReplyWindowDays: replyWindowDays,
 		CreatedAt: new Date().toISOString(),
 	};
 	statuses = [...statuses, status];
@@ -111,10 +131,16 @@ export function updateStatus(
 	id: string,
 	name: string,
 	colour: string,
+	replyWindowDays: number | null,
 ): ApplicationStatus {
 	const idx = statuses.findIndex((s) => s.ID === id);
 	if (idx === -1) throw new Error("Status not found");
-	const updated = { ...statuses[idx]!, Name: name, Colour: colour };
+	const updated = {
+		...statuses[idx]!,
+		Name: name,
+		Colour: colour,
+		ReplyWindowDays: replyWindowDays,
+	};
 	statuses = [...statuses.slice(0, idx), updated, ...statuses.slice(idx + 1)];
 	return updated;
 }
