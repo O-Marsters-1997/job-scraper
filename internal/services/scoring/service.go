@@ -526,17 +526,17 @@ func evaluatedPicksFor(picks []dto.Pick, byID map[string]dto.ScoringOption, answ
 }
 
 func unpickedGateOptions(picks []dto.Pick, byID map[string]dto.ScoringOption, answers map[string]dto.Answer, corrections map[string]string) []evaluatedPick {
-	pickedIDs := make(map[string]bool, len(picks))
+	wantedIDs := make(map[string]bool, len(picks))
 	gateDims := make(map[dto.Dimension]bool)
 	for _, p := range picks {
-		pickedIDs[p.OptionID] = true
+		_, wantedIDs[p.OptionID] = pickStrength[p.Stance]
 		if opt, ok := byID[p.OptionID]; ok && dimensionSpecs[opt.Dimension].Gate {
 			gateDims[opt.Dimension] = true
 		}
 	}
 	var out []evaluatedPick
 	for id, opt := range byID {
-		if pickedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
+		if wantedIDs[id] || opt.RetiredAt != nil || !gateDims[opt.Dimension] {
 			continue
 		}
 		out = append(out, evaluate(opt, "nice", answers, corrections))

@@ -724,7 +724,7 @@ func TestRecompute(t *testing.T) {
 					nicePick(dto.DimensionSeniority, "seniority:senior", 0.9, 0.05, 0.05),
 					nicePick(dto.DimensionWork, "work:remote", 0.9, 0.05, 0.05),
 				},
-				wantScore: 73,
+				wantScore: 74,
 				wantBand:  "good",
 			},
 			{
@@ -850,6 +850,21 @@ func TestRecompute(t *testing.T) {
 				wantRows: []dto.ScoreRow{
 					{Resolved: "yes", Effect: "meets"},
 					{Resolved: "no", Effect: "gated"},
+				},
+			},
+			{
+				name: "work gate still caps the score when the matching arrangement is avoided",
+				picks: []pickCase{
+					nicePick(dto.DimensionRole, "role:backend", 0.9, 0.05, 0.05),
+					nicePick(dto.DimensionWork, "work:remote", 0.05, 0.9, 0.05),
+					{id: "work:hybrid", dimension: dto.DimensionWork, stance: "avoid", answer: dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+				},
+				wantScore: 42,
+				wantBand:  "poor",
+				wantRows: []dto.ScoreRow{
+					{Resolved: "yes", Effect: "meets"},
+					{Resolved: "no", Effect: "gated"},
+					{Resolved: "yes", Effect: "misses"},
 				},
 			},
 			{
