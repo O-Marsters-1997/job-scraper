@@ -14,6 +14,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
@@ -54,6 +55,8 @@ func DiscoverBoard(ctx context.Context, source, token string) (Discovery, error)
 		name = greenhouseName(ctx, &base, token)
 	case "ashby":
 		name = ashbyName(ctx, &base, token)
+	case "teamtailor":
+		name = teamtailorName(ctx, &base, token)
 	}
 	if name == "" {
 		name = token
@@ -103,4 +106,12 @@ func ashbyName(ctx context.Context, base *sources.PaginatedBase, token string) s
 		name = strings.TrimSuffix(name, suffix)
 	}
 	return name
+}
+
+func teamtailorName(ctx context.Context, base *sources.PaginatedBase, token string) string {
+	body, err := base.Get(ctx, fmt.Sprintf("https://%s.teamtailor.com/jobs.rss?per_page=1", token))
+	if err != nil {
+		return ""
+	}
+	return teamtailor.BoardName(body)
 }

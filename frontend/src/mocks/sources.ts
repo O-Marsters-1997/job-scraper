@@ -70,6 +70,14 @@ const SOURCE_INFOS: SourceInfo[] = [
 		filters: [],
 	},
 	{
+		name: "teamtailor",
+		label: "Teamtailor",
+		kind: "board",
+		role: "ats",
+		url_prefix: "https://teamtailor.com",
+		filters: [],
+	},
+	{
 		name: "wis",
 		label: "Work in Startups",
 		kind: "filter",
