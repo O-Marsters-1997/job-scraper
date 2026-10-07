@@ -1,0 +1,17 @@
+{
+	auto_https off
+}
+
+http://:8000 {
+	bind 127.0.0.1
+
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		root * /opt/job-scraper/frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
+}
