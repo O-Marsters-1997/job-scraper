@@ -53,7 +53,7 @@ Production is a Hetzner server holding its own clone of this repo, running the C
 On the server, once:
 
 1. Clone the repo and run `sudo scripts/provision.sh` to install Docker, Caddy, `just` and `bun`, and enable the firewall. Log out and back in to pick up the `docker` group.
-2. Write production values into `.env` (start from `.env.example`; `API_BASE_URL` must be `http://api:8080`), then `ln -s .env .env.docker-compose` so Compose interpolation and container env read the same file.
+2. Write production values into `.env` (start from `.env.example`; `API_BASE_URL` must be `http://api:8080`), then `ln -s .env .env.docker-compose` so Compose interpolation and container env read the same file. If Bright Data needs its CA certificate, copy it to `certs/brightdata.crt` (gitignored, mounted into the worker) and set `BRIGHTDATA_CA_CERT=/app/certs/brightdata.crt`.
 
 On the server, each release: `just deploy`. It pulls, builds the frontend against `/api`, installs the Caddyfile and runs `docker compose up -d --build`; the `migrate` service applies migrations and seeds before the API and worker start. `just logs` tails them.
 
