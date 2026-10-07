@@ -12,14 +12,14 @@ The API is a modular monolith split into `jobsearch`, `scoring`, `applications`,
 
 Creating or rerunning a discovery Source Target stores a fresh run ID and `queued` status in PostgreSQL, then publishes its first listing-page task. WIS and LinkedIn continue through explicit page cursors; Indeed, RemoteOK, and Remotive finish in one page. A listing page saves and assesses Candidate cards, confirms detail and next-page tasks, then acknowledges. The matching Scrape Run succeeds at the terminal page; detail outcomes are tracked separately. Verified ATS Boards share the same Source queues and export complete Jobs without detail tasks. Scheduled checks keep each Tracked Company's frequency; manual checks do not shift it.
 
-RabbitMQ 4.3 quorum queues use persistent messages, publisher confirms, manual acknowledgements, listing priority, delayed bounded retries, and one shared durable DLQ. The worker runs one sequential consumer per Source; different Sources can progress together. PostgreSQL run IDs fence stale work, and canonical Job identity absorbs duplicate deliveries. See [ADR 0008](docs/adr/0008-rabbitmq-source-work-queues.md) and the [operations guide](docs/operations/rabbitmq.md).
+RabbitMQ 4.3 quorum queues use persistent messages, publisher confirms, manual acknowledgements, listing priority, delayed bounded retries, and one shared durable DLQ. The worker runs one sequential consumer per Source; different Sources can progress together. PostgreSQL run IDs fence stale work, and canonical Job identity absorbs duplicate deliveries. See [ADR 0006](docs/adr/0006-rabbitmq-source-work-queues.md).
 
 ## Local setup
 
 Requires Go 1.26, Docker, `just`, `goose`, and `sqlc` for query generation.
 
 1. Copy `.env.example` to `.env` and set PostgreSQL, RabbitMQ, API, and ingest-token values. For Docker Compose, set `RABBITMQ_USER` and `RABBITMQ_PASSWORD` in the shell or `.env` before starting it. URL-encode special characters in `RABBITMQ_PASSWORD` when constructing `RABBITMQ_URL`.
-2. Run `just up`, then `just migrate-up`.
+2. Run `just up`; its `migrate` service applies migrations and seeds before the API and worker start. Run `just migrate-up` when running the binaries on the host instead.
 3. Run `just build` or start the API and worker with `just run-api` and `just run`.
 
 The worker needs `API_BASE_URL` and the same `INGEST_SERVICE_TOKEN` as the API. RabbitMQ management is exposed only on `127.0.0.1:15672` by Compose. The API and worker each make their own broker connection. `--scrape-now` requests active verified Board checks without changing their cadence.
@@ -48,4 +48,12 @@ Tests use real PostgreSQL and RabbitMQ containers for the persistence and queue 
 
 ## Deployment
 
-Run the migrations and bring up the pinned RabbitMQ container before switching the API and worker to this version. No production Valkey tasks need importing for the initial cutover. Follow the [RabbitMQ cutover, monitoring, backup, and rollback guide](docs/operations/rabbitmq.md) before removing the old deployment. Keep the broker's named volume and PostgreSQL backups together; one Compose host does not survive loss of its broker volume.
+Production is one Hetzner box running the Compose stack, with Caddy on the host serving the frontend and proxying `/api` to the API ([`ops/caddy/Caddyfile`](ops/caddy/Caddyfile)). Every port binds to `127.0.0.1` and the firewall admits only SSH, so the app is reached through an SSH tunnel at `http://localhost:8000`.
+
+1. `just provision HOST` once, to install Docker and Caddy and enable the firewall.
+2. Fill in `.env.production` (gitignored). `just deploy` copies it to the box as both `.env` (Compose interpolation) and `.env.docker-compose` (container env), so the two cannot drift.
+3. `just deploy HOST` syncs the backend, installs the Caddyfile and runs `docker compose up -d --build`. The `migrate` service applies migrations and seeds before the API and worker start.
+4. `just deploy-frontend HOST` builds the frontend against `/api` and syncs it to the box.
+5. `just tunnel HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15672`.
+
+Never change `AI_CREDENTIAL_ENC_KEY` or `GOOGLE_TOKEN_ENC_KEY` once users exist: stored credentials become undecryptable. Back up the `db_data` and `rabbitmq_data` volumes together; one Compose host does not survive loss of its broker volume. `docker compose down -v` deletes both.

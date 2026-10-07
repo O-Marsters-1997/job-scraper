@@ -24,4 +24,4 @@ Searches and keyword filters are configured per-user under **Settings → Search
 - **Sources registered:** worker logs `sources built from db count=N` on startup; if `N=0`, no sources are configured
 - **Jobs flowing (ATS):** jobs appear in the frontend after a scrape; API logs show `/ingest` calls
 - **Jobs flowing (HTML/queue):** same as above; check `just rabbitmq-status` for broker health, or `just queue-list` for the dead-letter count if jobs seem stuck
-- **Scoring working:** jobs in the frontend show a suitability score; if missing, check `ANTHROPIC_API_KEY` and `SCORING_USER_ID` are set
+- **Scoring working:** jobs in the frontend show a suitability score; if missing, check an AI key is saved under **Settings → AI**
