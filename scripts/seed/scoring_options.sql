@@ -93,7 +93,6 @@ INSERT INTO scoring_options (id, dimension, label, question) VALUES
     ('tech:gcp', 'tech', 'GCP', 'Does the role use GCP?'),
     ('tech:azure', 'tech', 'Azure', 'Does the role use Azure?'),
     ('tech:cloudflare', 'tech', 'Cloudflare', 'Does the role use Cloudflare?'),
-    ('tech:vercel', 'tech', 'Vercel', 'Does the role use Vercel?'),
     ('tech:fly-io', 'tech', 'Fly.io', 'Does the role use Fly.io?'),
     ('tech:linux', 'tech', 'Linux', 'Does the role use Linux?'),
     ('tech:nix', 'tech', 'Nix', 'Does the role use Nix?'),
