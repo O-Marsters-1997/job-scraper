@@ -29,6 +29,7 @@ __debug_bin*
 .codemap
 .agents/
 .env*
+certs/
 
 # impeccable live session scratch (transient)
 .impeccable/live/sessions/

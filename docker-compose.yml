@@ -27,6 +27,8 @@ services:
       POSTGRES_PORT: 5432
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+    volumes:
+      - ./certs:/app/certs:ro
 
   api:
     build: .
