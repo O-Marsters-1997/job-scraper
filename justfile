@@ -53,7 +53,7 @@ build-emails:
 # build the frontend for same-origin /api and rsync it to the box (served by ops/caddy/Caddyfile)
 deploy-frontend host:
     cd frontend && VITE_API_URL=/api bun run build
-    rsync -a --delete frontend/dist/ root@{{host}}:/opt/job-scraper/frontend/dist/
+    rsync -a --delete --rsync-path='mkdir -p /opt/job-scraper/frontend/dist && rsync' frontend/dist/ root@{{host}}:/opt/job-scraper/frontend/dist/
 
 # push ops/grafana/ (contact point, notification policy, alert rules, dashboards) to Grafana
 # (requires yq and jq; needs GRAFANA_URL and GRAFANA_SA_TOKEN)

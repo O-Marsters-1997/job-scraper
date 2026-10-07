@@ -9,6 +9,11 @@ http://:8000 {
 		reverse_proxy 127.0.0.1:8080
 	}
 
+	handle /assets/* {
+		root * /opt/job-scraper/frontend/dist
+		file_server
+	}
+
 	handle {
 		root * /opt/job-scraper/frontend/dist
 		try_files {path} /index.html
