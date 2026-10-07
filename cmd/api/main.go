@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -31,6 +32,12 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	for _, key := range []string{"SESSION_SECRET", "INGEST_SERVICE_TOKEN"} {
+		if os.Getenv(key) == "" {
+			fatal(ctx, "config invalid", fmt.Errorf("%s is required", key))
+		}
+	}
 
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {

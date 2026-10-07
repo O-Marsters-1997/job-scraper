@@ -48,6 +48,14 @@ func main() {
 	if err := proxy.ValidateResidential(); err != nil {
 		fatal(ctx, "residential proxy config invalid", err)
 	}
+	apiBaseURL := os.Getenv("API_BASE_URL")
+	if apiBaseURL == "" {
+		fatal(ctx, "config invalid", errors.New("API_BASE_URL is required"))
+	}
+	ingestToken := os.Getenv("INGEST_SERVICE_TOKEN")
+	if ingestToken == "" {
+		fatal(ctx, "config invalid", errors.New("INGEST_SERVICE_TOKEN is required"))
+	}
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {
 		fatal(ctx, "tracing init failed", err)
@@ -75,17 +83,13 @@ func main() {
 	js := jobsearch.New(pool, q, scoringModule)
 	proxy.SetCache(js)
 
-	apiBaseURL := os.Getenv("API_BASE_URL")
-	if apiBaseURL == "" {
-		fatal(ctx, "config invalid", errors.New("API_BASE_URL is required"))
-	}
 	maxPages := 0
 	if raw := os.Getenv("SCRAPE_MAX_PAGES"); raw != "" {
 		if maxPages, err = strconv.Atoi(raw); err != nil || maxPages < 0 {
 			fatal(ctx, "config invalid", fmt.Errorf("SCRAPE_MAX_PAGES must be a non-negative integer, got %q", raw))
 		}
 	}
-	exporter := scraper.NewAPIExporter(apiBaseURL, os.Getenv("INGEST_SERVICE_TOKEN"))
+	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
 	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Profiles: js}, exporter)
 	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
