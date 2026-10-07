@@ -50,29 +50,23 @@ generate:
 build-emails:
     cd emails && bun run build.tsx
 
-# build the frontend for same-origin /api and rsync it to the box (served by ops/caddy/Caddyfile)
-deploy-frontend host:
-    cd frontend && VITE_API_URL=/api bun run build
-    rsync -a --delete --rsync-path='mkdir -p /opt/job-scraper/frontend/dist && rsync' frontend/dist/ root@{{host}}:/opt/job-scraper/frontend/dist/
+[doc('on the server: pull, build the frontend, install the Caddyfile and (re)start the stack')]
+deploy:
+    git pull --ff-only
+    cd frontend && bun install --frozen-lockfile && VITE_API_URL=/api bun run build
+    rsync -a --delete frontend/dist/ /opt/job-scraper/frontend/dist/
+    sudo install -m 644 ops/caddy/Caddyfile /etc/caddy/Caddyfile
+    sudo systemctl reload caddy
+    docker compose up -d --build --remove-orphans
+    docker compose ps
 
-[doc('one-off box setup: Docker, Caddy, firewall allowing SSH only')]
-provision host:
-    ssh root@{{host}} 'bash -s' < scripts/provision.sh
-
-[doc('sync the backend, .env.production and Caddyfile to the box, then migrate and (re)start the stack')]
-deploy host:
-    test -f .env.production
-    rsync -az --delete --exclude=.git --exclude='.env*' --exclude=/frontend/ --exclude=node_modules --exclude=/bin/ --exclude=/plans/ --exclude=/.claude/ --exclude=/.impeccable/ ./ root@{{host}}:/opt/job-scraper/
-    rsync -z --chmod=600 .env.production root@{{host}}:/opt/job-scraper/.env
-    ssh root@{{host}} 'cd /opt/job-scraper && cp -p .env .env.docker-compose && install -m 644 ops/caddy/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy && docker compose up -d --build --remove-orphans && docker compose ps'
-
-[doc('forward the app (localhost:8000) and RabbitMQ management (localhost:15672) from the box')]
+[doc('from the laptop: forward the app (localhost:8000) and RabbitMQ management (localhost:15672) from the server')]
 tunnel host:
-    ssh -N -L 8000:127.0.0.1:8000 -L 15672:127.0.0.1:15672 root@{{host}}
+    ssh -N -L 8000:127.0.0.1:8000 -L 15672:127.0.0.1:15672 {{host}}
 
-[doc('tail api and worker logs on the box')]
-logs host:
-    ssh root@{{host}} 'cd /opt/job-scraper && docker compose logs -f --tail=100 api worker'
+[doc('tail api and worker logs')]
+logs:
+    docker compose logs -f --tail=100 api worker
 
 # push ops/grafana/ (contact point, notification policy, alert rules, dashboards) to Grafana
 # (requires yq and jq; needs GRAFANA_URL and GRAFANA_SA_TOKEN)

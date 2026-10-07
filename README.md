@@ -48,12 +48,15 @@ Tests use real PostgreSQL and RabbitMQ containers for the persistence and queue 
 
 ## Deployment
 
-Production is one Hetzner box running the Compose stack, with Caddy on the host serving the frontend and proxying `/api` to the API ([`ops/caddy/Caddyfile`](ops/caddy/Caddyfile)). Every port binds to `127.0.0.1` and the firewall admits only SSH, so the app is reached through an SSH tunnel at `http://localhost:8000`.
+Production is a Hetzner server holding its own clone of this repo, running the Compose stack, with Caddy on the host serving the frontend and proxying `/api` to the API ([`ops/caddy/Caddyfile`](ops/caddy/Caddyfile)). Every port binds to `127.0.0.1` and the firewall admits only SSH, so the app is reached through an SSH tunnel at `http://localhost:8000`. Code reaches the server only through git; the server differs from a laptop only in its gitignored env files.
 
-1. `just provision HOST` once, to install Docker and Caddy and enable the firewall.
-2. Fill in `.env.production` (gitignored). `just deploy` copies it to the box as both `.env` (Compose interpolation) and `.env.docker-compose` (container env), so the two cannot drift.
-3. `just deploy HOST` syncs the backend, installs the Caddyfile and runs `docker compose up -d --build`. The `migrate` service applies migrations and seeds before the API and worker start.
-4. `just deploy-frontend HOST` builds the frontend against `/api` and syncs it to the box.
-5. `just tunnel HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15672`.
+On the server, once:
+
+1. Clone the repo and run `sudo scripts/provision.sh` to install Docker, Caddy, `just` and `bun`, and enable the firewall. Log out and back in to pick up the `docker` group.
+2. Write production values into `.env` (start from `.env.example`; `API_BASE_URL` must be `http://api:8080`), then `ln -s .env .env.docker-compose` so Compose interpolation and container env read the same file.
+
+On the server, each release: `just deploy`. It pulls, builds the frontend against `/api`, installs the Caddyfile and runs `docker compose up -d --build`; the `migrate` service applies migrations and seeds before the API and worker start. `just logs` tails them.
+
+From a laptop: `just tunnel USER@HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15672`.
 
 Never change `AI_CREDENTIAL_ENC_KEY` or `GOOGLE_TOKEN_ENC_KEY` once users exist: stored credentials become undecryptable. Back up the `db_data` and `rabbitmq_data` volumes together; one Compose host does not survive loss of its broker volume. `docker compose down -v` deletes both.
