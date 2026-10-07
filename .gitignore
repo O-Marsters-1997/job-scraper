@@ -28,7 +28,6 @@ __debug_bin*
 .treepad.toml
 .codemap
 .agents/
-.vercel
 .env*
 
 # impeccable live session scratch (transient)

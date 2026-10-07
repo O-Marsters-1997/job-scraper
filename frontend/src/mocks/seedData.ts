@@ -13,7 +13,6 @@ export const COMPANIES = [
 	"Cloudflare",
 	"Linear",
 	"Netflix",
-	"Vercel",
 	"Supabase",
 	"GitHub",
 	"GitLab",
