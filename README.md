@@ -57,6 +57,6 @@ On the server, once:
 
 On the server, each release: `just deploy`. It pulls, builds the frontend against `/api`, installs the Caddyfile and runs `docker compose up -d --build`; the `migrate` service applies migrations and seeds before the API and worker start. `just logs` tails them.
 
-From a laptop: `just tunnel USER@HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15672`.
+From a laptop: `just tunnel USER@HOST`, then open `http://localhost:8000`. RabbitMQ management is forwarded to `http://localhost:15673`, so it does not clash with the local stack's RabbitMQ on 15672.
 
 Never change `AI_CREDENTIAL_ENC_KEY` or `GOOGLE_TOKEN_ENC_KEY` once users exist: stored credentials become undecryptable. Back up the `db_data` and `rabbitmq_data` volumes together; one Compose host does not survive loss of its broker volume. `docker compose down -v` deletes both.
