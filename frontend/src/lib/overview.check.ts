@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
 	applicationStats,
+	chasesDue,
 	jobStats,
 	pipelineSegments,
 	recentJobs,
@@ -56,3 +57,17 @@ assert.deepEqual(
 	["b", "a"],
 );
 assert.ok(recentJobs(jobs, 10).length === 3);
+
+const chaseApp = (id: string, chaseBy: string | null) =>
+	({ ID: id, ChaseBy: chaseBy }) as never;
+const chases = [
+	chaseApp("tomorrow", "2026-06-11T00:00:00Z"),
+	chaseApp("today", "2026-06-10T00:00:00Z"),
+	chaseApp("none", null),
+	chaseApp("yesterday", "2026-06-09T00:00:00Z"),
+];
+assert.deepEqual(
+	chasesDue(chases, now).map((a) => a.ID),
+	["yesterday", "today"],
+);
+assert.deepEqual(chasesDue([], now), []);

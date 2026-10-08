@@ -1,6 +1,7 @@
 import type { ApplicationWithDetails } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Job } from "@/types/job";
+import { chaseDateKey } from "./chase";
 import { dayKey } from "./datetime";
 
 export const RECENT_LIMIT = 5;
@@ -49,4 +50,16 @@ export function recentJobs(jobs: Job[], limit = RECENT_LIMIT) {
 				new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
 		)
 		.slice(0, limit);
+}
+
+export function chasesDue(
+	applications: ApplicationWithDetails[],
+	now = new Date(),
+) {
+	const today = dayKey(now);
+	return applications
+		.filter((a) => a.ChaseBy != null && chaseDateKey(a.ChaseBy) <= today)
+		.sort((a, b) =>
+			chaseDateKey(a.ChaseBy!).localeCompare(chaseDateKey(b.ChaseBy!)),
+		);
 }
