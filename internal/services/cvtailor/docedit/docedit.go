@@ -15,6 +15,7 @@ const defaultSkillSeparator = ", "
 var (
 	ErrUnknownPosition = errors.New("docedit: edit names a position with no slots")
 	ErrTooManyBullets  = errors.New("docedit: more bullets than slots")
+	ErrSkillLines      = errors.New("docedit: skills do not match the document's skill lines")
 )
 
 type Range struct {
@@ -86,7 +87,11 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 		all = append(all, replace(ds.Profile.StartIndex, ds.Profile.EndIndex-1, *edits.Profile))
 	}
 	if ds.Skills != nil && len(edits.Skills) > 0 {
-		all = append(all, replace(ds.Skills.StartIndex, ds.Skills.EndIndex-1, joinSkills(*ds.Skills, edits.Skills)))
+		skillEdits, err := skillRequests(*ds.Skills, edits)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, skillEdits...)
 	}
 
 	slices.SortStableFunc(all, func(a, b edit) int { return b.start - a.start })
@@ -97,15 +102,39 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 	return reqs, nil
 }
 
-func joinSkills(s docparse.SkillsSlot, skills []string) string {
-	if s.List {
-		return strings.Join(skills, "\n")
+func skillRequests(s docparse.SkillsSlot, edits cvedit.EditSet) ([]edit, error) {
+	if edits.LegacySkills {
+		return []edit{replace(s.StartIndex, s.EndIndex-1, joinItems(s.Separator, s.List, cvedit.FlatSkills(edits.Skills)))}, nil
 	}
-	sep := s.Separator
-	if sep == "" {
-		sep = defaultSkillSeparator
+	if len(edits.Skills) != len(s.Lines) {
+		return nil, fmt.Errorf("%w: %d edited lines for %d in the document", ErrSkillLines, len(edits.Skills), len(s.Lines))
 	}
-	return strings.Join(skills, sep)
+	var out []edit
+	for i, line := range s.Lines {
+		group := edits.Skills[i]
+		if strings.TrimSpace(group.Label) != line.Label {
+			return nil, fmt.Errorf("%w: line %d is labelled %q, the document has %q", ErrSkillLines, i+1, group.Label, line.Label)
+		}
+		if slices.Equal(group.Items, line.Items) {
+			continue
+		}
+		sep := line.Separator
+		if sep == "" {
+			sep = s.Separator
+		}
+		out = append(out, replace(line.ItemsStart, line.End, joinItems(sep, false, group.Items)))
+	}
+	return out, nil
+}
+
+func joinItems(separator string, list bool, items []string) string {
+	if list {
+		return strings.Join(items, "\n")
+	}
+	if separator == "" {
+		separator = defaultSkillSeparator
+	}
+	return strings.Join(items, separator)
 }
 
 func remove(start, end int) edit {

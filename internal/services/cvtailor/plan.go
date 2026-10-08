@@ -2,6 +2,7 @@ package cvtailor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -117,7 +118,7 @@ func (pl plan) input(jobDescription string) cvedit.Input {
 		in.HasProfile, in.BaseProfile = true, pl.structure.Profile.Text
 	}
 	if pl.structure.Skills != nil {
-		in.HasSkills, in.BaseSkills = true, pl.structure.Skills.Items
+		in.HasSkills, in.BaseSkills = true, cvedit.SkillGroups(pl.structure.Skills)
 	}
 	for _, p := range pl.positions {
 		in.Positions = append(in.Positions, p.Position)
@@ -125,13 +126,13 @@ func (pl plan) input(jobDescription string) cvedit.Input {
 	return in
 }
 
-func (pl plan) baseContent() dto.DraftContent {
-	c := dto.DraftContent{Skills: []string{}, Positions: []dto.DraftPosition{}}
+func (pl plan) baseContent() baseContent {
+	c := baseContent{Skills: []cvedit.SkillGroup{}, Positions: []dto.DraftPosition{}}
 	if pl.structure.Profile != nil {
 		c.Profile = &pl.structure.Profile.Text
 	}
 	if pl.structure.Skills != nil {
-		c.Skills = pl.structure.Skills.Items
+		c.Skills = cvedit.SkillGroups(pl.structure.Skills)
 	}
 	for _, p := range pl.positions {
 		dp := dto.DraftPosition{PositionID: p.ID, Bullets: []dto.DraftBullet{}}
@@ -222,16 +223,19 @@ func (pl plan) baseText() []string {
 		out = append(out, pl.structure.Profile.Text)
 	}
 	if pl.structure.Skills != nil {
+		for _, l := range pl.structure.Skills.Lines {
+			out = append(out, l.Label)
+		}
 		out = append(out, pl.structure.Skills.Items...)
 	}
 	return out
 }
 
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
-	d := checks.Draft{Bank: pl.bank, Skills: edits.Skills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
+	d := checks.Draft{Bank: pl.bank, Skills: cvedit.CheckLines(edits.Skills), LegacySkills: edits.LegacySkills, JobSkills: edits.JobSkills, BasePages: basePages, DraftPages: draftPages}
 	d.Contact = &checks.ContactInput{InBody: pl.structure.Contact.InBody, InHeaderFooter: pl.structure.Contact.InHeaderFooter}
 	if pl.structure.Skills != nil {
-		d.BaseSkills = pl.structure.Skills.Items
+		d.BaseSkills = cvedit.CheckLines(cvedit.SkillGroups(pl.structure.Skills))
 	}
 	d.BaseText = pl.baseText()
 	if pl.structure.Profile != nil && edits.Profile != nil {
@@ -281,4 +285,39 @@ func (pl plan) withSlotIDs(edits cvedit.EditSet) cvedit.EditSet {
 
 func normalizeText(s string) string {
 	return strings.ToLower(strings.Join(strings.Fields(s), " "))
+}
+
+type baseContent struct {
+	Profile   *string             `json:"profile"`
+	Skills    []cvedit.SkillGroup `json:"skills"`
+	Positions []dto.DraftPosition `json:"positions"`
+}
+
+type baseContentJSON baseContent
+
+type baseContentWire struct {
+	baseContentJSON
+	Skills json.RawMessage `json:"skills"`
+}
+
+func (c *baseContent) UnmarshalJSON(data []byte) error {
+	var w baseContentWire
+	if err := json.Unmarshal(data, &w); err != nil {
+		return err
+	}
+	groups, _, err := cvedit.DecodeSkills(w.Skills)
+	if err != nil {
+		return err
+	}
+	*c = baseContent(w.baseContentJSON)
+	c.Skills = groups
+	return nil
+}
+
+func (c baseContent) content() dto.DraftContent {
+	flat := cvedit.FlatSkills(c.Skills)
+	if flat == nil {
+		flat = []string{}
+	}
+	return dto.DraftContent{Profile: c.Profile, Skills: flat, Positions: c.Positions}
 }

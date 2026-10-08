@@ -41,10 +41,12 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	if len(draft.BaseContent) == 0 {
 		return draft, nil
 	}
-	draft.Base = new(dto.DraftContent)
-	if err := json.Unmarshal(draft.BaseContent, draft.Base); err != nil {
+	var stored baseContent
+	if err := json.Unmarshal(draft.BaseContent, &stored); err != nil {
 		return dto.Draft{}, fmt.Errorf("decode base content: %w", err)
 	}
+	base := stored.content()
+	draft.Base = &base
 	if content.Profile == nil {
 		content.Profile = draft.Base.Profile
 	}
@@ -158,7 +160,7 @@ func withDocURL(d dto.Draft) dto.Draft {
 }
 
 func editedContent(edits cvedit.EditSet) dto.DraftContent {
-	c := dto.DraftContent{Profile: edits.Profile, Skills: edits.Skills, Positions: []dto.DraftPosition{}}
+	c := dto.DraftContent{Profile: edits.Profile, Skills: cvedit.FlatSkills(edits.Skills), Positions: []dto.DraftPosition{}}
 	if c.Skills == nil {
 		c.Skills = []string{}
 	}

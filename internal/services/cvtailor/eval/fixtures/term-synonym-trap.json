@@ -79,6 +79,18 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "",
+     "Items": [
+      "SQL",
+      "Python"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "SQL",
     "Python"
