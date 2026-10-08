@@ -7,7 +7,7 @@
 - No sycophantic openers or closing fluff. Be concise in output, thorough in reasoning.
 - Before a structural/architectural decision (new package boundary, naming ambiguity), check
   `CONTEXT.md` (domain glossary) and `docs/adr/` (past decisions) — not needed for routine work.
-- JS/TS packages use **bun**; CI's `bun-only` job fails on any npm/pnpm/yarn lockfile.
+- For JS/TS packages, use only the package manager named in each `package.json`'s `packageManager` field.
 
 ## Layout
 
