@@ -22,6 +22,11 @@ type Store interface {
 	UpdateAchievement(ctx context.Context, userID string, in dto.AchievementInput) (dto.Achievement, error)
 	DeleteAchievement(ctx context.Context, userID, id string) error
 	ReorderAchievements(ctx context.Context, userID, positionID string, ids []string) error
+	ListBankSkills(ctx context.Context, userID string) ([]dto.BankSkill, error)
+	CreateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
+	UpdateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
+	DeleteBankSkill(ctx context.Context, userID, id string) error
+	ReorderBankSkills(ctx context.Context, userID string, ids []string) error
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)
 	SaveHeadingMappings(ctx context.Context, userID, docID, tabID string, mappings []dto.HeadingMapping) error

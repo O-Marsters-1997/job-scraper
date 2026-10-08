@@ -39,3 +39,17 @@ export const importPreviewSchema = z.object({
 });
 
 export type ImportPosition = z.infer<typeof importPositionSchema>;
+
+export const bankSkillSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	category: z.string(),
+	sortOrder: z.number(),
+});
+
+export type BankSkill = z.infer<typeof bankSkillSchema>;
+
+export interface BankSkillInput {
+	name: string;
+	category: string;
+}

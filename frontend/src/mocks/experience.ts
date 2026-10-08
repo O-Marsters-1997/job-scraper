@@ -1,6 +1,8 @@
 import { faker } from "@faker-js/faker";
 import type {
 	Achievement,
+	BankSkill,
+	BankSkillInput,
 	ImportPosition,
 	Position,
 	PositionInput,
@@ -161,4 +163,53 @@ export function reorderAchievements(positionId: string, ids: string[]): void {
 			? { ...p, achievements: inOrder(p.achievements, ids) }
 			: p,
 	);
+}
+
+let bankSkills: BankSkill[] = [
+	{ id: "skill-1", name: "Go", category: "Languages", sortOrder: 1 },
+	{ id: "skill-2", name: "TypeScript", category: "Languages", sortOrder: 2 },
+	{ id: "skill-3", name: "PostgreSQL", category: "Databases", sortOrder: 3 },
+];
+
+function renumber(skills: BankSkill[]): BankSkill[] {
+	return skills.map((s, i) => ({ ...s, sortOrder: i + 1 }));
+}
+
+function assertNameFree(name: string, exceptId?: string): void {
+	const taken = bankSkills.some(
+		(s) => s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase(),
+	);
+	if (taken) throw new Error("a bank skill with that name already exists");
+}
+
+export function getBankSkills(): BankSkill[] {
+	return bankSkills;
+}
+
+export function createBankSkill(input: BankSkillInput): BankSkill {
+	assertNameFree(input.name);
+	const skill: BankSkill = {
+		id: `skill-${faker.string.uuid().slice(0, 8)}`,
+		...input,
+		sortOrder: bankSkills.length + 1,
+	};
+	bankSkills = [...bankSkills, skill];
+	return skill;
+}
+
+export function updateBankSkill(id: string, input: BankSkillInput): BankSkill {
+	const existing = bankSkills.find((s) => s.id === id);
+	if (!existing) throw new Error("bank skill not found");
+	assertNameFree(input.name, id);
+	const updated = { ...existing, ...input };
+	bankSkills = bankSkills.map((s) => (s.id === id ? updated : s));
+	return updated;
+}
+
+export function deleteBankSkill(id: string): void {
+	bankSkills = renumber(bankSkills.filter((s) => s.id !== id));
+}
+
+export function reorderBankSkills(ids: string[]): void {
+	bankSkills = renumber(inOrder(bankSkills, ids));
 }

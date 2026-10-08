@@ -32,6 +32,7 @@ export const keys = {
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
 	},
 	experience: ["experience"] as const,
+	bankSkills: ["bank-skills"] as const,
 	tailoring: {
 		all: tailoringAll,
 		headings: (docId: string, tabId: string) =>

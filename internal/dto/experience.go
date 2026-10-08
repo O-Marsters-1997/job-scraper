@@ -34,3 +34,16 @@ type ReorderInput struct {
 	PositionID string   `json:"-" path:"positionId"`
 	IDs        []string `json:"ids"`
 }
+
+type BankSkill struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+type BankSkillInput struct {
+	ID       string `json:"-" path:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+}

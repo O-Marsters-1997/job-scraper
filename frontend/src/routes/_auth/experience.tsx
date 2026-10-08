@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
+import { BankSkills } from "@/components/experience/BankSkills";
 import { ImportFromCV } from "@/components/experience/ImportFromCV";
 import { PositionCard } from "@/components/experience/PositionCard";
 import { PositionForm } from "@/components/experience/PositionForm";
@@ -89,6 +90,8 @@ function ExperiencePage() {
 					</Show>
 				)}
 			</QueryBoundary>
+
+			<BankSkills />
 		</div>
 	);
 }
