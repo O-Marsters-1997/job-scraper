@@ -100,7 +100,7 @@ export function StatCards(props: {
 				cta={
 					<Link
 						to="/applications"
-						search={{ status: undefined }}
+						search={{ status: undefined, chase: undefined }}
 						class={ctaClass}
 					>
 						Manage →

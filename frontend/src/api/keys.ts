@@ -17,8 +17,8 @@ export const keys = {
 	},
 	applications: {
 		all: applicationsAll,
-		byStatus: (statusId: string | undefined) =>
-			[...applicationsAll, statusId ?? "all"] as const,
+		list: (statusId: string | undefined, chase: boolean) =>
+			[...applicationsAll, statusId ?? "all", chase] as const,
 	},
 	statuses: ["application-statuses"] as const,
 	companies: {

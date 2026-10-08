@@ -13,12 +13,14 @@ import { mocked } from "./config";
 
 export async function fetchApplications(
 	statusId?: string,
+	chase = false,
 ): Promise<ApplicationWithDetails[]> {
 	return mocked(
-		(db) => db.getApplications(statusId),
+		(db) => db.getApplications(statusId, chase),
 		() => {
 			const params = new URLSearchParams();
 			if (statusId) params.set("status_id", statusId);
+			if (chase) params.set("chase", "true");
 			const query = params.toString();
 			return apiFetch(
 				`/applications${query ? `?${query}` : ""}`,

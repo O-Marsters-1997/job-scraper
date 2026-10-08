@@ -17,6 +17,14 @@ func fromOptionalDate(d pgtype.Date) *time.Time {
 	return &t
 }
 
+func fromOptionalTimestamp(ts pgtype.Timestamptz) *time.Time {
+	if !ts.Valid {
+		return nil
+	}
+	t := ts.Time
+	return &t
+}
+
 func toApplicationDTO(a sqlc.Application) dto.Application {
 	return dto.Application{
 		ID:         a.ID.String(),
@@ -41,6 +49,7 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 		JobCompanySlug: r.JobCompanySlug,
 		JobLocation:    r.JobLocation,
 		JobURL:         r.JobUrl,
+		JobClosedAt:    fromOptionalTimestamp(r.JobClosedAt),
 		StatusID:       r.StatusID.String(),
 		StatusName:     r.StatusName.String,
 		StatusColour:   r.StatusColour.String,

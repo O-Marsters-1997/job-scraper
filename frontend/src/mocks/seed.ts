@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+import { addDays, format } from "date-fns";
 import type { Application } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
@@ -157,7 +158,9 @@ const companyBoards: CompanyBoard[] = companies
 	}));
 
 const applications: Application[] = [];
+const closedJobIDs = new Set<string>();
 let appJobCursor = 0;
+let appCursor = 0;
 
 for (const { statusIndex, count } of APP_DISTRIBUTION) {
 	const status = statuses[statusIndex]!;
@@ -167,6 +170,9 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 		const appliedAt = isSaved
 			? null
 			: (faker.date.recent({ days: 20 }).toISOString().split("T")[0] ?? null);
+		const chaseOffsetDays = isSaved ? null : (appCursor % 4) - 2;
+		if (appCursor % 5 === 0) closedJobIDs.add(job.ID);
+		appCursor++;
 		applications.push({
 			ID: faker.string.uuid(),
 			UserID: "user-1",
@@ -177,7 +183,10 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			SalaryInfo: "",
 			CreatedAt: faker.date.recent({ days: 25 }).toISOString(),
 			UpdatedAt: faker.date.recent({ days: 10 }).toISOString(),
-			ChaseBy: null,
+			ChaseBy:
+				chaseOffsetDays === null
+					? null
+					: `${format(addDays(new Date(), chaseOffsetDays), "yyyy-MM-dd")}T00:00:00Z`,
 		});
 	}
 }
@@ -247,6 +256,7 @@ export const seed = {
 	companies,
 	companyBoards,
 	applications,
+	closedJobIDs,
 	discoverySourceTargets,
 	cvs,
 };

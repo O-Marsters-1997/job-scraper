@@ -141,6 +141,7 @@ SELECT
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
     j.url          AS job_url,
+    j.closed_at    AS job_closed_at,
     s.name         AS status_name,
     s.colour       AS status_colour
 FROM applications a
@@ -175,6 +176,7 @@ type ListApplicationsRow struct {
 	JobCompanySlug string
 	JobLocation    string
 	JobUrl         string
+	JobClosedAt    pgtype.Timestamptz
 	StatusName     pgtype.Text
 	StatusColour   pgtype.Text
 }
@@ -203,6 +205,7 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.JobCompanySlug,
 			&i.JobLocation,
 			&i.JobUrl,
+			&i.JobClosedAt,
 			&i.StatusName,
 			&i.StatusColour,
 		); err != nil {

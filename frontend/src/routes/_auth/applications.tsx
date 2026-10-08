@@ -13,13 +13,15 @@ import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
-import { useApplications } from "../../hooks/useApplications";
+import { useApplications, useClearChase } from "../../hooks/useApplications";
 import type { ApplicationWithDetails } from "../../types/application";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
+import { SetAnotherChase } from "./-applications/SetAnotherChase";
 
 export const Route = createFileRoute("/_auth/applications")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		status: typeof search.status === "string" ? search.status : undefined,
+		chase: search.chase === true || search.chase === "true" ? true : undefined,
 	}),
 	component: ApplicationsPage,
 });
@@ -27,12 +29,19 @@ export const Route = createFileRoute("/_auth/applications")({
 function ApplicationsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate();
-	const query = useApplications(() => search().status);
+	const query = useApplications(
+		() => search().status,
+		() => search().chase === true,
+	);
+	const clearChase = useClearChase();
 	const statusesQuery = useApplicationStatuses();
 
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [editingApp, setEditingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
+	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
+		[],
+	);
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
 
@@ -51,6 +60,14 @@ function ApplicationsPage() {
 		setModalOpen(true);
 	};
 
+	const markChased = (app: ApplicationWithDetails) =>
+		clearChase.mutate(app.ID, {
+			onSuccess: () => setChasedApps((prev) => [...prev, app]),
+		});
+
+	const isOverdue = (app: ApplicationWithDetails) =>
+		app.ChaseBy !== null && isChaseOverdue(app.ChaseBy, new Date());
+
 	const statusColour = (app: ApplicationWithDetails) => {
 		if (app.StatusColour) return app.StatusColour;
 		const status = statusesQuery.data?.find((s) => s.ID === app.StatusID);
@@ -68,7 +85,10 @@ function ApplicationsPage() {
 				<ToggleChip
 					active={!search().status}
 					onClick={() =>
-						navigate({ to: "/applications", search: { status: undefined } })
+						navigate({
+							to: "/applications",
+							search: { status: undefined, chase: search().chase },
+						})
 					}
 				>
 					All
@@ -78,7 +98,10 @@ function ApplicationsPage() {
 						<ToggleChip
 							active={search().status === s.ID}
 							onClick={() =>
-								navigate({ to: "/applications", search: { status: s.ID } })
+								navigate({
+									to: "/applications",
+									search: { status: s.ID, chase: search().chase },
+								})
 							}
 						>
 							<span
@@ -89,7 +112,34 @@ function ApplicationsPage() {
 						</ToggleChip>
 					)}
 				</For>
+				<span class="mx-1 h-4 w-px bg-border" />
+				<ToggleChip
+					active={search().chase === true}
+					onClick={() =>
+						navigate({
+							to: "/applications",
+							search: {
+								status: search().status,
+								chase: search().chase ? undefined : true,
+							},
+						})
+					}
+				>
+					Needs a chase
+				</ToggleChip>
 			</div>
+
+			<For each={chasedApps()}>
+				{(app) => (
+					<SetAnotherChase
+						applicationId={app.ID}
+						title={app.JobTitle}
+						onDone={() =>
+							setChasedApps((prev) => prev.filter((p) => p.ID !== app.ID))
+						}
+					/>
+				)}
+			</For>
 
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
@@ -106,7 +156,14 @@ function ApplicationsPage() {
 						<div class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
 							<For each={data()}>
 								{(app) => (
-									<div class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
+									<div
+										class={cn(
+											"flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted",
+											search().chase &&
+												isOverdue(app) &&
+												"bg-destructive-subtle",
+										)}
+									>
 										<div class="min-w-0 flex-1">
 											<p class="truncate text-sm font-medium text-foreground">
 												{app.JobTitle}
@@ -116,6 +173,11 @@ function ApplicationsPage() {
 												{app.JobLocation ? ` · ${app.JobLocation}` : ""}
 											</p>
 										</div>
+										<Show when={app.JobClosedAt}>
+											<span class="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted">
+												Listing closed
+											</span>
+										</Show>
 										<Show when={app.StatusName}>
 											<StatusBadge
 												name={app.StatusName}
@@ -140,6 +202,16 @@ function ApplicationsPage() {
 													Chase {formatChaseDate(chaseBy())}
 												</span>
 											)}
+										</Show>
+										<Show when={app.ChaseBy}>
+											<button
+												type="button"
+												disabled={clearChase.isPending}
+												onClick={() => markChased(app)}
+												class="shrink-0 rounded px-2 py-1 text-xs font-medium text-primary transition hover:bg-accent-subtle disabled:opacity-50"
+											>
+												Chased
+											</button>
 										</Show>
 										<button
 											type="button"

@@ -31,6 +31,7 @@ function buildWithDetails(app: Application): ApplicationWithDetails {
 		JobCompanySlug: job.CompanySlug,
 		JobLocation: job.Location,
 		JobURL: job.URL,
+		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.UpdatedAt : null,
 		StatusName: status.Name,
 		StatusColour: status.Colour,
 	};
@@ -40,11 +41,18 @@ export function getStatuses(): ApplicationStatus[] {
 	return statuses;
 }
 
-export function getApplications(statusId?: string): ApplicationWithDetails[] {
-	const list = statusId
+export function getApplications(
+	statusId?: string,
+	chase = false,
+): ApplicationWithDetails[] {
+	const byStatus = statusId
 		? applications.filter((a) => a.StatusID === statusId)
 		: applications;
-	return list.map(buildWithDetails);
+	if (!chase) return byStatus.map(buildWithDetails);
+	return byStatus
+		.filter((a) => a.ChaseBy !== null)
+		.sort((a, b) => a.ChaseBy!.localeCompare(b.ChaseBy!))
+		.map(buildWithDetails);
 }
 
 export function createApplication(data: CreateApplicationPayload): Application {

@@ -16,7 +16,7 @@ export function RecentApplicationsCard(props: {
 				</h2>
 				<Link
 					to="/applications"
-					search={{ status: undefined }}
+					search={{ status: undefined, chase: undefined }}
 					class="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
 				>
 					View all →

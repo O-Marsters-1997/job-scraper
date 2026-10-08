@@ -87,6 +87,30 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 	}
 }
 
+func TestListApplicationsReportsClosedJob(t *testing.T) {
+	st, pool, userID := newStore(t)
+	closed := pgtest.InsertJob(t, pool, "Closed", "Closed")
+	open := pgtest.InsertJob(t, pool, "Open", "Open")
+	if _, err := pool.Exec(t.Context(), `UPDATE jobs SET closed_at = NOW() WHERE id = $1`, closed); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+	for _, jobID := range []string{closed, open} {
+		if _, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID}); err != nil {
+			t.Fatalf("CreateApplication(%s) err = %v", jobID, err)
+		}
+	}
+
+	got, err := st.ListApplications(t.Context(), userID, dto.ApplicationsQuery{})
+	if err != nil {
+		t.Fatalf("ListApplications err = %v", err)
+	}
+	for _, a := range got {
+		if gotClosed, wantClosed := a.JobClosedAt != nil, a.JobID == closed; gotClosed != wantClosed {
+			t.Errorf("ListApplications job %s closed = %v, want %v", a.JobID, gotClosed, wantClosed)
+		}
+	}
+}
+
 func TestSeedDefaultStatuses(t *testing.T) {
 	tests := []struct {
 		name   string
