@@ -64,7 +64,9 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 	for range maxPages {
 		p, err := h.fetchPaced(ctx, pageToken)
 		if err != nil {
-			if len(seenBoards)+len(seenCompanies)+out.Skipped == 0 || ctx.Err() != nil {
+			var status *sources.StatusError
+			rateLimited := errors.As(err, &status) && status.Code == http.StatusTooManyRequests
+			if !rateLimited || len(seenBoards)+len(seenCompanies)+out.Skipped == 0 || ctx.Err() != nil {
 				return discover.Harvest{}, err
 			}
 			slog.WarnContext(ctx, "workable search stopped early, keeping the pages fetched", slog.Any(logger.KeyErr, err))

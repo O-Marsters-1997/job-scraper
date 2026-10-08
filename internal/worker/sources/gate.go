@@ -90,5 +90,12 @@ func (g *Gate) Block(d time.Duration) {
 	if d == 0 {
 		d = g.blockFor
 	}
-	g.blockedUntil = g.now().Add(d)
+	g.blockedUntil = later(g.blockedUntil, g.now().Add(d))
+}
+
+func later(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }
