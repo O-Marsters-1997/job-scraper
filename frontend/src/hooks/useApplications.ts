@@ -17,6 +17,12 @@ export const applicationsQueryOptions = (statusId?: string, chase = false) =>
 		queryFn: () => fetchApplications(statusId, chase),
 	});
 
+export const chasesQueryOptions = applicationsQueryOptions(undefined, true);
+
+export function useChases() {
+	return createQuery(() => chasesQueryOptions);
+}
+
 export function useApplications(
 	statusId?: () => string | undefined,
 	chase?: () => boolean,

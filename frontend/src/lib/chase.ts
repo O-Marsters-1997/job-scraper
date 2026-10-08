@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { differenceInCalendarDays, format } from "date-fns";
 import { addWorkingDays } from "./replyWindow";
 
 export function prefillChaseDate(
@@ -15,6 +15,11 @@ export function chaseDateKey(chaseBy: string): string {
 
 export function isChaseOverdue(chaseBy: string, now: Date): boolean {
 	return chaseDateKey(chaseBy) < format(now, "yyyy-MM-dd");
+}
+
+export function chaseOverdueDays(chaseBy: string, now: Date): number {
+	const [year, month, day] = chaseDateKey(chaseBy).split("-").map(Number);
+	return differenceInCalendarDays(now, new Date(year!, month! - 1, day!));
 }
 
 export function formatChaseDate(chaseBy: string): string {
