@@ -39,8 +39,8 @@ function ApplicationsPage() {
 	const [modalOpen, setModalOpen] = createSignal(false);
 	const [editingApp, setEditingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
-	const [chasedApp, setChasedApp] = createSignal<ApplicationWithDetails | null>(
-		null,
+	const [chasedApps, setChasedApps] = createSignal<ApplicationWithDetails[]>(
+		[],
 	);
 	const [deletingApp, setDeletingApp] =
 		createSignal<ApplicationWithDetails | null>(null);
