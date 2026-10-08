@@ -1,9 +1,12 @@
 package docparse_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -34,7 +37,13 @@ func TestParse(t *testing.T) {
 					{ID: "s2", HeadingIndex: 3, Text: "Built the ingestion API handling 2M requests per day.", StartIndex: 303, EndIndex: 357},
 				},
 				Profile: &docparse.Slot{ID: "profile", HeadingIndex: 0, Text: "Backend engineer with six years building Go services and data pipelines.", StartIndex: 18, EndIndex: 91},
-				Skills:  &docparse.SkillsSlot{Items: []string{"Go", "PostgreSQL", "Kubernetes"}, List: true, StartIndex: 364, EndIndex: 389},
+				Skills: &docparse.SkillsSlot{
+					Lines:      []docparse.SkillLine{{Items: []string{"Go", "PostgreSQL", "Kubernetes"}, Separator: "\n", ItemsStart: 364, End: 388}},
+					Items:      []string{"Go", "PostgreSQL", "Kubernetes"},
+					List:       true,
+					StartIndex: 364,
+					EndIndex:   389,
+				},
 			},
 		},
 		{
@@ -73,6 +82,7 @@ func TestParse(t *testing.T) {
 				},
 				Profile: &docparse.Slot{ID: "profile", HeadingIndex: 0, Text: "Full-stack developer focused on accessible products.", StartIndex: 23, EndIndex: 76},
 				Skills: &docparse.SkillsSlot{
+					Lines:      []docparse.SkillLine{{Items: []string{"TypeScript", "React", "Node.js", "PostgreSQL", "Docker"}, Separator: ", ", ItemsStart: 272, End: 318}},
 					Items:      []string{"TypeScript", "React", "Node.js", "PostgreSQL", "Docker"},
 					Separator:  ", ",
 					StartIndex: 272,
@@ -152,4 +162,84 @@ func TestParseContact(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseSkillLines(t *testing.T) {
+	tests := []struct {
+		name  string
+		paras []testPara
+		want  []docparse.SkillLine
+	}{
+		{
+			name:  "labelled lines split on the first colon",
+			paras: []testPara{{text: "Languages: Go, TypeScript"}, {text: "Databases: Postgres, Redis"}},
+			want: []docparse.SkillLine{
+				{Label: "Languages", Items: []string{"Go", "TypeScript"}, Separator: ", ", ItemsStart: 12, End: 26},
+				{Label: "Databases", Items: []string{"Postgres", "Redis"}, Separator: ", ", ItemsStart: 38, End: 53},
+			},
+		},
+		{
+			name:  "labelled list items are lines of their own",
+			paras: []testPara{{text: "Cloud: AWS | GCP", list: true}, {text: "Tools: Git", list: true}},
+			want: []docparse.SkillLine{
+				{Label: "Cloud", Items: []string{"AWS", "GCP"}, Separator: " | ", ItemsStart: 8, End: 17},
+				{Label: "Tools", Items: []string{"Git"}, ItemsStart: 25, End: 28},
+			},
+		},
+		{
+			name:  "unlabelled list items form one line",
+			paras: []testPara{{text: "Go", list: true}, {text: "SQL", list: true}},
+			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL"}, Separator: "\n", ItemsStart: 1, End: 7}},
+		},
+		{
+			name:  "text before a colon holding separators is not a label",
+			paras: []testPara{{text: "Go, SQL: advanced"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL: advanced"}, Separator: ", ", ItemsStart: 1, End: 18}},
+		},
+		{
+			name:  "a colon inside parentheses is not a label",
+			paras: []testPara{{text: "Go (since 2019: advanced), SQL"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go (since 2019: advanced)", "SQL"}, Separator: ", ", ItemsStart: 1, End: 31}},
+		},
+		{
+			name:  "indices count UTF-16 code units",
+			paras: []testPara{{text: "Café 🙂: Go, SQL"}},
+			want:  []docparse.SkillLine{{Label: "Café 🙂", Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 10, End: 17}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := docparse.Parse(skillsTab(tt.paras))
+			if err != nil {
+				t.Fatalf("Parse() err = %v", err)
+			}
+			if got.Skills == nil {
+				t.Fatal("Parse().Skills = nil, want a skills section")
+			}
+			if diff := cmp.Diff(tt.want, got.Skills.Lines); diff != "" {
+				t.Errorf("Parse().Skills.Lines mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+type testPara struct {
+	text string
+	list bool
+}
+
+func skillsTab(paras []testPara) []byte {
+	var els []string
+	els = append(els, `{"startIndex":0,"endIndex":1,"paragraph":{"elements":[{"textRun":{"content":"Skills\n"}}],"paragraphStyle":{"namedStyleType":"HEADING_1"}}}`)
+	start := 1
+	for _, p := range paras {
+		end := start + len(utf16.Encode([]rune(p.text))) + 1
+		bullet := ""
+		if p.list {
+			bullet = `,"bullet":{}`
+		}
+		els = append(els, fmt.Sprintf(`{"startIndex":%d,"endIndex":%d,"paragraph":{"elements":[{"textRun":{"content":%q}}],"paragraphStyle":{"namedStyleType":"NORMAL_TEXT"}%s}}`, start, end, p.text+"\n", bullet))
+		start = end
+	}
+	return []byte(`{"documentTab":{"body":{"content":[` + strings.Join(els, ",") + `]}}}`)
 }

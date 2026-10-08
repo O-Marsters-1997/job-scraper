@@ -144,16 +144,16 @@ func TestClient_Edit_ProfileAndSkillsOnlyWhenSectionsExist(t *testing.T) {
 		absentProps          []string
 	}{
 		{"neither", false, false, []string{"positions"}, []string{"profile", "skills", "jobSkills"}},
-		{"profile only", true, false, []string{"positions", "profile"}, []string{"skills", "jobSkills"}},
-		{"skills only", false, true, []string{"positions", "skills", "jobSkills"}, []string{"profile"}},
-		{"both", true, true, []string{"positions", "profile", "skills", "jobSkills"}, nil},
+		{"profile only", true, false, []string{"positions", "profile"}, []string{"skills"}},
+		{"skills only", false, true, []string{"positions", "skills"}, []string{"profile"}},
+		{"both", true, true, []string{"positions", "profile", "skills"}, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			client, captured := fakeServer(t, `{"positions":[]}`, 0)
 			in := baseInput()
 			in.HasProfile, in.BaseProfile = tc.hasProfile, "Old profile"
-			in.HasSkills, in.BaseSkills = tc.hasSkill, []string{"Go"}
+			in.HasSkills, in.BaseSkills = tc.hasSkill, []cvedit.SkillGroup{{Items: []string{"Go"}}}
 
 			if _, err := client.Edit(t.Context(), "sk-or-test", in); err != nil {
 				t.Fatalf("Edit: %v", err)
@@ -217,8 +217,8 @@ func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
 	}
 }
 
-func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
-	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":["Go"],"jobSkills":["Go","Postgres"]}`, 0)
+func TestClient_Edit_DecodesProfileAndSkills(t *testing.T) {
+	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":[{"label":"Languages","items":["Go"]}]}`, 0)
 
 	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err != nil {
@@ -227,8 +227,77 @@ func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
 	if res.Edits.Profile == nil || *res.Edits.Profile != "New profile" {
 		t.Errorf("profile = %v", res.Edits.Profile)
 	}
-	if len(res.Edits.Skills) != 1 || len(res.Edits.JobSkills) != 2 {
-		t.Errorf("skills = %v, jobSkills = %v", res.Edits.Skills, res.Edits.JobSkills)
+	if len(res.Edits.Skills) != 1 {
+		t.Errorf("skills = %v", res.Edits.Skills)
+	}
+}
+
+func TestEditSet_StoredJobSkillsAreIgnored(t *testing.T) {
+	var e cvedit.EditSet
+	stored := `{"positions":[],"skills":[{"label":"Languages","items":["Go"]}],"jobSkills":["Pulumi"]}`
+	if err := json.Unmarshal([]byte(stored), &e); err != nil {
+		t.Fatalf("Unmarshal(%s): %v", stored, err)
+	}
+	if len(e.Skills) != 1 || e.Skills[0].Items[0] != "Go" {
+		t.Errorf("skills = %v, want the Languages line", e.Skills)
+	}
+}
+
+func TestEditSet_SkillsRoundTrip(t *testing.T) {
+	t.Run("grouped skills decode and encode unchanged", func(t *testing.T) {
+		raw := `{"positions":[],"skills":[{"label":"Languages","items":["Go","SQL"]},{"label":"","items":["Git"]}]}`
+		var got cvedit.EditSet
+		if err := json.Unmarshal([]byte(raw), &got); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		want := []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "SQL"}}, {Items: []string{"Git"}}}
+		if diff := cmp.Diff(want, got.Skills); diff != "" || got.LegacySkills {
+			t.Errorf("Skills mismatch (-want +got):\n%s\nLegacySkills = %v, want false", diff, got.LegacySkills)
+		}
+		out, err := json.Marshal(got)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if diff := cmp.Diff(raw, string(out)); diff != "" {
+			t.Errorf("Marshal mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("flat skills decode as one unlabelled legacy group and encode back flat", func(t *testing.T) {
+		raw := `{"positions":[],"skills":["Go","SQL"]}`
+		var got cvedit.EditSet
+		if err := json.Unmarshal([]byte(raw), &got); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		want := []cvedit.SkillGroup{{Items: []string{"Go", "SQL"}}}
+		if diff := cmp.Diff(want, got.Skills); diff != "" || !got.LegacySkills {
+			t.Errorf("Skills mismatch (-want +got):\n%s\nLegacySkills = %v, want true", diff, got.LegacySkills)
+		}
+		out, err := json.Marshal(got)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		if diff := cmp.Diff(raw, string(out)); diff != "" {
+			t.Errorf("Marshal mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestClient_Edit_PromptListsSkillLines(t *testing.T) {
+	client, captured := fakeServer(t, `{"positions":[]}`, 0)
+	in := baseInput()
+	in.HasSkills = true
+	in.BaseSkills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "TypeScript"}}, {Items: []string{"Git"}}}
+
+	if _, err := client.Edit(t.Context(), "sk-or-test", in); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+
+	user := captured.Messages[len(captured.Messages)-1].Content
+	for _, want := range []string{"1. Languages: Go, TypeScript\n", "2. (no label): Git\n", "exactly these 2 lines"} {
+		if !strings.Contains(user, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, user)
+		}
 	}
 }
 
@@ -256,5 +325,15 @@ func TestClient_Edit_MalformedContent_KeepsRawAndErrors(t *testing.T) {
 	}
 	if res.Raw != "not json" || res.Cost != 0.5 {
 		t.Errorf("result = %+v, want raw and cost kept for the caller to record", res)
+	}
+}
+
+func TestClient_Edit_FlatSkillsFromModelIsAnError(t *testing.T) {
+	client, _ := fakeServer(t, `{"positions":[],"skills":["Go"]}`, 0)
+	in := baseInput()
+	in.HasSkills, in.BaseSkills = true, []cvedit.SkillGroup{{Items: []string{"Go"}}}
+
+	if _, err := client.Edit(t.Context(), "sk-or-test", in); err == nil {
+		t.Error("Edit() err = nil, want an error for flat skills")
 	}
 }

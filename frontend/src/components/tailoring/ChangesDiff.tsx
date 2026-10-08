@@ -15,6 +15,15 @@ const BULLET_LABEL: Record<BulletRow["kind"], string> = {
 	removed: "Removed",
 };
 
+function baseGroupIndex(
+	groups: DraftContent["skillGroups"],
+	label: string,
+	index: number,
+): number {
+	const byLabel = groups.findIndex((g) => g.label === label);
+	return byLabel >= 0 || label !== "" ? byLabel : index;
+}
+
 function Marked(props: { ops: WordOp[] }) {
 	return (
 		<For each={props.ops}>
@@ -98,7 +107,21 @@ export function ChangesDiff(props: {
 		)?.bullets[index]?.slotId;
 		return slotId ? () => undo(slotId, row.from) : undefined;
 	};
-	const skills = () => listDiff(props.base.skills, props.content.skills);
+	const skillRows = () => {
+		const matched = new Set<number>();
+		const rows = props.content.skillGroups.map((g, i) => {
+			const at = baseGroupIndex(props.base.skillGroups, g.label, i);
+			matched.add(at);
+			return {
+				label: g.label,
+				ops: listDiff(props.base.skillGroups[at]?.items ?? [], g.items),
+			};
+		});
+		const dropped = props.base.skillGroups
+			.filter((_, i) => !matched.has(i))
+			.map((g) => ({ label: g.label, ops: listDiff(g.items, []) }));
+		return [...rows, ...dropped];
+	};
 	const profile = () =>
 		props.base.profile !== null && props.content.profile !== null
 			? wordDiff(props.base.profile, props.content.profile)
@@ -142,23 +165,37 @@ export function ChangesDiff(props: {
 					<h3 id="diff-skills" class="mb-2 text-sm font-semibold">
 						Skills
 					</h3>
-					<ul class="flex flex-wrap gap-1.5 text-sm">
-						<For each={skills()}>
-							{(s) => (
-								<li
-									class="rounded-md border border-border bg-surface px-2 py-0.5"
-									classList={{
-										"text-faint": s.op === "same",
-										"font-medium text-foreground": s.op === "add",
-										"text-destructive-strong line-through": s.op === "del",
-									}}
-								>
-									<span class="sr-only">{SKILL_SR_PREFIX[s.op]}</span>
-									{s.text}
-								</li>
+					<div class="flex flex-col gap-2">
+						<For each={skillRows()}>
+							{(row) => (
+								<div class="flex items-baseline gap-3">
+									<Show when={row.label}>
+										<span class="w-24 shrink-0 text-xs font-medium text-muted">
+											{row.label}
+										</span>
+									</Show>
+									<ul class="flex flex-wrap gap-1.5 text-sm">
+										<For each={row.ops}>
+											{(s) => (
+												<li
+													class="rounded-md border border-border bg-surface px-2 py-0.5"
+													classList={{
+														"text-faint": s.op === "same",
+														"font-medium text-foreground": s.op === "add",
+														"text-destructive-strong line-through":
+															s.op === "del",
+													}}
+												>
+													<span class="sr-only">{SKILL_SR_PREFIX[s.op]}</span>
+													{s.text}
+												</li>
+											)}
+										</For>
+									</ul>
+								</div>
 							)}
 						</For>
-					</ul>
+					</div>
 				</section>
 			</Show>
 			<For each={props.content.positions}>

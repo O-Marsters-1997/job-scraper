@@ -79,6 +79,18 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "",
+     "Items": [
+      "Go",
+      "Bash"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "Go",
     "Bash"

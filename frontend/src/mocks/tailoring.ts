@@ -11,6 +11,8 @@ import type {
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
+	SkillGroup,
+	SkillSuggestions,
 	SlotEdit,
 	SuggestDone,
 	Suggestion,
@@ -54,6 +56,49 @@ export function saveHeadings(
 
 export function getExperienceMatch(): ExperienceMatch {
 	return { score: 0.34 };
+}
+
+export function getSkillSuggestions(): SkillSuggestions {
+	return {
+		lines: [
+			{
+				label: "Languages",
+				base: [
+					{ text: "Go", score: 0.6, state: "fit" },
+					{ text: "PHP", score: -0.4, state: "low" },
+					{ text: "TypeScript", score: 0.3, state: "fit" },
+				],
+				candidates: [
+					{
+						bankSkillId: "bank-skill-1",
+						name: "Rust",
+						score: 0.7,
+						state: "fit",
+						preselected: true,
+						replaces: "PHP",
+					},
+					{
+						bankSkillId: "bank-skill-2",
+						name: "Elixir",
+						score: 0.05,
+						state: "fit",
+						preselected: false,
+						replaces: "",
+					},
+				],
+			},
+		],
+		unplaced: [
+			{
+				bankSkillId: "bank-skill-3",
+				name: "Kubernetes",
+				score: 0.5,
+				state: "fit",
+				preselected: false,
+				replaces: "",
+			},
+		],
+	};
 }
 
 export function getSuggestions(): Suggestion[] {
@@ -130,21 +175,32 @@ function mockContent(): Pick<Draft, "content" | "base"> {
 	const p = getExperience()[0];
 	const texts = p?.achievements.slice(0, 3).map((a) => a.text) ?? [];
 	const bullet = (text: string) => ({ text, achievementIds: [] });
-	const content = (bullets: string[], skills: string[], profile: string) => ({
+	const content = (
+		bullets: string[],
+		skillGroups: { label: string; items: string[] }[],
+		profile: string,
+	) => ({
 		profile,
-		skills,
+		skills: skillGroups.flatMap((g) => g.items),
+		skillGroups,
 		positions: p ? [{ positionId: p.id, bullets: bullets.map(bullet) }] : [],
 	});
 	const [first = "", second = "", third = ""] = texts;
 	return {
 		base: content(
 			[first, second, third],
-			["Go", "SQL"],
+			[
+				{ label: "Languages", items: ["Go", "SQL"] },
+				{ label: "Tools", items: ["Postgres"] },
+			],
 			"Backend engineer with six years of experience.",
 		),
 		content: content(
 			[third, `${first} using Kubernetes`, "Led the on-call rota"],
-			["Go", "Kubernetes"],
+			[
+				{ label: "Languages", items: ["Go", "SQL"] },
+				{ label: "Tools", items: ["Postgres", "Kubernetes"] },
+			],
 			"Backend engineer with six years of experience in platform work.",
 		),
 	};
@@ -166,6 +222,7 @@ export function createDraft(input: DraftInput): DraftRef {
 			provenance: null,
 			content: null,
 			base: null,
+			skillsEditable: false,
 		},
 		polls: 0,
 	});
@@ -195,6 +252,7 @@ export function getDraft(id: string): Draft {
 			status: "ready",
 			draftDocUrl: MOCK_DOC_URL,
 			provenance: mockProvenance(),
+			skillsEditable: true,
 			...mockContent(),
 			findings: [
 				{
@@ -241,7 +299,11 @@ export function discardDraft(id: string): Draft {
 
 const MOCK_TWO_PAGES_CHARS = 1500;
 
-export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
+export function saveDraftSlots(
+	id: string,
+	slots: SlotEdit[],
+	skills?: SkillGroup[],
+): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
@@ -258,7 +320,13 @@ export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && applySlots(content, provenance, slots),
+		content: content && {
+			...applySlots(content, provenance, slots),
+			...(skills && {
+				skills: skills.flatMap((g) => g.items),
+				skillGroups: skills,
+			}),
+		},
 	};
 	return entry.draft;
 }
@@ -318,6 +386,7 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 				},
 			],
 			provenance: mockProvenance(),
+			skillsEditable: true,
 			...mockContent(),
 		},
 	});
@@ -359,6 +428,7 @@ const mockRun = (text: string, over: Partial<LayoutRun> = {}): LayoutRun => ({
 const mockBlock = (over: Partial<LayoutBlock>): LayoutBlock => ({
 	slotId: "",
 	section: "",
+	skillLine: null,
 	align: "left",
 	lineSpacing: 115,
 	spaceAbove: 0,
@@ -398,9 +468,14 @@ const mockBullet = (slotId: string): LayoutBlock =>
 		runs: [mockRun(MOCK_BULLET_TEXT[slotId] ?? "")],
 	});
 
-const mockSkillRow = (label: string, value: string): LayoutBlock =>
+const mockSkillRow = (
+	skillLine: number,
+	label: string,
+	value: string,
+): LayoutBlock =>
 	mockBlock({
 		section: "skills",
+		skillLine,
 		tabStops: [{ offset: 90, alignment: "start" }],
 		runs: [mockRun(`${label}\t`, { bold: true }), mockRun(value)],
 	});
@@ -441,8 +516,8 @@ export function getDraftLayout(): DraftLayout {
 			mockEmployer("Software Engineer, Globex", "2018 - 2021"),
 			mockBullet("s3"),
 			mockSection("Skills"),
-			mockSkillRow("Languages", "Go, SQL, TypeScript"),
-			mockSkillRow("Tools", "Kubernetes, Postgres, Terraform"),
+			mockSkillRow(0, "Languages", "Go, SQL, TypeScript"),
+			mockSkillRow(1, "Tools", "Kubernetes, Postgres, Terraform"),
 		],
 	};
 }

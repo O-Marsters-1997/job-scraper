@@ -246,6 +246,10 @@ _Avoid_: Summary, About, bio
 The list section of a CV naming the candidate's skills and tools.
 _Avoid_: Keywords, tech stack
 
+**Bank Skill**:
+A technology or skill in the user's Experience Bank, with a free-text category, kept in the user's own order. Names are unique per user, ignoring case.
+_Avoid_: Tag, keyword, tech option — not the seeded scoring options
+
 ## Relationships
 
 - A **User** owns at most one **Google Link** and many **Tracked Docs**

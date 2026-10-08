@@ -99,6 +99,16 @@ type ApplicationStatus struct {
 	ReplyWindowDays pgtype.Int4
 }
 
+type BankSkill struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Name      string
+	Category  string
+	SortOrder int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type BoardJobObservation struct {
 	BoardID             pgtype.UUID
 	JobID               pgtype.UUID
@@ -427,6 +437,7 @@ type TailoredCv struct {
 	BaseDocID      string
 	BaseTabID      string
 	AchievementIds []pgtype.UUID
+	SkillSwaps     []byte
 	EditSet        []byte
 	BaseContent    []byte
 	Findings       []byte

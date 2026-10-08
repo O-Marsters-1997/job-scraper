@@ -14,10 +14,18 @@ type ImportPosition struct {
 	EmployerExists bool     `json:"employerExists"`
 }
 
+type ImportSkill struct {
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Exists   bool   `json:"exists"`
+}
+
 type ImportPreview struct {
 	Positions []ImportPosition `json:"positions"`
+	Skills    []ImportSkill    `json:"skills"`
 }
 
 type ImportInput struct {
 	Positions []ImportPosition `json:"positions"`
+	Skills    []ImportSkill    `json:"skills"`
 }

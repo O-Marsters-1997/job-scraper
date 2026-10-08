@@ -123,7 +123,7 @@ func termCoverage(f Fixture, edits cvedit.EditSet) (supported, used int) {
 	if edits.Profile != nil {
 		output.WriteString(*edits.Profile + "\n")
 	}
-	output.WriteString(strings.Join(edits.Skills, "\n"))
+	output.WriteString(strings.Join(cvedit.FlatSkills(edits.Skills), "\n"))
 	bankText, outputText := strings.ToLower(bank.String()), strings.ToLower(output.String())
 	for _, term := range f.JobTerms {
 		term = strings.ToLower(term)
@@ -161,7 +161,7 @@ func input(f Fixture) cvedit.Input {
 		in.HasProfile, in.BaseProfile = true, p.Text
 	}
 	if s := f.Structure.Skills; s != nil {
-		in.HasSkills, in.BaseSkills = true, s.Items
+		in.HasSkills, in.BaseSkills = true, cvedit.SkillGroups(s)
 	}
 	return in
 }
@@ -199,9 +199,9 @@ func draft(f Fixture, edits cvedit.EditSet) checks.Draft {
 		d.Profile = &checks.Slot{ID: p.ID, Text: *edits.Profile, BaseText: p.Text}
 	}
 	if s := f.Structure.Skills; s != nil {
-		d.BaseSkills = s.Items
+		d.BaseSkills = cvedit.CheckLines(cvedit.SkillGroups(s))
 	}
-	d.Skills, d.JobSkills = edits.Skills, edits.JobSkills
+	d.Skills = cvedit.CheckLines(edits.Skills)
 	return d
 }
 

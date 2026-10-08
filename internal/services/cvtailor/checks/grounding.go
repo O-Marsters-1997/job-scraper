@@ -67,29 +67,29 @@ func groundSkills(d Draft) []Finding {
 	bank := normalise(strings.Join(d.Bank, " "))
 	baseText := normalise(strings.Join(d.BaseText, " "))
 	base := map[string]bool{}
-	for _, s := range d.BaseSkills {
-		base[strings.ToLower(strings.TrimSpace(s))] = true
+	for _, line := range d.BaseSkills {
+		for _, s := range line.Items {
+			base[strings.ToLower(strings.TrimSpace(s))] = true
+		}
+	}
+	bankSkill := map[string]bool{}
+	for _, name := range d.BankSkills {
+		bankSkill[strings.ToLower(strings.TrimSpace(name))] = true
 	}
 	sourced := func(skill string) bool {
 		key := strings.ToLower(strings.TrimSpace(skill))
-		return base[key] || containsWord(bank, key) || containsWord(baseText, key)
+		return base[key] || bankSkill[key] || containsWord(bank, key) || containsWord(baseText, key)
 	}
 
 	var out []Finding
-	for _, s := range d.Skills {
-		if !sourced(s) {
-			out = append(out, Finding{
-				Check: CheckSkills, Severity: Block,
-				Message: fmt.Sprintf("skill %q is in neither the base skills nor the Bank", s),
-			})
-		}
-	}
-	for _, s := range d.JobSkills {
-		if !sourced(s) {
-			out = append(out, Finding{
-				Check: CheckSkills, Severity: Info,
-				Message: fmt.Sprintf("the job asks for %q; your CV and Bank never mention it", s),
-			})
+	for _, line := range d.Skills {
+		for _, s := range line.Items {
+			if !sourced(s) {
+				out = append(out, Finding{
+					Check: CheckSkills, Severity: Block,
+					Message: fmt.Sprintf("skill %q is in neither the base skills nor the Bank", s),
+				})
+			}
 		}
 	}
 	return out

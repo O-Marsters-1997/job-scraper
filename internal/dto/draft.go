@@ -8,10 +8,22 @@ import (
 // DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
 // citing the Achievements the User confirmed.
 type DraftInput struct {
-	JobID          string   `json:"jobId"`
-	DocID          string   `json:"docId"`
-	TabID          string   `json:"tabId"`
-	AchievementIDs []string `json:"achievementIds"`
+	JobID          string      `json:"jobId"`
+	DocID          string      `json:"docId"`
+	TabID          string      `json:"tabId"`
+	AchievementIDs []string    `json:"achievementIds"`
+	SkillSwaps     []SkillSwap `json:"skillSwaps"`
+}
+
+// SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
+// base CV order), in place of the base item Replaces.
+type SkillSwap struct {
+	BankSkillID string `json:"bankSkillId"`
+	Line        int    `json:"line"`
+	Replaces    string `json:"replaces"`
+	// Name is set from the Bank Skill when a Draft is created, so later plans
+	// need no lookup. A request value is ignored.
+	Name string `json:"name"`
 }
 
 // BulletLabel is what one offered Achievement looked like when a Draft was
@@ -61,19 +73,30 @@ type Draft struct {
 	Content     *DraftContent    `json:"content"`
 	Base        *DraftContent    `json:"base"`
 	BaseContent json.RawMessage  `json:"-"`
+	// SkillsEditable is false for a Draft made before Skill Lines.
+	SkillsEditable bool `json:"skillsEditable"`
 
-	BaseDocID      string   `json:"-"`
-	BaseTabID      string   `json:"-"`
-	AchievementIDs []string `json:"-"`
+	BaseDocID      string      `json:"-"`
+	BaseTabID      string      `json:"-"`
+	AchievementIDs []string    `json:"-"`
+	SkillSwaps     []SkillSwap `json:"-"`
 }
 
-// DraftContent is the editable part of a Draft: the Profile, Skills and each
-// Position's bullets in CV order. Base holds the base CV Tab's content as it
-// was at generation, with no AchievementIDs.
+// DraftContent is the editable part of a Draft: the Profile, Skills (flat,
+// and by Skill Line in SkillGroups) and each Position's bullets in CV order.
+// Base holds the base CV Tab's content as it was at generation.
 type DraftContent struct {
-	Profile   *string         `json:"profile"`
-	Skills    []string        `json:"skills"`
-	Positions []DraftPosition `json:"positions"`
+	Profile     *string         `json:"profile"`
+	Skills      []string        `json:"skills"`
+	SkillGroups []SkillGroup    `json:"skillGroups"`
+	Positions   []DraftPosition `json:"positions"`
+}
+
+// SkillGroup is one Skill Line of a Draft: its label ("" when the CV has
+// none) and its items in order.
+type SkillGroup struct {
+	Label string   `json:"label"`
+	Items []string `json:"items"`
 }
 
 type DraftPosition struct {
@@ -123,6 +146,7 @@ type DraftClaim struct {
 	DocID          string
 	TabID          string
 	AchievementIDs []string
+	SkillSwaps     []SkillSwap
 	Attempts       int
 	DraftDocID     string
 	JobDescription string
@@ -169,10 +193,12 @@ type SlotEdit struct {
 	Text   string `json:"text"`
 }
 
-// DraftSlotsInput carries the bullets the User changed on a Draft.
+// DraftSlotsInput carries the bullets and, when Skills is set, the full
+// grouped Skills the User changed on a Draft.
 type DraftSlotsInput struct {
-	ID    string     `json:"-" path:"id"`
-	Slots []SlotEdit `json:"slots"`
+	ID     string       `json:"-" path:"id"`
+	Slots  []SlotEdit   `json:"slots"`
+	Skills []SkillGroup `json:"skills"`
 }
 
 // DraftLayout is a Draft Doc's single-column page geometry and styled
@@ -192,10 +218,12 @@ type LayoutPage struct {
 }
 
 // LayoutBlock is one paragraph. SlotID is "", "profile" or the base slot ID;
-// Section is "skills" inside the read-only Skills range.
+// Section is "skills" inside the read-only Skills range, where SkillLine is
+// the index of the Skill Line the paragraph belongs to.
 type LayoutBlock struct {
 	SlotID          string        `json:"slotId"`
 	Section         string        `json:"section"`
+	SkillLine       *int          `json:"skillLine"`
 	Align           string        `json:"align"`
 	LineSpacing     float64       `json:"lineSpacing"`
 	SpaceAbove      float64       `json:"spaceAbove"`

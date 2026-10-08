@@ -1,6 +1,7 @@
 package checks_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -135,8 +136,8 @@ func TestGroundingSkills(t *testing.T) {
 		skills     []string
 		baseSkills []string
 		bank       []string
+		bankSkills []string
 		baseText   []string
-		jobSkills  []string
 		wantSkills []want
 	}{
 		{
@@ -146,34 +147,21 @@ func TestGroundingSkills(t *testing.T) {
 			bank:       []string{"Ran Kubernetes clusters"},
 		},
 		{
+			name:       "Bank Skill name passes ignoring case",
+			skills:     []string{"Go", "rust"},
+			baseSkills: []string{"Go"},
+			bankSkills: []string{"Rust"},
+		},
+		{
 			name:       "unsourced skill blocks",
 			skills:     []string{"Go", "Pulumi"},
 			baseSkills: []string{"Go"},
 			wantSkills: []want{{checks.Block, ""}},
 		},
-		{
-			name:       "job skill without a source is an info gap and stays out of skills",
-			skills:     []string{"Go"},
-			baseSkills: []string{"Go"},
-			bank:       []string{"Wrote Terraform modules"},
-			jobSkills:  []string{"Pulumi", "Terraform", "go"},
-			wantSkills: []want{{checks.Info, ""}},
-		},
-		{
-			name:      "job skill named anywhere in the base CV is no gap",
-			baseText:  []string{"Languages/ Frameworks \t\tTypescript", "Databases\t\t\t\tPostgreSQL"},
-			jobSkills: []string{"TypeScript", "PostgreSQL"},
-		},
-		{
-			name:       "job skill listed in skills is both blocked and reported",
-			skills:     []string{"Pulumi"},
-			jobSkills:  []string{"Pulumi"},
-			wantSkills: []want{{checks.Block, ""}, {checks.Info, ""}},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := checks.Draft{Skills: tt.skills, BaseSkills: tt.baseSkills, Bank: tt.bank, BaseText: tt.baseText, JobSkills: tt.jobSkills}
+			d := checks.Draft{Skills: oneLine(tt.skills), BaseSkills: oneLine(tt.baseSkills), Bank: tt.bank, BankSkills: tt.bankSkills, BaseText: tt.baseText}
 			if diff := cmp.Diff(tt.wantSkills, findings(checks.Grounding(d), "skills")); diff != "" {
 				t.Errorf("skills findings (-want +got):\n%s", diff)
 			}
@@ -181,10 +169,39 @@ func TestGroundingSkills(t *testing.T) {
 	}
 }
 
-func TestGapMessageNamesSkill(t *testing.T) {
-	got := checks.Grounding(checks.Draft{JobSkills: []string{"Pulumi"}})
-	if len(got) != 1 || got[0].Severity != checks.Info || !strings.Contains(got[0].Message, "Pulumi") {
-		t.Fatalf("got %+v", got)
+func oneLine(items []string) []checks.SkillLine {
+	if items == nil {
+		return nil
+	}
+	return []checks.SkillLine{{Items: items}}
+}
+
+func TestSkillLines(t *testing.T) {
+	base := []checks.SkillLine{{Label: "Languages", Items: []string{"Go", "TypeScript"}}, {Label: "Databases", Items: []string{"Postgres", "Redis"}}}
+	tests := []struct {
+		name   string
+		skills []checks.SkillLine
+		legacy bool
+		want   []want
+	}{
+		{"items reordered within their lines pass", []checks.SkillLine{{Label: "Languages", Items: []string{"typescript", "Go"}}, {Label: "Databases", Items: []string{"Redis", "Postgres"}}}, false, nil},
+		{"no skills edit passes", nil, false, nil},
+		{"dropped line blocks", base[:1], false, []want{{checks.Block, ""}}},
+		{"extra line blocks", append(slices.Clone(base), checks.SkillLine{Label: "Tools", Items: []string{"Git"}}), false, []want{{checks.Block, ""}}},
+		{"swapped lines block", []checks.SkillLine{base[1], base[0]}, false, []want{{checks.Block, ""}, {checks.Block, ""}}},
+		{"renamed label blocks", []checks.SkillLine{{Label: "Langs", Items: base[0].Items}, base[1]}, false, []want{{checks.Block, ""}}},
+		{"dropped item blocks", []checks.SkillLine{{Label: "Languages", Items: []string{"Go"}}, base[1]}, false, []want{{checks.Block, ""}}},
+		{"added item blocks", []checks.SkillLine{base[0], {Label: "Databases", Items: []string{"Postgres", "Redis", "MySQL"}}}, false, []want{{checks.Block, ""}}},
+		{"item moved across lines blocks", []checks.SkillLine{{Label: "Languages", Items: []string{"Go", "TypeScript", "Redis"}}, {Label: "Databases", Items: []string{"Postgres"}}}, false, []want{{checks.Block, ""}, {checks.Block, ""}}},
+		{"legacy skills are not line-checked", []checks.SkillLine{{Items: []string{"Go"}}}, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := checks.Draft{Skills: tt.skills, BaseSkills: base, LegacySkills: tt.legacy}
+			if diff := cmp.Diff(tt.want, findings(checks.SkillLines(d), "skills")); diff != "" {
+				t.Errorf("SkillLines() findings (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

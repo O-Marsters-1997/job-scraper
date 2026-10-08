@@ -73,6 +73,29 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "Design",
+     "Items": [
+      "Figma",
+      "Sketch"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    },
+    {
+     "Label": "Infrastructure",
+     "Items": [
+      "Terraform",
+      "AWS",
+      "Go"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "Figma",
     "Sketch",

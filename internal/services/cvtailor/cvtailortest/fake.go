@@ -16,6 +16,8 @@ import (
 var (
 	errPositionNotFound    = apperr.NotFound("position not found")
 	errAchievementNotFound = apperr.NotFound("achievement not found")
+	errBankSkillNotFound   = apperr.NotFound("bank skill not found")
+	errBankSkillExists     = apperr.Conflict("a bank skill with that name already exists")
 	errIncompleteOrder     = apperr.Invalid("ids must list every item exactly once")
 )
 
@@ -36,6 +38,7 @@ type FakeStore struct {
 	positions    map[string]*position
 	achievements map[string]*achievement
 	mappings     map[headingKey]*string
+	skills       map[string]*bankSkill
 	drafts       map[string]*draft
 	jobs         map[string]dto.Job
 	labels       []dto.BulletLabel
@@ -43,7 +46,7 @@ type FakeStore struct {
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, drafts: map[string]*draft{}, jobs: map[string]dto.Job{}}
+	return &FakeStore{positions: map[string]*position{}, achievements: map[string]*achievement{}, mappings: map[headingKey]*string{}, skills: map[string]*bankSkill{}, drafts: map[string]*draft{}, jobs: map[string]dto.Job{}}
 }
 
 func (f *FakeStore) nextID() string {

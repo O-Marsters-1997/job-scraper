@@ -4,16 +4,11 @@ import { Button } from "@/components/ui/button";
 import { charsToSave, isSparse, type LineFit } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
 import { wordDiff } from "@/lib/wordDiff";
-import { type DraftEditorState, SKILLS_CARD } from "../../hooks/useDraftEditor";
+import type { DraftEditorState } from "../../hooks/useDraftEditor";
 
 type Tone = { dot: string; text: string };
 
 export function cardHeader(ed: DraftEditorState, key: string): Tone {
-	if (key === SKILLS_CARD)
-		return {
-			dot: "bg-status-interview",
-			text: `${ed.gaps().length} missing from your CV`,
-		};
 	if (ed.findingsFor(key).some((f) => f.severity === "block"))
 		return { dot: "bg-destructive", text: "Blocking issue" };
 	return ed.edited(key)
@@ -26,22 +21,6 @@ const SEVERITY_DOT = {
 	warn: "bg-status-interview",
 	info: "bg-border-strong",
 };
-
-function SkillGaps(props: { gaps: string[] }) {
-	return (
-		<>
-			<p class="text-xs text-muted">
-				The job asks for these and your CV never mentions them. Add one only if
-				it is true.
-			</p>
-			<ul class="flex flex-col gap-1.5">
-				<For each={props.gaps}>
-					{(gap) => <li class="text-xs text-foreground">{gap}</li>}
-				</For>
-			</ul>
-		</>
-	);
-}
 
 function EditDiff(props: { from: string; to: string }) {
 	return (
@@ -107,7 +86,6 @@ export function MarginCard(props: {
 	onFit?: ((slotId: string) => void) | undefined;
 }) {
 	const key = () => props.cardKey;
-	const isSlot = () => key() !== SKILLS_CARD;
 	const resolved = () => props.editor.isResolved(key());
 	const edited = () => props.editor.edited(key());
 	const header = () => cardHeader(props.editor, key());
@@ -157,38 +135,33 @@ export function MarginCard(props: {
 
 			<Show when={props.active}>
 				<div class="flex flex-col gap-3 border-t border-border px-3.5 pt-3 pb-3.5 animate-in fade-in duration-200">
-					<Show
-						when={isSlot()}
-						fallback={<SkillGaps gaps={props.editor.gaps()} />}
-					>
-						<Show when={edited()}>
-							<EditDiff
-								from={props.editor.original(key())}
-								to={props.editor.text(key())}
-							/>
-						</Show>
-						<For each={props.editor.findingsFor(key())}>
-							{(f) => (
-								<p class="flex items-start gap-2 text-xs text-foreground">
-									<span
-										class={cn(
-											"mt-1 size-1.5 shrink-0 rounded-full",
-											SEVERITY_DOT[f.severity],
-										)}
-									/>
-									{f.message}
-								</p>
-							)}
-						</For>
-						<Show when={sparseFit()}>
-							{(fit) => (
-								<FitHint
-									text={props.editor.text(key())}
-									fit={fit()}
-									onFit={props.onFit && (() => props.onFit?.(key()))}
+					<Show when={edited()}>
+						<EditDiff
+							from={props.editor.original(key())}
+							to={props.editor.text(key())}
+						/>
+					</Show>
+					<For each={props.editor.findingsFor(key())}>
+						{(f) => (
+							<p class="flex items-start gap-2 text-xs text-foreground">
+								<span
+									class={cn(
+										"mt-1 size-1.5 shrink-0 rounded-full",
+										SEVERITY_DOT[f.severity],
+									)}
 								/>
-							)}
-						</Show>
+								{f.message}
+							</p>
+						)}
+					</For>
+					<Show when={sparseFit()}>
+						{(fit) => (
+							<FitHint
+								text={props.editor.text(key())}
+								fit={fit()}
+								onFit={props.onFit && (() => props.onFit?.(key()))}
+							/>
+						)}
 					</Show>
 
 					<div class="flex items-center gap-2">
@@ -196,7 +169,7 @@ export function MarginCard(props: {
 							<Icon name="check" size={14} />
 							{resolved() ? "Reopen" : "Resolve"}
 						</Button>
-						<Show when={isSlot() && props.editable && edited()}>
+						<Show when={props.editable && edited()}>
 							<Button
 								variant="ghost"
 								size="sm"

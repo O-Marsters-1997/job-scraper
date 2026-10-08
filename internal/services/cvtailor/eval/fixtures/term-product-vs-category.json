@@ -78,6 +78,18 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "",
+     "Items": [
+      "Go",
+      "SQL"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "Go",
     "SQL"

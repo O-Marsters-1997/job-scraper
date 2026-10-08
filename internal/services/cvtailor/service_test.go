@@ -58,6 +58,14 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 	}
 }
 
+func TestBankSkillRejectsBlankName(t *testing.T) {
+	svc, _ := newService(t, nil, nil)
+	_, err := svc.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: "  ", Category: "Languages"})
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("CreateBankSkill() err = %v, want an invalid error", err)
+	}
+}
+
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	svc, _ := newService(t, nil, nil)
 	_, err := svc.ReorderPositions(t.Context(), userID, dto.ReorderInput{IDs: []string{"a", "a"}})
@@ -113,6 +121,55 @@ func newDraftEnv(t *testing.T) draftEnv {
 		pos:   pos,
 		input: dto.DraftInput{JobID: jobID, DocID: docID, TabID: tabID, AchievementIDs: []string{pos.Achievements[0].ID}},
 	}
+}
+
+func (e draftEnv) bankSkill(t *testing.T, name string) dto.BankSkill {
+	t.Helper()
+	sk, err := e.store.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sk
+}
+
+func TestCreateDraftSkillSwaps(t *testing.T) {
+	e := newDraftEnv(t)
+	e.svc = cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, e.asker, e.drive)
+	rust := e.bankSkill(t, "Rust")
+	foreign, err := e.store.CreateBankSkill(t.Context(), otherUserID, dto.BankSkillInput{Name: "Zig"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		swap dto.SkillSwap
+	}{
+		{"another user's Bank Skill is invalid", dto.SkillSwap{BankSkillID: foreign.ID, Line: 0, Replaces: "SQL"}},
+		{"unknown line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 3, Replaces: "SQL"}},
+		{"item not in the line is invalid", dto.SkillSwap{BankSkillID: rust.ID, Line: 0, Replaces: "Perl"}},
+		{"Bank Skill already in the CV is invalid", dto.SkillSwap{BankSkillID: e.bankSkill(t, "go").ID, Line: 0, Replaces: "SQL"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := e.input
+			in.SkillSwaps = []dto.SkillSwap{tc.swap}
+
+			_, err := e.svc.CreateDraft(t.Context(), userID, in)
+
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateDraft(%+v) error = %v, want an invalid error", tc.swap, err)
+			}
+		})
+	}
+
+	t.Run("a valid swap is queued", func(t *testing.T) {
+		in := e.input
+		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: rust.ID, Line: 0, Replaces: "sql"}}
+
+		if _, err := e.svc.CreateDraft(t.Context(), userID, in); err != nil {
+			t.Fatalf("CreateDraft() error = %v", err)
+		}
+	})
 }
 
 func TestCreateDraft(t *testing.T) {

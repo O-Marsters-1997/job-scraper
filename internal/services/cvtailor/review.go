@@ -38,18 +38,22 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	draft.Provenance = provenance(edits, positions)
 	content := editedContent(edits)
 	draft.Content = &content
+	draft.SkillsEditable = !edits.LegacySkills && len(content.SkillGroups) > 0
 	if len(draft.BaseContent) == 0 {
 		return draft, nil
 	}
-	draft.Base = new(dto.DraftContent)
-	if err := json.Unmarshal(draft.BaseContent, draft.Base); err != nil {
+	var stored baseContent
+	if err := json.Unmarshal(draft.BaseContent, &stored); err != nil {
 		return dto.Draft{}, fmt.Errorf("decode base content: %w", err)
 	}
+	base := stored.content()
+	draft.Base = &base
 	if content.Profile == nil {
 		content.Profile = draft.Base.Profile
 	}
 	if len(content.Skills) == 0 {
-		content.Skills = draft.Base.Skills
+		content.Skills, content.SkillGroups = draft.Base.Skills, draft.Base.SkillGroups
+		draft.SkillsEditable = !edits.LegacySkills && len(content.SkillGroups) > 0
 	}
 	return draft, nil
 }
@@ -157,11 +161,25 @@ func withDocURL(d dto.Draft) dto.Draft {
 	return d
 }
 
-func editedContent(edits cvedit.EditSet) dto.DraftContent {
-	c := dto.DraftContent{Profile: edits.Profile, Skills: edits.Skills, Positions: []dto.DraftPosition{}}
-	if c.Skills == nil {
-		c.Skills = []string{}
+func skillContent(groups []cvedit.SkillGroup) ([]string, []dto.SkillGroup) {
+	flat := cvedit.FlatSkills(groups)
+	if flat == nil {
+		flat = []string{}
 	}
+	out := make([]dto.SkillGroup, len(groups))
+	for i, g := range groups {
+		items := g.Items
+		if items == nil {
+			items = []string{}
+		}
+		out[i] = dto.SkillGroup{Label: g.Label, Items: items}
+	}
+	return flat, out
+}
+
+func editedContent(edits cvedit.EditSet) dto.DraftContent {
+	c := dto.DraftContent{Profile: edits.Profile, Positions: []dto.DraftPosition{}}
+	c.Skills, c.SkillGroups = skillContent(edits.Skills)
 	for _, pe := range edits.Positions {
 		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
 		for _, b := range pe.Bullets {

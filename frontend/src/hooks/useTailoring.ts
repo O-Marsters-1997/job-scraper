@@ -10,13 +10,14 @@ import {
 	fetchExperienceMatch,
 	fetchHeadings,
 	fetchJobDrafts,
+	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
 	saveDraftSlots,
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping, SlotEdit } from "../types/tailoring";
+import type { HeadingMapping, SkillGroup, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
@@ -51,6 +52,23 @@ export function useSuggestions(
 		return {
 			queryKey: keys.tailoring.suggestions(jobId(), docId, tabId),
 			queryFn: () => fetchSuggestions(jobId(), docId, tabId),
+			enabled: ref !== undefined,
+			retry: false,
+			staleTime: 5 * 60 * 1000,
+		};
+	});
+}
+
+export function useSkillSuggestions(
+	jobId: Accessor<string>,
+	cv: Accessor<CVRef | undefined>,
+) {
+	return createQuery(() => {
+		const ref = cv();
+		const { docId = "", tabId = "" } = ref ?? {};
+		return {
+			queryKey: keys.tailoring.skillSuggestions(jobId(), docId, tabId),
+			queryFn: () => fetchSkillSuggestions(jobId(), docId, tabId),
 			enabled: ref !== undefined,
 			retry: false,
 			staleTime: 5 * 60 * 1000,
@@ -123,6 +141,13 @@ export function useSaveDraftSlots(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
 		() => [keys.tailoring.draft(id())],
+	);
+}
+
+export function useSaveDraftSkills(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		(skills: SkillGroup[]) => saveDraftSlots(id(), [], skills),
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftLayout(id())],
 	);
 }
 

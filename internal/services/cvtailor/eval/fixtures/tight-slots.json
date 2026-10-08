@@ -73,6 +73,20 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "",
+     "Items": [
+      "Go",
+      "Kubernetes",
+      "Postgres",
+      "Rails"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "Go",
     "Kubernetes",

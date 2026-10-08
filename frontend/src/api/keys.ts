@@ -32,12 +32,15 @@ export const keys = {
 		boards: (id: string) => [...companiesAll, "boards", id] as const,
 	},
 	experience: ["experience"] as const,
+	bankSkills: ["bank-skills"] as const,
 	tailoring: {
 		all: tailoringAll,
 		headings: (docId: string, tabId: string) =>
 			[...tailoringAll, "headings", docId, tabId] as const,
 		suggestions: (jobId: string, docId: string, tabId: string) =>
 			[...tailoringAll, "suggestions", jobId, docId, tabId] as const,
+		skillSuggestions: (jobId: string, docId: string, tabId: string) =>
+			[...tailoringAll, "skill-suggestions", jobId, docId, tabId] as const,
 		experienceMatch: (jobId: string) =>
 			[...tailoringAll, "experience-match", jobId] as const,
 		draft: (id: string) => [...tailoringAll, "draft", id] as const,

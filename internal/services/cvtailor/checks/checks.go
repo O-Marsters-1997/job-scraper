@@ -26,6 +26,12 @@ type Slot struct {
 	Cited []string
 }
 
+// SkillLine is one line of the Skills section: its label and items in order.
+type SkillLine struct {
+	Label string
+	Items []string
+}
+
 type Position struct {
 	ID string
 	// Achievements holds the text of every Achievement in this Position.
@@ -36,11 +42,12 @@ type Position struct {
 type Draft struct {
 	Positions []Position
 	Profile   *Slot
-	Skills    []string
+	Skills    []SkillLine
 	// Bank holds the text of every Achievement the User has.
-	Bank       []string
-	BaseSkills []string
-	JobSkills  []string
+	Bank         []string
+	BankSkills   []string
+	BaseSkills   []SkillLine
+	LegacySkills bool
 	// BaseText holds every line of the base CV: headings, slots, profile and skills.
 	BaseText  []string
 	BasePages int
@@ -58,7 +65,7 @@ type ContactInput struct {
 }
 
 func Run(d Draft) []Finding {
-	return slices.Concat(Grounding(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d), Parse(d))
+	return slices.Concat(Grounding(d), SkillLines(d), BannedWords(d), SlotLength(d), PageCount(d), Contact(d), Parse(d))
 }
 
 func Blocking(findings []Finding) []Finding {

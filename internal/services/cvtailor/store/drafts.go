@@ -31,6 +31,10 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 	for i, id := range t.AchievementIds {
 		achievementIDs[i] = id.String()
 	}
+	swaps, err := decodeSwaps(t.SkillSwaps)
+	if err != nil {
+		return dto.Draft{}, err
+	}
 	var outcome *string
 	if t.Outcome.Valid {
 		outcome = &t.Outcome.String
@@ -39,7 +43,16 @@ func toDraft(t sqlc.TailoredCv) (dto.Draft, error) {
 		ID: t.ID.String(), JobID: t.JobID.String(), Status: t.Status, Outcome: outcome, KeptAs: t.KeptAs.String, LastError: t.LastError,
 		CreatedAt: t.CreatedAt.Time, Findings: findings, DraftDocID: t.DraftDocID.String, EditSet: t.EditSet, BaseContent: t.BaseContent,
 		BaseDocID: t.BaseDocID, BaseTabID: t.BaseTabID, AchievementIDs: achievementIDs,
+		SkillSwaps: swaps,
 	}, nil
+}
+
+func decodeSwaps(raw []byte) ([]dto.SkillSwap, error) {
+	var swaps []dto.SkillSwap
+	if err := json.Unmarshal(raw, &swaps); err != nil {
+		return nil, fmt.Errorf("decode skill swaps: %w", err)
+	}
+	return swaps, nil
 }
 
 // CreateDraft inserts a pending Draft for userID with its bullet labels;
@@ -57,11 +70,15 @@ func (s *Store) CreateDraft(ctx context.Context, userID string, in dto.DraftInpu
 	if err != nil {
 		return dto.Draft{}, apperr.Invalid("unknown achievement")
 	}
+	swaps, err := json.Marshal(in.SkillSwaps)
+	if err != nil {
+		return dto.Draft{}, fmt.Errorf("store.CreateDraft: encode skill swaps: %w", err)
+	}
 	var row sqlc.TailoredCv
 	err = s.inTx(ctx, func(q *sqlc.Queries) error {
 		var err error
 		row, err = q.InsertDraft(ctx, sqlc.InsertDraftParams{
-			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements,
+			UserID: uid, JobID: jid, BaseDocID: in.DocID, BaseTabID: in.TabID, AchievementIds: achievements, SkillSwaps: swaps,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrJobNotFound
@@ -186,8 +203,13 @@ func (s *Store) ClaimDraft(ctx context.Context) (dto.DraftClaim, error) {
 	for i, id := range row.AchievementIds {
 		ids[i] = id.String()
 	}
+	swaps, err := decodeSwaps(row.SkillSwaps)
+	if err != nil {
+		return dto.DraftClaim{}, err
+	}
 	return dto.DraftClaim{
-		ID: row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
+		SkillSwaps: swaps,
+		ID:         row.ID.String(), UserID: row.UserID.String(), JobID: row.JobID.String(),
 		DocID: row.BaseDocID, TabID: row.BaseTabID, AchievementIDs: ids,
 		Attempts: int(row.Attempts), DraftDocID: row.DraftDocID,
 		JobDescription: row.JobDescription, JobFingerprint: row.JobFingerprint,

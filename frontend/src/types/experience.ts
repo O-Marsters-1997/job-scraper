@@ -34,8 +34,31 @@ const importPositionSchema = z.object({
 	employerExists: z.boolean(),
 });
 
+const importSkillSchema = z.object({
+	name: z.string(),
+	category: z.string(),
+	exists: z.boolean(),
+});
+
 export const importPreviewSchema = z.object({
 	positions: z.array(importPositionSchema),
+	skills: z.array(importSkillSchema),
 });
 
 export type ImportPosition = z.infer<typeof importPositionSchema>;
+export type ImportSkill = z.infer<typeof importSkillSchema>;
+export type ImportPreview = z.infer<typeof importPreviewSchema>;
+
+export const bankSkillSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	category: z.string(),
+	sortOrder: z.number(),
+});
+
+export type BankSkill = z.infer<typeof bankSkillSchema>;
+
+export interface BankSkillInput {
+	name: string;
+	category: string;
+}
