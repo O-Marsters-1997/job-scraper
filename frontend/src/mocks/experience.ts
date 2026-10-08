@@ -4,6 +4,8 @@ import type {
 	BankSkill,
 	BankSkillInput,
 	ImportPosition,
+	ImportPreview,
+	ImportSkill,
 	Position,
 	PositionInput,
 } from "@/types/experience";
@@ -70,8 +72,8 @@ export function deletePosition(id: string): void {
 	experience = experience.filter((p) => p.id !== id);
 }
 
-export function previewExperienceImport(): ImportPosition[] {
-	return [
+export function previewExperienceImport(): ImportPreview {
+	const positions: ImportPosition[] = [
 		{
 			employer: "Acme Ltd",
 			title: "Senior Backend Engineer",
@@ -89,9 +91,23 @@ export function previewExperienceImport(): ImportPosition[] {
 			employerExists: false,
 		},
 	];
+	const skills: ImportSkill[] = [
+		{ name: "Go", category: "Languages", exists: false },
+		{ name: "Docker", category: "Tools", exists: false },
+	];
+	return { positions, skills };
 }
 
-export function importExperience(positions: ImportPosition[]): Position[] {
+export function importExperience(
+	positions: ImportPosition[],
+	skills: ImportSkill[],
+): Position[] {
+	for (const skill of skills) {
+		const taken = bankSkills.some(
+			(b) => b.name.toLowerCase() === skill.name.toLowerCase(),
+		);
+		if (!taken) createBankSkill({ name: skill.name, category: skill.category });
+	}
 	const created = positions.map((p): Position => {
 		const id = `position-${faker.string.uuid().slice(0, 8)}`;
 		return {

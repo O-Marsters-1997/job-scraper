@@ -1,5 +1,7 @@
 import {
 	type ImportPosition,
+	type ImportPreview,
+	type ImportSkill,
 	importPreviewSchema,
 	type Position,
 	positionSchema,
@@ -10,30 +12,29 @@ import { mocked } from "./config";
 export async function previewExperienceImport(
 	docId: string,
 	tabId: string,
-): Promise<ImportPosition[]> {
+): Promise<ImportPreview> {
 	return mocked(
 		(db) => db.previewExperienceImport(),
-		async () => {
-			const preview = await apiFetch(
+		() =>
+			apiFetch(
 				"/experience/import/preview",
 				importPreviewSchema,
 				jsonInit("POST", { docId, tabId }),
-			);
-			return preview.positions;
-		},
+			),
 	);
 }
 
 export async function importExperience(
 	positions: ImportPosition[],
+	skills: ImportSkill[],
 ): Promise<Position[]> {
 	return mocked(
-		(db) => db.importExperience(positions),
+		(db) => db.importExperience(positions, skills),
 		() =>
 			apiFetch(
 				"/experience/import",
 				positionSchema.array(),
-				jsonInit("POST", { positions }),
+				jsonInit("POST", { positions, skills }),
 			),
 	);
 }

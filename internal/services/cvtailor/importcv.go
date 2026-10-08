@@ -44,13 +44,42 @@ func (s *Service) PreviewImport(ctx context.Context, userID string, in dto.Impor
 	for i := range positions {
 		_, positions[i].EmployerExists = known[strings.ToLower(positions[i].Employer)]
 	}
-	return dto.ImportPreview{Positions: positions}, nil
+	bank, err := s.store.ListBankSkills(ctx, userID)
+	if err != nil {
+		return dto.ImportPreview{}, err
+	}
+	return dto.ImportPreview{Positions: positions, Skills: skillsFromStructure(ds, bank)}, nil
+}
+
+func skillsFromStructure(ds docparse.DocStructure, bank []dto.BankSkill) []dto.ImportSkill {
+	seen := make(map[string]struct{}, len(bank))
+	for _, b := range bank {
+		seen[normalizeText(b.Name)] = struct{}{}
+	}
+	out := []dto.ImportSkill{}
+	if ds.Skills == nil {
+		return out
+	}
+	for _, line := range ds.Skills.Lines {
+		for _, item := range line.Items {
+			name := strings.TrimSpace(item)
+			key := normalizeText(name)
+			if key == "" {
+				continue
+			}
+			_, exists := seen[key]
+			seen[key] = struct{}{}
+			out = append(out, dto.ImportSkill{Name: name, Category: strings.TrimSpace(line.Label), Exists: exists})
+		}
+	}
+	return out
 }
 
 func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.ImportInput) ([]dto.Position, error) {
-	if len(in.Positions) == 0 {
+	if len(in.Positions) == 0 && len(in.Skills) == 0 {
 		return nil, apperr.Invalid("nothing to import")
 	}
+
 	positions := make([]dto.ImportPosition, len(in.Positions))
 	for i, p := range in.Positions {
 		valid, err := validatePosition(dto.PositionInput{
@@ -65,6 +94,9 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 				positions[i].Achievements = append(positions[i].Achievements, text)
 			}
 		}
+	}
+	if err := s.importBankSkills(ctx, userID, in.Skills); err != nil {
+		return nil, err
 	}
 	fresh, touched, err := s.addToExistingRoles(ctx, userID, positions)
 	if err != nil {
@@ -90,6 +122,35 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 		}
 	}
 	return out, nil
+}
+
+func (s *Service) importBankSkills(ctx context.Context, userID string, skills []dto.ImportSkill) error {
+	if len(skills) == 0 {
+		return nil
+	}
+	bank, err := s.store.ListBankSkills(ctx, userID)
+	if err != nil {
+		return err
+	}
+	have := make(map[string]struct{}, len(bank)+len(skills))
+	for _, b := range bank {
+		have[normalizeText(b.Name)] = struct{}{}
+	}
+	for _, sk := range skills {
+		valid, err := validateBankSkill(dto.BankSkillInput{Name: sk.Name, Category: sk.Category})
+		if err != nil {
+			return err
+		}
+		key := normalizeText(valid.Name)
+		if _, ok := have[key]; ok {
+			continue
+		}
+		if _, err := s.store.CreateBankSkill(ctx, userID, valid); err != nil {
+			return err
+		}
+		have[key] = struct{}{}
+	}
+	return nil
 }
 
 func (s *Service) addToExistingRoles(ctx context.Context, userID string, positions []dto.ImportPosition) (fresh []dto.ImportPosition, touched map[string]bool, err error) {

@@ -64,7 +64,7 @@ func TestPreviewImportParsesHeadingsAndFlagsExistingEmployers(t *testing.T) {
 	want := dto.ImportPreview{Positions: []dto.ImportPosition{
 		{Employer: "Acme Ltd", Title: "Senior Engineer", StartDate: ptr("2021-01-01"), Achievements: []string{"Cut latency.", "Mentored four."}, EmployerExists: true},
 		{Employer: "Widgets Inc | sometime back then", Title: "Analyst", Achievements: []string{"Built reports."}},
-	}}
+	}, Skills: []dto.ImportSkill{}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("PreviewImport() (-want +got):\n%s", diff)
 	}
@@ -141,5 +141,63 @@ func TestImportPositionsIsIdempotentAndRejectsInvalidPositions(t *testing.T) {
 	bad := dto.ImportInput{Positions: []dto.ImportPosition{{Employer: "Acme", Title: ""}}}
 	if _, err := svc.ImportPositions(ctx, userID, bad); !apperr.IsKind(err, apperr.KindInvalid) {
 		t.Fatalf("ImportPositions() with blank title: err = %v, want an invalid error", err)
+	}
+}
+
+func TestPreviewImportProposesSkillItemsWithLineLabelAsCategory(t *testing.T) {
+	docs := cvtailortest.Docs{TabJSON: tabJSON(t,
+		head("Skills"),
+		prose("Languages: Go, Python"),
+		prose("Tools: Docker, go"),
+	)}
+	svc, st := newService(t, docs, nil)
+	if _, err := st.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: "python", Category: "Languages"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.PreviewImport(t.Context(), userID, dto.ImportPreviewInput{DocID: "d", TabID: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []dto.ImportSkill{
+		{Name: "Go", Category: "Languages"},
+		{Name: "Python", Category: "Languages", Exists: true},
+		{Name: "Docker", Category: "Tools"},
+		{Name: "go", Category: "Tools", Exists: true},
+	}
+	if diff := cmp.Diff(want, got.Skills); diff != "" {
+		t.Fatalf("PreviewImport().Skills (-want +got):\n%s", diff)
+	}
+}
+
+func TestImportPositionsCreatesOnlyNewBankSkills(t *testing.T) {
+	svc, st := newService(t, nil, nil)
+	ctx := t.Context()
+	if _, err := st.CreateBankSkill(ctx, userID, dto.BankSkillInput{Name: "Go", Category: "Languages"}); err != nil {
+		t.Fatal(err)
+	}
+
+	in := dto.ImportInput{Skills: []dto.ImportSkill{
+		{Name: "go", Category: "Languages"},
+		{Name: " Docker ", Category: "Tools"},
+		{Name: "DOCKER", Category: "Tools"},
+	}}
+	for range 2 {
+		if _, err := svc.ImportPositions(ctx, userID, in); err != nil {
+			t.Fatalf("ImportPositions() error = %v", err)
+		}
+	}
+
+	got, err := st.ListBankSkills(ctx, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, len(got))
+	for i, sk := range got {
+		names[i] = sk.Name
+	}
+	if diff := cmp.Diff([]string{"Go", "Docker"}, names); diff != "" {
+		t.Fatalf("Bank Skills after importing twice (-want +got):\n%s", diff)
 	}
 }

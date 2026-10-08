@@ -7,7 +7,7 @@ import {
 	useImportExperience,
 	usePreviewExperienceImport,
 } from "../../hooks/useExperienceImport";
-import type { ImportPosition } from "../../types/experience";
+import type { ImportPosition, ImportSkill } from "../../types/experience";
 
 export function ImportFromCV(props: { onDone: () => void }) {
 	const cvs = useCVTemplates();
@@ -15,6 +15,8 @@ export function ImportFromCV(props: { onDone: () => void }) {
 	const commit = useImportExperience();
 	const [selected, setSelected] = createSignal("");
 	const [draft, setDraft] = createSignal<ImportPosition[] | null>(null);
+	const [skills, setSkills] = createSignal<ImportSkill[]>([]);
+	const [skipped, setSkipped] = createSignal<ReadonlySet<number>>(new Set());
 
 	const tabs = createMemo(() => (cvs.data ?? []).filter((cv) => cv.Visible));
 
@@ -23,7 +25,15 @@ export function ImportFromCV(props: { onDone: () => void }) {
 		if (!cv) return;
 		preview.mutate(
 			{ docId: cv.DocID, tabId: cv.TabID },
-			{ onSuccess: (positions) => setDraft(positions) },
+			{
+				onSuccess: (result) => {
+					setSkills(result.skills);
+					setSkipped(
+						new Set(result.skills.flatMap((sk, i) => (sk.exists ? [i] : []))),
+					);
+					setDraft(result.positions);
+				},
+			},
 		);
 	};
 
@@ -36,10 +46,22 @@ export function ImportFromCV(props: { onDone: () => void }) {
 	const complete = () =>
 		(draft() ?? []).every((p) => p.employer.trim() && p.title.trim());
 
+	const toggleSkill = (i: number) =>
+		setSkipped((prev) => {
+			const next = new Set(prev);
+			if (!next.delete(i)) next.add(i);
+			return next;
+		});
+
+	const keptSkills = () => skills().filter((_, i) => !skipped().has(i));
+
 	const confirm = () => {
-		const positions = draft();
-		if (!positions?.length) return;
-		commit.mutate(positions, { onSuccess: props.onDone });
+		const positions = draft() ?? [];
+		if (!positions.length && !keptSkills().length) return;
+		commit.mutate(
+			{ positions, skills: keptSkills() },
+			{ onSuccess: props.onDone },
+		);
 	};
 
 	return (
@@ -90,6 +112,36 @@ export function ImportFromCV(props: { onDone: () => void }) {
 						</p>
 						<Show when={positions().length === 0}>
 							<p class="text-sm text-muted">No positions found in that tab.</p>
+						</Show>
+						<Show when={skills().length > 0}>
+							<div
+								class="flex flex-col gap-2 rounded-lg border border-border p-3"
+								data-testid="import-skills"
+							>
+								<p class="text-sm font-medium text-foreground">Skills</p>
+								<ul class="flex flex-col gap-1">
+									<For each={skills()}>
+										{(sk, i) => (
+											<li>
+												<label class="flex items-center gap-2 text-sm text-foreground">
+													<input
+														type="checkbox"
+														checked={!skipped().has(i())}
+														onChange={() => toggleSkill(i())}
+													/>
+													<span>{sk.name}</span>
+													<Show when={sk.category}>
+														<span class="text-muted">{sk.category}</span>
+													</Show>
+													<Show when={sk.exists}>
+														<span class="text-muted">already in your Bank</span>
+													</Show>
+												</label>
+											</li>
+										)}
+									</For>
+								</ul>
+							</div>
 						</Show>
 						<For each={positions()}>
 							{(p, i) => (
@@ -169,7 +221,9 @@ export function ImportFromCV(props: { onDone: () => void }) {
 							<Button
 								onClick={confirm}
 								disabled={
-									positions().length === 0 || !complete() || commit.isPending
+									(positions().length === 0 && keptSkills().length === 0) ||
+									!complete() ||
+									commit.isPending
 								}
 							>
 								Confirm import
