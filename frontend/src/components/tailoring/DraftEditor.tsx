@@ -31,6 +31,7 @@ import { PageMeter, SaveIndicator } from "./DraftMeters";
 import { KeepControls, KeepNotices } from "./KeepFlow";
 import { MarginCards } from "./MarginCards";
 import { PrintPreview } from "./PrintPreview";
+import { SkillsPanel } from "./SkillsPanel";
 import { WandMenu } from "./WandMenu";
 
 const NO_METRICS: PageMetrics = {
@@ -85,6 +86,7 @@ export function DraftEditor(props: {
 	const [showCounts, setShowCounts] = createSignal(true);
 	const [showChanges, setShowChanges] = createSignal(false);
 	const [preview, setPreview] = createSignal(false);
+	const [skillsOpen, setSkillsOpen] = createSignal(false);
 	const [stage, setStage] = createSignal<HTMLDivElement>();
 	const [askSlot, setAskSlot] = createSignal<string>();
 	const [mainWidth, setMainWidth] = createSignal(0);
@@ -183,6 +185,11 @@ export function DraftEditor(props: {
 		onInput: ed.setText,
 		onFocus: activate,
 		onBlur: () => void ed.flush(),
+		get onEditSkills() {
+			return editable() && props.draft.skillsEditable
+				? () => void setSkillsOpen(true)
+				: undefined;
+		},
 	};
 
 	createEffect(() => {
@@ -420,6 +427,14 @@ export function DraftEditor(props: {
 			<div class="sr-only" aria-live="polite">
 				{suggestions.announcement()}
 			</div>
+			<Show when={props.draft.skillsEditable}>
+				<SkillsPanel
+					draft={props.draft}
+					open={skillsOpen()}
+					onClose={() => setSkillsOpen(false)}
+					flush={ed.flush}
+				/>
+			</Show>
 			<Show when={preview()}>
 				<PrintPreview
 					draftId={props.draft.id}

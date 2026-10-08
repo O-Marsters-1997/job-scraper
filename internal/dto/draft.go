@@ -73,6 +73,8 @@ type Draft struct {
 	Content     *DraftContent    `json:"content"`
 	Base        *DraftContent    `json:"base"`
 	BaseContent json.RawMessage  `json:"-"`
+	// SkillsEditable is false for a Draft made before Skill Lines.
+	SkillsEditable bool `json:"skillsEditable"`
 
 	BaseDocID      string      `json:"-"`
 	BaseTabID      string      `json:"-"`
@@ -191,10 +193,12 @@ type SlotEdit struct {
 	Text   string `json:"text"`
 }
 
-// DraftSlotsInput carries the bullets the User changed on a Draft.
+// DraftSlotsInput carries the bullets and, when Skills is set, the full
+// grouped Skills the User changed on a Draft.
 type DraftSlotsInput struct {
-	ID    string     `json:"-" path:"id"`
-	Slots []SlotEdit `json:"slots"`
+	ID     string       `json:"-" path:"id"`
+	Slots  []SlotEdit   `json:"slots"`
+	Skills []SkillGroup `json:"skills"`
 }
 
 // DraftLayout is a Draft Doc's single-column page geometry and styled

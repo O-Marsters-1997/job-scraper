@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -46,9 +47,16 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 	if err != nil {
 		return dto.Draft{}, err
 	}
+	edits, err = basePlan.overlaySkills(edits, in.Skills)
+	if err != nil {
+		return dto.Draft{}, err
+	}
 	docEdits := cvedit.EditSet{Positions: edits.Positions}
 	if edits.Profile != before {
 		docEdits.Profile = edits.Profile
+	}
+	if len(in.Skills) > 0 && !skillsEqual(edits.Skills, cvedit.SkillGroups(docPlan.structure.Skills)) {
+		docEdits.Skills = edits.Skills
 	}
 	if err := s.applyEdits(ctx, userID, draft.DraftDocID, docPlan, docEdits); err != nil {
 		return dto.Draft{}, err
@@ -63,6 +71,9 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		return dto.Draft{}, fmt.Errorf("marshal edit set: %w", err)
 	}
 	checked := basePlan.draft(edits, basePages, draftPages)
+	if len(in.Skills) > 0 {
+		checked.BaseSkills = cvedit.CheckLines(edits.Skills)
+	}
 	checked.Parse = parseInput(ctx, draftPDF, basePlan.structure.Headings)
 	findings := toDraftFindings(checks.Run(checked))
 	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings); err != nil {
@@ -110,4 +121,51 @@ func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditS
 		return edits, apperr.Invalid("unknown slot")
 	}
 	return edits, nil
+}
+
+func (pl plan) overlaySkills(edits cvedit.EditSet, groups []dto.SkillGroup) (cvedit.EditSet, error) {
+	if len(groups) == 0 {
+		return edits, nil
+	}
+	if pl.structure.Skills == nil || edits.LegacySkills {
+		return edits, apperr.Invalid("this draft's skills cannot be edited")
+	}
+	base := cvedit.SkillGroups(pl.structure.Skills)
+	if len(groups) != len(base) {
+		return edits, apperr.Invalid("skills must keep the CV's skill lines")
+	}
+	sourced := slices.Concat(cvedit.FlatSkills(base), pl.bankSkills)
+	var seen []string
+	out := make([]cvedit.SkillGroup, len(groups))
+	for i, g := range groups {
+		if strings.TrimSpace(g.Label) != base[i].Label {
+			return edits, apperr.Invalid("skills must keep the CV's skill line labels")
+		}
+		if len(g.Items) == 0 {
+			return edits, apperr.Invalid("a skill line cannot be empty")
+		}
+		items := make([]string, len(g.Items))
+		for j, it := range g.Items {
+			it = strings.TrimSpace(it)
+			switch {
+			case it == "" || strings.ContainsAny(it, "\r\n"):
+				return edits, apperr.Invalid("a skill must be one non-empty line")
+			case hasItem(sourced, it) < 0:
+				return edits, apperr.Invalid(it + " is neither in the CV's skills nor a Bank Skill")
+			case hasItem(seen, it) >= 0:
+				return edits, apperr.Invalid(it + " appears twice in the skills")
+			}
+			seen = append(seen, it)
+			items[j] = it
+		}
+		out[i] = cvedit.SkillGroup{Label: base[i].Label, Items: items}
+	}
+	edits.Skills = out
+	return edits, nil
+}
+
+func skillsEqual(a, b []cvedit.SkillGroup) bool {
+	return slices.EqualFunc(a, b, func(x, y cvedit.SkillGroup) bool {
+		return x.Label == y.Label && slices.Equal(x.Items, y.Items)
+	})
 }

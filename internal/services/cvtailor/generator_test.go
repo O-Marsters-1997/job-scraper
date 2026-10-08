@@ -397,6 +397,9 @@ func TestGeneratorRunTick(t *testing.T) {
 		if diff := cmp.Diff([]string{"SQL", "Go"}, d.Content.Skills); diff != "" {
 			t.Errorf("content skills mismatch (-want +got):\n%s", diff)
 		}
+		if d.SkillsEditable {
+			t.Error("GetDraft(legacy).SkillsEditable = true, want false")
+		}
 	})
 
 	t.Run("shortens once when the draft runs over a page", func(t *testing.T) {

@@ -188,3 +188,16 @@ export function retarget(
 		p.bankSkillId === bankSkillId ? { ...p, replaces } : p,
 	);
 }
+
+export function lineWithIds(current: string[], ids: string[]): string[] {
+	const keep = current.filter((item) => ids.includes(item));
+	return [...keep, ...ids.filter((id) => !current.includes(id))];
+}
+
+export function moveItem(items: string[], from: number, to: number): string[] {
+	if (to < 0 || to >= items.length || from === to) return items;
+	const next = [...items];
+	const [moved] = next.splice(from, 1);
+	if (moved !== undefined) next.splice(to, 0, moved);
+	return next;
+}
