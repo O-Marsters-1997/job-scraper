@@ -53,8 +53,10 @@ func (s *Service) PreviewImport(ctx context.Context, userID string, in dto.Impor
 
 func skillsFromStructure(ds docparse.DocStructure, bank []dto.BankSkill) []dto.ImportSkill {
 	seen := make(map[string]struct{}, len(bank))
+	inBank := make(map[string]bool, len(bank))
 	for _, b := range bank {
 		seen[normalizeText(b.Name)] = struct{}{}
+		inBank[normalizeText(b.Name)] = true
 	}
 	out := []dto.ImportSkill{}
 	if ds.Skills == nil {
@@ -68,6 +70,9 @@ func skillsFromStructure(ds docparse.DocStructure, bank []dto.BankSkill) []dto.I
 				continue
 			}
 			_, exists := seen[key]
+			if exists && !inBank[key] {
+				continue
+			}
 			seen[key] = struct{}{}
 			out = append(out, dto.ImportSkill{Name: name, Category: strings.TrimSpace(line.Label), Exists: exists})
 		}
@@ -95,7 +100,15 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 			}
 		}
 	}
-	if err := s.importBankSkills(ctx, userID, in.Skills); err != nil {
+	skills := make([]dto.BankSkillInput, len(in.Skills))
+	for i, sk := range in.Skills {
+		valid, err := validateBankSkill(dto.BankSkillInput{Name: sk.Name, Category: sk.Category})
+		if err != nil {
+			return nil, err
+		}
+		skills[i] = valid
+	}
+	if err := s.importBankSkills(ctx, userID, skills); err != nil {
 		return nil, err
 	}
 	fresh, touched, err := s.addToExistingRoles(ctx, userID, positions)
@@ -124,7 +137,7 @@ func (s *Service) ImportPositions(ctx context.Context, userID string, in dto.Imp
 	return out, nil
 }
 
-func (s *Service) importBankSkills(ctx context.Context, userID string, skills []dto.ImportSkill) error {
+func (s *Service) importBankSkills(ctx context.Context, userID string, skills []dto.BankSkillInput) error {
 	if len(skills) == 0 {
 		return nil
 	}
@@ -137,15 +150,11 @@ func (s *Service) importBankSkills(ctx context.Context, userID string, skills []
 		have[normalizeText(b.Name)] = struct{}{}
 	}
 	for _, sk := range skills {
-		valid, err := validateBankSkill(dto.BankSkillInput{Name: sk.Name, Category: sk.Category})
-		if err != nil {
-			return err
-		}
-		key := normalizeText(valid.Name)
+		key := normalizeText(sk.Name)
 		if _, ok := have[key]; ok {
 			continue
 		}
-		if _, err := s.store.CreateBankSkill(ctx, userID, valid); err != nil {
+		if _, err := s.store.CreateBankSkill(ctx, userID, sk); err != nil {
 			return err
 		}
 		have[key] = struct{}{}

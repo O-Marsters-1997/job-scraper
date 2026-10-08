@@ -148,7 +148,7 @@ func TestPreviewImportProposesSkillItemsWithLineLabelAsCategory(t *testing.T) {
 	docs := cvtailortest.Docs{TabJSON: tabJSON(t,
 		head("Skills"),
 		prose("Languages: Go, Python"),
-		prose("Tools: Docker, go"),
+		prose("Tools: Docker, go, docker"),
 	)}
 	svc, st := newService(t, docs, nil)
 	if _, err := st.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: "python", Category: "Languages"}); err != nil {
@@ -164,7 +164,6 @@ func TestPreviewImportProposesSkillItemsWithLineLabelAsCategory(t *testing.T) {
 		{Name: "Go", Category: "Languages"},
 		{Name: "Python", Category: "Languages", Exists: true},
 		{Name: "Docker", Category: "Tools"},
-		{Name: "go", Category: "Tools", Exists: true},
 	}
 	if diff := cmp.Diff(want, got.Skills); diff != "" {
 		t.Fatalf("PreviewImport().Skills (-want +got):\n%s", diff)

@@ -102,7 +102,8 @@ export function importExperience(
 	positions: ImportPosition[],
 	skills: ImportSkill[],
 ): Position[] {
-	for (const skill of skills) {
+	for (const raw of skills) {
+		const skill = { ...raw, name: raw.name.trim() };
 		const taken = bankSkills.some(
 			(b) => b.name.toLowerCase() === skill.name.toLowerCase(),
 		);
