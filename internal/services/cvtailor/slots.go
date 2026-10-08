@@ -147,12 +147,15 @@ func (pl plan) overlaySkills(edits cvedit.EditSet, groups []dto.SkillGroup) (cve
 		items := make([]string, len(g.Items))
 		for j, it := range g.Items {
 			it = strings.TrimSpace(it)
-			switch {
-			case it == "" || strings.ContainsAny(it, "\r\n"):
+			if it == "" || strings.ContainsAny(it, "\r\n") {
 				return edits, apperr.Invalid("a skill must be one non-empty line")
-			case hasItem(sourced, it) < 0:
+			}
+			at := hasItem(sourced, it)
+			if at < 0 {
 				return edits, apperr.Invalid(it + " is neither in the CV's skills nor a Bank Skill")
-			case hasItem(seen, it) >= 0:
+			}
+			it = sourced[at]
+			if hasItem(seen, it) >= 0 {
 				return edits, apperr.Invalid(it + " appears twice in the skills")
 			}
 			seen = append(seen, it)

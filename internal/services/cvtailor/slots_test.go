@@ -234,6 +234,19 @@ func TestSaveDraftSlotsSkills(t *testing.T) {
 		}
 	})
 
+	t.Run("stores a skill with the CV's or Bank's own casing", func(t *testing.T) {
+		_, id, svc := ready(t)
+
+		got, err := save(t, svc, id, dto.SkillGroup{Label: "Languages", Items: []string{"rust", "GO"}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots(skills) error = %v", err)
+		}
+
+		if diff := cmp.Diff([]string{"Rust", "Go"}, got.Content.SkillGroups[0].Items); diff != "" {
+			t.Errorf("items mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("rejects skills on a Draft stored with flat skills", func(t *testing.T) {
 		e, id, svc := ready(t)
 		legacy := json.RawMessage(`{"positions":[],"skills":["Go","SQL"]}`)

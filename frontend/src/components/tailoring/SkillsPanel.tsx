@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Index, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { MultiCombobox } from "@/components/MultiCombobox";
 import { Button } from "@/components/ui/button";
@@ -49,20 +49,20 @@ function SkillsForm(props: {
 	};
 	return (
 		<div class="flex flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
-			<For each={groups()}>
+			<Index each={groups()}>
 				{(group, i) => (
 					<section class="space-y-2">
 						<MultiCombobox
-							label={lineName(group)}
+							label={lineName(group())}
 							hint="Your CV's skills and your Bank Skills."
-							options={optionsFor(i())}
-							value={group.items}
-							onChange={(ids) => setItems(i(), lineWithIds(group.items, ids))}
+							options={optionsFor(i)}
+							value={group().items}
+							onChange={(ids) => setItems(i, lineWithIds(group().items, ids))}
 							placeholder="Add a skill…"
 							chipClass="border-border bg-surface-muted text-foreground"
 						/>
 						<ol class="flex flex-col gap-1">
-							<For each={group.items}>
+							<For each={group().items}>
 								{(item, j) => (
 									<li class="flex items-center gap-1 text-sm text-foreground">
 										<span class="flex-1">{item}</span>
@@ -72,7 +72,7 @@ function SkillsForm(props: {
 											aria-label={`Move ${item} up`}
 											disabled={j() === 0}
 											onClick={() =>
-												setItems(i(), moveItem(group.items, j(), j() - 1))
+												setItems(i, moveItem(group().items, j(), j() - 1))
 											}
 										>
 											<Icon name="chevronUp" size={14} />
@@ -81,9 +81,9 @@ function SkillsForm(props: {
 											variant="ghost"
 											size="sm"
 											aria-label={`Move ${item} down`}
-											disabled={j() === group.items.length - 1}
+											disabled={j() === group().items.length - 1}
 											onClick={() =>
-												setItems(i(), moveItem(group.items, j(), j() + 1))
+												setItems(i, moveItem(group().items, j(), j() + 1))
 											}
 										>
 											<Icon name="chevronDown" size={14} />
@@ -94,7 +94,7 @@ function SkillsForm(props: {
 						</ol>
 					</section>
 				)}
-			</For>
+			</Index>
 			<Show when={save.isError}>
 				<p role="alert" class="text-sm text-destructive-strong">
 					{save.error?.message ?? "Saving the skills failed."}
