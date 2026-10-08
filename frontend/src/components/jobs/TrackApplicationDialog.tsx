@@ -13,9 +13,11 @@ import { Label } from "@/components/ui/label";
 import { useApplicationStatuses } from "@/hooks/useApplicationStatuses";
 import {
 	useCreateApplication,
+	useSetChase,
 	useUpdateApplication,
 } from "@/hooks/useApplications";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
+import { prefillChaseDate } from "@/lib/chase";
 import type {
 	Application,
 	ApplicationWithDetails,
@@ -89,6 +91,7 @@ function TrackApplicationForm(props: {
 	const statusesQuery = useApplicationStatuses();
 	const createMutation = useCreateApplication();
 	const updateMutation = useUpdateApplication();
+	const setChase = useSetChase();
 
 	const existingApp = untrack(() => props.existingApp);
 	const isEdit = !!existingApp;
@@ -97,20 +100,28 @@ function TrackApplicationForm(props: {
 	const [appliedAt, setAppliedAt] = createSignal(existingApp?.appliedAt ?? "");
 	const [salary, setSalary] = createSignal(existingApp?.salaryInfo ?? "");
 
+	const [offer, setOffer] = createSignal<{
+		applicationId: string;
+		date: string;
+	} | null>(null);
+
 	const form = useFormSubmit(async () => {
 		const jobId = props.job?.ID;
 		if (!jobId) return;
+		let applicationId: string;
 		if (!isEdit) {
-			await createMutation.mutateAsync({
+			const created = await createMutation.mutateAsync({
 				job_id: jobId,
 				status_id: statusId() || undefined,
 				notes: notes(),
 				applied_at: appliedAt() || null,
 				salary_info: salary(),
 			});
+			applicationId = created.ID;
 		} else {
 			const appId = existingApp?.id;
 			if (!appId) return;
+			applicationId = appId;
 			await updateMutation.mutateAsync({
 				id: appId,
 				data: {
@@ -121,12 +132,32 @@ function TrackApplicationForm(props: {
 				},
 			});
 		}
+		const statusChanged = statusId() !== (existingApp?.statusId ?? "");
+		const date = statusChanged
+			? prefillChaseDate(
+					statusesQuery.data?.find((s) => s.ID === statusId())?.ReplyWindowDays,
+					new Date(),
+				)
+			: "";
+		if (date) {
+			setOffer({ applicationId, date });
+			return;
+		}
 		props.onClose();
 	});
 	const pending = () =>
 		form.pending() || createMutation.isPending || updateMutation.isPending;
 
-	return (
+	const saveChase = () => {
+		const current = offer();
+		if (!current?.date) return;
+		setChase.mutate(
+			{ id: current.applicationId, chaseBy: current.date },
+			{ onSuccess: props.onClose },
+		);
+	};
+
+	const trackForm = () => (
 		<form onSubmit={form.submit} class="flex flex-col gap-4">
 			<FormFeedback error={form.error()} />
 			<div class="flex flex-col gap-4">
@@ -195,5 +226,40 @@ function TrackApplicationForm(props: {
 				</Button>
 			</DialogFooter>
 		</form>
+	);
+
+	return (
+		<Show when={offer()} fallback={trackForm()}>
+			{(current) => (
+				<div class="flex flex-col gap-4">
+					<FormFeedback
+						error={
+							setChase.isError ? "Couldn't save the chase. Try again." : null
+						}
+					/>
+					<p class="text-sm text-foreground">Set a chase?</p>
+					<Input
+						type="date"
+						aria-label="Chase by"
+						value={current().date}
+						onInput={(e) =>
+							setOffer({ ...current(), date: e.currentTarget.value })
+						}
+					/>
+					<DialogFooter class="border-t border-border pt-4">
+						<Button type="button" variant="outline" onClick={props.onClose}>
+							No thanks
+						</Button>
+						<Button
+							type="button"
+							disabled={!current().date || setChase.isPending}
+							onClick={saveChase}
+						>
+							Set chase
+						</Button>
+					</DialogFooter>
+				</div>
+			)}
+		</Show>
 	);
 }

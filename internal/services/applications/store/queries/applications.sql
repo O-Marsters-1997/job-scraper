@@ -25,7 +25,8 @@ ORDER BY
 
 -- name: UpdateApplication :one
 UPDATE applications
-SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW()
+SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
+    chase_by = CASE WHEN status_id IS DISTINCT FROM $3 THEN NULL ELSE chase_by END
 WHERE id = $1 AND user_id = $2
 RETURNING *;
 

@@ -57,7 +57,11 @@ export function ApplicationCard(props: {
 								</p>
 							)}
 						</Show>
-						<ChaseRow applicationId={a().ID} chaseBy={a().ChaseBy} />
+						<ChaseRow
+							applicationId={a().ID}
+							statusId={a().StatusID}
+							chaseBy={a().ChaseBy}
+						/>
 						<div class="pt-0.5">
 							<Button
 								variant="outline"
