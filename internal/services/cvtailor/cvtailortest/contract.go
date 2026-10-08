@@ -28,6 +28,7 @@ type Fixture struct {
 func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 	t.Helper()
 	t.Run("positions", func(t *testing.T) { runPositionContract(t, newStore) })
+	t.Run("bank skills", func(t *testing.T) { runBankSkillContract(t, newStore) })
 	t.Run("heading mappings", func(t *testing.T) { runHeadingMappingContract(t, newStore) })
 	t.Run("drafts", func(t *testing.T) { runDraftContract(t, newStore) })
 }

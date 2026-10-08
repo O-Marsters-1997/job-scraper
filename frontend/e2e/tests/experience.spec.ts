@@ -20,4 +20,17 @@ test.describe("Experience", () => {
 		await experiencePage.deletePosition(employer);
 		await expect(card).toHaveCount(0);
 	});
+
+	test("adds a Bank Skill under its category, then deletes it", async ({
+		experiencePage,
+	}) => {
+		const name = `Zig ${Date.now()}`;
+
+		await experiencePage.addBankSkill(name, "Languages");
+		const skill = experiencePage.bankSkills.filter({ hasText: name });
+		await expect(skill).toHaveCount(1);
+
+		await experiencePage.deleteBankSkill(name);
+		await expect(skill).toHaveCount(0);
+	});
 });

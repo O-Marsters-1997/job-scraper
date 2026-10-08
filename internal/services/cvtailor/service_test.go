@@ -58,6 +58,14 @@ func TestCreateAchievementRejectsBlankText(t *testing.T) {
 	}
 }
 
+func TestBankSkillRejectsBlankName(t *testing.T) {
+	svc, _ := newService(t, nil, nil)
+	_, err := svc.CreateBankSkill(t.Context(), userID, dto.BankSkillInput{Name: "  ", Category: "Languages"})
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Fatalf("CreateBankSkill() err = %v, want an invalid error", err)
+	}
+}
+
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	svc, _ := newService(t, nil, nil)
 	_, err := svc.ReorderPositions(t.Context(), userID, dto.ReorderInput{IDs: []string{"a", "a"}})

@@ -36,6 +36,11 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /experience/positions/{id}/achievements/order",
 		"PATCH /experience/achievements/{id}",
 		"DELETE /experience/achievements/{id}",
+		"GET /experience/skills",
+		"POST /experience/skills",
+		"PUT /experience/skills/order",
+		"PATCH /experience/skills/{id}",
+		"DELETE /experience/skills/{id}",
 		"POST /experience/import/preview",
 		"POST /experience/import",
 		"GET /tailoring/cvs/{docId}/{tabId}/headings",
@@ -57,6 +62,9 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PATCH /experience/positions/{id}",
 		"POST /experience/positions/{id}/achievements",
 		"PATCH /experience/achievements/{id}",
+		"POST /experience/skills",
+		"PUT /experience/skills/order",
+		"PATCH /experience/skills/{id}",
 		"POST /experience/import/preview",
 		"POST /experience/import",
 		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
@@ -66,7 +74,24 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	handlerstest.RejectsBadPathID(t, r,
 		"DELETE /experience/positions/{id}",
 		"DELETE /experience/achievements/{id}",
+		"DELETE /experience/skills/{id}",
 	)
+}
+
+func TestBankSkillsJourney(t *testing.T) {
+	r := newRouter(cvtailor.Deps{})
+
+	sk := handlerstest.Do[dto.BankSkill](t, r, http.StatusCreated, "POST /experience/skills", `{"name":" Go ","category":"Languages"}`)
+	if sk.Name != "Go" {
+		t.Fatalf("POST /experience/skills name = %q, want trimmed Go", sk.Name)
+	}
+	handlerstest.Do[dto.BankSkill](t, r, http.StatusOK, "PATCH /experience/skills/"+sk.ID, `{"name":"Golang","category":"Languages"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PUT /experience/skills/order", `{"ids":["`+sk.ID+`"]}`)
+	got := handlerstest.Do[[]dto.BankSkill](t, r, http.StatusOK, "GET /experience/skills", "")
+	if len(got) != 1 || got[0].Name != "Golang" {
+		t.Fatalf("GET /experience/skills = %+v, want the renamed skill", got)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/skills/"+sk.ID, "")
 }
 
 func TestExperienceJourney(t *testing.T) {
