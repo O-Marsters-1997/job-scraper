@@ -232,6 +232,11 @@ function TrackApplicationForm(props: {
 		<Show when={offer()} fallback={trackForm()}>
 			{(current) => (
 				<div class="flex flex-col gap-4">
+					<FormFeedback
+						error={
+							setChase.isError ? "Couldn't save the chase. Try again." : null
+						}
+					/>
 					<p class="text-sm text-foreground">Set a chase?</p>
 					<Input
 						type="date"
