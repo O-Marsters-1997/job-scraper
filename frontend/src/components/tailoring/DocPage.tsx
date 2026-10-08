@@ -55,6 +55,7 @@ export type PageEditor = {
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
+	onEditSkills?: (() => void) | undefined;
 };
 
 const ALIGN: Record<string, JSX.CSSProperties["text-align"]> = {
@@ -292,6 +293,8 @@ function Block(props: {
 	};
 	const editor = () =>
 		props.block.slotId && !props.block.section ? props.editor : undefined;
+	const onEditSkills = () =>
+		props.block.section === "skills" ? props.editor?.onEditSkills : undefined;
 	return (
 		<div
 			data-slot-id={props.block.slotId || undefined}
@@ -300,6 +303,17 @@ function Block(props: {
 			class="relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]"
 			style={blockStyle(props.block, lead(), props.draw, spacer())}
 		>
+			<Show when={onEditSkills()}>
+				{(open) => (
+					<button
+						type="button"
+						aria-label="Edit skills"
+						title="Edit skills"
+						class="absolute inset-0 z-10 cursor-pointer rounded-sm hover:bg-accent-subtle/60 focus-visible:outline-2 focus-visible:outline-primary"
+						onClick={() => open()()}
+					/>
+				)}
+			</Show>
 			<Show when={editor()}>
 				{(ed) => (
 					<>

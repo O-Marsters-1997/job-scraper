@@ -17,6 +17,7 @@ import {
 	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
+	type SkillGroup,
 	type SkillSuggestions,
 	type SlotEdit,
 	type SuggestDone,
@@ -183,14 +184,15 @@ export async function discardDraft(id: string): Promise<Draft> {
 export async function saveDraftSlots(
 	id: string,
 	slots: SlotEdit[],
+	skills?: SkillGroup[],
 ): Promise<Draft> {
 	return mocked(
-		(db) => db.saveDraftSlots(id, slots),
+		(db) => db.saveDraftSlots(id, slots, skills),
 		() =>
 			apiFetch(
 				`/tailoring/drafts/${id}/slots`,
 				draftSchema,
-				jsonInit("PUT", { slots }),
+				jsonInit("PUT", { slots, skills }),
 			),
 	);
 }

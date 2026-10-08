@@ -17,7 +17,7 @@ import {
 	saveHeadings,
 } from "../api/tailoring";
 import { isSettled } from "../lib/tailoring";
-import type { HeadingMapping, SlotEdit } from "../types/tailoring";
+import type { HeadingMapping, SkillGroup, SlotEdit } from "../types/tailoring";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export type CVRef = { docId: string; tabId: string };
@@ -141,6 +141,13 @@ export function useSaveDraftSlots(id: Accessor<string>) {
 	return useInvalidatingMutation(
 		(slots: SlotEdit[]) => saveDraftSlots(id(), slots),
 		() => [keys.tailoring.draft(id())],
+	);
+}
+
+export function useSaveDraftSkills(id: Accessor<string>) {
+	return useInvalidatingMutation(
+		(skills: SkillGroup[]) => saveDraftSlots(id(), [], skills),
+		() => [keys.tailoring.draft(id()), keys.tailoring.draftLayout(id())],
 	);
 }
 

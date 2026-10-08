@@ -10,6 +10,8 @@ import {
 	canExplain,
 	isSettled,
 	keptDraft,
+	lineWithIds,
+	moveItem,
 	moveSuggestion,
 	orderSuggestions,
 	placeUnplaced,
@@ -215,4 +217,25 @@ assert.equal(
 	retarget(initial, "r", "Go")[0]?.replaces,
 	"Go",
 	"the replaced item can be changed",
+);
+
+assert.deepEqual(
+	lineWithIds(["Go", "SQL"], ["SQL", "Rust", "Go"]),
+	["Go", "SQL", "Rust"],
+	"a line keeps its order and appends what was added",
+);
+assert.deepEqual(
+	lineWithIds(["Go", "SQL"], ["Go"]),
+	["Go"],
+	"a removed item leaves the line",
+);
+assert.deepEqual(
+	moveItem(["Go", "SQL", "Rust"], 2, 0),
+	["Rust", "Go", "SQL"],
+	"an item moves up",
+);
+assert.deepEqual(
+	moveItem(["Go", "SQL"], 0, -1),
+	["Go", "SQL"],
+	"a move off the end is ignored",
 );

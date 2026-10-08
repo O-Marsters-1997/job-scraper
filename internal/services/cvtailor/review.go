@@ -38,6 +38,7 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	draft.Provenance = provenance(edits, positions)
 	content := editedContent(edits)
 	draft.Content = &content
+	draft.SkillsEditable = !edits.LegacySkills && len(content.SkillGroups) > 0
 	if len(draft.BaseContent) == 0 {
 		return draft, nil
 	}
@@ -52,6 +53,7 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 	}
 	if len(content.Skills) == 0 {
 		content.Skills, content.SkillGroups = draft.Base.Skills, draft.Base.SkillGroups
+		draft.SkillsEditable = !edits.LegacySkills && len(content.SkillGroups) > 0
 	}
 	return draft, nil
 }

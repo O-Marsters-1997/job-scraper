@@ -1,6 +1,7 @@
 package cvtailor_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"slices"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers/handlerstest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
 )
@@ -191,4 +193,92 @@ func TestSaveDraftSlotsRoute(t *testing.T) {
 		t.Errorf("PUT slots Draft id = %q, want the path id %q, not the body's", got.ID, id)
 	}
 	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "PUT /tailoring/drafts/missing/slots", `{"slots":[]}`)
+}
+
+func TestSaveDraftSlotsSkills(t *testing.T) {
+	skillsTab := cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}
+	ready := func(t *testing.T) (draftEnv, string, *cvtailor.Service) {
+		t.Helper()
+		e := newDraftEnv(t)
+		e.bankSkill(t, "Rust")
+		res := e.bulletResult("Cut p99 latency", 0.25)
+		res.Edits.Skills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "SQL"}}}
+		id := e.queue(t)
+		e.run(t, tick{docs: skillsTab, editor: cvtailortest.Editing(res)})
+		return e, id, cvtailor.NewService(e.store, skillsTab, nil, e.drive)
+	}
+	save := func(t *testing.T, svc *cvtailor.Service, id string, groups ...dto.SkillGroup) (dto.Draft, error) {
+		t.Helper()
+		return svc.SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Skills: groups})
+	}
+
+	t.Run("saves a swap and reorder with the label intact", func(t *testing.T) {
+		e, id, svc := ready(t)
+
+		got, err := save(t, svc, id, dto.SkillGroup{Label: "Languages", Items: []string{"Rust", "Go"}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots(skills) error = %v", err)
+		}
+
+		if diff := cmp.Diff([]dto.SkillGroup{{Label: "Languages", Items: []string{"Rust", "Go"}}}, got.Content.SkillGroups); diff != "" {
+			t.Errorf("skill groups mismatch (-want +got):\n%s", diff)
+		}
+		if inserted := insertedText(t, e.drive); !slices.Contains(inserted, "Rust, Go") {
+			t.Errorf("inserted = %q, want the items \"Rust, Go\" written", inserted)
+		}
+		if blocks := findingChecks(got.Findings, "block"); len(blocks) != 0 {
+			t.Errorf("block findings = %v, want none", blocks)
+		}
+		if !got.SkillsEditable {
+			t.Error("SaveDraftSlots().SkillsEditable = false, want true")
+		}
+	})
+
+	t.Run("stores a skill with the CV's or Bank's own casing", func(t *testing.T) {
+		_, id, svc := ready(t)
+
+		got, err := save(t, svc, id, dto.SkillGroup{Label: "Languages", Items: []string{"rust", "GO"}})
+		if err != nil {
+			t.Fatalf("SaveDraftSlots(skills) error = %v", err)
+		}
+
+		if diff := cmp.Diff([]string{"Rust", "Go"}, got.Content.SkillGroups[0].Items); diff != "" {
+			t.Errorf("items mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("rejects skills on a Draft stored with flat skills", func(t *testing.T) {
+		e, id, svc := ready(t)
+		legacy := json.RawMessage(`{"positions":[],"skills":["Go","SQL"]}`)
+		if err := e.store.SetDraftEdits(t.Context(), userID, id, legacy, nil); err != nil {
+			t.Fatalf("SetDraftEdits() error = %v", err)
+		}
+
+		_, err := save(t, svc, id, dto.SkillGroup{Label: "Languages", Items: []string{"Rust", "Go"}})
+
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("SaveDraftSlots(skills on legacy) error = %v, want an invalid error", err)
+		}
+	})
+
+	rejected := []struct {
+		name   string
+		groups []dto.SkillGroup
+	}{
+		{"an item that is neither a base item nor a Bank Skill", []dto.SkillGroup{{Label: "Languages", Items: []string{"Perl", "Go"}}}},
+		{"a changed label", []dto.SkillGroup{{Label: "Tools", Items: []string{"Go", "SQL"}}}},
+		{"a changed line count", []dto.SkillGroup{{Label: "Languages", Items: []string{"Go"}}, {Items: []string{"SQL"}}}},
+		{"a duplicate item", []dto.SkillGroup{{Label: "Languages", Items: []string{"Go", "go"}}}},
+	}
+	for _, tc := range rejected {
+		t.Run("rejects "+tc.name, func(t *testing.T) {
+			_, id, svc := ready(t)
+
+			_, err := save(t, svc, id, tc.groups...)
+
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("SaveDraftSlots(%+v) error = %v, want an invalid error", tc.groups, err)
+			}
+		})
+	}
 }

@@ -11,6 +11,7 @@ import type {
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
+	SkillGroup,
 	SkillSuggestions,
 	SlotEdit,
 	SuggestDone,
@@ -221,6 +222,7 @@ export function createDraft(input: DraftInput): DraftRef {
 			provenance: null,
 			content: null,
 			base: null,
+			skillsEditable: false,
 		},
 		polls: 0,
 	});
@@ -250,6 +252,7 @@ export function getDraft(id: string): Draft {
 			status: "ready",
 			draftDocUrl: MOCK_DOC_URL,
 			provenance: mockProvenance(),
+			skillsEditable: true,
 			...mockContent(),
 			findings: [
 				{
@@ -296,7 +299,11 @@ export function discardDraft(id: string): Draft {
 
 const MOCK_TWO_PAGES_CHARS = 1500;
 
-export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
+export function saveDraftSlots(
+	id: string,
+	slots: SlotEdit[],
+	skills?: SkillGroup[],
+): Draft {
 	const entry = mockEntry(id);
 	if (!entry.draft.provenance) throw new Error(`mock draft ${id} is not ready`);
 	const chars = slots.reduce((n, s) => n + s.text.length, 0);
@@ -313,7 +320,13 @@ export function saveDraftSlots(id: string, slots: SlotEdit[]): Draft {
 		...entry.draft,
 		findings,
 		provenance,
-		content: content && applySlots(content, provenance, slots),
+		content: content && {
+			...applySlots(content, provenance, slots),
+			...(skills && {
+				skills: skills.flatMap((g) => g.items),
+				skillGroups: skills,
+			}),
+		},
 	};
 	return entry.draft;
 }
@@ -373,6 +386,7 @@ function seedDraft(id: string, outcome: Draft["outcome"]) {
 				},
 			],
 			provenance: mockProvenance(),
+			skillsEditable: true,
 			...mockContent(),
 		},
 	});
