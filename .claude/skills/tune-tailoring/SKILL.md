@@ -27,6 +27,10 @@ model, so they change together or not at all.
 into a fixed contract and user preferences, and the eval should then check that grounding and the other
 checks hold under any voice.
 
+Never run `just eval-tailoring`: it spends real money on the user's OpenRouter key and Claude Code is
+denied it. When a change needs a baseline, give the user the command with the `-runs` you intend and
+let them run it (`! just eval-tailoring -runs 5`), then work from the output they paste back.
+
 Runs cost real money and vary, so use `-runs 5` or more before drawing conclusions and `-fixture NAME`
 to iterate on one scenario.
 
