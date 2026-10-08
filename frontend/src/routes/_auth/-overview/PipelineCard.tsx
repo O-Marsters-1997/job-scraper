@@ -13,7 +13,7 @@ export function PipelineCard(props: {
 				</span>
 				<Link
 					to="/applications"
-					search={{ status: undefined }}
+					search={{ status: undefined, chase: undefined }}
 					class="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
 				>
 					View all →
@@ -28,7 +28,7 @@ export function PipelineCard(props: {
 						{(seg) => (
 							<Link
 								to="/applications"
-								search={{ status: seg.ID }}
+								search={{ status: seg.ID, chase: undefined }}
 								class="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-border bg-surface px-4 py-3 transition-colors hover:border-border-strong hover:bg-surface-muted"
 							>
 								<span

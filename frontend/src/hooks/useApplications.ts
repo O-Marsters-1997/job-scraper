@@ -11,14 +11,19 @@ import { keys } from "../api/keys";
 import type { UpdateApplicationPayload } from "../types/application";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
-export const applicationsQueryOptions = (statusId?: string) =>
+export const applicationsQueryOptions = (statusId?: string, chase = false) =>
 	queryOptions({
-		queryKey: keys.applications.byStatus(statusId),
-		queryFn: () => fetchApplications(statusId),
+		queryKey: keys.applications.list(statusId, chase),
+		queryFn: () => fetchApplications(statusId, chase),
 	});
 
-export function useApplications(statusId?: () => string | undefined) {
-	return createQuery(() => applicationsQueryOptions(statusId?.()));
+export function useApplications(
+	statusId?: () => string | undefined,
+	chase?: () => boolean,
+) {
+	return createQuery(() =>
+		applicationsQueryOptions(statusId?.(), chase?.() ?? false),
+	);
 }
 
 export function useCreateApplication() {

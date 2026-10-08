@@ -11,6 +11,7 @@ SELECT
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
     j.url          AS job_url,
+    j.closed_at    AS job_closed_at,
     s.name         AS status_name,
     s.colour       AS status_colour
 FROM applications a

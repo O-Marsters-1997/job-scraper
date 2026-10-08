@@ -64,6 +64,7 @@ type ApplicationWithDetails struct {
 	JobCompanySlug string
 	JobLocation    string
 	JobURL         string
+	JobClosedAt    *time.Time
 	StatusID       string
 	StatusName     string
 	StatusColour   string

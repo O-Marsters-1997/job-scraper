@@ -20,6 +20,7 @@ export const applicationWithDetailsSchema = applicationSchema.extend({
 	JobCompanySlug: z.string(),
 	JobLocation: z.string(),
 	JobURL: z.string(),
+	JobClosedAt: z.string().nullable(),
 	StatusName: z.string(),
 	StatusColour: z.string(),
 });
