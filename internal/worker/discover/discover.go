@@ -17,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 // Board is an ATS board a harvester found, identified by source and token.
@@ -56,7 +57,7 @@ func Get(ctx context.Context, client *http.Client, url, userAgent string) ([]byt
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch %s: status %s", url, resp.Status)
+		return nil, fmt.Errorf("fetch %s: %w", url, &sources.StatusError{Code: resp.StatusCode, Status: resp.Status})
 	}
 	return io.ReadAll(resp.Body)
 }

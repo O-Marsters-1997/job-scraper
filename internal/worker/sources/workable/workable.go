@@ -9,6 +9,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
+// Cloudflare 429s apply.workable.com's v3 API after about 150 requests in 90s, for a Retry-After of 24h.
+var limiter = sources.NewGate(3*time.Second, time.Hour)
+
 // New builds a Workable source for one company slug (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
@@ -19,6 +22,7 @@ func New(token string) *sources.BoardSource {
 		Parse:       func(body []byte) ([]dto.Job, error) { return parse(body, token) },
 		Count:       count,
 		NextPage:    nextPage,
+		Gate:        limiter,
 	})
 }
 

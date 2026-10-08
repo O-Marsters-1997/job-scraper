@@ -2,6 +2,7 @@ package workable_test
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
 )
@@ -66,5 +68,34 @@ func TestPollBoard_FollowsNextPage(t *testing.T) {
 	}
 	if res.Reported != 2 {
 		t.Errorf("PollBoard().Reported = %d, want 2", res.Reported)
+	}
+}
+
+type refusingTransport struct{ requests int }
+
+func (r *refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	r.requests++
+	header := http.Header{"Retry-After": {"86400"}}
+	return &http.Response{StatusCode: http.StatusTooManyRequests, Status: "429 Too Many Requests", Header: header, Body: io.NopCloser(strings.NewReader(`{"error":"rate_limit"}`))}, nil
+}
+
+func TestPollBoard_RateLimitDefersLaterRequests(t *testing.T) {
+	workable.ResetLimiter()
+	tr := &refusingTransport{}
+	first := workable.New("acme")
+	first.Client().Transport = tr
+	_, err := first.PollBoard(t.Context())
+	var status *sources.StatusError
+	if !errors.As(err, &status) || status.Code != http.StatusTooManyRequests {
+		t.Fatalf("PollBoard() = %v, want a 429 StatusError", err)
+	}
+	other := workable.New("other")
+	other.Client().Transport = tr
+	_, err = other.PollBoard(t.Context())
+	if !errors.Is(err, sources.ErrDeferred) {
+		t.Errorf("PollBoard() after the 429 = %v, want ErrDeferred", err)
+	}
+	if tr.requests != 1 {
+		t.Errorf("sent %d requests, want only the one that was refused", tr.requests)
 	}
 }

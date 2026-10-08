@@ -336,6 +336,48 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		<-done
 	})
 
+	t.Run("deferred task waits out the pause and never dead-letters", func(t *testing.T) {
+		const deferrals = 6
+		task := queuetest.DetailTask("wis")
+		if err := broker.Publish(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		consumeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var times []time.Time
+		finished := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = broker.Consume(consumeCtx, func(_ context.Context, got queue.Task) error {
+				times = append(times, time.Now())
+				if got.ID != task.ID {
+					return nil
+				}
+				if len(times) <= deferrals {
+					return &queue.DeferError{Until: time.Now().Add(150 * time.Millisecond), Err: errors.New("429")}
+				}
+				close(finished)
+				return nil
+			}, nil)
+		}()
+		select {
+		case <-finished:
+		case <-time.After(15 * time.Second):
+			t.Fatalf("task not delivered %d times, only %d", deferrals+1, len(times))
+		}
+		cancel()
+		<-done
+		for i := 1; i < len(times); i++ {
+			if gap := times[i].Sub(times[i-1]); gap < 100*time.Millisecond {
+				t.Errorf("delivery %d came %v after the previous, want it held for the pause", i, gap)
+			}
+		}
+		if msg, ok, err := ch.Get(deadQueue, true); err != nil || ok {
+			t.Errorf("dead queue Get() = %v, %v, want empty (deferral must not count as a failed attempt)", msg.MessageId, err)
+		}
+	})
+
 	t.Run("task.done logs one line per delivery", func(t *testing.T) {
 		runOne := func(t *testing.T, handler func(context.Context, queue.Task) error) map[string]any {
 			t.Helper()

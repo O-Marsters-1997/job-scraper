@@ -204,6 +204,18 @@ func (b *Broker) Publish(ctx context.Context, task Task) (err error) {
 	}
 }
 
+// DeferError is a handler's request to put the task back and stop consuming its source until
+// Until, without counting a delivery attempt.
+type DeferError struct {
+	Until time.Time
+	Err   error
+}
+
+func (e *DeferError) Error() string {
+	return "deferred until " + e.Until.Format(time.RFC3339) + ": " + e.Err.Error()
+}
+func (e *DeferError) Unwrap() error { return e.Err }
+
 func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) error {
 	var wg sync.WaitGroup
 	for _, source := range sourcespec.Sources() {
@@ -220,13 +232,19 @@ func (b *Broker) Consume(ctx context.Context, handler func(context.Context, Task
 
 func (b *Broker) consumeSource(ctx context.Context, source string, handler func(context.Context, Task) error, terminal func(context.Context, Task) error) {
 	for ctx.Err() == nil {
-		if err := b.consumeSession(ctx, source, handler, terminal); err != nil && ctx.Err() == nil {
+		pause := time.Second
+		err := b.consumeSession(ctx, source, handler, terminal)
+		var deferred *DeferError
+		switch {
+		case errors.As(err, &deferred):
+			pause = time.Until(deferred.Until)
+		case err != nil && ctx.Err() == nil:
 			slog.ErrorContext(ctx, "source consumer disconnected", slog.String(logger.KeySource, source), slog.Any(logger.KeyErr, err))
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Second):
+		case <-time.After(pause):
 		}
 	}
 }
@@ -248,7 +266,8 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 	if err := ch.Qos(1, 0, false); err != nil {
 		return err
 	}
-	deliveries, err := ch.Consume("source."+source, "", false, false, false, false, nil)
+	const consumerTag = "worker"
+	deliveries, err := ch.Consume("source."+source, consumerTag, false, false, false, false, nil)
 	if err != nil {
 		return err
 	}
@@ -293,6 +312,20 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			if ctx.Err() != nil {
 				return nil
 			}
+			var deferred *DeferError
+			if errors.As(err, &deferred) {
+				slog.InfoContext(taskCtx, "source task deferred", slog.Time("until", deferred.Until), slog.Any(logger.KeyErr, deferred.Err))
+				if err := b.Publish(ctx, task); err != nil {
+					return fmt.Errorf("republish deferred task %s: %w", task.ID, err)
+				}
+				if err := ch.Cancel(consumerTag, false); err != nil {
+					return err
+				}
+				if err := delivery.Ack(false); err != nil {
+					return err
+				}
+				return deferred
+			}
 			if err != nil {
 				count := deliveryCount(delivery.Headers["x-delivery-count"])
 				slog.ErrorContext(taskCtx, "source task failed",
@@ -319,7 +352,11 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 
 func logTaskDone(ctx context.Context, publishedAt, consumedAt time.Time, duration time.Duration, err error) {
 	outcome := "ok"
-	if err != nil {
+	var deferred *DeferError
+	switch {
+	case errors.As(err, &deferred):
+		outcome = "deferred"
+	case err != nil:
 		outcome = "error"
 	}
 	attrs := []slog.Attr{

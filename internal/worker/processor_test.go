@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -773,4 +774,70 @@ func TestFailRun(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+type failingBoard struct{ err error }
+
+func (f failingBoard) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResult, error) {
+	return sources.BoardResult{}, f.err
+}
+
+func TestProcessRateLimit(t *testing.T) {
+	ctx := t.Context()
+	limited := &sources.StatusError{Code: http.StatusTooManyRequests, Status: "429", RetryAfter: time.Minute}
+	blocked := &sources.DeferredError{Until: time.Now().Add(10 * time.Minute)}
+
+	discoverTask := queue.Task{Version: 1, Source: "workable", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}
+	discovers := []struct {
+		name      string
+		err       error
+		wantDefer bool
+	}{
+		{"a 429 defers discovery", limited, true},
+		{"a blocked gate defers discovery", blocked, true},
+		{"any other failure drops the discovery", errors.New("boom"), false},
+	}
+	for _, tt := range discovers {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, http.StatusOK, "")
+			p := f.discoverProcessor(func(context.Context, string, string) (scraper.Discovery, error) {
+				return scraper.Discovery{}, tt.err
+			}, configsStub{})
+			err := p.Process(ctx, discoverTask)
+			var deferred *queue.DeferError
+			if got := errors.As(err, &deferred); got != tt.wantDefer {
+				t.Fatalf("Process() = %v, want deferral %v", err, tt.wantDefer)
+			}
+			if !tt.wantDefer && err != nil {
+				t.Errorf("Process() = %v, want nil so the task is acked", err)
+			}
+			if tt.wantDefer && !deferred.Until.After(time.Now()) {
+				t.Errorf("deferred until %v, want a future time", deferred.Until)
+			}
+		})
+	}
+
+	boards := []struct {
+		name      string
+		err       error
+		wantDefer bool
+	}{
+		{"a 429 defers the board check", limited, true},
+		{"any other failure retries the board check", errors.New("boom"), false},
+	}
+	for _, tt := range boards {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, http.StatusOK, "")
+			exporter := scraper.NewAPIExporter(f.ingest.server.URL, "token").WithInitialBackoff(0)
+			p := worker.NewProcessor(worker.Deps{
+				JS:     jobsearch.Build(jobsearchtest.NewDeps(f.store)),
+				Boards: scraper.NewBoardPoller(f.store, failingBoard{err: tt.err}, exporter),
+			})
+			err := p.Process(ctx, queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: f.board(t), Manual: true})
+			var deferred *queue.DeferError
+			if err == nil || errors.As(err, &deferred) != tt.wantDefer {
+				t.Errorf("Process() = %v, want deferral %v and an error", err, tt.wantDefer)
+			}
+		})
+	}
 }
