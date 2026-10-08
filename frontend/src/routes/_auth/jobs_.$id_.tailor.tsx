@@ -3,10 +3,12 @@ import { createSignal, Show } from "solid-js";
 import { PageHeading } from "@/components/PageHeading";
 import { Button } from "@/components/ui/button";
 import type { CVRef } from "../../hooks/useTailoring";
+import type { SkillPick } from "../../types/tailoring";
 import { AchievementsStep } from "./-tailor/AchievementsStep";
 import { CvStep } from "./-tailor/CvStep";
 import { GenerateStep } from "./-tailor/GenerateStep";
 import { HeadingsStep } from "./-tailor/HeadingsStep";
+import { SkillsStep } from "./-tailor/SkillsStep";
 import { type Step, Stepper } from "./-tailor/Stepper";
 
 export const Route = createFileRoute("/_auth/jobs_/$id_/tailor")({
@@ -21,12 +23,14 @@ function TailorPage() {
 	const [skipped, setSkipped] = createSignal(false);
 	const [overrides, setOverrides] = createSignal<Record<string, boolean>>({});
 	const [order, setOrder] = createSignal<string[]>([]);
+	const [skillPicks, setSkillPicks] = createSignal<SkillPick[]>();
 	const [achievementIds, setAchievementIds] = createSignal<string[]>([]);
 
 	const pickCv = (ref: CVRef) => {
 		setCv(ref);
 		setOverrides({});
 		setOrder([]);
+		setSkillPicks(undefined);
 		setSkipped(false);
 		setStep("headings");
 	};
@@ -73,8 +77,18 @@ function TailorPage() {
 					onBack={() => setStep(skipped() ? "cv" : "headings")}
 					onContinue={(ids) => {
 						setAchievementIds(ids);
-						setStep("generate");
+						setStep("skills");
 					}}
+				/>
+			</Show>
+			<Show when={step() === "skills" && cv()}>
+				<SkillsStep
+					jobId={() => params().id}
+					cv={cv}
+					picks={skillPicks}
+					setPicks={setSkillPicks}
+					onBack={() => setStep("achievements")}
+					onContinue={() => setStep("generate")}
 				/>
 			</Show>
 			<Show when={step() === "generate" && cv()}>
@@ -82,7 +96,7 @@ function TailorPage() {
 					jobId={() => params().id}
 					cv={cv}
 					achievementIds={achievementIds}
-					onBack={() => setStep("achievements")}
+					onBack={() => setStep("skills")}
 				/>
 			</Show>
 		</div>

@@ -46,6 +46,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /tailoring/cvs/{docId}/{tabId}/headings",
 		"PUT /tailoring/cvs/{docId}/{tabId}/headings",
 		"GET /tailoring/jobs/{jobId}/suggestions",
+		"GET /tailoring/jobs/{jobId}/skill-suggestions",
 		"POST /tailoring/jobs/{jobId}/achievements/{achievementId}/explain",
 		"POST /tailoring/drafts",
 		"GET /tailoring/drafts/{id}",

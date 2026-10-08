@@ -17,10 +17,12 @@ import {
 	explanationSchema,
 	type HeadingMapping,
 	headingMappingSchema,
+	type SkillSuggestions,
 	type SlotEdit,
 	type SuggestDone,
 	type Suggestion,
 	type SuggestRequest,
+	skillSuggestionsSchema,
 	suggestDoneSchema,
 	suggestionSchema,
 } from "../types/tailoring";
@@ -82,6 +84,21 @@ export async function fetchSuggestions(
 			apiFetch(
 				`/tailoring/jobs/${jobId}/suggestions?${new URLSearchParams({ docId, tabId })}`,
 				suggestionSchema.array(),
+			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
+	);
+}
+
+export async function fetchSkillSuggestions(
+	jobId: string,
+	docId: string,
+	tabId: string,
+): Promise<SkillSuggestions> {
+	return mocked(
+		(db) => db.getSkillSuggestions(),
+		() =>
+			apiFetch(
+				`/tailoring/jobs/${jobId}/skill-suggestions?${new URLSearchParams({ docId, tabId })}`,
+				skillSuggestionsSchema,
 			).catch(rethrowStatus({ 422: () => new MissingAiKeyError() })),
 	);
 }

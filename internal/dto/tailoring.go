@@ -75,3 +75,42 @@ type ExplainInput struct {
 type Explanation struct {
 	Text string `json:"text"`
 }
+
+// SkillSuggestionsQuery selects the Job and the base CV Tab whose Skill Lines
+// receive Bank Skill candidates.
+type SkillSuggestionsQuery struct {
+	JobID string `json:"-" path:"jobId"`
+	DocID string `json:"docId"`
+	TabID string `json:"tabId"`
+}
+
+// SkillItem is a base CV skill and its lean for the Job.
+type SkillItem struct {
+	Text  string          `json:"text"`
+	Score float64         `json:"score"`
+	State SuggestionState `json:"state"`
+}
+
+// SkillCandidate is a Bank Skill missing from the base CV. Replaces names the
+// base item it displaces when Preselected.
+type SkillCandidate struct {
+	BankSkillID string          `json:"bankSkillId"`
+	Name        string          `json:"name"`
+	Score       float64         `json:"score"`
+	State       SuggestionState `json:"state"`
+	Preselected bool            `json:"preselected"`
+	Replaces    string          `json:"replaces"`
+}
+
+type SkillLineSuggestion struct {
+	Label      string           `json:"label"`
+	Base       []SkillItem      `json:"base"`
+	Candidates []SkillCandidate `json:"candidates"`
+}
+
+// SkillSuggestions holds Bank Skill candidates per Skill Line. Unplaced
+// candidates have a category that matches no line.
+type SkillSuggestions struct {
+	Lines    []SkillLineSuggestion `json:"lines"`
+	Unplaced []SkillCandidate      `json:"unplaced"`
+}

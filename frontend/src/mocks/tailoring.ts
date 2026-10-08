@@ -11,6 +11,7 @@ import type {
 	HeadingMapping,
 	LayoutBlock,
 	LayoutRun,
+	SkillSuggestions,
 	SlotEdit,
 	SuggestDone,
 	Suggestion,
@@ -54,6 +55,49 @@ export function saveHeadings(
 
 export function getExperienceMatch(): ExperienceMatch {
 	return { score: 0.34 };
+}
+
+export function getSkillSuggestions(): SkillSuggestions {
+	return {
+		lines: [
+			{
+				label: "Languages",
+				base: [
+					{ text: "Go", score: 0.6, state: "fit" },
+					{ text: "PHP", score: -0.4, state: "low" },
+					{ text: "TypeScript", score: 0.3, state: "fit" },
+				],
+				candidates: [
+					{
+						bankSkillId: "bank-skill-1",
+						name: "Rust",
+						score: 0.7,
+						state: "fit",
+						preselected: true,
+						replaces: "PHP",
+					},
+					{
+						bankSkillId: "bank-skill-2",
+						name: "Elixir",
+						score: 0.05,
+						state: "fit",
+						preselected: false,
+						replaces: "",
+					},
+				],
+			},
+		],
+		unplaced: [
+			{
+				bankSkillId: "bank-skill-3",
+				name: "Kubernetes",
+				score: 0.5,
+				state: "fit",
+				preselected: false,
+				replaces: "",
+			},
+		],
+	};
 }
 
 export function getSuggestions(): Suggestion[] {
