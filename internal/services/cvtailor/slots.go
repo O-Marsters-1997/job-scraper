@@ -32,12 +32,12 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		return dto.Draft{}, fmt.Errorf("decode edit set: %w", err)
 	}
 
-	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs}
+	claim := dto.DraftClaim{ID: draft.ID, UserID: userID, DocID: draft.BaseDocID, TabID: draft.BaseTabID, AchievementIDs: draft.AchievementIDs, SkillSwaps: draft.SkillSwaps}
 	basePlan, err := s.plan(ctx, claim, claim.DocID)
 	if err != nil {
 		return dto.Draft{}, err
 	}
-	docPlan, err := s.plan(ctx, claim, draft.DraftDocID)
+	docPlan, err := s.plan(ctx, withoutSwaps(claim), draft.DraftDocID)
 	if err != nil {
 		return dto.Draft{}, err
 	}

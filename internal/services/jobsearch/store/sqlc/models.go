@@ -437,6 +437,7 @@ type TailoredCv struct {
 	BaseDocID      string
 	BaseTabID      string
 	AchievementIds []pgtype.UUID
+	SkillSwaps     []byte
 	EditSet        []byte
 	BaseContent    []byte
 	Findings       []byte

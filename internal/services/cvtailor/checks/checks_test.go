@@ -136,6 +136,7 @@ func TestGroundingSkills(t *testing.T) {
 		skills     []string
 		baseSkills []string
 		bank       []string
+		bankSkills []string
 		baseText   []string
 		wantSkills []want
 	}{
@@ -146,6 +147,12 @@ func TestGroundingSkills(t *testing.T) {
 			bank:       []string{"Ran Kubernetes clusters"},
 		},
 		{
+			name:       "Bank Skill name passes ignoring case",
+			skills:     []string{"Go", "rust"},
+			baseSkills: []string{"Go"},
+			bankSkills: []string{"Rust"},
+		},
+		{
 			name:       "unsourced skill blocks",
 			skills:     []string{"Go", "Pulumi"},
 			baseSkills: []string{"Go"},
@@ -154,7 +161,7 @@ func TestGroundingSkills(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := checks.Draft{Skills: oneLine(tt.skills), BaseSkills: oneLine(tt.baseSkills), Bank: tt.bank, BaseText: tt.baseText}
+			d := checks.Draft{Skills: oneLine(tt.skills), BaseSkills: oneLine(tt.baseSkills), Bank: tt.bank, BankSkills: tt.bankSkills, BaseText: tt.baseText}
 			if diff := cmp.Diff(tt.wantSkills, findings(checks.Grounding(d), "skills")); diff != "" {
 				t.Errorf("skills findings (-want +got):\n%s", diff)
 			}

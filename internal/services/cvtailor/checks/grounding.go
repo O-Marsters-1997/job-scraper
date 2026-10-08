@@ -72,9 +72,13 @@ func groundSkills(d Draft) []Finding {
 			base[strings.ToLower(strings.TrimSpace(s))] = true
 		}
 	}
+	bankSkill := map[string]bool{}
+	for _, name := range d.BankSkills {
+		bankSkill[strings.ToLower(strings.TrimSpace(name))] = true
+	}
 	sourced := func(skill string) bool {
 		key := strings.ToLower(strings.TrimSpace(skill))
-		return base[key] || containsWord(bank, key) || containsWord(baseText, key)
+		return base[key] || bankSkill[key] || containsWord(bank, key) || containsWord(baseText, key)
 	}
 
 	var out []Finding
