@@ -67,10 +67,9 @@ type Draft struct {
 	AchievementIDs []string `json:"-"`
 }
 
-// DraftContent is the editable part of a Draft: the Profile, Skills and each
-// Position's bullets in CV order. Skills is the flat list; SkillGroups holds
-// the same items by Skill Line, one unlabelled group for a legacy Draft. Base holds the base CV Tab's content as it
-// was at generation, with no AchievementIDs.
+// DraftContent is the editable part of a Draft: the Profile, Skills (flat,
+// and by Skill Line in SkillGroups) and each Position's bullets in CV order.
+// Base holds the base CV Tab's content as it was at generation.
 type DraftContent struct {
 	Profile     *string         `json:"profile"`
 	Skills      []string        `json:"skills"`

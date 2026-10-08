@@ -166,7 +166,11 @@ func skillContent(groups []cvedit.SkillGroup) ([]string, []dto.SkillGroup) {
 	}
 	out := make([]dto.SkillGroup, len(groups))
 	for i, g := range groups {
-		out[i] = dto.SkillGroup{Label: g.Label, Items: g.Items}
+		items := g.Items
+		if items == nil {
+			items = []string{}
+		}
+		out[i] = dto.SkillGroup{Label: g.Label, Items: items}
 	}
 	return flat, out
 }

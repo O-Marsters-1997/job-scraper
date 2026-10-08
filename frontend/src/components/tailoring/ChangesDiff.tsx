@@ -15,13 +15,13 @@ const BULLET_LABEL: Record<BulletRow["kind"], string> = {
 	removed: "Removed",
 };
 
-function baseGroupItems(
+function baseGroupIndex(
 	groups: DraftContent["skillGroups"],
 	label: string,
 	index: number,
-): string[] {
-	const byLabel = groups.find((g) => g.label === label);
-	return (byLabel ?? (label === "" ? groups[index] : undefined))?.items ?? [];
+): number {
+	const byLabel = groups.findIndex((g) => g.label === label);
+	return byLabel >= 0 || label !== "" ? byLabel : index;
 }
 
 function Marked(props: { ops: WordOp[] }) {
@@ -107,14 +107,21 @@ export function ChangesDiff(props: {
 		)?.bullets[index]?.slotId;
 		return slotId ? () => undo(slotId, row.from) : undefined;
 	};
-	const skillRows = () =>
-		props.content.skillGroups.map((g, i) => ({
-			label: g.label,
-			ops: listDiff(
-				baseGroupItems(props.base.skillGroups, g.label, i),
-				g.items,
-			),
-		}));
+	const skillRows = () => {
+		const matched = new Set<number>();
+		const rows = props.content.skillGroups.map((g, i) => {
+			const at = baseGroupIndex(props.base.skillGroups, g.label, i);
+			matched.add(at);
+			return {
+				label: g.label,
+				ops: listDiff(props.base.skillGroups[at]?.items ?? [], g.items),
+			};
+		});
+		const dropped = props.base.skillGroups
+			.filter((_, i) => !matched.has(i))
+			.map((g) => ({ label: g.label, ops: listDiff(g.items, []) }));
+		return [...rows, ...dropped];
+	};
 	const profile = () =>
 		props.base.profile !== null && props.content.profile !== null
 			? wordDiff(props.base.profile, props.content.profile)
