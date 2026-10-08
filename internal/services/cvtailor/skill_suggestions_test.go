@@ -113,6 +113,23 @@ func TestSkillSuggestions(t *testing.T) {
 		}
 	})
 
+	t.Run("a candidate that leans below the item it would replace is not preselected", func(t *testing.T) {
+		asker := &fakeAsker{answers: skillAnswers(
+			skillLean{"Rust", 0.2, 0.1},
+			skillLean{"Go", 0.8, 0}, skillLean{"PHP", 0.7, 0}, skillLean{"Perl", 0.6, 0},
+		)}
+		svc, st := newService(t, baseDocs(t), asker)
+		addBank(t, st, "Languages", "Rust")
+
+		got, err := svc.SkillSuggestions(t.Context(), userID, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c := got.Lines[0].Candidates[0]; c.Preselected || c.Replaces != "" {
+			t.Errorf("SkillSuggestions() candidate = %+v, want not preselected", c)
+		}
+	})
+
 	t.Run("a category matching no line is unplaced and not preselected", func(t *testing.T) {
 		asker := &fakeAsker{answers: skillAnswers(skillLean{"Kubernetes", 0.9, 0.0})}
 		svc, st := newService(t, baseDocs(t), asker)

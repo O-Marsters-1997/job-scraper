@@ -60,12 +60,19 @@ func missingBankSkills(bank []dto.BankSkill, lines []docparse.SkillLine) []dto.B
 
 func skillQuestions(missing []dto.BankSkill, lines []docparse.SkillLine) []string {
 	var out []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		if q := skillQuestion(name); !seen[q] {
+			seen[q] = true
+			out = append(out, q)
+		}
+	}
 	for _, b := range missing {
-		out = append(out, skillQuestion(b.Name))
+		add(b.Name)
 	}
 	for _, l := range lines {
 		for _, item := range l.Items {
-			out = append(out, skillQuestion(item))
+			add(item)
 		}
 	}
 	return out
@@ -123,31 +130,29 @@ func preselectSwaps(lines []dto.SkillLineSuggestion) {
 		if picked == maxPreselectedSwaps {
 			return
 		}
-		victim, ok := lowestLean(lines[r.line].Base, replaced, r.line)
-		if !ok {
+		c := &lines[r.line].Candidates[r.cand]
+		target, ok := lowestLean(lines[r.line].Base, replaced, r.line)
+		if !ok || target.Score >= c.Score {
 			continue
 		}
-		c := &lines[r.line].Candidates[r.cand]
-		c.Preselected, c.Replaces = true, victim
+		replaced[victim{r.line, target.Text}] = true
+		c.Preselected, c.Replaces = true, target.Text
 		picked++
 	}
 }
 
-func lowestLean(base []dto.SkillItem, replaced map[victim]bool, line int) (string, bool) {
-	best := -1
-	for i, it := range base {
+func lowestLean(base []dto.SkillItem, replaced map[victim]bool, line int) (dto.SkillItem, bool) {
+	var best dto.SkillItem
+	found := false
+	for _, it := range base {
 		if replaced[victim{line, it.Text}] {
 			continue
 		}
-		if best < 0 || it.Score < base[best].Score {
-			best = i
+		if !found || it.Score < best.Score {
+			best, found = it, true
 		}
 	}
-	if best < 0 {
-		return "", false
-	}
-	replaced[victim{line, base[best].Text}] = true
-	return base[best].Text, true
+	return best, found
 }
 
 type victim struct {

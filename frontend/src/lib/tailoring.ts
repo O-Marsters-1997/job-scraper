@@ -160,12 +160,8 @@ export function setLinePicks(
 	const next = [...kept];
 	for (const id of ids) {
 		if (kept.some((p) => p.bankSkillId === id)) continue;
-		const all = [...rest, ...next];
-		next.push({
-			bankSkillId: id,
-			line: lineIndex,
-			replaces: nextReplaces(line, lineIndex, all),
-		});
+		const replaces = nextReplaces(line, lineIndex, [...rest, ...next]);
+		if (replaces) next.push({ bankSkillId: id, line: lineIndex, replaces });
 	}
 	return [...rest, ...next];
 }
