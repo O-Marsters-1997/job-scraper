@@ -281,7 +281,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		jobID = previous.ID
 		job.URL = previous.Url
 	case errors.Is(err, pgx.ErrNoRows):
-		match, found, err := findMatch(ctx, queries, job, companyID, matchTitle, matchLocation)
+		match, found, err := findMatch(ctx, queries, job, companyID, matchTitle, matchLocation, trusted)
 		if err != nil {
 			return dto.Job{}, "", err
 		}
@@ -289,6 +289,22 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			status = "merged"
 			jobID = match.ID
 			job.URL = match.Url
+			break
+		}
+		if found {
+			status = "upgraded"
+			jobID = match.ID
+			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
+				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
+				UpdatedAt: updatedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
+				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
+				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
+				CompanyID:     companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
+			})
+			if err != nil {
+				return dto.Job{}, "", fmt.Errorf("upgrade canonical job: %w", err)
+			}
 			break
 		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
@@ -342,7 +358,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	if rows != 1 {
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another canonical job", ErrCanonicalConflict)
 	}
-	if status == "new" || status == "changed" {
+	if status == "new" || status == "changed" || status == "upgraded" {
 		if err := s.scoring.JobsChanged(ctx, tx, []string{id}, status == "new"); err != nil {
 			return dto.Job{}, "", fmt.Errorf("scoring.JobsChanged: %w", err)
 		}
@@ -354,7 +370,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	return job, status, nil
 }
 
-func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string) (sqlc.FindMatchCandidatesRow, bool, error) {
+func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) (sqlc.FindMatchCandidatesRow, bool, error) {
 	if err := queries.LockCanonicalJob(ctx, "match:"+job.CompanySlug+"|"+matchTitle); err != nil {
 		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("lock match: %w", err)
 	}
@@ -365,7 +381,7 @@ func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyI
 		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("find match candidates: %w", err)
 	}
 	candidates = slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
-		return !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
+		return (trusted && c.PrimaryBoardID.Valid) || !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
 	})
 	if len(candidates) != 1 {
 		return sqlc.FindMatchCandidatesRow{}, false, nil

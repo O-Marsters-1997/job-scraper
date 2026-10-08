@@ -12,11 +12,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 )
 
 const (
-	heidiLinkedIn = "https://www.linkedin.com/jobs/view/4474766548"
-	heidiWIS      = "https://workinstartups.com/details/5909695355"
+	libertyLinkedIn  = "https://www.linkedin.com/jobs/view/4472707630"
+	libertyWTTJ      = "https://app.welcometothejungle.com/jobs/4LsTTZd3"
+	libertyOtherRole = "https://app.welcometothejungle.com/jobs/4EP20yW7"
+	heidiLinkedIn    = "https://www.linkedin.com/jobs/view/4474766548"
+	heidiWIS         = "https://workinstartups.com/details/5909695355"
 )
 
 func loadListing(t *testing.T, url string) dto.Job {
@@ -176,4 +180,131 @@ func TestSaveCanonicalMergesAggregatorListings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func libertyBoard(t *testing.T, st *store.Store) (boardID, companyID string) {
+	t.Helper()
+	company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "liberty-global", Name: "Liberty Global"})
+	board, err := st.UpsertCandidateBoard(t.Context(), company.ID, "wttj", "liberty-global")
+	if err != nil {
+		t.Fatalf("UpsertCandidateBoard() err = %v", err)
+	}
+	return board.ID, company.ID
+}
+
+func atsListing(t *testing.T, url, boardID, companyID string) dto.Job {
+	t.Helper()
+	job := loadListing(t, url)
+	job.BoardID, job.CompanyID = boardID, companyID
+	return job
+}
+
+func TestSaveCanonicalUpgradesAggregatorJob(t *testing.T) {
+	t.Run("the ATS posting upgrades the aggregator Job in place", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		boardID, companyID := libertyBoard(t, st)
+		trackCompany(t, st, userID, companyID, 60)
+		first, _ := saveJob(t, st, loadListing(t, libertyLinkedIn))
+		wttj := atsListing(t, libertyWTTJ, boardID, companyID)
+
+		got, status := saveJob(t, st, wttj)
+		if status != "upgraded" || got.ID != first.ID {
+			t.Fatalf("status = %q, id = %q, want upgraded with id %q", status, got.ID, first.ID)
+		}
+		if n := jobCount(t, pool); n != 1 {
+			t.Fatalf("jobs = %d, want 1", n)
+		}
+		var title, description, url, source, posting string
+		err := pool.QueryRow(t.Context(), "SELECT title, description, url, source, provider_posting_id FROM jobs WHERE id = $1", first.ID).
+			Scan(&title, &description, &url, &source, &posting)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if title != wttj.Title || description != wttj.Description || url != libertyWTTJ || source != "wttj" || posting != "4LsTTZd3" {
+			t.Errorf("job = %q %q %q %q, want the WTTJ version", title, url, source, posting)
+		}
+		if diff := cmp.Diff([]string{libertyWTTJ, libertyLinkedIn}, listingURLs(t, pool, first.ID)); diff != "" {
+			t.Errorf("job_urls (-want +got):\n%s", diff)
+		}
+		var upgrades int
+		err = pool.QueryRow(t.Context(), "SELECT count(*) FROM effect_outbox WHERE job_id = $1 AND NOT first_discovery", first.ID).Scan(&upgrades)
+		if err != nil || upgrades != 1 {
+			t.Errorf("non-first-discovery effects = %d, err = %v, want 1", upgrades, err)
+		}
+	})
+
+	t.Run("the reverse order merges into the ATS Job and keeps its content", func(t *testing.T) {
+		st, pool, _ := newUserStore(t)
+		boardID, companyID := libertyBoard(t, st)
+		wttj := atsListing(t, libertyWTTJ, boardID, companyID)
+		first, _ := saveJob(t, st, wttj)
+
+		got, status := saveJob(t, st, loadListing(t, libertyLinkedIn))
+		if status != "merged" || got.ID != first.ID {
+			t.Fatalf("status = %q, id = %q, want merged with id %q", status, got.ID, first.ID)
+		}
+		if n := jobCount(t, pool); n != 1 {
+			t.Fatalf("jobs = %d, want 1", n)
+		}
+		var title, url string
+		if err := pool.QueryRow(t.Context(), "SELECT title, url FROM jobs WHERE id = $1", first.ID).Scan(&title, &url); err != nil {
+			t.Fatal(err)
+		}
+		if title != wttj.Title || url != libertyWTTJ {
+			t.Errorf("job = %q %q, want the WTTJ version", title, url)
+		}
+	})
+
+	t.Run("a different WTTJ role stays separate in both orders", func(t *testing.T) {
+		for _, aggregatorFirst := range []bool{true, false} {
+			st, pool, _ := newUserStore(t)
+			boardID, companyID := libertyBoard(t, st)
+			aggregator, other := loadListing(t, libertyLinkedIn), atsListing(t, libertyOtherRole, boardID, companyID)
+			if aggregatorFirst {
+				saveJob(t, st, aggregator)
+				saveJob(t, st, other)
+			} else {
+				saveJob(t, st, other)
+				saveJob(t, st, aggregator)
+			}
+			if n := jobCount(t, pool); n != 2 {
+				t.Errorf("aggregatorFirst=%t: jobs = %d, want 2", aggregatorFirst, n)
+			}
+		}
+	})
+
+	t.Run("two ATS postings with an identical match key stay separate", func(t *testing.T) {
+		st, pool, _ := newUserStore(t)
+		boardID, companyID := libertyBoard(t, st)
+		a := atsListing(t, libertyWTTJ, boardID, companyID)
+		b := a
+		b.URL, b.ProviderPostingID = "https://app.welcometothejungle.com/jobs/other", "other"
+		saveJob(t, st, a)
+		if _, status := saveJob(t, st, b); status != "new" {
+			t.Errorf("status = %q, want new", status)
+		}
+		if n := jobCount(t, pool); n != 2 {
+			t.Errorf("jobs = %d, want 2", n)
+		}
+	})
+
+	t.Run("a board poll without the posting closes the upgraded Job", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		boardID, companyID := libertyBoard(t, st)
+		trackCompany(t, st, userID, companyID, 60)
+		if _, err := st.VerifyCompanyBoard(t.Context(), companyID, "wttj", "liberty-global", "user_confirmed", ""); err != nil {
+			t.Fatal(err)
+		}
+		saveJob(t, st, loadListing(t, libertyLinkedIn))
+		wttj := atsListing(t, libertyWTTJ, boardID, companyID)
+		saveJob(t, st, wttj)
+
+		env := boardEnv{st: st, pool: pool, board: dto.CompanyBoard{ID: boardID}, companyID: companyID}
+		env.complete(t, env.claim(t, true), wttj)
+		env.complete(t, env.claim(t, true))
+		env.complete(t, env.claim(t, true))
+		if !jobClosed(t, pool, libertyWTTJ) {
+			t.Error("upgraded Job still open after the board dropped its posting")
+		}
+	})
 }
