@@ -58,7 +58,7 @@ export function chasesDue(
 ) {
 	const today = dayKey(now);
 	return applications
-		.filter((a) => a.ChaseBy !== null && chaseDateKey(a.ChaseBy) <= today)
+		.filter((a) => a.ChaseBy != null && chaseDateKey(a.ChaseBy) <= today)
 		.sort((a, b) =>
 			chaseDateKey(a.ChaseBy!).localeCompare(chaseDateKey(b.ChaseBy!)),
 		);

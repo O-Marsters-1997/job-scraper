@@ -28,13 +28,14 @@ import { RecentJobsCard } from "./-overview/RecentJobsCard";
 import { StatCards } from "./-overview/StatCards";
 
 export const Route = createFileRoute("/_auth/overview")({
-	loader: () =>
-		Promise.all([
+	loader: () => {
+		void queryClient.prefetchQuery(chasesQueryOptions);
+		return Promise.all([
 			queryClient.ensureQueryData(allJobsQueryOptions),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
-			queryClient.ensureQueryData(chasesQueryOptions),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
-		]),
+		]);
+	},
 	component: OverviewPage,
 });
 
