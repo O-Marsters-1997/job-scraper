@@ -37,8 +37,19 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
     scraped_at = NOW()
 WHERE id = sqlc.arg(id)::uuid;
 
+-- name: UpgradeCanonicalJob :exec
+UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location), url = sqlc.arg(url),
+    source = sqlc.arg(source), updated_at = sqlc.arg(updated_at), description = sqlc.arg(description),
+    salary_raw = sqlc.arg(salary_raw), work_arrangement = sqlc.arg(work_arrangement),
+    content_fingerprint = sqlc.arg(fingerprint), content_changed_at = NOW(),
+    match_title = sqlc.arg(match_title), match_location = sqlc.arg(match_location),
+    company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
+    primary_board_id = sqlc.arg(board_id)::uuid, provider_posting_id = sqlc.arg(posting_id),
+    scraped_at = NOW()
+WHERE id = sqlc.arg(id)::uuid;
+
 -- name: FindMatchCandidates :many
-SELECT id, url, COALESCE(match_location, '') AS match_location
+SELECT id, url, COALESCE(match_location, '') AS match_location, primary_board_id
 FROM jobs
 WHERE match_title = sqlc.arg(match_title)
     AND (company_slug = sqlc.arg(company_slug) OR company_id = sqlc.narg(company_id)::uuid)

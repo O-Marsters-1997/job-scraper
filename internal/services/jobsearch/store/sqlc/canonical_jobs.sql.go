@@ -81,7 +81,7 @@ func (q *Queries) FindCanonicalJob(ctx context.Context, arg FindCanonicalJobPara
 }
 
 const findMatchCandidates = `-- name: FindMatchCandidates :many
-SELECT id, url, COALESCE(match_location, '') AS match_location
+SELECT id, url, COALESCE(match_location, '') AS match_location, primary_board_id
 FROM jobs
 WHERE match_title = $1
     AND (company_slug = $2 OR company_id = $3::uuid)
@@ -97,9 +97,10 @@ type FindMatchCandidatesParams struct {
 }
 
 type FindMatchCandidatesRow struct {
-	ID            pgtype.UUID
-	Url           string
-	MatchLocation string
+	ID             pgtype.UUID
+	Url            string
+	MatchLocation  string
+	PrimaryBoardID pgtype.UUID
 }
 
 func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidatesParams) ([]FindMatchCandidatesRow, error) {
@@ -111,7 +112,12 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 	var items []FindMatchCandidatesRow
 	for rows.Next() {
 		var i FindMatchCandidatesRow
-		if err := rows.Scan(&i.ID, &i.Url, &i.MatchLocation); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Url,
+			&i.MatchLocation,
+			&i.PrimaryBoardID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -279,6 +285,59 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
+		arg.ID,
+	)
+	return err
+}
+
+const upgradeCanonicalJob = `-- name: UpgradeCanonicalJob :exec
+UPDATE jobs SET title = $1, location = $2, url = $3,
+    source = $4, updated_at = $5, description = $6,
+    salary_raw = $7, work_arrangement = $8,
+    content_fingerprint = $9, content_changed_at = NOW(),
+    match_title = $10, match_location = $11,
+    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
+    primary_board_id = $14::uuid, provider_posting_id = $15,
+    scraped_at = NOW()
+WHERE id = $16::uuid
+`
+
+type UpgradeCanonicalJobParams struct {
+	Title           string
+	Location        string
+	Url             string
+	Source          string
+	UpdatedAt       pgtype.Timestamptz
+	Description     string
+	SalaryRaw       string
+	WorkArrangement string
+	Fingerprint     pgtype.Text
+	MatchTitle      pgtype.Text
+	MatchLocation   pgtype.Text
+	CompanyID       pgtype.UUID
+	CompanySlug     string
+	BoardID         pgtype.UUID
+	PostingID       pgtype.Text
+	ID              pgtype.UUID
+}
+
+func (q *Queries) UpgradeCanonicalJob(ctx context.Context, arg UpgradeCanonicalJobParams) error {
+	_, err := q.db.Exec(ctx, upgradeCanonicalJob,
+		arg.Title,
+		arg.Location,
+		arg.Url,
+		arg.Source,
+		arg.UpdatedAt,
+		arg.Description,
+		arg.SalaryRaw,
+		arg.WorkArrangement,
+		arg.Fingerprint,
+		arg.MatchTitle,
+		arg.MatchLocation,
+		arg.CompanyID,
+		arg.CompanySlug,
+		arg.BoardID,
+		arg.PostingID,
 		arg.ID,
 	)
 	return err
