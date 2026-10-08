@@ -7,7 +7,7 @@
 - No sycophantic openers or closing fluff. Be concise in output, thorough in reasoning.
 - Before a structural/architectural decision (new package boundary, naming ambiguity), check
   `CONTEXT.md` (domain glossary) and `docs/adr/` (past decisions) — not needed for routine work.
-- Use **bun** exclusively for JS/TS package management (`frontend/`, `emails/`). Never npm/pnpm/yarn.
+- For JS/TS packages, use only the package manager named in each `package.json`'s `packageManager` field.
 
 ## Layout
 
