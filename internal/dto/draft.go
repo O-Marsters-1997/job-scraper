@@ -21,6 +21,9 @@ type SkillSwap struct {
 	BankSkillID string `json:"bankSkillId"`
 	Line        int    `json:"line"`
 	Replaces    string `json:"replaces"`
+	// Name is set from the Bank Skill when a Draft is created, so later plans
+	// need no lookup. A request value is ignored.
+	Name string `json:"name"`
 }
 
 // BulletLabel is what one offered Achievement looked like when a Draft was

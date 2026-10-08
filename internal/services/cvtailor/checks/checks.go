@@ -44,8 +44,7 @@ type Draft struct {
 	Profile   *Slot
 	Skills    []SkillLine
 	// Bank holds the text of every Achievement the User has.
-	Bank []string
-	// BankSkills holds the name of every Bank Skill the User has.
+	Bank         []string
 	BankSkills   []string
 	BaseSkills   []SkillLine
 	LegacySkills bool

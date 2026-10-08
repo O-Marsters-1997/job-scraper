@@ -24,10 +24,9 @@ type planned struct {
 }
 
 type plan struct {
-	structure docparse.DocStructure
-	positions []planned
-	bank      []string
-	// skills are the base CV's Skill Lines with the chosen swaps applied.
+	structure  docparse.DocStructure
+	positions  []planned
+	bank       []string
 	skills     []cvedit.SkillGroup
 	bankSkills []string
 	swapped    bool
@@ -66,12 +65,12 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 	}
 	if ds.Skills != nil {
 		pl.swapped = len(claim.SkillSwaps) > 0
-		pl.skills, err = applySkillSwaps(cvedit.SkillGroups(ds.Skills), claim.SkillSwaps, bankSkills)
+		pl.skills, err = applySkillSwaps(cvedit.SkillGroups(ds.Skills), claim.SkillSwaps)
 		if err != nil {
 			return plan{}, err
 		}
 	} else if len(claim.SkillSwaps) > 0 {
-		return plan{}, apperr.Invalid("the CV tab has no skills section to swap into")
+		return plan{}, noSkillsSection()
 	}
 	found := 0
 	seen := map[string]bool{}
@@ -231,8 +230,6 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	return edits, names
 }
 
-// swappedSkills is what a Draft's Skills fall back to: the base lines with the
-// chosen swaps, or nil when there are none.
 func (pl plan) swappedSkills() []cvedit.SkillGroup {
 	if !pl.swapped {
 		return nil
