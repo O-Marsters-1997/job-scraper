@@ -38,6 +38,17 @@ jobs:
               - 'emails/**'
               - '.github/workflows/ci.yml'
 
+  bun-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject non-bun lockfiles
+        run: |
+          if found=$(git ls-files | grep -E '(^|/)(package-lock\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|yarn\.lock)$'); then
+            echo "::error::Use bun, not npm/pnpm/yarn. Remove: $found"
+            exit 1
+          fi
+
   # --- Go ---
 
   lint:
