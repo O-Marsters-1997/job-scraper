@@ -3,6 +3,10 @@ import type {
 	DraftFinding,
 	DraftStatus,
 	HeadingMapping,
+	SkillCandidate,
+	SkillLineSuggestion,
+	SkillPick,
+	SkillSuggestions,
 	Suggestion,
 } from "../types/tailoring";
 
@@ -104,4 +108,93 @@ export function keptDraft<T extends { outcome: string | null }>(
 	drafts: T[],
 ): T | undefined {
 	return drafts.find((d) => d.outcome === "kept");
+}
+
+export function preselectedPicks(data: SkillSuggestions): SkillPick[] {
+	return data.lines.flatMap((l, line) =>
+		l.candidates
+			.filter((c) => c.preselected)
+			.map((c) => ({ bankSkillId: c.bankSkillId, line, replaces: c.replaces })),
+	);
+}
+
+export function nextReplaces(
+	line: SkillLineSuggestion,
+	lineIndex: number,
+	picks: SkillPick[],
+): string {
+	const taken = new Set(
+		picks.filter((p) => p.line === lineIndex).map((p) => p.replaces),
+	);
+	return (
+		line.base
+			.filter((b) => !taken.has(b.text))
+			.sort((a, b) => a.score - b.score)[0]?.text ?? ""
+	);
+}
+
+export function candidatesFor(
+	data: SkillSuggestions,
+	lineIndex: number,
+	picks: SkillPick[],
+): SkillCandidate[] {
+	const placed = new Set(
+		picks.filter((p) => p.line === lineIndex).map((p) => p.bankSkillId),
+	);
+	const own = data.lines[lineIndex]?.candidates ?? [];
+	return [...own, ...data.unplaced.filter((c) => placed.has(c.bankSkillId))];
+}
+
+export function setLinePicks(
+	data: SkillSuggestions,
+	picks: SkillPick[],
+	lineIndex: number,
+	ids: string[],
+): SkillPick[] {
+	const line = data.lines[lineIndex];
+	if (!line) return picks;
+	const rest = picks.filter((p) => p.line !== lineIndex);
+	const kept = picks.filter(
+		(p) => p.line === lineIndex && ids.includes(p.bankSkillId),
+	);
+	const next = [...kept];
+	for (const id of ids) {
+		if (kept.some((p) => p.bankSkillId === id)) continue;
+		const all = [...rest, ...next];
+		next.push({
+			bankSkillId: id,
+			line: lineIndex,
+			replaces: nextReplaces(line, lineIndex, all),
+		});
+	}
+	return [...rest, ...next];
+}
+
+export function placeUnplaced(
+	data: SkillSuggestions,
+	picks: SkillPick[],
+	bankSkillId: string,
+	lineIndex: number | undefined,
+): SkillPick[] {
+	const rest = picks.filter((p) => p.bankSkillId !== bankSkillId);
+	const line = lineIndex === undefined ? undefined : data.lines[lineIndex];
+	if (lineIndex === undefined || !line) return rest;
+	return [
+		...rest,
+		{
+			bankSkillId,
+			line: lineIndex,
+			replaces: nextReplaces(line, lineIndex, rest),
+		},
+	];
+}
+
+export function retarget(
+	picks: SkillPick[],
+	bankSkillId: string,
+	replaces: string,
+): SkillPick[] {
+	return picks.map((p) =>
+		p.bankSkillId === bankSkillId ? { ...p, replaces } : p,
+	);
 }

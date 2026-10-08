@@ -10,6 +10,7 @@ import {
 	fetchExperienceMatch,
 	fetchHeadings,
 	fetchJobDrafts,
+	fetchSkillSuggestions,
 	fetchSuggestions,
 	keepDraft,
 	saveDraftSlots,
@@ -51,6 +52,23 @@ export function useSuggestions(
 		return {
 			queryKey: keys.tailoring.suggestions(jobId(), docId, tabId),
 			queryFn: () => fetchSuggestions(jobId(), docId, tabId),
+			enabled: ref !== undefined,
+			retry: false,
+			staleTime: 5 * 60 * 1000,
+		};
+	});
+}
+
+export function useSkillSuggestions(
+	jobId: Accessor<string>,
+	cv: Accessor<CVRef | undefined>,
+) {
+	return createQuery(() => {
+		const ref = cv();
+		const { docId = "", tabId = "" } = ref ?? {};
+		return {
+			queryKey: keys.tailoring.skillSuggestions(jobId(), docId, tabId),
+			queryFn: () => fetchSkillSuggestions(jobId(), docId, tabId),
 			enabled: ref !== undefined,
 			retry: false,
 			staleTime: 5 * 60 * 1000,
