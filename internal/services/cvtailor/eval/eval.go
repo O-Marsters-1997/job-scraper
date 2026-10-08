@@ -201,7 +201,7 @@ func draft(f Fixture, edits cvedit.EditSet) checks.Draft {
 	if s := f.Structure.Skills; s != nil {
 		d.BaseSkills = cvedit.CheckLines(cvedit.SkillGroups(s))
 	}
-	d.Skills, d.JobSkills = cvedit.CheckLines(edits.Skills), edits.JobSkills
+	d.Skills = cvedit.CheckLines(edits.Skills)
 	return d
 }
 

@@ -137,7 +137,6 @@ func TestGroundingSkills(t *testing.T) {
 		baseSkills []string
 		bank       []string
 		baseText   []string
-		jobSkills  []string
 		wantSkills []want
 	}{
 		{
@@ -152,29 +151,10 @@ func TestGroundingSkills(t *testing.T) {
 			baseSkills: []string{"Go"},
 			wantSkills: []want{{checks.Block, ""}},
 		},
-		{
-			name:       "job skill without a source is an info gap and stays out of skills",
-			skills:     []string{"Go"},
-			baseSkills: []string{"Go"},
-			bank:       []string{"Wrote Terraform modules"},
-			jobSkills:  []string{"Pulumi", "Terraform", "go"},
-			wantSkills: []want{{checks.Info, ""}},
-		},
-		{
-			name:      "job skill named anywhere in the base CV is no gap",
-			baseText:  []string{"Languages/ Frameworks \t\tTypescript", "Databases\t\t\t\tPostgreSQL"},
-			jobSkills: []string{"TypeScript", "PostgreSQL"},
-		},
-		{
-			name:       "job skill listed in skills is both blocked and reported",
-			skills:     []string{"Pulumi"},
-			jobSkills:  []string{"Pulumi"},
-			wantSkills: []want{{checks.Block, ""}, {checks.Info, ""}},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := checks.Draft{Skills: oneLine(tt.skills), BaseSkills: oneLine(tt.baseSkills), Bank: tt.bank, BaseText: tt.baseText, JobSkills: tt.jobSkills}
+			d := checks.Draft{Skills: oneLine(tt.skills), BaseSkills: oneLine(tt.baseSkills), Bank: tt.bank, BaseText: tt.baseText}
 			if diff := cmp.Diff(tt.wantSkills, findings(checks.Grounding(d), "skills")); diff != "" {
 				t.Errorf("skills findings (-want +got):\n%s", diff)
 			}
@@ -215,13 +195,6 @@ func TestSkillLines(t *testing.T) {
 				t.Errorf("SkillLines() findings (-want +got):\n%s", diff)
 			}
 		})
-	}
-}
-
-func TestGapMessageNamesSkill(t *testing.T) {
-	got := checks.Grounding(checks.Draft{JobSkills: []string{"Pulumi"}})
-	if len(got) != 1 || got[0].Severity != checks.Info || !strings.Contains(got[0].Message, "Pulumi") {
-		t.Fatalf("got %+v", got)
 	}
 }
 

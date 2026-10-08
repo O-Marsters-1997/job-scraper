@@ -46,7 +46,6 @@ type Draft struct {
 	// Bank holds the text of every Achievement the User has.
 	Bank         []string
 	BaseSkills   []SkillLine
-	JobSkills    []string
 	LegacySkills bool
 	// BaseText holds every line of the base CV: headings, slots, profile and skills.
 	BaseText  []string

@@ -12,11 +12,10 @@ import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
 import { blockText } from "@/lib/docLayout";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
-import { reviewFindings, skillGaps } from "@/lib/tailoring";
+import { reviewFindings } from "@/lib/tailoring";
 import type { Draft, DraftLayout } from "@/types/tailoring";
 
 export const PROFILE_SLOT = "profile";
-export const SKILLS_CARD = "skills";
 
 const SAVE_DELAY_MS = 1500;
 const PAGE_COUNT = /is (\d+) pages?/;
@@ -51,7 +50,6 @@ export function createDraftEditor(
 	const original: Record<string, string> = Object.fromEntries(
 		slotBlocks.map((b) => [b.slotId, blockText(b)]),
 	);
-	const hasSkills = blocks.some((b) => b.section === "skills");
 
 	const [texts, setTexts] = createStore<Record<string, string>>({
 		...original,
@@ -125,13 +123,8 @@ export function createDraftEditor(
 		slotId === PROFILE_SLOT
 			? []
 			: reviewFindings(draft().findings).filter((f) => f.slotId === slotId);
-	const gaps = () => skillGaps(draft().findings);
-	const cardKeys = (hasCard: (slotId: string) => boolean) => [
-		...slotIds.filter(
-			(slotId) => hasCard(slotId) || findingsFor(slotId).length,
-		),
-		...(gaps().length && hasSkills ? [SKILLS_CARD] : []),
-	];
+	const cardKeys = (hasCard: (slotId: string) => boolean) =>
+		slotIds.filter((slotId) => hasCard(slotId) || findingsFor(slotId).length);
 
 	const setResolved = (key: string, value: boolean) => {
 		const next = { ...resolved(), [key]: value };
@@ -150,7 +143,6 @@ export function createDraftEditor(
 		undo: (slotId: string) => setText(slotId, original[slotId] ?? ""),
 		edited: (slotId: string) => text(slotId) !== original[slotId],
 		findingsFor,
-		gaps,
 		cardKeys,
 		isResolved: (key: string) => resolved()[key] === true,
 		setResolved,

@@ -13,11 +13,13 @@ Rules:
   Keep the bullets in the order their achievements were given for the position.
 - Do not change headings, employers, titles, dates or contact details. You
   only write bullet text.
-- Keep each bullet no longer than the slot text it replaces.
+- Keep each bullet no longer than the slot text it replaces. A rewrite that
+  adds a job term must cut other detail to stay within that length.
 - Do not use these words: leverage, spearheaded, synergy, passionate,
   dynamic, results-driven, utilize, responsible for.
-- Use the job description to decide what to emphasise. Where an achievement
-  supports a skill or tool the job names, use the job's exact term for it
+- Use the job description to decide what to emphasise. Read it for the
+  technologies, languages, frameworks, platforms, tools and named ways of
+  working it asks for. Where an achievement supports one of them, use the job's exact term for it
   (write "Kubernetes", not "container orchestration"; "CI/CD", not
   "automated pipelines"). Never copy wording the achievement does not support.
   A term the achievements do not support stays out, even if the job asks for it.

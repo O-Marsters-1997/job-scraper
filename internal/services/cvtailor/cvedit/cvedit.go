@@ -133,14 +133,13 @@ func FlatSkills(groups []SkillGroup) []string {
 	return out
 }
 
-// EditSet is the strict JSON shape the model returns. Profile, Skills and
-// JobSkills are set only when the input asked for them. LegacySkills marks a
-// stored flat skills array, decoded as one unlabelled group.
+// EditSet is the strict JSON shape the model returns. Profile and Skills are
+// set only when the input asked for them. LegacySkills marks a stored flat
+// skills array, decoded as one unlabelled group.
 type EditSet struct {
 	Positions    []PositionEdit `json:"positions"`
 	Profile      *string        `json:"profile,omitempty"`
 	Skills       []SkillGroup   `json:"skills,omitempty"`
-	JobSkills    []string       `json:"jobSkills,omitempty"`
 	LegacySkills bool           `json:"-"`
 }
 
@@ -273,7 +272,7 @@ func renderTask(in Input) string {
 			}
 			fmt.Fprintf(&b, "%d. %s: %s\n", i+1, label, strings.Join(g.Items, ", "))
 		}
-		fmt.Fprintf(&b, "Return the skills field with exactly these %d lines, in this order, each with its label copied exactly (an empty string for no label). Reorder each line's items for this job, most relevant first. Keep every item of its own line: drop none, add none, and move none to another line. In jobSkills return at most 8 of the job description's most important requirements: named technologies, languages, frameworks, platforms or tools, and named ways of working such as end-to-end ownership. Leave out generic concepts and nice-to-haves (databases, replication, queuing, distributed systems) and anything already in the current skills, the positions or the profile.\n", len(in.BaseSkills))
+		fmt.Fprintf(&b, "Return the skills field with exactly these %d lines, in this order, each with its label copied exactly (an empty string for no label). Reorder each line's items for this job, most relevant first. Keep every item of its own line: drop none, add none, and move none to another line.\n", len(in.BaseSkills))
 	}
 	if in.PriorEdits != nil {
 		prior, _ := json.Marshal(in.PriorEdits)
@@ -342,8 +341,7 @@ func editSchema(in Input) map[string]any {
 				"additionalProperties": false,
 			},
 		}
-		props["jobSkills"] = stringArray
-		required = append(required, "skills", "jobSkills")
+		required = append(required, "skills")
 	}
 	return map[string]any{
 		"type":                 "object",

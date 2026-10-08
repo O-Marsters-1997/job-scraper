@@ -82,7 +82,7 @@ export class KeptDraftExistsError extends Error {
 	}
 }
 
-function isSkillGap(f: DraftFinding): boolean {
+function isLegacySkillGap(f: DraftFinding): boolean {
 	return f.check === "skills" && f.severity === "info";
 }
 
@@ -94,14 +94,8 @@ const SEVERITY_ORDER: Record<DraftFinding["severity"], number> = {
 
 export function reviewFindings(findings: DraftFinding[]): DraftFinding[] {
 	return findings
-		.filter((f) => !isSkillGap(f))
+		.filter((f) => !isLegacySkillGap(f))
 		.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-}
-
-export function skillGaps(findings: DraftFinding[]): string[] {
-	return findings
-		.filter(isSkillGap)
-		.map((f) => /"([^"]+)"/.exec(f.message)?.[1] ?? f.message);
 }
 
 export function keptDraft<T extends { outcome: string | null }>(

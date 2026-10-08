@@ -88,14 +88,6 @@ func groundSkills(d Draft) []Finding {
 			}
 		}
 	}
-	for _, s := range d.JobSkills {
-		if !sourced(s) {
-			out = append(out, Finding{
-				Check: CheckSkills, Severity: Info,
-				Message: fmt.Sprintf("the job asks for %q; your CV and Bank never mention it", s),
-			})
-		}
-	}
 	return out
 }
 
