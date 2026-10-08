@@ -210,6 +210,9 @@ func (m *Module) editClean(ctx context.Context, key string, pl plan, in cvedit.I
 	}
 	var reverted []string
 	res.Edits, reverted = pl.revertBlocked(res.Edits)
+	if res.Edits.Skills == nil {
+		res.Edits.Skills = pl.swappedSkills()
+	}
 	if len(reverted) > 0 {
 		slog.InfoContext(ctx, "reverted blocked draft slots", slog.Any("checks", reverted))
 	}
@@ -223,7 +226,7 @@ func (m *Module) shorten(ctx context.Context, claim dto.DraftClaim, key, docID s
 	if err != nil {
 		return cvedit.Result{}, err
 	}
-	copyPlan, err := m.svc.plan(ctx, claim, docID)
+	copyPlan, err := m.svc.plan(ctx, withoutSwaps(claim), docID)
 	if err != nil {
 		return cvedit.Result{}, err
 	}

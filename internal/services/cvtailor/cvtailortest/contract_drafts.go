@@ -67,6 +67,18 @@ func runDraftContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("a claim carries the Draft's skill swaps", func(t *testing.T) {
+		f := newStore(t)
+		in := input(f)
+		in.SkillSwaps = []dto.SkillSwap{{BankSkillID: "b1", Line: 1, Replaces: "SQL"}}
+		if _, err := f.Store.CreateDraft(ctx, f.UserID, in, nil); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(in.SkillSwaps, claim(t, f).SkillSwaps); diff != "" {
+			t.Errorf("ClaimDraft().SkillSwaps mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("completing records the result and the Doc", func(t *testing.T) {
 		f := newStore(t)
 		d := create(t, f)

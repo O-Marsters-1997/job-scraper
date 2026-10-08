@@ -27,6 +27,10 @@ type plan struct {
 	structure docparse.DocStructure
 	positions []planned
 	bank      []string
+	// skills are the base CV's Skill Lines with the chosen swaps applied.
+	skills     []cvedit.SkillGroup
+	bankSkills []string
+	swapped    bool
 }
 
 func (s *Service) plan(ctx context.Context, claim dto.DraftClaim, docID string) (plan, error) {
@@ -47,12 +51,28 @@ func (s *Service) planOf(ctx context.Context, claim dto.DraftClaim, ds docparse.
 		return plan{}, err
 	}
 	slotsOf := slotsByPosition(ds, mappings)
+	bankSkills, err := s.store.ListBankSkills(ctx, claim.UserID)
+	if err != nil {
+		return plan{}, err
+	}
 
 	chosenAt := make(map[string]int, len(claim.AchievementIDs))
 	for i, id := range claim.AchievementIDs {
 		chosenAt[id] = i
 	}
 	pl := plan{structure: ds}
+	for _, b := range bankSkills {
+		pl.bankSkills = append(pl.bankSkills, b.Name)
+	}
+	if ds.Skills != nil {
+		pl.swapped = len(claim.SkillSwaps) > 0
+		pl.skills, err = applySkillSwaps(cvedit.SkillGroups(ds.Skills), claim.SkillSwaps, bankSkills)
+		if err != nil {
+			return plan{}, err
+		}
+	} else if len(claim.SkillSwaps) > 0 {
+		return plan{}, apperr.Invalid("the CV tab has no skills section to swap into")
+	}
 	found := 0
 	seen := map[string]bool{}
 	for _, p := range bank {
@@ -118,7 +138,7 @@ func (pl plan) input(jobDescription string) cvedit.Input {
 		in.HasProfile, in.BaseProfile = true, pl.structure.Profile.Text
 	}
 	if pl.structure.Skills != nil {
-		in.HasSkills, in.BaseSkills = true, cvedit.SkillGroups(pl.structure.Skills)
+		in.HasSkills, in.BaseSkills = true, pl.skills
 	}
 	for _, p := range pl.positions {
 		in.Positions = append(in.Positions, p.Position)
@@ -191,7 +211,7 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	for _, f := range blocks {
 		names = append(names, f.Check)
 		if f.Check == checks.CheckSkills {
-			edits.Skills = nil
+			edits.Skills = pl.swappedSkills()
 			continue
 		}
 		blocked[f.SlotID] = true
@@ -209,6 +229,15 @@ func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 		}
 	}
 	return edits, names
+}
+
+// swappedSkills is what a Draft's Skills fall back to: the base lines with the
+// chosen swaps, or nil when there are none.
+func (pl plan) swappedSkills() []cvedit.SkillGroup {
+	if !pl.swapped {
+		return nil
+	}
+	return pl.skills
 }
 
 func (pl plan) baseText() []string {
@@ -232,10 +261,10 @@ func (pl plan) baseText() []string {
 }
 
 func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Draft {
-	d := checks.Draft{Bank: pl.bank, Skills: cvedit.CheckLines(edits.Skills), LegacySkills: edits.LegacySkills, BasePages: basePages, DraftPages: draftPages}
+	d := checks.Draft{Bank: pl.bank, BankSkills: pl.bankSkills, Skills: cvedit.CheckLines(edits.Skills), LegacySkills: edits.LegacySkills, BasePages: basePages, DraftPages: draftPages}
 	d.Contact = &checks.ContactInput{InBody: pl.structure.Contact.InBody, InHeaderFooter: pl.structure.Contact.InHeaderFooter}
 	if pl.structure.Skills != nil {
-		d.BaseSkills = cvedit.CheckLines(cvedit.SkillGroups(pl.structure.Skills))
+		d.BaseSkills = cvedit.CheckLines(pl.skills)
 	}
 	d.BaseText = pl.baseText()
 	if pl.structure.Profile != nil && edits.Profile != nil {

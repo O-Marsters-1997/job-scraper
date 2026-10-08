@@ -324,6 +324,50 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("writes the chosen swap into its line and keeps it through a reorder", func(t *testing.T) {
+		e := newDraftEnv(t)
+		e.svc = cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, e.asker, e.drive)
+		rust := e.bankSkill(t, "Rust")
+		e.input.SkillSwaps = []dto.SkillSwap{{BankSkillID: rust.ID, Line: 0, Replaces: "SQL"}}
+		id := e.queue(t)
+		res := e.bulletResult("Cut p99 latency", 0.25)
+		res.Edits.Skills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Rust", "Go"}}}
+		editor := cvtailortest.Editing(res)
+
+		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, editor: editor})
+
+		d := e.draft(t, id)
+		if blocks := findingChecks(d.Findings, "block"); len(blocks) != 0 {
+			t.Errorf("block findings = %v, want none", blocks)
+		}
+		if diff := cmp.Diff([]string{"Rust", "Go"}, d.Content.Skills); diff != "" {
+			t.Errorf("content skills mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"Go", "SQL"}, d.Base.Skills); diff != "" {
+			t.Errorf("base skills mismatch (-want +got):\n%s", diff)
+		}
+		wantOffered := []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "Rust"}}}
+		if diff := cmp.Diff(wantOffered, editor.Inputs[0].BaseSkills); diff != "" {
+			t.Errorf("skills offered to the model mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("keeps the swap when the model drops the swapped-in item", func(t *testing.T) {
+		e := newDraftEnv(t)
+		e.svc = cvtailor.NewService(e.store, cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, e.asker, e.drive)
+		rust := e.bankSkill(t, "Rust")
+		e.input.SkillSwaps = []dto.SkillSwap{{BankSkillID: rust.ID, Line: 0, Replaces: "SQL"}}
+		id := e.queue(t)
+		res := e.bulletResult("Cut p99 latency", 0.25)
+		res.Edits.Skills = []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go", "SQL"}}}
+
+		e.run(t, tick{docs: cvtailortest.Docs{TabJSON: baseTab(t, head("Skills"), prose("Languages: Go, SQL"))}, editor: cvtailortest.Editing(res)})
+
+		if diff := cmp.Diff([]string{"Go", "Rust"}, e.draft(t, id).Content.Skills); diff != "" {
+			t.Errorf("content skills mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("drops a skills edit that changes a label", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		res := e.bulletResult("Cut p99 latency", 0.25)

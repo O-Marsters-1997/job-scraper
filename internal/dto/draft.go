@@ -8,10 +8,19 @@ import (
 // DraftInput asks for a Tailored CV Draft of one Job from one base CV Tab,
 // citing the Achievements the User confirmed.
 type DraftInput struct {
-	JobID          string   `json:"jobId"`
-	DocID          string   `json:"docId"`
-	TabID          string   `json:"tabId"`
-	AchievementIDs []string `json:"achievementIds"`
+	JobID          string      `json:"jobId"`
+	DocID          string      `json:"docId"`
+	TabID          string      `json:"tabId"`
+	AchievementIDs []string    `json:"achievementIds"`
+	SkillSwaps     []SkillSwap `json:"skillSwaps"`
+}
+
+// SkillSwap puts a Bank Skill into the Skill Line at index Line (0-based, in
+// base CV order), in place of the base item Replaces.
+type SkillSwap struct {
+	BankSkillID string `json:"bankSkillId"`
+	Line        int    `json:"line"`
+	Replaces    string `json:"replaces"`
 }
 
 // BulletLabel is what one offered Achievement looked like when a Draft was
@@ -62,9 +71,10 @@ type Draft struct {
 	Base        *DraftContent    `json:"base"`
 	BaseContent json.RawMessage  `json:"-"`
 
-	BaseDocID      string   `json:"-"`
-	BaseTabID      string   `json:"-"`
-	AchievementIDs []string `json:"-"`
+	BaseDocID      string      `json:"-"`
+	BaseTabID      string      `json:"-"`
+	AchievementIDs []string    `json:"-"`
+	SkillSwaps     []SkillSwap `json:"-"`
 }
 
 // DraftContent is the editable part of a Draft: the Profile, Skills (flat,
@@ -131,6 +141,7 @@ type DraftClaim struct {
 	DocID          string
 	TabID          string
 	AchievementIDs []string
+	SkillSwaps     []SkillSwap
 	Attempts       int
 	DraftDocID     string
 	JobDescription string

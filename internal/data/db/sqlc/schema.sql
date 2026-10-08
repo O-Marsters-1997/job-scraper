@@ -167,6 +167,7 @@ CREATE TABLE tailored_cvs (
     base_doc_id     TEXT        NOT NULL,
     base_tab_id     TEXT        NOT NULL,
     achievement_ids UUID[]      NOT NULL,
+    skill_swaps     JSONB       NOT NULL DEFAULT '[]',
     edit_set        JSONB,
     base_content    JSONB,
     findings        JSONB       NOT NULL DEFAULT '[]',
