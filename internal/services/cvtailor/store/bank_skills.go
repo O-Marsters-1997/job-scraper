@@ -22,7 +22,6 @@ func toBankSkill(s sqlc.BankSkill) dto.BankSkill {
 	return dto.BankSkill{ID: s.ID.String(), Name: s.Name, Category: s.Category, SortOrder: int(s.SortOrder)}
 }
 
-// ListBankSkills returns userID's Bank Skills in sort order.
 func (s *Store) ListBankSkills(ctx context.Context, userID string) ([]dto.BankSkill, error) {
 	uid, err := parseID(userID, ErrBankSkillNotFound)
 	if err != nil {

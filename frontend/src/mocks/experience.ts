@@ -186,7 +186,12 @@ export function getBankSkills(): BankSkill[] {
 	return bankSkills;
 }
 
-export function createBankSkill(input: BankSkillInput): BankSkill {
+function trimmed(input: BankSkillInput): BankSkillInput {
+	return { name: input.name.trim(), category: input.category.trim() };
+}
+
+export function createBankSkill(raw: BankSkillInput): BankSkill {
+	const input = trimmed(raw);
 	assertNameFree(input.name);
 	const skill: BankSkill = {
 		id: `skill-${faker.string.uuid().slice(0, 8)}`,
@@ -197,7 +202,8 @@ export function createBankSkill(input: BankSkillInput): BankSkill {
 	return skill;
 }
 
-export function updateBankSkill(id: string, input: BankSkillInput): BankSkill {
+export function updateBankSkill(id: string, raw: BankSkillInput): BankSkill {
+	const input = trimmed(raw);
 	const existing = bankSkills.find((s) => s.id === id);
 	if (!existing) throw new Error("bank skill not found");
 	assertNameFree(input.name, id);

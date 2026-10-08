@@ -219,6 +219,7 @@ function SkillRow(props: {
 								onClick={() => {
 									setName(props.skill.name);
 									setCategory(props.skill.category);
+									update.reset();
 									setEditing(true);
 								}}
 							>

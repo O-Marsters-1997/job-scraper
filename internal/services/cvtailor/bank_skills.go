@@ -24,7 +24,6 @@ func (s *Service) UpdateBankSkill(ctx context.Context, userID string, in dto.Ban
 	return s.store.UpdateBankSkill(ctx, userID, in)
 }
 
-// ReorderBankSkills moves the Bank Skills into the order of in.IDs.
 func (s *Service) ReorderBankSkills(ctx context.Context, userID string, in dto.ReorderInput) (struct{}, error) {
 	if hasDuplicates(in.IDs) {
 		return struct{}{}, apperr.Invalid("ids must not repeat")
