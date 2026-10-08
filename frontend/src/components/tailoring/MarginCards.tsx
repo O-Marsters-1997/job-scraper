@@ -21,8 +21,7 @@ const DOT = 20;
 const INLINE_GAP = 6;
 const WAND_PX = 32;
 
-const anchorSelector = (key: string) =>
-	`[data-slot-id="${key}"]`;
+const anchorSelector = (key: string) => `[data-slot-id="${key}"]`;
 
 function CardDot(props: {
 	cardKey: string;
