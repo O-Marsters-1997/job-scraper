@@ -18,7 +18,6 @@ import {
 	reviewFindings,
 	selectedAchievementIds,
 	setLinePicks,
-	skillGaps,
 	toMappings,
 } from "./tailoring";
 
@@ -121,11 +120,7 @@ assert.ok(
 	reviewFindings(findings)
 		.map((f) => f.message)
 		.join() === "40%,long",
-	"findings list blocking first and leave skill gaps out",
-);
-assert.ok(
-	skillGaps(findings).join() === "Terraform",
-	"info-level skills findings are the skill gaps",
+	"findings list blocking first and leave legacy skill gaps out",
 );
 assert.ok(
 	keptDraft([{ outcome: null }, { outcome: "kept" }])?.outcome === "kept",

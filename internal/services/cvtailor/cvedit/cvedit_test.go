@@ -144,9 +144,9 @@ func TestClient_Edit_ProfileAndSkillsOnlyWhenSectionsExist(t *testing.T) {
 		absentProps          []string
 	}{
 		{"neither", false, false, []string{"positions"}, []string{"profile", "skills", "jobSkills"}},
-		{"profile only", true, false, []string{"positions", "profile"}, []string{"skills", "jobSkills"}},
-		{"skills only", false, true, []string{"positions", "skills", "jobSkills"}, []string{"profile"}},
-		{"both", true, true, []string{"positions", "profile", "skills", "jobSkills"}, nil},
+		{"profile only", true, false, []string{"positions", "profile"}, []string{"skills"}},
+		{"skills only", false, true, []string{"positions", "skills"}, []string{"profile"}},
+		{"both", true, true, []string{"positions", "profile", "skills"}, nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,8 +217,8 @@ func TestClient_Edit_FirstAttemptOmitsRetrySections(t *testing.T) {
 	}
 }
 
-func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
-	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":[{"label":"Languages","items":["Go"]}],"jobSkills":["Go","Postgres"]}`, 0)
+func TestClient_Edit_DecodesProfileAndSkills(t *testing.T) {
+	client, _ := fakeServer(t, `{"positions":[],"profile":"New profile","skills":[{"label":"Languages","items":["Go"]}]}`, 0)
 
 	res, err := client.Edit(t.Context(), "sk-or-test", baseInput())
 	if err != nil {
@@ -227,8 +227,19 @@ func TestClient_Edit_DecodesProfileSkillsAndJobSkills(t *testing.T) {
 	if res.Edits.Profile == nil || *res.Edits.Profile != "New profile" {
 		t.Errorf("profile = %v", res.Edits.Profile)
 	}
-	if len(res.Edits.Skills) != 1 || len(res.Edits.JobSkills) != 2 {
-		t.Errorf("skills = %v, jobSkills = %v", res.Edits.Skills, res.Edits.JobSkills)
+	if len(res.Edits.Skills) != 1 {
+		t.Errorf("skills = %v", res.Edits.Skills)
+	}
+}
+
+func TestEditSet_StoredJobSkillsAreIgnored(t *testing.T) {
+	var e cvedit.EditSet
+	stored := `{"positions":[],"skills":[{"label":"Languages","items":["Go"]}],"jobSkills":["Pulumi"]}`
+	if err := json.Unmarshal([]byte(stored), &e); err != nil {
+		t.Fatalf("Unmarshal(%s): %v", stored, err)
+	}
+	if len(e.Skills) != 1 || e.Skills[0].Items[0] != "Go" {
+		t.Errorf("skills = %v, want the Languages line", e.Skills)
 	}
 }
 

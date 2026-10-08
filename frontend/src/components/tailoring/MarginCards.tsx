@@ -11,7 +11,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { cardTops } from "@/lib/cardLayout";
 import type { LineFit } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
-import { type DraftEditorState, SKILLS_CARD } from "../../hooks/useDraftEditor";
+import type { DraftEditorState } from "../../hooks/useDraftEditor";
 import type { SuggestionsState } from "../../hooks/useSuggestions";
 import { cardHeader, MarginCard } from "./MarginCard";
 import { SuggestionCard } from "./SuggestionCard";
@@ -22,7 +22,7 @@ const INLINE_GAP = 6;
 const WAND_PX = 32;
 
 const anchorSelector = (key: string) =>
-	key === SKILLS_CARD ? '[data-section="skills"]' : `[data-slot-id="${key}"]`;
+	`[data-slot-id="${key}"]`;
 
 function CardDot(props: {
 	cardKey: string;
