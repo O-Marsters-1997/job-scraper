@@ -158,6 +158,20 @@ func TestRequests(t *testing.T) {
 		}
 	})
 
+	t.Run("a label with stray whitespace still matches its line", func(t *testing.T) {
+		doc := loadFixture(t, "labelled_skills.json")
+		edits := cvedit.EditSet{Skills: []cvedit.SkillGroup{
+			{Label: "Languages ", Items: []string{"TypeScript", "Go"}},
+			{Label: "Databases", Items: []string{"Postgres", "Redis"}},
+		}}
+
+		got := apply(t, doc.text, requests(t, doc, nil, edits))
+
+		if !strings.Contains(got, "Languages: TypeScript, Go\n") {
+			t.Errorf("Requests() applied doc = %q, want the Languages line reordered", got)
+		}
+	})
+
 	t.Run("legacy flat skills replace the whole range", func(t *testing.T) {
 		doc := loadFixture(t, "labelled_skills.json")
 		edits := cvedit.EditSet{LegacySkills: true, Skills: []cvedit.SkillGroup{{Items: []string{"Go", "Redis"}}}}

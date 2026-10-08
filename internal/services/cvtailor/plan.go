@@ -223,6 +223,9 @@ func (pl plan) baseText() []string {
 		out = append(out, pl.structure.Profile.Text)
 	}
 	if pl.structure.Skills != nil {
+		for _, l := range pl.structure.Skills.Lines {
+			out = append(out, l.Label)
+		}
 		out = append(out, pl.structure.Skills.Items...)
 	}
 	return out

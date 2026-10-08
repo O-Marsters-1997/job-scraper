@@ -316,3 +316,13 @@ func TestClient_Edit_MalformedContent_KeepsRawAndErrors(t *testing.T) {
 		t.Errorf("result = %+v, want raw and cost kept for the caller to record", res)
 	}
 }
+
+func TestClient_Edit_FlatSkillsFromModelIsAnError(t *testing.T) {
+	client, _ := fakeServer(t, `{"positions":[],"skills":["Go"]}`, 0)
+	in := baseInput()
+	in.HasSkills, in.BaseSkills = true, []cvedit.SkillGroup{{Items: []string{"Go"}}}
+
+	if _, err := client.Edit(t.Context(), "sk-or-test", in); err == nil {
+		t.Error("Edit() err = nil, want an error for flat skills")
+	}
+}

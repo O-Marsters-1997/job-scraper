@@ -317,7 +317,7 @@ func proseLine(p para) SkillLine {
 func splitLabel(text string) (label, body string, labelled bool) {
 	before, after, found := strings.Cut(text, ":")
 	label = strings.TrimSpace(before)
-	if !found || label == "" || skillSplit.MatchString(label) {
+	if !found || label == "" || skillSplit.MatchString(label) || strings.ContainsAny(label, "()") {
 		return "", text, false
 	}
 	return label, strings.TrimLeftFunc(after, unicode.IsSpace), true

@@ -197,6 +197,11 @@ func TestParseSkillLines(t *testing.T) {
 			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL: advanced"}, Separator: ", ", ItemsStart: 1, End: 18}},
 		},
 		{
+			name:  "a colon inside parentheses is not a label",
+			paras: []testPara{{text: "Go (since 2019: advanced), SQL"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go (since 2019: advanced)", "SQL"}, Separator: ", ", ItemsStart: 1, End: 31}},
+		},
+		{
 			name:  "indices count UTF-16 code units",
 			paras: []testPara{{text: "Café 🙂: Go, SQL"}},
 			want:  []docparse.SkillLine{{Label: "Café 🙂", Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 10, End: 17}},

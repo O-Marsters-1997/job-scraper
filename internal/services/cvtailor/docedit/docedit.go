@@ -112,7 +112,7 @@ func skillRequests(s docparse.SkillsSlot, edits cvedit.EditSet) ([]edit, error) 
 	var out []edit
 	for i, line := range s.Lines {
 		group := edits.Skills[i]
-		if group.Label != line.Label {
+		if strings.TrimSpace(group.Label) != line.Label {
 			return nil, fmt.Errorf("%w: line %d is labelled %q, the document has %q", ErrSkillLines, i+1, group.Label, line.Label)
 		}
 		if slices.Equal(group.Items, line.Items) {

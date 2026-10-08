@@ -8,6 +8,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -223,6 +224,9 @@ func (c *Client) Edit(ctx context.Context, apiKey string, in Input) (Result, err
 	var edits EditSet
 	if err := json.Unmarshal([]byte(reply.Content), &edits); err != nil {
 		return Result{Raw: reply.Content, Cost: reply.Cost}, fmt.Errorf("decode edit result: %w", err)
+	}
+	if edits.LegacySkills {
+		return Result{Raw: reply.Content, Cost: reply.Cost}, errors.New("decode edit result: skills must be labelled lines")
 	}
 	fillKept(edits, in.Positions)
 	return Result{Edits: edits, Cost: reply.Cost, Raw: reply.Content}, nil
