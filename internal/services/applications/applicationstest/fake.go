@@ -106,6 +106,9 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	if !ok || app.UserID != userID {
 		return dto.Application{}, data.ErrNotFound
 	}
+	if app.StatusID != in.StatusID {
+		app.ChaseBy = nil
+	}
 	app.StatusID = in.StatusID
 	app.Notes = in.Notes
 	app.AppliedAt = parseDate(in.AppliedAt)

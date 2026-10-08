@@ -2,7 +2,13 @@ import { createSignal, Match, Show, Switch } from "solid-js";
 import { FactRow } from "@/components/FactRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { chaseDateKey, formatChaseDate, isChaseOverdue } from "@/lib/chase";
+import { useApplicationStatuses } from "@/hooks/useApplicationStatuses";
+import {
+	chaseDateKey,
+	formatChaseDate,
+	isChaseOverdue,
+	prefillChaseDate,
+} from "@/lib/chase";
 import { cn } from "@/lib/utils";
 import { useClearChase, useSetChase } from "../../../hooks/useApplications";
 
@@ -10,15 +16,23 @@ type Mode = "idle" | "picking" | "another";
 
 export function ChaseRow(props: {
 	applicationId: string;
+	statusId: string;
 	chaseBy: string | null;
 }) {
 	const [mode, setMode] = createSignal<Mode>("idle");
 	const [draft, setDraft] = createSignal("");
 	const setChase = useSetChase();
 	const clearChase = useClearChase();
+	const statuses = useApplicationStatuses();
+
+	const prefill = () =>
+		prefillChaseDate(
+			statuses.data?.find((s) => s.ID === props.statusId)?.ReplyWindowDays,
+			new Date(),
+		);
 
 	const openPicker = () => {
-		setDraft(props.chaseBy ? chaseDateKey(props.chaseBy) : "");
+		setDraft(props.chaseBy ? chaseDateKey(props.chaseBy) : prefill());
 		setMode("picking");
 	};
 

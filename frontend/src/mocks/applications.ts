@@ -77,7 +77,8 @@ export function updateApplication(
 	const prev = applications[idx]!;
 	const updated: Application = {
 		...prev,
-		StatusID: data.status_id ?? prev.StatusID,
+		StatusID: data.status_id ?? "",
+		ChaseBy: (data.status_id ?? "") === prev.StatusID ? prev.ChaseBy : null,
 		Notes: data.notes ?? prev.Notes,
 		AppliedAt: data.applied_at !== undefined ? data.applied_at : prev.AppliedAt,
 		SalaryInfo: data.salary_info ?? prev.SalaryInfo,

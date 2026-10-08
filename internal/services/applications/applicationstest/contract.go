@@ -43,6 +43,15 @@ func createStatus(t *testing.T, f Fixture, name string) dto.ApplicationStatus {
 	return got
 }
 
+func chaseSet(t *testing.T, f Fixture, id string) time.Time {
+	t.Helper()
+	chaseBy := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	if _, err := f.Store.SetChase(t.Context(), f.UserID, id, chaseBy); err != nil {
+		t.Fatalf("SetChase(...) err = %v", err)
+	}
+	return chaseBy
+}
+
 // RunStoreContract proves newStore's applications.Store behaves the same
 // whether it's the fake or the real store (ADR 0012). SeedDefaultStatuses is
 // a tx-scoped port, covered in store/store_test.go.
@@ -179,6 +188,49 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if got.Notes != "followed up" {
 			t.Errorf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
+		}
+	})
+
+	t.Run("update that changes the status clears the chase", func(t *testing.T) {
+		f := newStore(t)
+		applied := createStatus(t, f, "Applied")
+		offer := createStatus(t, f, "Offer")
+		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
+		chaseSet(t, f, created.ID)
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: offer.ID})
+		if err != nil {
+			t.Fatalf("UpdateApplication(status change) err = %v", err)
+		}
+		if got.ChaseBy != nil {
+			t.Errorf("UpdateApplication(status change) ChaseBy = %v, want nil", got.ChaseBy)
+		}
+	})
+
+	t.Run("update that keeps the status keeps the chase", func(t *testing.T) {
+		f := newStore(t)
+		applied := createStatus(t, f, "Applied")
+		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
+		want := chaseSet(t, f, created.ID)
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, Notes: "followed up"})
+		if err != nil {
+			t.Fatalf("UpdateApplication(same status) err = %v", err)
+		}
+		if got.ChaseBy == nil || !got.ChaseBy.Equal(want) {
+			t.Errorf("UpdateApplication(same status) ChaseBy = %v, want %v", got.ChaseBy, want)
+		}
+	})
+
+	t.Run("update that clears the status clears the chase", func(t *testing.T) {
+		f := newStore(t)
+		applied := createStatus(t, f, "Applied")
+		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
+		chaseSet(t, f, created.ID)
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{})
+		if err != nil {
+			t.Fatalf("UpdateApplication(clear status) err = %v", err)
+		}
+		if got.ChaseBy != nil {
+			t.Errorf("UpdateApplication(clear status) ChaseBy = %v, want nil", got.ChaseBy)
 		}
 	})
 

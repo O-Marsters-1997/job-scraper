@@ -1,4 +1,13 @@
 import { format } from "date-fns";
+import { addWorkingDays } from "./replyWindow";
+
+export function prefillChaseDate(
+	replyWindowDays: number | null | undefined,
+	today: Date,
+): string {
+	if (!replyWindowDays) return "";
+	return format(addWorkingDays(today, replyWindowDays), "yyyy-MM-dd");
+}
 
 export function chaseDateKey(chaseBy: string): string {
 	return chaseBy.slice(0, 10);
