@@ -61,7 +61,9 @@ function ApplicationsPage() {
 	};
 
 	const markChased = (app: ApplicationWithDetails) =>
-		clearChase.mutate(app.ID, { onSuccess: () => setChasedApp(app) });
+		clearChase.mutate(app.ID, {
+			onSuccess: () => setChasedApps((prev) => [...prev, app]),
+		});
 
 	const isOverdue = (app: ApplicationWithDetails) =>
 		app.ChaseBy !== null && isChaseOverdue(app.ChaseBy, new Date());
@@ -127,15 +129,17 @@ function ApplicationsPage() {
 				</ToggleChip>
 			</div>
 
-			<Show when={chasedApp()}>
+			<For each={chasedApps()}>
 				{(app) => (
 					<SetAnotherChase
-						applicationId={app().ID}
-						title={app().JobTitle}
-						onDone={() => setChasedApp(null)}
+						applicationId={app.ID}
+						title={app.JobTitle}
+						onDone={() =>
+							setChasedApps((prev) => prev.filter((p) => p.ID !== app.ID))
+						}
 					/>
 				)}
-			</Show>
+			</For>
 
 			<QueryBoundary query={query} fallbackRows={5}>
 				{(data) => (
