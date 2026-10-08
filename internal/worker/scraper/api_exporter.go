@@ -66,7 +66,7 @@ func (p *APIExporter) BulkExport(ctx context.Context, jobs []dto.Job) error {
 		}
 		for idx, item := range result.Results {
 			switch item.Status {
-			case "new", "changed", "unchanged", "merged":
+			case "new", "changed", "unchanged", "merged", "upgraded":
 			case "rejected":
 				return fmt.Errorf("api_exporter: job %s rejected: %s", batch[idx].URL, item.Reason)
 			default:
@@ -95,7 +95,7 @@ func (p *APIExporter) Export(ctx context.Context, job dto.Job) error {
 		return fmt.Errorf("api_exporter: decode outcome: %w", err)
 	}
 	switch result.Status {
-	case "new", "changed", "unchanged", "merged":
+	case "new", "changed", "unchanged", "merged", "upgraded":
 		return nil
 	case "rejected":
 		return fmt.Errorf("api_exporter: job %s rejected: %s", job.URL, result.Reason)
