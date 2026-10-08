@@ -56,7 +56,7 @@ func (s *Service) IngestJobs(ctx context.Context, jobs []dto.Job) ([]IngestResul
 			return nil, err
 		}
 		results[idx] = IngestResult{Status: status, JobID: saved.ID}
-		if status == "unchanged" {
+		if status == "unchanged" || status == "merged" {
 			continue
 		}
 		s.upsertCompany(ctx, saved)

@@ -85,6 +85,29 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 	};
 });
 
+for (const [i, job] of jobs.entries()) {
+	const primary = {
+		source: job.Source.toLowerCase(),
+		url: job.URL,
+		first_seen_at: job.ScrapedAt,
+	};
+	if (i % 3 !== 0) {
+		job.Listings = [primary];
+		continue;
+	}
+	const secondary =
+		primary.source === "linkedin"
+			? {
+					source: "wis",
+					url: `https://workinstartups.com/details/${5900000000 + i}`,
+				}
+			: {
+					source: "linkedin",
+					url: `https://www.linkedin.com/jobs/view/${4470000000 + i}`,
+				};
+	job.Listings = [primary, { ...secondary, first_seen_at: job.ScrapedAt }];
+}
+
 jobs.sort(
 	(a, b) => new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
 );

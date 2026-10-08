@@ -26,4 +26,11 @@ type Job struct {
 	CompanyFavourite   bool
 	Breakdown          []ScoreRow
 	Wildcard           bool
+	Listings           []JobListing
+}
+
+type JobListing struct {
+	Source      string    `json:"source"`
+	URL         string    `json:"url"`
+	FirstSeenAt time.Time `json:"first_seen_at"`
 }

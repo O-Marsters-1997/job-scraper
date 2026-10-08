@@ -7,11 +7,11 @@ The domain language for Job Scraper — a personal job-hunting command centre th
 ### Job search
 
 **Job**:
-A single job opportunity, identified by a trusted ATS posting ID when one is available; the same Job may appear at several URLs.
+A single job opportunity, matched across listings by a trusted ATS posting ID or, for aggregator listings, the match key; the same Job may appear at several URLs.
 _Avoid_: Listing, posting, vacancy
 
 **Job URL**:
-A source-specific link to a Job; several Job URLs may refer to the same Job when a trusted ATS posting ID establishes the match.
+A source-specific link to a Job, also called a listing; several Job URLs may refer to the same Job when a trusted ATS posting ID establishes the match, and aggregator listings attach by match key.
 _Avoid_: Job identity, unique Job
 
 **Job Candidate**:
@@ -19,7 +19,7 @@ A discovered job URL with cheap listing details, retained before its full Job de
 _Avoid_: Fully described Job, rejected Job
 
 **Provisional Job**:
-A fully described Job whose identity rests on a normalized Job URL until a trusted ATS posting ID establishes whether it matches another Job.
+A fully described Job whose identity rests on a normalized Job URL until a trusted ATS posting ID establishes whether it matches another Job; a matching ATS posting upgrades it in place.
 _Avoid_: Confirmed Job, duplicate Job
 
 **Closed Job**:

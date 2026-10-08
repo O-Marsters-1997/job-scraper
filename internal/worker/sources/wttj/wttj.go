@@ -310,7 +310,7 @@ func parseJobPosting(body []byte, id string) (dto.Job, error) {
 		Location:          strings.Join(places, "; "),
 		URL:               baseURL + "/jobs/" + id,
 		ApplyURL:          p.Identifier.Value,
-		CompanySlug:       slug.Make(p.HiringOrg.Name),
+		CompanySlug:       slug.Company(p.HiringOrg.Name),
 		ProviderPostingID: id,
 		Source:            name,
 		UpdatedAt:         posted,

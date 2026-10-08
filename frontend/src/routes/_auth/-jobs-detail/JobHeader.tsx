@@ -1,13 +1,15 @@
 import { useNavigate } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { JobActionsMenu } from "@/components/jobs/JobActionsMenu";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSources } from "@/hooks/useSources";
 import { formatDate } from "@/lib/datetime";
+import { otherListings, sourceLabel } from "@/lib/listings";
 import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
@@ -32,6 +34,8 @@ export function JobHeader(props: {
 	onTrack: () => void;
 }) {
 	const navigate = useNavigate();
+	const sources = useSources();
+	const others = () => otherListings(props.job);
 
 	return (
 		<Card class="mb-4">
@@ -48,6 +52,27 @@ export function JobHeader(props: {
 						<p class="mt-0.5 text-sm text-muted">
 							{titleCase(props.job.CompanySlug)} · {props.job.Location}
 						</p>
+
+						<Show when={others().length > 0}>
+							<p class="mt-1 text-xs text-faint">
+								Also on{" "}
+								<For each={others()}>
+									{(listing, i) => (
+										<>
+											{i() > 0 && ", "}
+											<a
+												href={listing.url}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="font-medium text-muted transition-colors hover:text-foreground hover:underline"
+											>
+												{sourceLabel(listing.source, sources.data)}
+											</a>
+										</>
+									)}
+								</For>
+							</p>
+						</Show>
 
 						<Show
 							when={

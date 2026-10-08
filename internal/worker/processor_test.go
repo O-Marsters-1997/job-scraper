@@ -468,7 +468,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 
 	t.Run("tracks matching users as new and leaves existing rows alone", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
-		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -587,7 +587,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err := f.discoverProcessor(noRecheck, configsStub{match}).Process(ctx, queue.Task{Version: 1, Source: "wttj", Kind: queue.BoardDiscoverTask, BoardToken: "acme"}); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
 		}
-		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -611,7 +611,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err := f.discoverProcessor(viaAshby, configsStub{match}).Process(ctx, wttj); err != nil {
 			t.Fatalf("Process() = %v, want nil", err)
 		}
-		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -630,7 +630,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 
 	t.Run("an already verified ATS board is not republished", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
-		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme-corp", Name: "Acme Corp"})
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
 		if err != nil {
 			t.Fatal(err)
 		}

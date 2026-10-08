@@ -245,6 +245,8 @@ type Job struct {
 	ContentFingerprint pgtype.Text
 	ContentChangedAt   pgtype.Timestamptz
 	FirstDiscoveredAt  pgtype.Timestamptz
+	MatchTitle         pgtype.Text
+	MatchLocation      pgtype.Text
 }
 
 type JobCandidate struct {

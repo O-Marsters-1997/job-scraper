@@ -37,6 +37,7 @@ type FakeStore struct {
 	jobOrder []string
 	byURL    map[string]string
 	byBoard  map[string]string
+	listings map[string][]dto.JobListing
 
 	companies     map[string]dto.Company
 	companyBySlug map[string]string
@@ -64,6 +65,7 @@ func NewFakeStore() *FakeStore {
 		seen:           make(map[string]map[string]bool),
 		byURL:          make(map[string]string),
 		byBoard:        make(map[string]string),
+		listings:       make(map[string][]dto.JobListing),
 		companies:      make(map[string]dto.Company),
 		companyBySlug:  make(map[string]string),
 		tracking:       make(map[string]dto.CompanyTracking),
@@ -133,6 +135,14 @@ func (f *FakeStore) indexJob(job dto.Job) {
 	}
 }
 
+func (f *FakeStore) addListing(jobID string, job dto.Job) {
+	f.byURL[job.URL] = jobID
+	if slices.ContainsFunc(f.listings[jobID], func(l dto.JobListing) bool { return l.URL == job.URL }) {
+		return
+	}
+	f.listings[jobID] = append(f.listings[jobID], dto.JobListing{Source: job.Source, URL: job.URL, FirstSeenAt: time.Now()})
+}
+
 func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -146,6 +156,7 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		f.jobs[id] = job
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
+		f.addListing(id, job)
 		return job, "new", nil
 	}
 
@@ -158,6 +169,7 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	if prev.ContentFingerprint != fingerprint {
 		status = "changed"
 	}
+	f.addListing(id, job)
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL
 	f.jobs[id] = job
 	f.indexJob(job)
@@ -206,6 +218,12 @@ func (f *FakeStore) GetJob(_ context.Context, jobID, userID string) (dto.Job, er
 		return dto.Job{}, err
 	}
 	return f.withUserState(userID, job), nil
+}
+
+func (f *FakeStore) ListJobListings(_ context.Context, jobID string) ([]dto.JobListing, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.listings[jobID]), nil
 }
 
 func (f *FakeStore) MarkJobsSeen(_ context.Context, userID string, jobIDs []string, seen bool) error {

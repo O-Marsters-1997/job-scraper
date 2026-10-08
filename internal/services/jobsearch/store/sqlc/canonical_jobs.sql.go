@@ -80,15 +80,63 @@ func (q *Queries) FindCanonicalJob(ctx context.Context, arg FindCanonicalJobPara
 	return i, err
 }
 
+const findMatchCandidates = `-- name: FindMatchCandidates :many
+SELECT id, url, COALESCE(match_location, '') AS match_location, primary_board_id
+FROM jobs
+WHERE match_title = $1
+    AND (company_slug = $2 OR company_id = $3::uuid)
+    AND closed_at IS NULL
+    AND updated_at > NOW() - INTERVAL '90 days'
+FOR UPDATE
+`
+
+type FindMatchCandidatesParams struct {
+	MatchTitle  pgtype.Text
+	CompanySlug string
+	CompanyID   pgtype.UUID
+}
+
+type FindMatchCandidatesRow struct {
+	ID             pgtype.UUID
+	Url            string
+	MatchLocation  string
+	PrimaryBoardID pgtype.UUID
+}
+
+func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidatesParams) ([]FindMatchCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, findMatchCandidates, arg.MatchTitle, arg.CompanySlug, arg.CompanyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindMatchCandidatesRow
+	for rows.Next() {
+		var i FindMatchCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Url,
+			&i.MatchLocation,
+			&i.PrimaryBoardID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, updated_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
-    content_fingerprint, content_changed_at)
+    content_fingerprint, content_changed_at, match_title, match_location)
 VALUES ($1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, COALESCE($10::uuid, (SELECT id FROM companies WHERE slug = $4)),
     $11::uuid, $12,
-    $13, NOW())
+    $13, NOW(), $14, $15)
 RETURNING id
 `
 
@@ -106,6 +154,8 @@ type InsertCanonicalJobParams struct {
 	BoardID         pgtype.UUID
 	PostingID       pgtype.Text
 	Fingerprint     pgtype.Text
+	MatchTitle      pgtype.Text
+	MatchLocation   pgtype.Text
 }
 
 func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJobParams) (pgtype.UUID, error) {
@@ -123,6 +173,8 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
+		arg.MatchTitle,
+		arg.MatchLocation,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
@@ -164,11 +216,12 @@ UPDATE jobs SET title = $1, location = $2,
     updated_at = $3, description = $4,
     salary_raw = $5, work_arrangement = $6,
     content_fingerprint = $7, content_changed_at = NOW(),
-    company_id = COALESCE($8::uuid, company_id, (SELECT id FROM companies WHERE slug = $9)),
-    primary_board_id = COALESCE($10::uuid, primary_board_id),
-    provider_posting_id = COALESCE($11, provider_posting_id),
+    match_title = $8, match_location = $9,
+    company_id = COALESCE($10::uuid, company_id, (SELECT id FROM companies WHERE slug = $11)),
+    primary_board_id = COALESCE($12::uuid, primary_board_id),
+    provider_posting_id = COALESCE($13, provider_posting_id),
     scraped_at = NOW()
-WHERE id = $12::uuid
+WHERE id = $14::uuid
 `
 
 type UpdateChangedCanonicalJobParams struct {
@@ -179,6 +232,8 @@ type UpdateChangedCanonicalJobParams struct {
 	SalaryRaw       string
 	WorkArrangement string
 	Fingerprint     pgtype.Text
+	MatchTitle      pgtype.Text
+	MatchLocation   pgtype.Text
 	CompanyID       pgtype.UUID
 	CompanySlug     string
 	BoardID         pgtype.UUID
@@ -195,6 +250,8 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 		arg.SalaryRaw,
 		arg.WorkArrangement,
 		arg.Fingerprint,
+		arg.MatchTitle,
+		arg.MatchLocation,
 		arg.CompanyID,
 		arg.CompanySlug,
 		arg.BoardID,
@@ -228,6 +285,59 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
+		arg.ID,
+	)
+	return err
+}
+
+const upgradeCanonicalJob = `-- name: UpgradeCanonicalJob :exec
+UPDATE jobs SET title = $1, location = $2, url = $3,
+    source = $4, updated_at = $5, description = $6,
+    salary_raw = $7, work_arrangement = $8,
+    content_fingerprint = $9, content_changed_at = NOW(),
+    match_title = $10, match_location = $11,
+    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
+    primary_board_id = $14::uuid, provider_posting_id = $15,
+    scraped_at = NOW()
+WHERE id = $16::uuid
+`
+
+type UpgradeCanonicalJobParams struct {
+	Title           string
+	Location        string
+	Url             string
+	Source          string
+	UpdatedAt       pgtype.Timestamptz
+	Description     string
+	SalaryRaw       string
+	WorkArrangement string
+	Fingerprint     pgtype.Text
+	MatchTitle      pgtype.Text
+	MatchLocation   pgtype.Text
+	CompanyID       pgtype.UUID
+	CompanySlug     string
+	BoardID         pgtype.UUID
+	PostingID       pgtype.Text
+	ID              pgtype.UUID
+}
+
+func (q *Queries) UpgradeCanonicalJob(ctx context.Context, arg UpgradeCanonicalJobParams) error {
+	_, err := q.db.Exec(ctx, upgradeCanonicalJob,
+		arg.Title,
+		arg.Location,
+		arg.Url,
+		arg.Source,
+		arg.UpdatedAt,
+		arg.Description,
+		arg.SalaryRaw,
+		arg.WorkArrangement,
+		arg.Fingerprint,
+		arg.MatchTitle,
+		arg.MatchLocation,
+		arg.CompanyID,
+		arg.CompanySlug,
+		arg.BoardID,
+		arg.PostingID,
 		arg.ID,
 	)
 	return err
