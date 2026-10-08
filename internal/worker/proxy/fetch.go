@@ -184,44 +184,30 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			release()
 		}
 	}()
-	for attempt := 0; attempt < 2; attempt++ {
-		start := time.Now()
-		resp, err := f.base.RoundTrip(req)
-		logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
-		record(req, f.source, f.route, resp, err)
-		if err != nil {
-			if f.zone != nil && errors.Is(err, errZoneExhausted) {
-				f.zone.result(true, false, probe)
-			}
-			return nil, err
+	start := time.Now()
+	resp, err := f.base.RoundTrip(req)
+	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	record(req, f.source, f.route, resp, err)
+	if err != nil {
+		if f.zone != nil && errors.Is(err, errZoneExhausted) {
+			f.zone.result(true, false, probe)
 		}
-		if f.zone != nil {
-			exhausted := zoneExhausted(resp)
-			f.zone.result(exhausted, resp.StatusCode == http.StatusOK, probe)
-			if exhausted {
-				_ = resp.Body.Close()
-				return nil, errZoneExhausted
-			}
-		}
-		if resp.StatusCode != http.StatusTooManyRequests || attempt == 1 {
-			resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
-			held = false
-			if collector != nil && storable(resp) {
-				return storeResponse(f.cache, req, resp, collector)
-			}
-			return resp, nil
-		}
-		_ = resp.Body.Close()
-		select {
-		case <-req.Context().Done():
-			return nil, req.Context().Err()
-		case <-time.After(200 * time.Millisecond):
-		}
-		if req, err = rewound(req); err != nil {
-			return nil, err
+		return nil, err
+	}
+	if f.zone != nil {
+		exhausted := zoneExhausted(resp)
+		f.zone.result(exhausted, resp.StatusCode == http.StatusOK, probe)
+		if exhausted {
+			_ = resp.Body.Close()
+			return nil, errZoneExhausted
 		}
 	}
-	return nil, errors.New("unreachable")
+	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
+	held = false
+	if collector != nil && storable(resp) {
+		return storeResponse(f.cache, req, resp, collector)
+	}
+	return resp, nil
 }
 
 func rewound(req *http.Request) (*http.Request, error) {

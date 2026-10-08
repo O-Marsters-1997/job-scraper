@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -29,6 +30,9 @@ type BoardSpec struct {
 	// NextPage, when set with Post, reads a response and returns the POST body that
 	// fetches the following page, or nil on the last page.
 	NextPage func(body []byte) []byte
+	// Gate, when set, spaces this spec's requests and stops them for as long as the host's
+	// 429 says.
+	Gate *Gate
 }
 
 const maxBoardPages = 200
@@ -102,6 +106,24 @@ func (b *BoardSource) PollBoard(ctx context.Context) (BoardResult, error) {
 }
 
 func (b *BoardSource) fetchPage(ctx context.Context, postBody []byte) ([]byte, []dto.Job, error) {
+	if gate := b.spec.Gate; gate != nil {
+		if err := gate.Wait(ctx); err != nil {
+			return nil, nil, err
+		}
+	}
+	body, err := b.request(ctx, postBody)
+	var status *StatusError
+	if b.spec.Gate != nil && errors.As(err, &status) && status.Code == http.StatusTooManyRequests {
+		b.spec.Gate.Block(status.RetryAfter)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	jobs, err := b.spec.Parse(body)
+	return body, jobs, err
+}
+
+func (b *BoardSource) request(ctx context.Context, postBody []byte) ([]byte, error) {
 	var body []byte
 	var err error
 	switch {
@@ -112,11 +134,7 @@ func (b *BoardSource) fetchPage(ctx context.Context, postBody []byte) ([]byte, [
 	default:
 		body, err = b.Get(ctx, b.spec.URL)
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-	jobs, err := b.spec.Parse(body)
-	return body, jobs, err
+	return body, err
 }
 
 // JSONArrayLen counts the elements of the array at key in a JSON object body, or of a

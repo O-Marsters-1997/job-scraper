@@ -10,6 +10,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
@@ -101,7 +102,7 @@ func TestFetchRejectsOversizedBody(t *testing.T) {
 	}
 }
 
-func TestRateLimitDoesNotPauseZone(t *testing.T) {
+func TestRateLimitIsNotRetriedAndDoesNotPauseZone(t *testing.T) {
 	calls := 0
 	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		calls++
@@ -110,15 +111,20 @@ func TestRateLimitDoesNotPauseZone(t *testing.T) {
 		}
 		return response(200, ""), nil
 	}), &proxy.ZoneGate{}, nil)
+	var statuses []int
 	for range 2 {
 		resp, err := tr.RoundTrip(newRequest(t, "https://8.8.8.8/"))
 		if err != nil {
 			t.Fatal(err)
 		}
+		statuses = append(statuses, resp.StatusCode)
 		_ = resp.Body.Close()
 	}
-	if calls != 3 {
-		t.Fatalf("calls = %d, want 3 (one bounded retry)", calls)
+	if diff := cmp.Diff([]int{429, 200}, statuses); diff != "" {
+		t.Errorf("statuses (-want +got):\n%s", diff)
+	}
+	if calls != 2 {
+		t.Errorf("calls = %d, want 2 (no retry of the 429)", calls)
 	}
 }
 

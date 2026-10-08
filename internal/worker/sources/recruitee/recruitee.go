@@ -10,6 +10,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
+// One gate for every company subdomain: Recruitee's limit spans *.recruitee.com.
+var limiter = sources.NewGate(2*time.Second, time.Hour)
+
 // New builds a Recruitee source for one company subdomain (e.g. "acmecorp").
 func New(token string) *sources.BoardSource {
 	return sources.NewBoardSource(sources.BoardSpec{
@@ -18,6 +21,7 @@ func New(token string) *sources.BoardSource {
 		CompanySlug: token,
 		Parse:       parse,
 		Count:       sources.JSONArrayLen("offers"),
+		Gate:        limiter,
 	})
 }
 

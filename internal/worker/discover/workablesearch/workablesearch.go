@@ -3,15 +3,19 @@ package workablesearch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/detect"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
 const (
@@ -22,15 +26,21 @@ const (
 	interval  = 7 * 24 * time.Hour
 	maxPages  = 500
 	applyHost = "apply.workable.com"
+
+	pageGap       = time.Second
+	rateLimitWait = 30 * time.Second
+	maxRateLimits = 3
 )
 
 type Harvester struct {
 	client    *http.Client
 	searchURL string
+	pageGap   time.Duration
+	backoff   time.Duration
 }
 
 func New(client *http.Client, searchURL string) *Harvester {
-	return &Harvester{client: client, searchURL: searchURL}
+	return &Harvester{client: client, searchURL: searchURL, pageGap: pageGap, backoff: rateLimitWait}
 }
 
 func (h *Harvester) Name() string            { return "workablesearch" }
@@ -52,9 +62,15 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 	seenCompanies := map[string]bool{}
 	pageToken := ""
 	for range maxPages {
-		p, err := h.fetch(ctx, pageToken)
+		p, err := h.fetchPaced(ctx, pageToken)
 		if err != nil {
-			return discover.Harvest{}, err
+			var status *sources.StatusError
+			rateLimited := errors.As(err, &status) && status.Code == http.StatusTooManyRequests
+			if !rateLimited || len(seenBoards)+len(seenCompanies)+out.Skipped == 0 || ctx.Err() != nil {
+				return discover.Harvest{}, err
+			}
+			slog.WarnContext(ctx, "workable search stopped early, keeping the pages fetched", slog.Any(logger.KeyErr, err))
+			break
 		}
 		for _, j := range p.Jobs {
 			if board, ok := applyBoard(j.URL); ok {
@@ -82,6 +98,33 @@ func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
 		pageToken = p.NextPageToken
 	}
 	return out, nil
+}
+
+func (h *Harvester) fetchPaced(ctx context.Context, pageToken string) (page, error) {
+	if err := sleep(ctx, h.pageGap); err != nil {
+		return page{}, err
+	}
+	for attempt := 1; ; attempt++ {
+		p, err := h.fetch(ctx, pageToken)
+		var status *sources.StatusError
+		if !errors.As(err, &status) || status.Code != http.StatusTooManyRequests || attempt > maxRateLimits {
+			return p, err
+		}
+		if err := sleep(ctx, time.Duration(attempt)*h.backoff); err != nil {
+			return page{}, err
+		}
+	}
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (h *Harvester) fetch(ctx context.Context, pageToken string) (page, error) {

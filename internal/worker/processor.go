@@ -152,6 +152,9 @@ func (p *Processor) nameCompany(ctx context.Context, companyID, name string) err
 
 func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	found, err := p.discover(ctx, task.Source, task.BoardToken)
+	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+		return &queue.DeferError{Until: until, Err: err}
+	}
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		logBoardDiscover(ctx, task, "failed")
@@ -357,6 +360,9 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 		}
 	}
 	if err := p.boards.PollBoard(ctx, task.BoardID, task.Manual); err != nil {
+		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+			return &queue.DeferError{Until: until, Err: err}
+		}
 		return err
 	}
 	if task.TargetID != "" {
