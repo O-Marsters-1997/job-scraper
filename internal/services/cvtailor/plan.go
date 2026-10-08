@@ -315,9 +315,6 @@ func (c *baseContent) UnmarshalJSON(data []byte) error {
 }
 
 func (c baseContent) content() dto.DraftContent {
-	flat := cvedit.FlatSkills(c.Skills)
-	if flat == nil {
-		flat = []string{}
-	}
-	return dto.DraftContent{Profile: c.Profile, Skills: flat, Positions: c.Positions}
+	flat, groups := skillContent(c.Skills)
+	return dto.DraftContent{Profile: c.Profile, Skills: flat, SkillGroups: groups, Positions: c.Positions}
 }

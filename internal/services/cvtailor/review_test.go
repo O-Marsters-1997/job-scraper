@@ -67,6 +67,25 @@ func TestGetDraftBase(t *testing.T) {
 	})
 }
 
+func TestGetDraftSkillGroups(t *testing.T) {
+	t.Run("a Draft that did not edit Skills shows the base Skill Lines", func(t *testing.T) {
+		e, id, _ := renumberedDraft(t)
+
+		d := e.draft(t, id)
+
+		if d.Base == nil || d.Content == nil {
+			t.Fatalf("GetDraft() base = %+v, content = %+v, want both", d.Base, d.Content)
+		}
+		want := []dto.SkillGroup{{Items: []string{"Go", "SQL"}}}
+		if diff := cmp.Diff(want, d.Base.SkillGroups); diff != "" {
+			t.Errorf("base skill groups (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(want, d.Content.SkillGroups); diff != "" {
+			t.Errorf("content skill groups (-want +got):\n%s", diff)
+		}
+	})
+}
+
 func TestKeepDraft(t *testing.T) {
 	t.Run("queues at once and the next tick renames the Doc and marks it kept", func(t *testing.T) {
 		e := newDraftEnv(t)

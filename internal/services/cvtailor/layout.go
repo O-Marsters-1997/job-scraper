@@ -62,6 +62,7 @@ func (s *Service) DraftLayout(ctx context.Context, userID string, q dto.DraftQue
 		b.SlotID = slotAt[b.StartIndex]
 		if sk := ds.Skills; sk != nil && b.StartIndex >= sk.StartIndex && b.StartIndex < sk.EndIndex {
 			b.Section = skillsSection
+			b.SkillLine = skillLineAt(sk, b.StartIndex)
 		}
 		out.Blocks[i] = b.LayoutBlock
 	}
@@ -89,4 +90,13 @@ func baseSlotsByStart(pl plan, edits cvedit.EditSet) map[int]string {
 		}
 	}
 	return out
+}
+
+func skillLineAt(sk *docparse.SkillsSlot, start int) *int {
+	for i, l := range sk.Lines {
+		if start <= l.End {
+			return &i
+		}
+	}
+	return nil
 }

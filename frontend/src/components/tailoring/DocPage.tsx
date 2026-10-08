@@ -296,6 +296,7 @@ function Block(props: {
 		<div
 			data-slot-id={props.block.slotId || undefined}
 			data-section={props.block.section || undefined}
+			data-skill-line={props.block.skillLine ?? undefined}
 			class="relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]"
 			style={blockStyle(props.block, lead(), props.draw, spacer())}
 		>

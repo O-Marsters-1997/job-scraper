@@ -67,13 +67,21 @@ type Draft struct {
 	AchievementIDs []string `json:"-"`
 }
 
-// DraftContent is the editable part of a Draft: the Profile, Skills and each
-// Position's bullets in CV order. Base holds the base CV Tab's content as it
-// was at generation, with no AchievementIDs.
+// DraftContent is the editable part of a Draft: the Profile, Skills (flat,
+// and by Skill Line in SkillGroups) and each Position's bullets in CV order.
+// Base holds the base CV Tab's content as it was at generation.
 type DraftContent struct {
-	Profile   *string         `json:"profile"`
-	Skills    []string        `json:"skills"`
-	Positions []DraftPosition `json:"positions"`
+	Profile     *string         `json:"profile"`
+	Skills      []string        `json:"skills"`
+	SkillGroups []SkillGroup    `json:"skillGroups"`
+	Positions   []DraftPosition `json:"positions"`
+}
+
+// SkillGroup is one Skill Line of a Draft: its label ("" when the CV has
+// none) and its items in order.
+type SkillGroup struct {
+	Label string   `json:"label"`
+	Items []string `json:"items"`
 }
 
 type DraftPosition struct {
@@ -192,10 +200,12 @@ type LayoutPage struct {
 }
 
 // LayoutBlock is one paragraph. SlotID is "", "profile" or the base slot ID;
-// Section is "skills" inside the read-only Skills range.
+// Section is "skills" inside the read-only Skills range, where SkillLine is
+// the index of the Skill Line the paragraph belongs to.
 type LayoutBlock struct {
 	SlotID          string        `json:"slotId"`
 	Section         string        `json:"section"`
+	SkillLine       *int          `json:"skillLine"`
 	Align           string        `json:"align"`
 	LineSpacing     float64       `json:"lineSpacing"`
 	SpaceAbove      float64       `json:"spaceAbove"`

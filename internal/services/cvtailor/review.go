@@ -51,7 +51,7 @@ func (s *Service) GetDraft(ctx context.Context, userID string, q dto.DraftQuery)
 		content.Profile = draft.Base.Profile
 	}
 	if len(content.Skills) == 0 {
-		content.Skills = draft.Base.Skills
+		content.Skills, content.SkillGroups = draft.Base.Skills, draft.Base.SkillGroups
 	}
 	return draft, nil
 }
@@ -159,11 +159,25 @@ func withDocURL(d dto.Draft) dto.Draft {
 	return d
 }
 
-func editedContent(edits cvedit.EditSet) dto.DraftContent {
-	c := dto.DraftContent{Profile: edits.Profile, Skills: cvedit.FlatSkills(edits.Skills), Positions: []dto.DraftPosition{}}
-	if c.Skills == nil {
-		c.Skills = []string{}
+func skillContent(groups []cvedit.SkillGroup) ([]string, []dto.SkillGroup) {
+	flat := cvedit.FlatSkills(groups)
+	if flat == nil {
+		flat = []string{}
 	}
+	out := make([]dto.SkillGroup, len(groups))
+	for i, g := range groups {
+		items := g.Items
+		if items == nil {
+			items = []string{}
+		}
+		out[i] = dto.SkillGroup{Label: g.Label, Items: items}
+	}
+	return flat, out
+}
+
+func editedContent(edits cvedit.EditSet) dto.DraftContent {
+	c := dto.DraftContent{Profile: edits.Profile, Positions: []dto.DraftPosition{}}
+	c.Skills, c.SkillGroups = skillContent(edits.Skills)
 	for _, pe := range edits.Positions {
 		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
 		for _, b := range pe.Bullets {
