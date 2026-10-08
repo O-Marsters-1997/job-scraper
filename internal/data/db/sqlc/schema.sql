@@ -16,13 +16,16 @@ CREATE TABLE IF NOT EXISTS jobs (
     provider_posting_id TEXT,
     content_fingerprint TEXT,
     content_changed_at  TIMESTAMPTZ,
-    first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    match_title         TEXT,
+    match_location      TEXT
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
 CREATE INDEX jobs_open_page_idx ON jobs (scraped_at DESC, id DESC) WHERE closed_at IS NULL;
 CREATE INDEX jobs_company_page_idx ON jobs (company_id, scraped_at DESC, id DESC);
 CREATE INDEX jobs_legacy_company_page_idx ON jobs (company_slug, scraped_at DESC, id DESC) WHERE company_id IS NULL;
+CREATE INDEX jobs_match_idx ON jobs (match_title, company_slug) WHERE closed_at IS NULL;
 
 CREATE TABLE job_urls (
     job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
