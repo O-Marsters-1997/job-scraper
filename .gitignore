@@ -26,7 +26,6 @@ __debug_bin*
 # Utilities
 .DS_Store
 .treepad.toml
-.codemap
 .agents/
 .env*
 certs/
@@ -44,3 +43,4 @@ worker.log
 
 # Local schema diagram (regenerate with python3 docs/diagrams/build.py)
 docs/diagrams/
+.codegraph/
