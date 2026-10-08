@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/openrouter"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 )
@@ -77,7 +78,7 @@ type Input struct {
 	HasProfile  bool
 	BaseProfile string
 	HasSkills   bool
-	BaseSkills  []string
+	BaseSkills  []SkillGroup
 
 	PriorEdits     *EditSet
 	PriorFindings  []checks.Finding
@@ -97,13 +98,101 @@ type PositionEdit struct {
 	Bullets    []Bullet `json:"bullets"`
 }
 
+// SkillGroup is one Skill Line: its label ("" when the base CV has none) and
+// its items in order.
+type SkillGroup struct {
+	Label string   `json:"label"`
+	Items []string `json:"items"`
+}
+
+// SkillGroups returns the base CV's Skill Lines as groups.
+func SkillGroups(s *docparse.SkillsSlot) []SkillGroup {
+	groups := make([]SkillGroup, len(s.Lines))
+	for i, l := range s.Lines {
+		groups[i] = SkillGroup{Label: l.Label, Items: l.Items}
+	}
+	return groups
+}
+
+// CheckLines converts groups to the lines the checks compare.
+func CheckLines(groups []SkillGroup) []checks.SkillLine {
+	lines := make([]checks.SkillLine, len(groups))
+	for i, g := range groups {
+		lines[i] = checks.SkillLine{Label: g.Label, Items: g.Items}
+	}
+	return lines
+}
+
+// FlatSkills concatenates the items of every group.
+func FlatSkills(groups []SkillGroup) []string {
+	var out []string
+	for _, g := range groups {
+		out = append(out, g.Items...)
+	}
+	return out
+}
+
 // EditSet is the strict JSON shape the model returns. Profile, Skills and
-// JobSkills are set only when the input asked for them.
+// JobSkills are set only when the input asked for them. LegacySkills marks a
+// stored flat skills array, decoded as one unlabelled group.
 type EditSet struct {
-	Positions []PositionEdit `json:"positions"`
-	Profile   *string        `json:"profile,omitempty"`
-	Skills    []string       `json:"skills,omitempty"`
-	JobSkills []string       `json:"jobSkills,omitempty"`
+	Positions    []PositionEdit `json:"positions"`
+	Profile      *string        `json:"profile,omitempty"`
+	Skills       []SkillGroup   `json:"skills,omitempty"`
+	JobSkills    []string       `json:"jobSkills,omitempty"`
+	LegacySkills bool           `json:"-"`
+}
+
+type editSetJSON EditSet
+
+type editSetWire struct {
+	editSetJSON
+	Skills json.RawMessage `json:"skills,omitempty"`
+}
+
+// DecodeSkills decodes stored skills, either grouped or, for a Draft made
+// before Skill Lines, a flat array of items.
+func DecodeSkills(raw json.RawMessage) (groups []SkillGroup, legacy bool, err error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, false, nil
+	}
+	if err := json.Unmarshal(raw, &groups); err == nil {
+		return groups, false, nil
+	}
+	var flat []string
+	if err := json.Unmarshal(raw, &flat); err != nil {
+		return nil, false, fmt.Errorf("decode skills: %w", err)
+	}
+	return []SkillGroup{{Items: flat}}, true, nil
+}
+
+func (e *EditSet) UnmarshalJSON(data []byte) error {
+	var w editSetWire
+	if err := json.Unmarshal(data, &w); err != nil {
+		return err
+	}
+	groups, legacy, err := DecodeSkills(w.Skills)
+	if err != nil {
+		return err
+	}
+	*e = EditSet(w.editSetJSON)
+	e.Skills, e.LegacySkills = groups, legacy
+	return nil
+}
+
+func (e EditSet) MarshalJSON() ([]byte, error) {
+	if !e.LegacySkills {
+		return json.Marshal(editSetJSON(e))
+	}
+	flat, err := json.Marshal(FlatSkills(e.Skills))
+	if err != nil {
+		return nil, err
+	}
+	w := editSetWire{editSetJSON: editSetJSON(e)}
+	if len(e.Skills) > 0 {
+		w.Skills = flat
+	}
+	return json.Marshal(w)
 }
 
 // Result is a decoded edit with the cost OpenRouter billed and the raw
@@ -172,7 +261,15 @@ func renderTask(in Input) string {
 		fmt.Fprintf(&b, "\nCurrent profile:\n%s\nRewrite it for this job in the profile field.\n", in.BaseProfile)
 	}
 	if in.HasSkills {
-		fmt.Fprintf(&b, "\nCurrent skills: %s\nReturn the skills list reordered for this job in the skills field, dropping none you cannot support and adding none the person does not already list. In jobSkills return at most 8 of the job description's most important requirements: named technologies, languages, frameworks, platforms or tools, and named ways of working such as end-to-end ownership. Leave out generic concepts and nice-to-haves (databases, replication, queuing, distributed systems) and anything already in the current skills, the positions or the profile.\n", strings.Join(in.BaseSkills, ", "))
+		b.WriteString("\nCurrent skills, one line each as number, label, items:\n")
+		for i, g := range in.BaseSkills {
+			label := g.Label
+			if label == "" {
+				label = "(no label)"
+			}
+			fmt.Fprintf(&b, "%d. %s: %s\n", i+1, label, strings.Join(g.Items, ", "))
+		}
+		fmt.Fprintf(&b, "Return the skills field with exactly these %d lines, in this order, each with its label copied exactly (an empty string for no label). Reorder each line's items for this job, most relevant first. Keep every item of its own line: drop none, add none, and move none to another line. In jobSkills return at most 8 of the job description's most important requirements: named technologies, languages, frameworks, platforms or tools, and named ways of working such as end-to-end ownership. Leave out generic concepts and nice-to-haves (databases, replication, queuing, distributed systems) and anything already in the current skills, the positions or the profile.\n", len(in.BaseSkills))
 	}
 	if in.PriorEdits != nil {
 		prior, _ := json.Marshal(in.PriorEdits)
@@ -227,7 +324,20 @@ func editSchema(in Input) map[string]any {
 		required = append(required, "profile")
 	}
 	if in.HasSkills {
-		props["skills"] = stringArray
+		props["skills"] = map[string]any{
+			"type":     "array",
+			"minItems": len(in.BaseSkills),
+			"maxItems": len(in.BaseSkills),
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"label": map[string]any{"type": "string"},
+					"items": stringArray,
+				},
+				"required":             []string{"label", "items"},
+				"additionalProperties": false,
+			},
+		}
 		props["jobSkills"] = stringArray
 		required = append(required, "skills", "jobSkills")
 	}

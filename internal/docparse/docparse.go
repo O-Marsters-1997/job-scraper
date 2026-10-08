@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf16"
 )
 
 var (
@@ -34,9 +36,22 @@ type Slot struct {
 	EndIndex     int
 }
 
+// SkillLine is one paragraph of the skills section, or a run of unlabelled
+// list paragraphs. ItemsStart..End is the Doc range holding the items, after
+// the label and before the paragraph's newline.
+type SkillLine struct {
+	Label      string
+	Items      []string
+	Separator  string
+	ItemsStart int
+	End        int
+}
+
 // SkillsSlot is the skills section. It spans StartIndex to EndIndex and, for a
-// prose layout, records the Separator the items were joined with.
+// prose layout, records the Separator the items were joined with. Items is the
+// concatenation of every line's Items.
 type SkillsSlot struct {
+	Lines      []SkillLine
 	Items      []string
 	List       bool
 	Separator  string
@@ -101,6 +116,7 @@ type paragraph struct {
 
 type para struct {
 	text       string
+	lead       int
 	level      int
 	list       bool
 	start, end int
@@ -156,8 +172,10 @@ func flatten(content []element, out *[]para) {
 					sb.WriteString(pe.TextRun.Content)
 				}
 			}
+			raw := sb.String()
 			*out = append(*out, para{
-				text:  strings.TrimSpace(sb.String()),
+				text:  strings.TrimSpace(raw),
+				lead:  utf16Len(raw[:len(raw)-len(strings.TrimLeftFunc(raw, unicode.IsSpace))]),
 				level: headingLevel(el.Paragraph.ParagraphStyle.NamedStyleType),
 				list:  el.Paragraph.Bullet != nil,
 				start: el.StartIndex,
@@ -244,21 +262,69 @@ func buildSkills(paras []para) *SkillsSlot {
 		StartIndex: paras[0].start,
 		EndIndex:   paras[len(paras)-1].end,
 	}
-	for _, p := range paras {
-		if s.List {
-			s.Items = append(s.Items, p.text)
-			continue
-		}
-		if s.Separator == "" {
-			s.Separator = detectSeparator(p.text)
-		}
-		for _, item := range skillSplit.Split(p.text, -1) {
-			if item != "" {
-				s.Items = append(s.Items, item)
+	if !s.List {
+		for _, p := range paras {
+			if s.Separator = detectSeparator(p.text); s.Separator != "" {
+				break
 			}
 		}
 	}
+	for i := 0; i < len(paras); i++ {
+		if !isPlainListItem(paras[i]) {
+			s.Lines = append(s.Lines, proseLine(paras[i]))
+			continue
+		}
+		run := []para{paras[i]}
+		for i+1 < len(paras) && isPlainListItem(paras[i+1]) {
+			i++
+			run = append(run, paras[i])
+		}
+		s.Lines = append(s.Lines, listLine(run))
+	}
+	for _, l := range s.Lines {
+		s.Items = append(s.Items, l.Items...)
+	}
 	return s
+}
+
+func isPlainListItem(p para) bool {
+	_, _, labelled := splitLabel(p.text)
+	return p.list && !labelled
+}
+
+func listLine(run []para) SkillLine {
+	l := SkillLine{Separator: "\n", ItemsStart: run[0].start + run[0].lead, End: run[len(run)-1].end - 1}
+	for _, p := range run {
+		l.Items = append(l.Items, p.text)
+	}
+	return l
+}
+
+func proseLine(p para) SkillLine {
+	label, body, labelled := splitLabel(p.text)
+	l := SkillLine{Label: label, Separator: detectSeparator(body), ItemsStart: p.start + p.lead, End: p.end - 1}
+	if labelled {
+		l.ItemsStart += utf16Len(p.text[:len(p.text)-len(body)])
+	}
+	for _, item := range skillSplit.Split(body, -1) {
+		if item != "" {
+			l.Items = append(l.Items, item)
+		}
+	}
+	return l
+}
+
+func splitLabel(text string) (label, body string, labelled bool) {
+	before, after, found := strings.Cut(text, ":")
+	label = strings.TrimSpace(before)
+	if !found || label == "" || skillSplit.MatchString(label) {
+		return "", text, false
+	}
+	return label, strings.TrimLeftFunc(after, unicode.IsSpace), true
+}
+
+func utf16Len(s string) int {
+	return len(utf16.Encode([]rune(s)))
 }
 
 func detectSeparator(text string) string {

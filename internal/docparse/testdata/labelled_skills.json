@@ -1,0 +1,74 @@
+{
+  "tabProperties": {
+    "tabId": "t.0",
+    "title": "CV",
+    "index": 0
+  },
+  "documentTab": {
+    "body": {
+      "content": [
+        {
+          "endIndex": 1,
+          "sectionBreak": {}
+        },
+        {
+          "startIndex": 1,
+          "endIndex": 8,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 1,
+                "endIndex": 8,
+                "textRun": {
+                  "content": "Skills\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "HEADING_1"
+            }
+          }
+        },
+        {
+          "startIndex": 8,
+          "endIndex": 34,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 8,
+                "endIndex": 34,
+                "textRun": {
+                  "content": "Languages: Go, TypeScript\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT"
+            }
+          }
+        },
+        {
+          "startIndex": 34,
+          "endIndex": 61,
+          "paragraph": {
+            "elements": [
+              {
+                "startIndex": 34,
+                "endIndex": 61,
+                "textRun": {
+                  "content": "Databases: Postgres, Redis\n",
+                  "textStyle": {}
+                }
+              }
+            ],
+            "paragraphStyle": {
+              "namedStyleType": "NORMAL_TEXT"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

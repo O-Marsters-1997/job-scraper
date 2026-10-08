@@ -84,6 +84,29 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "Frontend",
+     "Items": [
+      "React",
+      "CSS"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    },
+    {
+     "Label": "Backend",
+     "Items": [
+      "Kubernetes",
+      "Postgres",
+      "Go"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "React",
     "CSS",

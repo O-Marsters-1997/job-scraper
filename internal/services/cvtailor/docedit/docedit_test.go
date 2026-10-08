@@ -109,7 +109,7 @@ func TestRequests(t *testing.T) {
 				{PositionID: "p2", Bullets: bullets("Built ingestion.")},
 			},
 			Profile: &profile,
-			Skills:  []string{"Kubernetes", "Go"},
+			Skills:  []cvedit.SkillGroup{{Items: []string{"Kubernetes", "Go"}}},
 		}
 
 		reqs := requests(t, doc, positions, edits)
@@ -127,7 +127,7 @@ func TestRequests(t *testing.T) {
 
 	t.Run("prose skills keep their separator", func(t *testing.T) {
 		doc := loadFixture(t, "table_profile_prose_skills.json")
-		edits := cvedit.EditSet{Skills: []string{"Docker", "React"}}
+		edits := cvedit.EditSet{Skills: []cvedit.SkillGroup{{Items: []string{"Docker", "React"}}}}
 
 		reqs := requests(t, doc, nil, edits)
 		got := apply(t, doc.text, reqs)
@@ -136,6 +136,37 @@ func TestRequests(t *testing.T) {
 			if !strings.Contains(got, want) {
 				t.Errorf("Requests() applied doc lacks %q:\n%s", want, got)
 			}
+		}
+	})
+
+	t.Run("labelled lines keep their labels and reorder within the line", func(t *testing.T) {
+		doc := loadFixture(t, "labelled_skills.json")
+		edits := cvedit.EditSet{Skills: []cvedit.SkillGroup{
+			{Label: "Languages", Items: []string{"TypeScript", "Go"}},
+			{Label: "Databases", Items: []string{"Postgres", "Redis"}},
+		}}
+
+		reqs := requests(t, doc, nil, edits)
+		got := apply(t, doc.text, reqs)
+
+		want := string(doc.text[:8]) + "Languages: TypeScript, Go\nDatabases: Postgres, Redis\n"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Requests() applied doc mismatch (-want +got):\n%s", diff)
+		}
+		if len(reqs) != 2 {
+			t.Errorf("Requests() = %d requests, want 2 for the one changed line", len(reqs))
+		}
+	})
+
+	t.Run("legacy flat skills replace the whole range", func(t *testing.T) {
+		doc := loadFixture(t, "labelled_skills.json")
+		edits := cvedit.EditSet{LegacySkills: true, Skills: []cvedit.SkillGroup{{Items: []string{"Go", "Redis"}}}}
+
+		got := apply(t, doc.text, requests(t, doc, nil, edits))
+
+		want := string(doc.text[:8]) + "Go, Redis\n"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Requests() applied doc mismatch (-want +got):\n%s", diff)
 		}
 	})
 
@@ -154,7 +185,7 @@ func TestRequests(t *testing.T) {
 	t.Run("missing profile and skills sections produce no requests", func(t *testing.T) {
 		doc := loadFixture(t, "no_profile_skills.json")
 		profile := "New profile."
-		edits := cvedit.EditSet{Profile: &profile, Skills: []string{"Go"}}
+		edits := cvedit.EditSet{Profile: &profile, Skills: []cvedit.SkillGroup{{Items: []string{"Go"}}}}
 
 		reqs := requests(t, doc, nil, edits)
 		if len(reqs) != 0 {
@@ -167,7 +198,7 @@ func TestRequests(t *testing.T) {
 		edits := cvedit.EditSet{
 			Positions: []cvedit.PositionEdit{{PositionID: "p1", Bullets: bullets("a", "b")}},
 			Profile:   &profile,
-			Skills:    []string{"Go"},
+			Skills:    []cvedit.SkillGroup{{Items: []string{"Go"}}},
 		}
 
 		reqs := requests(t, doc, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits)
@@ -186,6 +217,25 @@ func TestRequests(t *testing.T) {
 			last = idx
 		}
 	})
+}
+
+func TestRequestsSkillLineMismatch(t *testing.T) {
+	doc := loadFixture(t, "labelled_skills.json")
+	tests := []struct {
+		name   string
+		skills []cvedit.SkillGroup
+	}{
+		{"fewer lines", []cvedit.SkillGroup{{Label: "Languages", Items: []string{"Go"}}}},
+		{"renamed label", []cvedit.SkillGroup{{Label: "Langs", Items: []string{"Go"}}, {Label: "Databases", Items: []string{"Redis"}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := docedit.Requests(doc.ds, nil, cvedit.EditSet{Skills: tt.skills})
+			if !errors.Is(err, docedit.ErrSkillLines) {
+				t.Errorf("Requests() error = %v, want %v", err, docedit.ErrSkillLines)
+			}
+		})
+	}
 }
 
 func TestRequestsErrors(t *testing.T) {

@@ -73,6 +73,19 @@
    "EndIndex": 0
   },
   "Skills": {
+   "Lines": [
+    {
+     "Label": "",
+     "Items": [
+      "Go",
+      "Redis",
+      "Postgres"
+     ],
+     "Separator": ", ",
+     "ItemsStart": 0,
+     "End": 0
+    }
+   ],
    "Items": [
     "Go",
     "Redis",
