@@ -32,6 +32,7 @@ const rule: LayoutBorder = {
 const block = (over: Partial<LayoutBlock>): LayoutBlock => ({
 	slotId: "",
 	section: "",
+	skillLine: null,
 	align: "left",
 	lineSpacing: 100,
 	spaceAbove: 0,

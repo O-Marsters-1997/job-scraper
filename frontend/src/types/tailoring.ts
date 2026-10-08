@@ -64,9 +64,15 @@ const draftProvenanceSchema = z.object({
 	profile: z.object({ slotId: z.string() }).nullable(),
 });
 
+const skillGroupSchema = z.object({
+	label: z.string(),
+	items: z.array(z.string()),
+});
+
 const draftContentSchema = z.object({
 	profile: z.string().nullable(),
 	skills: z.array(z.string()),
+	skillGroups: z.array(skillGroupSchema),
 	positions: z.array(
 		z.object({
 			positionId: z.string(),
@@ -119,6 +125,7 @@ const layoutRunSchema = z.object({
 const layoutBlockSchema = z.object({
 	slotId: z.string(),
 	section: z.string(),
+	skillLine: z.number().nullable(),
 	align: z.string(),
 	lineSpacing: z.number(),
 	spaceAbove: z.number(),

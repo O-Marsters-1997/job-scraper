@@ -81,6 +81,9 @@ func TestDraftLayout(t *testing.T) {
 		if last := got.Blocks[len(got.Blocks)-1]; last.Section != "skills" || got.Blocks[2].Section != "" {
 			t.Errorf("DraftLayout() sections = %q on the skills text and %q on a bullet, want skills only on the skills text", last.Section, got.Blocks[2].Section)
 		}
+		if last := got.Blocks[len(got.Blocks)-1]; last.SkillLine == nil || *last.SkillLine != 0 || got.Blocks[2].SkillLine != nil {
+			t.Errorf("DraftLayout() skill lines = %v on the skills text and %v on a bullet, want 0 and nil", last.SkillLine, got.Blocks[2].SkillLine)
+		}
 		if counted.gets != 1 {
 			t.Errorf("DraftLayout() fetched %d Docs, want 1", counted.gets)
 		}
