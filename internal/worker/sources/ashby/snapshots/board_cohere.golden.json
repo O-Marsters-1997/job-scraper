@@ -18,8 +18,7 @@
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -40,8 +39,7 @@
     "WorkArrangement": "hybrid",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -62,8 +60,7 @@
     "WorkArrangement": "onsite",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -84,7 +81,6 @@
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   }
 ]

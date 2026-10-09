@@ -1,7 +1,6 @@
 package jobsearch_test
 
 import (
-	"strconv"
 	"testing"
 	"time"
 
@@ -148,92 +147,28 @@ func TestGet(t *testing.T) {
 }
 
 func TestListScored(t *testing.T) {
-	seedScored := func(t *testing.T, n int) *jobsearchtest.FakeStore {
-		t.Helper()
-		st := jobsearchtest.NewFakeStore()
-		for i := range n {
-			score := 100 - i
-			job := dto.Job{Title: "Role", URL: "https://example.com/" + strconv.Itoa(i), UpdatedAt: time.Now(), SuitabilityScore: &score}
-			if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
-				t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
-			}
+	st := jobsearchtest.NewFakeStore()
+	for i, slug := range []string{"acme", "globex", "initech"} {
+		score := 90 - i
+		job := dto.Job{Title: "Role", URL: "https://example.com/" + slug, CompanySlug: slug, UpdatedAt: time.Now(), SuitabilityScore: &score}
+		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
+			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
 		}
-		return st
 	}
-	list := func(t *testing.T, st *jobsearchtest.FakeStore, user string) []dto.Job {
-		t.Helper()
-		jobs, err := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring()).ListScored(t.Context(), user)
-		if err != nil {
-			t.Fatalf("ListScored() err = %v", err)
-		}
-		return jobs
+	scoring := jobsearchtest.NewNoopScoring()
+	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedCompanies: []string{"Globex"}})
+
+	jobs, err := jobsearch.NewService(st, nil, scoring).ListScored(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListScored() err = %v", err)
 	}
-
-	t.Run("flags one bottom-half job per ten, one in each block of ten slots", func(t *testing.T) {
-		st := seedScored(t, 45)
-		jobs := list(t, st, userID)
-		if len(jobs) != 45 {
-			t.Fatalf("ListScored() = %d jobs, want 45", len(jobs))
-		}
-		for block := range 4 {
-			var flagged []int
-			for i, job := range jobs[block*10 : block*10+10] {
-				if job.Wildcard {
-					flagged = append(flagged, i)
-					if *job.SuitabilityScore > 100-23 {
-						t.Errorf("block %d wildcard score = %d, want from the bottom half", block, *job.SuitabilityScore)
-					}
-				}
-			}
-			if len(flagged) != 1 {
-				t.Errorf("block %d wildcards at %v, want exactly one", block, flagged)
-			}
-		}
-		for _, job := range jobs[40:] {
-			if job.Wildcard {
-				t.Errorf("trailing partial block has wildcard %q", job.URL)
-			}
-		}
-	})
-
-	t.Run("keeps every job once, the rest in score order", func(t *testing.T) {
-		st := seedScored(t, 45)
-		jobs := list(t, st, userID)
-		seen := map[string]bool{}
-		prev := 101
-		for _, job := range jobs {
-			if seen[job.URL] {
-				t.Errorf("job %s repeated", job.URL)
-			}
-			seen[job.URL] = true
-			if job.Wildcard {
-				continue
-			}
-			if *job.SuitabilityScore > prev {
-				t.Errorf("score %d after %d, want non-wildcards best first", *job.SuitabilityScore, prev)
-			}
-			prev = *job.SuitabilityScore
-		}
-		if len(seen) != 45 {
-			t.Errorf("distinct jobs = %d, want 45", len(seen))
-		}
-	})
-
-	t.Run("is stable across calls", func(t *testing.T) {
-		st := seedScored(t, 45)
-		first := list(t, st, userID)
-		if diff := cmp.Diff(first, list(t, st, userID)); diff != "" {
-			t.Errorf("ListScored() changed between calls (-first +second):\n%s", diff)
-		}
-	})
-
-	t.Run("short lists have no wildcard", func(t *testing.T) {
-		for _, job := range list(t, seedScored(t, 9), userID) {
-			if job.Wildcard {
-				t.Errorf("job %s flagged in a list under ten", job.URL)
-			}
-		}
-	})
+	var got []string
+	for _, job := range jobs {
+		got = append(got, job.CompanySlug)
+	}
+	if diff := cmp.Diff([]string{"acme", "initech"}, got); diff != "" {
+		t.Errorf("ListScored() companies (-want +got):\n%s", diff)
+	}
 }
 
 func TestListHidesExcludedCompanies(t *testing.T) {

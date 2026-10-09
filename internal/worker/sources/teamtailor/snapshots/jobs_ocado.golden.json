@@ -22,7 +22,6 @@
     "Seen": false,
     "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false,
     "Listings": null
   },
   {
@@ -48,7 +47,6 @@
     "Seen": false,
     "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false,
     "Listings": null
   }
 ]

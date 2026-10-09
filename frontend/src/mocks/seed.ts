@@ -72,6 +72,7 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		Source: faker.helpers.arrayElement(SOURCES),
 		UpdatedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
+		FirstDiscoveredAt: scrapedAt,
 		DaysInOffice: daysInOffice,
 		SuitabilityScore: score,
 		Band: score == null ? "" : mockBand(score),

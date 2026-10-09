@@ -18,8 +18,7 @@
     "WorkArrangement": "onsite",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -40,8 +39,7 @@
     "WorkArrangement": "onsite",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -62,7 +60,6 @@
     "WorkArrangement": "onsite",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   }
 ]

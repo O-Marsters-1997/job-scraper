@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectItemLabel,
+	SelectTrigger,
+} from "@/components/ui/select";
+import {
 	Table,
 	TableBody,
 	TableCell,
@@ -27,11 +34,8 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useShortcuts } from "@/hooks/useShortcuts";
-import {
-	activeFilterCount,
-	isDefaultView,
-	type JobFilters,
-} from "@/lib/jobFilters";
+import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
+import { type JobSort, SORT_LABELS, SORT_OPTIONS } from "@/lib/jobSort";
 import type { Job } from "@/types/job";
 
 interface JobsDataTableProps<TData extends Job> {
@@ -42,7 +46,7 @@ interface JobsDataTableProps<TData extends Job> {
 	page?: number | undefined;
 	onPageChange?: (page: number | undefined) => void;
 	sourceOptions: string[];
-	wildcards?: boolean;
+	sortControl?: boolean;
 	selection?: RowSelectionState;
 	onSelectionChange?: (next: RowSelectionState) => void;
 	onBulkGrade?: (jobs: TData[]) => void;
@@ -51,6 +55,13 @@ interface JobsDataTableProps<TData extends Job> {
 }
 
 const PAGE_SIZE = 10;
+
+type SortChoice = JobSort | "custom";
+const SORT_CHOICES = [...SORT_OPTIONS, "custom" as const].map((value) => ({
+	value,
+	label: SORT_LABELS[value],
+	disabled: value === "custom",
+}));
 
 export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
@@ -138,9 +149,6 @@ export function JobsDataTable<TData extends Job>(
 		meta: {
 			isExpanded,
 			toggleExpanded,
-			showWildcard: () =>
-				props.wildcards === true &&
-				isDefaultView(props.filters, sorting().length > 0),
 		},
 	});
 
@@ -199,6 +207,8 @@ export function JobsDataTable<TData extends Job>(
 		props.data.filter((job) => selection()[job.ID] === true);
 	const unseenJobs = () => props.data.filter((job) => !job.Seen);
 	const filterCount = () => activeFilterCount(props.filters);
+	const sortChoice = (): SortChoice =>
+		sorting().length > 0 ? "custom" : props.filters.sort;
 
 	return (
 		<div class="flex flex-col gap-3">
@@ -262,6 +272,37 @@ export function JobsDataTable<TData extends Job>(
 						</Button>
 					</Show>
 				</div>
+				<Show when={props.sortControl}>
+					<div class="ml-auto">
+						<Select
+							options={SORT_CHOICES}
+							optionValue={(o) => o?.value ?? ""}
+							optionTextValue={(o) => o?.label ?? ""}
+							optionDisabled={(o) => o?.disabled ?? false}
+							disallowEmptySelection
+							value={SORT_CHOICES.find((o) => o.value === sortChoice())}
+							onChange={(opt) => {
+								if (!opt || opt.value === "custom") return;
+								setSorting([]);
+								props.onChange({ sort: opt.value });
+							}}
+							itemComponent={(itemProps) => (
+								<SelectItem item={itemProps.item}>
+									<SelectItemLabel>
+										{itemProps.item.rawValue?.label}
+									</SelectItemLabel>
+								</SelectItem>
+							)}
+						>
+							<SelectTrigger aria-label="Sort jobs">
+								<Select.Value<(typeof SORT_CHOICES)[number]>>
+									{(state) => state.selectedOption()?.label}
+								</Select.Value>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
+					</div>
+				</Show>
 				<Show when={props.onBulkGrade && selectedJobs().length > 0}>
 					<div class="flex items-center gap-2">
 						<span class="font-mono text-xs tabular-nums text-muted">

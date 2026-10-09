@@ -1,4 +1,5 @@
 import type { Job } from "@/types/job";
+import { type JobSort, SORT_OPTIONS } from "./jobSort";
 
 export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
 export type GradedFilter = (typeof GRADED_OPTIONS)[number];
@@ -19,6 +20,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	sort: JobSort;
 	page?: number | undefined;
 }
 
@@ -35,6 +37,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	sort: "relevant",
 	page: undefined,
 };
 
@@ -71,6 +74,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1
 				? page
@@ -152,11 +156,6 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.seen !== "all") n++;
 	if (f.fav) n++;
 	return n;
-}
-
-/** The server-ordered list, where wildcard slots are meaningful: no search, filters or column sort. */
-export function isDefaultView(f: JobFilters, sorted: boolean): boolean {
-	return !sorted && !f.q && !f.company && activeFilterCount(f) === 0;
 }
 
 /** Unique Source values present in the dataset, sorted. */

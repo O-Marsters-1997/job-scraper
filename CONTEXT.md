@@ -176,6 +176,14 @@ Answers — no per-Job Jev call, since Suitability is derived entirely from data
 once. Gates notification and ranks the list, with one breakdown row per Pick explaining it.
 _Avoid_: Relevance, fit score — keep distinct from Relevance
 
+**Relevant**:
+The default order of the jobs list: Suitability multiplied by 0.5^(days since first discovered / 3), so
+a score halves every three days. A Job with no score ranks as 50. A client-side sort, not a stored or
+user-facing score, and distinct from Suitability (the 0–100 value, which it never changes), Band (a
+label from Suitability alone) and Relevance (the pre-scoring listing-card check). Newest and Best match
+are the other sort options.
+_Avoid_: Relevance, match score, hot rank
+
 **Gate**:
 A rule that caps Suitability at the top of Poor (44) without hiding the Job. A Gate dimension
 (work, employment) fires when every option the User picked in it resolves no and an option they did
