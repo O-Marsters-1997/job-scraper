@@ -154,8 +154,8 @@ _Avoid_: Range, level filter
 **Answer**:
 Jev's reply to one Option's question about one Job — three probabilities (yes/no/not_stated) plus
 confidence, resolved to whichever is most likely (below 0.6, or not_stated, resolves unknown).
-Shared across every User, keyed on the Job, its content fingerprint, the question's text hash and
-the model, so identical questions across Users and Custom questions answer once.
+Owned by one User and paid for with that User's key, keyed on the User, the Job, its content
+fingerprint, the question's text hash and the model; never visible to other Users (ADR 0023).
 _Avoid_: Score, judgement — an Answer is a fact about the Job, not a fit verdict
 
 **Correction**:
@@ -359,4 +359,5 @@ _Avoid_: Tag, keyword, tech option — not the seeded scoring options
 - "Check Frequency" previously belonged to each ATS **Source Target** — resolved: it belongs to the User's **Tracked Company** and applies across its verified **Boards**.
 - "Source Target" previously included ATS Board tracking — resolved: **Source Target** is a discovery search; direct ATS Board entry resolves to a **Company** and its **Tracked Company** choice.
 - "scheduled scraping" previously included recurring discovery searches and HTML detail refresh — resolved: discovery runs once or on explicit rerun; only matched ATS Boards of Tracked Companies are checked automatically on a recurring schedule.
+- "Answer" was shared across Users — resolved: an **Answer** belongs to one User and their key (ADR 0023).
 - "verified Board" previously meant a detected ATS-looking URL — resolved: a **Verified Board** also requires a successful read and Company association evidence.
