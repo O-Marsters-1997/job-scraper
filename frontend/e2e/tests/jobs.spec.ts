@@ -23,6 +23,30 @@ test.describe("Jobs", () => {
 		expect(overflow).toBeLessThanOrEqual(0);
 	});
 
+	test("should page with ] and [ and focus the first row", async ({
+		page,
+		jobsPage,
+	}) => {
+		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
+		await jobsPage.pressPageKey("]");
+		await expect(page).toHaveURL(/page=2/);
+		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.firstJobTitleLink()).not.toHaveText(firstTitle ?? "");
+
+		await jobsPage.pressPageKey("[");
+		await expect(jobsPage.firstJobTitleLink()).toHaveText(firstTitle ?? "");
+		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+	});
+
+	test("should ignore paging keys while the search box has focus", async ({
+		page,
+		jobsPage,
+	}) => {
+		await page.getByPlaceholder("Search by role or company…").focus();
+		await jobsPage.pressPageKey("]");
+		await expect(page).not.toHaveURL(/page=2/);
+	});
+
 	test("should filter jobs by search term", async ({ jobsPage }) => {
 		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
 
