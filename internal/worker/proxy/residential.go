@@ -88,21 +88,28 @@ func (t *residentialTransport) RoundTrip(req *http.Request) (*http.Response, err
 }
 
 func (t *residentialTransport) fetch(req *http.Request) (*http.Response, error) {
-	for range residentialAttempts {
+	var lastErr error
+	for attempt := range residentialAttempts {
 		resp, err := t.residentialAttempt(req)
 		switch {
 		case err == nil && !blocked(req, resp):
 			return resp, nil
 		case err == nil:
 			_ = resp.Body.Close()
+			lastErr = nil
 		case req.Context().Err() != nil:
 			return nil, req.Context().Err()
+		default:
+			lastErr = err
+		}
+		if attempt == residentialAttempts-1 {
+			break
 		}
 		if req, err = rewound(req); err != nil {
 			return nil, err
 		}
 	}
-	return nil, ErrBlocked
+	return nil, errors.Join(ErrBlocked, lastErr)
 }
 
 func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Response, error) {
