@@ -244,7 +244,12 @@ func (s *Service) TransitionSourceTargetRun(ctx context.Context, id, runID, stat
 // DisableSource turns off every enabled target of source for all users and
 // returns how many it changed. In-flight runs are failed with the reason.
 func (s *Service) DisableSource(ctx context.Context, source, reason string) (int64, error) {
-	return s.targets.DisableSourceTargets(ctx, source, reason)
+	disabled, err := s.targets.DisableSourceTargets(ctx, source, reason)
+	if err != nil {
+		return 0, err
+	}
+	TargetsDisabled.WithLabelValues(source, reason).Add(float64(disabled))
+	return disabled, nil
 }
 
 func (s *Service) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {

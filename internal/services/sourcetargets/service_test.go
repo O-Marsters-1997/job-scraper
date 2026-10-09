@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -305,6 +307,33 @@ func TestScrape(t *testing.T) {
 		}
 		if got := len(q.Tasks()); got != 1 {
 			t.Errorf("queued tasks = %d, want 1", got)
+		}
+	})
+}
+
+func TestDisableSource(t *testing.T) {
+	t.Run("counts the targets it disabled by source and reason", func(t *testing.T) {
+		svc, st, _ := newService(t)
+		createTarget(t, st, true)
+		if _, err := st.CreateSourceTarget(t.Context(), userID, "wis", "designer", true, nil); err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		counter := sourcetargets.TargetsDisabled.WithLabelValues("wis", "wis key rejected")
+		before := testutil.ToFloat64(counter)
+
+		n, err := svc.DisableSource(t.Context(), "wis", "wis key rejected")
+		if err != nil || n != 2 {
+			t.Fatalf("DisableSource() = %d, %v, want 2, nil", n, err)
+		}
+		if got := testutil.ToFloat64(counter) - before; got != 2 {
+			t.Errorf("jobscraper_source_targets_disabled_total rose by %v, want 2", got)
+		}
+
+		if _, err := svc.DisableSource(t.Context(), "wis", "wis key rejected"); err != nil {
+			t.Fatalf("second DisableSource() err = %v", err)
+		}
+		if got := testutil.ToFloat64(counter) - before; got != 2 {
+			t.Errorf("counter rose by %v after a no-op disable, want 2", got)
 		}
 	})
 }

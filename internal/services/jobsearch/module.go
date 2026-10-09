@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -13,6 +14,11 @@ import (
 )
 
 var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
+
+// RegisterMetrics registers the jobsearch context's Prometheus metrics.
+func RegisterMetrics(reg prometheus.Registerer) {
+	sourcetargets.RegisterMetrics(reg)
+}
 
 type Module struct {
 	store         Store
