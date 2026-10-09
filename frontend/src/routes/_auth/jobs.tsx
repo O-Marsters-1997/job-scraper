@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
 import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
+import { sortJobs } from "@/lib/jobSort";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
@@ -35,7 +36,9 @@ function JobsPage() {
 	const filters = () => parseSearch(search() as Record<string, unknown>);
 	const company = useCompany(() => filters().company ?? "");
 	const companyName = () => company.data?.Name ?? "Selected company";
-	const filtered = createMemo(() => applyJobFilters(jobs(), filters()));
+	const filtered = createMemo(() =>
+		sortJobs(applyJobFilters(jobs(), filters()), filters().sort),
+	);
 	const srcOptions = () => sourceOptions(jobs());
 
 	const setFilters = (patch: Partial<JobFilters>) => {
@@ -120,7 +123,7 @@ function JobsPage() {
 					page={filters().page}
 					onPageChange={(page) => setFilters({ page })}
 					sourceOptions={srcOptions()}
-					wildcards
+					sortControl
 					selection={track.selection()}
 					onSelectionChange={track.setSelection}
 					onBulkGrade={track.openGrade}

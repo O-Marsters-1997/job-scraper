@@ -21,8 +21,7 @@
     "Grade": "",
     "Seen": false,
     "CompanyFavourite": false,
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -46,8 +45,7 @@
     "Grade": "",
     "Seen": false,
     "CompanyFavourite": false,
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -71,8 +69,7 @@
     "Grade": "",
     "Seen": false,
     "CompanyFavourite": false,
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -96,7 +93,6 @@
     "Grade": "",
     "Seen": false,
     "CompanyFavourite": false,
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   }
 ]

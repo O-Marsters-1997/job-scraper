@@ -38,7 +38,7 @@ func (q *Queries) ExistingURLs(ctx context.Context, dollar_1 []string) ([]string
 }
 
 const getJob = `-- name: GetJob :one
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $2 AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $2
 LEFT JOIN job_views jv ON jv.job_id = j.id AND jv.user_id = $2
@@ -60,6 +60,7 @@ type GetJobRow struct {
 	Source             string
 	UpdatedAt          pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
@@ -86,6 +87,7 @@ func (q *Queries) GetJob(ctx context.Context, arg GetJobParams) (GetJobRow, erro
 		&i.Source,
 		&i.UpdatedAt,
 		&i.ScrapedAt,
+		&i.FirstDiscoveredAt,
 		&i.Description,
 		&i.SalaryRaw,
 		&i.WorkArrangement,
@@ -136,7 +138,7 @@ func (q *Queries) ListJobListings(ctx context.Context, jobID pgtype.UUID) ([]Lis
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
@@ -163,6 +165,7 @@ type ListJobsRow struct {
 	Source             string
 	UpdatedAt          pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	SalaryRaw          string
 	WorkArrangement    string
 	CompanyID          pgtype.UUID
@@ -195,6 +198,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]ListJobsR
 			&i.Source,
 			&i.UpdatedAt,
 			&i.ScrapedAt,
+			&i.FirstDiscoveredAt,
 			&i.SalaryRaw,
 			&i.WorkArrangement,
 			&i.CompanyID,
@@ -252,7 +256,7 @@ func (q *Queries) MarkJobsUnseen(ctx context.Context, arg MarkJobsUnseenParams) 
 }
 
 const pageJobs = `-- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = $1::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = $1::uuid
@@ -290,6 +294,7 @@ type PageJobsRow struct {
 	Source             string
 	UpdatedAt          pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	SalaryRaw          string
 	WorkArrangement    string
 	CompanyID          pgtype.UUID
@@ -332,6 +337,7 @@ func (q *Queries) PageJobs(ctx context.Context, arg PageJobsParams) ([]PageJobsR
 			&i.Source,
 			&i.UpdatedAt,
 			&i.ScrapedAt,
+			&i.FirstDiscoveredAt,
 			&i.SalaryRaw,
 			&i.WorkArrangement,
 			&i.CompanyID,

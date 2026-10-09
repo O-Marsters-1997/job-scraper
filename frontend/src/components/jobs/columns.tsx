@@ -27,7 +27,6 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
-		showWildcard: () => boolean;
 	}
 }
 
@@ -92,16 +91,6 @@ export function createJobColumns(
 								{GRADE_LABEL[grade()]}
 							</Badge>
 						)}
-					</Show>
-					<Show
-						when={
-							info.row.original.Wildcard &&
-							info.table.options.meta?.showWildcard()
-						}
-					>
-						<Badge variant="secondary" class="shrink-0">
-							Wildcard
-						</Badge>
 					</Show>
 				</div>
 			),

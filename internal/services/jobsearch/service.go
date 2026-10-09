@@ -91,6 +91,14 @@ func (s *Service) List(ctx context.Context, userID string, q dto.JobsQuery) (dto
 	return page, nil
 }
 
+func (s *Service) ListScored(ctx context.Context, userID string) ([]dto.Job, error) {
+	excluded, err := s.excludedCompanySlugs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.ListJobs(ctx, userID, excluded)
+}
+
 func (s *Service) excludedCompanySlugs(ctx context.Context, userID string) ([]string, error) {
 	cfg, err := s.configs.SearchConfig(ctx, userID)
 	if err != nil && !errors.Is(err, data.ErrNotFound) {

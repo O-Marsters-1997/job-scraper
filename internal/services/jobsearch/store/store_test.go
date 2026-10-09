@@ -443,6 +443,36 @@ func TestPage(t *testing.T) {
 		}
 	})
 
+	t.Run("ListJobs and Page report first discovered time", func(t *testing.T) {
+		st, pool, userID := newUserStore(t)
+		ctx := t.Context()
+		company := insertCompany(t, pool, "acme")
+		id := insertJob(t, pool, company, 1, time.Now(), false)
+		scoreJob(t, pool, id, userID, `[]`)
+		discovered := time.Now().AddDate(0, 0, -3).Truncate(time.Microsecond)
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET first_discovered_at = $2 WHERE id = $1::uuid`, id, discovered); err != nil {
+			t.Fatalf("set first_discovered_at: %v", err)
+		}
+
+		all, err := st.ListJobs(ctx, userID, nil)
+		if err != nil {
+			t.Fatalf("ListJobs() err = %v", err)
+		}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10})
+		if err != nil {
+			t.Fatalf("Page() err = %v", err)
+		}
+		if len(all) != 1 || len(page.Items) != 1 {
+			t.Fatalf("ListJobs/Page len = %d/%d, want 1/1", len(all), len(page.Items))
+		}
+		if !all[0].FirstDiscoveredAt.Equal(discovered) {
+			t.Errorf("ListJobs() FirstDiscoveredAt = %v, want %v", all[0].FirstDiscoveredAt, discovered)
+		}
+		if !page.Items[0].FirstDiscoveredAt.Equal(discovered) {
+			t.Errorf("Page() FirstDiscoveredAt = %v, want %v", page.Items[0].FirstDiscoveredAt, discovered)
+		}
+	})
+
 	t.Run("scored only keeps the caller's scored jobs of the company", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		otherUserID := pgtest.InsertUser(t, pool)

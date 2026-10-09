@@ -45,6 +45,7 @@ export const jobSchema = z.object({
 	Source: z.string(),
 	UpdatedAt: z.string(),
 	ScrapedAt: z.string(),
+	FirstDiscoveredAt: z.string().optional(),
 	DaysInOffice: z.number().nullable().optional(),
 	WorkArrangement: z.string().optional(),
 	SalaryRaw: z.string().optional(),
@@ -53,7 +54,6 @@ export const jobSchema = z.object({
 	Grade: z.enum(GRADES).or(z.literal("")).optional(),
 	Seen: z.boolean().optional(),
 	CompanyFavourite: z.boolean().optional(),
-	Wildcard: z.boolean().optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	Listings: z.array(jobListingSchema).nullable().optional(),
 	// Optional rich fields — populated in demo mode; absent from the live backend
