@@ -125,8 +125,8 @@ func maxAutomaticTargets(ctx context.Context) int {
 		return sourcetargets.DefaultMaxAutomatic
 	}
 	n, err := strconv.Atoi(raw)
-	if err != nil || n < 0 {
-		fatal(ctx, "config invalid", fmt.Errorf("MAX_AUTOMATIC_TARGETS must be a non-negative integer, got %q", raw))
+	if err != nil || n < 1 {
+		fatal(ctx, "config invalid", fmt.Errorf("MAX_AUTOMATIC_TARGETS must be a positive integer, got %q", raw))
 	}
 	return n
 }

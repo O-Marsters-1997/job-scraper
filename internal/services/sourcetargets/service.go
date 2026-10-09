@@ -140,9 +140,6 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	return target, nil
 }
 
-// guardAutomatic rejects an interval on a Source that can't fetch
-// incrementally, and an enabled one that would take the user past the cap.
-// The target being changed (exceptID) doesn't count against itself.
 func (s *Service) guardAutomatic(ctx context.Context, userID, exceptID, source string, w dto.RunWindow, enabled bool) error {
 	if w.IntervalMinutes == nil {
 		return nil
