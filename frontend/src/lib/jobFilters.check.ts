@@ -157,6 +157,11 @@ assert.equal(parseSearch({}).scored, true, "Jobs page defaults scored on");
 assert.equal(parseSearch({ scored: false }).scored, false);
 assert.equal(parseSearch({ scored: "1" }).scored, true);
 
+assert.equal(parseSearch({}).sort, "relevant");
+assert.equal(parseSearch({ sort: "newest" }).sort, "newest");
+assert.equal(parseSearch({ sort: "best" }).sort, "best");
+assert.equal(parseSearch({ sort: "bogus" }).sort, "relevant");
+
 console.log("✓ jobFilters checks passed");
 
 {

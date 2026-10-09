@@ -16,6 +16,7 @@ type Job struct {
 	Source             string
 	UpdatedAt          time.Time
 	ScrapedAt          time.Time
+	FirstDiscoveredAt  time.Time
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
