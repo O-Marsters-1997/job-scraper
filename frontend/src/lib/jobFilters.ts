@@ -19,6 +19,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	page?: number | undefined;
 }
 
 export const DEFAULT_FILTERS: JobFilters = {
@@ -34,6 +35,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	page: undefined,
 };
 
 /** Coerce raw URL search params to JobFilters. Used as the route's validateSearch. */
@@ -47,6 +49,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		if (typeof v === "string" && v) return [v];
 		return [];
 	};
+	const page = Number(raw.page);
 	return {
 		q: typeof raw.q === "string" ? raw.q : "",
 		suit: coerceNum(raw.suit),
@@ -65,6 +68,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		page: Number.isInteger(page) && page > 1 ? page : undefined,
 	};
 }
 
