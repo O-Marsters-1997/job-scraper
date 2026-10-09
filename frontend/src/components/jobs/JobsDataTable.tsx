@@ -36,6 +36,8 @@ interface JobsDataTableProps<TData extends Job> {
 	data: TData[];
 	filters: JobFilters;
 	onChange: (patch: Partial<JobFilters>) => void;
+	page?: number | undefined;
+	onPageChange?: (page: number | undefined) => void;
 	sourceOptions: string[];
 	wildcards?: boolean;
 	selection?: RowSelectionState;
@@ -44,6 +46,8 @@ interface JobsDataTableProps<TData extends Job> {
 	onBulkSeen?: (jobs: TData[], seen: boolean) => void;
 	onMarkAllSeen?: (jobs: TData[]) => void;
 }
+
+const PAGE_SIZE = 10;
 
 export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
@@ -62,6 +66,33 @@ export function JobsDataTable<TData extends Job>(
 	const toggleExpanded = (rowId: string) =>
 		setExpandedRow((prev) => (prev === rowId ? null : rowId));
 
+	const [localPageIndex, setLocalPageIndex] = createSignal(0);
+	const controlled = () => props.onPageChange !== undefined;
+	const requestedPageIndex = () =>
+		controlled() ? (props.page ?? 1) - 1 : localPageIndex();
+	const pageIndex = () =>
+		Math.min(
+			requestedPageIndex(),
+			Math.max(0, Math.ceil(props.data.length / PAGE_SIZE) - 1),
+		);
+	const setPageIndex = (next: number) => {
+		if (props.onPageChange) props.onPageChange(next > 0 ? next + 1 : undefined);
+		else setLocalPageIndex(next);
+	};
+
+	createEffect(
+		on(
+			() => props.filters,
+			() => setLocalPageIndex(0),
+			{ defer: true },
+		),
+	);
+
+	createEffect(() => {
+		if (!controlled() || props.data.length === 0) return;
+		if (requestedPageIndex() > pageIndex()) setPageIndex(pageIndex());
+	});
+
 	const table = createSolidTable({
 		get data() {
 			return props.data;
@@ -74,7 +105,7 @@ export function JobsDataTable<TData extends Job>(
 		getPaginationRowModel: getPaginationRowModel(),
 		getRowId: (row) => row.ID,
 		enableRowSelection: true,
-		initialState: { pagination: { pageSize: 10 } },
+		autoResetPageIndex: false,
 		state: {
 			get sorting() {
 				return sorting();
@@ -82,8 +113,21 @@ export function JobsDataTable<TData extends Job>(
 			get rowSelection() {
 				return selection();
 			},
+			get pagination() {
+				return { pageIndex: pageIndex(), pageSize: PAGE_SIZE };
+			},
 		},
-		onSortingChange: setSorting,
+		onSortingChange: (updater) => {
+			setSorting(updater);
+			setPageIndex(0);
+		},
+		onPaginationChange: (updater) => {
+			const next =
+				typeof updater === "function"
+					? updater({ pageIndex: pageIndex(), pageSize: PAGE_SIZE })
+					: updater;
+			setPageIndex(next.pageIndex);
+		},
 		onRowSelectionChange: (updater) =>
 			setSelection(
 				typeof updater === "function" ? updater(selection()) : updater,

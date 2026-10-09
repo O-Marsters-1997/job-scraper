@@ -185,3 +185,13 @@ assert.equal(parseSearch({ fav: true }).fav, true);
 assert.equal(parseSearch({ fav: "nonsense" }).fav, false);
 assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, fav: true }), 1);
 assert.equal(isDefaultView({ ...DEFAULT_FILTERS, fav: true }, false), false);
+
+assert.equal(parseSearch({ page: "3" }).page, 3);
+assert.equal(parseSearch({ page: 3 }).page, 3);
+assert.equal(parseSearch({ page: "1" }).page, undefined);
+assert.equal(parseSearch({ page: "0" }).page, undefined);
+assert.equal(parseSearch({ page: "2.5" }).page, undefined);
+assert.equal(parseSearch({ page: "abc" }).page, undefined);
+assert.equal(parseSearch({}).page, undefined);
+assert.equal(parseSearch({ page: "1e3" }).page, undefined);
+assert.equal(parseSearch({ page: "0x10" }).page, undefined);
