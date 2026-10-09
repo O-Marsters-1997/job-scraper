@@ -136,6 +136,7 @@ function ScoringForm(props: {
 		try {
 			const result = await mutation.mutateAsync({
 				notifyThreshold: filters.threshold(),
+				maxJobAgeDays: filters.maxJobAgeDays(),
 				excludedTitleKeywords: filters.titleKeywords(),
 				excludedCompanies: uniqueCapitalised(filters.companies()),
 				excludedLocations: uniqueCapitalised(filters.locations()),

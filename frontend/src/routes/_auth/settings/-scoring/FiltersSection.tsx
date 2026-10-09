@@ -88,6 +88,24 @@ export function FiltersSection(props: { filters: ExclusionFilters }) {
 					class="w-24 font-mono tabular-nums"
 				/>
 			</Field>
+			<Field
+				label="Only score jobs posted in the last"
+				for="max-job-age"
+				hint="Days, up to 365. Older jobs are saved but never scored. 0 scores every job."
+			>
+				<Input
+					id="max-job-age"
+					type="number"
+					min="0"
+					max="365"
+					value={props.filters.maxJobAgeDays()}
+					onInput={(e) => {
+						const days = e.currentTarget.valueAsNumber;
+						if (!Number.isNaN(days)) props.filters.setMaxJobAgeDays(days);
+					}}
+					class="w-24 font-mono tabular-nums"
+				/>
+			</Field>
 		</>
 	);
 }

@@ -33,7 +33,7 @@ func (s *Service) AppendOverallFeedback(ctx context.Context, userID string, in d
 	if reason == "" {
 		return dto.ScoreFeedback{}, apperr.Invalid("reason must not be blank")
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
@@ -71,7 +71,7 @@ func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.J
 	if err != nil {
 		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendJobFeedback: load score: %w", err)
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
@@ -176,7 +176,7 @@ func (s *Service) ExportFeedback(ctx context.Context, userID string, includeOutd
 	if err != nil {
 		return "", err
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return "", err
 	}
@@ -211,7 +211,7 @@ func (s *Service) AppendCollectionFeedback(ctx context.Context, userID string, i
 	if err != nil {
 		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendCollectionFeedback: load scores: %w", err)
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}

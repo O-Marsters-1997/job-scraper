@@ -60,7 +60,7 @@ func (s *Service) rescoreJob(ctx context.Context, userID, jobID string) (dto.Job
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load job: %w", err)
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.JobScore{}, err
 	}

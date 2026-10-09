@@ -177,9 +177,10 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	if err != nil {
 		return fail(fmt.Errorf("load interested configs: %w", err))
 	}
+	now := time.Now()
 	surviving := make([]dto.SearchConfig, 0, len(configs))
 	for _, cfg := range configs {
-		if _, rejected := filter.Reject(job, cfg); !rejected {
+		if _, rejected := filter.Reject(job, cfg); !rejected && !postedBeforeCutoff(job, cfg, now) {
 			surviving = append(surviving, cfg)
 		}
 	}
@@ -255,6 +256,13 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	s.notifyNewJob(ctx, job, surviving, scores, saved)
 	return nil
+}
+
+func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {
+	if cfg.MaxJobAgeDays <= 0 {
+		return false
+	}
+	return job.UpdatedAt.Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
 }
 
 func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {
@@ -412,7 +420,7 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 // Recompute re-scores every job userID already has a score for, from their
 // current preferences and each job's cached answers. It never calls Answerer.
 func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeResult, error) {
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.RecomputeResult{}, err
 	}
@@ -438,7 +446,7 @@ func (s *Service) Recompute(ctx context.Context, userID string) (dto.RecomputeRe
 // CompanyFavouriteChanged re-scores userID's scored, open Jobs at companyID
 // from cached answers within tx. It never calls Answerer or notifies.
 func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -456,7 +464,7 @@ func (s *Service) CompanyFavouriteChanged(ctx context.Context, tx pgx.Tx, userID
 // FillMissingAnswers queues an answer effect, without alerting, for each of
 // userID's already-scored jobs missing an answer to a currently picked question.
 func (s *Service) FillMissingAnswers(ctx context.Context, userID string) (int64, error) {
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -489,12 +497,12 @@ func (s *Service) loadBank(ctx context.Context) (bank, error) {
 	return newBank(options), nil
 }
 
-func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.SearchConfig, error) {
+func (s *Service) searchConfigOrDefault(ctx context.Context, userID string) (dto.SearchConfig, error) {
 	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !notFound(err) {
-		return dto.SearchConfig{}, err
+	if notFound(err) {
+		return dto.SearchConfig{MaxJobAgeDays: defaultMaxJobAgeDays}, nil
 	}
-	return cfg, nil
+	return cfg, err
 }
 
 func scoreInputs(userID string, cfg dto.SearchConfig, byID map[string]dto.ScoringOption, inputs []store.ScoringInput) []dto.JobScore {

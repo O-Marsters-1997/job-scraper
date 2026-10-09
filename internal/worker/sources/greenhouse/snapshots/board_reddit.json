@@ -9,6 +9,7 @@
       "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/8089959",
       "content": "<p>trimmed</p>",
       "updated_at": "2026-10-03T08:09:17-04:00",
+      "first_published": "2026-07-29T02:19:34-04:00",
       "pay_input_ranges": [
         {
           "min_cents": 18900000,
@@ -28,6 +29,7 @@
       "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/7792848",
       "content": "<p>trimmed</p>",
       "updated_at": "2026-10-01T03:25:11-04:00",
+      "first_published": "2026-04-14T14:08:53-04:00",
       "pay_input_ranges": [
         {
           "min_cents": 23000000,
@@ -47,6 +49,7 @@
       "absolute_url": "https://job-boards.greenhouse.io/reddit/jobs/8249259",
       "content": "<p>trimmed</p>",
       "updated_at": "2026-10-03T08:09:17-04:00",
+      "first_published": "2026-10-02T13:29:27-04:00",
       "pay_input_ranges": []
     }
   ],

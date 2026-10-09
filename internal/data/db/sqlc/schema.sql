@@ -261,7 +261,8 @@ CREATE TABLE IF NOT EXISTS search_config (
     notify_threshold        INT         NOT NULL DEFAULT 70,
     preferences             JSONB       NOT NULL DEFAULT '{}',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    max_job_age_days        INT         NOT NULL DEFAULT 7 CHECK (max_job_age_days BETWEEN 0 AND 365)
 );
 
 CREATE TABLE IF NOT EXISTS user_ai_credentials (

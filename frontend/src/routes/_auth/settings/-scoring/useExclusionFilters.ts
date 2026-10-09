@@ -14,6 +14,7 @@ export function useExclusionFilters(initial: ScoringConfig) {
 		initial.requiredTitleKeywords,
 	);
 	const [threshold, setThreshold] = createSignal(initial.notifyThreshold);
+	const [maxJobAgeDays, setMaxJobAgeDays] = createSignal(initial.maxJobAgeDays);
 	return {
 		titleKeywords,
 		setTitleKeywords,
@@ -27,6 +28,8 @@ export function useExclusionFilters(initial: ScoringConfig) {
 		setRequiredTitleKeywords,
 		threshold,
 		setThreshold,
+		maxJobAgeDays,
+		setMaxJobAgeDays,
 	};
 }
 

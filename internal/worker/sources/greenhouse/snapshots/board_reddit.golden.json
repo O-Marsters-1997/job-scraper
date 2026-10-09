@@ -11,15 +11,19 @@
     "ProviderPostingID": "8089959",
     "ContentFingerprint": "",
     "Source": "greenhouse",
-    "UpdatedAt": "2026-10-03T08:09:17-04:00",
+    "UpdatedAt": "2026-07-29T02:19:34-04:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003etrimmed\u003c/p\u003e",
     "SalaryRaw": "USD 189000 - 264600",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   },
   {
     "ID": "",
@@ -33,15 +37,19 @@
     "ProviderPostingID": "7792848",
     "ContentFingerprint": "",
     "Source": "greenhouse",
-    "UpdatedAt": "2026-10-01T03:25:11-04:00",
+    "UpdatedAt": "2026-04-14T14:08:53-04:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003etrimmed\u003c/p\u003e",
     "SalaryRaw": "USD 230000 - 322000",
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   },
   {
     "ID": "",
@@ -55,14 +63,18 @@
     "ProviderPostingID": "8249259",
     "ContentFingerprint": "",
     "Source": "greenhouse",
-    "UpdatedAt": "2026-10-03T08:09:17-04:00",
+    "UpdatedAt": "2026-10-02T13:29:27-04:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003etrimmed\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   }
 ]

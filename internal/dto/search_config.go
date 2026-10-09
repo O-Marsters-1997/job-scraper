@@ -11,6 +11,7 @@ type SearchConfig struct {
 	RequiredLocations     []string
 	RequiredTitleKeywords []string
 	NotifyThreshold       int
+	MaxJobAgeDays         int
 	CompanyIsNew          bool
 	CompanyIsFavourite    bool
 	Preferences           Preferences

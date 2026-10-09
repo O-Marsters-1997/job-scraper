@@ -26,13 +26,13 @@ type boardResponse struct {
 }
 
 type boardJob struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	Location    jobLocation `json:"location"`
-	AbsoluteURL string      `json:"absolute_url"`
-	Content     string      `json:"content"`
-	UpdatedAt   string      `json:"updated_at"`
-	PayRanges   []payRange  `json:"pay_input_ranges"`
+	ID             int64       `json:"id"`
+	Title          string      `json:"title"`
+	Location       jobLocation `json:"location"`
+	AbsoluteURL    string      `json:"absolute_url"`
+	Content        string      `json:"content"`
+	FirstPublished string      `json:"first_published"`
+	PayRanges      []payRange  `json:"pay_input_ranges"`
 }
 
 type payRange struct {
@@ -81,7 +81,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       bj.Content,
 			SalaryRaw:         bj.salary(),
 			WorkArrangement:   sources.DetectWorkArrangement(bj.Location.Name),
-			UpdatedAt:         sources.RFC3339OrNow(bj.UpdatedAt),
+			UpdatedAt:         sources.RFC3339OrNow(bj.FirstPublished),
 		})
 	}
 	return jobs, nil
