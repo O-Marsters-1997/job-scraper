@@ -41,18 +41,38 @@ type Scraper struct {
 	sources.PaginatedBase
 	keywords string
 	filters  map[string]string
+	recency  string
 }
 
 var _ sources.Source = (*Scraper)(nil)
 
-func New(keywords string, filters map[string]string) *Scraper {
+// Recency returns the whole-day window covering the time since lastSucceeded, rounded up
+// and capped at configured (the Target's own recency filter). It returns "" when the
+// Target's stored recency should be used unchanged.
+func Recency(configured string, lastSucceeded *time.Time, now time.Time) string {
+	if lastSucceeded == nil {
+		return ""
+	}
+	elapsed := max(now.Sub(*lastSucceeded), 0)
+	days := max(int((elapsed+24*time.Hour-1)/(24*time.Hour)), 1)
+	if n, err := strconv.Atoi(configured); err == nil && days >= n {
+		return ""
+	}
+	return strconv.Itoa(days)
+}
+
+// New builds an Indeed Source. A non-empty recency (from Recency) narrows the window
+// and switches to date sort, which makes the Source NewestFirst.
+func New(keywords string, filters map[string]string, recency string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
-			Name:  "indeed",
-			Route: sources.RouteTiered,
+			Name:        "indeed",
+			Route:       sources.RouteTiered,
+			NewestFirst: recency != "",
 		}),
 		keywords: keywords,
 		filters:  filters,
+		recency:  recency,
 	}
 }
 
@@ -79,7 +99,11 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 }
 
 func (s *Scraper) query(cursor string) string {
-	args := []string{"limit: 100", "sort: RELEVANCE"}
+	sort := "RELEVANCE"
+	if s.recency != "" {
+		sort = "DATE"
+	}
+	args := []string{"limit: 100", "sort: " + sort}
 	if s.keywords != "" {
 		args = append(args, "what: "+quote(s.keywords))
 	}
@@ -91,6 +115,9 @@ func (s *Scraper) query(cursor string) string {
 		args = append(args, loc+"}")
 	}
 	recency := s.filters["recency"]
+	if s.recency != "" {
+		recency = s.recency
+	}
 	if days, err := strconv.Atoi(recency); err == nil && sourcespec.ValidFilterValue("indeed", "recency", recency) {
 		args = append(args, fmt.Sprintf(`filters: [{ date: { field: "dateOnIndeed", start: "%dh" } }]`, days*24))
 	}
