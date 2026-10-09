@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
@@ -105,6 +106,14 @@ func (m *Module) UserIDByUsername(ctx context.Context, username string) (string,
 		return "", err
 	}
 	return user.ID, nil
+}
+
+// SetRole is called by cmd/admin's set-role command.
+func (m *Module) SetRole(ctx context.Context, username, role string) error {
+	if role != dto.RoleUser && role != dto.RoleAdmin {
+		return apperr.Invalid(fmt.Sprintf("role must be %q or %q, got %q", dto.RoleUser, dto.RoleAdmin, role))
+	}
+	return m.store.SetRole(ctx, username, role)
 }
 
 // Get returns userID's decrypted AI provider key, satisfying scoring's

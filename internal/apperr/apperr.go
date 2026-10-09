@@ -11,6 +11,7 @@ type Kind int
 const (
 	KindInvalid Kind = iota
 	KindUnauthorized
+	KindForbidden
 	KindNotFound
 	KindConflict
 	KindUnprocessable
@@ -24,6 +25,8 @@ func (k Kind) Status() int {
 		return http.StatusBadRequest
 	case KindUnauthorized:
 		return http.StatusUnauthorized
+	case KindForbidden:
+		return http.StatusForbidden
 	case KindNotFound:
 		return http.StatusNotFound
 	case KindConflict:
@@ -52,6 +55,7 @@ func (e *Error) Kind() Kind    { return e.kind }
 
 func Invalid(msg string) error       { return &Error{kind: KindInvalid, msg: msg} }
 func Unauthorized(msg string) error  { return &Error{kind: KindUnauthorized, msg: msg} }
+func Forbidden(msg string) error     { return &Error{kind: KindForbidden, msg: msg} }
 func NotFound(msg string) error      { return &Error{kind: KindNotFound, msg: msg} }
 func Conflict(msg string) error      { return &Error{kind: KindConflict, msg: msg} }
 func Unprocessable(msg string) error { return &Error{kind: KindUnprocessable, msg: msg} }

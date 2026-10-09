@@ -113,7 +113,7 @@ var meHandler = handlers.Handle(
 		if !ok {
 			return dto.MeView{}, apperr.Unauthorized("unauthorized")
 		}
-		return dto.MeView{ID: session.UserID, Username: session.Username}, nil
+		return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
 	},
 	func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
 	func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {

@@ -37,7 +37,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, password_hash, email)
 VALUES ($1, $2, $3)
-RETURNING id, username, password_hash, email, created_at
+RETURNING id, username, password_hash, email, role, created_at
 `
 
 type CreateUserParams struct {
@@ -54,6 +54,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -78,7 +79,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) error {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT s.id, s.user_id, s.created_at, s.expires_at, u.username
+SELECT s.id, s.user_id, s.created_at, s.expires_at, u.username, u.role
 FROM sessions s
 JOIN users u ON s.user_id = u.id
 WHERE s.id = $1 AND s.expires_at > NOW()
@@ -90,6 +91,7 @@ type GetSessionRow struct {
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
 	Username  string
+	Role      UserRole
 }
 
 func (q *Queries) GetSession(ctx context.Context, id pgtype.UUID) (GetSessionRow, error) {
@@ -101,12 +103,13 @@ func (q *Queries) GetSession(ctx context.Context, id pgtype.UUID) (GetSessionRow
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.Username,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, email, created_at FROM users WHERE username = $1
+SELECT id, username, password_hash, email, role, created_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -117,7 +120,25 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Username,
 		&i.PasswordHash,
 		&i.Email,
+		&i.Role,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const setUserRole = `-- name: SetUserRole :execrows
+UPDATE users SET role = $2 WHERE username = $1
+`
+
+type SetUserRoleParams struct {
+	Username string
+	Role     UserRole
+}
+
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserRole, arg.Username, arg.Role)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
