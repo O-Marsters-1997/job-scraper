@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Pager } from "@/components/Pager";
 import { SearchField } from "@/components/SearchField";
@@ -13,6 +13,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { describeNextRun } from "@/lib/runWindow";
 import {
 	describeFilters,
 	matchesSearch,
@@ -33,6 +34,7 @@ import {
 	RunStatus,
 	SortHead,
 } from "./parts";
+import { ScheduleEditor } from "./ScheduleEditor";
 
 const ALL = "all";
 
@@ -49,6 +51,7 @@ export function BoardSearchesTable(props: {
 	onDelete: (target: SourceTarget) => void;
 	runPending: boolean;
 }) {
+	const [editing, setEditing] = createSignal<string>();
 	const info = (name: string) => props.sources.find((s) => s.name === name);
 	const label = (name: string) => info(name)?.label ?? name;
 
@@ -154,6 +157,7 @@ export function BoardSearchesTable(props: {
 								>
 									Last run
 								</SortHead>
+								<TableHead>Schedule</TableHead>
 								<TableHead class="w-24" />
 								<TableHead class="w-20">Active</TableHead>
 								<TableHead class="w-10" />
@@ -163,7 +167,7 @@ export function BoardSearchesTable(props: {
 							<For
 								each={paged().items}
 								fallback={
-									<EmptyRow colSpan={6}>
+									<EmptyRow colSpan={7}>
 										{filtersActive()
 											? "No searches match these filters."
 											: "No searches yet. Use Build from fields to add one."}
@@ -175,82 +179,113 @@ export function BoardSearchesTable(props: {
 										t.RunStatus === "queued" || t.RunStatus === "running";
 									const chips = () => describeFilters(t, info(t.Source));
 									return (
-										<TableRow
-											class={cn("[&>td]:py-2.5", !t.Enabled && "text-faint")}
-										>
-											<TableCell>
-												<div class="flex items-center gap-2">
-													<SourceBadge source={label(t.Source)} />
-													<span
-														class="max-w-64 truncate font-medium"
-														title={t.Value}
-													>
-														{t.Value}
-													</span>
-													<Show when={t.URL}>
-														<a
-															href={t.URL}
-															target="_blank"
-															rel="noopener noreferrer"
-															aria-label={`Open on ${label(t.Source)}`}
-															title={`Open on ${label(t.Source)}`}
-															class="grid size-6 shrink-0 place-items-center rounded text-faint transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+										<>
+											<TableRow
+												class={cn("[&>td]:py-2.5", !t.Enabled && "text-faint")}
+											>
+												<TableCell>
+													<div class="flex items-center gap-2">
+														<SourceBadge source={label(t.Source)} />
+														<span
+															class="max-w-64 truncate font-medium"
+															title={t.Value}
 														>
-															<Icon name="externalLink" size={12} />
-														</a>
-													</Show>
-												</div>
-											</TableCell>
-											<TableCell>
-												<div class="flex flex-wrap gap-1">
-													<For
-														each={chips()}
-														fallback={
-															<span class="text-xs text-faint">None</span>
-														}
+															{t.Value}
+														</span>
+														<Show when={t.URL}>
+															<a
+																href={t.URL}
+																target="_blank"
+																rel="noopener noreferrer"
+																aria-label={`Open on ${label(t.Source)}`}
+																title={`Open on ${label(t.Source)}`}
+																class="grid size-6 shrink-0 place-items-center rounded text-faint transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+															>
+																<Icon name="externalLink" size={12} />
+															</a>
+														</Show>
+													</div>
+												</TableCell>
+												<TableCell>
+													<div class="flex flex-wrap gap-1">
+														<For
+															each={chips()}
+															fallback={
+																<span class="text-xs text-faint">None</span>
+															}
+														>
+															{(f) => (
+																<span class="whitespace-nowrap rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">
+																	{f.display}
+																</span>
+															)}
+														</For>
+													</div>
+												</TableCell>
+												<TableCell>
+													<Show
+														when={t.Enabled}
+														fallback={<span class="text-xs">Paused</span>}
 													>
-														{(f) => (
-															<span class="whitespace-nowrap rounded bg-surface-muted px-1.5 py-0.5 text-xs text-muted">
-																{f.display}
-															</span>
-														)}
-													</For>
-												</div>
-											</TableCell>
-											<TableCell>
-												<Show
-													when={t.Enabled}
-													fallback={<span class="text-xs">Paused</span>}
-												>
-													<RunStatus target={t} />
-												</Show>
-											</TableCell>
-											<TableCell>
-												<Button
-													variant="outline"
-													size="sm"
-													class="w-full"
-													onClick={() => props.onRun(t)}
-													disabled={busy() || !t.Enabled || props.runPending}
-												>
-													{busy() ? "Running…" : "Run now"}
-												</Button>
-											</TableCell>
-											<TableCell>
-												<EnabledSwitch
-													enabled={t.Enabled}
-													name={t.Value}
-													onToggle={() => props.onToggle(t)}
-												/>
-											</TableCell>
-											<TableCell>
-												<DeleteIconButton
-													label={`Delete ${t.Value}`}
-													title="Delete"
-													onClick={() => props.onDelete(t)}
-												/>
-											</TableCell>
-										</TableRow>
+														<RunStatus target={t} />
+													</Show>
+												</TableCell>
+												<TableCell>
+													<button
+														type="button"
+														onClick={() =>
+															setEditing(editing() === t.ID ? undefined : t.ID)
+														}
+														aria-expanded={editing() === t.ID}
+														aria-label={`Edit schedule for ${t.Value}`}
+														class="whitespace-nowrap text-xs text-muted hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+													>
+														{t.Enabled
+															? describeNextRun(
+																	t.NextRunAt,
+																	t.RunWindow.timezone,
+																)
+															: "Paused"}
+													</button>
+												</TableCell>
+												<TableCell>
+													<Button
+														variant="outline"
+														size="sm"
+														class="w-full"
+														onClick={() => props.onRun(t)}
+														disabled={busy() || !t.Enabled || props.runPending}
+													>
+														{busy() ? "Running…" : "Run now"}
+													</Button>
+												</TableCell>
+												<TableCell>
+													<EnabledSwitch
+														enabled={t.Enabled}
+														name={t.Value}
+														onToggle={() => props.onToggle(t)}
+													/>
+												</TableCell>
+												<TableCell>
+													<DeleteIconButton
+														label={`Delete ${t.Value}`}
+														title="Delete"
+														onClick={() => props.onDelete(t)}
+													/>
+												</TableCell>
+											</TableRow>
+											<Show when={editing() === t.ID}>
+												<TableRow class="hover:bg-transparent">
+													<TableCell colSpan={7} class="bg-surface-muted">
+														<ScheduleEditor
+															target={t}
+															incremental={info(t.Source)?.incremental ?? false}
+															onDone={() => setEditing(undefined)}
+														/>
+													</TableCell>
+												</TableRow>
+											</Show>
+										</>
 									);
 								}}
 							</For>
