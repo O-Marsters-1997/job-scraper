@@ -1,4 +1,6 @@
+import { Link } from "@tanstack/solid-router";
 import { Show } from "solid-js";
+import { useAiPrefs } from "@/hooks/useAiPrefs";
 import { unknownCount } from "@/lib/scoreRows";
 import { cn } from "@/lib/utils";
 import type { Band, ScoreRow } from "@/types/job";
@@ -10,10 +12,20 @@ export function SuitabilityScoreValue(props: {
 	breakdown?: ScoreRow[] | null | undefined;
 	size?: "sm" | "lg";
 }) {
+	const aiPrefs = useAiPrefs();
 	return (
 		<Show
 			when={props.score != null}
-			fallback={<p class="text-xs text-faint">Not yet scored.</p>}
+			fallback={
+				<Show
+					when={aiPrefs.data && !aiPrefs.data.scoringEnabled}
+					fallback={<p class="text-xs text-faint">Not yet scored.</p>}
+				>
+					<Link to="/settings/ai" class="text-xs text-accent-text underline">
+						Connect an OpenRouter key to score jobs
+					</Link>
+				</Show>
+			}
 		>
 			<div class="flex items-center gap-2">
 				<Show when={props.band || undefined}>
