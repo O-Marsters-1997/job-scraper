@@ -24,7 +24,7 @@ func notFound(err error) bool {
 }
 
 func (s *Service) GetConfig(ctx context.Context, userID string) (dto.ScoringConfigView, error) {
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
@@ -52,7 +52,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 		return dto.ScoringConfigView{}, err
 	}
 
-	existing, err := s.searchConfigOrZero(ctx, userID)
+	existing, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}

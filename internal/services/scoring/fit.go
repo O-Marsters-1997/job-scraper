@@ -130,7 +130,7 @@ func (s *Service) fitIfDue(ctx context.Context, userID string) error {
 	if err != nil || len(grades) < minBandGrades {
 		return err
 	}
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil || cfg.UserID == "" {
 		return err
 	}

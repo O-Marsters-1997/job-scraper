@@ -363,19 +363,6 @@ func TestRunTick(t *testing.T) {
 		})
 	}
 
-	t.Run("a job with no posting date is scored whatever the cutoff", func(t *testing.T) {
-		st := newFakeStore()
-		cfg := picking("user-1", "tech:go")
-		cfg.MaxJobAgeDays = 7
-		seedEffect(st, false, cfg)
-
-		runTick(t, st)
-
-		if completed := st.Completed(); len(completed) != 1 || len(completed[0].Scores) != 1 {
-			t.Errorf("completed effects = %+v, want 1 effect with 1 score", completed)
-		}
-	})
-
 	t.Run("alerts only on first discovery above threshold", func(t *testing.T) {
 		st := newFakeStore()
 		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())

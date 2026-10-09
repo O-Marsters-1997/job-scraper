@@ -63,7 +63,7 @@ type labelPool struct {
 }
 
 func (s *Service) loadLabelPool(ctx context.Context, userID string) (labelPool, error) {
-	cfg, err := s.searchConfigOrZero(ctx, userID)
+	cfg, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return labelPool{}, err
 	}

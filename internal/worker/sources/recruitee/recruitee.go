@@ -25,7 +25,7 @@ func New(token string) *sources.BoardSource {
 	})
 }
 
-const timestampLayout = "2006-01-02 15:04:05 MST"
+const timestampLayout = "2006-01-02 15:04:05 UTC"
 
 type boardResponse struct {
 	Offers []offer `json:"offers"`
