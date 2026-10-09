@@ -47,6 +47,38 @@ test.describe("Jobs", () => {
 		await expect(page).not.toHaveURL(/page=2/);
 	});
 
+	test("should focus search with /, jump to results with Enter, and replace the old query", async ({
+		page,
+		jobsPage,
+	}) => {
+		const firstTitle = (await jobsPage.firstJobTitleLink().textContent())
+			?.trim()
+			.split(/\s+/)[0] as string;
+		const kbdHint = page.locator("kbd", { hasText: "/" });
+		await expect(kbdHint).toBeVisible();
+
+		await jobsPage.focusSearchWithKey();
+		await expect(jobsPage.searchBox).toBeFocused();
+		await expect(jobsPage.searchBox).toHaveValue("");
+		await expect(kbdHint).toBeHidden();
+
+		await page.keyboard.type(firstTitle);
+		await page.keyboard.press("Enter");
+		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.firstJobTitleLink()).toContainText(firstTitle);
+
+		await page.keyboard.press("Enter");
+		await expect(page).toHaveURL(/\/jobs\/[^/?]+/);
+		await page.goBack();
+
+		await jobsPage.focusSearchWithKey();
+		await expect(jobsPage.searchBox).toBeFocused();
+		await page.keyboard.type("zzzznomatch");
+		await expect(jobsPage.searchBox).toHaveValue("zzzznomatch");
+		await page.keyboard.press("Enter");
+		await expect(jobsPage.searchBox).toBeFocused();
+	});
+
 	test("should filter jobs by search term", async ({ jobsPage }) => {
 		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
 

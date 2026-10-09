@@ -26,6 +26,14 @@ export class JobsPage {
 		await this.searchInput.fill(query);
 	}
 
+	async focusSearchWithKey() {
+		await this.page.keyboard.press("/");
+	}
+
+	get searchBox() {
+		return this.searchInput;
+	}
+
 	async openFirstJob() {
 		await this.rows.first().getByRole("link").first().click();
 	}
