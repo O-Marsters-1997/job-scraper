@@ -71,3 +71,6 @@ assert.deepEqual(
 );
 assert.deepEqual(ids(sortJobs(jobs, "best")), ids(best(jobs)));
 assert.deepEqual(ids(sortJobs(jobs, "newest")), ids(newest(jobs)));
+
+assert.equal(relevanceRank(job("bad", 70, "not-a-date"), now), 70);
+assert.equal(relevanceRank(job("zero", 0, ago(0)), now), 0);

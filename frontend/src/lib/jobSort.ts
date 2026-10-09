@@ -34,7 +34,7 @@ export const UNSCORED_PRIOR = 50;
 const MS_PER_DAY = 86_400_000;
 
 export function relevanceRank(job: Job, now: number = Date.now()): number {
-	const ageDays = Math.max(0, (now - discoveredAt(job)) / MS_PER_DAY);
+	const ageDays = Math.max(0, (now - discoveredAt(job)) / MS_PER_DAY) || 0;
 	const score = job.SuitabilityScore ?? UNSCORED_PRIOR;
 	return score * 0.5 ** (ageDays / HALF_LIFE_DAYS);
 }
@@ -44,12 +44,14 @@ export function relevant<T extends Job>(
 	now: number = Date.now(),
 ): T[] {
 	return jobs
-		.map((job) => ({ job, rank: relevanceRank(job, now) }))
+		.map((job) => ({
+			job,
+			rank: relevanceRank(job, now),
+			at: discoveredAt(job) || 0,
+		}))
 		.sort(
 			(a, b) =>
-				b.rank - a.rank ||
-				byNewest(a.job, b.job) ||
-				a.job.ID.localeCompare(b.job.ID),
+				b.rank - a.rank || b.at - a.at || a.job.ID.localeCompare(b.job.ID),
 		)
 		.map(({ job }) => job);
 }
