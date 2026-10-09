@@ -34,7 +34,7 @@ func (q *Queries) AddExcludedCompany(ctx context.Context, arg AddExcludedCompany
 }
 
 const getSearchConfig = `-- name: GetSearchConfig :one
-SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at FROM search_config WHERE user_id = $1 LIMIT 1
+SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at, max_job_age_days FROM search_config WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (SearchConfig, error) {
@@ -52,12 +52,13 @@ func (q *Queries) GetSearchConfig(ctx context.Context, userID pgtype.UUID) (Sear
 		&i.Preferences,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxJobAgeDays,
 	)
 	return i, err
 }
 
 const listIncludeFilterConfigs = `-- name: ListIncludeFilterConfigs :many
-SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at FROM search_config
+SELECT id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at, max_job_age_days FROM search_config
 WHERE cardinality(required_locations) > 0 OR cardinality(required_title_keywords) > 0
 `
 
@@ -82,6 +83,7 @@ func (q *Queries) ListIncludeFilterConfigs(ctx context.Context) ([]SearchConfig,
 			&i.Preferences,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxJobAgeDays,
 		); err != nil {
 			return nil, err
 		}
@@ -111,8 +113,8 @@ func (q *Queries) RemoveExcludedCompany(ctx context.Context, arg RemoveExcludedC
 }
 
 const upsertSearchConfig = `-- name: UpsertSearchConfig :one
-INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO search_config (user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, max_job_age_days)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (user_id) DO UPDATE SET
     excluded_title_keywords = EXCLUDED.excluded_title_keywords,
     excluded_companies      = EXCLUDED.excluded_companies,
@@ -121,8 +123,9 @@ ON CONFLICT (user_id) DO UPDATE SET
     required_title_keywords = EXCLUDED.required_title_keywords,
     notify_threshold        = EXCLUDED.notify_threshold,
     preferences             = EXCLUDED.preferences,
+    max_job_age_days        = EXCLUDED.max_job_age_days,
     updated_at              = NOW()
-RETURNING id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at
+RETURNING id, user_id, excluded_title_keywords, excluded_companies, excluded_locations, required_locations, required_title_keywords, notify_threshold, preferences, created_at, updated_at, max_job_age_days
 `
 
 type UpsertSearchConfigParams struct {
@@ -134,6 +137,7 @@ type UpsertSearchConfigParams struct {
 	RequiredTitleKeywords []string
 	NotifyThreshold       int32
 	Preferences           []byte
+	MaxJobAgeDays         int32
 }
 
 func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfigParams) (SearchConfig, error) {
@@ -146,6 +150,7 @@ func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfig
 		arg.RequiredTitleKeywords,
 		arg.NotifyThreshold,
 		arg.Preferences,
+		arg.MaxJobAgeDays,
 	)
 	var i SearchConfig
 	err := row.Scan(
@@ -160,6 +165,7 @@ func (q *Queries) UpsertSearchConfig(ctx context.Context, arg UpsertSearchConfig
 		&i.Preferences,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxJobAgeDays,
 	)
 	return i, err
 }

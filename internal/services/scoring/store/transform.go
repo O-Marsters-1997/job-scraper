@@ -34,6 +34,7 @@ func toSearchConfigDTO(row sqlc.SearchConfig) (dto.SearchConfig, error) {
 		RequiredLocations:     row.RequiredLocations,
 		RequiredTitleKeywords: row.RequiredTitleKeywords,
 		NotifyThreshold:       int(row.NotifyThreshold),
+		MaxJobAgeDays:         int(row.MaxJobAgeDays),
 		Preferences:           prefs,
 		UpdatedAt:             row.UpdatedAt.Time,
 	}, nil

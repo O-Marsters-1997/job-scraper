@@ -9,6 +9,7 @@ import { slugify } from "./helpers";
 
 let scoringConfig: ScoringConfig = {
 	notifyThreshold: 70,
+	maxJobAgeDays: 7,
 	excludedTitleKeywords: [],
 	excludedCompanies: [],
 	excludedLocations: [],

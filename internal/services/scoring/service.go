@@ -177,9 +177,10 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	if err != nil {
 		return fail(fmt.Errorf("load interested configs: %w", err))
 	}
+	now := time.Now()
 	surviving := make([]dto.SearchConfig, 0, len(configs))
 	for _, cfg := range configs {
-		if _, rejected := filter.Reject(job, cfg); !rejected {
+		if _, rejected := filter.Reject(job, cfg); !rejected && !postedBeforeCutoff(job, cfg, now) {
 			surviving = append(surviving, cfg)
 		}
 	}
@@ -255,6 +256,13 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	s.notifyNewJob(ctx, job, surviving, scores, saved)
 	return nil
+}
+
+func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {
+	if cfg.MaxJobAgeDays <= 0 || job.UpdatedAt.IsZero() {
+		return false
+	}
+	return job.UpdatedAt.Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
 }
 
 func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {
@@ -491,10 +499,10 @@ func (s *Service) loadBank(ctx context.Context) (bank, error) {
 
 func (s *Service) searchConfigOrZero(ctx context.Context, userID string) (dto.SearchConfig, error) {
 	cfg, err := s.store.GetSearchConfig(ctx, userID)
-	if err != nil && !notFound(err) {
-		return dto.SearchConfig{}, err
+	if notFound(err) {
+		return dto.SearchConfig{MaxJobAgeDays: defaultMaxJobAgeDays}, nil
 	}
-	return cfg, nil
+	return cfg, err
 }
 
 func scoreInputs(userID string, cfg dto.SearchConfig, byID map[string]dto.ScoringOption, inputs []store.ScoringInput) []dto.JobScore {

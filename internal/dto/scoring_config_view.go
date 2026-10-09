@@ -10,6 +10,7 @@ type ScoringConfigView struct {
 	RequiredLocations     []string    `json:"requiredLocations"`
 	RequiredTitleKeywords []string    `json:"requiredTitleKeywords"`
 	NotifyThreshold       int         `json:"notifyThreshold"`
+	MaxJobAgeDays         int         `json:"maxJobAgeDays"`
 	UpdatedAt             time.Time   `json:"updatedAt"`
 	BackfillQueued        int64       `json:"backfillQueued"`
 }

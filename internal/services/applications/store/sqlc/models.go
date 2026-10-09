@@ -401,6 +401,7 @@ type SearchConfig struct {
 	Preferences           []byte
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
+	MaxJobAgeDays         int32
 }
 
 type Session struct {

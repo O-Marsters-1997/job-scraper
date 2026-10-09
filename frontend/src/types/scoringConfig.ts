@@ -33,6 +33,7 @@ export const scoringConfigSchema = z.object({
 	requiredLocations: z.array(z.string()),
 	requiredTitleKeywords: z.array(z.string()),
 	notifyThreshold: z.number().int().min(0).max(100),
+	maxJobAgeDays: z.number().int().min(0).max(365),
 	updatedAt: z.string(),
 	backfillQueued: z.number().int().nonnegative().default(0),
 });

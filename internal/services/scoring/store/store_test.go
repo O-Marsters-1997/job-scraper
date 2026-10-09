@@ -107,7 +107,7 @@ func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
 	userID := pgtest.InsertUser(t, pool)
 
 	saved, err := st.UpsertSearchConfig(ctx, dto.SearchConfig{
-		UserID: userID, NotifyThreshold: 70,
+		UserID: userID, NotifyThreshold: 70, MaxJobAgeDays: 30,
 		Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}},
 	})
 	if err != nil {
@@ -120,8 +120,8 @@ func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
 	if diff := cmp.Diff(saved, got); diff != "" {
 		t.Errorf("GetSearchConfig() differs from the upserted config (-saved +got):\n%s", diff)
 	}
-	if got.UserID != userID || got.NotifyThreshold != 70 || len(got.Preferences.Picks) != 1 {
-		t.Errorf("GetSearchConfig() = %+v, want user %q, threshold 70, one pick", got, userID)
+	if got.UserID != userID || got.NotifyThreshold != 70 || got.MaxJobAgeDays != 30 || len(got.Preferences.Picks) != 1 {
+		t.Errorf("GetSearchConfig() = %+v, want user %q, threshold 70, max age 30, one pick", got, userID)
 	}
 }
 
@@ -221,6 +221,20 @@ func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 	}
 	if len(configs) != 1 || configs[0].UserID != userID {
 		t.Fatalf("ListInterestedConfigs() = %+v, want one config for %q", configs, userID)
+	}
+}
+
+func TestListInterestedConfigs_DefaultsMaxJobAgeWithoutSearchConfig(t *testing.T) {
+	st, pool := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	insertTrackedCompany(t, pool, "acme")
+
+	configs, err := st.ListInterestedConfigs(t.Context(), jobID)
+	if err != nil || len(configs) != 1 {
+		t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+	}
+	if got := configs[0].MaxJobAgeDays; got != 7 {
+		t.Errorf("MaxJobAgeDays = %d, want 7", got)
 	}
 }
 

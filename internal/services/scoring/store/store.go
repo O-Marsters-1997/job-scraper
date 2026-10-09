@@ -157,6 +157,7 @@ func (s *Store) UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (d
 		RequiredTitleKeywords: nonNilStrings(cfg.RequiredTitleKeywords),
 		NotifyThreshold:       int32(cfg.NotifyThreshold),
 		Preferences:           prefs,
+		MaxJobAgeDays:         int32(cfg.MaxJobAgeDays),
 	})
 	if err != nil {
 		return dto.SearchConfig{}, fmt.Errorf("store.UpsertSearchConfig: %w", err)
@@ -356,6 +357,7 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 			RequiredLocations:     row.RequiredLocations,
 			RequiredTitleKeywords: row.RequiredTitleKeywords,
 			NotifyThreshold:       int(row.NotifyThreshold),
+			MaxJobAgeDays:         int(row.MaxJobAgeDays),
 			CompanyIsNew:          row.CompanyIsNew,
 			CompanyIsFavourite:    row.CompanyIsFavourite,
 			Preferences:           prefs,

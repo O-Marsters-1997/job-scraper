@@ -42,9 +42,11 @@ func TestGet(t *testing.T) {
 		ExcludedLocations:     []string{},
 		RequiredLocations:     []string{},
 		RequiredTitleKeywords: []string{},
+		MaxJobAgeDays:         7,
 	}
 	saved := empty
 	saved.NotifyThreshold = 5
+	saved.MaxJobAgeDays = 30
 
 	tests := []struct {
 		name string
@@ -52,7 +54,7 @@ func TestGet(t *testing.T) {
 		want dto.ScoringConfigView
 	}{
 		{"returns empty config when none saved", nil, empty},
-		{"returns saved config", &dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5}, saved},
+		{"returns saved config", &dto.SearchConfig{UserID: "user-1", NotifyThreshold: 5, MaxJobAgeDays: 30}, saved},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,6 +93,8 @@ func TestUpdateConfigRejects(t *testing.T) {
 		{"a weight on a non-ladder pick", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice", Weight: 50}}}}},
 		{"a notify threshold below 0", dto.ScoringConfigView{NotifyThreshold: -1}},
 		{"a notify threshold above 100", dto.ScoringConfigView{NotifyThreshold: 101}},
+		{"a negative max job age", dto.ScoringConfigView{MaxJobAgeDays: -1}},
+		{"a max job age above 365 days", dto.ScoringConfigView{MaxJobAgeDays: 366}},
 		{"a negative salary floor amount", dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: -1, Currency: "GBP"}}}},
 		{"a salary floor with no currency", dto.ScoringConfigView{Preferences: dto.Preferences{SalaryFloor: &dto.Money{Amount: 55000}}}},
 	}
@@ -109,6 +113,7 @@ func TestUpdateConfig(t *testing.T) {
 
 	got, err := svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{
 		NotifyThreshold:       70,
+		MaxJobAgeDays:         14,
 		ExcludedTitleKeywords: []string{" Intern ", ""},
 		Preferences: dto.Preferences{
 			Picks: []dto.Pick{
@@ -138,6 +143,9 @@ func TestUpdateConfig(t *testing.T) {
 	wantFloor := &dto.Money{Amount: 55000, Currency: "GBP"}
 	if diff := cmp.Diff(wantFloor, got.Preferences.SalaryFloor); diff != "" {
 		t.Errorf("salary floor, currency uppercased (-want +got):\n%s", diff)
+	}
+	if got.MaxJobAgeDays != 14 {
+		t.Errorf("MaxJobAgeDays = %d, want 14", got.MaxJobAgeDays)
 	}
 	if got.BackfillQueued != 4 {
 		t.Errorf("BackfillQueued = %d, want 4", got.BackfillQueued)

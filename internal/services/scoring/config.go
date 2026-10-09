@@ -13,6 +13,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jev"
 )
 
+const (
+	defaultMaxJobAgeDays = 7
+	maxJobAgeDaysLimit   = 365
+)
+
 func notFound(err error) bool {
 	ae, ok := errors.AsType[*apperr.Error](err)
 	return ok && ae.Kind() == apperr.KindNotFound
@@ -29,6 +34,9 @@ func (s *Service) GetConfig(ctx context.Context, userID string) (dto.ScoringConf
 func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.ScoringConfigView) (dto.ScoringConfigView, error) {
 	if in.NotifyThreshold < 0 || in.NotifyThreshold > 100 {
 		return dto.ScoringConfigView{}, apperr.Invalid("notify threshold must be between 0 and 100")
+	}
+	if in.MaxJobAgeDays < 0 || in.MaxJobAgeDays > maxJobAgeDaysLimit {
+		return dto.ScoringConfigView{}, apperr.Invalid(fmt.Sprintf("max job age must be between 0 and %d days", maxJobAgeDaysLimit))
 	}
 	b, err := s.loadBank(ctx)
 	if err != nil {
@@ -58,6 +66,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	cfg := dto.SearchConfig{
 		UserID:                userID,
 		NotifyThreshold:       in.NotifyThreshold,
+		MaxJobAgeDays:         in.MaxJobAgeDays,
 		ExcludedTitleKeywords: cleanList(in.ExcludedTitleKeywords),
 		ExcludedCompanies:     cleanList(in.ExcludedCompanies),
 		ExcludedLocations:     cleanList(in.ExcludedLocations),
@@ -212,6 +221,7 @@ func toView(cfg dto.SearchConfig) dto.ScoringConfigView {
 		RequiredLocations:     nonNilStrings(cfg.RequiredLocations),
 		RequiredTitleKeywords: nonNilStrings(cfg.RequiredTitleKeywords),
 		NotifyThreshold:       cfg.NotifyThreshold,
+		MaxJobAgeDays:         cfg.MaxJobAgeDays,
 		UpdatedAt:             cfg.UpdatedAt,
 	}
 }

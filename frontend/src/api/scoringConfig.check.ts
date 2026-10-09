@@ -3,6 +3,7 @@ import { scoringConfigSchema } from "../types/scoringConfig";
 
 const base = {
 	notifyThreshold: 70,
+	maxJobAgeDays: 7,
 	excludedTitleKeywords: ["java", "sales"],
 	excludedCompanies: ["acme corp"],
 	excludedLocations: ["united states"],
@@ -51,6 +52,14 @@ try {
 	threw = true;
 }
 assert.ok(threw, "float threshold rejected");
+
+threw = false;
+try {
+	scoringConfigSchema.parse({ ...base, maxJobAgeDays: 366 });
+} catch {
+	threw = true;
+}
+assert.ok(threw, "max job age > 365 rejected");
 
 threw = false;
 try {

@@ -329,6 +329,53 @@ func TestRunTick(t *testing.T) {
 		}
 	})
 
+	ageCases := []struct {
+		name       string
+		postedAgo  time.Duration
+		maxAgeDays int
+		wantCalls  int
+		wantScores int
+	}{
+		{name: "a job posted before the cutoff is never sent to jev and gets no score", postedAgo: 8 * 24 * time.Hour, maxAgeDays: 7},
+		{name: "a job posted within the cutoff is scored", postedAgo: 6 * 24 * time.Hour, maxAgeDays: 7, wantCalls: 1, wantScores: 1},
+		{name: "a zero cutoff scores a job of any age", postedAgo: 400 * 24 * time.Hour, wantCalls: 1, wantScores: 1},
+	}
+	for _, tt := range ageCases {
+		t.Run(tt.name, func(t *testing.T) {
+			st := newFakeStore()
+			job := testJob
+			job.UpdatedAt = time.Now().Add(-tt.postedAgo)
+			cfg := picking("user-1", "tech:go")
+			cfg.MaxJobAgeDays = tt.maxAgeDays
+			st.SeedJob(job, []dto.SearchConfig{cfg})
+			st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+			answerer := &fakeAnswerer{}
+
+			runTick(t, st, withAnswerer(answerer))
+
+			if len(answerer.calls) != tt.wantCalls {
+				t.Errorf("Answer calls = %v, want %d", answerer.calls, tt.wantCalls)
+			}
+			completed := st.Completed()
+			if len(completed) != 1 || len(completed[0].Scores) != tt.wantScores {
+				t.Errorf("completed effects = %+v, want 1 effect with %d scores", completed, tt.wantScores)
+			}
+		})
+	}
+
+	t.Run("a job with no posting date is scored whatever the cutoff", func(t *testing.T) {
+		st := newFakeStore()
+		cfg := picking("user-1", "tech:go")
+		cfg.MaxJobAgeDays = 7
+		seedEffect(st, false, cfg)
+
+		runTick(t, st)
+
+		if completed := st.Completed(); len(completed) != 1 || len(completed[0].Scores) != 1 {
+			t.Errorf("completed effects = %+v, want 1 effect with 1 score", completed)
+		}
+	})
+
 	t.Run("alerts only on first discovery above threshold", func(t *testing.T) {
 		st := newFakeStore()
 		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
