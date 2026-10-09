@@ -1,7 +1,7 @@
 import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type { SourceTarget } from "@/types/sourceTarget";
 
-const SEARCH_PAGE_SIZE = 10;
+export const SEARCH_PAGE_SIZE = 10;
 
 export type SearchTab = "boards" | "ats";
 export type SearchSortKey =
