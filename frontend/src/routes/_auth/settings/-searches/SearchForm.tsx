@@ -10,10 +10,18 @@ import {
 	SelectTrigger,
 } from "@/components/ui/select";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
+import {
+	DEFAULT_RUN_WINDOW,
+	draftError,
+	draftFrom,
+	toRunWindow,
+} from "@/lib/runWindow";
+import { runWindowErrorMessage } from "@/lib/runWindowError";
 import { ConflictError } from "../../../../api/sourceTargets";
 import { useCreateSourceTarget } from "../../../../hooks/useSourceTargets";
 import type { SourceFilterField, SourceInfo } from "../../../../types/source";
 import type { SourceTarget } from "../../../../types/sourceTarget";
+import { RunWindowFields } from "./RunWindowFields";
 
 type Option = { value: string; label: string };
 const ANY = "__any__";
@@ -80,6 +88,11 @@ export function SearchForm(props: {
 		props.initial?.filters ?? defaultFilters(sourceName()),
 	);
 
+	const [schedule, setSchedule] = createSignal(
+		draftFrom(DEFAULT_RUN_WINDOW, true),
+	);
+	const scheduleError = () => draftError(schedule());
+
 	const source = () => props.sources.find((s) => s.name === sourceName());
 
 	const pickSource = (name: string) => {
@@ -104,6 +117,10 @@ export function SearchForm(props: {
 				source: info.name,
 				value: trimmed,
 				filters: payload,
+				run_window: toRunWindow({
+					...schedule(),
+					automatic: schedule().automatic && info.incremental,
+				}),
 			});
 			props.onCreated(created, info);
 		},
@@ -112,6 +129,8 @@ export function SearchForm(props: {
 				return `URL must start with ${err.prefix}`;
 			if (err instanceof ConflictError)
 				return "A search with these settings already exists.";
+			const capped = runWindowErrorMessage(err);
+			if (capped) return capped;
 			return "Failed to add search. Please try again.";
 		},
 	);
@@ -230,9 +249,17 @@ export function SearchForm(props: {
 				</div>
 			</Show>
 
-			<Show when={form.error()}>
+			<RunWindowFields
+				idPrefix="new-search"
+				value={schedule()}
+				onChange={setSchedule}
+				incremental={source()?.incremental ?? false}
+				error={null}
+			/>
+
+			<Show when={form.error() ?? scheduleError()}>
 				<p role="alert" class="text-xs text-destructive-strong">
-					{form.error()}
+					{form.error() ?? scheduleError()}
 				</p>
 			</Show>
 
@@ -248,7 +275,7 @@ export function SearchForm(props: {
 				<Button
 					type="submit"
 					size="sm"
-					disabled={form.pending() || !value().trim()}
+					disabled={form.pending() || !value().trim() || !!scheduleError()}
 				>
 					{form.pending() ? "Adding…" : "Add search"}
 				</Button>
