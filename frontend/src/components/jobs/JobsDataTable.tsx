@@ -12,6 +12,7 @@ import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
+import { Kbd } from "@/components/Kbd";
 import { Pager } from "@/components/Pager";
 import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import { type JobSort, SORT_LABELS, SORT_OPTIONS } from "@/lib/jobSort";
 import type { Job } from "@/types/job";
@@ -158,6 +160,49 @@ export function JobsDataTable<TData extends Job>(
 		),
 	);
 
+	let tableContainer: HTMLDivElement | undefined;
+	let focusAfterPaging = false;
+
+	const focusFirstRow = () => {
+		tableContainer?.scrollIntoView({ block: "start" });
+		tableContainer
+			?.querySelector<HTMLElement>("tbody tr a")
+			?.focus({ preventScroll: true });
+	};
+
+	createEffect(
+		on(
+			() => table.getState().pagination.pageIndex,
+			() => {
+				if (!focusAfterPaging) return;
+				focusAfterPaging = false;
+				focusFirstRow();
+			},
+			{ defer: true },
+		),
+	);
+
+	let searchInput: HTMLInputElement | undefined;
+	const [searchFocused, setSearchFocused] = createSignal(false);
+
+	useShortcuts({
+		"/": () => {
+			searchInput?.scrollIntoView({ block: "nearest" });
+			searchInput?.focus();
+			searchInput?.select();
+		},
+		"]": () => {
+			if (!table.getCanNextPage()) return;
+			focusAfterPaging = true;
+			table.nextPage();
+		},
+		"[": () => {
+			if (!table.getCanPreviousPage()) return;
+			focusAfterPaging = true;
+			table.previousPage();
+		},
+	});
+
 	const selectedJobs = () =>
 		props.data.filter((job) => selection()[job.ID] === true);
 	const unseenJobs = () => props.data.filter((job) => !job.Seen);
@@ -179,13 +224,28 @@ export function JobsDataTable<TData extends Job>(
 							Search jobs
 						</Label>
 						<Input
+							ref={searchInput}
 							id="jobs-search"
+							aria-keyshortcuts="/"
 							type="search"
 							placeholder="Search by role or company…"
 							value={props.filters.q}
 							onInput={(e) => props.onChange({ q: e.currentTarget.value })}
+							onFocus={() => setSearchFocused(true)}
+							onBlur={() => setSearchFocused(false)}
+							onKeyDown={(e) => {
+								if (e.key !== "Enter" || e.isComposing) return;
+								if (table.getRowModel().rows.length === 0) return;
+								e.preventDefault();
+								focusFirstRow();
+							}}
 							class="pr-3 pl-9"
 						/>
+						<Show when={!searchFocused() && props.filters.q === ""}>
+							<Kbd class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2">
+								/
+							</Kbd>
+						</Show>
 					</div>
 					<Button
 						variant="outline"
@@ -279,6 +339,7 @@ export function JobsDataTable<TData extends Job>(
 			</div>
 
 			<div
+				ref={tableContainer}
 				class="overflow-hidden rounded-xl border border-border bg-surface"
 				data-feedback-collection={table
 					.getPrePaginationRowModel()
@@ -373,6 +434,7 @@ export function JobsDataTable<TData extends Job>(
 						page={pageIndex() + 1}
 						pageSize={PAGE_SIZE}
 						noun="jobs"
+						keyHints
 						onPage={(page) => table.setPageIndex(page - 1)}
 					/>
 				</Show>

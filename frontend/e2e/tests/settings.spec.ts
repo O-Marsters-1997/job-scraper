@@ -16,6 +16,11 @@ test("should redirect to the first section and switch sections from the nav", as
 	await expect(nav.getByRole("link", { name: /^Scoring/ })).toBeFocused();
 	await expect(page).toHaveURL(/\/settings\/profile$/);
 
+	await page.keyboard.press("[");
+	await expect(nav.getByRole("link", { name: /^Profile/ })).toBeFocused();
+	await page.keyboard.press("]");
+	await expect(nav.getByRole("link", { name: /^Scoring/ })).toBeFocused();
+
 	await page.keyboard.press("Enter");
 	await expect(page).toHaveURL(/\/settings\/scoring\/role$/);
 	await expect(
@@ -36,4 +41,14 @@ test("should redirect to the first section and switch sections from the nav", as
 		.getByRole("link", { name: "Settings" })
 		.click();
 	await expect(page).toHaveURL(/\/settings\/profile$/);
+});
+
+test("should ignore [ and ] while typing in a field", async ({ page }) => {
+	await page.goto("/settings/profile");
+	const nav = page.getByRole("navigation", { name: "Settings sections" });
+	const field = page.getByRole("textbox").first();
+	await field.focus();
+	await page.keyboard.press("]");
+	await expect(field).toBeFocused();
+	await expect(nav.getByRole("link", { name: /^Scoring/ })).not.toBeFocused();
 });
