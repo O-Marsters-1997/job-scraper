@@ -18,3 +18,9 @@ export const quotaSchema = z.object({
 });
 
 export type Quota = z.infer<typeof quotaSchema>;
+
+export const proxyUsageSchema = z.object({
+	providers: z.array(quotaSchema),
+});
+
+export type ProxyUsage = z.infer<typeof proxyUsageSchema>;

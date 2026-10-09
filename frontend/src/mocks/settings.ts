@@ -1,7 +1,7 @@
 import type { AiPrefs } from "../types/aiPrefs";
 import type { GoogleStatus } from "../types/google";
 import type { Profile } from "../types/profile";
-import type { Quota } from "../types/quota";
+import type { ProxyUsage, Quota } from "../types/quota";
 
 let aiPrefs: AiPrefs = {
 	configuredProviders: ["openrouter"],
@@ -75,5 +75,24 @@ export function getAiUsage(): Quota {
 		percent: 32,
 		level: "ok",
 		resetsAt: new Date(Date.UTC(2026, 10, 1)).toISOString(),
+	};
+}
+
+export function getProxyUsage(): ProxyUsage {
+	return {
+		providers: [
+			{
+				provider: "decodo",
+				status: "ok",
+				used: 6.4,
+				limit: 8,
+				unit: "GB",
+				percent: 80,
+				level: "warn",
+				resetsAt: new Date(Date.UTC(2026, 10, 1)).toISOString(),
+				fetchedAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
+				error: "",
+			},
+		],
 	};
 }

@@ -1,0 +1,73 @@
+import { createFileRoute } from "@tanstack/solid-router";
+import { For, Show } from "solid-js";
+import { QueryBoundary } from "@/components/QueryBoundary";
+import { QuotaBar } from "@/components/QuotaBar";
+import { useIsAdmin } from "../../../hooks/useIsAdmin";
+import { useProxyUsage } from "../../../hooks/useProxyUsage";
+import { formatRelative } from "../../../lib/datetime";
+import type { Quota } from "../../../types/quota";
+
+export const Route = createFileRoute("/_auth/settings/usage")({
+	component: UsagePage,
+});
+
+const PROVIDER_LABELS: Record<string, { name: string; envVar: string }> = {
+	decodo: { name: "Decodo", envVar: "DECODO_API_KEY" },
+};
+
+function UsagePage() {
+	const isAdmin = useIsAdmin();
+	const query = useProxyUsage();
+	return (
+		<Show
+			when={isAdmin()}
+			fallback={<p class="text-sm text-faint">Admins only.</p>}
+		>
+			<QueryBoundary query={query} fallbackRows={1}>
+				{(data) => (
+					<For each={data().providers}>
+						{(quota) => <ProviderRow quota={quota} />}
+					</For>
+				)}
+			</QueryBoundary>
+		</Show>
+	);
+}
+
+function ProviderRow(props: { quota: Quota }) {
+	const label = () =>
+		PROVIDER_LABELS[props.quota.provider] ?? {
+			name: props.quota.provider,
+			envVar: "its API key",
+		};
+	return (
+		<section class="flex flex-col gap-2">
+			<h2 class="text-sm font-medium text-foreground">{label().name}</h2>
+			<Show
+				when={props.quota.status !== "not_configured"}
+				fallback={
+					<p class="text-xs text-faint">Not configured: set {label().envVar}</p>
+				}
+			>
+				<QuotaBar quota={props.quota} />
+				<Show when={props.quota.status === "error" && props.quota.fetchedAt}>
+					{(fetchedAt) => (
+						<p class="text-xs text-faint">
+							Last fetched {formatRelative(fetchedAt())}: {props.quota.error}
+						</p>
+					)}
+				</Show>
+				<Show when={props.quota.status === "error" && !props.quota.fetchedAt}>
+					<p class="text-xs text-faint">Not fetched yet: {props.quota.error}</p>
+				</Show>
+				<Show when={props.quota.status === "ok" && props.quota.fetchedAt}>
+					{(fetchedAt) => (
+						<p class="text-xs text-faint">
+							Updated {formatRelative(fetchedAt())}
+						</p>
+					)}
+				</Show>
+			</Show>
+		</section>
+	);
+}

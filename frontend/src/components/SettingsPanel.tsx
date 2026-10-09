@@ -16,15 +16,14 @@ import {
 	SwitchLabel,
 	SwitchThumb,
 } from "@/components/ui/switch";
+import { useSettingsGroups } from "@/hooks/useSettingsGroups";
 import { demoDataEnabled, setDemoData } from "@/lib/demoData";
-import {
-	SETTINGS_SECTIONS,
-	type SettingsSection,
-} from "@/lib/settingsSections";
+import type { SettingsSection } from "@/lib/settingsSections";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPanel() {
 	const location = useLocation();
+	const groups = useSettingsGroups();
 
 	return (
 		<Sheet>
@@ -61,7 +60,7 @@ export default function SettingsPanel() {
 
 					<div class="border-t border-border" />
 
-					<For each={SETTINGS_SECTIONS}>
+					<For each={groups()}>
 						{(group) => (
 							<div class="flex flex-col gap-1">
 								<p class="mb-2 text-2xs font-semibold uppercase tracking-wider text-faint">
