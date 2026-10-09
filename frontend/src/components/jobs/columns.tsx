@@ -79,7 +79,7 @@ export function createJobColumns(
 						to="/jobs/$id"
 						params={{ id: info.row.original.ID }}
 						class={cn(
-							"block max-w-[260px] truncate text-foreground transition-colors hover:text-primary",
+							"block max-w-[11vw] truncate text-foreground transition-colors hover:text-primary",
 							info.row.original.Seen ? "font-medium" : "font-bold",
 						)}
 						title={info.getValue() as string}
@@ -119,7 +119,7 @@ export function createJobColumns(
 						/>
 					</Show>
 					<span
-						class="block max-w-[160px] truncate text-muted"
+						class="block max-w-[7vw] truncate text-muted"
 						title={titleCase(info.getValue() as string)}
 					>
 						{titleCase(info.getValue() as string)}
@@ -136,7 +136,7 @@ export function createJobColumns(
 					fallback={<span class="text-faint">—</span>}
 				>
 					{(val) => (
-						<span class="block max-w-[160px] truncate text-muted" title={val()}>
+						<span class="block max-w-[7vw] truncate text-muted" title={val()}>
 							{val()}
 						</span>
 					)}

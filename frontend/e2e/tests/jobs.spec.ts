@@ -9,6 +9,20 @@ test.describe("Jobs", () => {
 		await expect(jobsPage.rows.first()).toBeVisible();
 	});
 
+	test("should fit the table to a 1280px viewport", async ({
+		jobsPage,
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await expect(jobsPage.rows.first()).toBeVisible();
+
+		const overflow = await jobsPage.rows.first().evaluate((row) => {
+			const wrapper = row.closest("table")?.parentElement;
+			return wrapper ? wrapper.scrollWidth - wrapper.clientWidth : -1;
+		});
+		expect(overflow).toBeLessThanOrEqual(0);
+	});
+
 	test("should filter jobs by search term", async ({ jobsPage }) => {
 		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
 
