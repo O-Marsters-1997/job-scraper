@@ -197,9 +197,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 
 	asked := make(map[string]string)
 	for _, cfg := range surviving {
-		for hash, question := range pickedQuestionHashes(cfg.Preferences.Picks, byID) {
-			asked[hash] = question
-		}
+		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, byID))
 	}
 
 	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
@@ -232,12 +230,8 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	maps.Copy(fresh, derived)
 
 	allAnswers := make(map[string]dto.Answer, len(cached)+len(fresh))
-	for h, a := range cached {
-		allAnswers[h] = a
-	}
-	for h, a := range fresh {
-		allAnswers[h] = a
-	}
+	maps.Copy(allAnswers, cached)
+	maps.Copy(allAnswers, fresh)
 
 	scores := make([]dto.JobScore, 0, len(surviving))
 	for _, cfg := range surviving {
