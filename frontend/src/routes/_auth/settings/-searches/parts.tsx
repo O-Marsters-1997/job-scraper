@@ -5,6 +5,7 @@ import {
 	type SortDir,
 } from "@/components/SortableTableHead";
 import { ToggleChip } from "@/components/ToggleChip";
+import { Badge } from "@/components/ui/badge";
 import {
 	Switch,
 	SwitchControl,
@@ -133,7 +134,12 @@ export function RunStatus(props: { target: SourceTarget }) {
 			<span class={cn("size-1.5 shrink-0 rounded-full", s().dot)} />
 			{s().label}
 			<Show when={disabledReason()}>
-				<span class="text-destructive">· {disabledReason()}</span>
+				<Badge
+					variant="outline"
+					class="border-destructive/40 bg-destructive-subtle px-2 py-0 text-destructive"
+				>
+					{disabledReason()}
+				</Badge>
 			</Show>
 			<Show when={showTime()}>
 				<span class="text-faint">· {relativeTime(props.target.LastRunAt)}</span>
