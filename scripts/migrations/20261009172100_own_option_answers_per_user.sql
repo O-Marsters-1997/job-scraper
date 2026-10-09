@@ -1,5 +1,6 @@
 -- +goose Up
 ALTER TABLE option_answers ADD COLUMN user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE option_answers DROP CONSTRAINT option_answers_pkey;
 
 INSERT INTO option_answers (user_id, job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence, answered_at)
 SELECT s.user_id, a.job_id, a.fingerprint, a.question_hash, a.model, a.p_yes, a.p_no, a.p_not_stated, a.confidence, a.answered_at
@@ -10,7 +11,6 @@ WHERE a.user_id IS NULL;
 DELETE FROM option_answers WHERE user_id IS NULL;
 
 ALTER TABLE option_answers ALTER COLUMN user_id SET NOT NULL;
-ALTER TABLE option_answers DROP CONSTRAINT option_answers_pkey;
 ALTER TABLE option_answers ADD PRIMARY KEY (user_id, job_id, fingerprint, question_hash, model);
 CREATE INDEX option_answers_job_id_idx ON option_answers (job_id);
 
