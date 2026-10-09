@@ -74,13 +74,15 @@ const ranked = highValueJobs(
 		hv("top", { SuitabilityScore: 95, Band: "great" }),
 		hv("unscored", { SuitabilityScore: null, Band: "" }),
 	],
+	true,
 	now,
 );
-assert.equal(ranked.ranked, true);
+
 assert.deepEqual(ids(ranked), ["top", "newer", "tie", "low"]);
 assert.equal(
 	highValueJobs(
 		Array.from({ length: 9 }, (_, i) => hv(`j${i}`, {})),
+		true,
 		now,
 	).jobs.length,
 	5,
@@ -93,6 +95,7 @@ const unranked = highValueJobs(
 		hv("b", { ...none, ScrapedAt: "2026-06-01T09:00:00" }),
 		hv("c", { ...none, Seen: true }),
 	],
+	false,
 	now,
 );
 assert.equal(unranked.ranked, false);

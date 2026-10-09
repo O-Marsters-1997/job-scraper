@@ -9,6 +9,7 @@ import {
 	pipelineSegments,
 	RECENT_LIMIT,
 } from "@/lib/overview";
+import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import {
 	applicationStatusesQueryOptions,
 	useApplicationStatuses,
@@ -34,6 +35,7 @@ export const Route = createFileRoute("/_auth/overview")({
 			queryClient.ensureQueryData(allJobsQueryOptions),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
+			queryClient.ensureQueryData(aiPrefsQueryOptions),
 		]);
 	},
 	component: OverviewPage,
@@ -44,6 +46,7 @@ function OverviewPage() {
 	const appsQuery = useApplications();
 	const chasesQuery = useChases();
 	const statusesQuery = useApplicationStatuses();
+	const aiPrefs = useAiPrefs();
 
 	const jobs = () => jobsQuery.data ?? [];
 	const applications = () => appsQuery.data ?? [];
@@ -57,7 +60,9 @@ function OverviewPage() {
 		pipelineSegments(applications(), statuses()),
 	);
 	const due = createMemo(() => chasesDue(chasesQuery.data ?? []));
-	const highValue = createMemo(() => highValueJobs(jobs()));
+	const highValue = createMemo(() =>
+		highValueJobs(jobs(), aiPrefs.data?.scoringEnabled ?? true),
+	);
 
 	return (
 		<div class="px-7 py-6">

@@ -52,10 +52,10 @@ function scrapedMs(job: Job) {
 
 export function highValueJobs(
 	jobs: Job[],
+	ranked: boolean,
 	now = new Date(),
 	limit = RECENT_LIMIT,
 ) {
-	const ranked = jobs.some((j) => j.SuitabilityScore != null);
 	const cutoff = now.getTime() - HIGH_VALUE_DAYS * DAY_MS;
 	const picked = ranked
 		? jobs
