@@ -216,6 +216,7 @@ export function JobsDataTable<TData extends Job>(
 						<Input
 							ref={searchInput}
 							id="jobs-search"
+							aria-keyshortcuts="/"
 							type="search"
 							placeholder="Search by role or company…"
 							value={props.filters.q}
