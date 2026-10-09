@@ -193,3 +193,5 @@ assert.equal(parseSearch({ page: "0" }).page, undefined);
 assert.equal(parseSearch({ page: "2.5" }).page, undefined);
 assert.equal(parseSearch({ page: "abc" }).page, undefined);
 assert.equal(parseSearch({}).page, undefined);
+assert.equal(parseSearch({ page: "1e3" }).page, undefined);
+assert.equal(parseSearch({ page: "0x10" }).page, undefined);

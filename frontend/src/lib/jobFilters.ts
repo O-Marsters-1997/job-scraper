@@ -49,7 +49,10 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		if (typeof v === "string" && v) return [v];
 		return [];
 	};
-	const page = Number(raw.page);
+	const page =
+		typeof raw.page === "string" && /^\d+$/.test(raw.page)
+			? Number(raw.page)
+			: raw.page;
 	return {
 		q: typeof raw.q === "string" ? raw.q : "",
 		suit: coerceNum(raw.suit),
@@ -68,7 +71,10 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
-		page: Number.isInteger(page) && page > 1 ? page : undefined,
+		page:
+			typeof page === "number" && Number.isInteger(page) && page > 1
+				? page
+				: undefined,
 	};
 }
 

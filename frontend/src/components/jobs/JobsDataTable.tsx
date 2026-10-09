@@ -88,6 +88,11 @@ export function JobsDataTable<TData extends Job>(
 		),
 	);
 
+	createEffect(() => {
+		if (!controlled() || props.data.length === 0) return;
+		if (requestedPageIndex() > pageIndex()) setPageIndex(pageIndex());
+	});
+
 	const table = createSolidTable({
 		get data() {
 			return props.data;
