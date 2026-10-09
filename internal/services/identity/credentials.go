@@ -14,13 +14,17 @@ func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.Up
 		return struct{}{}, apperr.Invalid("provider required")
 	}
 	if in.APIKey == nil {
-		return struct{}{}, s.store.DeleteUserAICredential(ctx, userID, in.Provider)
+		err := s.store.DeleteUserAICredential(ctx, userID, in.Provider)
+		s.usage.drop(userID)
+		return struct{}{}, err
 	}
 	enc, err := s.cipher.Encrypt(strings.Trim(*in.APIKey, `"`))
 	if err != nil {
 		return struct{}{}, fmt.Errorf("identity.UpdateCredential: %w", err)
 	}
-	return struct{}{}, s.store.UpsertUserAICredential(ctx, userID, in.Provider, enc)
+	err = s.store.UpsertUserAICredential(ctx, userID, in.Provider, enc)
+	s.usage.drop(userID)
+	return struct{}{}, err
 }
 
 func (s *Service) GetCredential(ctx context.Context, userID, provider string) (string, error) {

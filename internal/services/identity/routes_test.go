@@ -86,6 +86,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /auth/logout",
 		"GET /auth/me",
 		"GET /profile",
+		"GET /ai-usage",
 		"PUT /profile",
 		"GET /ai-prefs",
 		"PUT /ai-credentials",

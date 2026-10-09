@@ -14,5 +14,8 @@ export function useAiPrefs() {
 }
 
 export function useUpdateAiCredentials() {
-	return useInvalidatingMutation(updateAiCredentials, [keys.aiPrefs]);
+	return useInvalidatingMutation(updateAiCredentials, [
+		keys.aiPrefs,
+		keys.aiUsage,
+	]);
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/oauth2"
@@ -42,6 +43,8 @@ type Deps struct {
 	Seeder       StatusSeeder
 	GoogleClient googleClient
 	Cipher       *tokencrypt.Cipher
+	KeyUsage     KeyUsageFetcher
+	Now          func() time.Time
 }
 
 type Module struct {

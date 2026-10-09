@@ -30,6 +30,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
 
 	r.Get("/ai-prefs", handlers.GetAll(m.service.GetAIPrefs))
+	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
