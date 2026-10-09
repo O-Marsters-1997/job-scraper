@@ -199,7 +199,7 @@ export function JobsDataTable<TData extends Job>(
 					.rows.map((row) => row.original.ID)
 					.join(",")}
 			>
-				<Table>
+				<Table class="[&_td]:px-2.5 [&_th]:px-2.5">
 					<TableHeader>
 						<For each={table.getHeaderGroups()}>
 							{(headerGroup) => (
