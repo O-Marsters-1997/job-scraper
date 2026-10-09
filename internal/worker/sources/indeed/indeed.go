@@ -49,7 +49,7 @@ func New(keywords string, filters map[string]string) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "indeed",
-			Route: sources.RouteTiered,
+			Route: sources.RouteResidential,
 		}),
 		keywords: keywords,
 		filters:  filters,

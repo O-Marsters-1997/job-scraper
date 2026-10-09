@@ -41,7 +41,7 @@ func newFetchingDetailer(cache proxy.Cache) fetchingDetailer {
 	upstream := identitytest.RoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("page"))}, nil
 	})
-	return fetchingDetailer{client: &http.Client{Transport: proxy.NewFetchTransport(upstream, nil, cache)}}
+	return fetchingDetailer{client: &http.Client{Transport: proxy.NewFetchTransport(upstream, cache)}}
 }
 
 func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, error) {

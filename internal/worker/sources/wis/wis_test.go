@@ -17,7 +17,6 @@ import (
 func newScraper(tb testing.TB, search wis.Search) *wis.Scraper {
 	tb.Helper()
 	tb.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
-	tb.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@localhost:7001")
 	return wis.New(search)
 }
 

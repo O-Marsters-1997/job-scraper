@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -77,14 +78,12 @@ func (c *memCache) PutFetch(_ context.Context, resp dto.CachedResponse) error {
 	return nil
 }
 
-func tieredFetcher(t *testing.T, residential, unlocker *fakeProxy, cache proxy.Cache) http.RoundTripper {
+func residentialFetcher(t *testing.T, residential *fakeProxy, cache proxy.Cache) http.RoundTripper {
 	t.Helper()
 	t.Setenv("DECODO_PROXY_URL", "http://res:pw@"+strings.TrimPrefix(residential.URL, "http://"))
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://unl:pw@"+strings.TrimPrefix(unlocker.URL, "http://"))
-	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	proxy.SetCache(cache)
 	t.Cleanup(func() { proxy.SetCache(nil) })
-	tr, err := proxy.Fetcher(proxy.Tiered, t.Name())
+	tr, err := proxy.Fetcher(proxy.Residential, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,8 +95,8 @@ func httpTarget(t *testing.T) *http.Request {
 	return newRequest(t, strings.Replace(freshURL("/jobs"), "https://", "http://", 1))
 }
 
-func TestTieredFetcher(t *testing.T) {
-	t.Run("block retries three residential sessions then one unlocker attempt", func(t *testing.T) {
+func TestResidentialFetcher(t *testing.T) {
+	t.Run("a block is retried on three fresh sessions then fails", func(t *testing.T) {
 		blocks := map[string]http.HandlerFunc{
 			"429":      status(429, ""),
 			"999":      status(999, ""),
@@ -108,21 +107,13 @@ func TestTieredFetcher(t *testing.T) {
 		for name, block := range blocks {
 			t.Run(name, func(t *testing.T) {
 				residential := newFakeProxy(t, block)
-				unlocker := newFakeProxy(t, status(200, ""))
-				tr := tieredFetcher(t, residential, unlocker, nil)
+				tr := residentialFetcher(t, residential, nil)
 				resp, err := tr.RoundTrip(httpTarget(t))
-				if err != nil {
-					t.Fatal(err)
-				}
-				_ = resp.Body.Close()
-				if resp.StatusCode != 200 {
-					t.Fatalf("status = %d, want 200 from unlocker", resp.StatusCode)
+				if !errors.Is(err, proxy.ErrBlocked) {
+					t.Fatalf("RoundTrip() = %v, %v, want ErrBlocked", resp, err)
 				}
 				if got := residential.hits(); got != 3 {
 					t.Fatalf("residential attempts = %d, want 3", got)
-				}
-				if got := unlocker.hits(); got != 1 {
-					t.Fatalf("unlocker attempts = %d, want 1", got)
 				}
 				seen := map[string]bool{}
 				for _, s := range residential.sessions {
@@ -147,8 +138,7 @@ func TestTieredFetcher(t *testing.T) {
 			}
 			status(200, "")(w, r)
 		})
-		unlocker := newFakeProxy(t, status(200, ""))
-		tr := tieredFetcher(t, residential, unlocker, nil)
+		tr := residentialFetcher(t, residential, nil)
 		for range 4 {
 			resp, err := tr.RoundTrip(httpTarget(t))
 			if err != nil {
@@ -169,24 +159,22 @@ func TestTieredFetcher(t *testing.T) {
 		}
 	})
 
-	t.Run("residential 404 is gone without fallback", func(t *testing.T) {
+	t.Run("residential 404 is gone and not retried", func(t *testing.T) {
 		residential := newFakeProxy(t, status(404, ""))
-		unlocker := newFakeProxy(t, status(200, ""))
-		resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
+		resp, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t))
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = resp.Body.Close()
-		if resp.StatusCode != 404 || residential.hits() != 1 || unlocker.hits() != 0 {
-			t.Fatalf("status=%d residential=%d unlocker=%d, want 404/1/0", resp.StatusCode, residential.hits(), unlocker.hits())
+		if resp.StatusCode != 404 || residential.hits() != 1 {
+			t.Fatalf("status=%d residential=%d, want 404/1", resp.StatusCode, residential.hits())
 		}
 	})
 
-	t.Run("cached 200 skips both tiers and a residential 200 is cached", func(t *testing.T) {
+	t.Run("a residential 200 is cached and replayed", func(t *testing.T) {
 		residential := newFakeProxy(t, status(200, ""))
-		unlocker := newFakeProxy(t, status(200, ""))
 		cache := &memCache{entries: map[string]dto.CachedResponse{}}
-		tr := tieredFetcher(t, residential, unlocker, cache)
+		tr := residentialFetcher(t, residential, cache)
 		ctx, _ := proxy.WithCollector(t.Context())
 		req := httpTarget(t).WithContext(ctx)
 		for range 2 {
@@ -200,25 +188,49 @@ func TestTieredFetcher(t *testing.T) {
 				t.Fatalf("body = %q, want body", body)
 			}
 		}
-		if residential.hits() != 1 || unlocker.hits() != 0 {
-			t.Fatalf("residential=%d unlocker=%d, want 1/0", residential.hits(), unlocker.hits())
+		if residential.hits() != 1 {
+			t.Fatalf("residential=%d, want 1", residential.hits())
 		}
 	})
 }
 
-func TestTieredFetcherLogsRotations(t *testing.T) {
+func TestResidentialFetcherCachesOnlySuccess(t *testing.T) {
+	tests := []struct {
+		name       string
+		respond    http.HandlerFunc
+		wantCached bool
+	}{
+		{"200", status(200, ""), true},
+		{"redirect", status(302, "https://example.com/next"), true},
+		{"500", status(500, ""), false},
+		{"403", status(403, ""), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := &memCache{entries: map[string]dto.CachedResponse{}}
+			tr := residentialFetcher(t, newFakeProxy(t, tt.respond), cache)
+			ctx, _ := proxy.WithCollector(t.Context())
+			resp, err := tr.RoundTrip(httpTarget(t).WithContext(ctx))
+			if err == nil {
+				_ = resp.Body.Close()
+			}
+			if got := len(cache.entries) == 1; got != tt.wantCached {
+				t.Errorf("cached = %v, want %v", got, tt.wantCached)
+			}
+		})
+	}
+}
+
+func TestResidentialFetcherLogsRotations(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	residential := newFakeProxy(t, status(429, ""))
-	unlocker := newFakeProxy(t, status(200, ""))
-	resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t)); !errors.Is(err, proxy.ErrBlocked) {
+		t.Fatalf("RoundTrip() error = %v, want ErrBlocked", err)
 	}
-	_ = resp.Body.Close()
 
 	var counts []float64
 	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
@@ -254,47 +266,28 @@ func TestValidateResidential(t *testing.T) {
 	}
 }
 
-func TestTieredFetcherMetrics(t *testing.T) {
+func TestResidentialFetcherMetrics(t *testing.T) {
 	requests := func(source, route, outcome string) float64 {
 		return testutil.ToFloat64(proxy.FetchRequests.WithLabelValues(source, route, outcome))
 	}
-	t.Run("blocked residential attempts fall back to the unlocker", func(t *testing.T) {
+	t.Run("blocked attempts are counted per attempt", func(t *testing.T) {
 		residential := newFakeProxy(t, status(429, ""))
-		unlocker := newFakeProxy(t, status(200, ""))
-		resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
-		if err != nil {
-			t.Fatal(err)
+		if _, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t)); !errors.Is(err, proxy.ErrBlocked) {
+			t.Fatalf("RoundTrip() error = %v, want ErrBlocked", err)
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-		src := t.Name()
-		if got := requests(src, "residential", "blocked"); got != 3 {
+		if got := requests(t.Name(), "residential", "blocked"); got != 3 {
 			t.Errorf("residential blocked = %v, want 3", got)
 		}
-		if got := requests(src, "unlocker", "ok"); got != 1 {
-			t.Errorf("unlocker ok = %v, want 1", got)
-		}
-		if got := testutil.ToFloat64(proxy.FetchFallbacks.WithLabelValues(src)); got != 1 {
-			t.Errorf("fallbacks = %v, want 1", got)
-		}
-		if got := testutil.ToFloat64(proxy.FetchBytes.WithLabelValues(src, "unlocker")); got != 4 {
-			t.Errorf("unlocker bytes = %v, want 4", got)
-		}
 	})
-	t.Run("a gone page is not a fallback", func(t *testing.T) {
+	t.Run("a gone page is counted gone", func(t *testing.T) {
 		residential := newFakeProxy(t, status(404, ""))
-		unlocker := newFakeProxy(t, status(200, ""))
-		resp, err := tieredFetcher(t, residential, unlocker, nil).RoundTrip(httpTarget(t))
+		resp, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t))
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = resp.Body.Close()
-		src := t.Name()
-		if got := requests(src, "residential", "gone"); got != 1 {
+		if got := requests(t.Name(), "residential", "gone"); got != 1 {
 			t.Errorf("residential gone = %v, want 1", got)
-		}
-		if got := testutil.ToFloat64(proxy.FetchFallbacks.WithLabelValues(src)); got != 0 {
-			t.Errorf("fallbacks = %v, want 0", got)
 		}
 	})
 }
