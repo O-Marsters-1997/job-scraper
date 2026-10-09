@@ -1466,7 +1466,7 @@ func TestCompanyFavouritesArePerUser(t *testing.T) {
 func TestClaimDueSourceTargets(t *testing.T) {
 	hourly := 60
 	past := time.Now().Add(-time.Minute)
-	later := time.Now().Add(time.Hour)
+	later := time.Now().Add(time.Hour).Truncate(time.Microsecond)
 	nextHour := func(dto.RunWindow) *time.Time { return &later }
 
 	createDue := func(t *testing.T, st *store.Store, userID, value string, interval *int, at time.Time) dto.SourceTarget {
