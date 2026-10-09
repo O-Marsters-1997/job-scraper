@@ -108,7 +108,8 @@ func (m *Module) UserIDByUsername(ctx context.Context, username string) (string,
 	return user.ID, nil
 }
 
-// SetRole is called by cmd/admin's set-role command.
+// SetRole sets username's role. It returns apperr.Invalid for a role other
+// than dto.RoleUser or dto.RoleAdmin and data.ErrNotFound for an unknown user.
 func (m *Module) SetRole(ctx context.Context, username, role string) error {
 	if role != dto.RoleUser && role != dto.RoleAdmin {
 		return apperr.Invalid(fmt.Sprintf("role must be %q or %q, got %q", dto.RoleUser, dto.RoleAdmin, role))

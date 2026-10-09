@@ -11,12 +11,12 @@ type Kind int
 const (
 	KindInvalid Kind = iota
 	KindUnauthorized
-	KindForbidden
 	KindNotFound
 	KindConflict
 	KindUnprocessable
 	KindUpstream
 	KindUnavailable
+	KindForbidden
 )
 
 func (k Kind) Status() int {
