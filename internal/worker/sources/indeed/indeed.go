@@ -46,14 +46,16 @@ type Scraper struct {
 
 var _ sources.Source = (*Scraper)(nil)
 
-// Recency returns the whole-day window covering the time since lastSucceeded, rounded up
+const recencyMargin = time.Hour
+
+// Recency returns the whole-day window covering the time since lastSucceeded plus an hour, rounded up
 // and capped at configured (the Target's own recency filter). It returns "" when the
 // Target's stored recency should be used unchanged.
 func Recency(configured string, lastSucceeded *time.Time, now time.Time) string {
 	if lastSucceeded == nil {
 		return ""
 	}
-	elapsed := max(now.Sub(*lastSucceeded), 0)
+	elapsed := max(now.Sub(*lastSucceeded), 0) + recencyMargin
 	days := max(int((elapsed+24*time.Hour-1)/(24*time.Hour)), 1)
 	if n, err := strconv.Atoi(configured); err == nil && days >= n {
 		return ""
@@ -115,16 +117,19 @@ func (s *Scraper) query(cursor string) string {
 		args = append(args, loc+"}")
 	}
 	recency := s.filters["recency"]
-	if s.recency != "" {
-		recency = s.recency
-	}
-	if days, err := strconv.Atoi(recency); err == nil && sourcespec.ValidFilterValue("indeed", "recency", recency) {
-		args = append(args, fmt.Sprintf(`filters: [{ date: { field: "dateOnIndeed", start: "%dh" } }]`, days*24))
+	if days, err := strconv.Atoi(s.recency); err == nil {
+		args = append(args, windowFilter(days))
+	} else if days, err := strconv.Atoi(recency); err == nil && sourcespec.ValidFilterValue("indeed", "recency", recency) {
+		args = append(args, windowFilter(days))
 	}
 	if cursor != "" {
 		args = append(args, "cursor: "+quote(cursor))
 	}
 	return "query { jobSearch(" + strings.Join(args, " ") + ") { " + resultFields + " } }"
+}
+
+func windowFilter(days int) string {
+	return fmt.Sprintf(`filters: [{ date: { field: "dateOnIndeed", start: "%dh" } }]`, days*24)
 }
 
 func quote(s string) string {

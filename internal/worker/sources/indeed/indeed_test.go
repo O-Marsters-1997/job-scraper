@@ -168,9 +168,10 @@ func TestRecency(t *testing.T) {
 		{"sub-day gap is one day", "7", ago(3 * time.Hour), "1"},
 		{"just ran is one day", "7", ago(0), "1"},
 		{"multi-day gap rounds up", "14", ago(50 * time.Hour), "3"},
+		{"margin pushes an exact day over", "14", ago(24 * time.Hour), "2"},
 		{"gap beyond the Target recency keeps stored recency", "3", ago(96 * time.Hour), ""},
 		{"gap equal to the Target recency keeps stored recency", "3", ago(72 * time.Hour), ""},
-		{"no configured recency still narrows", "", ago(48 * time.Hour), "2"},
+		{"no configured recency still narrows", "", ago(48 * time.Hour), "3"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
