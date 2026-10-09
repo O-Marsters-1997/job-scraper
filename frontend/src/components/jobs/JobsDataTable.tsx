@@ -326,13 +326,15 @@ export function JobsDataTable<TData extends Job>(
 						</Show>
 					</TableBody>
 				</Table>
-				<Pager
-					total={props.data.length}
-					page={pageIndex() + 1}
-					pageSize={PAGE_SIZE}
-					noun="jobs"
-					onPage={(page) => table.setPageIndex(page - 1)}
-				/>
+				<Show when={props.data.length > 0}>
+					<Pager
+						total={props.data.length}
+						page={pageIndex() + 1}
+						pageSize={PAGE_SIZE}
+						noun="jobs"
+						onPage={(page) => table.setPageIndex(page - 1)}
+					/>
+				</Show>
 			</div>
 
 			<JobFiltersDialog
