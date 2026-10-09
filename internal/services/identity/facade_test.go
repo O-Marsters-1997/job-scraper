@@ -2,8 +2,10 @@ package identity_test
 
 import (
 	"errors"
+	"net/http"
 	"testing"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
@@ -56,5 +58,24 @@ func TestUserIDByUsername(t *testing.T) {
 	}
 	if _, err := m.UserIDByUsername(t.Context(), "nobody"); !errors.Is(err, data.ErrNotFound) {
 		t.Errorf("UserIDByUsername(nobody) err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetRole(t *testing.T) {
+	st := identitytest.NewFakeStore()
+	m := identity.Build(testDeps(t, identity.Deps{Store: st}))
+	if _, err := st.CreateUser(t.Context(), "bob", "hash", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.SetRole(t.Context(), "bob", "admin"); err != nil {
+		t.Errorf("SetRole(bob, admin) err = %v, want nil", err)
+	}
+	err := m.SetRole(t.Context(), "bob", "root")
+	if status, _ := apperr.StatusFor(err); status != http.StatusBadRequest {
+		t.Errorf("SetRole(bob, root) status = %d (err %v), want 400", status, err)
+	}
+	if err = m.SetRole(t.Context(), "nobody", "admin"); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("SetRole(nobody, admin) err = %v, want ErrNotFound", err)
 	}
 }

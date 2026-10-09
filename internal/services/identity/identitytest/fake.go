@@ -24,6 +24,7 @@ type FakeStore struct {
 	byName   map[string]string
 	sessions map[string]dto.Session
 	aiCreds  map[string]string
+	roles    map[string]string
 }
 
 func NewFakeStore() *FakeStore {
@@ -32,6 +33,7 @@ func NewFakeStore() *FakeStore {
 		byName:   make(map[string]string),
 		sessions: make(map[string]dto.Session),
 		aiCreds:  make(map[string]string),
+		roles:    make(map[string]string),
 	}
 }
 
@@ -63,8 +65,20 @@ func (f *FakeStore) createUser(username, passwordHash, email string) (dto.User, 
 	}
 	u := dto.User{ID: fmt.Sprintf("user-%d", len(f.users)+1), Username: username, PasswordHash: passwordHash, Email: email}
 	f.users[u.ID] = u
+	f.roles[u.ID] = dto.RoleUser
 	f.byName[username] = u.ID
 	return u, nil
+}
+
+func (f *FakeStore) SetRole(_ context.Context, username, role string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id, ok := f.byName[username]
+	if !ok {
+		return data.ErrNotFound
+	}
+	f.roles[id] = role
+	return nil
 }
 
 func (f *FakeStore) Begin(context.Context) (pgx.Tx, error) { return fakeTx{}, nil }
@@ -85,6 +99,7 @@ func (f *FakeStore) GetSession(_ context.Context, id string) (dto.Session, error
 		return dto.Session{}, data.ErrNotFound
 	}
 	s.Username = f.users[s.UserID].Username
+	s.Role = f.roles[s.UserID]
 	return s, nil
 }
 

@@ -29,6 +29,7 @@ func toSessionRowDTO(r sqlc.GetSessionRow) dto.Session {
 		ID:        r.ID.String(),
 		UserID:    r.UserID.String(),
 		Username:  r.Username,
+		Role:      string(r.Role),
 		ExpiresAt: r.ExpiresAt.Time,
 	}
 }

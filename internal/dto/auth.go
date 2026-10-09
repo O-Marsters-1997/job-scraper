@@ -9,10 +9,16 @@ type User struct {
 	Email        string
 }
 
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
 type Session struct {
 	ID        string
 	UserID    string
 	Username  string
+	Role      string
 	ExpiresAt time.Time
 }
 
@@ -41,4 +47,5 @@ type AuthUserView struct {
 type MeView struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
+	IsAdmin  bool   `json:"isAdmin"`
 }

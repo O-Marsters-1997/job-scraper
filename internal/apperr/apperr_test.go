@@ -17,6 +17,7 @@ func TestStatusFor(t *testing.T) {
 	}{
 		{"invalid", apperr.Invalid("bad"), http.StatusBadRequest},
 		{"unauthorized", apperr.Unauthorized("nope"), http.StatusUnauthorized},
+		{"forbidden", apperr.Forbidden("no"), http.StatusForbidden},
 		{"not found", apperr.NotFound("gone"), http.StatusNotFound},
 		{"conflict", apperr.Conflict("dup"), http.StatusConflict},
 		{"unprocessable", apperr.Unprocessable("nope"), http.StatusUnprocessableEntity},
