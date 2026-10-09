@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
+import { SuitabilityScoreValue } from "@/components/jobs/SuitabilityScoreValue";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Card } from "@/components/ui/card";
 import {
@@ -14,24 +15,34 @@ import { formatDate } from "@/lib/datetime";
 import { titleCase } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
-export function RecentJobsCard(props: { jobs: Job[] }) {
+export function RecentJobsCard(props: { jobs: Job[]; ranked: boolean }) {
 	return (
 		<Card>
 			<div class="flex items-center justify-between border-b border-border px-5 py-4">
 				<h2 class="text-base font-semibold leading-snug text-foreground">
-					Recent jobs
+					{props.ranked ? "Recent high-value jobs" : "Newest unseen jobs"}
 				</h2>
 				<Link
 					to="/jobs"
+					search={{ scored: props.ranked, seen: "unseen" }}
 					class="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
 				>
 					View all →
 				</Link>
 			</div>
+			<Show when={!props.ranked}>
+				<p class="border-b border-border px-5 py-2 text-xs text-faint">
+					Not ranked: AI scoring is off.
+				</p>
+			</Show>
 			<Show
 				when={props.jobs.length > 0}
 				fallback={
-					<p class="px-5 py-4 text-sm text-faint">No jobs scraped yet.</p>
+					<p class="px-5 py-4 text-sm text-faint">
+						{props.ranked
+							? "No recent unseen Good or better jobs."
+							: "No unseen jobs."}
+					</p>
 				}
 			>
 				<Table>
@@ -40,6 +51,9 @@ export function RecentJobsCard(props: { jobs: Job[] }) {
 							<TableHead>Role</TableHead>
 							<TableHead>Company</TableHead>
 							<TableHead>Source</TableHead>
+							<Show when={props.ranked}>
+								<TableHead>Match</TableHead>
+							</Show>
 							<TableHead>Scraped</TableHead>
 						</TableRow>
 					</TableHeader>
@@ -59,6 +73,14 @@ export function RecentJobsCard(props: { jobs: Job[] }) {
 									<TableCell>
 										<SourceBadge source={job.Source} />
 									</TableCell>
+									<Show when={props.ranked}>
+										<TableCell>
+											<SuitabilityScoreValue
+												score={job.SuitabilityScore}
+												band={job.Band}
+											/>
+										</TableCell>
+									</Show>
 									<TableCell class="font-mono text-xs tabular-nums text-faint">
 										{formatDate(job.ScrapedAt)}
 									</TableCell>
