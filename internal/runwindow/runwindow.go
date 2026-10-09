@@ -15,6 +15,7 @@ import (
 
 const (
 	MinIntervalMinutes = 60
+	MaxIntervalMinutes = 7 * 24 * 60
 	clockLayout        = "15:04"
 	maxJitterFraction  = 0.1
 )
@@ -40,7 +41,7 @@ func Jitter(d time.Duration) time.Duration {
 // Validate rejects an unknown timezone, an empty or out-of-range weekday set,
 // an inverted window and an interval under an hour.
 func Validate(w dto.RunWindow) error {
-	if _, err := time.LoadLocation(w.Timezone); err != nil || w.Timezone == "" {
+	if _, err := time.LoadLocation(w.Timezone); err != nil || w.Timezone == "" || w.Timezone == "Local" {
 		return fmt.Errorf("unknown timezone %q", w.Timezone)
 	}
 	if len(w.Weekdays) == 0 {
@@ -62,8 +63,8 @@ func Validate(w dto.RunWindow) error {
 	if !start.Before(end) {
 		return errors.New("window start must be before end")
 	}
-	if w.IntervalMinutes != nil && *w.IntervalMinutes < MinIntervalMinutes {
-		return fmt.Errorf("interval_minutes must be at least %d", MinIntervalMinutes)
+	if w.IntervalMinutes != nil && (*w.IntervalMinutes < MinIntervalMinutes || *w.IntervalMinutes > MaxIntervalMinutes) {
+		return fmt.Errorf("interval_minutes must be between %d and %d", MinIntervalMinutes, MaxIntervalMinutes)
 	}
 	return nil
 }

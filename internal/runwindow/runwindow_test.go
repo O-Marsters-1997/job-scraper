@@ -89,6 +89,7 @@ func TestValidate(t *testing.T) {
 		return w
 	}
 	short := 30
+	long := runwindow.MaxIntervalMinutes + 1
 	tests := []struct {
 		name    string
 		w       dto.RunWindow
@@ -103,6 +104,8 @@ func TestValidate(t *testing.T) {
 		{"inverted window", with(func(w *dto.RunWindow) { w.Start, w.End = "18:00", "08:00" }), true},
 		{"empty window", with(func(w *dto.RunWindow) { w.End = w.Start }), true},
 		{"malformed start", with(func(w *dto.RunWindow) { w.Start = "8am" }), true},
+		{"local timezone", with(func(w *dto.RunWindow) { w.Timezone = "Local" }), true},
+		{"interval over a week", with(func(w *dto.RunWindow) { w.IntervalMinutes = &long }), true},
 		{"interval under an hour", with(func(w *dto.RunWindow) { w.IntervalMinutes = &short }), true},
 	}
 	for _, tt := range tests {

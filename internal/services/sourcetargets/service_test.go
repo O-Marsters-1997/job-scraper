@@ -321,6 +321,28 @@ func TestUpdate(t *testing.T) {
 		assertInDefaultWindow(t, *got.NextRunAt)
 	})
 
+	t.Run("enabling reschedules the next run", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		in := wisTarget
+		in.Enabled = new(false)
+		created, err := svc.Create(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+		if created.NextRunAt != nil {
+			t.Fatalf("Create(disabled).NextRunAt = %v, want nil", created.NextRunAt)
+		}
+
+		got, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: created.ID, Enabled: new(true)})
+		if err != nil {
+			t.Fatalf("Update() err = %v", err)
+		}
+		if got.NextRunAt == nil {
+			t.Fatal("Update(enable).NextRunAt = nil, want a scheduled run")
+		}
+		assertInDefaultWindow(t, *got.NextRunAt)
+	})
+
 	t.Run("a null run window makes the target manual", func(t *testing.T) {
 		svc, _, _ := newService(t)
 		created, err := svc.Create(t.Context(), userID, wisTarget)

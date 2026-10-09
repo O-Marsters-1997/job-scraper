@@ -102,7 +102,10 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	nextRunAt := s.nextRun(window)
+	var nextRunAt *time.Time
+	if enabled {
+		nextRunAt = s.nextRun(window)
+	}
 
 	startNow := enabled
 	create := s.targets.CreateSourceTarget
@@ -210,6 +213,13 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 		}
 		window = &w
 		nextRunAt = s.nextRun(w)
+	} else if in.Enabled != nil && *in.Enabled {
+		current, err := s.owned(ctx, userID, in.ID)
+		if err != nil {
+			return dto.SourceTarget{}, err
+		}
+		window = &current.RunWindow
+		nextRunAt = s.nextRun(current.RunWindow)
 	}
 
 	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, window, nextRunAt)
