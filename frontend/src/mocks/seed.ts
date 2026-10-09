@@ -1,5 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { addDays, format } from "date-fns";
+import { DEFAULT_RUN_WINDOW } from "@/lib/runWindow";
 import type { Application } from "@/types/application";
 import type { ApplicationStatus } from "@/types/applicationStatus";
 import type { Company, CompanyBoard } from "@/types/company";
@@ -205,6 +206,8 @@ const discoverySourceTargets: SourceTarget[] = [
 		LastRunError: "",
 		DisabledReason: "",
 		URL: "",
+		RunWindow: { ...DEFAULT_RUN_WINDOW },
+		NextRunAt: new Date(Date.now() + 47 * 60000).toISOString(),
 	},
 	{
 		ID: "target-linkedin-1",
@@ -218,6 +221,8 @@ const discoverySourceTargets: SourceTarget[] = [
 		LastRunError: "",
 		DisabledReason: "",
 		URL: "",
+		RunWindow: { ...DEFAULT_RUN_WINDOW, interval_minutes: null },
+		NextRunAt: null,
 	},
 ];
 

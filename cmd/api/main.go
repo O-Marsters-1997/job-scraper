@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -75,7 +77,7 @@ func main() {
 	if key := os.Getenv("DECODO_API_KEY"); key != "" {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
-	js := jobsearch.New(pool, q, scoring.NewFacade(pool), proxyQuota)
+	js := jobsearch.New(pool, q, scoring.NewFacade(pool), proxyQuota, maxAutomaticTargets(ctx))
 	if proxyQuota != nil {
 		go schedule.Every(ctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
 	}
@@ -122,4 +124,16 @@ func main() {
 func fatal(ctx context.Context, msg string, err error) {
 	slog.ErrorContext(ctx, msg, slog.Any(logger.KeyErr, err)) //nolint:sloglint // pedantic: msg is a literal at every call site
 	os.Exit(1)
+}
+
+func maxAutomaticTargets(ctx context.Context) int {
+	raw := os.Getenv("MAX_AUTOMATIC_TARGETS")
+	if raw == "" {
+		return sourcetargets.DefaultMaxAutomatic
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		fatal(ctx, "config invalid", fmt.Errorf("MAX_AUTOMATIC_TARGETS must be a positive integer, got %q", raw))
+	}
+	return n
 }

@@ -5,7 +5,10 @@ package sourcetargets
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -13,7 +16,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
@@ -24,12 +29,13 @@ type QueuePublisher interface {
 
 type Store interface {
 	CandidateStore
-	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
-	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
-	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
+	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
+	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
+	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, window *dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
-	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
+	StartSourceTargetRun(ctx context.Context, id string, nextRunAt *time.Time) (dto.SourceTarget, error)
+	ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error)
 	GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error)
 	TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error)
 	DisableSourceTargets(ctx context.Context, source, reason string) (int64, error)
@@ -47,10 +53,17 @@ type Service struct {
 	configs SearchConfigReader
 	queue   QueuePublisher
 	boards  CardBoards
+	now     func() time.Time
+	jitter  func(time.Duration) time.Duration
+
+	maxAutomatic int
 }
 
-func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards) *Service {
-	return &Service{targets: targets, configs: configs, queue: q, boards: boards}
+// DefaultMaxAutomatic caps a user's enabled targets that run on an interval.
+const DefaultMaxAutomatic = 10
+
+func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards, maxAutomatic int) *Service {
+	return &Service{targets: targets, configs: configs, queue: q, boards: boards, now: time.Now, jitter: runwindow.Jitter, maxAutomatic: maxAutomatic}
 }
 
 // Create validates a new source target against the source registry, then
@@ -94,12 +107,24 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		enabled = *in.Enabled
 	}
 
+	window, err := createWindow(in.RunWindow)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	if err := s.guardAutomatic(ctx, userID, "", in.Source, window, enabled); err != nil {
+		return dto.SourceTarget{}, err
+	}
+	var nextRunAt *time.Time
+	if enabled {
+		nextRunAt = s.nextRun(window)
+	}
+
 	startNow := enabled
 	create := s.targets.CreateSourceTarget
 	if startNow {
 		create = s.targets.CreateSourceTargetWithRun
 	}
-	target, err := create(ctx, userID, in.Source, in.Value, enabled, filters)
+	target, err := create(ctx, userID, in.Source, in.Value, enabled, filters, window, nextRunAt)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -113,6 +138,62 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	}
 
 	return target, nil
+}
+
+func (s *Service) guardAutomatic(ctx context.Context, userID, exceptID, source string, w dto.RunWindow, enabled bool) error {
+	if w.IntervalMinutes == nil {
+		return nil
+	}
+	if !sourcespec.Incremental(source) {
+		return apperr.Invalid("run_window: " + source + " can't run automatically; save it as a manual search")
+	}
+	if !enabled {
+		return nil
+	}
+	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	automatic := 0
+	for _, t := range targets {
+		if t.ID != exceptID && t.Enabled && t.RunWindow.IntervalMinutes != nil {
+			automatic++
+		}
+	}
+	if automatic >= s.maxAutomatic {
+		return apperr.Invalid(fmt.Sprintf("run_window: at most %d searches can run automatically", s.maxAutomatic))
+	}
+	return nil
+}
+
+func createWindow(in dto.RunWindowInput) (dto.RunWindow, error) {
+	var window dto.RunWindow
+	switch {
+	case !in.Set:
+		window = runwindow.Default()
+	case in.Window == nil:
+		window = manualWindow()
+	default:
+		window = *in.Window
+	}
+	if err := runwindow.Validate(window); err != nil {
+		return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
+	}
+	return window, nil
+}
+
+func manualWindow() dto.RunWindow {
+	w := runwindow.Default()
+	w.IntervalMinutes = nil
+	return w
+}
+
+func (s *Service) nextRun(w dto.RunWindow) *time.Time {
+	next, ok := runwindow.Next(w, s.now(), s.jitter)
+	if !ok {
+		return nil
+	}
+	return &next
 }
 
 func validateSourceValue(source, value string, filters map[string]string) error {
@@ -152,18 +233,41 @@ func isKnownFilterField(key string, fields []sourcespec.FilterField) bool {
 	return false
 }
 
-// Update changes a source target's enabled state and/or check interval. If
-// it enables a discovery target, saved candidates are reconsidered against
-// the user's current search config.
+// Update changes a source target's enabled state and/or Run Window. A
+// run_window of null makes the target manual. If it enables a discovery
+// target, saved candidates are reconsidered against the user's current search
+// config.
 func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSourceTargetInput) (dto.SourceTarget, error) {
-	if in.Enabled == nil && in.CheckIntervalMinutes == nil {
+	if in.Enabled == nil && !in.RunWindow.Set {
 		return dto.SourceTarget{}, apperr.Invalid("nothing to update")
 	}
-	if in.CheckIntervalMinutes != nil && *in.CheckIntervalMinutes < 60 {
-		return dto.SourceTarget{}, apperr.Invalid("check_interval_minutes must be at least 60")
+
+	var window *dto.RunWindow
+	var nextRunAt *time.Time
+	enabling := in.Enabled != nil && *in.Enabled
+	if in.RunWindow.Set || enabling {
+		current, err := s.owned(ctx, userID, in.ID)
+		if err != nil {
+			return dto.SourceTarget{}, err
+		}
+		w := current.RunWindow
+		if in.RunWindow.Set {
+			if w, err = updatedWindow(current, in); err != nil {
+				return dto.SourceTarget{}, err
+			}
+		}
+		enabled := current.Enabled
+		if in.Enabled != nil {
+			enabled = *in.Enabled
+		}
+		if err := s.guardAutomatic(ctx, userID, current.ID, current.Source, w, enabled); err != nil {
+			return dto.SourceTarget{}, err
+		}
+		window = &w
+		nextRunAt = s.nextRun(w)
 	}
 
-	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, in.CheckIntervalMinutes)
+	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, window, nextRunAt)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -188,6 +292,30 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	return target, nil
 }
 
+func updatedWindow(current dto.SourceTarget, in dto.UpdateSourceTargetInput) (dto.RunWindow, error) {
+	if in.RunWindow.Window != nil {
+		if err := runwindow.Validate(*in.RunWindow.Window); err != nil {
+			return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
+		}
+		return *in.RunWindow.Window, nil
+	}
+	current.RunWindow.IntervalMinutes = nil
+	return current.RunWindow, nil
+}
+
+func (s *Service) owned(ctx context.Context, userID, id string) (dto.SourceTarget, error) {
+	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	for _, target := range targets {
+		if target.ID == id {
+			return target, nil
+		}
+	}
+	return dto.SourceTarget{}, apperr.NotFound("not found")
+}
+
 func (s *Service) List(ctx context.Context, userID string) ([]dto.SourceTarget, error) {
 	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
 	if err != nil {
@@ -204,33 +332,42 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 }
 
 func (s *Service) Scrape(ctx context.Context, userID, id string) (dto.SourceTarget, error) {
-	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	target, err := s.owned(ctx, userID, id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	for _, target := range targets {
-		if target.ID != id {
-			continue
-		}
-		if target.RunStatus == "queued" || target.RunStatus == "running" {
-			return dto.SourceTarget{}, apperr.Conflict("search already in progress")
-		}
-		target.Enabled = true
-		queued, err := s.enqueueRun(ctx, target)
-		if err != nil {
-			return dto.SourceTarget{}, apperr.Unavailable("could not start search")
-		}
-		return queued, nil
+	if target.RunStatus == "queued" || target.RunStatus == "running" {
+		return dto.SourceTarget{}, apperr.Conflict("search already in progress")
 	}
-	return dto.SourceTarget{}, apperr.NotFound("not found")
+	queued, err := s.enqueueRun(ctx, target)
+	if err != nil {
+		return dto.SourceTarget{}, apperr.Unavailable("could not start search")
+	}
+	return queued, nil
 }
 
 func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.SourceTarget, error) {
-	queued, err := s.targets.StartSourceTargetRun(ctx, target.ID)
+	queued, err := s.targets.StartSourceTargetRun(ctx, target.ID, s.nextRun(target.RunWindow))
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
 	return s.publishRun(ctx, queued)
+}
+
+// PublishDue starts a run on up to limit Source Targets whose Run Window has
+// come due and publishes their listing pages. A lost publish is left for
+// RecoverRuns.
+func (s *Service) PublishDue(ctx context.Context, limit int) error {
+	claimed, err := s.targets.ClaimDueSourceTargets(ctx, limit, s.nextRun)
+	if err != nil {
+		return err
+	}
+	for _, target := range claimed {
+		if _, err := s.publishRun(ctx, target); err != nil {
+			slog.ErrorContext(ctx, "publish due run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
+		}
+	}
+	return nil
 }
 
 func (s *Service) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
@@ -244,7 +381,12 @@ func (s *Service) TransitionSourceTargetRun(ctx context.Context, id, runID, stat
 // DisableSource turns off every enabled target of source for all users and
 // returns how many it changed. In-flight runs are failed with the reason.
 func (s *Service) DisableSource(ctx context.Context, source, reason string) (int64, error) {
-	return s.targets.DisableSourceTargets(ctx, source, reason)
+	disabled, err := s.targets.DisableSourceTargets(ctx, source, reason)
+	if err != nil {
+		return 0, err
+	}
+	TargetsDisabled.WithLabelValues(source, reason).Add(float64(disabled))
+	return disabled, nil
 }
 
 func (s *Service) ListRecoverableSourceTargets(ctx context.Context) ([]dto.SourceTarget, error) {

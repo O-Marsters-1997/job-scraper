@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -811,7 +812,7 @@ func (f *FakeStore) ListActiveBoards(context.Context) ([]dto.BoardPoll, error) {
 	return out, nil
 }
 
-func (f *FakeStore) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
+func (f *FakeStore) CreateSourceTarget(_ context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	key := targetKey(userID, source, value)
@@ -819,21 +820,37 @@ func (f *FakeStore) CreateSourceTarget(_ context.Context, userID, source, value 
 		return dto.SourceTarget{}, store.ErrSourceTargetExists
 	}
 	id := f.nextID("target")
-	t := dto.SourceTarget{ID: id, UserID: userID, Source: source, Value: value, Enabled: enabled, Filters: filters, UpdatedAt: time.Now()}
+	manual := runwindow.Default()
+	manual.IntervalMinutes = nil
+	t := dto.SourceTarget{
+		ID: id, UserID: userID, Source: source, Value: value, Enabled: enabled, Filters: filters,
+		RunWindow: overlayWindow(manual, window), NextRunAt: nextRunAt, UpdatedAt: time.Now(),
+	}
 	f.sourceTargets[id] = t
 	f.targetByKey[key] = id
 	return t, nil
 }
 
-func (f *FakeStore) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	t, err := f.CreateSourceTarget(ctx, userID, source, value, enabled, filters)
+func (f *FakeStore) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
+	t, err := f.CreateSourceTarget(ctx, userID, source, value, enabled, filters, window, nextRunAt)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	return f.StartSourceTargetRun(ctx, t.ID)
+	return f.StartSourceTargetRun(ctx, t.ID, nextRunAt)
 }
 
-func (f *FakeStore) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
+func overlayWindow(base, set dto.RunWindow) dto.RunWindow {
+	base.IntervalMinutes = set.IntervalMinutes
+	if len(set.Weekdays) > 0 {
+		base.Weekdays = runwindow.Weekdays(runwindow.WeekdayMask(set.Weekdays))
+	}
+	base.Start = cmp.Or(set.Start, base.Start)
+	base.End = cmp.Or(set.End, base.End)
+	base.Timezone = cmp.Or(set.Timezone, base.Timezone)
+	return base
+}
+
+func (f *FakeStore) UpdateSourceTarget(_ context.Context, id, userID string, enabled *bool, window *dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t, ok := f.sourceTargets[id]
@@ -846,8 +863,9 @@ func (f *FakeStore) UpdateSourceTarget(_ context.Context, id, userID string, ena
 			t.DisabledReason = ""
 		}
 	}
-	if checkIntervalMinutes != nil {
-		t.CheckIntervalMinutes = *checkIntervalMinutes
+	if window != nil {
+		t.RunWindow = overlayWindow(t.RunWindow, *window)
+		t.NextRunAt = nextRunAt
 	}
 	f.sourceTargets[id] = t
 	return t, nil
@@ -878,7 +896,7 @@ func (f *FakeStore) ListSourceTargetsByUser(_ context.Context, userID string) ([
 	return out, nil
 }
 
-func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.SourceTarget, error) {
+func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t, ok := f.sourceTargets[id]
@@ -886,9 +904,33 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string) (dto.Sour
 		return dto.SourceTarget{}, data.ErrNotFound
 	}
 	t.RunID = f.nextID("run")
+	t.NextRunAt = nextRunAt
 	t.RunStatus, t.LastRunError, t.Enabled, t.DisabledReason = "queued", "", true, ""
 	f.sourceTargets[id] = t
 	return t, nil
+}
+
+func (f *FakeStore) ClaimDueSourceTargets(_ context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	var due []dto.SourceTarget
+	for _, t := range f.sourceTargets {
+		if t.Enabled && t.RunWindow.IntervalMinutes != nil && t.NextRunAt != nil && !t.NextRunAt.After(now) &&
+			t.RunStatus != "queued" && t.RunStatus != "running" {
+			due = append(due, t)
+		}
+	}
+	slices.SortFunc(due, func(a, b dto.SourceTarget) int { return a.NextRunAt.Compare(*b.NextRunAt) })
+	due = due[:min(limit, len(due))]
+	for i, t := range due {
+		t.RunID = f.nextID("run")
+		t.NextRunAt = nextRunAt(t.RunWindow)
+		t.RunStatus, t.LastRunError = "queued", ""
+		f.sourceTargets[t.ID] = t
+		due[i] = t
+	}
+	return due, nil
 }
 
 func (f *FakeStore) GetSourceTarget(_ context.Context, id string) (dto.SourceTarget, error) {

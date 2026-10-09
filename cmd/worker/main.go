@@ -22,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -69,6 +70,7 @@ func main() {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	proxy.RegisterMetrics(reg)
+	jobsearch.RegisterMetrics(reg)
 	telemetry.ServeMetrics(ctx, reg)
 
 	q, err := queue.NewBrokerFromEnv()
@@ -77,7 +79,7 @@ func main() {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule, nil)
+	js := jobsearch.New(pool, q, scoringModule, nil, sourcetargets.DefaultMaxAutomatic)
 	proxy.SetCache(js)
 
 	maxPages := 0
@@ -98,6 +100,7 @@ func main() {
 		return js.PublishBoardChecks(ctx, *forceBoards)
 	})
 	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
+	go schedule.Every(ctx, "discovery runs", time.Minute, js.PublishDueTargets)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 

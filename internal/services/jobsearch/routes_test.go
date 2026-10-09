@@ -191,3 +191,56 @@ func TestCompanyFavouriteHandlers(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateSourceTargetRunWindow(t *testing.T) {
+	r := chi.NewRouter()
+	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
+
+	t.Run("omitted run_window gets the default", func(t *testing.T) {
+		got := handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"omitted"}`)
+		if got.RunWindow.IntervalMinutes == nil || *got.RunWindow.IntervalMinutes != 60 || got.NextRunAt == nil {
+			t.Errorf("POST /source-targets = %+v, want the hourly default with a next run", got)
+		}
+	})
+
+	t.Run("null run_window is manual", func(t *testing.T) {
+		got := handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"manual","run_window":null}`)
+		if got.RunWindow.IntervalMinutes != nil || got.NextRunAt != nil {
+			t.Errorf("POST /source-targets = %+v, want manual with no next run", got)
+		}
+	})
+
+	t.Run("an invalid run_window is rejected", func(t *testing.T) {
+		body := `{"source":"wis","value":"bad","run_window":{"interval_minutes":60,"weekdays":[],"start":"08:00","end":"18:00","timezone":"Europe/London"}}`
+		if w := handlerstest.Serve(t, r, "POST /source-targets", body); w.Code != http.StatusBadRequest {
+			t.Errorf("POST /source-targets = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+}
+
+func TestSourceTargetAutomaticGuards(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	deps := jobsearchtest.NewDeps(st)
+	deps.MaxAutomaticTargets = 1
+	r := chi.NewRouter()
+	jobsearch.Build(deps).Routes(r)
+
+	t.Run("a non-incremental source cannot take an interval", func(t *testing.T) {
+		ats, err := st.CreateSourceTarget(t.Context(), handlerstest.UserID, "greenhouse", "acme", true, nil, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		body := `{"run_window":{"interval_minutes":120,"weekdays":[1],"start":"08:00","end":"18:00","timezone":"Europe/London"}}`
+		if w := handlerstest.Serve(t, r, "PATCH /source-targets/"+ats.ID, body); w.Code != http.StatusBadRequest {
+			t.Errorf("PATCH /source-targets/{id} = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("an automatic target past the cap is rejected and a manual one is not", func(t *testing.T) {
+		handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"first"}`)
+		if w := handlerstest.Serve(t, r, "POST /source-targets", `{"source":"wis","value":"second"}`); w.Code != http.StatusBadRequest {
+			t.Errorf("POST /source-targets = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+		handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"second","run_window":null}`)
+	})
+}

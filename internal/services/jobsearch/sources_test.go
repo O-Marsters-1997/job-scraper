@@ -8,6 +8,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
 func TestListSources(t *testing.T) {
@@ -17,6 +18,18 @@ func TestListSources(t *testing.T) {
 	}
 	if len(got) == 0 {
 		t.Fatal("ListSources() = none, want at least one registered source")
+	}
+}
+
+func TestListSourcesIncremental(t *testing.T) {
+	got, err := jobsearch.NewService(nil, nil, nil).ListSources(t.Context(), userID)
+	if err != nil {
+		t.Fatalf("ListSources() err = %v", err)
+	}
+	for _, s := range got {
+		if want := s.Role == sourcespec.RoleDiscovery; s.Incremental != want {
+			t.Errorf("ListSources() %s incremental = %t, want %t", s.Name, s.Incremental, want)
+		}
 	}
 }
 
