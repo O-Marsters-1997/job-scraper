@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 export class JobsPage {
-	private readonly searchInput: Locator;
+	readonly searchInput: Locator;
 	private readonly heading: Locator;
 	readonly rows: Locator;
 
@@ -24,6 +24,14 @@ export class JobsPage {
 
 	async search(query: string) {
 		await this.searchInput.fill(query);
+	}
+
+	async focusSearchWithKey() {
+		await this.page.keyboard.press("/");
+	}
+
+	get searchHint() {
+		return this.searchInput.locator("xpath=..").locator("kbd");
 	}
 
 	async openFirstJob() {

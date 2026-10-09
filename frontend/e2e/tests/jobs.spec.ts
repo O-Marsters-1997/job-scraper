@@ -47,6 +47,56 @@ test.describe("Jobs", () => {
 		await expect(page).not.toHaveURL(/page=2/);
 	});
 
+	test("should focus and select the search box with /", async ({
+		page,
+		jobsPage,
+	}) => {
+		await expect(jobsPage.searchHint).toBeVisible();
+		await jobsPage.focusSearchWithKey();
+		await expect(jobsPage.searchInput).toBeFocused();
+		await expect(jobsPage.searchInput).toHaveValue("");
+		await expect(jobsPage.searchHint).toBeHidden();
+
+		await page.keyboard.type("first");
+		await jobsPage.searchInput.blur();
+		await jobsPage.focusSearchWithKey();
+		await page.keyboard.type("second");
+		await expect(jobsPage.searchInput).toHaveValue("second");
+	});
+
+	test("should jump to results with Enter and open the first job", async ({
+		page,
+		jobsPage,
+	}) => {
+		const firstTitle = (await jobsPage.firstJobTitleLink().textContent())
+			?.trim()
+			.split(/\s+/)[0] as string;
+		await jobsPage.focusSearchWithKey();
+		await page.keyboard.type(firstTitle);
+		await page.keyboard.press("Enter");
+		await expect(jobsPage.firstJobTitleLink()).toBeFocused();
+		await expect(jobsPage.firstJobTitleLink()).toContainText(firstTitle);
+
+		await page.keyboard.press("Enter");
+		await expect(page).toHaveURL(/\/jobs\/[^/?]+/);
+		await page.goBack();
+		await expect(jobsPage.rows.first()).toBeVisible();
+
+		await jobsPage.focusSearchWithKey();
+		await page.keyboard.type("zzzznomatch");
+		await expect(jobsPage.searchInput).toHaveValue("zzzznomatch");
+	});
+
+	test("should keep focus in the search box on Enter with no matches", async ({
+		page,
+		jobsPage,
+	}) => {
+		await jobsPage.search("zzzznomatch");
+		await expect(page.getByText("No jobs found.")).toBeVisible();
+		await page.keyboard.press("Enter");
+		await expect(jobsPage.searchInput).toBeFocused();
+	});
+
 	test("should filter jobs by search term", async ({ jobsPage }) => {
 		const firstTitle = await jobsPage.firstJobTitleLink().textContent();
 
