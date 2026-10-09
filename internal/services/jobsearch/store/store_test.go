@@ -586,8 +586,8 @@ func TestSaveCanonical(t *testing.T) {
 		if status != "changed" {
 			t.Fatalf("change to B: status = %q, want changed", status)
 		}
-		insertOptionAnswer(t, pool, saved.ID, fpA, "q-fpA")
-		insertOptionAnswer(t, pool, saved.ID, updatedB.ContentFingerprint, "q-fpB")
+		insertOptionAnswer(t, pool, userID, saved.ID, fpA, "q-fpA")
+		insertOptionAnswer(t, pool, userID, saved.ID, updatedB.ContentFingerprint, "q-fpB")
 
 		revertedA, status := saveJob(t, st, jobA)
 		if status != "changed" || revertedA.ContentFingerprint != fpA {
@@ -1094,11 +1094,11 @@ func TestBoardPolling(t *testing.T) {
 	})
 }
 
-func insertOptionAnswer(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint, questionHash string) {
+func insertOptionAnswer(t *testing.T, pool *pgxpool.Pool, userID, jobID, fingerprint, questionHash string) {
 	t.Helper()
 	_, err := pool.Exec(t.Context(),
-		"INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence) VALUES ($1, $2, $3, 'test-model', 0.5, 0.3, 0.2, 0.9)",
-		jobID, fingerprint, questionHash)
+		"INSERT INTO option_answers (user_id, job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence) VALUES ($1, $2, $3, $4, 'test-model', 0.5, 0.3, 0.2, 0.9)",
+		userID, jobID, fingerprint, questionHash)
 	if err != nil {
 		t.Fatalf("insert option_answer: %v", err)
 	}

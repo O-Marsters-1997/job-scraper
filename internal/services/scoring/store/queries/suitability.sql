@@ -35,13 +35,13 @@ WHERE EXISTS (
 -- name: ListOptionAnswers :many
 SELECT question_hash, p_yes, p_no, p_not_stated, confidence
 FROM option_answers
-WHERE job_id = sqlc.arg(job_id)::uuid AND fingerprint = sqlc.arg(fingerprint)::text AND model = sqlc.arg(model)::text;
+WHERE user_id = sqlc.arg(user_id)::uuid AND job_id = sqlc.arg(job_id)::uuid AND fingerprint = sqlc.arg(fingerprint)::text AND model = sqlc.arg(model)::text;
 
 -- name: InsertOptionAnswer :exec
-INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
-VALUES (sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(question_hash)::text, sqlc.arg(model)::text,
+INSERT INTO option_answers (user_id, job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+VALUES (sqlc.arg(user_id)::uuid, sqlc.arg(job_id)::uuid, sqlc.arg(fingerprint)::text, sqlc.arg(question_hash)::text, sqlc.arg(model)::text,
     sqlc.arg(p_yes)::real, sqlc.arg(p_no)::real, sqlc.arg(p_not_stated)::real, sqlc.arg(confidence)::real)
-ON CONFLICT (job_id, fingerprint, question_hash, model) DO NOTHING;
+ON CONFLICT (user_id, job_id, fingerprint, question_hash, model) DO NOTHING;
 
 -- name: DropStaleAnswers :exec
 DELETE FROM option_answers
@@ -81,7 +81,7 @@ WHERE s.user_id = sqlc.arg(user_id)::uuid
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM job_scores s
 JOIN jobs j ON j.id = s.job_id
-JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint AND a.user_id = s.user_id
 WHERE s.user_id = sqlc.arg(user_id)::uuid AND a.model = sqlc.arg(model)::text;
 
 -- name: GetScoringStatus :one
@@ -98,7 +98,7 @@ WHERE company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND closed_at IS NULL;
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM jobs j
 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
-WHERE j.company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND j.closed_at IS NULL AND a.model = sqlc.arg(model)::text;
+WHERE a.user_id = sqlc.arg(user_id)::uuid AND j.company_id = ANY(sqlc.arg(company_ids)::uuid[]) AND j.closed_at IS NULL AND a.model = sqlc.arg(model)::text;
 
 -- name: IsJobCompanyFavourite :one
 SELECT EXISTS (

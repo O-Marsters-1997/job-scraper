@@ -366,12 +366,17 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 	return configs, nil
 }
 
-func (s *Store) ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
+// ListAnswers returns the Answers userID paid for on one job version.
+func (s *Store) ListAnswers(ctx context.Context, userID, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
 	jid, err := data.UUID(jobID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.queries.ListOptionAnswers(ctx, sqlc.ListOptionAnswersParams{JobID: jid, Fingerprint: fingerprint, Model: model})
+	rows, err := s.queries.ListOptionAnswers(ctx, sqlc.ListOptionAnswersParams{UserID: uid, JobID: jid, Fingerprint: fingerprint, Model: model})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListAnswers: %w", err)
 	}
@@ -385,8 +390,12 @@ func (s *Store) ListAnswers(ctx context.Context, jobID, fingerprint, model strin
 	return answers, nil
 }
 
-// SaveAnswers caches answers for one job version, keeping any already stored.
-func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
+// SaveAnswers caches userID's answers for one job version, keeping any already stored.
+func (s *Store) SaveAnswers(ctx context.Context, userID, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
 	jid, err := data.UUID(jobID)
 	if err != nil {
 		return err
@@ -395,7 +404,7 @@ func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model strin
 		queries := s.queries.WithTx(tx)
 		for hash, a := range answers {
 			err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
-				JobID: jid, Fingerprint: fingerprint, QuestionHash: hash, Model: model,
+				UserID: uid, JobID: jid, Fingerprint: fingerprint, QuestionHash: hash, Model: model,
 				PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
 			})
 			if err != nil {
@@ -406,9 +415,10 @@ func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model strin
 	})
 }
 
-// CompleteAnswerEffect writes the effect's answers and every surviving
-// user's score, then marks it done, in one transaction.
-func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+// CompleteAnswerEffect writes each user's own answers (keyed by user ID, then
+// question hash) and every scored user's score, then marks the effect done,
+// in one transaction.
+func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	effectID, err := data.UUID(effect.ID)
 	if err != nil {
 		return nil, err
@@ -425,7 +435,7 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 	return saved, nil
 }
 
-func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries, effect dto.AnswerEffect, effectID pgtype.UUID, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries, effect dto.AnswerEffect, effectID pgtype.UUID, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	rows, err := queries.CompleteAnswerEffect(ctx, sqlc.CompleteAnswerEffectParams{ID: effectID, Attempts: int32(effect.Attempts)})
 	if err != nil {
 		return nil, fmt.Errorf("store.CompleteAnswerEffect: %w", err)
@@ -446,13 +456,19 @@ func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries,
 		return nil, nil
 	}
 
-	for hash, a := range answers {
-		err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
-			JobID: jobID, Fingerprint: effect.Fingerprint, QuestionHash: hash, Model: effect.Model,
-			PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
-		})
+	for userID, userAnswers := range answers {
+		uid, err := data.UUID(userID)
 		if err != nil {
-			return nil, fmt.Errorf("store.CompleteAnswerEffect: insert answer: %w", err)
+			return nil, err
+		}
+		for hash, a := range userAnswers {
+			err := queries.InsertOptionAnswer(ctx, sqlc.InsertOptionAnswerParams{
+				UserID: uid, JobID: jobID, Fingerprint: effect.Fingerprint, QuestionHash: hash, Model: effect.Model,
+				PYes: float32(a.PYes), PNo: float32(a.PNo), PNotStated: float32(a.PNotStated), Confidence: float32(a.Confidence),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("store.CompleteAnswerEffect: insert answer: %w", err)
+			}
 		}
 	}
 
@@ -706,8 +722,12 @@ func (s *Store) OpsState(ctx context.Context) (dto.OpsState, error) {
 }
 
 // ListCompanyAnswers returns, per company, one answer map (keyed by question
-// hash) for each of its open jobs, from the cache only.
-func (s *Store) ListCompanyAnswers(ctx context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
+// hash) for each of its open jobs, from userID's cached Answers only.
+func (s *Store) ListCompanyAnswers(ctx context.Context, userID string, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
 	ids, err := data.UUIDs(companyIDs)
 	if err != nil {
 		return nil, err
@@ -716,7 +736,7 @@ func (s *Store) ListCompanyAnswers(ctx context.Context, companyIDs []string, mod
 	if err != nil {
 		return nil, fmt.Errorf("store.ListCompanyAnswers: %w", err)
 	}
-	rows, err := s.queries.ListCompanyJobAnswers(ctx, sqlc.ListCompanyJobAnswersParams{CompanyIds: ids, Model: model})
+	rows, err := s.queries.ListCompanyJobAnswers(ctx, sqlc.ListCompanyJobAnswersParams{UserID: uid, CompanyIds: ids, Model: model})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListCompanyAnswers: %w", err)
 	}

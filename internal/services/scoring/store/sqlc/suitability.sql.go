@@ -95,13 +95,14 @@ func (q *Queries) GetScoringStatus(ctx context.Context, userID pgtype.UUID) (int
 }
 
 const insertOptionAnswer = `-- name: InsertOptionAnswer :exec
-INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
-VALUES ($1::uuid, $2::text, $3::text, $4::text,
-    $5::real, $6::real, $7::real, $8::real)
-ON CONFLICT (job_id, fingerprint, question_hash, model) DO NOTHING
+INSERT INTO option_answers (user_id, job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+VALUES ($1::uuid, $2::uuid, $3::text, $4::text, $5::text,
+    $6::real, $7::real, $8::real, $9::real)
+ON CONFLICT (user_id, job_id, fingerprint, question_hash, model) DO NOTHING
 `
 
 type InsertOptionAnswerParams struct {
+	UserID       pgtype.UUID
 	JobID        pgtype.UUID
 	Fingerprint  string
 	QuestionHash string
@@ -114,6 +115,7 @@ type InsertOptionAnswerParams struct {
 
 func (q *Queries) InsertOptionAnswer(ctx context.Context, arg InsertOptionAnswerParams) error {
 	_, err := q.db.Exec(ctx, insertOptionAnswer,
+		arg.UserID,
 		arg.JobID,
 		arg.Fingerprint,
 		arg.QuestionHash,
@@ -149,10 +151,11 @@ const listCompanyJobAnswers = `-- name: ListCompanyJobAnswers :many
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM jobs j
 JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
-WHERE j.company_id = ANY($1::uuid[]) AND j.closed_at IS NULL AND a.model = $2::text
+WHERE a.user_id = $1::uuid AND j.company_id = ANY($2::uuid[]) AND j.closed_at IS NULL AND a.model = $3::text
 `
 
 type ListCompanyJobAnswersParams struct {
+	UserID     pgtype.UUID
 	CompanyIds []pgtype.UUID
 	Model      string
 }
@@ -167,7 +170,7 @@ type ListCompanyJobAnswersRow struct {
 }
 
 func (q *Queries) ListCompanyJobAnswers(ctx context.Context, arg ListCompanyJobAnswersParams) ([]ListCompanyJobAnswersRow, error) {
-	rows, err := q.db.Query(ctx, listCompanyJobAnswers, arg.CompanyIds, arg.Model)
+	rows, err := q.db.Query(ctx, listCompanyJobAnswers, arg.UserID, arg.CompanyIds, arg.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -302,10 +305,11 @@ func (q *Queries) ListOpenCompanyJobs(ctx context.Context, companyIds []pgtype.U
 const listOptionAnswers = `-- name: ListOptionAnswers :many
 SELECT question_hash, p_yes, p_no, p_not_stated, confidence
 FROM option_answers
-WHERE job_id = $1::uuid AND fingerprint = $2::text AND model = $3::text
+WHERE user_id = $1::uuid AND job_id = $2::uuid AND fingerprint = $3::text AND model = $4::text
 `
 
 type ListOptionAnswersParams struct {
+	UserID      pgtype.UUID
 	JobID       pgtype.UUID
 	Fingerprint string
 	Model       string
@@ -320,7 +324,12 @@ type ListOptionAnswersRow struct {
 }
 
 func (q *Queries) ListOptionAnswers(ctx context.Context, arg ListOptionAnswersParams) ([]ListOptionAnswersRow, error) {
-	rows, err := q.db.Query(ctx, listOptionAnswers, arg.JobID, arg.Fingerprint, arg.Model)
+	rows, err := q.db.Query(ctx, listOptionAnswers,
+		arg.UserID,
+		arg.JobID,
+		arg.Fingerprint,
+		arg.Model,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +358,7 @@ const listScoringAnswersForUser = `-- name: ListScoringAnswersForUser :many
 SELECT j.id AS job_id, a.question_hash, a.p_yes, a.p_no, a.p_not_stated, a.confidence
 FROM job_scores s
 JOIN jobs j ON j.id = s.job_id
-JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+JOIN option_answers a ON a.job_id = j.id AND a.fingerprint = j.content_fingerprint AND a.user_id = s.user_id
 WHERE s.user_id = $1::uuid AND a.model = $2::text
 `
 

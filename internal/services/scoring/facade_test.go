@@ -134,7 +134,7 @@ func TestCompanyProfiles(t *testing.T) {
 		{"b1", "bare", nil},
 	} {
 		st.SeedJob(dto.Job{ID: j.id, CompanyID: j.company, ContentFingerprint: "fp"}, nil)
-		st.SeedAnswers(j.id, "fp", jev.Model, j.answers)
+		st.SeedAnswers(userID, j.id, "fp", jev.Model, j.answers)
 	}
 
 	m := scoring.Build(scoring.Deps{Store: st})
@@ -257,7 +257,7 @@ func TestFavouriteScoresIdenticallyOnEveryPath(t *testing.T) {
 	effect := func(t *testing.T) int {
 		t.Helper()
 		st := newFakeStore()
-		st.SeedAnswers(job.ID, job.ContentFingerprint, jev.Model, answers)
+		st.SeedAnswers(userID, job.ID, job.ContentFingerprint, jev.Model, answers)
 		cfg := picking(userID, "tech:go")
 		cfg.CompanyIsFavourite = true
 		st.SeedJob(job, []dto.SearchConfig{cfg})

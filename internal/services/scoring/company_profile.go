@@ -20,7 +20,7 @@ func (m *Module) CompanyProfiles(ctx context.Context, userID string, companyIDs 
 		return nil, err
 	}
 	byID := newBank(options).byID
-	answersByCompany, err := m.store.ListCompanyAnswers(ctx, companyIDs, jev.Model)
+	answersByCompany, err := m.store.ListCompanyAnswers(ctx, userID, companyIDs, jev.Model)
 	if err != nil {
 		return nil, err
 	}
