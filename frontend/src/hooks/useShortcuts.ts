@@ -1,9 +1,10 @@
 import { onCleanup, onMount } from "solid-js";
 
 const BLOCKED_TARGETS =
-	'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="menu"], [data-no-hotkeys]';
+	'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="dialog"], [role="menu"], [role="listbox"], [data-no-hotkeys]';
 
 function shouldIgnore(e: KeyboardEvent) {
+	if (e.repeat || e.defaultPrevented || e.isComposing) return true;
 	if (e.metaKey || e.ctrlKey || e.altKey) return true;
 	return (
 		e.target instanceof Element && e.target.closest(BLOCKED_TARGETS) !== null
