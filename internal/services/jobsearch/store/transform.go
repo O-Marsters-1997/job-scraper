@@ -31,16 +31,17 @@ func unmarshalBreakdown(raw []byte, out *[]dto.ScoreRow) error {
 
 func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 	j := dto.Job{
-		ID:              row.ID.String(),
-		Title:           row.Title,
-		Location:        row.Location,
-		URL:             row.Url,
-		CompanySlug:     row.CompanySlug,
-		Source:          row.Source,
-		UpdatedAt:       row.UpdatedAt.Time,
-		ScrapedAt:       row.ScrapedAt.Time,
-		SalaryRaw:       row.SalaryRaw,
-		WorkArrangement: row.WorkArrangement,
+		ID:                row.ID.String(),
+		Title:             row.Title,
+		Location:          row.Location,
+		URL:               row.Url,
+		CompanySlug:       row.CompanySlug,
+		Source:            row.Source,
+		UpdatedAt:         row.UpdatedAt.Time,
+		ScrapedAt:         row.ScrapedAt.Time,
+		FirstDiscoveredAt: row.FirstDiscoveredAt.Time,
+		SalaryRaw:         row.SalaryRaw,
+		WorkArrangement:   row.WorkArrangement,
 	}
 	if err := unmarshalBreakdown(row.Breakdown, &j.Breakdown); err != nil {
 		return dto.Job{}, err

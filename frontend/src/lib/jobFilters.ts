@@ -1,4 +1,5 @@
 import type { Job } from "@/types/job";
+import { type JobSort, SORT_OPTIONS } from "./jobSort";
 
 export const GRADED_OPTIONS = ["all", "ungraded", "graded"] as const;
 export type GradedFilter = (typeof GRADED_OPTIONS)[number];
@@ -19,6 +20,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	sort: JobSort;
 	page?: number | undefined;
 }
 
@@ -35,6 +37,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	sort: "relevant",
 	page: undefined,
 };
 
@@ -71,6 +74,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1
 				? page

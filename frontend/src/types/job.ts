@@ -45,6 +45,7 @@ export const jobSchema = z.object({
 	Source: z.string(),
 	UpdatedAt: z.string(),
 	ScrapedAt: z.string(),
+	FirstDiscoveredAt: z.string().optional(),
 	DaysInOffice: z.number().nullable().optional(),
 	WorkArrangement: z.string().optional(),
 	SalaryRaw: z.string().optional(),

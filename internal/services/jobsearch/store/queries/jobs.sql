@@ -1,5 +1,5 @@
 -- name: ListJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
@@ -12,7 +12,7 @@ WHERE j.closed_at IS NULL
 ORDER BY js.suitability_score DESC, j.scraped_at DESC;
 
 -- name: PageJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at, j.first_discovered_at, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint, js.suitability_score, js.band, js.breakdown, COALESCE(jg.grade, '')::text AS grade, (jv.job_id IS NOT NULL)::bool AS seen, EXISTS (SELECT 1 FROM company_favourites cf JOIN companies fc ON fc.id = cf.company_id WHERE cf.user_id = sqlc.arg(user_id)::uuid AND (fc.id = j.company_id OR fc.slug = j.company_slug)) AS company_favourite
 FROM jobs j
 LEFT JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
 LEFT JOIN job_grades jg ON jg.job_id = j.id AND jg.user_id = sqlc.arg(user_id)::uuid
