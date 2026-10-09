@@ -11,7 +11,7 @@ run() {
 
 worktrees=$(git worktree list --porcelain | sed -n 's/^worktree //p')
 main=$(head -n 1 <<<"$worktrees")
-parent=$(dirname "$main")
+live_projects=$(xargs -n 1 basename <<<"$worktrees" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_\n-')
 volume_suffix='_(db_data|rabbitmq_data|alloy_data|valkey_data)$'
 
 finished() {
@@ -21,17 +21,19 @@ finished() {
 	fleet-*)
 		! grep -qE "issue-${project#fleet-}([^0-9]|$)" <<<"$worktrees"
 		;;
-	job-scraper-*) [ ! -d "$parent/$project" ] ;;
+	job-scraper-*) ! grep -qxF "$project" <<<"$live_projects" ;;
 	*) return 1 ;;
 	esac
 }
 
+volumes=$(docker volume ls -q)
+stacks=$(docker compose ls -a -q)
 projects=$(
 	{
-		docker volume ls -q | grep -E "$volume_suffix" | sed -E "s/$volume_suffix//"
-		docker compose ls -a --format json | jq -r '.[].Name'
-	} | grep -E '^(agent-|fleet-[0-9]+$|job-scraper-)' | sort -u || true
-)
+		grep -E "$volume_suffix" <<<"$volumes" | sed -E "s/$volume_suffix//"
+		echo "$stacks"
+	} | grep -E '^(agent-|fleet-[0-9]+$|job-scraper-)' | sort -u
+) || true
 
 for project in $projects; do
 	finished "$project" || continue

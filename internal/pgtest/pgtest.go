@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/jackc/pgx/v5"
@@ -97,17 +98,10 @@ func start(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	adminConnStr, err := runContainer(ctx)
+	cfg, name, err := provision(ctx)
 	if err != nil {
-		return nil, err
+		cfg, name, err = provision(ctx)
 	}
-
-	cfg, err := pgxpool.ParseConfig(adminConnStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse connection string: %w", err)
-	}
-
-	name, err := createDatabase(ctx, cfg.Copy())
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +109,30 @@ func start(ctx context.Context) (*pgxpool.Pool, error) {
 	cfg.ConnConfig.Database = name
 	cfg.MaxConns = maxConns
 	cfg.MinConns = 1
+	cfg.MaxConnLifetime = 24 * time.Hour
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
 	return pool, nil
+}
+
+func provision(ctx context.Context) (*pgxpool.Config, string, error) {
+	adminConnStr, err := runContainer(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	cfg, err := pgxpool.ParseConfig(adminConnStr)
+	if err != nil {
+		return nil, "", fmt.Errorf("parse connection string: %w", err)
+	}
+
+	name, err := createDatabase(ctx, cfg.Copy())
+	if err != nil {
+		return nil, "", err
+	}
+	return cfg, name, nil
 }
 
 func runContainer(ctx context.Context) (string, error) {

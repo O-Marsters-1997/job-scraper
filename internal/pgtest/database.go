@@ -140,7 +140,7 @@ func migrationsHash() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("hash migrations: %w", err)
 		}
-		fmt.Fprintf(h, "%s\x00%d\x00", e.Name(), len(body))
+		h.Write(fmt.Appendf(nil, "%s\x00%d\x00", e.Name(), len(body)))
 		h.Write(body)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil

@@ -30,7 +30,7 @@ func connect(t *testing.T, cfg *pgx.ConnConfig, database string) *pgx.Conn {
 	if err != nil {
 		t.Fatalf("connect %s: %v", database, err)
 	}
-	t.Cleanup(func() { _ = conn.Close(context.Background()) })
+	t.Cleanup(func() { _ = conn.Close(context.WithoutCancel(t.Context())) })
 	return conn
 }
 
@@ -41,7 +41,7 @@ func createScratch(t *testing.T, admin *pgx.Conn, created time.Time) string {
 		t.Fatalf("create %s: %v", name, err)
 	}
 	t.Cleanup(func() {
-		_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)")
+		_, _ = admin.Exec(context.WithoutCancel(t.Context()), "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)")
 	})
 	return name
 }
@@ -101,7 +101,7 @@ func TestCreateDatabase(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, name := range []string{first, second} {
-			_, _ = admin.Exec(context.Background(), "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)")
+			_, _ = admin.Exec(context.WithoutCancel(t.Context()), "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)")
 		}
 	})
 
@@ -132,7 +132,7 @@ func TestCreateDatabase(t *testing.T) {
 			t.Fatalf("migrationsHash: %v", err)
 		}
 		var n int
-		if err := admin.QueryRow(t.Context(), "SELECT count(*) FROM pg_database WHERE datname LIKE $1", "pgtest_tpl_"+hash+"%").Scan(&n); err != nil {
+		if err := admin.QueryRow(t.Context(), "SELECT count(*) FROM pg_database WHERE datname = $1", "pgtest_tpl_"+hash).Scan(&n); err != nil {
 			t.Fatalf("count templates: %v", err)
 		}
 		if n != 1 {
