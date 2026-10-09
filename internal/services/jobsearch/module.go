@@ -101,21 +101,27 @@ type Deps struct {
 	Scoring       ScoringPort
 	Queue         QueuePublisher
 	ClaimLimit    int
+
+	MaxAutomaticTargets int
 }
 
 func Build(deps Deps) *Module {
 	jobs := NewService(deps.Store, deps.Queue, deps.Scoring)
+	maxAutomatic := deps.MaxAutomaticTargets
+	if maxAutomatic == 0 {
+		maxAutomatic = sourcetargets.DefaultMaxAutomatic
+	}
 	return &Module{
 		store:         deps.Store,
 		jobs:          jobs,
-		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs),
+		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs, maxAutomatic),
 		queue:         deps.Queue,
 		scoring:       deps.Scoring,
 		claimLimit:    cmp.Or(deps.ClaimLimit, defaultClaimLimit),
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, maxAutomaticTargets int) *Module {
 	st := store.New(pool, scoring)
 	return Build(Deps{
 		Store:         st,
@@ -123,6 +129,8 @@ func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
 		Scoring:       scoring,
 		Queue:         q,
 		ClaimLimit:    claimLimitFromEnv(),
+
+		MaxAutomaticTargets: maxAutomaticTargets,
 	})
 }
 

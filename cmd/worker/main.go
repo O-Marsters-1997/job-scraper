@@ -22,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -81,7 +82,7 @@ func main() {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule)
+	js := jobsearch.New(pool, q, scoringModule, sourcetargets.DefaultMaxAutomatic)
 	proxy.SetCache(js)
 
 	maxPages := 0

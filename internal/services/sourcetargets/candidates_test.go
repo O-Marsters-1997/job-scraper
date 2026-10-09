@@ -53,7 +53,7 @@ func TestCapturePage(t *testing.T) {
 	t.Run("drops LinkedIn cards for tracked companies before detail fetch", func(t *testing.T) {
 		st := jobsearchtest.NewFakeStore()
 		q := queuetest.NewRecorder()
-		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "polled-co", Source: "ashby", BoardToken: "polled", Tracked: true}})
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "polled-co", Source: "ashby", BoardToken: "polled", Tracked: true}}, sourcetargets.DefaultMaxAutomatic)
 		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
 		polled := dto.Job{URL: "https://linkedin.com/jobs/view/1", Title: "Engineer", CompanySlug: "polled-co"}
 		unpolled := dto.Job{URL: "https://linkedin.com/jobs/view/2", Title: "Engineer", CompanySlug: "other-co"}
@@ -80,7 +80,7 @@ func TestCapturePage(t *testing.T) {
 	t.Run("drops LinkedIn cards for untracked verified companies and harvests the board once", func(t *testing.T) {
 		st := jobsearchtest.NewFakeStore()
 		q := queuetest.NewRecorder()
-		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "acme", Source: "ashby", BoardToken: "acme"}})
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, q, verifiedBoards{{CompanySlug: "acme", Source: "ashby", BoardToken: "acme"}}, sourcetargets.DefaultMaxAutomatic)
 		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
 		cards := []dto.Job{
 			{URL: "https://linkedin.com/jobs/view/1", Title: "Engineer", CompanySlug: "acme"},

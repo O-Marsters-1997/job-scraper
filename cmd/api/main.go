@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
@@ -71,7 +73,7 @@ func main() {
 	if notifyFrom == "" {
 		notifyFrom = "onboarding@resend.dev"
 	}
-	js := jobsearch.New(pool, q, scoring.NewFacade(pool))
+	js := jobsearch.New(pool, q, scoring.NewFacade(pool), maxAutomaticTargets(ctx))
 	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
 		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
 	go func() {
@@ -115,4 +117,16 @@ func main() {
 func fatal(ctx context.Context, msg string, err error) {
 	slog.ErrorContext(ctx, msg, slog.Any(logger.KeyErr, err)) //nolint:sloglint // pedantic: msg is a literal at every call site
 	os.Exit(1)
+}
+
+func maxAutomaticTargets(ctx context.Context) int {
+	raw := os.Getenv("MAX_AUTOMATIC_TARGETS")
+	if raw == "" {
+		return sourcetargets.DefaultMaxAutomatic
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		fatal(ctx, "config invalid", fmt.Errorf("MAX_AUTOMATIC_TARGETS must be a non-negative integer, got %q", raw))
+	}
+	return n
 }

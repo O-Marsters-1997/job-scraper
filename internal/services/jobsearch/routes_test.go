@@ -216,3 +216,30 @@ func TestCreateSourceTargetRunWindow(t *testing.T) {
 		}
 	})
 }
+
+func TestSourceTargetAutomaticGuards(t *testing.T) {
+	st := jobsearchtest.NewFakeStore()
+	deps := jobsearchtest.NewDeps(st)
+	deps.MaxAutomaticTargets = 1
+	r := chi.NewRouter()
+	jobsearch.Build(deps).Routes(r)
+
+	t.Run("a non-incremental source cannot take an interval", func(t *testing.T) {
+		ats, err := st.CreateSourceTarget(t.Context(), handlerstest.UserID, "greenhouse", "acme", true, nil, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		body := `{"run_window":{"interval_minutes":120,"weekdays":[1],"start":"08:00","end":"18:00","timezone":"Europe/London"}}`
+		if w := handlerstest.Serve(t, r, "PATCH /source-targets/"+ats.ID, body); w.Code != http.StatusBadRequest {
+			t.Errorf("PATCH /source-targets/{id} = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("an automatic target past the cap is rejected and a manual one is not", func(t *testing.T) {
+		handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"first"}`)
+		if w := handlerstest.Serve(t, r, "POST /source-targets", `{"source":"wis","value":"second"}`); w.Code != http.StatusBadRequest {
+			t.Errorf("POST /source-targets = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+		handlerstest.Do[dto.SourceTarget](t, r, http.StatusCreated, "POST /source-targets", `{"source":"wis","value":"second","run_window":null}`)
+	})
+}
