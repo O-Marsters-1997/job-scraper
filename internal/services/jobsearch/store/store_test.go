@@ -109,7 +109,7 @@ func trackCompany(t *testing.T, st *store.Store, userID, companyID string, minut
 
 func createTarget(t *testing.T, st *store.Store, userID, source, value string) dto.SourceTarget {
 	t.Helper()
-	target, err := st.CreateSourceTarget(t.Context(), userID, source, value, true, nil)
+	target, err := st.CreateSourceTarget(t.Context(), userID, source, value, true, nil, dto.RunWindow{}, nil)
 	if err != nil {
 		t.Fatalf("CreateSourceTarget(%s, %s) err = %v", source, value, err)
 	}
@@ -813,7 +813,7 @@ func TestSourceTargetRuns(t *testing.T) {
 	t.Run("recovery claims a stale run once", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, nil)
+		target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, nil, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTargetWithRun() err = %v", err)
 		}
@@ -852,17 +852,17 @@ func TestSourceTargetRuns(t *testing.T) {
 		st, _, userID := newUserStore(t)
 		ctx := t.Context()
 		target := createTarget(t, st, userID, "wis", "engineer")
-		if _, err := st.UpdateSourceTarget(ctx, target.ID, userID, new(false), nil); err != nil {
+		if _, err := st.UpdateSourceTarget(ctx, target.ID, userID, new(false), nil, nil); err != nil {
 			t.Fatalf("UpdateSourceTarget() err = %v", err)
 		}
-		first, err := st.StartSourceTargetRun(ctx, target.ID)
+		first, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun(first) err = %v", err)
 		}
 		if !first.Enabled {
 			t.Error("manual rerun did not enable the target")
 		}
-		second, err := st.StartSourceTargetRun(ctx, target.ID)
+		second, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun(second) err = %v", err)
 		}

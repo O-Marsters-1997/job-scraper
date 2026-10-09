@@ -116,7 +116,7 @@ func (claimTaken) ClaimRecoverableSourceTarget(context.Context, string, string) 
 
 func startRun(t *testing.T, st *jobsearchtest.FakeStore, source, value string) dto.SourceTarget {
 	t.Helper()
-	target, err := st.CreateSourceTargetWithRun(t.Context(), "user-1", source, value, true, nil)
+	target, err := st.CreateSourceTargetWithRun(t.Context(), "user-1", source, value, true, nil, dto.RunWindow{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
