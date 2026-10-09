@@ -39,12 +39,13 @@ type FilterOption struct {
 
 // SourceInfo is the serialisable view of a registry entry, suitable for API responses.
 type SourceInfo struct {
-	Name      string        `json:"name"`
-	Label     string        `json:"label"`
-	Kind      string        `json:"kind"` // "board" | "url" | "filter"
-	Role      string        `json:"role"` // "ats" | "discovery"
-	URLPrefix string        `json:"url_prefix"`
-	Filters   []FilterField `json:"filters"` // non-empty only for kindFilter sources
+	Name        string        `json:"name"`
+	Label       string        `json:"label"`
+	Kind        string        `json:"kind"` // "board" | "url" | "filter"
+	Role        string        `json:"role"` // "ats" | "discovery"
+	URLPrefix   string        `json:"url_prefix"`
+	Incremental bool          `json:"incremental"`
+	Filters     []FilterField `json:"filters"` // non-empty only for kindFilter sources
 }
 
 type registryEntry struct {
@@ -55,6 +56,7 @@ type registryEntry struct {
 	urlPrefix    string
 	filters      []FilterField
 	cardComplete bool
+	incremental  bool
 }
 
 var entries = []registryEntry{
@@ -69,7 +71,7 @@ var entries = []registryEntry{
 	{name: "hibob", label: "HiBob", kind: kindBoard, role: RoleATS, urlPrefix: "https://careers.hibob.com"},
 	{name: "smartrecruiters", label: "SmartRecruiters", kind: kindBoard, role: RoleATS, urlPrefix: "https://jobs.smartrecruiters.com"},
 	{name: "wttj", label: "Welcome to the Jungle", kind: kindBoard, role: RoleATS, urlPrefix: "https://app.welcometothejungle.com/companies"},
-	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://workinstartups.com", filters: []FilterField{
+	{name: "wis", label: "Work in Startups", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://workinstartups.com", filters: []FilterField{
 		{Name: "loc", Param: "loc", Label: "Location", Options: []FilterOption{
 			{Value: "86383", Label: "United Kingdom"},
 			{Value: "86384", Label: "London"},
@@ -135,7 +137,7 @@ var entries = []registryEntry{
 			{Value: "100000", Label: "£100,000+"},
 		}},
 	}},
-	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
+	{name: "linkedin", label: "LinkedIn", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://www.linkedin.com/jobs", filters: []FilterField{
 		{Name: "location", Param: "location", Label: "Location"},
 		{Name: "company_id", Param: "f_C", Label: "Company ID", Numeric: true},
 		{Name: "recency", Param: "f_TPR", Label: "Recency", Options: []FilterOption{
@@ -183,7 +185,7 @@ var entries = []registryEntry{
 			{Value: "9", Label: "$200,000+"},
 		}},
 	}},
-	{name: "indeed", label: "Indeed", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://uk.indeed.com", cardComplete: true, filters: []FilterField{
+	{name: "indeed", label: "Indeed", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://uk.indeed.com", cardComplete: true, filters: []FilterField{
 		{Name: "location", Param: "l", Label: "Location"},
 		{Name: "radius", Param: "radius", Label: "Radius", Options: []FilterOption{
 			{Value: "5", Label: "5 miles"},
@@ -200,8 +202,8 @@ var entries = []registryEntry{
 			{Value: "14", Label: "Past 2 weeks"},
 		}},
 	}},
-	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remoteok.com", cardComplete: true},
-	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, urlPrefix: "https://remotive.com", cardComplete: true},
+	{name: "remoteok", label: "RemoteOK", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remoteok.com", cardComplete: true},
+	{name: "remotive", label: "Remotive", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://remotive.com", cardComplete: true},
 }
 
 func Sources() []SourceInfo {
@@ -212,12 +214,13 @@ func Sources() []SourceInfo {
 			filters = []FilterField{}
 		}
 		infos[i] = SourceInfo{
-			Name:      e.name,
-			Label:     e.label,
-			Kind:      string(e.kind),
-			Role:      e.role,
-			URLPrefix: e.urlPrefix,
-			Filters:   filters,
+			Name:        e.name,
+			Label:       e.label,
+			Kind:        string(e.kind),
+			Role:        e.role,
+			URLPrefix:   e.urlPrefix,
+			Incremental: e.incremental,
+			Filters:     filters,
 		}
 	}
 	return infos
@@ -283,6 +286,13 @@ func SourceRole(name string) (string, bool) {
 		return "", false
 	}
 	return e.role, true
+}
+
+// Incremental reports whether name fetches only recent jobs, which a target
+// needs to run on an interval.
+func Incremental(name string) bool {
+	e, ok := findEntry(name)
+	return ok && e.incremental
 }
 
 func IsFilterSource(name string) bool {

@@ -48,7 +48,7 @@ func (v verifiedBoards) VerifiedBoardsBySlug(_ context.Context, slugs []string) 
 }
 
 func serviceOver(targets sourcetargets.Store, q sourcetargets.QueuePublisher) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, verifiedBoards(nil))
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, verifiedBoards(nil), sourcetargets.DefaultMaxAutomatic)
 }
 
 func newService(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore, *queuetest.Recorder) {
@@ -490,5 +490,113 @@ func TestDisableSource(t *testing.T) {
 		if got := testutil.ToFloat64(counter) - before; got != 2 {
 			t.Errorf("counter rose by %v after a no-op disable, want 2", got)
 		}
+	})
+}
+
+func TestAutomaticGuards(t *testing.T) {
+	const cap = 2
+	newCapped := func(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore) {
+		t.Helper()
+		st := jobsearchtest.NewFakeStore()
+		return sourcetargets.New(st, fakeSearchConfigReader{}, queuetest.NewRecorder(), verifiedBoards(nil), cap), st
+	}
+	automatic := func(value string) dto.CreateSourceTargetInput {
+		return dto.CreateSourceTargetInput{Source: "wis", Value: value}
+	}
+	manual := func(value string) dto.CreateSourceTargetInput {
+		return dto.CreateSourceTargetInput{Source: "wis", Value: value, RunWindow: dto.RunWindowInput{Set: true}}
+	}
+	wantKind := func(t *testing.T, err error, kind apperr.Kind) {
+		t.Helper()
+		if !apperr.IsKind(err, kind) {
+			t.Fatalf("err = %v, want kind %v", err, kind)
+		}
+	}
+
+	t.Run("create past the cap is invalid and a manual one succeeds", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		_, err := svc.Create(t.Context(), userID, automatic("c"))
+		wantKind(t, err, apperr.KindInvalid)
+		if _, err := svc.Create(t.Context(), userID, manual("c")); err != nil {
+			t.Errorf("Create(manual) err = %v, want nil", err)
+		}
+		if _, err := svc.Create(t.Context(), "user-2", automatic("a")); err != nil {
+			t.Errorf("Create(other user) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("disabled targets are not counted", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		in := automatic("c")
+		in.Enabled = new(false)
+		if _, err := svc.Create(t.Context(), userID, in); err != nil {
+			t.Errorf("Create(disabled) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("update past the cap is invalid", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		m, err := svc.Create(t.Context(), userID, manual("c"))
+		if err != nil {
+			t.Fatalf("Create(manual) err = %v", err)
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: m.ID, RunWindow: runWindowInput(withInterval(120))})
+		wantKind(t, err, apperr.KindInvalid)
+	})
+
+	t.Run("update keeps a target at the cap", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		var last dto.SourceTarget
+		for _, v := range []string{"a", "b"} {
+			var err error
+			if last, err = svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		if _, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: last.ID, RunWindow: runWindowInput(withInterval(120))}); err != nil {
+			t.Errorf("Update(retime) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("re-enabling past the cap is invalid", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		in := automatic("off")
+		in.Enabled = new(false)
+		off, err := svc.Create(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("Create(disabled) err = %v", err)
+		}
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: off.ID, Enabled: new(true)})
+		wantKind(t, err, apperr.KindInvalid)
+	})
+
+	t.Run("a non-incremental source cannot take an interval", func(t *testing.T) {
+		svc, st := newCapped(t)
+		ats, err := st.CreateSourceTarget(t.Context(), userID, "greenhouse", "acme", true, nil, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: ats.ID, RunWindow: runWindowInput(withInterval(120))})
+		wantKind(t, err, apperr.KindInvalid)
 	})
 }

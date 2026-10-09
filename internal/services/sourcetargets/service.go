@@ -5,6 +5,7 @@ package sourcetargets
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -54,10 +55,15 @@ type Service struct {
 	boards  CardBoards
 	now     func() time.Time
 	jitter  func(time.Duration) time.Duration
+
+	maxAutomatic int
 }
 
-func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards) *Service {
-	return &Service{targets: targets, configs: configs, queue: q, boards: boards, now: time.Now, jitter: runwindow.Jitter}
+// DefaultMaxAutomatic caps a user's enabled targets that run on an interval.
+const DefaultMaxAutomatic = 10
+
+func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards, maxAutomatic int) *Service {
+	return &Service{targets: targets, configs: configs, queue: q, boards: boards, now: time.Now, jitter: runwindow.Jitter, maxAutomatic: maxAutomatic}
 }
 
 // Create validates a new source target against the source registry, then
@@ -105,6 +111,9 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
+	if err := s.guardAutomatic(ctx, userID, "", in.Source, window, enabled); err != nil {
+		return dto.SourceTarget{}, err
+	}
 	var nextRunAt *time.Time
 	if enabled {
 		nextRunAt = s.nextRun(window)
@@ -129,6 +138,32 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	}
 
 	return target, nil
+}
+
+func (s *Service) guardAutomatic(ctx context.Context, userID, exceptID, source string, w dto.RunWindow, enabled bool) error {
+	if w.IntervalMinutes == nil {
+		return nil
+	}
+	if !sourcespec.Incremental(source) {
+		return apperr.Invalid("run_window: " + source + " can't run automatically; save it as a manual search")
+	}
+	if !enabled {
+		return nil
+	}
+	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	automatic := 0
+	for _, t := range targets {
+		if t.ID != exceptID && t.Enabled && t.RunWindow.IntervalMinutes != nil {
+			automatic++
+		}
+	}
+	if automatic >= s.maxAutomatic {
+		return apperr.Invalid(fmt.Sprintf("run_window: at most %d searches can run automatically", s.maxAutomatic))
+	}
+	return nil
 }
 
 func createWindow(in dto.RunWindowInput) (dto.RunWindow, error) {
@@ -209,20 +244,27 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 
 	var window *dto.RunWindow
 	var nextRunAt *time.Time
-	if in.RunWindow.Set {
-		w, err := s.updatedWindow(ctx, userID, in)
-		if err != nil {
-			return dto.SourceTarget{}, err
-		}
-		window = &w
-		nextRunAt = s.nextRun(w)
-	} else if in.Enabled != nil && *in.Enabled {
+	enabling := in.Enabled != nil && *in.Enabled
+	if in.RunWindow.Set || enabling {
 		current, err := s.owned(ctx, userID, in.ID)
 		if err != nil {
 			return dto.SourceTarget{}, err
 		}
-		window = &current.RunWindow
-		nextRunAt = s.nextRun(current.RunWindow)
+		w := current.RunWindow
+		if in.RunWindow.Set {
+			if w, err = updatedWindow(current, in); err != nil {
+				return dto.SourceTarget{}, err
+			}
+		}
+		enabled := current.Enabled
+		if in.Enabled != nil {
+			enabled = *in.Enabled
+		}
+		if err := s.guardAutomatic(ctx, userID, current.ID, current.Source, w, enabled); err != nil {
+			return dto.SourceTarget{}, err
+		}
+		window = &w
+		nextRunAt = s.nextRun(w)
 	}
 
 	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, window, nextRunAt)
@@ -250,16 +292,12 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	return target, nil
 }
 
-func (s *Service) updatedWindow(ctx context.Context, userID string, in dto.UpdateSourceTargetInput) (dto.RunWindow, error) {
+func updatedWindow(current dto.SourceTarget, in dto.UpdateSourceTargetInput) (dto.RunWindow, error) {
 	if in.RunWindow.Window != nil {
 		if err := runwindow.Validate(*in.RunWindow.Window); err != nil {
 			return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
 		}
 		return *in.RunWindow.Window, nil
-	}
-	current, err := s.owned(ctx, userID, in.ID)
-	if err != nil {
-		return dto.RunWindow{}, err
 	}
 	current.RunWindow.IntervalMinutes = nil
 	return current.RunWindow, nil
