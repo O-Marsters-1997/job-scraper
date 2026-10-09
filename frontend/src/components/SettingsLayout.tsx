@@ -4,12 +4,11 @@ import {
 	createSignal,
 	For,
 	type JSX,
-	onCleanup,
-	onMount,
 	Show,
 	useContext,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import {
 	findSettingsSection,
 	SETTINGS_SECTIONS,
@@ -29,11 +28,6 @@ export function SettingsActions(props: { children: JSX.Element }) {
 	);
 }
 
-const isTyping = (target: EventTarget | null) =>
-	target instanceof HTMLElement &&
-	(target.isContentEditable ||
-		["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-
 const NAV_ITEM =
 	"block shrink-0 rounded-lg border border-transparent px-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
@@ -47,28 +41,22 @@ export function SettingsLayout() {
 	const isOpen = (section: SettingsSection) =>
 		location().pathname.startsWith(section.to);
 
-	onMount(() => {
-		const cycle = (e: KeyboardEvent) => {
-			if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
-			const step = e.key === "]" ? 1 : e.key === "[" ? -1 : 0;
-			if (!step) return;
-			e.preventDefault();
-			const order = SECTIONS.flatMap((section) => [
-				section.to,
-				...(isOpen(section)
-					? (section.children?.map((child) => child.to) ?? [])
-					: []),
-			]);
-			const focused = order.findIndex(
-				(to) => links[to] === document.activeElement,
-			);
-			const i = focused >= 0 ? focused : order.indexOf(location().pathname);
-			const next = order[(i + step + order.length) % order.length];
-			if (next) links[next]?.focus();
-		};
-		document.addEventListener("keydown", cycle);
-		onCleanup(() => document.removeEventListener("keydown", cycle));
-	});
+	const cycle = (step: number) => {
+		const order = SECTIONS.flatMap((section) => [
+			section.to,
+			...(isOpen(section)
+				? (section.children?.map((child) => child.to) ?? [])
+				: []),
+		]);
+		const focused = order.findIndex(
+			(to) => links[to] === document.activeElement,
+		);
+		const i = focused >= 0 ? focused : order.indexOf(location().pathname);
+		const next = order[(i + step + order.length) % order.length];
+		if (next) links[next]?.focus();
+	};
+
+	useShortcuts({ "]": () => cycle(1), "[": () => cycle(-1) });
 
 	return (
 		<ActionsSlot.Provider value={slot}>
