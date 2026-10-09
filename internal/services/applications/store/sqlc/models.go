@@ -319,6 +319,7 @@ type NotificationDigest struct {
 }
 
 type OptionAnswer struct {
+	UserID       pgtype.UUID
 	JobID        pgtype.UUID
 	Fingerprint  string
 	QuestionHash string

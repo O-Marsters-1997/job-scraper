@@ -23,7 +23,7 @@ import (
 // CompletedEffect is one recorded CompleteAnswerEffect call.
 type CompletedEffect struct {
 	Effect  dto.AnswerEffect
-	Answers map[string]dto.Answer
+	Answers map[string]map[string]dto.Answer
 	Scores  []dto.JobScore
 }
 
@@ -81,8 +81,8 @@ func NewFakeStore() *FakeStore {
 	}
 }
 
-func answerKey(jobID, fingerprint, model string) string {
-	return jobID + "|" + fingerprint + "|" + model
+func answerKey(userID, jobID, fingerprint, model string) string {
+	return jobID + "|" + userID + "|" + fingerprint + "|" + model
 }
 
 func scoredKey(jobID, userID string) string {
@@ -102,10 +102,10 @@ func (f *FakeStore) SeedJob(job dto.Job, configs []dto.SearchConfig) {
 	f.configs[job.ID] = configs
 }
 
-func (f *FakeStore) SeedAnswers(jobID, fingerprint, model string, answers map[string]dto.Answer) {
+func (f *FakeStore) SeedAnswers(userID, jobID, fingerprint, model string, answers map[string]dto.Answer) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.answers[answerKey(jobID, fingerprint, model)] = answers
+	f.answers[answerKey(userID, jobID, fingerprint, model)] = answers
 }
 
 func (f *FakeStore) SeedScoringInputs(userID string, inputs []store.ScoringInput) {
@@ -210,19 +210,19 @@ func (f *FakeStore) ListScoringOptions(context.Context) ([]dto.ScoringOption, er
 	return out, nil
 }
 
-func (f *FakeStore) ListAnswers(_ context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
+func (f *FakeStore) ListAnswers(_ context.Context, userID, jobID, fingerprint, model string) (map[string]dto.Answer, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	key := answerKey(jobID, fingerprint, model)
+	key := answerKey(userID, jobID, fingerprint, model)
 	out := make(map[string]dto.Answer, len(f.answers[key]))
 	maps.Copy(out, f.answers[key])
 	return out, nil
 }
 
-func (f *FakeStore) SaveAnswers(_ context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
+func (f *FakeStore) SaveAnswers(_ context.Context, userID, jobID, fingerprint, model string, answers map[string]dto.Answer) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	key := answerKey(jobID, fingerprint, model)
+	key := answerKey(userID, jobID, fingerprint, model)
 	if f.answers[key] == nil {
 		f.answers[key] = make(map[string]dto.Answer, len(answers))
 	}
@@ -240,7 +240,7 @@ func (f *FakeStore) markScored(jobID string, scores []dto.JobScore) {
 	}
 }
 
-func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.completed = append(f.completed, CompletedEffect{Effect: effect, Answers: answers, Scores: scores})
@@ -484,7 +484,7 @@ func (f *FakeStore) RetireScoringOption(_ context.Context, id string) error {
 	return data.ErrNotFound
 }
 
-func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
+func (f *FakeStore) ListCompanyAnswers(_ context.Context, userID string, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make(map[string][]map[string]dto.Answer)
@@ -493,7 +493,7 @@ func (f *FakeStore) ListCompanyAnswers(_ context.Context, companyIDs []string, m
 			continue
 		}
 		answers := make(map[string]dto.Answer)
-		maps.Copy(answers, f.answers[answerKey(job.ID, job.ContentFingerprint, model)])
+		maps.Copy(answers, f.answers[answerKey(userID, job.ID, job.ContentFingerprint, model)])
 		out[job.CompanyID] = append(out[job.CompanyID], answers)
 	}
 	return out, nil

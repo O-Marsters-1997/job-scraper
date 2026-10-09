@@ -68,7 +68,7 @@ func (s *Service) rescoreJob(ctx context.Context, userID, jobID string) (dto.Job
 	if err != nil {
 		return dto.JobScore{}, err
 	}
-	answers, err := s.store.ListAnswers(ctx, jobID, job.ContentFingerprint, jev.Model)
+	answers, err := s.store.ListAnswers(ctx, userID, jobID, job.ContentFingerprint, jev.Model)
 	if err != nil {
 		return dto.JobScore{}, fmt.Errorf("scoring.rescoreJob: load answers: %w", err)
 	}

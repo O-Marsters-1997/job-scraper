@@ -81,10 +81,15 @@ func runTick(t *testing.T, st scoring.Store, opts ...depsOpt) {
 
 type fakeAnswerer struct {
 	calls [][]string
+	byKey map[string][]string
 }
 
-func (f *fakeAnswerer) Answer(_ context.Context, _ string, _ dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+func (f *fakeAnswerer) Answer(_ context.Context, apiKey string, _ dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
 	f.calls = append(f.calls, questions)
+	if f.byKey == nil {
+		f.byKey = make(map[string][]string)
+	}
+	f.byKey[apiKey] = append(f.byKey[apiKey], questions...)
 	out := make(map[string]dto.Answer, len(questions))
 	for _, q := range questions {
 		out[q] = dto.Answer{PYes: 0.9, PNo: 0.05, PNotStated: 0.05}
@@ -105,6 +110,17 @@ func (f *fakeCredentials) Get(context.Context, string, string) (string, error) {
 		return "", data.ErrNotFound
 	}
 	return f.key, nil
+}
+
+// userKeys gives each user their own key; a user absent from the map has none.
+type userKeys map[string]string
+
+func (k userKeys) Get(_ context.Context, userID, _ string) (string, error) {
+	key, ok := k[userID]
+	if !ok {
+		return "", data.ErrNotFound
+	}
+	return key, nil
 }
 
 type fakeAlerter struct{ notified []string }
@@ -202,7 +218,7 @@ func scoreCallLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 func TestRunTick(t *testing.T) {
 	t.Run("all cached answers make no jev call", func(t *testing.T) {
 		st := newFakeStore()
-		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		st.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		seedEffect(st, true, picking("user-1", "tech:go"))
 		answerer := &fakeAnswerer{}
 
@@ -234,11 +250,6 @@ func TestRunTick(t *testing.T) {
 			want:    []string{"Does the role use Go?"},
 		},
 		{
-			name:    "overlapping picks are unioned without duplicates",
-			configs: []dto.SearchConfig{picking("user-1", "tech:go", "tech:rust"), picking("user-2", "tech:rust", "role:backend")},
-			want:    []string{"Does the role use Go?", "Does the role use Rust?", "Is this primarily a backend role?"},
-		},
-		{
 			name:    "a retired option pick is never sent",
 			options: []dto.ScoringOption{retiredCobol},
 			configs: []dto.SearchConfig{picking("user-1", "tech:go", "tech:cobol")},
@@ -259,11 +270,64 @@ func TestRunTick(t *testing.T) {
 				t.Errorf("Answer calls (-want +got):\n%s", diff)
 			}
 			completed := st.Completed()
-			if len(completed) != 1 || len(completed[0].Answers) != len(tt.want) {
+			if len(completed) != 1 || len(completed[0].Answers["user-1"]) != len(tt.want) {
 				t.Errorf("completed effects = %+v, want 1 effect with %d new answers", completed, len(tt.want))
 			}
 		})
 	}
+
+	t.Run("each user's key is billed only for that user's own picks and stores only their own answers", func(t *testing.T) {
+		buf := captureScoreCallLogs(t)
+		st := newFakeStore()
+		seedEffect(st, false, picking("user-1", "tech:go", "tech:rust"), picking("user-2", "tech:rust", "role:backend"))
+		answerer := &fakeAnswerer{}
+		keys := userKeys{"user-1": "key-1", "user-2": "key-2"}
+
+		runTick(t, st, withAnswerer(answerer), withCredentials(keys))
+
+		sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+		wantCalls := map[string][]string{
+			"key-1": {"Does the role use Go?", "Does the role use Rust?"},
+			"key-2": {"Does the role use Rust?", "Is this primarily a backend role?"},
+		}
+		if diff := cmp.Diff(wantCalls, answerer.byKey, sortStrings); diff != "" {
+			t.Errorf("questions per key (-want +got):\n%s", diff)
+		}
+		completed := st.Completed()
+		if len(completed) != 1 {
+			t.Fatalf("completed effects = %d, want 1", len(completed))
+		}
+		if got := len(completed[0].Answers["user-1"]); got != 2 {
+			t.Errorf("user-1 stored answers = %d, want 2", got)
+		}
+		if got := len(completed[0].Answers["user-2"]); got != 2 {
+			t.Errorf("user-2 stored answers = %d, want 2", got)
+		}
+		for _, sc := range completed[0].Scores {
+			if sc.Cost != 0.0004 {
+				t.Errorf("score for %s cost = %v, want that user's own 0.0004", sc.UserID, sc.Cost)
+			}
+		}
+		if lines := scoreCallLines(t, buf); len(lines) != 2 {
+			t.Errorf("score.call lines = %d, want one per user", len(lines))
+		}
+	})
+
+	t.Run("a keyless user gets no score and the other user is still scored", func(t *testing.T) {
+		st := newFakeStore()
+		seedEffect(st, false, picking("user-1", "tech:go"), picking("user-2", "tech:go"))
+		answerer := &fakeAnswerer{}
+
+		runTick(t, st, withAnswerer(answerer), withCredentials(userKeys{"user-2": "key-2"}))
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Scores) != 1 || completed[0].Scores[0].UserID != "user-2" {
+			t.Fatalf("completed = %+v, want one effect scoring only user-2", completed)
+		}
+		if _, ok := completed[0].Answers["user-1"]; ok {
+			t.Errorf("keyless user-1 stored answers, want none")
+		}
+	})
 
 	t.Run("a successful answer emits a score call log", func(t *testing.T) {
 		buf := captureScoreCallLogs(t)
@@ -365,7 +429,7 @@ func TestRunTick(t *testing.T) {
 
 	t.Run("alerts only on first discovery above threshold", func(t *testing.T) {
 		st := newFakeStore()
-		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		st.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		cfg := picking("user-1", "tech:go")
 		cfg.NotifyThreshold = 30
 		seedEffect(st, true, cfg)
@@ -380,7 +444,7 @@ func TestRunTick(t *testing.T) {
 
 	t.Run("does not alert a user whose company is new", func(t *testing.T) {
 		st := newFakeStore()
-		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		st.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		cfg := picking("user-1", "tech:go")
 		cfg.NotifyThreshold = 30
 		cfg.CompanyIsNew = true
@@ -413,7 +477,7 @@ func TestRunTick(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				st := newFakeStore()
-				st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+				st.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 				cfg := picking("user-1", "tech:go")
 				cfg.NotifyThreshold, cfg.CompanyIsNew = tt.threshold, tt.newCo
 				seedEffect(st, tt.first, cfg)
@@ -459,7 +523,7 @@ func (f *flakyClaimStore) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffe
 	return f.FakeStore.ClaimAnswerEffect(ctx)
 }
 
-func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
 	saved, err := f.FakeStore.CompleteAnswerEffect(ctx, effect, answers, scores)
 	f.completed <- struct{}{}
 	return saved, err
@@ -486,7 +550,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("keeps ticking after a failed tick", func(t *testing.T) {
 		inner := newFakeStore()
-		inner.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		inner.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		seedEffect(inner, false, picking("user-1", "tech:go"))
 		st := &flakyClaimStore{FakeStore: inner, failsLeft: 1, completed: make(chan struct{}, 1)}
 		svc := newService(t, st, withKey("sk-or-test"), withTick(time.Millisecond))
@@ -1220,6 +1284,24 @@ func TestAsk(t *testing.T) {
 		}
 	})
 
+	t.Run("another user's answers are never reused", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedJob(job, nil)
+		answerer := &fakeAnswerer{}
+		svc := newService(t, st, withAnswerer(answerer), withCredentials(userKeys{"user-a": "key-a", "user-b": "key-b"}))
+		qs := []string{"Is it remote?"}
+		if _, err := svc.Ask(ctx, "user-a", job.ID, qs); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Ask(ctx, "user-b", job.ID, qs); err != nil {
+			t.Fatal(err)
+		}
+		want := map[string][]string{"key-a": qs, "key-b": qs}
+		if diff := cmp.Diff(want, answerer.byKey); diff != "" {
+			t.Errorf("questions per key (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("changing one question asks only that question", func(t *testing.T) {
 		svc, answerer := newSvc(t, "sk-or-test")
 		if _, err := svc.Ask(ctx, "user-1", job.ID, []string{"Is it remote?", "Is it senior?"}); err != nil {
@@ -1311,7 +1393,7 @@ func seedScoredJob(st *scoringtest.FakeStore, userID string, optionIDs ...string
 	job.CompanySlug = "acme"
 	job.Description = "<p>Build Go services.</p>"
 	st.SeedJob(job, nil)
-	st.SeedAnswers(job.ID, job.ContentFingerprint, jev.Model, cachedAnswers())
+	st.SeedAnswers(userID, job.ID, job.ContentFingerprint, jev.Model, cachedAnswers())
 	st.SeedJobScore(userID, job.ID, dto.JobScoreEvidence{
 		Score: 72, Fingerprint: "score-fp", Model: "jev-old",
 		Breakdown: []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}},
@@ -1592,7 +1674,7 @@ func TestCorrections(t *testing.T) {
 
 	t.Run("the answer effect applies each user's own corrections", func(t *testing.T) {
 		st := newFakeStore()
-		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		st.SeedAnswers("user-1", testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
 		seedEffect(st, false, picking("user-1", "tech:go"), picking("user-2", "tech:go"))
 		if err := st.SetAnswerCorrection(t.Context(), "user-1", testJob.ID, "tech:go", "no"); err != nil {
 			t.Fatal(err)
@@ -1717,7 +1799,7 @@ func TestRunTick_CompanyProfileAnswers(t *testing.T) {
 			scoring.QuestionHash("Series B stage?"):      {PYes: 1},
 		}
 		for hash, want := range wantAnswers {
-			if got := completed[0].Answers[hash]; got != want {
+			if got := completed[0].Answers["user-1"][hash]; got != want {
 				t.Errorf("saved answer for %s = %+v, want %+v", hash, got, want)
 			}
 		}

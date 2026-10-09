@@ -413,6 +413,7 @@ CREATE TABLE scoring_options (
 );
 
 CREATE TABLE option_answers (
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id        UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     fingerprint   TEXT NOT NULL,
     question_hash TEXT NOT NULL,
@@ -422,8 +423,10 @@ CREATE TABLE option_answers (
     p_not_stated  REAL NOT NULL,
     confidence    REAL NOT NULL,
     answered_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (job_id, fingerprint, question_hash, model)
+    PRIMARY KEY (user_id, job_id, fingerprint, question_hash, model)
 );
+
+CREATE INDEX option_answers_job_id_idx ON option_answers (job_id);
 
 CREATE TABLE fetch_cache (
     url        TEXT PRIMARY KEY,

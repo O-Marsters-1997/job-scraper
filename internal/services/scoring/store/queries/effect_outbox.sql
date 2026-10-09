@@ -42,7 +42,7 @@ WHERE s.user_id = sqlc.arg(user_id)::uuid
         SELECT 1 FROM unnest(sqlc.arg(question_hashes)::text[]) AS missing(hash)
         WHERE NOT EXISTS (
             SELECT 1 FROM option_answers a
-            WHERE a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+            WHERE a.user_id = s.user_id AND a.job_id = j.id AND a.fingerprint = j.content_fingerprint
                 AND a.model = sqlc.arg(model)::text AND a.question_hash = missing.hash
         )
     )

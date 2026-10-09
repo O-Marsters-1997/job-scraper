@@ -79,7 +79,7 @@ func (s *Service) AppendJobFeedback(ctx context.Context, userID string, in dto.J
 	if err != nil {
 		return dto.ScoreFeedback{}, err
 	}
-	answers, err := s.store.ListAnswers(ctx, in.JobID, job.ContentFingerprint, jev.Model)
+	answers, err := s.store.ListAnswers(ctx, userID, in.JobID, job.ContentFingerprint, jev.Model)
 	if err != nil {
 		return dto.ScoreFeedback{}, fmt.Errorf("scoring.AppendJobFeedback: load answers: %w", err)
 	}

@@ -38,9 +38,9 @@ type Store interface {
 	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
-	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
-	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
-	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
+	ListAnswers(ctx context.Context, userID, jobID, fingerprint, model string) (map[string]dto.Answer, error)
+	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
+	SaveAnswers(ctx context.Context, userID, jobID, fingerprint, model string, answers map[string]dto.Answer) error
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
 	ListIncludeFilterConfigs(ctx context.Context) ([]dto.SearchConfig, error)
@@ -55,7 +55,7 @@ type Store interface {
 	ListJobCorrections(ctx context.Context, jobID string) (map[string]map[string]string, error)
 	SaveScores(ctx context.Context, scores []dto.JobScore) error
 	QueueMissingAnswers(ctx context.Context, userID string, hashes []string, model string) (int64, error)
-	ListCompanyAnswers(ctx context.Context, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error)
+	ListCompanyAnswers(ctx context.Context, userID string, companyIDs []string, model string) (map[string][]map[string]dto.Answer, error)
 
 	OpsState(ctx context.Context) (dto.OpsState, error)
 	GetScoringStatus(ctx context.Context, userID string) (dto.ScoringStatus, error)
@@ -195,52 +195,30 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 	}
 	byID := bk.byID
 
-	asked := make(map[string]string)
-	for _, cfg := range surviving {
-		maps.Copy(asked, pickedQuestionHashes(cfg.Preferences.Picks, byID))
-	}
-
-	cached, err := s.store.ListAnswers(ctx, effect.JobID, effect.Fingerprint, jev.Model)
-	if err != nil {
-		return fail(fmt.Errorf("load cached answers: %w", err))
-	}
 	corrections, err := s.store.ListJobCorrections(ctx, effect.JobID)
 	if err != nil {
 		return fail(fmt.Errorf("load corrections: %w", err))
 	}
 
-	derived, err := s.profileAnswers(ctx, job, byID, asked)
-	if err != nil {
-		return fail(err)
-	}
-
-	var missing []string
-	for hash, question := range asked {
-		_, isCached := cached[hash]
-		_, isDerived := derived[hash]
-		if !isCached && !isDerived {
-			missing = append(missing, question)
-		}
-	}
-
-	fresh, cost, err := s.answerMissing(ctx, surviving, job, missing)
-	if err != nil {
-		return fail(err)
-	}
-	maps.Copy(fresh, derived)
-
-	allAnswers := make(map[string]dto.Answer, len(cached)+len(fresh))
-	maps.Copy(allAnswers, cached)
-	maps.Copy(allAnswers, fresh)
-
 	scores := make([]dto.JobScore, 0, len(surviving))
+	scored := make([]dto.SearchConfig, 0, len(surviving))
+	answers := make(map[string]map[string]dto.Answer, len(surviving))
 	for _, cfg := range surviving {
-		score := scoreJob(cfg.UserID, cfg, job, byID, allAnswers, corrections[cfg.UserID], cfg.CompanyIsFavourite)
-		score.Cost = cost
+		fresh, score, ok, err := s.scoreForUser(ctx, effect, job, cfg, byID, corrections)
+		if err != nil {
+			return fail(err)
+		}
+		if !ok {
+			continue
+		}
+		if len(fresh) > 0 {
+			answers[cfg.UserID] = fresh
+		}
 		scores = append(scores, score)
+		scored = append(scored, cfg)
 	}
 
-	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores)
+	saved, err := s.store.CompleteAnswerEffect(ctx, effect, answers, scores)
 	if err != nil {
 		return err
 	}
@@ -248,7 +226,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return nil
 	}
 
-	s.notifyNewJob(ctx, job, surviving, scores, saved)
+	s.notifyNewJob(ctx, job, scored, scores, saved)
 	return nil
 }
 
@@ -283,34 +261,64 @@ func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[stri
 	return out, nil
 }
 
-func (s *Service) answerMissing(ctx context.Context, surviving []dto.SearchConfig, job dto.Job, missing []string) (map[string]dto.Answer, float64, error) {
-	fresh := make(map[string]dto.Answer)
-	if len(missing) == 0 {
-		return fresh, 0, nil
+// scoreForUser answers cfg's user's still-missing Picks on that user's own
+// key and scores the job from their Answers. ok is false when the user has no
+// key and Jev would be needed.
+func (s *Service) scoreForUser(ctx context.Context, effect dto.AnswerEffect, job dto.Job, cfg dto.SearchConfig, byID map[string]dto.ScoringOption, corrections map[string]map[string]string) (fresh map[string]dto.Answer, score dto.JobScore, ok bool, err error) {
+	userID := cfg.UserID
+	asked := pickedQuestionHashes(cfg.Preferences.Picks, byID)
+
+	cached, err := s.store.ListAnswers(ctx, userID, effect.JobID, effect.Fingerprint, jev.Model)
+	if err != nil {
+		return nil, dto.JobScore{}, false, fmt.Errorf("load cached answers: %w", err)
 	}
-	for _, cfg := range surviving {
-		key, err := s.credentials.Get(ctx, cfg.UserID, jev.Provider)
+	derived, err := s.profileAnswers(ctx, job, byID, asked)
+	if err != nil {
+		return nil, dto.JobScore{}, false, err
+	}
+
+	var missing []string
+	for hash, question := range asked {
+		_, isCached := cached[hash]
+		_, isDerived := derived[hash]
+		if !isCached && !isDerived {
+			missing = append(missing, question)
+		}
+	}
+
+	fresh = make(map[string]dto.Answer, len(missing)+len(derived))
+	var cost float64
+	if len(missing) > 0 {
+		key, err := s.credentials.Get(ctx, userID, jev.Provider)
 		if err != nil {
-			continue
+			return nil, dto.JobScore{}, false, nil
 		}
 		answers, usage, err := s.answerer.Answer(ctx, key, job, missing)
 		if err != nil {
-			return nil, 0, fmt.Errorf("answer questions: %w", err)
+			return nil, dto.JobScore{}, false, fmt.Errorf("answer questions: %w", err)
 		}
 		for question, a := range answers {
 			fresh[QuestionHash(question)] = a
 		}
-		for _, sc := range surviving {
-			slog.InfoContext(ctx, "score call",
-				slog.String(logger.KeyEvent, telemetry.EventScoreCall),
-				slog.String(logger.KeyUserID, sc.UserID),
-				slog.String("model", usage.Model),
-				slog.Float64(logger.KeyCostUSD, usage.Cost),
-			)
+		if err := s.store.SaveAnswers(ctx, userID, effect.JobID, effect.Fingerprint, jev.Model, fresh); err != nil {
+			return nil, dto.JobScore{}, false, fmt.Errorf("cache paid answers: %w", err)
 		}
-		return fresh, usage.Cost, nil
+		cost = usage.Cost
+		slog.InfoContext(ctx, "score call",
+			slog.String(logger.KeyEvent, telemetry.EventScoreCall),
+			slog.String(logger.KeyUserID, userID),
+			slog.String("model", usage.Model),
+			slog.Float64(logger.KeyCostUSD, usage.Cost),
+		)
 	}
-	return fresh, 0, nil
+	maps.Copy(fresh, derived)
+
+	all := make(map[string]dto.Answer, len(cached)+len(fresh))
+	maps.Copy(all, cached)
+	maps.Copy(all, fresh)
+	score = scoreJob(userID, cfg, job, byID, all, corrections[userID], cfg.CompanyIsFavourite)
+	score.Cost = cost
+	return fresh, score, true, nil
 }
 
 func (s *Service) notifyNewJob(ctx context.Context, job dto.Job, surviving []dto.SearchConfig, scores []dto.JobScore, saved []string) {
@@ -348,7 +356,7 @@ func (s *Service) emailNewJob(ctx context.Context, job dto.Job, userID string) {
 	}
 }
 
-// Ask answers questions about jobID from the Jev answer cache, sending only
+// Ask answers questions about jobID from userID's own Jev answers, sending only
 // the misses to Jev with userID's OpenRouter key and caching the results.
 // The map is keyed by question text.
 func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []string) (map[string]dto.Answer, error) {
@@ -360,7 +368,7 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 		return nil, fmt.Errorf("scoring.Ask: load job: %w", err)
 	}
 
-	cached, err := s.store.ListAnswers(ctx, jobID, job.ContentFingerprint, jev.Model)
+	cached, err := s.store.ListAnswers(ctx, userID, jobID, job.ContentFingerprint, jev.Model)
 	if err != nil {
 		return nil, fmt.Errorf("scoring.Ask: load cached answers: %w", err)
 	}
@@ -405,7 +413,7 @@ func (s *Service) Ask(ctx context.Context, userID, jobID string, questions []str
 		out[q] = a
 		fresh[QuestionHash(q)] = a
 	}
-	if err := s.store.SaveAnswers(ctx, jobID, job.ContentFingerprint, jev.Model, fresh); err != nil {
+	if err := s.store.SaveAnswers(ctx, userID, jobID, job.ContentFingerprint, jev.Model, fresh); err != nil {
 		return nil, fmt.Errorf("scoring.Ask: cache answers: %w", err)
 	}
 	return out, nil

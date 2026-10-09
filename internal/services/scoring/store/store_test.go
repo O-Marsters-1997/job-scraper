@@ -53,11 +53,11 @@ func insertScore(t *testing.T, pool *pgxpool.Pool, jobID, userID string) {
 	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown) VALUES ($1, $2, 50, '[]')`, jobID, userID)
 }
 
-func insertAnswer(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint, hash, model string) {
+func insertAnswer(t *testing.T, pool *pgxpool.Pool, userID, jobID, fingerprint, hash, model string) {
 	t.Helper()
 	exec(t, pool,
-		`INSERT INTO option_answers (job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
-		 VALUES ($1, $2, $3, $4, 0.9, 0.05, 0.05, 0.9)`, jobID, fingerprint, hash, model)
+		`INSERT INTO option_answers (user_id, job_id, fingerprint, question_hash, model, p_yes, p_no, p_not_stated, confidence)
+		 VALUES ($1, $2, $3, $4, $5, 0.9, 0.05, 0.05, 0.9)`, userID, jobID, fingerprint, hash, model)
 }
 
 func opsState(t *testing.T, st *store.Store) dto.OpsState {
@@ -271,7 +271,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	}
 
 	saved, err := st.CompleteAnswerEffect(ctx, effect,
-		map[string]dto.Answer{"hash-1": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+		map[string]map[string]dto.Answer{userID: {"hash-1": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}},
 		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Band: "great", Rows: []dto.ScoreRow{}}},
 	)
 	if err != nil {
@@ -281,7 +281,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 		t.Errorf("CompleteAnswerEffect() saved users (-want +got):\n%s", diff)
 	}
 
-	answers, err := st.ListAnswers(ctx, jobID, "fp-1", "typesafe/jev-1.13")
+	answers, err := st.ListAnswers(ctx, userID, jobID, "fp-1", "typesafe/jev-1.13")
 	if err != nil {
 		t.Fatalf("ListAnswers() err = %v", err)
 	}
@@ -314,7 +314,7 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 		{JobID: jobID, UserID: alice, Score: 79, Band: "good", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
 		{JobID: jobID, UserID: bob, Score: 21, Band: "poor", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
 	}
-	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores)
+	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]map[string]dto.Answer{alice: {"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, bob: {"hash-go": {PYes: 0.1, PNo: 0.8, PNotStated: 0.1}}}, scores)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
 	}
@@ -339,7 +339,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 	exec(t, pool, "UPDATE jobs SET content_fingerprint = 'fp-2' WHERE id = $1", jobID)
 
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect,
-		map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
+		map[string]map[string]dto.Answer{userID: {"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}},
 		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79, Band: "good"}},
 	)
 	if err != nil {
@@ -394,7 +394,7 @@ func TestListScoringInputs(t *testing.T) {
 			userID := pgtest.InsertUser(t, pool)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 			insertScore(t, pool, jobID, userID)
-			insertAnswer(t, pool, jobID, "fp-1", "hash-1", tt.answerModel)
+			insertAnswer(t, pool, userID, jobID, "fp-1", "hash-1", tt.answerModel)
 
 			inputs, err := st.ListScoringInputs(t.Context(), userID, model)
 			if err != nil {
@@ -426,12 +426,13 @@ func TestListCompanyAnswers(t *testing.T) {
 	insertCompanyJob("https://example.com/b", "fp-1", "")
 	stale := insertCompanyJob("https://example.com/c", "fp-2", "")
 	closed := insertCompanyJob("https://example.com/d", "fp-1", "2026-01-01T00:00:00Z")
-	insertAnswer(t, pool, answered, "fp-1", "hash-1", model)
-	insertAnswer(t, pool, answered, "fp-1", "hash-2", "old-model")
-	insertAnswer(t, pool, stale, "fp-1", "hash-1", model)
-	insertAnswer(t, pool, closed, "fp-1", "hash-1", model)
+	userID := pgtest.InsertUser(t, pool)
+	insertAnswer(t, pool, userID, answered, "fp-1", "hash-1", model)
+	insertAnswer(t, pool, userID, answered, "fp-1", "hash-2", "old-model")
+	insertAnswer(t, pool, userID, stale, "fp-1", "hash-1", model)
+	insertAnswer(t, pool, userID, closed, "fp-1", "hash-1", model)
 
-	got, err := st.ListCompanyAnswers(t.Context(), []string{companyID}, model)
+	got, err := st.ListCompanyAnswers(t.Context(), userID, []string{companyID}, model)
 	if err != nil {
 		t.Fatalf("ListCompanyAnswers() err = %v", err)
 	}
@@ -498,8 +499,9 @@ func TestJobsChanged(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			st, pool := newStore(t)
+			userID := pgtest.InsertUser(t, pool)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-new")
-			insertAnswer(t, pool, jobID, "fp-old", "hash-1", "typesafe/jev-1.13")
+			insertAnswer(t, pool, userID, jobID, "fp-old", "hash-1", "typesafe/jev-1.13")
 			insertTrackedCompany(t, pool, "acme")
 
 			pgtest.InTx(t, pool, tt.commit, func(tx pgx.Tx) error {
@@ -528,8 +530,9 @@ func TestJobsClosed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			st, pool := newStore(t)
+			userID := pgtest.InsertUser(t, pool)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-			insertAnswer(t, pool, jobID, "fp-1", "hash-1", "typesafe/jev-1.13")
+			insertAnswer(t, pool, userID, jobID, "fp-1", "hash-1", "typesafe/jev-1.13")
 
 			pgtest.InTx(t, pool, tt.commit, func(tx pgx.Tx) error {
 				return st.JobsClosed(t.Context(), tx, []string{jobID})
@@ -1016,7 +1019,7 @@ func TestQueueMissingAnswers(t *testing.T) {
 		}
 		insertScore(t, pool, otherUsers, userB)
 		closeJob(t, pool, closed)
-		insertAnswer(t, pool, answered, "fp-answered", "hash-1", model)
+		insertAnswer(t, pool, userA, answered, "fp-answered", "hash-1", model)
 
 		n, err := st.QueueMissingAnswers(t.Context(), userA, []string{"hash-1"}, model)
 		if err != nil {
@@ -1056,7 +1059,7 @@ func TestQueueMissingAnswers(t *testing.T) {
 		}
 
 		exec(t, pool, "DELETE FROM effect_outbox WHERE job_id = $1", jobID)
-		insertAnswer(t, pool, jobID, "fp-1", "hash-1", model)
+		insertAnswer(t, pool, userID, jobID, "fp-1", "hash-1", model)
 		if got := queue(); got != 0 {
 			t.Errorf("QueueMissingAnswers() with no gap = %d, want 0", got)
 		}
@@ -1096,21 +1099,39 @@ func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
 	st, pool := newStore(t)
 	ctx := t.Context()
+	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 
-	if err := st.SaveAnswers(ctx, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.5}}); err != nil {
+	if err := st.SaveAnswers(ctx, userID, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.5}}); err != nil {
 		t.Fatalf("SaveAnswers() err = %v", err)
 	}
-	if err := st.SaveAnswers(ctx, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.9}, "h2": {PNo: 0.5}}); err != nil {
+	if err := st.SaveAnswers(ctx, userID, jobID, "fp-1", "m", map[string]dto.Answer{"h1": {PYes: 0.9}, "h2": {PNo: 0.5}}); err != nil {
 		t.Fatalf("SaveAnswers() err = %v", err)
 	}
-	got, err := st.ListAnswers(ctx, jobID, "fp-1", "m")
+	got, err := st.ListAnswers(ctx, userID, jobID, "fp-1", "m")
 	if err != nil {
 		t.Fatalf("ListAnswers() err = %v", err)
 	}
 	want := map[string]dto.Answer{"h1": {PYes: 0.5}, "h2": {PNo: 0.5}}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ListAnswers() (-want +got):\n%s", diff)
+	}
+}
+
+func TestListAnswers_ReturnsOnlyTheCallersAnswers(t *testing.T) {
+	st, pool := newStore(t)
+	alice := pgtest.InsertUser(t, pool)
+	bob := pgtest.InsertUser(t, pool)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	insertAnswer(t, pool, alice, jobID, "fp-1", "hash-alice", "m")
+	insertAnswer(t, pool, bob, jobID, "fp-1", "hash-bob", "m")
+
+	got, err := st.ListAnswers(t.Context(), alice, jobID, "fp-1", "m")
+	if err != nil {
+		t.Fatalf("ListAnswers() err = %v", err)
+	}
+	if _, ok := got["hash-alice"]; !ok || len(got) != 1 {
+		t.Errorf("ListAnswers(alice) = %+v, want only hash-alice", got)
 	}
 }
 

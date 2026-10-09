@@ -135,7 +135,7 @@ WHERE s.user_id = $2::uuid
         SELECT 1 FROM unnest($3::text[]) AS missing(hash)
         WHERE NOT EXISTS (
             SELECT 1 FROM option_answers a
-            WHERE a.job_id = j.id AND a.fingerprint = j.content_fingerprint
+            WHERE a.user_id = s.user_id AND a.job_id = j.id AND a.fingerprint = j.content_fingerprint
                 AND a.model = $1::text AND a.question_hash = missing.hash
         )
     )
