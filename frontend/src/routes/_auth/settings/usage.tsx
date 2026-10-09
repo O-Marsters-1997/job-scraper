@@ -1,7 +1,10 @@
+import { createQuery } from "@tanstack/solid-query";
 import { createFileRoute } from "@tanstack/solid-router";
 import { For, Show } from "solid-js";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { QuotaBar } from "@/components/QuotaBar";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { meQueryOptions } from "../../../hooks/useAuth";
 import { useIsAdmin } from "../../../hooks/useIsAdmin";
 import { useProxyUsage } from "../../../hooks/useProxyUsage";
 import { formatRelative } from "../../../lib/datetime";
@@ -16,20 +19,23 @@ const PROVIDER_LABELS: Record<string, { name: string; envVar: string }> = {
 };
 
 function UsagePage() {
+	const me = createQuery(() => meQueryOptions);
 	const isAdmin = useIsAdmin();
 	const query = useProxyUsage();
 	return (
-		<Show
-			when={isAdmin()}
-			fallback={<p class="text-sm text-faint">Admins only.</p>}
-		>
-			<QueryBoundary query={query} fallbackRows={1}>
-				{(data) => (
-					<For each={data().providers}>
-						{(quota) => <ProviderRow quota={quota} />}
-					</For>
-				)}
-			</QueryBoundary>
+		<Show when={!me.isPending} fallback={<SkeletonList rows={1} />}>
+			<Show
+				when={isAdmin()}
+				fallback={<p class="text-sm text-faint">Admins only.</p>}
+			>
+				<QueryBoundary query={query} fallbackRows={1}>
+					{(data) => (
+						<For each={data().providers}>
+							{(quota) => <ProviderRow quota={quota} />}
+						</For>
+					)}
+				</QueryBoundary>
+			</Show>
 		</Show>
 	);
 }

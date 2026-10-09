@@ -9,6 +9,7 @@ export function useProxyUsage() {
 		queryKey: keys.proxyUsage,
 		queryFn: fetchProxyUsage,
 		staleTime: 60 * 1000,
+		refetchInterval: 15 * 60 * 1000,
 		enabled: isAdmin(),
 	}));
 }

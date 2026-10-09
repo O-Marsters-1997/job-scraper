@@ -9,7 +9,7 @@ const BAR_TONE: Record<UsageLevel, string> = {
 };
 
 function amount(n: number, unit: string): string {
-	return unit === "USD" ? `$${n.toFixed(2)}` : `${n.toFixed(1)} ${unit}`;
+	return unit === "USD" ? `$${n.toFixed(2)}` : `${n.toFixed(2)} ${unit}`;
 }
 
 export function QuotaBar(props: { quota: Quota }) {

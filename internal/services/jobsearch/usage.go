@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -70,7 +71,7 @@ func (d decodoQuota) FetchQuota(ctx context.Context) (ProxyQuota, error) {
 		return ProxyQuota{}, fmt.Errorf("decodo subscriptions: status %d", resp.StatusCode)
 	}
 	var subs []decodoSubscription
-	if err := json.NewDecoder(resp.Body).Decode(&subs); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&subs); err != nil {
 		return ProxyQuota{}, fmt.Errorf("decodo subscriptions: %w", err)
 	}
 	if len(subs) == 0 {
@@ -135,6 +136,9 @@ func (u *ProxyUsage) Refresh(ctx context.Context) error {
 		return nil
 	}
 	quota, err := u.fetcher.FetchQuota(ctx)
+	if err != nil && ctx.Err() != nil {
+		return nil
+	}
 	now := u.now()
 
 	u.mu.Lock()
