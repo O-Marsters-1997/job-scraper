@@ -243,11 +243,9 @@ export function CompanyBoardsTable(props: {
 					</Table>
 				</div>
 				<Pager
-					from={paged().from}
-					to={paged().to}
 					total={paged().total}
 					page={paged().page}
-					pageCount={paged().pageCount}
+					pageSize={COMPANY_PAGE_SIZE}
 					noun="companies"
 					onPage={(page) =>
 						props.onParams({ page: page > 1 ? page : undefined })

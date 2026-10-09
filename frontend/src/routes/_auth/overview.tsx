@@ -4,11 +4,12 @@ import { PageHeading } from "@/components/PageHeading";
 import {
 	applicationStats,
 	chasesDue,
+	highValueJobs,
 	jobStats,
 	pipelineSegments,
 	RECENT_LIMIT,
-	recentJobs,
 } from "@/lib/overview";
+import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import {
 	applicationStatusesQueryOptions,
 	useApplicationStatuses,
@@ -34,6 +35,7 @@ export const Route = createFileRoute("/_auth/overview")({
 			queryClient.ensureQueryData(allJobsQueryOptions),
 			queryClient.ensureQueryData(applicationsQueryOptions()),
 			queryClient.ensureQueryData(applicationStatusesQueryOptions),
+			queryClient.ensureQueryData(aiPrefsQueryOptions),
 		]);
 	},
 	component: OverviewPage,
@@ -44,6 +46,7 @@ function OverviewPage() {
 	const appsQuery = useApplications();
 	const chasesQuery = useChases();
 	const statusesQuery = useApplicationStatuses();
+	const aiPrefs = useAiPrefs();
 
 	const jobs = () => jobsQuery.data ?? [];
 	const applications = () => appsQuery.data ?? [];
@@ -57,7 +60,9 @@ function OverviewPage() {
 		pipelineSegments(applications(), statuses()),
 	);
 	const due = createMemo(() => chasesDue(chasesQuery.data ?? []));
-	const recent = createMemo(() => recentJobs(jobs()));
+	const highValue = createMemo(() =>
+		highValueJobs(jobs(), aiPrefs.data?.scoringEnabled ?? true),
+	);
 
 	return (
 		<div class="px-7 py-6">
@@ -67,7 +72,7 @@ function OverviewPage() {
 			<PipelineCard segments={segments()} />
 			<ChasesDueCard chases={due().slice(0, RECENT_LIMIT)} />
 			<div class="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_300px]">
-				<RecentJobsCard jobs={recent()} />
+				<RecentJobsCard jobs={highValue().jobs} ranked={highValue().ranked} />
 				<RecentApplicationsCard
 					applications={applications().slice(0, RECENT_LIMIT)}
 				/>

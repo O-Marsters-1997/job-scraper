@@ -41,7 +41,11 @@ function JobsPage() {
 	const setFilters = (patch: Partial<JobFilters>) => {
 		navigate({
 			to: "/jobs",
-			search: (p) => ({ ...p, ...patch }),
+			search: (p) => ({
+				...p,
+				...("page" in patch ? {} : { page: undefined }),
+				...patch,
+			}),
 			replace: true,
 		});
 	};
@@ -113,6 +117,8 @@ function JobsPage() {
 					data={filtered()}
 					filters={filters()}
 					onChange={setFilters}
+					page={filters().page}
+					onPageChange={(page) => setFilters({ page })}
 					sourceOptions={srcOptions()}
 					wildcards
 					selection={track.selection()}
