@@ -197,7 +197,7 @@ func (f fixture) discoverProcessor(discover worker.DiscoverFunc, scoring worker.
 
 func (f fixture) target(t *testing.T, source string) dto.SourceTarget {
 	t.Helper()
-	target, err := f.store.CreateSourceTargetWithRun(t.Context(), "user-1", source, "https://example.com/search", true, nil)
+	target, err := f.store.CreateSourceTargetWithRun(t.Context(), "user-1", source, "https://example.com/search", true, nil, dto.RunWindow{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -701,7 +701,7 @@ func TestProcessKeyRejection(t *testing.T) {
 		slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 		t.Cleanup(func() { slog.SetDefault(prev) })
 		f := newFixture(t, http.StatusOK, "")
-		other, err := f.store.CreateSourceTarget(ctx, "user-2", "indeed", "rust", true, nil)
+		other, err := f.store.CreateSourceTarget(ctx, "user-2", "indeed", "rust", true, nil, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

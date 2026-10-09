@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func trackCompany(t *testing.T, st *store.Store, userID, companyID string, minut
 
 func createTarget(t *testing.T, st *store.Store, userID, source, value string) dto.SourceTarget {
 	t.Helper()
-	target, err := st.CreateSourceTarget(t.Context(), userID, source, value, true, nil)
+	target, err := st.CreateSourceTarget(t.Context(), userID, source, value, true, nil, dto.RunWindow{}, nil)
 	if err != nil {
 		t.Fatalf("CreateSourceTarget(%s, %s) err = %v", source, value, err)
 	}
@@ -813,7 +814,7 @@ func TestSourceTargetRuns(t *testing.T) {
 	t.Run("recovery claims a stale run once", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, nil)
+		target, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "recovery-search", true, nil, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTargetWithRun() err = %v", err)
 		}
@@ -852,17 +853,17 @@ func TestSourceTargetRuns(t *testing.T) {
 		st, _, userID := newUserStore(t)
 		ctx := t.Context()
 		target := createTarget(t, st, userID, "wis", "engineer")
-		if _, err := st.UpdateSourceTarget(ctx, target.ID, userID, new(false), nil); err != nil {
+		if _, err := st.UpdateSourceTarget(ctx, target.ID, userID, new(false), nil, nil); err != nil {
 			t.Fatalf("UpdateSourceTarget() err = %v", err)
 		}
-		first, err := st.StartSourceTargetRun(ctx, target.ID)
+		first, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun(first) err = %v", err)
 		}
 		if !first.Enabled {
 			t.Error("manual rerun did not enable the target")
 		}
-		second, err := st.StartSourceTargetRun(ctx, target.ID)
+		second, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun(second) err = %v", err)
 		}
@@ -1460,4 +1461,123 @@ func TestCompanyFavouritesArePerUser(t *testing.T) {
 			t.Errorf("GetCompanyForUser(%s).Favourite = %v, %v, want %v", user, got.Favourite, err, want)
 		}
 	}
+}
+
+func TestClaimDueSourceTargets(t *testing.T) {
+	hourly := 60
+	past := time.Now().Add(-time.Minute)
+	later := time.Now().Add(time.Hour).Truncate(time.Microsecond)
+	nextHour := func(dto.RunWindow) *time.Time { return &later }
+
+	createDue := func(t *testing.T, st *store.Store, userID, value string, interval *int, at time.Time) dto.SourceTarget {
+		t.Helper()
+		target, err := st.CreateSourceTarget(t.Context(), userID, "linkedin", value, true, nil, dto.RunWindow{IntervalMinutes: interval}, &at)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(%s) err = %v", value, err)
+		}
+		return target
+	}
+
+	t.Run("claims due targets in order, starts a run and advances next_run_at", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		ctx := t.Context()
+		older := createDue(t, st, userID, "older", &hourly, past.Add(-time.Hour))
+		newer := createDue(t, st, userID, "newer", &hourly, past)
+
+		got, err := st.ClaimDueSourceTargets(ctx, 10, nextHour)
+		if err != nil {
+			t.Fatalf("ClaimDueSourceTargets() err = %v", err)
+		}
+		if ids := []string{got[0].ID, got[1].ID}; len(got) != 2 || ids[0] != older.ID || ids[1] != newer.ID {
+			t.Fatalf("ClaimDueSourceTargets() ids = %v, want [%s %s]", ids, older.ID, newer.ID)
+		}
+		for _, target := range got {
+			if target.RunStatus != "queued" || target.RunID == "" {
+				t.Errorf("claimed %s run = %q/%q, want queued with a run id", target.Value, target.RunStatus, target.RunID)
+			}
+			if target.NextRunAt == nil || !target.NextRunAt.Equal(later) {
+				t.Errorf("claimed %s next_run_at = %v, want %v", target.Value, target.NextRunAt, later)
+			}
+		}
+	})
+
+	t.Run("skips manual, queued, running, future and disabled targets", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		ctx := t.Context()
+		createDue(t, st, userID, "manual", nil, past)
+		createDue(t, st, userID, "future", &hourly, later)
+		queued := createDue(t, st, userID, "queued", &hourly, past)
+		running := createDue(t, st, userID, "running", &hourly, past)
+		disabled := createDue(t, st, userID, "disabled", &hourly, past)
+		if _, err := st.StartSourceTargetRun(ctx, queued.ID, &past); err != nil {
+			t.Fatal(err)
+		}
+		started, err := st.StartSourceTargetRun(ctx, running.ID, &past)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.TransitionSourceTargetRun(ctx, running.ID, started.RunID, "running", ""); err != nil {
+			t.Fatal(err)
+		}
+		off := false
+		if _, err := st.UpdateSourceTarget(ctx, disabled.ID, userID, &off, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := st.ClaimDueSourceTargets(ctx, 10, nextHour)
+		if err != nil {
+			t.Fatalf("ClaimDueSourceTargets() err = %v", err)
+		}
+		if len(got) != 0 {
+			t.Fatalf("ClaimDueSourceTargets() = %d targets, want 0", len(got))
+		}
+	})
+
+	t.Run("respects the limit", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		for _, value := range []string{"a", "b", "c"} {
+			createDue(t, st, userID, value, &hourly, past)
+		}
+		got, err := st.ClaimDueSourceTargets(t.Context(), 2, nextHour)
+		if err != nil {
+			t.Fatalf("ClaimDueSourceTargets() err = %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("ClaimDueSourceTargets(limit 2) = %d targets, want 2", len(got))
+		}
+	})
+
+	t.Run("concurrent claims never take the same target", func(t *testing.T) {
+		st, _, userID := newUserStore(t)
+		const targets, claimers = 20, 4
+		for i := range targets {
+			createDue(t, st, userID, fmt.Sprintf("t%02d", i), &hourly, past)
+		}
+		claimed := make(chan string, targets)
+		var wg sync.WaitGroup
+		for range claimers {
+			wg.Go(func() {
+				got, err := st.ClaimDueSourceTargets(t.Context(), targets, nextHour)
+				if err != nil {
+					t.Errorf("ClaimDueSourceTargets() err = %v", err)
+				}
+				for _, target := range got {
+					claimed <- target.ID
+				}
+			})
+		}
+		wg.Wait()
+		close(claimed)
+
+		seen := map[string]bool{}
+		for id := range claimed {
+			if seen[id] {
+				t.Errorf("target %s claimed twice", id)
+			}
+			seen[id] = true
+		}
+		if len(seen) != targets {
+			t.Errorf("claimed %d distinct targets, want %d", len(seen), targets)
+		}
+	})
 }

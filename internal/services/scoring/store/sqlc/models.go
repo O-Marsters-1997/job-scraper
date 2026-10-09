@@ -412,23 +412,27 @@ type Session struct {
 }
 
 type SourceTarget struct {
-	ID                   pgtype.UUID
-	UserID               pgtype.UUID
-	Source               string
-	Value                string
-	Enabled              bool
-	Filters              []byte
-	CompanyID            pgtype.UUID
-	CheckIntervalMinutes int32
-	LastCheckedAt        pgtype.Timestamptz
-	RunStatus            string
-	RunID                pgtype.UUID
-	LastRunAt            pgtype.Timestamptz
-	LastSucceededAt      pgtype.Timestamptz
-	LastRunError         string
-	DisabledReason       string
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Source          string
+	Value           string
+	Enabled         bool
+	Filters         []byte
+	CompanyID       pgtype.UUID
+	IntervalMinutes pgtype.Int4
+	Weekdays        int16
+	WindowStart     pgtype.Time
+	WindowEnd       pgtype.Time
+	Timezone        string
+	NextRunAt       pgtype.Timestamptz
+	RunStatus       string
+	RunID           pgtype.UUID
+	LastRunAt       pgtype.Timestamptz
+	LastSucceededAt pgtype.Timestamptz
+	LastRunError    string
+	DisabledReason  string
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
 }
 
 type TailoredCv struct {

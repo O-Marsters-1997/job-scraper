@@ -2,10 +2,12 @@ import { faker } from "@faker-js/faker";
 import type { ResolvedURL, SourceInfo } from "@/types/source";
 import type {
 	CreateSourceTargetPayload,
+	RunWindow,
 	SourceTarget,
 	UpdateSourceTargetPayload,
 } from "@/types/sourceTarget";
 import { ResolveError } from "../lib/resolveError";
+import { DEFAULT_RUN_WINDOW } from "../lib/runWindow";
 import { updateCompanyTarget } from "./companies";
 import { failIfRequested, hostMatches } from "./helpers";
 import { seed } from "./seed";
@@ -18,6 +20,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Greenhouse",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://boards.greenhouse.io",
 		filters: [],
 	},
@@ -26,6 +29,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Lever",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://jobs.lever.co",
 		filters: [],
 	},
@@ -34,6 +38,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Ashby",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://jobs.ashbyhq.com",
 		filters: [],
 	},
@@ -42,6 +47,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Workable",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://apply.workable.com",
 		filters: [],
 	},
@@ -50,6 +56,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Recruitee",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://recruitee.com",
 		filters: [],
 	},
@@ -58,6 +65,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Personio",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://personio.de",
 		filters: [],
 	},
@@ -66,6 +74,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Pinpoint",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://pinpointhq.com",
 		filters: [],
 	},
@@ -74,6 +83,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Teamtailor",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://teamtailor.com",
 		filters: [],
 	},
@@ -82,6 +92,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "HiBob",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://careers.hibob.com",
 		filters: [],
 	},
@@ -90,6 +101,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "SmartRecruiters",
 		kind: "board",
 		role: "ats",
+		incremental: false,
 		url_prefix: "https://jobs.smartrecruiters.com",
 		filters: [],
 	},
@@ -98,6 +110,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Work in Startups",
 		kind: "filter",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "https://workinstartups.com",
 		filters: [
 			{
@@ -116,6 +129,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "LinkedIn",
 		kind: "filter",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "https://www.linkedin.com/jobs",
 		filters: [
 			{ name: "location", label: "Location", required: false },
@@ -136,6 +150,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Indeed",
 		kind: "url",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "https://www.indeed.com",
 		filters: [],
 	},
@@ -144,6 +159,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "RemoteOK",
 		kind: "filter",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "https://remoteok.com",
 		filters: [],
 	},
@@ -152,6 +168,7 @@ const SOURCE_INFOS: SourceInfo[] = [
 		label: "Remotive",
 		kind: "filter",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "https://remotive.com",
 		filters: [],
 	},
@@ -222,6 +239,20 @@ export function resolveUrl(url: string): ResolvedURL {
 	);
 }
 
+function scheduleFor(
+	requested: RunWindow | null | undefined,
+): Pick<SourceTarget, "RunWindow" | "NextRunAt"> {
+	const window =
+		requested === undefined
+			? { ...DEFAULT_RUN_WINDOW }
+			: (requested ?? { ...DEFAULT_RUN_WINDOW, interval_minutes: null });
+	const next =
+		window.interval_minutes === null
+			? null
+			: new Date(Date.now() + window.interval_minutes * 60000).toISOString();
+	return { RunWindow: window, NextRunAt: next };
+}
+
 export function getSourceTargets(): SourceTarget[] {
 	return discoverySourceTargets;
 }
@@ -246,6 +277,7 @@ export function createSourceTarget(
 		LastRunError: "",
 		DisabledReason: "",
 		URL: SOURCE_INFOS.find((s) => s.name === payload.source)?.url_prefix ?? "",
+		...scheduleFor(payload.run_window),
 	};
 	discoverySourceTargets = [...discoverySourceTargets, target];
 	return target;
@@ -262,6 +294,7 @@ export function updateSourceTarget(
 	const updated: SourceTarget = {
 		...discoverySourceTargets[idx]!,
 		Enabled: patch.enabled ?? discoverySourceTargets[idx]!.Enabled,
+		...(patch.run_window === undefined ? {} : scheduleFor(patch.run_window)),
 	};
 	discoverySourceTargets = [
 		...discoverySourceTargets.slice(0, idx),

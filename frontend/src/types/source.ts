@@ -19,6 +19,7 @@ export const sourceInfoSchema = z.object({
 	label: z.string(),
 	kind: z.enum(["board", "url", "filter"]),
 	role: z.enum(["ats", "discovery"]),
+	incremental: z.boolean(),
 	url_prefix: z.string(),
 	filters: z.array(sourceFilterFieldSchema),
 });

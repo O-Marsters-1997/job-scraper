@@ -668,6 +668,42 @@ rules:
                 type: gt
                 params: [0]
 
+  - uid: source-targets-disabled-now
+    title: Source Targets just disabled
+    condition: C
+    for: 0m
+    noDataState: OK
+    execErrState: Error
+    labels:
+      severity: critical
+    annotations:
+      summary: "{{ $values.A }} {{ $labels.source }} Targets were disabled in the last 5m ({{ $labels.reason }})"
+    data:
+      - refId: A
+        queryType: ""
+        relativeTimeRange:
+          from: 300
+          to: 0
+        datasourceUid: __PROM_DATASOURCE_UID__
+        model:
+          refId: A
+          expr: sum by (source, reason) (increase(jobscraper_source_targets_disabled_total{env="prod"}[5m]) or (jobscraper_source_targets_disabled_total{env="prod"} unless jobscraper_source_targets_disabled_total{env="prod"} offset 5m))
+          instant: true
+      - refId: C
+        queryType: ""
+        relativeTimeRange:
+          from: 0
+          to: 0
+        datasourceUid: __expr__
+        model:
+          refId: C
+          type: threshold
+          expression: A
+          conditions:
+            - evaluator:
+                type: gt
+                params: [0]
+
   - uid: field-completeness-drop
     title: Field completeness drop
     condition: C

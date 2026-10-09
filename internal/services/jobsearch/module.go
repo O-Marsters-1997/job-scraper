@@ -1,10 +1,14 @@
 package jobsearch
 
 import (
+	"cmp"
 	"context"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
@@ -14,13 +18,24 @@ import (
 
 var ErrBoardClaimUnavailable = store.ErrBoardClaimUnavailable
 
+// RegisterMetrics registers the jobsearch context's Prometheus metrics.
+func RegisterMetrics(reg prometheus.Registerer) {
+	sourcetargets.RegisterMetrics(reg)
+}
+
 type Module struct {
 	store         Store
 	jobs          *Service
 	sourceTargets *sourcetargets.Service
 	queue         QueuePublisher
 	scoring       ScoringPort
+	claimLimit    int
 }
+
+const (
+	defaultClaimLimit = 10
+	maxClaimLimit     = 1000
+)
 
 type ScoringPort interface {
 	sourcetargets.SearchConfigReader
@@ -85,26 +100,37 @@ type Deps struct {
 	SourceTargets sourcetargets.Store
 	Scoring       ScoringPort
 	Queue         QueuePublisher
+	ClaimLimit    int
+
+	MaxAutomaticTargets int
 }
 
 func Build(deps Deps) *Module {
 	jobs := NewService(deps.Store, deps.Queue, deps.Scoring)
+	maxAutomatic := deps.MaxAutomaticTargets
+	if maxAutomatic == 0 {
+		maxAutomatic = sourcetargets.DefaultMaxAutomatic
+	}
 	return &Module{
 		store:         deps.Store,
 		jobs:          jobs,
-		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs),
+		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs, maxAutomatic),
 		queue:         deps.Queue,
 		scoring:       deps.Scoring,
+		claimLimit:    cmp.Or(deps.ClaimLimit, defaultClaimLimit),
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, maxAutomaticTargets int) *Module {
 	st := store.New(pool, scoring)
 	return Build(Deps{
 		Store:         st,
 		SourceTargets: st,
 		Scoring:       scoring,
 		Queue:         q,
+		ClaimLimit:    claimLimitFromEnv(),
+
+		MaxAutomaticTargets: maxAutomaticTargets,
 	})
 }
 
@@ -133,4 +159,18 @@ func (m *Module) Targets() *sourcetargets.Service { return m.sourceTargets }
 
 func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
 	return m.sourceTargets.DeleteExpired(ctx)
+}
+
+func claimLimitFromEnv() int {
+	limit, err := strconv.Atoi(os.Getenv("DISCOVERY_CLAIM_LIMIT"))
+	if err != nil || limit < 1 || limit > maxClaimLimit {
+		return defaultClaimLimit
+	}
+	return limit
+}
+
+// PublishDueTargets starts and publishes a run for each saved search whose
+// Run Window has come due, at most DISCOVERY_CLAIM_LIMIT per call.
+func (m *Module) PublishDueTargets(ctx context.Context) error {
+	return m.sourceTargets.PublishDue(ctx, m.claimLimit)
 }

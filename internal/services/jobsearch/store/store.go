@@ -23,6 +23,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/jobmatch"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -846,17 +847,23 @@ func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 		_ = json.Unmarshal(row.Filters, &filters)
 	}
 	t := dto.SourceTarget{
-		ID:                   row.ID.String(),
-		UserID:               row.UserID.String(),
-		Source:               row.Source,
-		Value:                row.Value,
-		Enabled:              row.Enabled,
-		Filters:              filters,
-		CheckIntervalMinutes: int(row.CheckIntervalMinutes),
-		RunStatus:            row.RunStatus,
-		LastRunError:         row.LastRunError,
-		DisabledReason:       row.DisabledReason,
-		UpdatedAt:            row.UpdatedAt.Time,
+		ID:      row.ID.String(),
+		UserID:  row.UserID.String(),
+		Source:  row.Source,
+		Value:   row.Value,
+		Enabled: row.Enabled,
+		Filters: filters,
+		RunWindow: dto.RunWindow{
+			IntervalMinutes: optionalInt32(row.IntervalMinutes),
+			Weekdays:        runwindow.Weekdays(row.Weekdays),
+			Start:           clockString(row.WindowStart),
+			End:             clockString(row.WindowEnd),
+			Timezone:        row.Timezone,
+		},
+		RunStatus:      row.RunStatus,
+		LastRunError:   row.LastRunError,
+		DisabledReason: row.DisabledReason,
+		UpdatedAt:      row.UpdatedAt.Time,
 	}
 	if row.RunID.Valid {
 		t.RunID = row.RunID.String()
@@ -864,7 +871,7 @@ func toSourceTargetDTO(row sqlc.SourceTarget) dto.SourceTarget {
 	if row.CompanyID.Valid {
 		t.CompanyID = row.CompanyID.String()
 	}
-	t.LastCheckedAt = data.TimePtr(row.LastCheckedAt)
+	t.NextRunAt = data.TimePtr(row.NextRunAt)
 	t.LastRunAt = data.TimePtr(row.LastRunAt)
 	t.LastSucceededAt = data.TimePtr(row.LastSucceededAt)
 	return t
@@ -886,12 +893,12 @@ func (s *Store) ListSourceTargetsByUser(ctx context.Context, userID string) ([]d
 	return out, nil
 }
 
-func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	return s.createSourceTarget(ctx, "CreateSourceTarget", userID, source, value, enabled, filters, s.queries.CreateSourceTarget)
+func (s *Store) CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
+	return s.createSourceTarget(ctx, "CreateSourceTarget", userID, source, value, enabled, filters, window, nextRunAt, s.queries.CreateSourceTarget)
 }
 
-func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error) {
-	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters,
+func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
+	return s.createSourceTarget(ctx, "CreateSourceTargetWithRun", userID, source, value, enabled, filters, window, nextRunAt,
 		func(ctx context.Context, p sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error) {
 			return s.queries.CreateSourceTargetWithRun(ctx, sqlc.CreateSourceTargetWithRunParams(p))
 		})
@@ -899,6 +906,7 @@ func (s *Store) CreateSourceTargetWithRun(ctx context.Context, userID, source, v
 
 func (s *Store) createSourceTarget(
 	ctx context.Context, op, userID, source, value string, enabled bool, filters map[string]string,
+	window dto.RunWindow, nextRunAt *time.Time,
 	insert func(context.Context, sqlc.CreateSourceTargetParams) (sqlc.SourceTarget, error),
 ) (dto.SourceTarget, error) {
 	uid, err := data.UUID(userID)
@@ -909,8 +917,11 @@ func (s *Store) createSourceTarget(
 	if err != nil {
 		return dto.SourceTarget{}, fmt.Errorf("store.%s: marshal filters: %w", op, err)
 	}
+	args := windowArgs(window, nextRunAt)
 	row, err := insert(ctx, sqlc.CreateSourceTargetParams{
 		UserID: uid, Source: source, Value: value, Enabled: enabled, Filters: filtersJSON,
+		IntervalMinutes: args.interval, Weekdays: args.weekdays, WindowStart: args.start,
+		WindowEnd: args.end, Timezone: args.timezone, NextRunAt: args.nextRunAt,
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
@@ -921,7 +932,7 @@ func (s *Store) createSourceTarget(
 	return toSourceTargetDTO(row), nil
 }
 
-func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error) {
+func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, window *dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
@@ -934,8 +945,15 @@ func (s *Store) UpdateSourceTarget(ctx context.Context, id, userID string, enabl
 	if enabled != nil {
 		params.Enabled = pgtype.Bool{Bool: *enabled, Valid: true}
 	}
-	if checkIntervalMinutes != nil {
-		params.CheckIntervalMinutes = pgtype.Int4{Int32: int32(*checkIntervalMinutes), Valid: true}
+	if window != nil {
+		args := windowArgs(*window, nextRunAt)
+		params.SetWindow = true
+		params.IntervalMinutes = args.interval
+		params.Weekdays = args.weekdays
+		params.WindowStart = args.start
+		params.WindowEnd = args.end
+		params.Timezone = args.timezone
+		params.NextRunAt = args.nextRunAt
 	}
 	row, err := s.queries.UpdateSourceTarget(ctx, params)
 	if err != nil {
@@ -959,16 +977,46 @@ func (s *Store) DeleteSourceTarget(ctx context.Context, id, userID string) error
 	return nil
 }
 
-func (s *Store) StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error) {
+func (s *Store) StartSourceTargetRun(ctx context.Context, id string, nextRunAt *time.Time) (dto.SourceTarget, error) {
 	tid, err := data.UUID(id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	row, err := s.queries.StartSourceTargetRun(ctx, tid)
+	row, err := s.queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: tid, NextRunAt: timestamptz(nextRunAt)})
 	if err != nil {
 		return dto.SourceTarget{}, data.QueryErr("StartSourceTargetRun", err)
 	}
 	return toSourceTargetDTO(row), nil
+}
+
+// ClaimDueSourceTargets starts a queued run on up to limit due Source Targets,
+// moving each to the next_run_at that nextRunAt returns for its window. Rows
+// another claim holds are skipped.
+func (s *Store) ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin claim due source targets: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+
+	due, err := queries.LockDueSourceTargets(ctx, int32(limit))
+	if err != nil {
+		return nil, data.QueryErr("LockDueSourceTargets", err)
+	}
+	claimed := make([]dto.SourceTarget, 0, len(due))
+	for _, row := range due {
+		next := nextRunAt(toSourceTargetDTO(row).RunWindow)
+		started, err := queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: row.ID, NextRunAt: timestamptz(next)})
+		if err != nil {
+			return nil, data.QueryErr("StartSourceTargetRun", err)
+		}
+		claimed = append(claimed, toSourceTargetDTO(started))
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit claim due source targets: %w", err)
+	}
+	return claimed, nil
 }
 
 func (s *Store) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {

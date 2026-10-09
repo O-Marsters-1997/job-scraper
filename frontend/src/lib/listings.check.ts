@@ -27,6 +27,7 @@ const sources: SourceInfo[] = [
 		label: "LinkedIn",
 		kind: "filter",
 		role: "discovery",
+		incremental: true,
 		url_prefix: "",
 		filters: [],
 	},
