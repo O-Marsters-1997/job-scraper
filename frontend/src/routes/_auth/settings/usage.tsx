@@ -34,6 +34,16 @@ function UsagePage() {
 	);
 }
 
+function footnote(q: Quota): string | null {
+	if (q.status === "ok" && q.fetchedAt) {
+		return `Updated ${formatRelative(q.fetchedAt)}`;
+	}
+	if (q.status !== "error") return null;
+	return q.fetchedAt
+		? `Last fetched ${formatRelative(q.fetchedAt)}: ${q.error}`
+		: `Not fetched yet: ${q.error}`;
+}
+
 function ProviderRow(props: { quota: Quota }) {
 	const label = () =>
 		PROVIDER_LABELS[props.quota.provider] ?? {
@@ -50,22 +60,8 @@ function ProviderRow(props: { quota: Quota }) {
 				}
 			>
 				<QuotaBar quota={props.quota} />
-				<Show when={props.quota.status === "error" && props.quota.fetchedAt}>
-					{(fetchedAt) => (
-						<p class="text-xs text-faint">
-							Last fetched {formatRelative(fetchedAt())}: {props.quota.error}
-						</p>
-					)}
-				</Show>
-				<Show when={props.quota.status === "error" && !props.quota.fetchedAt}>
-					<p class="text-xs text-faint">Not fetched yet: {props.quota.error}</p>
-				</Show>
-				<Show when={props.quota.status === "ok" && props.quota.fetchedAt}>
-					{(fetchedAt) => (
-						<p class="text-xs text-faint">
-							Updated {formatRelative(fetchedAt())}
-						</p>
-					)}
+				<Show when={footnote(props.quota)}>
+					{(text) => <p class="text-xs text-faint">{text()}</p>}
 				</Show>
 			</Show>
 		</section>

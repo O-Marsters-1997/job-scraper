@@ -76,7 +76,9 @@ func main() {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
 	js := jobsearch.New(pool, q, scoring.NewFacade(pool), proxyQuota)
-	go schedule.Every(ctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
+	if proxyQuota != nil {
+		go schedule.Every(ctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
+	}
 	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
 		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
 	go func() {
