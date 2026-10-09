@@ -25,9 +25,8 @@ const (
 type Route = proxy.Route
 
 const (
-	RouteDirect   = proxy.Direct
-	RouteUnlocker = proxy.Unlocker
-	RouteTiered   = proxy.Tiered
+	RouteDirect      = proxy.Direct
+	RouteResidential = proxy.Residential
 )
 
 type Config struct {

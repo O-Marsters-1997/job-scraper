@@ -42,9 +42,6 @@ func main() {
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := proxy.Validate(); err != nil {
-		fatal(ctx, "Web Unlocker config invalid", err)
-	}
 	if err := proxy.ValidateResidential(); err != nil {
 		fatal(ctx, "residential proxy config invalid", err)
 	}
@@ -101,7 +98,6 @@ func main() {
 		return js.PublishBoardChecks(ctx, *forceBoards)
 	})
 	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
-	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 
