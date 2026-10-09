@@ -20,6 +20,7 @@ type Module struct {
 	sourceTargets *sourcetargets.Service
 	queue         QueuePublisher
 	scoring       ScoringPort
+	proxyUsage    *ProxyUsage
 }
 
 type ScoringPort interface {
@@ -85,6 +86,8 @@ type Deps struct {
 	SourceTargets sourcetargets.Store
 	Scoring       ScoringPort
 	Queue         QueuePublisher
+	ProxyQuota    QuotaFetcher
+	Now           func() time.Time
 }
 
 func Build(deps Deps) *Module {
@@ -95,16 +98,18 @@ func Build(deps Deps) *Module {
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs),
 		queue:         deps.Queue,
 		scoring:       deps.Scoring,
+		proxyUsage:    newProxyUsage(deps.ProxyQuota, deps.Now),
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort) *Module {
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher) *Module {
 	st := store.New(pool, scoring)
 	return Build(Deps{
 		Store:         st,
 		SourceTargets: st,
 		Scoring:       scoring,
 		Queue:         q,
+		ProxyQuota:    proxyQuota,
 	})
 }
 
@@ -125,6 +130,11 @@ func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID s
 // SaveCompanyProfile upserts the profile source reports for companyID.
 func (m *Module) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
 	return m.store.SaveCompanyProfile(ctx, companyID, source, profile)
+}
+
+// RefreshProxyUsage refreshes the in-memory proxy quota snapshot.
+func (m *Module) RefreshProxyUsage(ctx context.Context) error {
+	return m.proxyUsage.Refresh(ctx)
 }
 
 func (m *Module) Boards() Store { return m.store }

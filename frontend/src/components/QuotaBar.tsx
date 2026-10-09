@@ -8,8 +8,8 @@ const BAR_TONE: Record<UsageLevel, string> = {
 	critical: "bg-destructive",
 };
 
-function money(n: number): string {
-	return `$${n.toFixed(2)}`;
+function amount(n: number, unit: string): string {
+	return unit === "USD" ? `$${n.toFixed(2)}` : `${n.toFixed(2)} ${unit}`;
 }
 
 export function QuotaBar(props: { quota: Quota }) {
@@ -20,20 +20,21 @@ export function QuotaBar(props: { quota: Quota }) {
 				when={q().limit !== null && q().percent !== null}
 				fallback={
 					<p class="text-sm text-foreground">
-						{money(q().used ?? 0)} this month
+						{amount(q().used ?? 0, q().unit)} this month
 					</p>
 				}
 			>
 				<div class="max-w-lg">
 					<div class="flex items-baseline justify-between text-sm text-foreground">
 						<span>
-							{money(q().used ?? 0)} of {money(q().limit ?? 0)}
+							{amount(q().used ?? 0, q().unit)} of{" "}
+							{amount(q().limit ?? 0, q().unit)}
 						</span>
 						<span>{Math.round(q().percent ?? 0)}%</span>
 					</div>
 					<div
 						role="progressbar"
-						aria-label="OpenRouter usage"
+						aria-label={`${q().provider} usage`}
 						aria-valuemin={0}
 						aria-valuemax={100}
 						aria-valuenow={Math.max(

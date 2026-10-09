@@ -77,7 +77,7 @@ func main() {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule)
+	js := jobsearch.New(pool, q, scoringModule, nil)
 	proxy.SetCache(js)
 
 	maxPages := 0
