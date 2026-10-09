@@ -1,0 +1,63 @@
+import { Show } from "solid-js";
+import { formatDate } from "../lib/datetime";
+import type { Quota, UsageLevel } from "../types/quota";
+
+const BAR_TONE: Record<UsageLevel, string> = {
+	ok: "bg-primary",
+	warn: "bg-status-interview",
+	critical: "bg-destructive",
+};
+
+function money(n: number): string {
+	return `$${n.toFixed(2)}`;
+}
+
+export function QuotaBar(props: { quota: Quota }) {
+	const q = () => props.quota;
+	return (
+		<Show when={q().status === "ok" && q().used !== null}>
+			<Show
+				when={q().limit !== null && q().percent !== null}
+				fallback={
+					<p class="text-sm text-foreground">
+						{money(q().used ?? 0)} this month
+					</p>
+				}
+			>
+				<div class="max-w-lg">
+					<div class="flex items-baseline justify-between text-sm text-foreground">
+						<span>
+							{money(q().used ?? 0)} of {money(q().limit ?? 0)}
+						</span>
+						<span>{Math.round(q().percent ?? 0)}%</span>
+					</div>
+					<div
+						role="progressbar"
+						aria-label="OpenRouter usage"
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={Math.max(
+							0,
+							Math.min(100, Math.round(q().percent ?? 0)),
+						)}
+						class="mt-1.5 h-2 overflow-hidden rounded-full bg-border"
+					>
+						<div
+							class={`h-full rounded-full ${BAR_TONE[q().level]}`}
+							style={{
+								width: `${Math.max(0, Math.min(100, q().percent ?? 0))}%`,
+							}}
+						/>
+					</div>
+					<Show when={q().resetsAt}>
+						{(resetsAt) => (
+							<p class="mt-1 text-xs text-faint">
+								Resets {formatDate(resetsAt())}
+							</p>
+						)}
+					</Show>
+				</div>
+			</Show>
+		</Show>
+	);
+}

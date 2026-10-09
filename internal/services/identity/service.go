@@ -47,10 +47,24 @@ type Service struct {
 	seeder StatusSeeder
 	cipher *tokencrypt.Cipher
 	google googleClient
+
+	keyUsage KeyUsageFetcher
+	now      func() time.Time
+	usage    aiUsageCache
 }
 
 func NewService(deps Deps) *Service {
-	return &Service{store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient}
+	s := &Service{
+		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
+		keyUsage: deps.KeyUsage, now: deps.Now,
+	}
+	if s.keyUsage == nil {
+		s.keyUsage = newHTTPKeyUsage()
+	}
+	if s.now == nil {
+		s.now = time.Now
+	}
+	return s
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {

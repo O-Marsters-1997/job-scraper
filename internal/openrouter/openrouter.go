@@ -177,3 +177,38 @@ func send(ctx context.Context, hc *http.Client, url, apiKey string, body any) (*
 	}
 	return resp, nil
 }
+
+// KeyInfo is the usage block of GET /api/v1/key. A nil Limit means the key
+// has no spend cap; LimitReset is "daily", "weekly", "monthly" or empty.
+type KeyInfo struct {
+	Limit          *float64 `json:"limit"`
+	LimitRemaining *float64 `json:"limit_remaining"`
+	LimitReset     *string  `json:"limit_reset"`
+	Usage          float64  `json:"usage"`
+	UsageMonthly   float64  `json:"usage_monthly"`
+}
+
+// GetKey reads the credit usage and limit of apiKey from url.
+func GetKey(ctx context.Context, hc *http.Client, url, apiKey string) (KeyInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return KeyInfo{}, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	resp, err := hc.Do(req)
+	if err != nil {
+		return KeyInfo{}, fmt.Errorf("request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit))
+		return KeyInfo{}, &StatusError{Code: resp.StatusCode, Header: resp.Header, Body: string(body)}
+	}
+	var decoded struct {
+		Data KeyInfo `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return KeyInfo{}, fmt.Errorf("decode response: %w", err)
+	}
+	return decoded.Data, nil
+}

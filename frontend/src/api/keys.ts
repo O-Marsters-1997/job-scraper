@@ -52,6 +52,7 @@ export const keys = {
 	sources: ["sources"] as const,
 	profile: ["profile"] as const,
 	aiPrefs: ["ai-prefs"] as const,
+	aiUsage: ["ai-usage"] as const,
 	cvTemplates: ["cv-templates"] as const,
 	google: ["google-status"] as const,
 	scoringConfig: ["scoring-config"] as const,
