@@ -8,8 +8,10 @@ import {
 	useContext,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+import { UsageDot } from "@/components/UsageDot";
 import { useSettingsGroups } from "@/hooks/useSettingsGroups";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { useUsageWarning } from "@/hooks/useUsageWarning";
 import {
 	findSettingsSection,
 	type SettingsSection,
@@ -34,6 +36,7 @@ const NAV_ITEM =
 export function SettingsLayout() {
 	const location = useLocation();
 	const groups = useSettingsGroups();
+	const usageWarning = useUsageWarning();
 	const [slot, setSlot] = createSignal<HTMLElement>();
 	const links: Record<string, HTMLAnchorElement> = {};
 
@@ -92,8 +95,11 @@ export function SettingsLayout() {
 												}}
 												class={`${NAV_ITEM} min-w-40 py-2.5 data-[status=active]:border-border data-[status=active]:bg-surface md:min-w-0`}
 											>
-												<span class="block text-sm font-medium text-foreground">
+												<span class="flex items-center gap-2 text-sm font-medium text-foreground">
 													{section.label}
+													<UsageDot
+														level={usageWarning.forSection(section.to)}
+													/>
 												</span>
 												<span class="mt-0.5 block truncate text-xs text-faint">
 													{section.description}

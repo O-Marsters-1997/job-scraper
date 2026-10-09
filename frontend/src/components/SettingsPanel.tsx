@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/solid-router";
 import { For, type JSX } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { UsageDot } from "@/components/UsageDot";
 import { Label } from "@/components/ui/label";
 import {
 	Sheet,
@@ -17,6 +18,7 @@ import {
 	SwitchThumb,
 } from "@/components/ui/switch";
 import { useSettingsGroups } from "@/hooks/useSettingsGroups";
+import { useUsageWarning } from "@/hooks/useUsageWarning";
 import { demoDataEnabled, setDemoData } from "@/lib/demoData";
 import type { SettingsSection } from "@/lib/settingsSections";
 import { cn } from "@/lib/utils";
@@ -24,14 +26,19 @@ import { cn } from "@/lib/utils";
 export default function SettingsPanel() {
 	const location = useLocation();
 	const groups = useSettingsGroups();
+	const usageWarning = useUsageWarning();
 
 	return (
 		<Sheet>
 			<SheetTrigger
-				class="flex size-8 items-center justify-center rounded-full border border-accent-border bg-accent-subtle text-accent-text transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+				class="relative flex size-8 items-center justify-center rounded-full border border-accent-border bg-accent-subtle text-accent-text transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
 				aria-label="Open settings"
 			>
 				<Icon name="user" size={15} />
+				<UsageDot
+					level={usageWarning.overall()}
+					class="absolute -right-0.5 -top-0.5"
+				/>
 			</SheetTrigger>
 
 			<SheetContent>
@@ -94,6 +101,7 @@ export default function SettingsPanel() {
 }
 
 function SettingsNavRow(props: { section: SettingsSection; current: boolean }) {
+	const usageWarning = useUsageWarning();
 	return (
 		<SheetClose
 			as={Link}
@@ -107,7 +115,10 @@ function SettingsNavRow(props: { section: SettingsSection; current: boolean }) {
 				<Icon name={props.section.icon} size={15} />
 			</span>
 			<div class="flex flex-col gap-0.5">
-				<span class="font-medium leading-none">{props.section.label}</span>
+				<span class="flex items-center gap-2 font-medium leading-none">
+					{props.section.label}
+					<UsageDot level={usageWarning.forSection(props.section.to)} />
+				</span>
 				<span class="text-xs text-faint">{props.section.description}</span>
 			</div>
 			<Icon name="chevronRight" size={14} class="ml-auto shrink-0 text-faint" />
