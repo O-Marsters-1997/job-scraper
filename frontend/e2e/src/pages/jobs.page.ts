@@ -18,6 +18,10 @@ export class JobsPage {
 		await this.heading.waitFor({ state: "visible" });
 	}
 
+	async pressPageKey(key: "[" | "]") {
+		await this.page.keyboard.press(key);
+	}
+
 	async search(query: string) {
 		await this.searchInput.fill(query);
 	}

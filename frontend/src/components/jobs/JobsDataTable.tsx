@@ -25,6 +25,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useShortcuts } from "@/hooks/useShortcuts";
 import {
 	activeFilterCount,
 	isDefaultView,
@@ -150,6 +151,41 @@ export function JobsDataTable<TData extends Job>(
 		),
 	);
 
+	let tableContainer: HTMLDivElement | undefined;
+	let focusAfterPaging = false;
+
+	const focusFirstRow = () => {
+		tableContainer?.scrollIntoView({ block: "start" });
+		tableContainer
+			?.querySelector<HTMLElement>("tbody tr a")
+			?.focus({ preventScroll: true });
+	};
+
+	createEffect(
+		on(
+			() => table.getState().pagination.pageIndex,
+			() => {
+				if (!focusAfterPaging) return;
+				focusAfterPaging = false;
+				focusFirstRow();
+			},
+			{ defer: true },
+		),
+	);
+
+	useShortcuts({
+		"]": () => {
+			if (!table.getCanNextPage()) return;
+			focusAfterPaging = true;
+			table.nextPage();
+		},
+		"[": () => {
+			if (!table.getCanPreviousPage()) return;
+			focusAfterPaging = true;
+			table.previousPage();
+		},
+	});
+
 	const selectedJobs = () =>
 		props.data.filter((job) => selection()[job.ID] === true);
 	const unseenJobs = () => props.data.filter((job) => !job.Seen);
@@ -238,6 +274,7 @@ export function JobsDataTable<TData extends Job>(
 			</div>
 
 			<div
+				ref={tableContainer}
 				class="overflow-hidden rounded-xl border border-border bg-surface"
 				data-feedback-collection={table
 					.getPrePaginationRowModel()
@@ -332,6 +369,7 @@ export function JobsDataTable<TData extends Job>(
 						page={pageIndex() + 1}
 						pageSize={PAGE_SIZE}
 						noun="jobs"
+						keyHints
 						onPage={(page) => table.setPageIndex(page - 1)}
 					/>
 				</Show>

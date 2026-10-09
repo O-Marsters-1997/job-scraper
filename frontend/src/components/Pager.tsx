@@ -1,4 +1,5 @@
 import { Show } from "solid-js";
+import { Kbd } from "@/components/Kbd";
 import { Button } from "@/components/ui/button";
 
 export function Pager(props: {
@@ -7,6 +8,7 @@ export function Pager(props: {
 	pageSize: number;
 	noun: string;
 	onPage: (page: number) => void;
+	keyHints?: boolean;
 }) {
 	const pageCount = () => Math.max(1, Math.ceil(props.total / props.pageSize));
 	const from = () => (props.page - 1) * props.pageSize + 1;
@@ -33,17 +35,25 @@ export function Pager(props: {
 					variant="outline"
 					size="sm"
 					disabled={props.page <= 1}
+					title={props.keyHints ? "Previous page ([)" : undefined}
 					onClick={() => props.onPage(props.page - 1)}
 				>
 					Previous
+					<Show when={props.keyHints}>
+						<Kbd>[</Kbd>
+					</Show>
 				</Button>
 				<Button
 					variant="outline"
 					size="sm"
 					disabled={props.page >= pageCount()}
+					title={props.keyHints ? "Next page (])" : undefined}
 					onClick={() => props.onPage(props.page + 1)}
 				>
 					Next
+					<Show when={props.keyHints}>
+						<Kbd>]</Kbd>
+					</Show>
 				</Button>
 			</Show>
 		</div>
