@@ -5,6 +5,7 @@ package sourcetargets
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -32,6 +34,7 @@ type Store interface {
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
 	StartSourceTargetRun(ctx context.Context, id string, nextRunAt *time.Time) (dto.SourceTarget, error)
+	ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error)
 	GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error)
 	TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error)
 	DisableSourceTargets(ctx context.Context, source, reason string) (int64, error)
@@ -311,6 +314,22 @@ func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.
 		return dto.SourceTarget{}, err
 	}
 	return s.publishRun(ctx, queued)
+}
+
+// PublishDue starts a run on up to limit Source Targets whose Run Window has
+// come due and publishes their listing pages. A lost publish is left for
+// RecoverRuns.
+func (s *Service) PublishDue(ctx context.Context, limit int) error {
+	claimed, err := s.targets.ClaimDueSourceTargets(ctx, limit, s.nextRun)
+	if err != nil {
+		return err
+	}
+	for _, target := range claimed {
+		if _, err := s.publishRun(ctx, target); err != nil {
+			slog.ErrorContext(ctx, "publish due run failed", slog.String(logger.KeyTargetID, target.ID), slog.Any(logger.KeyErr, err))
+		}
+	}
+	return nil
 }
 
 func (s *Service) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {

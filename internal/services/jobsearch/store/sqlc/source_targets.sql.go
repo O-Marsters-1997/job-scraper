@@ -349,6 +349,57 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 	return items, nil
 }
 
+const lockDueSourceTargets = `-- name: LockDueSourceTargets :many
+SELECT id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets
+WHERE enabled = TRUE AND interval_minutes IS NOT NULL AND next_run_at <= NOW()
+  AND run_status NOT IN ('queued', 'running')
+ORDER BY next_run_at
+LIMIT $1
+FOR UPDATE SKIP LOCKED
+`
+
+func (q *Queries) LockDueSourceTargets(ctx context.Context, limit int32) ([]SourceTarget, error) {
+	rows, err := q.db.Query(ctx, lockDueSourceTargets, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SourceTarget
+	for rows.Next() {
+		var i SourceTarget
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Source,
+			&i.Value,
+			&i.Enabled,
+			&i.Filters,
+			&i.CompanyID,
+			&i.IntervalMinutes,
+			&i.Weekdays,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.Timezone,
+			&i.NextRunAt,
+			&i.RunStatus,
+			&i.RunID,
+			&i.LastRunAt,
+			&i.LastSucceededAt,
+			&i.LastRunError,
+			&i.DisabledReason,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const startSourceTargetRun = `-- name: StartSourceTargetRun :one
 UPDATE source_targets SET run_id = gen_random_uuid(), run_status = 'queued',
     next_run_at = $1,

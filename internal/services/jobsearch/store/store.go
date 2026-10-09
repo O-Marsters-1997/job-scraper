@@ -989,6 +989,36 @@ func (s *Store) StartSourceTargetRun(ctx context.Context, id string, nextRunAt *
 	return toSourceTargetDTO(row), nil
 }
 
+// ClaimDueSourceTargets starts a queued run on up to limit due Source Targets,
+// moving each to the next_run_at that nextRunAt returns for its window. Rows
+// another claim holds are skipped.
+func (s *Store) ClaimDueSourceTargets(ctx context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin claim due source targets: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+
+	due, err := queries.LockDueSourceTargets(ctx, int32(limit))
+	if err != nil {
+		return nil, data.QueryErr("LockDueSourceTargets", err)
+	}
+	claimed := make([]dto.SourceTarget, 0, len(due))
+	for _, row := range due {
+		next := nextRunAt(toSourceTargetDTO(row).RunWindow)
+		started, err := queries.StartSourceTargetRun(ctx, sqlc.StartSourceTargetRunParams{ID: row.ID, NextRunAt: timestamptz(next)})
+		if err != nil {
+			return nil, data.QueryErr("StartSourceTargetRun", err)
+		}
+		claimed = append(claimed, toSourceTargetDTO(started))
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit claim due source targets: %w", err)
+	}
+	return claimed, nil
+}
+
 func (s *Store) GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error) {
 	tid, err := data.UUID(id)
 	if err != nil {

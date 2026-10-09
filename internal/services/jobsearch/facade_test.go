@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -193,6 +194,53 @@ func TestRecoverRuns(t *testing.T) {
 
 		if err := m.RecoverRuns(ctx); err != nil {
 			t.Fatalf("RecoverRuns() = %v, want nil", err)
+		}
+		if got := rec.Tasks(); len(got) != 0 {
+			t.Fatalf("published %d tasks, want 0", len(got))
+		}
+	})
+}
+
+func TestPublishDueTargets(t *testing.T) {
+	ctx := t.Context()
+	ignoreID := cmpopts.IgnoreFields(queue.Task{}, "ID")
+	hourly := 60
+	past := time.Now().Add(-time.Minute)
+
+	t.Run("due target is queued and its listing page published", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		target, err := st.CreateSourceTarget(ctx, "user-1", "linkedin", "go", true, nil, dto.RunWindow{IntervalMinutes: &hourly}, &past)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, rec := newRecoverModule(t, st)
+
+		if err := m.PublishDueTargets(ctx); err != nil {
+			t.Fatalf("PublishDueTargets() = %v, want nil", err)
+		}
+
+		got, err := st.GetSourceTarget(ctx, target.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []queue.Task{{Version: 1, Source: "linkedin", Kind: queue.ListingPageTask, TargetID: target.ID, RunID: got.RunID}}
+		if diff := cmp.Diff(want, rec.Tasks(), ignoreID); diff != "" {
+			t.Fatalf("published tasks mismatch (-want +got):\n%s", diff)
+		}
+		if got.RunStatus != "queued" || got.NextRunAt == nil || !got.NextRunAt.After(time.Now()) {
+			t.Errorf("target = %q next %v, want queued with next_run_at in the future", got.RunStatus, got.NextRunAt)
+		}
+	})
+
+	t.Run("manual target publishes nothing", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		if _, err := st.CreateSourceTarget(ctx, "user-1", "linkedin", "go", true, nil, dto.RunWindow{}, &past); err != nil {
+			t.Fatal(err)
+		}
+		m, rec := newRecoverModule(t, st)
+
+		if err := m.PublishDueTargets(ctx); err != nil {
+			t.Fatalf("PublishDueTargets() = %v, want nil", err)
 		}
 		if got := rec.Tasks(); len(got) != 0 {
 			t.Fatalf("published %d tasks, want 0", len(got))

@@ -910,6 +910,29 @@ func (f *FakeStore) StartSourceTargetRun(_ context.Context, id string, nextRunAt
 	return t, nil
 }
 
+func (f *FakeStore) ClaimDueSourceTargets(_ context.Context, limit int, nextRunAt func(dto.RunWindow) *time.Time) ([]dto.SourceTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	var due []dto.SourceTarget
+	for _, t := range f.sourceTargets {
+		if t.Enabled && t.RunWindow.IntervalMinutes != nil && t.NextRunAt != nil && !t.NextRunAt.After(now) &&
+			t.RunStatus != "queued" && t.RunStatus != "running" {
+			due = append(due, t)
+		}
+	}
+	slices.SortFunc(due, func(a, b dto.SourceTarget) int { return a.NextRunAt.Compare(*b.NextRunAt) })
+	due = due[:min(limit, len(due))]
+	for i, t := range due {
+		t.RunID = f.nextID("run")
+		t.NextRunAt = nextRunAt(t.RunWindow)
+		t.RunStatus, t.LastRunError = "queued", ""
+		f.sourceTargets[t.ID] = t
+		due[i] = t
+	}
+	return due, nil
+}
+
 func (f *FakeStore) GetSourceTarget(_ context.Context, id string) (dto.SourceTarget, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
