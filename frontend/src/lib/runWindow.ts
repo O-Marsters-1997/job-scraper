@@ -1,7 +1,9 @@
 import type { RunWindow } from "@/types/sourceTarget";
 
+const DEFAULT_INTERVAL = 60;
+
 export const DEFAULT_RUN_WINDOW: RunWindow = {
-	interval_minutes: 60,
+	interval_minutes: DEFAULT_INTERVAL,
 	weekdays: [1, 2, 3, 4, 5],
 	start: "08:00",
 	end: "18:00",
@@ -37,7 +39,7 @@ export interface WindowDraft {
 export function draftFrom(window: RunWindow, automatic?: boolean): WindowDraft {
 	return {
 		automatic: automatic ?? window.interval_minutes !== null,
-		interval: window.interval_minutes ?? DEFAULT_RUN_WINDOW.interval_minutes!,
+		interval: window.interval_minutes ?? DEFAULT_INTERVAL,
 		weekdays: window.weekdays.length
 			? window.weekdays
 			: DEFAULT_RUN_WINDOW.weekdays,
@@ -45,6 +47,13 @@ export function draftFrom(window: RunWindow, automatic?: boolean): WindowDraft {
 		end: window.end,
 		timezone: window.timezone,
 	};
+}
+
+export function effectiveDraft(
+	draft: WindowDraft,
+	incremental: boolean,
+): WindowDraft {
+	return { ...draft, automatic: draft.automatic && incremental };
 }
 
 export function draftError(draft: WindowDraft): string | null {
@@ -69,6 +78,7 @@ export function toRunWindow(draft: WindowDraft): RunWindow | null {
 
 export function describeNextRun(
 	nextRunAt: string | null,
+	timeZone: string,
 	now = new Date(),
 ): string {
 	if (!nextRunAt) return "Manual";
@@ -76,8 +86,16 @@ export function describeNextRun(
 	const time = next.toLocaleTimeString("en-GB", {
 		hour: "2-digit",
 		minute: "2-digit",
+		timeZone,
 	});
-	if (next.toDateString() === now.toDateString()) return `Next run ${time}`;
-	const day = next.toLocaleDateString("en-GB", { weekday: "short" });
+	const dayOf = (d: Date) =>
+		d.toLocaleDateString("en-GB", { timeZone, dateStyle: "short" });
+	if (dayOf(next) === dayOf(now)) return `Next run ${time}`;
+	const day = next.toLocaleDateString("en-GB", {
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+		timeZone,
+	});
 	return `Next run ${day} ${time}`;
 }

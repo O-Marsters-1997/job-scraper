@@ -1,7 +1,12 @@
 import { createSignal, untrack } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import { draftError, draftFrom, toRunWindow } from "@/lib/runWindow";
+import {
+	draftError,
+	draftFrom,
+	effectiveDraft,
+	toRunWindow,
+} from "@/lib/runWindow";
 import { runWindowErrorMessage } from "@/lib/runWindowError";
 import { useUpdateSourceTarget } from "../../../../hooks/useSourceTargets";
 import type { SourceTarget } from "../../../../types/sourceTarget";
@@ -16,7 +21,7 @@ export function ScheduleEditor(props: {
 	const [draft, setDraft] = createSignal(
 		untrack(() => draftFrom(props.target.RunWindow)),
 	);
-	const invalid = () => draftError(draft());
+	const invalid = () => draftError(effectiveDraft(draft(), props.incremental));
 
 	const form = useFormSubmit(
 		async () => {
@@ -42,7 +47,7 @@ export function ScheduleEditor(props: {
 				value={draft()}
 				onChange={setDraft}
 				incremental={props.incremental}
-				error={form.error() ?? invalid()}
+				error={invalid() ?? form.error()}
 			/>
 			<div class="flex items-center gap-2">
 				<Button

@@ -14,6 +14,7 @@ import {
 	DEFAULT_RUN_WINDOW,
 	draftError,
 	draftFrom,
+	effectiveDraft,
 	toRunWindow,
 } from "@/lib/runWindow";
 import { runWindowErrorMessage } from "@/lib/runWindowError";
@@ -91,7 +92,8 @@ export function SearchForm(props: {
 	const [schedule, setSchedule] = createSignal(
 		draftFrom(DEFAULT_RUN_WINDOW, true),
 	);
-	const scheduleError = () => draftError(schedule());
+	const scheduleError = () =>
+		draftError(effectiveDraft(schedule(), source()?.incremental ?? false));
 
 	const source = () => props.sources.find((s) => s.name === sourceName());
 
@@ -257,9 +259,9 @@ export function SearchForm(props: {
 				error={null}
 			/>
 
-			<Show when={form.error() ?? scheduleError()}>
+			<Show when={scheduleError() ?? form.error()}>
 				<p role="alert" class="text-xs text-destructive-strong">
-					{form.error() ?? scheduleError()}
+					{scheduleError() ?? form.error()}
 				</p>
 			</Show>
 

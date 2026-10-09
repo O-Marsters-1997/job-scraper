@@ -25,15 +25,15 @@ assert(
 	draftError({ ...draft, automatic: false, weekdays: [] }) === null,
 	"manual skips validation",
 );
-assert(describeNextRun(null) === "Manual", "null is manual");
-const now = new Date(2026, 9, 9, 8, 0);
+assert(describeNextRun(null, "Europe/London") === "Manual", "null is manual");
+const now = new Date("2026-10-09T07:00:00Z");
 assert(
-	describeNextRun(new Date(2026, 9, 9, 9, 15).toISOString(), now) ===
+	describeNextRun("2026-10-09T08:15:00Z", "Europe/London", now) ===
 		"Next run 09:15",
 	"same day shows time",
 );
 assert(
-	describeNextRun(new Date(2026, 9, 12, 9, 15).toISOString(), now) ===
-		"Next run Mon 09:15",
+	describeNextRun("2026-10-12T08:15:00Z", "Europe/London", now) ===
+		"Next run Mon 12 Oct 09:15",
 	"later day shows weekday",
 );

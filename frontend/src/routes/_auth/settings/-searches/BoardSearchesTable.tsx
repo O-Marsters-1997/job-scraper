@@ -240,7 +240,12 @@ export function BoardSearchesTable(props: {
 														aria-label={`Edit schedule for ${t.Value}`}
 														class="whitespace-nowrap text-xs text-muted hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
 													>
-														{describeNextRun(t.NextRunAt)}
+														{t.Enabled
+															? describeNextRun(
+																	t.NextRunAt,
+																	t.RunWindow.timezone,
+																)
+															: "Paused"}
 													</button>
 												</TableCell>
 												<TableCell>
