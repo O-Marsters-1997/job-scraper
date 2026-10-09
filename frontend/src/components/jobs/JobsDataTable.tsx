@@ -25,11 +25,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import {
-	activeFilterCount,
-	isDefaultView,
-	type JobFilters,
-} from "@/lib/jobFilters";
+import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import type { Job } from "@/types/job";
 
 interface JobsDataTableProps<TData extends Job> {
@@ -40,7 +36,6 @@ interface JobsDataTableProps<TData extends Job> {
 	page?: number | undefined;
 	onPageChange?: (page: number | undefined) => void;
 	sourceOptions: string[];
-	wildcards?: boolean;
 	selection?: RowSelectionState;
 	onSelectionChange?: (next: RowSelectionState) => void;
 	onBulkGrade?: (jobs: TData[]) => void;
@@ -136,9 +131,6 @@ export function JobsDataTable<TData extends Job>(
 		meta: {
 			isExpanded,
 			toggleExpanded,
-			showWildcard: () =>
-				props.wildcards === true &&
-				isDefaultView(props.filters, sorting().length > 0),
 		},
 	});
 

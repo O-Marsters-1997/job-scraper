@@ -18,8 +18,7 @@
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   },
   {
     "ID": "",
@@ -40,7 +39,6 @@
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null,
-    "Wildcard": false
+    "Breakdown": null
   }
 ]

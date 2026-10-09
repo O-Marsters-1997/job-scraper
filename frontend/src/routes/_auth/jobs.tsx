@@ -120,7 +120,6 @@ function JobsPage() {
 					page={filters().page}
 					onPageChange={(page) => setFilters({ page })}
 					sourceOptions={srcOptions()}
-					wildcards
 					selection={track.selection()}
 					onSelectionChange={track.setSelection}
 					onBulkGrade={track.openGrade}

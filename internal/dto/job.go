@@ -25,7 +25,6 @@ type Job struct {
 	Seen               bool
 	CompanyFavourite   bool
 	Breakdown          []ScoreRow
-	Wildcard           bool
 	Listings           []JobListing
 }
 
