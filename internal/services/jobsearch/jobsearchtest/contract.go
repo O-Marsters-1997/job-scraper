@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
@@ -844,7 +845,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("create then list source targets for a user", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "acme", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
@@ -857,10 +858,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("create a duplicate source target returns already exists", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}); err != nil {
+		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}, dto.RunWindow{}, nil); err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
-		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}); !errors.Is(err, store.ErrSourceTargetExists) {
+		if _, err := st.CreateSourceTarget(ctx, userID, "linkedin", "dup", true, map[string]string{}, dto.RunWindow{}, nil); !errors.Is(err, store.ErrSourceTargetExists) {
 			t.Fatalf("duplicate CreateSourceTarget(...) err = %v, want ErrSourceTargetExists", err)
 		}
 	})
@@ -868,18 +869,18 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("restarting a failed run clears its error", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "retry", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
-		started, err := st.StartSourceTargetRun(ctx, target.ID)
+		started, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun(...) = %v", err)
 		}
 		if _, err := st.TransitionSourceTargetRun(ctx, target.ID, started.RunID, "failed", "boom"); err != nil {
 			t.Fatalf("TransitionSourceTargetRun(...) = %v", err)
 		}
-		restarted, err := st.StartSourceTargetRun(ctx, target.ID)
+		restarted, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil || restarted.RunStatus != "queued" || restarted.LastRunError != "" {
 			t.Fatalf("StartSourceTargetRun(...) = %+v, %v, want queued with no error", restarted, err)
 		}
@@ -888,11 +889,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("disabling a source records the reason until the target is re-enabled", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		running, err := st.CreateSourceTargetWithRun(ctx, userID, "indeed", "go", true, map[string]string{})
+		running, err := st.CreateSourceTargetWithRun(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTargetWithRun(...) = %v", err)
 		}
-		other, err := st.CreateSourceTarget(ctx, userID, "linkedin", "go", true, map[string]string{})
+		other, err := st.CreateSourceTarget(ctx, userID, "linkedin", "go", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
@@ -913,7 +914,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 
 		enabled := true
-		got, err = st.UpdateSourceTarget(ctx, running.ID, userID, &enabled, nil)
+		got, err = st.UpdateSourceTarget(ctx, running.ID, userID, &enabled, nil, nil)
 		if err != nil || !got.Enabled || got.DisabledReason != "" {
 			t.Fatalf("UpdateSourceTarget(enable) = %+v, %v, want enabled with no reason", got, err)
 		}
@@ -922,14 +923,14 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("starting a run clears the disabled reason", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "indeed", "go", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "indeed", "go", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
 		if _, err := st.DisableSourceTargets(ctx, "indeed", "indeed key rejected"); err != nil {
 			t.Fatalf("DisableSourceTargets(...) = %v", err)
 		}
-		started, err := st.StartSourceTargetRun(ctx, target.ID)
+		started, err := st.StartSourceTargetRun(ctx, target.ID, nil)
 		if err != nil || !started.Enabled || started.DisabledReason != "" {
 			t.Fatalf("StartSourceTargetRun(...) = %+v, %v, want enabled with no reason", started, err)
 		}
@@ -938,12 +939,12 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("update then delete a source target", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "update-me", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "update-me", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
 		disabled := false
-		updated, err := st.UpdateSourceTarget(ctx, target.ID, userID, &disabled, nil)
+		updated, err := st.UpdateSourceTarget(ctx, target.ID, userID, &disabled, nil, nil)
 		if err != nil || updated.Enabled {
 			t.Fatalf("UpdateSourceTarget(...) = %+v, %v, want disabled", updated, err)
 		}
@@ -953,6 +954,69 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		targets, err := st.ListSourceTargetsByUser(ctx, userID)
 		if err != nil || len(targets) != 0 {
 			t.Fatalf("ListSourceTargetsByUser(...) after delete = %+v, %v, want none", targets, err)
+		}
+	})
+
+	t.Run("a new source target is manual on the default window", func(t *testing.T) {
+		st, userID := newStore(t)
+		target, err := st.CreateSourceTarget(t.Context(), userID, "linkedin", "defaults", true, map[string]string{}, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+		want := runwindow.Default()
+		want.IntervalMinutes = nil
+		if diff := cmp.Diff(want, target.RunWindow); diff != "" {
+			t.Errorf("CreateSourceTarget(...).RunWindow mismatch (-want +got):\n%s", diff)
+		}
+		if target.NextRunAt != nil {
+			t.Errorf("CreateSourceTarget(...).NextRunAt = %v, want nil", target.NextRunAt)
+		}
+	})
+
+	t.Run("run window and next run round trip through create update and rerun", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		interval := 180
+		window := dto.RunWindow{
+			IntervalMinutes: &interval,
+			Weekdays:        []time.Weekday{time.Monday, time.Sunday},
+			Start:           "09:30",
+			End:             "17:45",
+			Timezone:        "America/New_York",
+		}
+		next := time.Date(2026, time.October, 12, 13, 30, 0, 0, time.UTC)
+
+		created, err := st.CreateSourceTargetWithRun(ctx, userID, "linkedin", "windowed", true, map[string]string{}, window, &next)
+		if err != nil {
+			t.Fatalf("CreateSourceTargetWithRun(...) = %v", err)
+		}
+		if diff := cmp.Diff(window, created.RunWindow); diff != "" {
+			t.Errorf("created RunWindow mismatch (-want +got):\n%s", diff)
+		}
+		if created.NextRunAt == nil || !created.NextRunAt.Equal(next) {
+			t.Errorf("created NextRunAt = %v, want %v", created.NextRunAt, next)
+		}
+
+		manual := window
+		manual.IntervalMinutes = nil
+		updated, err := st.UpdateSourceTarget(ctx, created.ID, userID, nil, &manual, nil)
+		if err != nil {
+			t.Fatalf("UpdateSourceTarget(manual) = %v", err)
+		}
+		if updated.RunWindow.IntervalMinutes != nil || updated.NextRunAt != nil {
+			t.Errorf("manual update interval = %v, next run = %v, want both nil", updated.RunWindow.IntervalMinutes, updated.NextRunAt)
+		}
+		if updated.RunWindow.Timezone != window.Timezone || updated.RunWindow.Start != window.Start {
+			t.Errorf("manual update RunWindow = %+v, want the window kept", updated.RunWindow)
+		}
+
+		later := next.Add(time.Hour)
+		rerun, err := st.StartSourceTargetRun(ctx, created.ID, &later)
+		if err != nil {
+			t.Fatalf("StartSourceTargetRun(...) = %v", err)
+		}
+		if rerun.NextRunAt == nil || !rerun.NextRunAt.Equal(later) {
+			t.Errorf("rerun NextRunAt = %v, want %v", rerun.NextRunAt, later)
 		}
 	})
 
@@ -967,7 +1031,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("save cards then list for user round trips", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "candidate-search", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
@@ -984,7 +1048,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("new urls counts saved candidates as known under any host or tracking params", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "known-search", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "known-search", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}
@@ -1005,11 +1069,11 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("list for user returns the full card only for complete sources", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		complete, err := st.CreateSourceTarget(ctx, userID, "remoteok", "complete-search", true, map[string]string{})
+		complete, err := st.CreateSourceTarget(ctx, userID, "remoteok", "complete-search", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(remoteok) = %v", err)
 		}
-		partial, err := st.CreateSourceTarget(ctx, userID, "linkedin", "partial-search", true, map[string]string{})
+		partial, err := st.CreateSourceTarget(ctx, userID, "linkedin", "partial-search", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(linkedin) = %v", err)
 		}
@@ -1036,7 +1100,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
-		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "assess-search", true, map[string]string{})
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "assess-search", true, map[string]string{}, dto.RunWindow{}, nil)
 		if err != nil {
 			t.Fatalf("CreateSourceTarget(...) = %v", err)
 		}

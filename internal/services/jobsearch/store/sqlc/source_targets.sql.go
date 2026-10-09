@@ -16,7 +16,7 @@ UPDATE source_targets SET updated_at = NOW()
 WHERE id = $1 AND run_id = $2 AND enabled = TRUE
   AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
        OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
 type ClaimRecoverableSourceTargetParams struct {
@@ -35,8 +35,12 @@ func (q *Queries) ClaimRecoverableSourceTarget(ctx context.Context, arg ClaimRec
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -50,17 +54,28 @@ func (q *Queries) ClaimRecoverableSourceTarget(ctx context.Context, arg ClaimRec
 }
 
 const createSourceTarget = `-- name: CreateSourceTarget :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+INSERT INTO source_targets (user_id, source, value, enabled, filters, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at)
+VALUES ($1, $2, $3, $4, $5, $6,
+        COALESCE($7::smallint, 31),
+        COALESCE($8::time, '08:00'),
+        COALESCE($9::time, '18:00'),
+        COALESCE($10::text, 'Europe/London'),
+        $11)
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
 type CreateSourceTargetParams struct {
-	UserID  pgtype.UUID
-	Source  string
-	Value   string
-	Enabled bool
-	Filters []byte
+	UserID          pgtype.UUID
+	Source          string
+	Value           string
+	Enabled         bool
+	Filters         []byte
+	IntervalMinutes pgtype.Int4
+	Weekdays        pgtype.Int2
+	WindowStart     pgtype.Time
+	WindowEnd       pgtype.Time
+	Timezone        pgtype.Text
+	NextRunAt       pgtype.Timestamptz
 }
 
 func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTargetParams) (SourceTarget, error) {
@@ -70,6 +85,12 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 		arg.Value,
 		arg.Enabled,
 		arg.Filters,
+		arg.IntervalMinutes,
+		arg.Weekdays,
+		arg.WindowStart,
+		arg.WindowEnd,
+		arg.Timezone,
+		arg.NextRunAt,
 	)
 	var i SourceTarget
 	err := row.Scan(
@@ -80,8 +101,12 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -95,17 +120,28 @@ func (q *Queries) CreateSourceTarget(ctx context.Context, arg CreateSourceTarget
 }
 
 const createSourceTargetWithRun = `-- name: CreateSourceTargetWithRun :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters, run_id, run_status)
-VALUES ($1, $2, $3, $4, $5, gen_random_uuid(), 'queued')
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+INSERT INTO source_targets (user_id, source, value, enabled, filters, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_id, run_status)
+VALUES ($1, $2, $3, $4, $5, $6,
+        COALESCE($7::smallint, 31),
+        COALESCE($8::time, '08:00'),
+        COALESCE($9::time, '18:00'),
+        COALESCE($10::text, 'Europe/London'),
+        $11, gen_random_uuid(), 'queued')
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
 type CreateSourceTargetWithRunParams struct {
-	UserID  pgtype.UUID
-	Source  string
-	Value   string
-	Enabled bool
-	Filters []byte
+	UserID          pgtype.UUID
+	Source          string
+	Value           string
+	Enabled         bool
+	Filters         []byte
+	IntervalMinutes pgtype.Int4
+	Weekdays        pgtype.Int2
+	WindowStart     pgtype.Time
+	WindowEnd       pgtype.Time
+	Timezone        pgtype.Text
+	NextRunAt       pgtype.Timestamptz
 }
 
 func (q *Queries) CreateSourceTargetWithRun(ctx context.Context, arg CreateSourceTargetWithRunParams) (SourceTarget, error) {
@@ -115,6 +151,12 @@ func (q *Queries) CreateSourceTargetWithRun(ctx context.Context, arg CreateSourc
 		arg.Value,
 		arg.Enabled,
 		arg.Filters,
+		arg.IntervalMinutes,
+		arg.Weekdays,
+		arg.WindowStart,
+		arg.WindowEnd,
+		arg.Timezone,
+		arg.NextRunAt,
 	)
 	var i SourceTarget
 	err := row.Scan(
@@ -125,8 +167,12 @@ func (q *Queries) CreateSourceTargetWithRun(ctx context.Context, arg CreateSourc
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -175,7 +221,7 @@ func (q *Queries) DisableSourceTargets(ctx context.Context, arg DisableSourceTar
 }
 
 const getSourceTarget = `-- name: GetSourceTarget :one
-SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets WHERE id = $1
+SELECT id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets WHERE id = $1
 `
 
 func (q *Queries) GetSourceTarget(ctx context.Context, id pgtype.UUID) (SourceTarget, error) {
@@ -189,8 +235,12 @@ func (q *Queries) GetSourceTarget(ctx context.Context, id pgtype.UUID) (SourceTa
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -204,7 +254,7 @@ func (q *Queries) GetSourceTarget(ctx context.Context, id pgtype.UUID) (SourceTa
 }
 
 const listRecoverableSourceTargets = `-- name: ListRecoverableSourceTargets :many
-SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets
+SELECT id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets
 WHERE run_id IS NOT NULL AND enabled = TRUE
   AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
        OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
@@ -228,8 +278,12 @@ func (q *Queries) ListRecoverableSourceTargets(ctx context.Context) ([]SourceTar
 			&i.Enabled,
 			&i.Filters,
 			&i.CompanyID,
-			&i.CheckIntervalMinutes,
-			&i.LastCheckedAt,
+			&i.IntervalMinutes,
+			&i.Weekdays,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.Timezone,
+			&i.NextRunAt,
 			&i.RunStatus,
 			&i.RunID,
 			&i.LastRunAt,
@@ -250,7 +304,7 @@ func (q *Queries) ListRecoverableSourceTargets(ctx context.Context) ([]SourceTar
 }
 
 const listSourceTargetsByUser = `-- name: ListSourceTargetsByUser :many
-SELECT id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
+SELECT id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at FROM source_targets WHERE user_id = $1 ORDER BY source, value
 `
 
 func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUID) ([]SourceTarget, error) {
@@ -270,8 +324,12 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 			&i.Enabled,
 			&i.Filters,
 			&i.CompanyID,
-			&i.CheckIntervalMinutes,
-			&i.LastCheckedAt,
+			&i.IntervalMinutes,
+			&i.Weekdays,
+			&i.WindowStart,
+			&i.WindowEnd,
+			&i.Timezone,
+			&i.NextRunAt,
 			&i.RunStatus,
 			&i.RunID,
 			&i.LastRunAt,
@@ -293,13 +351,19 @@ func (q *Queries) ListSourceTargetsByUser(ctx context.Context, userID pgtype.UUI
 
 const startSourceTargetRun = `-- name: StartSourceTargetRun :one
 UPDATE source_targets SET run_id = gen_random_uuid(), run_status = 'queued',
+    next_run_at = $1,
     enabled = TRUE, disabled_reason = '', last_run_error = '', updated_at = NOW()
-WHERE id = $1
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+WHERE id = $2
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
-func (q *Queries) StartSourceTargetRun(ctx context.Context, id pgtype.UUID) (SourceTarget, error) {
-	row := q.db.QueryRow(ctx, startSourceTargetRun, id)
+type StartSourceTargetRunParams struct {
+	NextRunAt pgtype.Timestamptz
+	ID        pgtype.UUID
+}
+
+func (q *Queries) StartSourceTargetRun(ctx context.Context, arg StartSourceTargetRunParams) (SourceTarget, error) {
+	row := q.db.QueryRow(ctx, startSourceTargetRun, arg.NextRunAt, arg.ID)
 	var i SourceTarget
 	err := row.Scan(
 		&i.ID,
@@ -309,8 +373,12 @@ func (q *Queries) StartSourceTargetRun(ctx context.Context, id pgtype.UUID) (Sou
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -329,7 +397,7 @@ UPDATE source_targets SET run_status = $3, last_run_error = $4,
     last_succeeded_at = CASE WHEN $3 = 'succeeded' THEN NOW() ELSE last_succeeded_at END,
     updated_at = NOW()
 WHERE id = $1 AND run_id = $2
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
 type TransitionSourceTargetRunParams struct {
@@ -355,8 +423,12 @@ func (q *Queries) TransitionSourceTargetRun(ctx context.Context, arg TransitionS
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,
@@ -373,17 +445,28 @@ const updateSourceTarget = `-- name: UpdateSourceTarget :one
 UPDATE source_targets SET
     enabled                = COALESCE($3, enabled),
     disabled_reason        = CASE WHEN $3::boolean THEN '' ELSE disabled_reason END,
-    check_interval_minutes = COALESCE($4, check_interval_minutes),
+    interval_minutes       = CASE WHEN $4::boolean THEN $5 ELSE interval_minutes END,
+    weekdays               = COALESCE($6::smallint, weekdays),
+    window_start           = COALESCE($7::time, window_start),
+    window_end             = COALESCE($8::time, window_end),
+    timezone               = COALESCE($9::text, timezone),
+    next_run_at            = CASE WHEN $4::boolean THEN $10 ELSE next_run_at END,
     updated_at             = NOW()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, source, value, enabled, filters, company_id, check_interval_minutes, last_checked_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
+RETURNING id, user_id, source, value, enabled, filters, company_id, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_status, run_id, last_run_at, last_succeeded_at, last_run_error, disabled_reason, created_at, updated_at
 `
 
 type UpdateSourceTargetParams struct {
-	ID                   pgtype.UUID
-	UserID               pgtype.UUID
-	Enabled              pgtype.Bool
-	CheckIntervalMinutes pgtype.Int4
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Enabled         pgtype.Bool
+	SetWindow       bool
+	IntervalMinutes pgtype.Int4
+	Weekdays        pgtype.Int2
+	WindowStart     pgtype.Time
+	WindowEnd       pgtype.Time
+	Timezone        pgtype.Text
+	NextRunAt       pgtype.Timestamptz
 }
 
 func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTargetParams) (SourceTarget, error) {
@@ -391,7 +474,13 @@ func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTarget
 		arg.ID,
 		arg.UserID,
 		arg.Enabled,
-		arg.CheckIntervalMinutes,
+		arg.SetWindow,
+		arg.IntervalMinutes,
+		arg.Weekdays,
+		arg.WindowStart,
+		arg.WindowEnd,
+		arg.Timezone,
+		arg.NextRunAt,
 	)
 	var i SourceTarget
 	err := row.Scan(
@@ -402,8 +491,12 @@ func (q *Queries) UpdateSourceTarget(ctx context.Context, arg UpdateSourceTarget
 		&i.Enabled,
 		&i.Filters,
 		&i.CompanyID,
-		&i.CheckIntervalMinutes,
-		&i.LastCheckedAt,
+		&i.IntervalMinutes,
+		&i.Weekdays,
+		&i.WindowStart,
+		&i.WindowEnd,
+		&i.Timezone,
+		&i.NextRunAt,
 		&i.RunStatus,
 		&i.RunID,
 		&i.LastRunAt,

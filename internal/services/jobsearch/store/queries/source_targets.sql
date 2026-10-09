@@ -2,20 +2,35 @@
 SELECT * FROM source_targets WHERE user_id = $1 ORDER BY source, value;
 
 -- name: CreateSourceTarget :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO source_targets (user_id, source, value, enabled, filters, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg('interval_minutes'),
+        COALESCE(sqlc.narg('weekdays')::smallint, 31),
+        COALESCE(sqlc.narg('window_start')::time, '08:00'),
+        COALESCE(sqlc.narg('window_end')::time, '18:00'),
+        COALESCE(sqlc.narg('timezone')::text, 'Europe/London'),
+        sqlc.narg('next_run_at'))
 RETURNING *;
 
 -- name: CreateSourceTargetWithRun :one
-INSERT INTO source_targets (user_id, source, value, enabled, filters, run_id, run_status)
-VALUES ($1, $2, $3, $4, $5, gen_random_uuid(), 'queued')
+INSERT INTO source_targets (user_id, source, value, enabled, filters, interval_minutes, weekdays, window_start, window_end, timezone, next_run_at, run_id, run_status)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg('interval_minutes'),
+        COALESCE(sqlc.narg('weekdays')::smallint, 31),
+        COALESCE(sqlc.narg('window_start')::time, '08:00'),
+        COALESCE(sqlc.narg('window_end')::time, '18:00'),
+        COALESCE(sqlc.narg('timezone')::text, 'Europe/London'),
+        sqlc.narg('next_run_at'), gen_random_uuid(), 'queued')
 RETURNING *;
 
 -- name: UpdateSourceTarget :one
 UPDATE source_targets SET
     enabled                = COALESCE(sqlc.narg('enabled'), enabled),
     disabled_reason        = CASE WHEN sqlc.narg('enabled')::boolean THEN '' ELSE disabled_reason END,
-    check_interval_minutes = COALESCE(sqlc.narg('check_interval_minutes'), check_interval_minutes),
+    interval_minutes       = CASE WHEN sqlc.arg('set_window')::boolean THEN sqlc.narg('interval_minutes') ELSE interval_minutes END,
+    weekdays               = COALESCE(sqlc.narg('weekdays')::smallint, weekdays),
+    window_start           = COALESCE(sqlc.narg('window_start')::time, window_start),
+    window_end             = COALESCE(sqlc.narg('window_end')::time, window_end),
+    timezone               = COALESCE(sqlc.narg('timezone')::text, timezone),
+    next_run_at            = CASE WHEN sqlc.arg('set_window')::boolean THEN sqlc.narg('next_run_at') ELSE next_run_at END,
     updated_at             = NOW()
 WHERE id = $1 AND user_id = $2
 RETURNING *;
@@ -32,8 +47,9 @@ DELETE FROM source_targets WHERE id = $1 AND user_id = $2;
 
 -- name: StartSourceTargetRun :one
 UPDATE source_targets SET run_id = gen_random_uuid(), run_status = 'queued',
+    next_run_at = sqlc.narg('next_run_at'),
     enabled = TRUE, disabled_reason = '', last_run_error = '', updated_at = NOW()
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: GetSourceTarget :one

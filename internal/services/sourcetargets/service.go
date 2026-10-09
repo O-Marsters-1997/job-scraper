@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 )
 
@@ -24,12 +26,12 @@ type QueuePublisher interface {
 
 type Store interface {
 	CandidateStore
-	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
-	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string) (dto.SourceTarget, error)
-	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, checkIntervalMinutes *int) (dto.SourceTarget, error)
+	CreateSourceTarget(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
+	CreateSourceTargetWithRun(ctx context.Context, userID, source, value string, enabled bool, filters map[string]string, window dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
+	UpdateSourceTarget(ctx context.Context, id, userID string, enabled *bool, window *dto.RunWindow, nextRunAt *time.Time) (dto.SourceTarget, error)
 	DeleteSourceTarget(ctx context.Context, id, userID string) error
 	ListSourceTargetsByUser(ctx context.Context, userID string) ([]dto.SourceTarget, error)
-	StartSourceTargetRun(ctx context.Context, id string) (dto.SourceTarget, error)
+	StartSourceTargetRun(ctx context.Context, id string, nextRunAt *time.Time) (dto.SourceTarget, error)
 	GetSourceTarget(ctx context.Context, id string) (dto.SourceTarget, error)
 	TransitionSourceTargetRun(ctx context.Context, id, runID, status, runError string) (dto.SourceTarget, error)
 	DisableSourceTargets(ctx context.Context, source, reason string) (int64, error)
@@ -47,10 +49,12 @@ type Service struct {
 	configs SearchConfigReader
 	queue   QueuePublisher
 	boards  CardBoards
+	now     func() time.Time
+	jitter  func(time.Duration) time.Duration
 }
 
 func New(targets Store, configs SearchConfigReader, q QueuePublisher, boards CardBoards) *Service {
-	return &Service{targets: targets, configs: configs, queue: q, boards: boards}
+	return &Service{targets: targets, configs: configs, queue: q, boards: boards, now: time.Now, jitter: runwindow.Jitter}
 }
 
 // Create validates a new source target against the source registry, then
@@ -94,12 +98,21 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 		enabled = *in.Enabled
 	}
 
+	window, err := createWindow(in.RunWindow)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	var nextRunAt *time.Time
+	if enabled {
+		nextRunAt = s.nextRun(window)
+	}
+
 	startNow := enabled
 	create := s.targets.CreateSourceTarget
 	if startNow {
 		create = s.targets.CreateSourceTargetWithRun
 	}
-	target, err := create(ctx, userID, in.Source, in.Value, enabled, filters)
+	target, err := create(ctx, userID, in.Source, in.Value, enabled, filters, window, nextRunAt)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -113,6 +126,36 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 	}
 
 	return target, nil
+}
+
+func createWindow(in dto.RunWindowInput) (dto.RunWindow, error) {
+	var window dto.RunWindow
+	switch {
+	case !in.Set:
+		window = runwindow.Default()
+	case in.Window == nil:
+		window = manualWindow()
+	default:
+		window = *in.Window
+	}
+	if err := runwindow.Validate(window); err != nil {
+		return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
+	}
+	return window, nil
+}
+
+func manualWindow() dto.RunWindow {
+	w := runwindow.Default()
+	w.IntervalMinutes = nil
+	return w
+}
+
+func (s *Service) nextRun(w dto.RunWindow) *time.Time {
+	next, ok := runwindow.Next(w, s.now(), s.jitter)
+	if !ok {
+		return nil
+	}
+	return &next
 }
 
 func validateSourceValue(source, value string, filters map[string]string) error {
@@ -152,18 +195,34 @@ func isKnownFilterField(key string, fields []sourcespec.FilterField) bool {
 	return false
 }
 
-// Update changes a source target's enabled state and/or check interval. If
-// it enables a discovery target, saved candidates are reconsidered against
-// the user's current search config.
+// Update changes a source target's enabled state and/or Run Window. A
+// run_window of null makes the target manual. If it enables a discovery
+// target, saved candidates are reconsidered against the user's current search
+// config.
 func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSourceTargetInput) (dto.SourceTarget, error) {
-	if in.Enabled == nil && in.CheckIntervalMinutes == nil {
+	if in.Enabled == nil && !in.RunWindow.Set {
 		return dto.SourceTarget{}, apperr.Invalid("nothing to update")
 	}
-	if in.CheckIntervalMinutes != nil && *in.CheckIntervalMinutes < 60 {
-		return dto.SourceTarget{}, apperr.Invalid("check_interval_minutes must be at least 60")
+
+	var window *dto.RunWindow
+	var nextRunAt *time.Time
+	if in.RunWindow.Set {
+		w, err := s.updatedWindow(ctx, userID, in)
+		if err != nil {
+			return dto.SourceTarget{}, err
+		}
+		window = &w
+		nextRunAt = s.nextRun(w)
+	} else if in.Enabled != nil && *in.Enabled {
+		current, err := s.owned(ctx, userID, in.ID)
+		if err != nil {
+			return dto.SourceTarget{}, err
+		}
+		window = &current.RunWindow
+		nextRunAt = s.nextRun(current.RunWindow)
 	}
 
-	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, in.CheckIntervalMinutes)
+	target, err := s.targets.UpdateSourceTarget(ctx, in.ID, userID, in.Enabled, window, nextRunAt)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
@@ -188,6 +247,34 @@ func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateSource
 	return target, nil
 }
 
+func (s *Service) updatedWindow(ctx context.Context, userID string, in dto.UpdateSourceTargetInput) (dto.RunWindow, error) {
+	if in.RunWindow.Window != nil {
+		if err := runwindow.Validate(*in.RunWindow.Window); err != nil {
+			return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
+		}
+		return *in.RunWindow.Window, nil
+	}
+	current, err := s.owned(ctx, userID, in.ID)
+	if err != nil {
+		return dto.RunWindow{}, err
+	}
+	current.RunWindow.IntervalMinutes = nil
+	return current.RunWindow, nil
+}
+
+func (s *Service) owned(ctx context.Context, userID, id string) (dto.SourceTarget, error) {
+	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	if err != nil {
+		return dto.SourceTarget{}, err
+	}
+	for _, target := range targets {
+		if target.ID == id {
+			return target, nil
+		}
+	}
+	return dto.SourceTarget{}, apperr.NotFound("not found")
+}
+
 func (s *Service) List(ctx context.Context, userID string) ([]dto.SourceTarget, error) {
 	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
 	if err != nil {
@@ -204,29 +291,22 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 }
 
 func (s *Service) Scrape(ctx context.Context, userID, id string) (dto.SourceTarget, error) {
-	targets, err := s.targets.ListSourceTargetsByUser(ctx, userID)
+	target, err := s.owned(ctx, userID, id)
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
-	for _, target := range targets {
-		if target.ID != id {
-			continue
-		}
-		if target.RunStatus == "queued" || target.RunStatus == "running" {
-			return dto.SourceTarget{}, apperr.Conflict("search already in progress")
-		}
-		target.Enabled = true
-		queued, err := s.enqueueRun(ctx, target)
-		if err != nil {
-			return dto.SourceTarget{}, apperr.Unavailable("could not start search")
-		}
-		return queued, nil
+	if target.RunStatus == "queued" || target.RunStatus == "running" {
+		return dto.SourceTarget{}, apperr.Conflict("search already in progress")
 	}
-	return dto.SourceTarget{}, apperr.NotFound("not found")
+	queued, err := s.enqueueRun(ctx, target)
+	if err != nil {
+		return dto.SourceTarget{}, apperr.Unavailable("could not start search")
+	}
+	return queued, nil
 }
 
 func (s *Service) enqueueRun(ctx context.Context, target dto.SourceTarget) (dto.SourceTarget, error) {
-	queued, err := s.targets.StartSourceTargetRun(ctx, target.ID)
+	queued, err := s.targets.StartSourceTargetRun(ctx, target.ID, s.nextRun(target.RunWindow))
 	if err != nil {
 		return dto.SourceTarget{}, err
 	}
