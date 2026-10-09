@@ -9,7 +9,6 @@ import (
 
 const (
 	routeResidential = "residential"
-	routeUnlocker    = "unlocker"
 	routeDirect      = "direct"
 )
 
@@ -22,14 +21,10 @@ var (
 		Name: "jobscraper_fetch_bytes_total",
 		Help: "Response body bytes read by source and route.",
 	}, []string{"source", "route"})
-	FetchFallbacks = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "jobscraper_fetch_fallbacks_total",
-		Help: "Requests that exhausted residential attempts and fell back to the Unlocker.",
-	}, []string{"source"})
 )
 
 func RegisterMetrics(reg prometheus.Registerer) {
-	reg.MustRegister(FetchRequests, FetchBytes, FetchFallbacks)
+	reg.MustRegister(FetchRequests, FetchBytes)
 }
 
 func outcome(req *http.Request, resp *http.Response, err error) string {

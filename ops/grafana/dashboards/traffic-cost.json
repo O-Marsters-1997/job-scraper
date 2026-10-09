@@ -169,7 +169,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "(sum by (source, route) (increase(jobscraper_fetch_bytes_total{env=\"$env\", route=\"residential\"}[$__range])) / 1e9 * 4) or (sum by (source, route) (increase(jobscraper_fetch_requests_total{env=\"$env\", route=\"unlocker\"}[$__range])) / 1000 * 1.5)",
+          "expr": "(sum by (source, route) (increase(jobscraper_fetch_bytes_total{env=\"$env\", route=\"residential\"}[$__range])) / 1e9 * 4)",
           "legendFormat": "{{source}} {{route}}"
         }
       ]

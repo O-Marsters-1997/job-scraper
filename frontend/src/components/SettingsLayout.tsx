@@ -8,10 +8,12 @@ import {
 	useContext,
 } from "solid-js";
 import { Portal } from "solid-js/web";
+import { UsageDot } from "@/components/UsageDot";
+import { useSettingsGroups } from "@/hooks/useSettingsGroups";
 import { useShortcuts } from "@/hooks/useShortcuts";
+import { useUsageWarning } from "@/hooks/useUsageWarning";
 import {
 	findSettingsSection,
-	SETTINGS_SECTIONS,
 	type SettingsSection,
 } from "@/lib/settingsSections";
 
@@ -31,10 +33,10 @@ export function SettingsActions(props: { children: JSX.Element }) {
 const NAV_ITEM =
 	"block shrink-0 rounded-lg border border-transparent px-3 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
-const SECTIONS = SETTINGS_SECTIONS.flatMap((group) => group.sections);
-
 export function SettingsLayout() {
 	const location = useLocation();
+	const groups = useSettingsGroups();
+	const usageWarning = useUsageWarning();
 	const [slot, setSlot] = createSignal<HTMLElement>();
 	const links: Record<string, HTMLAnchorElement> = {};
 
@@ -42,12 +44,14 @@ export function SettingsLayout() {
 		location().pathname.startsWith(section.to);
 
 	const cycle = (step: number) => {
-		const order = SECTIONS.flatMap((section) => [
-			section.to,
-			...(isOpen(section)
-				? (section.children?.map((child) => child.to) ?? [])
-				: []),
-		]);
+		const order = groups()
+			.flatMap((group) => group.sections)
+			.flatMap((section) => [
+				section.to,
+				...(isOpen(section)
+					? (section.children?.map((child) => child.to) ?? [])
+					: []),
+			]);
 		const focused = order.findIndex(
 			(to) => links[to] === document.activeElement,
 		);
@@ -74,7 +78,7 @@ export function SettingsLayout() {
 					aria-label="Settings sections"
 					class="scroll-slim flex gap-1 overflow-x-auto md:sticky md:top-20 md:w-60 md:shrink-0 md:flex-col md:gap-5 md:overflow-visible"
 				>
-					<For each={SETTINGS_SECTIONS}>
+					<For each={groups()}>
 						{(group) => (
 							<div class="contents md:flex md:flex-col md:gap-1">
 								<p class="hidden px-3 text-2xs font-semibold uppercase tracking-wider text-faint md:block">
@@ -91,8 +95,11 @@ export function SettingsLayout() {
 												}}
 												class={`${NAV_ITEM} min-w-40 py-2.5 data-[status=active]:border-border data-[status=active]:bg-surface md:min-w-0`}
 											>
-												<span class="block text-sm font-medium text-foreground">
+												<span class="flex items-center gap-2 text-sm font-medium text-foreground">
 													{section.label}
+													<UsageDot
+														level={usageWarning.forSection(section.to)}
+													/>
 												</span>
 												<span class="mt-0.5 block truncate text-xs text-faint">
 													{section.description}

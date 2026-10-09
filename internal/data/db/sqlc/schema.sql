@@ -35,11 +35,14 @@ CREATE TABLE job_urls (
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TYPE user_role AS ENUM ('user', 'admin');
+
 CREATE TABLE IF NOT EXISTS users (
     id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     username      TEXT        NOT NULL UNIQUE,
     password_hash TEXT        NOT NULL,
     email         TEXT        UNIQUE,
+    role          user_role   NOT NULL DEFAULT 'user',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

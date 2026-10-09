@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useGoogleStatus } from "../hooks/useGoogle";
+import { useUsageWarning } from "../hooks/useUsageWarning";
+import { UsageDot } from "./UsageDot";
 
 const navLinkVariants = cva(
 	"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
@@ -178,6 +180,7 @@ interface SidebarBodyProps {
 }
 
 function SidebarBody(props: SidebarBodyProps) {
+	const usageWarning = useUsageWarning();
 	return (
 		<>
 			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
@@ -221,9 +224,22 @@ function SidebarBody(props: SidebarBodyProps) {
 							>
 								{({ isActive }) => (
 									<span class={navLinkVariants({ active: isActive })}>
-										<Icon name={item.icon} class="shrink-0" />
+										<span class="relative flex shrink-0">
+											<Icon name={item.icon} class="shrink-0" />
+											<Show
+												when={item.to === "/settings" && !props.showLabels()}
+											>
+												<UsageDot
+													level={usageWarning.overall()}
+													class="absolute -right-1 -top-1"
+												/>
+											</Show>
+										</span>
 										<Show when={props.showLabels()}>
 											<span class="whitespace-nowrap">{item.label}</span>
+											<Show when={item.to === "/settings"}>
+												<UsageDot level={usageWarning.overall()} />
+											</Show>
 											<Show
 												when={
 													item.badge && (props.appsQuery.data?.length ?? 0) > 0

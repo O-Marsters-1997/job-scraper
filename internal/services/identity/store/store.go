@@ -244,3 +244,14 @@ func (s *Store) DeleteGoogleToken(ctx context.Context, userID string) error {
 	}
 	return nil
 }
+
+func (s *Store) SetRole(ctx context.Context, username, role string) error {
+	n, err := s.queries.SetUserRole(ctx, sqlc.SetUserRoleParams{Username: username, Role: sqlc.UserRole(role)})
+	if err != nil {
+		return fmt.Errorf("store.SetRole: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}

@@ -17,7 +17,6 @@ import (
 func newScraper(t *testing.T, body string, filters map[string]string, recency ...string) (*indeed.Scraper, *sourcetest.Responder) {
 	t.Helper()
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@localhost:7001")
 	t.Setenv("INDEED_API_KEY", "test-key")
 	s := indeed.New("go developer", filters, append(recency, "")[0])
 	r := sourcetest.Respond(body)

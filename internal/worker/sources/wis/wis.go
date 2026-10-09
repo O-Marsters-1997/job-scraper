@@ -133,7 +133,7 @@ func New(search Search) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:        "wis",
-			Route:       sources.RouteTiered,
+			Route:       sources.RouteResidential,
 			Header:      browserHeader,
 			Cookies:     true,
 			NewestFirst: true,

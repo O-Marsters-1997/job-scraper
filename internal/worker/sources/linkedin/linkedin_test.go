@@ -135,8 +135,6 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 		},
 	}
 
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
-	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	allParams := []string{"keywords", "location", "f_C", "f_TPR", "f_WT", "f_E", "f_JT", "geoId", "f_D", "f_SB2"}
 
@@ -167,8 +165,6 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
-	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	src := linkedin.New("", nil, "")
 	recorder := sourcetest.Respond(string(html))
@@ -217,8 +213,6 @@ func TestRecency(t *testing.T) {
 }
 
 func TestFetchPage_NarrowedRecencyOverridesFilter(t *testing.T) {
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@brd.superproxy.io:33335")
-	t.Setenv("BRIGHTDATA_CA_CERT", "")
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	filters := map[string]string{"recency": "r604800"}
 	src := linkedin.New("go", filters, "r176400")

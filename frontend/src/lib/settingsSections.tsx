@@ -10,6 +10,7 @@ export interface SettingsSection {
 
 interface SettingsGroup {
 	heading: string;
+	adminOnly?: boolean;
 	sections: SettingsSection[];
 }
 
@@ -68,6 +69,18 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 				label: "Integrations",
 				description: "Google and other accounts",
 				icon: "link",
+			},
+		],
+	},
+	{
+		heading: "Admin",
+		adminOnly: true,
+		sections: [
+			{
+				to: "/settings/usage",
+				label: "Usage",
+				description: "Proxy quota",
+				icon: "barChart",
 			},
 		],
 	},

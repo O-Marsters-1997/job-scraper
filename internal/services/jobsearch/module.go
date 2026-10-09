@@ -29,6 +29,7 @@ type Module struct {
 	sourceTargets *sourcetargets.Service
 	queue         QueuePublisher
 	scoring       ScoringPort
+	proxyUsage    *ProxyUsage
 	claimLimit    int
 }
 
@@ -100,6 +101,8 @@ type Deps struct {
 	SourceTargets sourcetargets.Store
 	Scoring       ScoringPort
 	Queue         QueuePublisher
+	ProxyQuota    QuotaFetcher
+	Now           func() time.Time
 	ClaimLimit    int
 
 	MaxAutomaticTargets int
@@ -117,17 +120,19 @@ func Build(deps Deps) *Module {
 		sourceTargets: sourcetargets.New(deps.SourceTargets, deps.Scoring, deps.Queue, jobs, maxAutomatic),
 		queue:         deps.Queue,
 		scoring:       deps.Scoring,
+		proxyUsage:    newProxyUsage(deps.ProxyQuota, deps.Now),
 		claimLimit:    cmp.Or(deps.ClaimLimit, defaultClaimLimit),
 	}
 }
 
-func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, maxAutomaticTargets int) *Module {
+func New(pool *pgxpool.Pool, q *queue.Broker, scoring ScoringPort, proxyQuota QuotaFetcher, maxAutomaticTargets int) *Module {
 	st := store.New(pool, scoring)
 	return Build(Deps{
 		Store:         st,
 		SourceTargets: st,
 		Scoring:       scoring,
 		Queue:         q,
+		ProxyQuota:    proxyQuota,
 		ClaimLimit:    claimLimitFromEnv(),
 
 		MaxAutomaticTargets: maxAutomaticTargets,
@@ -151,6 +156,11 @@ func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID s
 // SaveCompanyProfile upserts the profile source reports for companyID.
 func (m *Module) SaveCompanyProfile(ctx context.Context, companyID, source string, profile dto.CompanyProfile) error {
 	return m.store.SaveCompanyProfile(ctx, companyID, source, profile)
+}
+
+// RefreshProxyUsage refreshes the in-memory proxy quota snapshot.
+func (m *Module) RefreshProxyUsage(ctx context.Context) error {
+	return m.proxyUsage.Refresh(ctx)
 }
 
 func (m *Module) Boards() Store { return m.store }

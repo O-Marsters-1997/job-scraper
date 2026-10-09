@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -16,11 +17,13 @@ import (
 
 const residentialAttempts = 3
 
+// ErrBlocked is returned when every residential attempt for a request was blocked.
+var ErrBlocked = errors.New("residential fetch blocked on every attempt")
+
 type sessionKey struct{}
 
-type tieredTransport struct {
+type residentialTransport struct {
 	residential *http.Transport
-	unlocker    http.RoundTripper
 	cache       Cache
 
 	session   atomic.Value
@@ -32,7 +35,7 @@ func newSession() string {
 	return strconv.FormatUint(rand.Uint64(), 36)
 }
 
-func (t *tieredTransport) rotate(ctx context.Context, stale, reason string, status int) {
+func (t *residentialTransport) rotate(ctx context.Context, stale, reason string, status int) {
 	if t.session.CompareAndSwap(stale, newSession()) {
 		slog.InfoContext(ctx, "residential session rotated",
 			slog.String(logger.KeySource, t.source),
@@ -44,12 +47,8 @@ func (t *tieredTransport) rotate(ctx context.Context, stale, reason string, stat
 	t.residential.CloseIdleConnections()
 }
 
-func newTiered(cache Cache, source string) (*tieredTransport, error) {
+func newResidential(cache Cache, source string) (*residentialTransport, error) {
 	u, err := proxyURL(residentialEnvKey)
-	if err != nil {
-		return nil, err
-	}
-	unlocker, err := Transport(true)
 	if err != nil {
 		return nil, err
 	}
@@ -61,9 +60,8 @@ func newTiered(cache Cache, source string) (*tieredTransport, error) {
 		pu.User = url.UserPassword(u.User.Username()+"-session-"+session, password)
 		return &pu, nil
 	}
-	t := &tieredTransport{
+	t := &residentialTransport{
 		residential: tr,
-		unlocker:    &fetchTransport{base: unlocker, zone: sharedZone, route: routeUnlocker, source: source},
 		cache:       cache,
 		source:      source,
 	}
@@ -71,7 +69,7 @@ func newTiered(cache Cache, source string) (*tieredTransport, error) {
 	return t, nil
 }
 
-func (t *tieredTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *residentialTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err := ValidateURL(req.Context(), req.URL); err != nil {
 		return nil, err
 	}
@@ -89,26 +87,32 @@ func (t *tieredTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (t *tieredTransport) fetch(req *http.Request) (*http.Response, error) {
-	for range residentialAttempts {
+func (t *residentialTransport) fetch(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	for attempt := range residentialAttempts {
 		resp, err := t.residentialAttempt(req)
 		switch {
 		case err == nil && !blocked(req, resp):
 			return resp, nil
 		case err == nil:
 			_ = resp.Body.Close()
+			lastErr = nil
 		case req.Context().Err() != nil:
 			return nil, req.Context().Err()
+		default:
+			lastErr = err
+		}
+		if attempt == residentialAttempts-1 {
+			break
 		}
 		if req, err = rewound(req); err != nil {
 			return nil, err
 		}
 	}
-	FetchFallbacks.WithLabelValues(t.source).Inc()
-	return t.unlocker.RoundTrip(req)
+	return nil, errors.Join(ErrBlocked, lastErr)
 }
 
-func (t *tieredTransport) residentialAttempt(req *http.Request) (*http.Response, error) {
+func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Response, error) {
 	release, err := acquire(req.Context(), req.URL.Hostname())
 	if err != nil {
 		return nil, err

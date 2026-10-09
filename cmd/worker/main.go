@@ -43,9 +43,6 @@ func main() {
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := proxy.Validate(); err != nil {
-		fatal(ctx, "Web Unlocker config invalid", err)
-	}
 	if err := proxy.ValidateResidential(); err != nil {
 		fatal(ctx, "residential proxy config invalid", err)
 	}
@@ -82,7 +79,7 @@ func main() {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule, sourcetargets.DefaultMaxAutomatic)
+	js := jobsearch.New(pool, q, scoringModule, nil, sourcetargets.DefaultMaxAutomatic)
 	proxy.SetCache(js)
 
 	maxPages := 0
@@ -104,7 +101,6 @@ func main() {
 	})
 	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
 	go schedule.Every(ctx, "discovery runs", time.Minute, js.PublishDueTargets)
-	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 

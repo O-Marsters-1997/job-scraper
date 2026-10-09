@@ -45,7 +45,7 @@ func newApp(t *testing.T) *app {
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
-	js := jobsearch.New(pool, &queue.Broker{}, scoring.NewFacade(pool), sourcetargets.DefaultMaxAutomatic)
+	js := jobsearch.New(pool, &queue.Broker{}, scoring.NewFacade(pool), nil, sourcetargets.DefaultMaxAutomatic)
 	sc := scoring.New(pool, idm, idm, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
 	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc)}
