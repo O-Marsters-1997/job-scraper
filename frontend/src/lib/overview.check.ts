@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import {
 	applicationStats,
 	chasesDue,
+	highValueJobs,
 	jobStats,
 	pipelineSegments,
-	recentJobs,
 } from "./overview";
 
 const now = new Date("2026-06-10T12:00:00");
@@ -52,11 +52,54 @@ assert.deepEqual(
 );
 assert.deepEqual(pipelineSegments(apps, []), []);
 
-assert.deepEqual(
-	recentJobs(jobs, 2).map((j) => j.ID),
-	["b", "a"],
+const hv = (id: string, over: Record<string, unknown>) =>
+	({
+		ID: id,
+		ScrapedAt: "2026-06-09T09:00:00",
+		SuitabilityScore: 80,
+		Band: "good",
+		Seen: false,
+		...over,
+	}) as never;
+const ids = (r: { jobs: { ID: string }[] }) => r.jobs.map((j) => j.ID);
+
+const ranked = highValueJobs(
+	[
+		hv("low", { SuitabilityScore: 70 }),
+		hv("old", { ScrapedAt: "2026-05-30T09:00:00" }),
+		hv("seen", { Seen: true }),
+		hv("fair", { Band: "fair" }),
+		hv("newer", { ScrapedAt: "2026-06-10T09:00:00" }),
+		hv("tie", {}),
+		hv("top", { SuitabilityScore: 95, Band: "great" }),
+		hv("unscored", { SuitabilityScore: null, Band: "" }),
+	],
+	true,
+	now,
 );
-assert.ok(recentJobs(jobs, 10).length === 3);
+
+assert.deepEqual(ids(ranked), ["top", "newer", "tie", "low"]);
+assert.equal(
+	highValueJobs(
+		Array.from({ length: 9 }, (_, i) => hv(`j${i}`, {})),
+		true,
+		now,
+	).jobs.length,
+	5,
+);
+
+const none = { SuitabilityScore: null, Band: "" };
+const unranked = highValueJobs(
+	[
+		hv("a", { ...none, ScrapedAt: "2026-05-01T09:00:00" }),
+		hv("b", { ...none, ScrapedAt: "2026-06-01T09:00:00" }),
+		hv("c", { ...none, Seen: true }),
+	],
+	false,
+	now,
+);
+assert.equal(unranked.ranked, false);
+assert.deepEqual(ids(unranked), ["b", "a"]);
 
 const chaseApp = (id: string, chaseBy: string | null) =>
 	({ ID: id, ChaseBy: chaseBy }) as never;

@@ -43,13 +43,35 @@ export function pipelineSegments(
 	return statuses.map((s) => ({ ...s, count: counts.get(s.ID) ?? 0 }));
 }
 
-export function recentJobs(jobs: Job[], limit = RECENT_LIMIT) {
-	return [...jobs]
-		.sort(
-			(a, b) =>
-				new Date(b.ScrapedAt).getTime() - new Date(a.ScrapedAt).getTime(),
-		)
-		.slice(0, limit);
+const HIGH_VALUE_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function scrapedMs(job: Job) {
+	return new Date(job.ScrapedAt).getTime();
+}
+
+export function highValueJobs(
+	jobs: Job[],
+	ranked: boolean,
+	now = new Date(),
+	limit = RECENT_LIMIT,
+) {
+	const cutoff = now.getTime() - HIGH_VALUE_DAYS * DAY_MS;
+	const picked = ranked
+		? jobs
+				.filter(
+					(j) =>
+						!j.Seen &&
+						scrapedMs(j) >= cutoff &&
+						(j.Band === "great" || j.Band === "good"),
+				)
+				.sort(
+					(a, b) =>
+						(b.SuitabilityScore ?? 0) - (a.SuitabilityScore ?? 0) ||
+						scrapedMs(b) - scrapedMs(a),
+				)
+		: jobs.filter((j) => !j.Seen).sort((a, b) => scrapedMs(b) - scrapedMs(a));
+	return { ranked, jobs: picked.slice(0, limit) };
 }
 
 export function chasesDue(
