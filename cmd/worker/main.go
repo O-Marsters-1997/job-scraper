@@ -102,6 +102,7 @@ func main() {
 		return js.PublishBoardChecks(ctx, *forceBoards)
 	})
 	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
+	go schedule.Every(ctx, "discovery runs", time.Minute, js.PublishDueTargets)
 	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)

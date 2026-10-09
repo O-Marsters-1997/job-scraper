@@ -76,3 +76,11 @@ WHERE id = $1 AND run_id = $2 AND enabled = TRUE
   AND (run_status = 'queued' AND updated_at < NOW() - INTERVAL '1 minute'
        OR run_status = 'running' AND updated_at < NOW() - INTERVAL '30 minutes')
 RETURNING *;
+
+-- name: LockDueSourceTargets :many
+SELECT * FROM source_targets
+WHERE enabled = TRUE AND interval_minutes IS NOT NULL AND next_run_at <= NOW()
+  AND run_status NOT IN ('queued', 'running')
+ORDER BY next_run_at
+LIMIT $1
+FOR UPDATE SKIP LOCKED;

@@ -470,7 +470,7 @@ func TestDisableSource(t *testing.T) {
 	t.Run("counts the targets it disabled by source and reason", func(t *testing.T) {
 		svc, st, _ := newService(t)
 		createTarget(t, st, true)
-		if _, err := st.CreateSourceTarget(t.Context(), userID, "wis", "designer", true, nil); err != nil {
+		if _, err := st.CreateSourceTarget(t.Context(), userID, "wis", "designer", true, nil, dto.RunWindow{}, nil); err != nil {
 			t.Fatalf("CreateSourceTarget() err = %v", err)
 		}
 		counter := sourcetargets.TargetsDisabled.WithLabelValues("wis", "wis key rejected")
