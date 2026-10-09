@@ -1,5 +1,5 @@
 // Package pgtest provides a shared Postgres testcontainer for integration
-// tests, one container per test binary.
+// tests, one database per test binary (https://github.com/O-Marsters-1997/job-scraper/issues/840).
 package pgtest
 
 import (
@@ -12,12 +12,32 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-
-	"github.com/ollymarsters/job-scraper/internal/data/db"
 )
+
+const (
+	containerName = "job-scraper-pgtest-v1"
+	image         = "postgres:17-alpine"
+	maxConns      = 4
+	idleSeconds   = 300
+)
+
+// Ryuk reaps a reused container with its creator, so it stops itself when idle: https://golang.testcontainers.org/features/garbage_collector/
+var entrypoint = fmt.Sprintf(`
+(
+	idle=0
+	while sleep 10; do
+		n=$(psql -U postgres -d postgres -tAc "SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend' AND pid <> pg_backend_pid()" 2>/dev/null) || { idle=0; continue; }
+		if [ "$n" = 0 ]; then idle=$((idle + 10)); else idle=0; fi
+		if [ "$idle" -ge %d ]; then kill -INT 1; fi
+	done
+) &
+exec docker-entrypoint.sh "$@"
+`, idleSeconds)
 
 var (
 	once    sync.Once
@@ -77,29 +97,53 @@ func start(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	container, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithDatabase("testdb"),
-		postgres.BasicWaitStrategies(),
-	)
+	adminConnStr, err := runContainer(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("start postgres container: %w", err)
+		return nil, err
 	}
 
-	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	cfg, err := pgxpool.ParseConfig(adminConnStr)
 	if err != nil {
-		return nil, fmt.Errorf("connection string: %w", err)
+		return nil, fmt.Errorf("parse connection string: %w", err)
 	}
 
-	pool, err := pgxpool.New(ctx, connStr)
+	name, err := createDatabase(ctx, cfg.Copy())
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.ConnConfig.Database = name
+	cfg.MaxConns = maxConns
+	cfg.MinConns = 1
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
+	return pool, nil
+}
 
-	if err := db.RunMigrations(ctx, pool); err != nil {
-		return nil, fmt.Errorf("run migrations: %w", err)
+func runContainer(ctx context.Context) (string, error) {
+	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
+		return "", fmt.Errorf("disable ryuk: %w", err)
 	}
 
-	return pool, nil
+	c, err := postgres.Run(ctx, image,
+		testcontainers.WithReuseByName(containerName),
+		testcontainers.WithEntrypoint("sh", "-c", entrypoint, "pgtest"),
+		testcontainers.WithCmd("postgres", "-c", "fsync=off", "-c", "max_connections=500"),
+		testcontainers.WithTmpfs(map[string]string{"/var/lib/postgresql/data": "rw"}),
+		testcontainers.WithHostConfigModifier(func(hc *container.HostConfig) { hc.AutoRemove = true }),
+		postgres.BasicWaitStrategies(),
+	)
+	if err != nil {
+		return "", fmt.Errorf("start postgres container: %w", err)
+	}
+
+	connStr, err := c.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		return "", fmt.Errorf("connection string: %w", err)
+	}
+	return connStr, nil
 }
 
 // chdirToRepoRoot resolves "scripts/migrations" against the repo root:
