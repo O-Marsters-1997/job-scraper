@@ -11,15 +11,19 @@
     "ProviderPostingID": "5001",
     "ContentFingerprint": "",
     "Source": "recruitee",
-    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "UpdatedAt": "2026-06-01T09:00:00Z",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eWe are looking for a Go Engineer.\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   },
   {
     "ID": "",
@@ -33,14 +37,18 @@
     "ProviderPostingID": "5002",
     "ContentFingerprint": "",
     "Source": "recruitee",
-    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "UpdatedAt": "2026-06-02T10:30:00Z",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eJoin our ML team as an ML Engineer.\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   }
 ]

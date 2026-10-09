@@ -11,15 +11,19 @@
     "ProviderPostingID": "1",
     "ContentFingerprint": "",
     "Source": "personio",
-    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "UpdatedAt": "2026-06-01T09:00:00+02:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eFully remote friendly role.\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   },
   {
     "ID": "",
@@ -33,15 +37,19 @@
     "ProviderPostingID": "2",
     "ContentFingerprint": "",
     "Source": "personio",
-    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "UpdatedAt": "2026-06-01T09:00:00+02:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eFully remote friendly role.\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "hybrid",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   },
   {
     "ID": "",
@@ -55,14 +63,18 @@
     "ProviderPostingID": "3",
     "ContentFingerprint": "",
     "Source": "personio",
-    "UpdatedAt": "0001-01-01T00:00:00Z",
+    "UpdatedAt": "2026-06-01T09:00:00+02:00",
     "ScrapedAt": "0001-01-01T00:00:00Z",
     "Description": "\u003cp\u003eFully remote friendly role.\u003c/p\u003e",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
     "Breakdown": null,
-    "Wildcard": false
+    "Wildcard": false,
+    "Listings": null
   }
 ]

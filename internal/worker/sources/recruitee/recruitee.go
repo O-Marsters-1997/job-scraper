@@ -25,6 +25,8 @@ func New(token string) *sources.BoardSource {
 	})
 }
 
+const timestampLayout = "2006-01-02 15:04:05 MST"
+
 type boardResponse struct {
 	Offers []offer `json:"offers"`
 }
@@ -35,6 +37,7 @@ type offer struct {
 	Location    string `json:"location"`
 	CareersURL  string `json:"careers_url"`
 	Description string `json:"description"`
+	CreatedAt   string `json:"created_at"`
 	Remote      bool   `json:"remote"`
 	Hybrid      bool   `json:"hybrid"`
 	OnSite      bool   `json:"on_site"`
@@ -81,7 +84,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       o.Description,
 			SalaryRaw:         o.salaryRaw(),
 			WorkArrangement:   o.workArrangement(),
-			UpdatedAt:         time.Now().UTC(),
+			UpdatedAt:         sources.TimeOrNow(timestampLayout, o.CreatedAt),
 		})
 	}
 	return jobs, nil

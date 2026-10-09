@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -30,6 +29,7 @@ type personioJob struct {
 	ID              string           `xml:"id"`
 	Name            string           `xml:"name"`
 	Office          string           `xml:"office"`
+	CreatedAt       string           `xml:"createdAt"`
 	JobDescriptions []jobDescription `xml:"jobDescriptions>jobDescription"`
 }
 
@@ -64,7 +64,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			URL:               fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
 			ProviderPostingID: p.ID,
 			Description:       sb.String(),
-			UpdatedAt:         time.Now().UTC(),
+			UpdatedAt:         sources.RFC3339OrNow(p.CreatedAt),
 		})
 	}
 	return jobs, nil

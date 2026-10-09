@@ -31,6 +31,7 @@ type item struct {
 	Title        string     `xml:"title"`
 	Description  string     `xml:"description"`
 	Link         string     `xml:"link"`
+	PubDate      string     `xml:"pubDate"`
 	GUID         string     `xml:"guid"`
 	RemoteStatus string     `xml:"remoteStatus"`
 	Locations    []location `xml:"https://teamtailor.com/locations locations>location"`
@@ -108,7 +109,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			ProviderPostingID: it.GUID,
 			Description:       it.Description,
 			WorkArrangement:   it.workArrangement(),
-			UpdatedAt:         time.Now().UTC(),
+			UpdatedAt:         sources.TimeOrNow(time.RFC1123Z, it.PubDate),
 		})
 	}
 	return jobs, nil
