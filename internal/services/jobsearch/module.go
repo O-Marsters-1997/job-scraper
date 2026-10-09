@@ -32,7 +32,10 @@ type Module struct {
 	claimLimit    int
 }
 
-const defaultClaimLimit = 10
+const (
+	defaultClaimLimit = 10
+	maxClaimLimit     = 1000
+)
 
 type ScoringPort interface {
 	sourcetargets.SearchConfigReader
@@ -152,7 +155,7 @@ func (m *Module) DeleteExpiredCandidates(ctx context.Context) error {
 
 func claimLimitFromEnv() int {
 	limit, err := strconv.Atoi(os.Getenv("DISCOVERY_CLAIM_LIMIT"))
-	if err != nil || limit < 1 {
+	if err != nil || limit < 1 || limit > maxClaimLimit {
 		return defaultClaimLimit
 	}
 	return limit
