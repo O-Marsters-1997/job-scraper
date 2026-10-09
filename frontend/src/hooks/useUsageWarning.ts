@@ -18,8 +18,9 @@ export function createUsageWarning(): UsageWarning {
 	const proxyLevel = createMemo<UsageLevel>(() =>
 		isAdmin() ? worstLevel(proxy.data?.providers.map(quotaLevel) ?? []) : "ok",
 	);
+	const overall = createMemo(() => worstLevel([aiLevel(), proxyLevel()]));
 	return {
-		overall: createMemo(() => worstLevel([aiLevel(), proxyLevel()])),
+		overall,
 		forSection: (to) =>
 			to === "/settings/ai"
 				? aiLevel()
