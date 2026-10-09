@@ -126,12 +126,14 @@ func (s *Service) Create(ctx context.Context, userID string, in dto.CreateSource
 }
 
 func createWindow(in dto.RunWindowInput) (dto.RunWindow, error) {
-	window := runwindow.Default()
-	if in.Set {
+	var window dto.RunWindow
+	switch {
+	case !in.Set:
+		window = runwindow.Default()
+	case in.Window == nil:
 		window = manualWindow()
-		if in.Window != nil {
-			window = *in.Window
-		}
+	default:
+		window = *in.Window
 	}
 	if err := runwindow.Validate(window); err != nil {
 		return dto.RunWindow{}, apperr.Invalid("run_window: " + err.Error())
