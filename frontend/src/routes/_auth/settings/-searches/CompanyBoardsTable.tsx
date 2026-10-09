@@ -13,7 +13,12 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { paginate, relativeTime, type SearchParams } from "@/lib/searchTargets";
+import {
+	paginate,
+	relativeTime,
+	SEARCH_PAGE_SIZE,
+	type SearchParams,
+} from "@/lib/searchTargets";
 import {
 	boardCounts,
 	COMPANY_PAGE_SIZE,
@@ -243,11 +248,9 @@ export function CompanyBoardsTable(props: {
 					</Table>
 				</div>
 				<Pager
-					from={paged().from}
-					to={paged().to}
 					total={paged().total}
 					page={paged().page}
-					pageCount={paged().pageCount}
+					pageSize={SEARCH_PAGE_SIZE}
 					noun="companies"
 					onPage={(page) =>
 						props.onParams({ page: page > 1 ? page : undefined })

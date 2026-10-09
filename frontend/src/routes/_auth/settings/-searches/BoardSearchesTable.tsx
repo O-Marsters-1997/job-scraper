@@ -17,6 +17,7 @@ import {
 	describeFilters,
 	matchesSearch,
 	paginate,
+	SEARCH_PAGE_SIZE,
 	type SearchParams,
 	type SearchStatus,
 	sortTargets,
@@ -257,11 +258,9 @@ export function BoardSearchesTable(props: {
 					</Table>
 				</div>
 				<Pager
-					from={paged().from}
-					to={paged().to}
 					total={paged().total}
 					page={paged().page}
-					pageCount={paged().pageCount}
+					pageSize={SEARCH_PAGE_SIZE}
 					noun="searches"
 					onPage={(page) =>
 						props.onParams({ page: page > 1 ? page : undefined })

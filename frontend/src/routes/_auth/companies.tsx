@@ -240,11 +240,9 @@ function CompaniesPage() {
 								</TableBody>
 							</Table>
 							<Pager
-								from={(page() - 1) * COMPANY_PAGE_SIZE + 1}
-								to={(page() - 1) * COMPANY_PAGE_SIZE + data().items.length}
 								total={data().total}
 								page={page()}
-								pageCount={Math.ceil(data().total / COMPANY_PAGE_SIZE)}
+								pageSize={COMPANY_PAGE_SIZE}
 								noun="companies"
 								onPage={setPage}
 							/>

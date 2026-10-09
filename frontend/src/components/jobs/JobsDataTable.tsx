@@ -12,6 +12,7 @@ import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
+import { Pager } from "@/components/Pager";
 import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -325,30 +326,13 @@ export function JobsDataTable<TData extends Job>(
 						</Show>
 					</TableBody>
 				</Table>
-				<Show when={table.getPageCount() > 1}>
-					<div class="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
-						<span class="mr-auto text-xs text-faint">
-							Page {table.getState().pagination.pageIndex + 1} of{" "}
-							{table.getPageCount()}
-						</span>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={!table.getCanPreviousPage()}
-							onClick={() => table.previousPage()}
-						>
-							Previous
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={!table.getCanNextPage()}
-							onClick={() => table.nextPage()}
-						>
-							Next
-						</Button>
-					</div>
-				</Show>
+				<Pager
+					total={props.data.length}
+					page={pageIndex() + 1}
+					pageSize={PAGE_SIZE}
+					noun="jobs"
+					onPage={(page) => table.setPageIndex(page - 1)}
+				/>
 			</div>
 
 			<JobFiltersDialog
