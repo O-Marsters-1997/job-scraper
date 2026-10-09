@@ -16,6 +16,11 @@ test("should redirect to the first section and switch sections from the nav", as
 	await expect(nav.getByRole("link", { name: /^Scoring/ })).toBeFocused();
 	await expect(page).toHaveURL(/\/settings\/profile$/);
 
+	await page.keyboard.press("[");
+	await expect(nav.getByRole("link", { name: /^Profile/ })).toBeFocused();
+	await page.keyboard.press("]");
+	await expect(nav.getByRole("link", { name: /^Scoring/ })).toBeFocused();
+
 	await page.keyboard.press("Enter");
 	await expect(page).toHaveURL(/\/settings\/scoring\/role$/);
 	await expect(
