@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { DraftEditor } from "@/components/tailoring/DraftEditor";
 import { PhoneDraftReview } from "@/components/tailoring/PhoneDraftReview";
@@ -14,10 +14,15 @@ export const Route = createFileRoute("/_auth/tailoring/drafts/$id")({
 function DraftReviewPage() {
 	const params = Route.useParams();
 	const draft = useDraft(() => params().id);
+	const [data, setData] = createSignal<Draft>();
+	createEffect(() => {
+		const next = draft.data;
+		if (next) setData(next);
+	});
 
 	return (
 		<Show
-			when={draft.data}
+			when={data()}
 			fallback={
 				<p class="px-7 py-6 text-sm text-muted">
 					{draft.isError ? "Draft not found." : "Loading…"}

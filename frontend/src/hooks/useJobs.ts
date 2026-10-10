@@ -1,4 +1,5 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
+import { createMemo } from "solid-js";
 import { fetchAllJobs, fetchJob, markJobsSeen } from "../api/jobs";
 import { keys } from "../api/keys";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
@@ -20,7 +21,8 @@ export function jobQueryOptions(id: string) {
 }
 
 export function useJob(id: () => string) {
-	return createQuery(() => jobQueryOptions(id()));
+	const stableId = createMemo(id);
+	return createQuery(() => jobQueryOptions(stableId()));
 }
 
 export function useMarkJobsSeen() {
