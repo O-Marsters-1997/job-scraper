@@ -309,6 +309,17 @@ func TestRunCollectsEveryCheck(t *testing.T) {
 	}
 }
 
+func TestRunUserEditedSkipsSlotLength(t *testing.T) {
+	d := bulletDraft("Cut costs by a very long margin", "short", nil, nil)
+
+	if diff := cmp.Diff([]want(nil), findings(checks.RunUserEdited(d), "slot_length")); diff != "" {
+		t.Errorf("RunUserEdited slot_length findings (-want +got):\n%s", diff)
+	}
+	if len(findings(checks.Run(d), "slot_length")) == 0 {
+		t.Error("Run produced no slot_length finding, want one")
+	}
+}
+
 func TestContact(t *testing.T) {
 	tests := []struct {
 		name  string

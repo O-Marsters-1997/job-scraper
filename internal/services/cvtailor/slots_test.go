@@ -87,6 +87,21 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("saves an edit longer than the base text without a length finding", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+		long := "Cut p99 latency by moving queries to Postgres and then tuning every index across the whole platform for good measure"
+
+		got := e.saved(t, e.editing(t, e.drive), id, dto.SlotEdit{SlotID: slot, Text: long})
+
+		for _, f := range got.Findings {
+			if f.Check == "slot_length" {
+				t.Errorf("SaveDraftSlots().Findings = %+v, want no slot_length finding", got.Findings)
+			}
+		}
+	})
+
 	t.Run("saves an edit that adds a page and reports it", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
