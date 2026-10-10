@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For, onCleanup, Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { charsToSave, isSparse, type LineFit } from "@/lib/docLayout";
@@ -80,6 +80,8 @@ export function MarginCard(props: {
 	editor: DraftEditorState;
 	fit: LineFit | undefined;
 	active: boolean;
+	hovered: boolean;
+	onHover: (key: string, over: boolean) => void;
 	editable: boolean;
 	onOpen: () => void;
 	onResolve: () => void;
@@ -90,15 +92,22 @@ export function MarginCard(props: {
 	const edited = () => props.editor.edited(key());
 	const header = () => cardHeader(props.editor, key());
 	const sparseFit = () => (isSparse(props.fit) ? props.fit : undefined);
+	onCleanup(() => props.onHover(key(), false));
 	return (
 		<div
 			data-testid="margin-card"
 			data-card-key={key()}
+			onPointerEnter={(e) => {
+				if (e.pointerType === "mouse") props.onHover(key(), true);
+			}}
+			onPointerLeave={() => props.onHover(key(), false)}
 			class={cn(
 				"rounded-xl bg-surface text-sm transition-shadow duration-300",
 				props.active
 					? "shadow-xl ring-1 ring-accent-border"
-					: "ring-1 ring-border",
+					: props.hovered
+						? "shadow-md ring-1 ring-accent-border"
+						: "ring-1 ring-border",
 				resolved() && !props.active && "opacity-60",
 			)}
 		>

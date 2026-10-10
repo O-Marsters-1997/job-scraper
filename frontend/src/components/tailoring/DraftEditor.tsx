@@ -82,6 +82,9 @@ export function DraftEditor(props: {
 	const job = useJob(() => props.draft.jobId);
 
 	const [active, setActive] = createSignal<string>();
+	const [hovered, setHovered] = createSignal<string>();
+	const hover = (key: string, over: boolean) =>
+		setHovered((cur) => (over ? key : cur === key ? undefined : cur));
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
 	const [showChanges, setShowChanges] = createSignal(false);
@@ -170,6 +173,11 @@ export function DraftEditor(props: {
 		get active() {
 			return active();
 		},
+		get hovered() {
+			return hovered();
+		},
+		hasCard: (slotId) => cardKeys().includes(slotId),
+		onHover: hover,
 		text: ed.text,
 		label: ed.label,
 		diffFor: (slotId) => {
@@ -237,6 +245,8 @@ export function DraftEditor(props: {
 			stage={stage()}
 			fits={metrics().fits}
 			active={active()}
+			hovered={hovered()}
+			onHover={hover}
 			editable={editable()}
 			onActive={activate}
 			onFit={editable() ? fitSlot : undefined}

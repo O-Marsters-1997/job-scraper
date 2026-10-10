@@ -60,6 +60,8 @@ export function MarginCards(props: {
 	stage: HTMLElement | undefined;
 	fits: Record<string, LineFit>;
 	active: string | undefined;
+	hovered: string | undefined;
+	onHover: (key: string, over: boolean) => void;
 	editable: boolean;
 	narrow: boolean;
 	onActive: (key: string | undefined) => void;
@@ -140,6 +142,8 @@ export function MarginCards(props: {
 					editor={props.editor}
 					fit={props.fits[key]}
 					active={props.active === key}
+					hovered={props.hovered === key}
+					onHover={props.onHover}
 					editable={props.editable}
 					onOpen={() => open(key)}
 					onResolve={() => {

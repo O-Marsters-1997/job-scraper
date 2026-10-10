@@ -49,6 +49,9 @@ export type PageEditor = {
 	editable: boolean;
 	showCounts: boolean;
 	active: string | undefined;
+	hovered: string | undefined;
+	hasCard: (slotId: string) => boolean;
+	onHover: (slotId: string, over: boolean) => void;
 	text: (slotId: string) => string;
 	label: (slotId: string) => string;
 	diffFor: (slotId: string) => WordOp[] | null;
@@ -345,6 +348,12 @@ function Block(props: {
 				"relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]",
 				editor()?.editable && "cursor-text",
 			)}
+			on:mouseenter={() => {
+				const ed = editor();
+				if (ed?.hasCard(props.block.slotId))
+					ed.onHover(props.block.slotId, true);
+			}}
+			on:mouseleave={() => editor()?.onHover(props.block.slotId, false)}
 			on:mousedown={(e) => {
 				const ed = editor();
 				if (ed) claimClick(e, ed, props.block.slotId);
@@ -368,7 +377,25 @@ function Block(props: {
 						<Show when={ed().active === props.block.slotId}>
 							<span
 								aria-hidden="true"
-								class="absolute -left-2 inset-y-0 w-0.5 rounded-full bg-primary"
+								class="absolute -left-2 inset-y-0 w-1 rounded-full bg-primary"
+							/>
+						</Show>
+						<Show
+							when={
+								ed().hasCard(props.block.slotId) ||
+								ed().active === props.block.slotId
+							}
+						>
+							<span
+								aria-hidden="true"
+								data-testid="line-anchor"
+								class={cn(
+									"pointer-events-none absolute inset-0 rounded-sm transition-colors",
+									ed().active === props.block.slotId ||
+										ed().hovered === props.block.slotId
+										? "bg-primary/20"
+										: "bg-accent-subtle",
+								)}
 							/>
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
