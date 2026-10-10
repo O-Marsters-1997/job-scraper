@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
+import { recordEvent } from "@/api/events";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
@@ -46,6 +47,16 @@ function JobDetailPage() {
 		if (!job || job.Seen || markedId === job.ID) return;
 		markedId = job.ID;
 		markSeen.mutate({ jobIds: [job.ID], seen: true });
+	});
+	let openedId: string | undefined;
+	createEffect(() => {
+		const job = jobsQuery.data;
+		if (!job || openedId === job.ID) return;
+		openedId = job.ID;
+		recordEvent({ type: "job_opened", subject_id: job.ID });
+		if (new URLSearchParams(window.location.search).get("from") === "alert") {
+			recordEvent({ type: "alert_opened", subject_id: job.ID });
+		}
 	});
 	const track = useTrackJobs(() => (jobsQuery.data ? [jobsQuery.data] : []));
 

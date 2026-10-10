@@ -1,4 +1,5 @@
 import { createSignal, Show } from "solid-js";
+import { recordEvent } from "@/api/events";
 import { GradeChips } from "@/components/jobs/GradeChips";
 import { undoPlan } from "@/lib/gradeBatch";
 import type { Grade, GradeReason } from "@/types/grade";
@@ -54,6 +55,7 @@ export function useDismissJob() {
 		dismiss: async (job: { ID: string; Title: string }) => {
 			await set.mutateAsync({ jobId: job.ID, grade: "no", reasons: [] });
 			await markSeen([job.ID]);
+			recordEvent({ type: "job_dismissed", subject_id: job.ID });
 			showFor({ jobId: job.ID, title: job.Title, reasons: [] });
 		},
 		undo: async (jobId: string) => {

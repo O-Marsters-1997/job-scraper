@@ -867,7 +867,7 @@ func (s *Store) GetJobScoreForFeedback(ctx context.Context, userID, jobID string
 	if err := json.Unmarshal(row.Breakdown, &rows); err != nil {
 		return dto.JobScoreEvidence{}, fmt.Errorf("store.GetJobScoreForFeedback: breakdown: %w", err)
 	}
-	return dto.JobScoreEvidence{Score: int(row.Score), Breakdown: rows, Fingerprint: row.ScoreFingerprint, Model: row.ScoreModel}, nil
+	return dto.JobScoreEvidence{Score: int(row.Score), Band: row.Band, Breakdown: rows, Fingerprint: row.ScoreFingerprint, Model: row.ScoreModel}, nil
 }
 
 // ListJobScoresForCollection returns userID's stored score for each of jobIDs

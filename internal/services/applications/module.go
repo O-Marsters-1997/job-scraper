@@ -24,8 +24,8 @@ func Build(deps Deps) *Module {
 	return &Module{service: NewService(deps.Store), store: deps.Store}
 }
 
-func New(pool *pgxpool.Pool) *Module {
-	return Build(Deps{Store: store.New(pool)})
+func New(pool *pgxpool.Pool, events store.EventRecorder) *Module {
+	return Build(Deps{Store: store.New(pool, events)})
 }
 
 // SeedDefaults seeds userID's default Statuses inside tx; identity's signup

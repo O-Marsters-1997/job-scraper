@@ -22,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -60,7 +61,9 @@ func main() {
 	slog.InfoContext(ctx, "queue client ready")
 	defer func() { _ = q.Close() }()
 
-	apps := applications.New(pool)
+	scoringFacade := scoring.NewFacade(pool)
+	eventsModule := events.New(pool, scoringFacade)
+	apps := applications.New(pool, eventsModule)
 	idm, err := identity.New(pool, apps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
@@ -77,7 +80,7 @@ func main() {
 	if key := os.Getenv("DECODO_API_KEY"); key != "" {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
-	js := jobsearch.New(pool, q, scoring.NewFacade(pool), proxyQuota, maxAutomaticTargets(ctx))
+	js := jobsearch.New(pool, q, scoringFacade, proxyQuota, maxAutomaticTargets(ctx))
 	if proxyQuota != nil {
 		go schedule.Every(ctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
 	}
@@ -108,7 +111,7 @@ func main() {
 		}
 	}()
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule)}
+	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)}
 
 	go func() {
 		<-ctx.Done()

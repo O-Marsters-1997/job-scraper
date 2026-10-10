@@ -56,3 +56,7 @@ SELECT
 FROM applications a
 LEFT JOIN application_statuses s ON a.status_id = s.id
 WHERE a.user_id = $1 AND a.job_id = ANY($2::uuid[]);
+
+-- name: GetApplicationState :one
+SELECT job_id, status_id FROM applications
+WHERE id = $1 AND user_id = $2;

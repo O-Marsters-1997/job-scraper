@@ -79,7 +79,7 @@ func newJobPush(job dto.Job, sc dto.JobScore) dto.PushMessage {
 	return dto.PushMessage{
 		Title: fmt.Sprintf("%d · %s, %s", sc.Score, job.Title, job.CompanySlug),
 		Body:  strings.Join(labels, " · "),
-		URL:   "/jobs/" + job.ID,
+		URL:   "/jobs/" + job.ID + "?from=alert",
 		Tag:   job.ID,
 	}
 }

@@ -46,6 +46,8 @@ linters:
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/events/eventstest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtemplates/cvtemplatestest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/services/identity/identitytest
@@ -88,6 +90,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/applications/store
               desc: only the applications context uses its store; call the applications Module facade (ADR 0011)
+        events-store:
+          files: ["$all", "!**/internal/services/events/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/events/store
+              desc: only the events context uses its store; call the events Module facade (ADR 0011)
         cvtemplates-store:
           files: ["$all", "!**/internal/services/cvtemplates/**"]
           deny:

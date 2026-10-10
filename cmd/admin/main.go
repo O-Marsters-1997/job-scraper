@@ -15,6 +15,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/logger"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
+	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 )
@@ -92,7 +93,7 @@ func runCreateUser(args []string) {
 	pool := connectDB(ctx)
 	defer pool.Close()
 
-	apps := applications.New(pool)
+	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)))
 	idm := identity.NewFacade(pool, apps)
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
 	if err != nil {
