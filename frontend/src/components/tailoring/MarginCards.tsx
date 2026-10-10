@@ -38,7 +38,11 @@ function CardDot(props: {
 			aria-label={header().text}
 			data-testid="card-dot"
 			data-card-key={props.cardKey}
-			class="pointer-events-auto absolute left-0.5 grid place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+			class={cn(
+				"pointer-events-auto absolute left-0.5 grid place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none",
+				props.editor.isResolved(props.cardKey) &&
+					"bg-accent-subtle ring-1 ring-accent-border",
+			)}
 			style={{ top: `${props.top}px`, width: `${DOT}px`, height: `${DOT}px` }}
 			onClick={() => props.onOpen()}
 		>
@@ -50,7 +54,7 @@ function CardDot(props: {
 					/>
 				}
 			>
-				<Icon name="check" size={12} class="text-muted" />
+				<Icon name="check" size={13} class="text-accent-text" />
 			</Show>
 		</button>
 	);
@@ -163,6 +167,7 @@ export function MarginCards(props: {
 					onHover={props.onHover}
 					editable={props.editable}
 					onOpen={() => open(key)}
+					onCollapse={() => setExpanded(undefined)}
 					onResolve={() => {
 						props.editor.setResolved(key, !props.editor.isResolved(key));
 						props.onActive(undefined);

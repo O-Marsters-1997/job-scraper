@@ -84,6 +84,7 @@ export function MarginCard(props: {
 	onHover: (key: string, over: boolean) => void;
 	editable: boolean;
 	onOpen: () => void;
+	onCollapse?: (() => void) | undefined;
 	onResolve: () => void;
 	onFit?: ((slotId: string) => void) | undefined;
 }) {
@@ -115,7 +116,11 @@ export function MarginCard(props: {
 				type="button"
 				aria-expanded={props.active}
 				class="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
-				onClick={() => props.onOpen()}
+				onClick={() =>
+					resolved() && props.active && props.onCollapse
+						? props.onCollapse()
+						: props.onOpen()
+				}
 			>
 				<Show
 					when={!resolved()}
@@ -139,6 +144,9 @@ export function MarginCard(props: {
 							{fit().lines} {fit().lines === 1 ? "line" : "lines"}
 						</span>
 					)}
+				</Show>
+				<Show when={resolved() && props.active && props.onCollapse}>
+					<Icon name="chevronUp" size={14} class="shrink-0 text-muted" />
 				</Show>
 			</button>
 

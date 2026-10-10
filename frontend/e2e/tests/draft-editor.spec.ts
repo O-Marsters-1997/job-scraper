@@ -141,6 +141,8 @@ test.describe("Draft editor", () => {
 		await expect(
 			draftPage.card("s1").getByRole("button", { name: "Reopen" }),
 		).toBeVisible();
+		await draftPage.card("s1").getByRole("button").first().click();
+		await expect(draftPage.dot("s1")).toBeVisible();
 	});
 
 	test("tightens a line through the wand and saves it on Accept", async ({
