@@ -1,5 +1,6 @@
 import {
 	createEffect,
+	createSignal,
 	For,
 	type JSX,
 	onCleanup,
@@ -210,6 +211,19 @@ function EditableLine(props: {
 	let el: HTMLElement | undefined;
 	const text = () => props.editor.text(props.slotId);
 	const diff = () => props.editor.diffFor(props.slotId);
+	const [caret, setCaret] = createSignal<CaretBox>();
+	const placeCaret = () => {
+		if (el) setCaret(caretBox(el));
+	};
+	const trackCaret = () => {
+		document.addEventListener("selectionchange", placeCaret);
+		placeCaret();
+	};
+	const untrackCaret = () => {
+		document.removeEventListener("selectionchange", placeCaret);
+		setCaret(undefined);
+	};
+	onCleanup(untrackCaret);
 	createEffect(() => {
 		const value = text();
 		if (el && el.textContent !== value) el.textContent = value;
@@ -251,7 +265,7 @@ function EditableLine(props: {
 					props.editor.editable && !diff() ? "plaintext-only" : false
 				}
 				spellcheck={false}
-				style={{ "caret-color": INK }}
+				style={{ "caret-color": "transparent" }}
 				class={cn(
 					"relative block cursor-text outline-none selection:bg-primary/30",
 					diff() && "pointer-events-none invisible absolute inset-x-0 top-0",
@@ -271,11 +285,43 @@ function EditableLine(props: {
 					if (e.key === "Enter") e.preventDefault();
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
-				onFocus={() => props.editor.onFocus(props.slotId)}
-				onBlur={() => props.editor.onBlur(props.slotId)}
+				onFocus={() => {
+					trackCaret();
+					props.editor.onFocus(props.slotId);
+				}}
+				onBlur={() => {
+					untrackCaret();
+					props.editor.onBlur(props.slotId);
+				}}
 			/>
+			<Show when={caret()}>
+				{(box) => (
+					<span
+						aria-hidden="true"
+						class="doc-caret pointer-events-none absolute w-[3px] bg-black"
+						style={{
+							left: `${box().x - 1}px`,
+							top: `${box().y}px`,
+							height: `${box().h}px`,
+						}}
+					/>
+				)}
+			</Show>
 		</span>
 	);
+}
+
+type CaretBox = { x: number; y: number; h: number };
+
+function caretBox(line: HTMLElement): CaretBox | undefined {
+	const sel = document.getSelection();
+	const host = line.parentElement;
+	if (!sel || !host || !sel.isCollapsed || !line.contains(sel.anchorNode))
+		return undefined;
+	const at =
+		sel.getRangeAt(0).getClientRects()[0] ?? line.getBoundingClientRect();
+	const origin = host.getBoundingClientRect();
+	return { x: at.left - origin.left, y: at.top - origin.top, h: at.height };
 }
 
 function caretAt(line: HTMLElement, x: number, y: number) {
