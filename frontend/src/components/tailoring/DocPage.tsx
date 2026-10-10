@@ -54,6 +54,7 @@ export type PageEditor = {
 	diffFor: (slotId: string) => WordOp[] | null;
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
+	onDismissSuggestion: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
 	onEditSkills?: (() => void) | undefined;
 };
@@ -228,7 +229,7 @@ function EditableLine(props: {
 				}
 				spellcheck={false}
 				class={cn(
-					"relative block cursor-text caret-primary outline-none selection:bg-accent-border",
+					"relative block cursor-text caret-primary outline-none selection:bg-primary/30",
 					diff() && "pointer-events-none invisible absolute inset-x-0 top-0",
 				)}
 				onInput={(e) =>
@@ -251,6 +252,46 @@ function EditableLine(props: {
 			/>
 		</span>
 	);
+}
+
+function caretAt(line: HTMLElement, x: number, y: number) {
+	const box = line.getBoundingClientRect();
+	const px = Math.min(Math.max(x, box.left + 1), box.right - 1);
+	const py = Math.min(Math.max(y, box.top + 1), box.bottom - 1);
+	const pos = document.caretPositionFromPoint?.(px, py);
+	if (pos && line.contains(pos.offsetNode)) return pos;
+	const range = document.caretRangeFromPoint?.(px, py);
+	if (range && line.contains(range.startContainer))
+		return { offsetNode: range.startContainer, offset: range.startOffset };
+	return undefined;
+}
+
+function claimClick(e: MouseEvent, ed: PageEditor, slotId: string) {
+	const block = e.currentTarget;
+	if (!(block instanceof HTMLElement) || e.button !== 0 || !ed.editable) return;
+	const line = block.querySelector<HTMLElement>('[role="textbox"]');
+	if (!line) return;
+	const suggested = ed.diffFor(slotId) !== null;
+	if (!suggested && e.target instanceof Node && line.contains(e.target)) return;
+	e.preventDefault();
+	if (suggested) ed.onDismissSuggestion(slotId);
+	const { clientX, clientY } = e;
+	queueMicrotask(() => {
+		line.focus({ preventScroll: true });
+		const sel = getSelection();
+		if (!sel) return;
+		const at = caretAt(line, clientX, clientY);
+		const range = document.createRange();
+		if (at) {
+			range.setStart(at.offsetNode, at.offset);
+			range.collapse(true);
+		} else {
+			range.selectNodeContents(line);
+			range.collapse(false);
+		}
+		sel.removeAllRanges();
+		sel.addRange(range);
+	});
 }
 
 function LineCount(props: {
@@ -300,7 +341,14 @@ function Block(props: {
 			data-slot-id={props.block.slotId || undefined}
 			data-section={props.block.section || undefined}
 			data-skill-line={props.block.skillLine ?? undefined}
-			class="relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]"
+			class={cn(
+				"relative whitespace-pre-wrap [font-kerning:normal] [font-variant-ligatures:none] [tab-size:36pt]",
+				editor()?.editable && "cursor-text",
+			)}
+			on:mousedown={(e) => {
+				const ed = editor();
+				if (ed) claimClick(e, ed, props.block.slotId);
+			}}
 			style={blockStyle(props.block, lead(), props.draw, spacer())}
 		>
 			<Show when={onEditSkills()}>
@@ -339,7 +387,7 @@ function Block(props: {
 				{(bullet) => (
 					<span
 						aria-hidden="true"
-						class="absolute"
+						class="pointer-events-none absolute"
 						style={{
 							left: `${Math.min(props.block.indentFirstLine, Math.max(props.block.indentStart - bullet().size, 0))}pt`,
 							"font-size": bullet().size > 0 ? `${bullet().size}pt` : undefined,

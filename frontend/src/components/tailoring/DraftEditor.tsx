@@ -184,6 +184,7 @@ export function DraftEditor(props: {
 		},
 		onInput: ed.setText,
 		onFocus: activate,
+		onDismissSuggestion: suggestions.reject,
 		onBlur: () => void ed.flush(),
 		get onEditSkills() {
 			return editable() && props.draft.skillsEditable
