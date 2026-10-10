@@ -81,37 +81,48 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	if len(in.Reason) > maxReasonLen {
 		return struct{}{}, apperr.Invalid("reason too long")
 	}
-	props, err := s.stamped(ctx, userID, in.SubjectID)
-	if err != nil {
-		return struct{}{}, err
+	var snap *dto.JobScoreEvidence
+	if in.SubjectID != "" {
+		var err error
+		if snap, err = s.snapshots.ScoreSnapshot(ctx, userID, in.SubjectID); err != nil {
+			return struct{}{}, fmt.Errorf("events.Record: snapshot: %w", err)
+		}
 	}
+	props := stampFrom(snap, in.Type == JobDismissed)
 	props.Reason = in.Reason
 	return struct{}{}, s.insert(ctx, nil, userID, in.Type, in.SubjectID, props)
 }
 
-func (s *Service) recordApplicationEvent(ctx context.Context, tx pgx.Tx, userID, eventType, applicationID string, p applicationProps) error {
-	stamped, err := s.stamped(ctx, userID, p.JobID)
-	if err != nil {
-		slog.WarnContext(ctx, "application event recorded without score", slog.Any(logger.KeyErr, err))
-	}
-	p.jobProps = stamped
+func (s *Service) recordApplicationEvent(ctx context.Context, tx pgx.Tx, userID, eventType, applicationID string, p applicationProps, snap *dto.JobScoreEvidence) error {
+	p.jobProps = stampFrom(snap, true)
 	return s.insert(ctx, tx, userID, eventType, applicationID, p)
 }
 
-func (s *Service) stamped(ctx context.Context, userID, jobID string) (jobProps, error) {
-	var props jobProps
+// snapshot returns a best-effort score snapshot: a failed read is logged and
+// reported as no score, so analytics never blocks the caller.
+func (s *Service) snapshot(ctx context.Context, userID, jobID string) *dto.JobScoreEvidence {
 	if jobID == "" {
-		return props, nil
+		return nil
 	}
 	snap, err := s.snapshots.ScoreSnapshot(ctx, userID, jobID)
 	if err != nil {
-		return props, fmt.Errorf("events.stamped: %w", err)
+		slog.WarnContext(ctx, "score snapshot failed", slog.Any(logger.KeyErr, err))
+		return nil
 	}
-	if snap != nil {
-		props.Score, props.Band = &snap.Score, snap.Band
-		props.ScoreModel, props.ScoreFingerprint, props.Breakdown = snap.Model, snap.Fingerprint, snap.Breakdown
+	return snap
+}
+
+func stampFrom(snap *dto.JobScoreEvidence, withBreakdown bool) jobProps {
+	var props jobProps
+	if snap == nil {
+		return props
 	}
-	return props, nil
+	props.Score, props.Band = &snap.Score, snap.Band
+	props.ScoreModel, props.ScoreFingerprint = snap.Model, snap.Fingerprint
+	if withBreakdown {
+		props.Breakdown = snap.Breakdown
+	}
+	return props
 }
 
 func (s *Service) insert(ctx context.Context, tx pgx.Tx, userID, eventType, subjectID string, props any) error {

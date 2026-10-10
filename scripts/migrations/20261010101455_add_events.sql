@@ -16,7 +16,7 @@ CREATE TABLE events (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX events_user_type_created_idx ON events (user_id, type, created_at);
-CREATE INDEX events_subject_idx ON events (subject_id);
+CREATE INDEX events_user_subject_idx ON events (user_id, subject_id);
 
 -- +goose Down
 DROP TABLE events;

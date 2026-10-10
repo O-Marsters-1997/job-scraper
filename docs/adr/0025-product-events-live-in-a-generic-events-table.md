@@ -14,7 +14,10 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 - **`subject_id` has no foreign key.** The type decides what it points at. The log outlives the row.
 - **`props` is one Go struct per type, validated on write.** Job and application events carry the score
   snapshot (`score`, `band`, `score_model`, `score_fingerprint`, `breakdown`), taken server side from
-  scoring through the `ScoreSnapshotter` interface and omitted when the job has no score.
+  scoring through the `ScoreSnapshotter` interface and omitted when the job has no score. The `breakdown`
+  is stored only on `job_dismissed` and application events; `job_opened` and `alert_opened` are high volume
+  and keep the scalar fields. Application events read the snapshot before their transaction opens, so a
+  request never holds two pool connections.
 - **Frontend events** (`job_opened`, `job_dismissed`, `alert_opened`) go through `POST /events`, fire and
   forget. **Application events** are written by `applications` in its own transaction through the events
   module's ports.

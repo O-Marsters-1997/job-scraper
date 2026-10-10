@@ -43,7 +43,7 @@ func only(t *testing.T, st *eventstest.FakeStore) dto.Event {
 }
 
 func TestRecord(t *testing.T) {
-	t.Run("stamps a job event with the job's current score", func(t *testing.T) {
+	t.Run("stamps an open with the job's current score, without the breakdown", func(t *testing.T) {
 		st := eventstest.NewFakeStore()
 		svc := events.NewService(st, eventstest.ScoresAs(scored))
 
@@ -55,12 +55,9 @@ func TestRecord(t *testing.T) {
 		if e.Type != events.JobOpened || e.SubjectID != jobID {
 			t.Errorf("event = %+v, want job_opened for %s", e, jobID)
 		}
-		got := props(t, e)
-		breakdown, _ := got["breakdown"].([]any)
-		delete(got, "breakdown")
 		want := map[string]any{"score": float64(72), "band": "good", "score_model": "jev-1", "score_fingerprint": "fp-1"}
-		if diff := cmp.Diff(want, got); diff != "" || len(breakdown) != 1 {
-			t.Errorf("props = %v, breakdown rows %d (-want +got):\n%s", got, len(breakdown), diff)
+		if diff := cmp.Diff(want, props(t, e)); diff != "" {
+			t.Errorf("props (-want +got):\n%s", diff)
 		}
 	})
 
@@ -87,8 +84,8 @@ func TestRecord(t *testing.T) {
 		}
 
 		got := props(t, only(t, st))
-		if got["reason"] != "wrong seniority" || got["score"] != float64(72) {
-			t.Errorf("props = %v, want reason and score", got)
+		if got["reason"] != "wrong seniority" || got["score"] != float64(72) || got["breakdown"] == nil {
+			t.Errorf("props = %v, want reason, score and breakdown", got)
 		}
 	})
 
@@ -148,14 +145,15 @@ func TestApplicationEventRecording(t *testing.T) {
 		st := eventstest.NewFakeStore()
 		m := events.Build(events.Deps{Store: st, Snapshots: eventstest.ScoresAs(scored)})
 
-		if err := m.RecordApplicationCreated(t.Context(), nil, userID, "app-1", jobID); err != nil {
+		snap := m.Snapshot(t.Context(), userID, jobID)
+		if err := m.RecordApplicationCreated(t.Context(), nil, userID, "app-1", jobID, snap); err != nil {
 			t.Fatalf("RecordApplicationCreated() err = %v", err)
 		}
 
 		e := only(t, st)
 		got := props(t, e)
-		if e.Type != events.ApplicationCreated || e.SubjectID != "app-1" || got["job_id"] != jobID || got["score"] != float64(72) {
-			t.Errorf("event = %+v props %v, want application_created for app-1 on %s scored 72", e, got, jobID)
+		if e.Type != events.ApplicationCreated || e.SubjectID != "app-1" || got["job_id"] != jobID || got["score"] != float64(72) || got["breakdown"] == nil {
+			t.Errorf("event = %+v props %v, want application_created for app-1 on %s scored 72 with breakdown", e, got, jobID)
 		}
 	})
 
@@ -163,13 +161,21 @@ func TestApplicationEventRecording(t *testing.T) {
 		st := eventstest.NewFakeStore()
 		m := events.Build(events.Deps{Store: st, Snapshots: eventstest.Unscored()})
 
-		if err := m.RecordApplicationStatusChanged(t.Context(), nil, userID, "app-1", jobID, "s-1", "s-2"); err != nil {
+		if err := m.RecordApplicationStatusChanged(t.Context(), nil, userID, "app-1", jobID, "s-1", "s-2", nil); err != nil {
 			t.Fatalf("RecordApplicationStatusChanged() err = %v", err)
 		}
 
 		want := map[string]any{"job_id": jobID, "from_status_id": "s-1", "to_status_id": "s-2"}
 		if diff := cmp.Diff(want, props(t, only(t, st))); diff != "" {
 			t.Errorf("props (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("a failed snapshot reads as no score", func(t *testing.T) {
+		m := events.Build(events.Deps{Store: eventstest.NewFakeStore(), Snapshots: eventstest.Fails(errors.New("boom"))})
+
+		if snap := m.Snapshot(t.Context(), userID, jobID); snap != nil {
+			t.Errorf("Snapshot() = %+v, want nil", snap)
 		}
 	})
 }

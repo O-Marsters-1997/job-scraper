@@ -82,6 +82,28 @@ func (q *Queries) DeleteApplication(ctx context.Context, arg DeleteApplicationPa
 	return err
 }
 
+const getApplicationState = `-- name: GetApplicationState :one
+SELECT job_id, status_id FROM applications
+WHERE id = $1 AND user_id = $2
+`
+
+type GetApplicationStateParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type GetApplicationStateRow struct {
+	JobID    pgtype.UUID
+	StatusID pgtype.UUID
+}
+
+func (q *Queries) GetApplicationState(ctx context.Context, arg GetApplicationStateParams) (GetApplicationStateRow, error) {
+	row := q.db.QueryRow(ctx, getApplicationState, arg.ID, arg.UserID)
+	var i GetApplicationStateRow
+	err := row.Scan(&i.JobID, &i.StatusID)
+	return i, err
+}
+
 const getApplicationsForJobs = `-- name: GetApplicationsForJobs :many
 SELECT
     a.job_id,
@@ -217,29 +239,6 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 		return nil, err
 	}
 	return items, nil
-}
-
-const lockApplication = `-- name: LockApplication :one
-SELECT job_id, status_id FROM applications
-WHERE id = $1 AND user_id = $2
-FOR UPDATE
-`
-
-type LockApplicationParams struct {
-	ID     pgtype.UUID
-	UserID pgtype.UUID
-}
-
-type LockApplicationRow struct {
-	JobID    pgtype.UUID
-	StatusID pgtype.UUID
-}
-
-func (q *Queries) LockApplication(ctx context.Context, arg LockApplicationParams) (LockApplicationRow, error) {
-	row := q.db.QueryRow(ctx, lockApplication, arg.ID, arg.UserID)
-	var i LockApplicationRow
-	err := row.Scan(&i.JobID, &i.StatusID)
-	return i, err
 }
 
 const setApplicationChase = `-- name: SetApplicationChase :one

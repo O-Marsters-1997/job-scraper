@@ -22,8 +22,9 @@ var ErrApplicationExists = apperr.Conflict("application already exists for this 
 // EventRecorder logs application events inside the caller's transaction; the
 // events module implements it (ADR 0011).
 type EventRecorder interface {
-	RecordApplicationCreated(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID string) error
-	RecordApplicationStatusChanged(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID, fromStatusID, toStatusID string) error
+	Snapshot(ctx context.Context, userID, jobID string) *dto.JobScoreEvidence
+	RecordApplicationCreated(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID string, snap *dto.JobScoreEvidence) error
+	RecordApplicationStatusChanged(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID, fromStatusID, toStatusID string, snap *dto.JobScoreEvidence) error
 }
 
 type Store struct {
@@ -67,6 +68,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 	if err != nil {
 		return dto.Application{}, err
 	}
+	snap := s.events.Snapshot(ctx, userID, input.JobID)
 	var out dto.Application
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		a, err := s.queries.WithTx(tx).CreateApplication(ctx, sqlc.CreateApplicationParams{
@@ -81,7 +83,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			return err
 		}
 		out = toApplicationDTO(a)
-		return s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID)
+		return s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID, snap)
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
@@ -134,14 +136,18 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 	if err != nil {
 		return dto.Application{}, err
 	}
+	before, err := s.queries.GetApplicationState(ctx, sqlc.GetApplicationStateParams{ID: aid, UserID: uid})
+	if err != nil {
+		return dto.Application{}, data.QueryErr("UpdateApplication", err)
+	}
+	statusChanged := before.StatusID != sid
+	var snap *dto.JobScoreEvidence
+	if statusChanged {
+		snap = s.events.Snapshot(ctx, userID, before.JobID.String())
+	}
 	var out dto.Application
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := s.queries.WithTx(tx)
-		before, err := q.LockApplication(ctx, sqlc.LockApplicationParams{ID: aid, UserID: uid})
-		if err != nil {
-			return err
-		}
-		a, err := q.UpdateApplication(ctx, sqlc.UpdateApplicationParams{
+		a, err := s.queries.WithTx(tx).UpdateApplication(ctx, sqlc.UpdateApplicationParams{
 			ID:         aid,
 			UserID:     uid,
 			StatusID:   sid,
@@ -153,10 +159,10 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 			return err
 		}
 		out = toApplicationDTO(a)
-		if before.StatusID == sid {
+		if !statusChanged {
 			return nil
 		}
-		return s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID)
+		return s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID, snap)
 	})
 	if err != nil {
 		return dto.Application{}, data.QueryErr("UpdateApplication", err)
