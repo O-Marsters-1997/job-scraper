@@ -45,8 +45,6 @@ const RAIL_PX = 320;
 const RAIL_GAP_PX = 48;
 const DESKTOP_PAD_PX = 64;
 const NARROW_PAD_PX = 32;
-const RAIL_MIN_SCALE = 0.7;
-const MAX_SCALE = 1.15;
 
 function watchSize(el: HTMLElement, onResize: () => void) {
 	const ro = new ResizeObserver(onResize);
@@ -107,13 +105,11 @@ export function DraftEditor(props: {
 	};
 
 	const pagePx = () => (props.layout?.page.width ?? 0) * PX_PER_PT;
-	const railScale = () =>
-		(mainWidth() - RAIL_PX - RAIL_GAP_PX - DESKTOP_PAD_PX) / pagePx();
-	const narrow = () => mainWidth() > 0 && railScale() < RAIL_MIN_SCALE;
+	const narrow = () =>
+		mainWidth() > 0 &&
+		mainWidth() < pagePx() + RAIL_PX + RAIL_GAP_PX + DESKTOP_PAD_PX;
 	const scale = () =>
-		narrow()
-			? Math.min(1, (mainWidth() - NARROW_PAD_PX) / pagePx())
-			: Math.max(RAIL_MIN_SCALE, Math.min(MAX_SCALE, railScale()));
+		narrow() ? Math.min(1, (mainWidth() - NARROW_PAD_PX) / pagePx()) : 1;
 
 	const suggestions = createSuggestions({
 		// eslint-disable-next-line solid/reactivity -- pedantic: the Draft id is fixed for this editor
@@ -384,7 +380,7 @@ export function DraftEditor(props: {
 									ref={setStage}
 									class="relative"
 									style={
-										scale() !== 1
+										scale() < 1
 											? {
 													width: `${pagePx() * scale()}px`,
 													height: `${innerHeight() * scale()}px`,
@@ -397,7 +393,7 @@ export function DraftEditor(props: {
 											watchSize(el, () => setInnerHeight(el.offsetHeight))
 										}
 										style={
-											scale() !== 1
+											scale() < 1
 												? {
 														width: `${pagePx()}px`,
 														transform: `scale(${scale()})`,
