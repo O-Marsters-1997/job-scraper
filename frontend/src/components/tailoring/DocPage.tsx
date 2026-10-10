@@ -321,7 +321,12 @@ function caretBox(line: HTMLElement): CaretBox | undefined {
 	const at =
 		sel.getRangeAt(0).getClientRects()[0] ?? line.getBoundingClientRect();
 	const origin = host.getBoundingClientRect();
-	return { x: at.left - origin.left, y: at.top - origin.top, h: at.height };
+	const k = origin.width / host.offsetWidth || 1;
+	return {
+		x: (at.left - origin.left) / k,
+		y: (at.top - origin.top) / k,
+		h: at.height / k,
+	};
 }
 
 function caretAt(line: HTMLElement, x: number, y: number) {
