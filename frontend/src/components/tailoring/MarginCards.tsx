@@ -63,6 +63,7 @@ function CardDot(props: {
 export function MarginCards(props: {
 	editor: DraftEditorState;
 	keys: string[];
+	showResolved: boolean;
 	suggestions: SuggestionsState;
 	measureLines: (slotId: string, text: string) => number;
 	stage: HTMLElement | undefined;
@@ -81,6 +82,13 @@ export function MarginCards(props: {
 	const cards = new Map<string, HTMLElement>();
 	let rail: HTMLElement | undefined;
 
+	const shown = () =>
+		props.keys.filter(
+			(key) =>
+				props.showResolved ||
+				!props.editor.isResolved(key) ||
+				!!props.suggestions.get(key),
+		);
 	const isDot = (key: string) =>
 		props.editor.isResolved(key) &&
 		expanded() !== key &&
@@ -97,7 +105,7 @@ export function MarginCards(props: {
 		const anchor = (key: string) =>
 			stage.querySelector(anchorSelector(key))?.getBoundingClientRect();
 		const desired = (key: string) => (anchor(key)?.top ?? paperTop) - base;
-		const keys = props.keys;
+		const keys = shown();
 		const active = props.active;
 		if (!props.narrow) {
 			const slots = keys.map((key) => ({
@@ -133,8 +141,8 @@ export function MarginCards(props: {
 			[
 				() => props.active,
 				() => props.narrow,
-				() => props.keys.join(),
-				() => props.keys.map(isDot).join(),
+				() => shown().join(),
+				() => shown().map(isDot).join(),
 				() => JSON.stringify(props.fits),
 				() => props.stage,
 			],
@@ -204,7 +212,7 @@ export function MarginCards(props: {
 					: "w-80 shrink-0 self-stretch",
 			)}
 		>
-			<For each={props.keys}>
+			<For each={shown()}>
 				{(key) => (
 					<Show
 						when={!isDot(key) && (!props.narrow || props.active === key)}

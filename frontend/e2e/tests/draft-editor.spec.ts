@@ -128,12 +128,15 @@ test.describe("Draft editor", () => {
 		await expect(draftPage.resolvedCount).toContainText("1/");
 	});
 
-	test("collapses a resolved card to an icon that only expands when clicked", async ({
+	test("hides resolved cards until Show resolved, then collapses them to an icon that only expands when clicked", async ({
 		draftPage,
+		page,
 	}) => {
 		await draftPage.type(BULLET, " Terraform");
 		await draftPage.card("s1").getByRole("button").first().click();
 		await draftPage.card("s1").getByRole("button", { name: "Resolve" }).click();
+		await expect(draftPage.card("s1")).toHaveCount(0);
+		await page.getByRole("button", { name: "Show resolved" }).click();
 		await expect(draftPage.dot("s1")).toBeVisible();
 		await draftPage.line(BULLET).click();
 		await expect(draftPage.dot("s1")).toBeVisible();

@@ -87,6 +87,7 @@ export function DraftEditor(props: {
 		setHovered((cur) => (over ? key : cur === key ? undefined : cur));
 	const [metrics, setMetrics] = createSignal(NO_METRICS);
 	const [showCounts, setShowCounts] = createSignal(true);
+	const [showResolved, setShowResolved] = createSignal(false);
 	const [showChanges, setShowChanges] = createSignal(false);
 	const [preview, setPreview] = createSignal(false);
 	const [skillsOpen, setSkillsOpen] = createSignal(false);
@@ -237,6 +238,7 @@ export function DraftEditor(props: {
 			narrow={narrowRail}
 			editor={ed}
 			keys={cardKeys()}
+			showResolved={showResolved()}
 			suggestions={suggestions}
 			measureLines={(id, text) => measureLines(id, text)}
 			stage={stage()}
@@ -287,6 +289,14 @@ export function DraftEditor(props: {
 							{cardKeys().filter((k) => ed.isResolved(k)).length}/
 							{cardKeys().length} resolved
 						</span>
+						<Button
+							variant="ghost"
+							size="sm"
+							aria-pressed={showResolved()}
+							onClick={() => setShowResolved((v) => !v)}
+						>
+							Show resolved
+						</Button>
 						<Button
 							variant="ghost"
 							size="sm"
