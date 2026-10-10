@@ -255,3 +255,14 @@ func (s *Store) SetRole(ctx context.Context, username, role string) error {
 	}
 	return nil
 }
+
+func (s *Store) SetPasswordHash(ctx context.Context, username, passwordHash string) error {
+	n, err := s.queries.SetUserPasswordHash(ctx, sqlc.SetUserPasswordHashParams{Username: username, PasswordHash: passwordHash})
+	if err != nil {
+		return fmt.Errorf("store.SetPasswordHash: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}

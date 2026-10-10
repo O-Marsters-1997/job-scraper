@@ -86,6 +86,30 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		}
 	})
 
+	t.Run("set password hash replaces the stored hash", func(t *testing.T) {
+		st := newStore(t)
+		if _, err := st.CreateUser(t.Context(), "gina", "old-hash", ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.SetPasswordHash(t.Context(), "gina", "new-hash"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetUserByUsername(t.Context(), "gina")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.PasswordHash != "new-hash" {
+			t.Errorf("GetUserByUsername(gina).PasswordHash = %q, want new-hash", got.PasswordHash)
+		}
+	})
+
+	t.Run("set password hash returns not found for an unknown username", func(t *testing.T) {
+		st := newStore(t)
+		if err := st.SetPasswordHash(t.Context(), "nobody", "hash"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetPasswordHash(nobody) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("get session returns not found when expired", func(t *testing.T) {
 		st := newStore(t)
 		_, session := newSession(t, st, "erin", -time.Second)

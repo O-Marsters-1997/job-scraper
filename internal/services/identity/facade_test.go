@@ -79,3 +79,38 @@ func TestSetRole(t *testing.T) {
 		t.Errorf("SetRole(nobody, admin) err = %v, want ErrNotFound", err)
 	}
 }
+
+func TestResetPassword(t *testing.T) {
+	st := identitytest.NewFakeStore()
+	deps := testDeps(t, identity.Deps{Store: st})
+	m, svc := identity.Build(deps), identity.NewService(deps)
+	if _, _, err := svc.Signup(t.Context(), "bob", "old-password", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("new password logs in and old one does not", func(t *testing.T) {
+		if err := m.ResetPassword(t.Context(), "bob", "new-password"); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := svc.Login(t.Context(), "bob", "new-password"); err != nil {
+			t.Errorf("Login(bob, new-password) err = %v, want nil", err)
+		}
+		_, _, err := svc.Login(t.Context(), "bob", "old-password")
+		if status, _ := apperr.StatusFor(err); status != http.StatusUnauthorized {
+			t.Errorf("Login(bob, old-password) status = %d (err %v), want 401", status, err)
+		}
+	})
+
+	t.Run("empty password is invalid", func(t *testing.T) {
+		err := m.ResetPassword(t.Context(), "bob", "")
+		if status, _ := apperr.StatusFor(err); status != http.StatusBadRequest {
+			t.Errorf("ResetPassword(bob, \"\") status = %d (err %v), want 400", status, err)
+		}
+	})
+
+	t.Run("unknown user is not found", func(t *testing.T) {
+		if err := m.ResetPassword(t.Context(), "nobody", "pw"); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("ResetPassword(nobody) err = %v, want ErrNotFound", err)
+		}
+	})
+}

@@ -22,6 +22,7 @@ import (
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
+	fmt.Fprintln(os.Stderr, "       admin reset-password <username>")
 	fmt.Fprintln(os.Stderr, "       admin set-role <username> <user|admin>")
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
@@ -43,6 +44,8 @@ func main() {
 	switch os.Args[1] {
 	case "create-user":
 		runCreateUser(os.Args[2:])
+	case "reset-password":
+		runResetPassword(os.Args[2:])
 	case "set-role":
 		runSetRole(os.Args[2:])
 	case "options":
@@ -73,12 +76,7 @@ func runCreateUser(args []string) {
 	}
 	username := args[0]
 
-	fmt.Fprint(os.Stderr, "Password: ")
-	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(os.Stderr)
-	if err != nil {
-		fatal("read password", err)
-	}
+	passwordBytes := readPassword("Password: ")
 	if len(passwordBytes) == 0 {
 		fmt.Fprintln(os.Stderr, "password must not be empty")
 		os.Exit(1)
@@ -101,6 +99,38 @@ func runCreateUser(args []string) {
 	}
 
 	fmt.Printf("User %q created (id: %s)\n", user.Username, user.ID)
+}
+
+func runResetPassword(args []string) {
+	if len(args) != 1 {
+		usage()
+	}
+	username := args[0]
+
+	password := readPassword("New password: ")
+	if string(readPassword("Confirm password: ")) != string(password) {
+		fmt.Fprintln(os.Stderr, "passwords do not match")
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	if err := identity.NewFacade(pool, nil).ResetPassword(ctx, username, string(password)); err != nil {
+		fatal("reset password", err)
+	}
+	fmt.Printf("Password for %q reset\n", username)
+}
+
+func readPassword(prompt string) []byte {
+	fmt.Fprint(os.Stderr, prompt)
+	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		fatal("read password", err)
+	}
+	return password
 }
 
 func runSetRole(args []string) {
