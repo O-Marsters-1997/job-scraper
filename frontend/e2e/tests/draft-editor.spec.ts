@@ -62,6 +62,17 @@ test.describe("Draft editor", () => {
 		);
 	});
 
+	test("tints a carded line and darkens it on card hover", async ({
+		draftPage,
+	}) => {
+		await draftPage.type(BULLET, " Terraform");
+		const anchor = draftPage.slot("s1").getByTestId("line-anchor");
+		await draftPage.line(SECOND_BULLET).click();
+		await expect(anchor).toHaveClass(/bg-accent-subtle/);
+		await draftPage.card("s1").hover();
+		await expect(anchor).toHaveClass(/bg-primary\/20/);
+	});
+
 	test("undoes edits and saves the restored text", async ({ draftPage }) => {
 		const original = (await draftPage.line(BULLET).textContent()) ?? "";
 		await draftPage.type(BULLET, " Terraform");
