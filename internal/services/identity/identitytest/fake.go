@@ -81,6 +81,19 @@ func (f *FakeStore) SetRole(_ context.Context, username, role string) error {
 	return nil
 }
 
+func (f *FakeStore) SetPasswordHash(_ context.Context, username, passwordHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	id, ok := f.byName[username]
+	if !ok {
+		return data.ErrNotFound
+	}
+	u := f.users[id]
+	u.PasswordHash = passwordHash
+	f.users[id] = u
+	return nil
+}
+
 func (f *FakeStore) Begin(context.Context) (pgx.Tx, error) { return fakeTx{}, nil }
 
 func (f *FakeStore) CreateSession(_ context.Context, userID string, expiresAt time.Time) (dto.Session, error) {

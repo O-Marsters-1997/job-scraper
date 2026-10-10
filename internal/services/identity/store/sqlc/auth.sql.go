@@ -126,6 +126,23 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const setUserPasswordHash = `-- name: SetUserPasswordHash :execrows
+UPDATE users SET password_hash = $2 WHERE username = $1
+`
+
+type SetUserPasswordHashParams struct {
+	Username     string
+	PasswordHash string
+}
+
+func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserPasswordHash, arg.Username, arg.PasswordHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setUserRole = `-- name: SetUserRole :execrows
 UPDATE users SET role = $2 WHERE username = $1
 `

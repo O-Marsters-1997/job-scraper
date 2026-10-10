@@ -120,6 +120,12 @@ func (m *Module) SetRole(ctx context.Context, username, role string) error {
 	return m.store.SetRole(ctx, username, role)
 }
 
+// ResetPassword replaces username's password. It returns apperr.Invalid for an
+// empty password and data.ErrNotFound for an unknown user.
+func (m *Module) ResetPassword(ctx context.Context, username, password string) error {
+	return m.service.ResetPassword(ctx, username, password)
+}
+
 // Get returns userID's decrypted AI provider key, satisfying scoring's
 // Credentials port.
 func (m *Module) Get(ctx context.Context, userID, provider string) (string, error) {

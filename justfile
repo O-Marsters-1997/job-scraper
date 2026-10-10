@@ -141,6 +141,10 @@ migrate-create name:
 scoring-feedback-export user *flags:
     go run ./cmd/admin scoring-feedback export {{user}} {{flags}}
 
+# set a new password for a user (prompts for it)
+reset-password user:
+    go run ./cmd/admin reset-password {{user}}
+
 # hard-delete a user's Score Feedback and print the count
 scoring-feedback-clear user:
     go run ./cmd/admin scoring-feedback clear {{user}}

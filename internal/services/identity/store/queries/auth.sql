@@ -25,3 +25,6 @@ DELETE FROM sessions WHERE expires_at <= NOW();
 
 -- name: SetUserRole :execrows
 UPDATE users SET role = $2 WHERE username = $1;
+
+-- name: SetUserPasswordHash :execrows
+UPDATE users SET password_hash = $2 WHERE username = $1;
