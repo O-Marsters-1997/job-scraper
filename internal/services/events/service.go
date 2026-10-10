@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
 // Event types, matching the event_type Postgres enum.
@@ -70,6 +73,11 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	default:
 		return struct{}{}, apperr.Invalid("unsupported event type")
 	}
+	if in.SubjectID != "" {
+		if _, err := data.UUID(in.SubjectID); err != nil {
+			return struct{}{}, apperr.Invalid("invalid subject_id")
+		}
+	}
 	if len(in.Reason) > maxReasonLen {
 		return struct{}{}, apperr.Invalid("reason too long")
 	}
@@ -84,7 +92,7 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 func (s *Service) recordApplicationEvent(ctx context.Context, tx pgx.Tx, userID, eventType, applicationID string, p applicationProps) error {
 	stamped, err := s.stamped(ctx, userID, p.JobID)
 	if err != nil {
-		return err
+		slog.WarnContext(ctx, "application event recorded without score", slog.Any(logger.KeyErr, err))
 	}
 	p.jobProps = stamped
 	return s.insert(ctx, tx, userID, eventType, applicationID, p)

@@ -19,7 +19,7 @@ func TestRoutes(t *testing.T) {
 	handlerstest.RequiresAuth(t, r, "POST /events")
 	handlerstest.RejectsMalformedBody(t, r, "POST /events")
 
-	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /events", `{"type":"job_opened","subject_id":"job-1"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /events", `{"type":"job_opened","subject_id":"00000000-0000-0000-0000-000000000001"}`)
 
 	got, err := st.ListEvents(t.Context(), handlerstest.UserID, events.JobOpened)
 	if err != nil || len(got) != 1 {

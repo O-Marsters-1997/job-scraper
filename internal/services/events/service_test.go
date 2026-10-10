@@ -16,7 +16,7 @@ import (
 
 const (
 	userID = "user-1"
-	jobID  = "job-1"
+	jobID  = "00000000-0000-0000-0000-000000000001"
 )
 
 var scored = dto.JobScoreEvidence{
@@ -109,6 +109,7 @@ func TestRecord(t *testing.T) {
 		"unknown type":           {Type: "job_deleted", SubjectID: jobID},
 		"server-only type":       {Type: events.ApplicationCreated, SubjectID: jobID},
 		"job event with no job":  {Type: events.JobOpened},
+		"malformed subject":      {Type: events.JobOpened, SubjectID: "abc"},
 		"oversized dismiss note": {Type: events.JobDismissed, SubjectID: jobID, Reason: strings.Repeat("x", 501)},
 	} {
 		t.Run("rejects "+name, func(t *testing.T) {
