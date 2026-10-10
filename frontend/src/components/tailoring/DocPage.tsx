@@ -37,6 +37,7 @@ export const DEFAULT_BODY_LINE_PT = 15;
 const DEFAULT_FONT_PT = 11;
 const LINE_COUNT_GUTTER_PT = 14;
 const SAME_ROW_TOLERANCE_PX = 2;
+const FILL_EPSILON = 0.005;
 
 export type PageMetrics = {
 	contentPt: number;
@@ -191,7 +192,12 @@ function sameMetrics(a: PageMetrics, b: PageMetrics) {
 		ids.every((id) => {
 			const x = a.fits[id];
 			const y = b.fits[id];
-			return x && y && x.lines === y.lines && x.lastLineFill === y.lastLineFill;
+			return (
+				x &&
+				y &&
+				x.lines === y.lines &&
+				Math.abs(x.lastLineFill - y.lastLineFill) < FILL_EPSILON
+			);
 		})
 	);
 }
