@@ -50,7 +50,6 @@ export type PageEditor = {
 	editable: boolean;
 	showCounts: boolean;
 	active: string | undefined;
-	hovered: string | undefined;
 	hasCard: (slotId: string) => boolean;
 	onHover: (slotId: string, over: boolean) => void;
 	text: (slotId: string) => string;
@@ -398,25 +397,7 @@ function Block(props: {
 						<Show when={ed().active === props.block.slotId}>
 							<span
 								aria-hidden="true"
-								class="absolute -left-2 inset-y-0 w-1 rounded-full bg-primary"
-							/>
-						</Show>
-						<Show
-							when={
-								ed().hasCard(props.block.slotId) ||
-								ed().active === props.block.slotId
-							}
-						>
-							<span
-								aria-hidden="true"
-								data-testid="line-anchor"
-								class={cn(
-									"pointer-events-none absolute inset-0 rounded-sm transition-colors",
-									ed().active === props.block.slotId ||
-										ed().hovered === props.block.slotId
-										? "bg-primary/20"
-										: "bg-accent-subtle",
-								)}
+								class="absolute -left-2 inset-y-0 w-1.5 rounded-full bg-primary"
 							/>
 						</Show>
 						<Show when={ed().showCounts && props.fit}>

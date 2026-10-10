@@ -173,9 +173,6 @@ export function DraftEditor(props: {
 		get active() {
 			return active();
 		},
-		get hovered() {
-			return hovered();
-		},
 		hasCard: (slotId) => cardKeys().includes(slotId),
 		onHover: hover,
 		text: ed.text,
