@@ -1,4 +1,5 @@
 import {
+	batch,
 	createEffect,
 	createSignal,
 	For,
@@ -8,6 +9,7 @@ import {
 	Show,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
+import { Icon } from "@/components/Icon";
 import { cardTops } from "@/lib/cardLayout";
 import type { LineFit } from "@/lib/docLayout";
 import { cn } from "@/lib/utils";
@@ -40,14 +42,16 @@ function CardDot(props: {
 			style={{ top: `${props.top}px`, width: `${DOT}px`, height: `${DOT}px` }}
 			onClick={() => props.onOpen()}
 		>
-			<span
-				class={cn(
-					"size-2 rounded-full ring-2 ring-surface",
-					props.editor.isResolved(props.cardKey)
-						? "bg-border-strong"
-						: header().dot,
-				)}
-			/>
+			<Show
+				when={props.editor.isResolved(props.cardKey)}
+				fallback={
+					<span
+						class={cn("size-2 rounded-full ring-2 ring-surface", header().dot)}
+					/>
+				}
+			>
+				<Icon name="check" size={12} class="text-muted" />
+			</Show>
 		</button>
 	);
 }
@@ -69,8 +73,17 @@ export function MarginCards(props: {
 }) {
 	const [tops, setTops] = createStore<Record<string, number>>({});
 	const [ready, setReady] = createSignal(false);
+	const [expanded, setExpanded] = createSignal<string>();
 	const cards = new Map<string, HTMLElement>();
 	let rail: HTMLElement | undefined;
+
+	const isDot = (key: string) =>
+		props.editor.isResolved(key) &&
+		expanded() !== key &&
+		!props.suggestions.get(key);
+	createEffect(() => {
+		if (expanded() !== props.active) setExpanded(undefined);
+	});
 
 	const layout = () => {
 		const stage = props.stage;
@@ -86,15 +99,15 @@ export function MarginCards(props: {
 			const slots = keys.map((key) => ({
 				key,
 				desired: desired(key),
-				height: cards.get(key)?.offsetHeight ?? 0,
+				height: isDot(key) ? DOT : (cards.get(key)?.offsetHeight ?? 0),
 			}));
 			setTops(reconcile(cardTops(slots, keys.indexOf(active ?? ""), GAP)));
 		} else {
 			const dots = keys
-				.filter((key) => key !== active)
+				.filter((key) => key !== active || isDot(key))
 				.map((key) => ({ key, desired: desired(key), height: DOT }));
 			const next = cardTops(dots, -1, 0);
-			if (active && keys.includes(active)) {
+			if (active && keys.includes(active) && !isDot(active)) {
 				const a = anchor(active);
 				next[active] = a
 					? Math.max(a.bottom, a.top + WAND_PX) - base + INLINE_GAP
@@ -117,6 +130,7 @@ export function MarginCards(props: {
 				() => props.active,
 				() => props.narrow,
 				() => props.keys.join(),
+				() => props.keys.map(isDot).join(),
 				() => JSON.stringify(props.fits),
 				() => props.stage,
 			],
@@ -125,7 +139,10 @@ export function MarginCards(props: {
 	);
 
 	const open = (key: string) => {
-		props.onActive(key);
+		batch(() => {
+			setExpanded(key);
+			props.onActive(key);
+		});
 		const anchor = props.stage?.querySelector(anchorSelector(key));
 		anchor?.scrollIntoView({ behavior: "smooth", block: "center" });
 		anchor
@@ -185,7 +202,7 @@ export function MarginCards(props: {
 			<For each={props.keys}>
 				{(key) => (
 					<Show
-						when={!props.narrow || props.active === key}
+						when={!isDot(key) && (!props.narrow || props.active === key)}
 						fallback={
 							<CardDot
 								cardKey={key}

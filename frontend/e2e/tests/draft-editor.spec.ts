@@ -128,6 +128,21 @@ test.describe("Draft editor", () => {
 		await expect(draftPage.resolvedCount).toContainText("1/");
 	});
 
+	test("collapses a resolved card to an icon that only expands when clicked", async ({
+		draftPage,
+	}) => {
+		await draftPage.type(BULLET, " Terraform");
+		await draftPage.card("s1").getByRole("button").first().click();
+		await draftPage.card("s1").getByRole("button", { name: "Resolve" }).click();
+		await expect(draftPage.dot("s1")).toBeVisible();
+		await draftPage.line(BULLET).click();
+		await expect(draftPage.dot("s1")).toBeVisible();
+		await draftPage.dot("s1").click();
+		await expect(
+			draftPage.card("s1").getByRole("button", { name: "Reopen" }),
+		).toBeVisible();
+	});
+
 	test("tightens a line through the wand and saves it on Accept", async ({
 		draftPage,
 	}) => {
