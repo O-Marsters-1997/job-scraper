@@ -251,8 +251,9 @@ function EditableLine(props: {
 					props.editor.editable && !diff() ? "plaintext-only" : false
 				}
 				spellcheck={false}
+				style={{ "caret-color": INK }}
 				class={cn(
-					"relative block cursor-text caret-primary outline-none selection:bg-primary/30",
+					"relative block cursor-text outline-none selection:bg-primary/30",
 					diff() && "pointer-events-none invisible absolute inset-x-0 top-0",
 				)}
 				onInput={(e) =>
