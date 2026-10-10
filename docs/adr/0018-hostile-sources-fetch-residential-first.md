@@ -1,5 +1,8 @@
 # ADR 0018 — Hostile Sources fetch residential-first, with an Unlocker fallback
 
+> Superseded by [ADR 0024](0024-hostile-sources-fetch-residential-only.md): Bright Data is dropped and
+> hostile Sources fetch residential-only, with no Unlocker fallback.
+
 Supersedes the "Bright Data Web Unlocker for protected sources" section of ADR 0003. The rest of 0003 stands.
 
 ## Context

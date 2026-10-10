@@ -1,5 +1,9 @@
 # ADR 0016 — A fetch cache makes proxied retries free
 
+> Amended by [ADR 0024](0024-hostile-sources-fetch-residential-only.md): Bright Data is gone, and the
+> cache now wraps the Decodo residential route. Its Bright Data error-header and zone-probe details no
+> longer apply; the rest stands.
+
 A failed task is requeued and refetched from scratch (ADR 0006), so every retry of a LinkedIn or Indeed task paid Bright Data again. On 2026-09-30, with the API down, about 93 paid requests saved 4 jobs. Web Unlocker bills each response it delivers from the target, whatever its status, and bills none of its own failures (`x-brd-error` / `Proxy-Status`). The goal is that no retry of any post-fetch failure (export, parse, crash, DLQ replay) pays twice.
 
 - **Where.** `fetchTransport.RoundTrip` in `internal/worker/proxy`, on proxied requests only, and only when the ctx carries a per-task collector. The processor attaches one per task, so the zone probe and non-task callers stay live.

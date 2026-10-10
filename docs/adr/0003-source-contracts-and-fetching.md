@@ -7,7 +7,8 @@
 ## Bright Data Web Unlocker for protected sources
 
 > Superseded by [ADR 0018](0018-hostile-sources-fetch-residential-first.md): hostile Sources now go
-> residential-first, with Unlocker as the counted fallback.
+> residential-first, with Unlocker as the counted fallback. That is in turn superseded by
+> [ADR 0024](0024-hostile-sources-fetch-residential-only.md): Bright Data is dropped entirely.
 
 Hostile sources (LinkedIn, Indeed) fetch through Bright Data Web Unlocker; everything else (ATS APIs, cooperative boards) goes direct. Web Unlocker handles IP rotation, fingerprinting and CAPTCHAs and bills only successful responses. Datacenter IPs are pre-flagged on the aggregators, so there is no datacenter tier.
 
