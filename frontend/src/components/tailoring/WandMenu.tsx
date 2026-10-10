@@ -24,7 +24,7 @@ function AskForm(props: {
 	onMount(() => input?.focus());
 	return (
 		<form
-			class="flex items-center gap-1 rounded-lg bg-sidebar p-1 shadow-xl ring-1 ring-sidebar-border animate-in fade-in zoom-in-95 duration-150"
+			class="pointer-events-auto flex items-center gap-1 rounded-lg bg-sidebar p-1 shadow-xl ring-1 ring-sidebar-border animate-in fade-in zoom-in-95 duration-150"
 			onSubmit={(e) => {
 				e.preventDefault();
 				const prompt = input?.value.trim();
@@ -63,7 +63,7 @@ export function WandMenu(props: {
 }) {
 	return (
 		<div
-			class="absolute right-2 z-20 flex w-[min(20rem,calc(100%-1rem))] justify-end"
+			class="pointer-events-none absolute right-2 z-20 flex w-[min(20rem,calc(100%-1rem))] justify-end"
 			style={{ top: `${props.top}px` }}
 		>
 			<Show
@@ -73,7 +73,7 @@ export function WandMenu(props: {
 						<DropdownMenuTrigger
 							aria-label="Edit with Haiku"
 							title="Edit with Haiku (⌘K)"
-							class="grid size-8 place-items-center rounded-full bg-surface text-accent-text shadow-md ring-1 ring-border transition-[transform,background-color] duration-150 ease-out hover:scale-110 hover:bg-accent-subtle animate-in fade-in zoom-in-90"
+							class="pointer-events-auto grid size-8 place-items-center rounded-full bg-surface text-accent-text shadow-md ring-1 ring-border transition-[transform,background-color] duration-150 ease-out hover:scale-110 hover:bg-accent-subtle animate-in fade-in zoom-in-90"
 						>
 							<Icon name="wand" size={15} />
 						</DropdownMenuTrigger>
