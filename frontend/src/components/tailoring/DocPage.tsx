@@ -298,7 +298,7 @@ function EditableLine(props: {
 				{(box) => (
 					<span
 						aria-hidden="true"
-						class="doc-caret pointer-events-none absolute w-[3px] bg-black"
+						class="doc-caret pointer-events-none absolute w-0.5 bg-black"
 						style={{
 							left: `${box().x - 1}px`,
 							top: `${box().y}px`,
