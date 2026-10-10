@@ -181,6 +181,21 @@ function measureFit(el: HTMLElement): LineFit {
 	};
 }
 
+function sameMetrics(a: PageMetrics, b: PageMetrics) {
+	const ids = Object.keys(b.fits);
+	return (
+		a.contentPt === b.contentPt &&
+		a.availablePt === b.availablePt &&
+		a.bodyLinePt === b.bodyLinePt &&
+		Object.keys(a.fits).length === ids.length &&
+		ids.every((id) => {
+			const x = a.fits[id];
+			const y = b.fits[id];
+			return x && y && x.lines === y.lines && x.lastLineFill === y.lastLineFill;
+		})
+	);
+}
+
 function EditableLine(props: {
 	slotId: string;
 	editor: PageEditor;
@@ -460,6 +475,7 @@ export function DocPage(props: {
 	const lines = new Map<string, HTMLElement>();
 	const [fits, setFits] = createStore<Record<string, LineFit>>({});
 	let content: HTMLDivElement | undefined;
+	let lastMetrics: PageMetrics | undefined;
 
 	const measure = () => {
 		if (!content) return;
@@ -471,12 +487,15 @@ export function DocPage(props: {
 			bodyLinePx ||= Number.parseFloat(getComputedStyle(el).lineHeight);
 		}
 		setFits(reconcile(next));
-		props.onMetrics?.({
+		const metrics: PageMetrics = {
 			contentPt: content.offsetHeight / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,
 			bodyLinePt: bodyLinePx ? bodyLinePx / PX_PER_PT : DEFAULT_BODY_LINE_PT,
 			fits: next,
-		});
+		};
+		if (lastMetrics && sameMetrics(lastMetrics, metrics)) return;
+		lastMetrics = metrics;
+		props.onMetrics?.(metrics);
 	};
 	const remeasure = () => queueMicrotask(measure);
 
