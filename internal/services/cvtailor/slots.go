@@ -75,7 +75,7 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 		checked.BaseSkills = cvedit.CheckLines(edits.Skills)
 	}
 	checked.Parse = parseInput(ctx, draftPDF, basePlan.structure.Headings)
-	findings := toDraftFindings(checks.Run(checked))
+	findings := toDraftFindings(checks.RunUserEdited(checked))
 	if err := s.store.SetDraftEdits(ctx, userID, draft.ID, editSet, findings); err != nil {
 		return dto.Draft{}, err
 	}
