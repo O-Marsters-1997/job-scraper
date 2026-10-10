@@ -19,13 +19,21 @@ import (
 
 var ErrApplicationExists = apperr.Conflict("application already exists for this job")
 
+// EventRecorder logs application events inside the caller's transaction; the
+// events module implements it (ADR 0011).
+type EventRecorder interface {
+	RecordApplicationCreated(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID string) error
+	RecordApplicationStatusChanged(ctx context.Context, tx pgx.Tx, userID, applicationID, jobID, fromStatusID, toStatusID string) error
+}
+
 type Store struct {
 	pool    *pgxpool.Pool
 	queries *sqlc.Queries
+	events  EventRecorder
 }
 
-func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool, queries: sqlc.New(pool)}
+func New(pool *pgxpool.Pool, events EventRecorder) *Store {
+	return &Store{pool: pool, queries: sqlc.New(pool), events: events}
 }
 
 func parseOptionalDate(s *string) (pgtype.Date, error) {
@@ -59,13 +67,21 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 	if err != nil {
 		return dto.Application{}, err
 	}
-	a, err := s.queries.CreateApplication(ctx, sqlc.CreateApplicationParams{
-		UserID:     uid,
-		JobID:      jid,
-		StatusID:   sid,
-		Notes:      data.Text(input.Notes),
-		AppliedAt:  appliedAt,
-		SalaryInfo: data.Text(input.SalaryInfo),
+	var out dto.Application
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		a, err := s.queries.WithTx(tx).CreateApplication(ctx, sqlc.CreateApplicationParams{
+			UserID:     uid,
+			JobID:      jid,
+			StatusID:   sid,
+			Notes:      data.Text(input.Notes),
+			AppliedAt:  appliedAt,
+			SalaryInfo: data.Text(input.SalaryInfo),
+		})
+		if err != nil {
+			return err
+		}
+		out = toApplicationDTO(a)
+		return s.events.RecordApplicationCreated(ctx, tx, userID, out.ID, out.JobID)
 	})
 	if err != nil {
 		if data.IsUniqueViolation(err) {
@@ -73,7 +89,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 		}
 		return dto.Application{}, fmt.Errorf("store.CreateApplication: %w", err)
 	}
-	return toApplicationDTO(a), nil
+	return out, nil
 }
 
 func (s *Store) ListApplications(ctx context.Context, userID string, q dto.ApplicationsQuery) ([]dto.ApplicationWithDetails, error) {
@@ -118,18 +134,34 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 	if err != nil {
 		return dto.Application{}, err
 	}
-	a, err := s.queries.UpdateApplication(ctx, sqlc.UpdateApplicationParams{
-		ID:         aid,
-		UserID:     uid,
-		StatusID:   sid,
-		Notes:      data.Text(input.Notes),
-		AppliedAt:  appliedAt,
-		SalaryInfo: data.Text(input.SalaryInfo),
+	var out dto.Application
+	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		q := s.queries.WithTx(tx)
+		before, err := q.LockApplication(ctx, sqlc.LockApplicationParams{ID: aid, UserID: uid})
+		if err != nil {
+			return err
+		}
+		a, err := q.UpdateApplication(ctx, sqlc.UpdateApplicationParams{
+			ID:         aid,
+			UserID:     uid,
+			StatusID:   sid,
+			Notes:      data.Text(input.Notes),
+			AppliedAt:  appliedAt,
+			SalaryInfo: data.Text(input.SalaryInfo),
+		})
+		if err != nil {
+			return err
+		}
+		out = toApplicationDTO(a)
+		if before.StatusID == sid {
+			return nil
+		}
+		return s.events.RecordApplicationStatusChanged(ctx, tx, userID, out.ID, out.JobID, before.StatusID.String(), out.StatusID)
 	})
 	if err != nil {
 		return dto.Application{}, data.QueryErr("UpdateApplication", err)
 	}
-	return toApplicationDTO(a), nil
+	return out, nil
 }
 
 func (s *Store) SetChase(ctx context.Context, userID, id string, chaseBy time.Time) (dto.Application, error) {

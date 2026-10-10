@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -11,12 +12,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/pgtest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 	"github.com/ollymarsters/job-scraper/internal/services/applications/store"
+	"github.com/ollymarsters/job-scraper/internal/services/events"
+	"github.com/ollymarsters/job-scraper/internal/services/events/eventstest"
 )
 
 func newStore(t *testing.T) (st *store.Store, pool *pgxpool.Pool, userID string) {
 	t.Helper()
 	pool = pgtest.New(t)
-	return store.New(pool), pool, pgtest.InsertUser(t, pool)
+	return store.New(pool, events.New(pool, eventstest.Unscored())), pool, pgtest.InsertUser(t, pool)
 }
 
 func TestStoreContract(t *testing.T) {
@@ -135,5 +138,43 @@ func TestSeedDefaultStatuses(t *testing.T) {
 				t.Errorf("default statuses = %d, want %d", len(got), tt.want)
 			}
 		})
+	}
+}
+
+func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
+	st, pool, userID := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
+
+	created, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID})
+	if err != nil {
+		t.Fatalf("CreateApplication err = %v", err)
+	}
+	_, err = st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID})
+	if !errors.Is(err, store.ErrApplicationExists) {
+		t.Fatalf("duplicate CreateApplication err = %v, want ErrApplicationExists", err)
+	}
+	status, err := st.CreateApplicationStatus(t.Context(), userID, "Applied", "#6366f1", nil)
+	if err != nil {
+		t.Fatalf("CreateApplicationStatus err = %v", err)
+	}
+	for _, in := range []dto.UpdateApplicationInput{
+		{StatusID: status.ID}, {StatusID: status.ID, Notes: "same status, new note"},
+	} {
+		if _, err := st.UpdateApplication(t.Context(), userID, created.ID, in); err != nil {
+			t.Fatalf("UpdateApplication(%+v) err = %v", in, err)
+		}
+	}
+
+	rows, err := pool.Query(t.Context(), `SELECT type::text FROM events WHERE user_id = $1 ORDER BY created_at`, userID)
+	if err != nil {
+		t.Fatalf("select events err = %v", err)
+	}
+	types, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatalf("collect events err = %v", err)
+	}
+	want := []string{events.ApplicationCreated, events.ApplicationStatusChanged}
+	if diff := cmp.Diff(want, types); diff != "" {
+		t.Errorf("event types (-want +got):\n%s", diff)
 	}
 }

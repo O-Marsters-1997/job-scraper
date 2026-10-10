@@ -19,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/queue"
 	"github.com/ollymarsters/job-scraper/internal/services/applications"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtemplates"
+	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -39,15 +40,17 @@ func newApp(t *testing.T) *app {
 	t.Setenv("GOOGLE_TOKEN_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 
 	pool := pgtest.New(t)
-	apps := applications.New(pool)
+	scoringFacade := scoring.NewFacade(pool)
+	eventsModule := events.New(pool, scoringFacade)
+	apps := applications.New(pool, eventsModule)
 	idm, err := identity.New(pool, apps, "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
-	js := jobsearch.New(pool, &queue.Broker{}, scoring.NewFacade(pool))
+	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade)
 	sc := scoring.New(pool, idm, idm, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
-	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc)}
+	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc, eventsModule)}
 }
 
 type user struct {

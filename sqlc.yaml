@@ -48,3 +48,11 @@ sql:
         package: *package
         out: "internal/services/cvtailor/store/sqlc"
         sql_package: *sql_package
+  - engine: *engine
+    queries: "internal/services/events/store/queries"
+    schema: *schema
+    gen:
+      go:
+        package: *package
+        out: "internal/services/events/store/sqlc"
+        sql_package: *sql_package

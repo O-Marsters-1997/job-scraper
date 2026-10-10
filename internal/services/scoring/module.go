@@ -2,6 +2,7 @@ package scoring
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -194,4 +195,17 @@ func (m *Module) Replay(ctx context.Context, userID string) (string, error) {
 // returning a report of what changed.
 func (m *Module) Fit(ctx context.Context, userID string) (string, error) {
 	return m.svc.Fit(ctx, userID)
+}
+
+// ScoreSnapshot returns userID's stored score for jobID, or nil when the job
+// is unscored; events stamps it onto the events it records.
+func (m *Module) ScoreSnapshot(ctx context.Context, userID, jobID string) (*dto.JobScoreEvidence, error) {
+	ev, err := m.store.GetJobScoreForFeedback(ctx, userID, jobID)
+	if notFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scoring.ScoreSnapshot: %w", err)
+	}
+	return &ev, nil
 }

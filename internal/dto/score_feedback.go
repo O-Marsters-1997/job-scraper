@@ -61,6 +61,7 @@ type JevState struct {
 // JobScoreEvidence is the stored score a Job entry freezes.
 type JobScoreEvidence struct {
 	Score       int
+	Band        string
 	Breakdown   []ScoreRow
 	Fingerprint string
 	Model       string

@@ -71,7 +71,7 @@ func (q *Queries) DeleteScoreFeedback(ctx context.Context, arg DeleteScoreFeedba
 }
 
 const getJobScoreForFeedback = `-- name: GetJobScoreForFeedback :one
-SELECT suitability_score::int AS score, breakdown, COALESCE(score_fingerprint, '')::text AS score_fingerprint,
+SELECT suitability_score::int AS score, COALESCE(band, '')::text AS band, breakdown, COALESCE(score_fingerprint, '')::text AS score_fingerprint,
     COALESCE(score_model, '')::text AS score_model
 FROM job_scores
 WHERE user_id = $1 AND job_id = $2 AND suitability_score IS NOT NULL
@@ -84,6 +84,7 @@ type GetJobScoreForFeedbackParams struct {
 
 type GetJobScoreForFeedbackRow struct {
 	Score            int32
+	Band             string
 	Breakdown        []byte
 	ScoreFingerprint string
 	ScoreModel       string
@@ -94,6 +95,7 @@ func (q *Queries) GetJobScoreForFeedback(ctx context.Context, arg GetJobScoreFor
 	var i GetJobScoreForFeedbackRow
 	err := row.Scan(
 		&i.Score,
+		&i.Band,
 		&i.Breakdown,
 		&i.ScoreFingerprint,
 		&i.ScoreModel,

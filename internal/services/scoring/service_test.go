@@ -434,7 +434,7 @@ func TestRunTick(t *testing.T) {
 					return
 				}
 				msg := pusher.msgs[0]
-				if !strings.HasSuffix(msg.Title, " · Backend Engineer, monzo") || msg.URL != "/jobs/job-1" || msg.Tag != "job-1" {
+				if !strings.HasSuffix(msg.Title, " · Backend Engineer, monzo") || msg.URL != "/jobs/job-1?from=alert" || msg.Tag != "job-1" {
 					t.Errorf("push = %+v, want title ending \" · Backend Engineer, monzo\", URL /jobs/job-1, Tag job-1", msg)
 				}
 				if n := len(strings.Split(msg.Body, " · ")); msg.Body == "" || n > 3 {

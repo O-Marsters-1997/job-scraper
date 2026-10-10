@@ -1228,15 +1228,15 @@ func TestGetJobScoreForFeedback(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, breakdown, score_fingerprint, score_model)
-		VALUES ($1, $2, 64, '[{"key":"tech:go","label":"Go","stance":"nice","resolved":"yes","effect":"meets","overridden":false}]', 'fp-1', 'jev-1')`, jobID, userID)
+	exec(t, pool, `INSERT INTO job_scores (job_id, user_id, suitability_score, band, breakdown, score_fingerprint, score_model)
+		VALUES ($1, $2, 64, 'good', '[{"key":"tech:go","label":"Go","stance":"nice","resolved":"yes","effect":"meets","overridden":false}]', 'fp-1', 'jev-1')`, jobID, userID)
 
 	got, err := st.GetJobScoreForFeedback(t.Context(), userID, jobID)
 	if err != nil {
 		t.Fatalf("GetJobScoreForFeedback() err = %v", err)
 	}
 	want := dto.JobScoreEvidence{
-		Score: 64, Fingerprint: "fp-1", Model: "jev-1",
+		Score: 64, Band: "good", Fingerprint: "fp-1", Model: "jev-1",
 		Breakdown: []dto.ScoreRow{{Key: "tech:go", Label: "Go", Stance: "nice", Resolved: "yes", Effect: "meets"}},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {

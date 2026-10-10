@@ -331,3 +331,29 @@ func TestCorrectionRescoreReadsFavourite(t *testing.T) {
 		t.Errorf("starred score = %d, want above the unstarred %d", starred, plain)
 	}
 }
+
+func TestScoreSnapshot(t *testing.T) {
+	const userID = "user-1"
+
+	t.Run("returns the stored score for the pair", func(t *testing.T) {
+		st := newFakeStore()
+		seedScoredJob(st, userID, "tech:go")
+		m := scoring.Build(newDeps(t, st))
+
+		got, err := m.ScoreSnapshot(t.Context(), userID, testJob.ID)
+		if err != nil || got == nil || got.Score != 72 {
+			t.Errorf("ScoreSnapshot() = %+v, %v, want score 72", got, err)
+		}
+	})
+
+	t.Run("is nil for an unscored job", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedJob(testJob, nil)
+		m := scoring.Build(newDeps(t, st))
+
+		got, err := m.ScoreSnapshot(t.Context(), userID, testJob.ID)
+		if err != nil || got != nil {
+			t.Errorf("ScoreSnapshot() = %+v, %v, want nil, nil", got, err)
+		}
+	})
+}

@@ -219,6 +219,29 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 	return items, nil
 }
 
+const lockApplication = `-- name: LockApplication :one
+SELECT job_id, status_id FROM applications
+WHERE id = $1 AND user_id = $2
+FOR UPDATE
+`
+
+type LockApplicationParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type LockApplicationRow struct {
+	JobID    pgtype.UUID
+	StatusID pgtype.UUID
+}
+
+func (q *Queries) LockApplication(ctx context.Context, arg LockApplicationParams) (LockApplicationRow, error) {
+	row := q.db.QueryRow(ctx, lockApplication, arg.ID, arg.UserID)
+	var i LockApplicationRow
+	err := row.Scan(&i.JobID, &i.StatusID)
+	return i, err
+}
+
 const setApplicationChase = `-- name: SetApplicationChase :one
 UPDATE applications
 SET chase_by = $3

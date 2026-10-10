@@ -34,7 +34,7 @@ DELETE FROM score_feedback WHERE id = $1 AND user_id = $2;
 DELETE FROM score_feedback WHERE user_id = $1;
 
 -- name: GetJobScoreForFeedback :one
-SELECT suitability_score::int AS score, breakdown, COALESCE(score_fingerprint, '')::text AS score_fingerprint,
+SELECT suitability_score::int AS score, COALESCE(band, '')::text AS band, breakdown, COALESCE(score_fingerprint, '')::text AS score_fingerprint,
     COALESCE(score_model, '')::text AS score_model
 FROM job_scores
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id) AND suitability_score IS NOT NULL;

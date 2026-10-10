@@ -11,6 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type EventType string
+
+const (
+	EventTypeJobOpened                EventType = "job_opened"
+	EventTypeJobDismissed             EventType = "job_dismissed"
+	EventTypeApplicationCreated       EventType = "application_created"
+	EventTypeApplicationStatusChanged EventType = "application_status_changed"
+	EventTypeAlertOpened              EventType = "alert_opened"
+)
+
+func (e *EventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EventType(s)
+	case string:
+		*e = EventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EventType: %T", src)
+	}
+	return nil
+}
+
+type NullEventType struct {
+	EventType EventType
+	Valid     bool // Valid is true if EventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.EventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EventType), nil
+}
+
 type ScoringDimension string
 
 const (
@@ -209,6 +254,15 @@ type EffectOutbox struct {
 	LeaseUntil     pgtype.Timestamptz
 	LastError      string
 	CreatedAt      pgtype.Timestamptz
+}
+
+type Event struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Type      EventType
+	SubjectID pgtype.UUID
+	Props     []byte
+	CreatedAt pgtype.Timestamptz
 }
 
 type FetchCache struct {
