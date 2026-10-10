@@ -1,5 +1,5 @@
 import { createQuery } from "@tanstack/solid-query";
-import type { Accessor } from "solid-js";
+import { type Accessor, createMemo } from "solid-js";
 import { keys } from "../api/keys";
 import {
 	createDraft,
@@ -112,9 +112,10 @@ export function useDraft(id: Accessor<string | undefined>) {
 }
 
 export function useDraftLayout(id: Accessor<string>) {
+	const stableId = createMemo(id);
 	return createQuery(() => ({
-		queryKey: keys.tailoring.draftLayout(id()),
-		queryFn: () => fetchDraftLayout(id()),
+		queryKey: keys.tailoring.draftLayout(stableId()),
+		queryFn: () => fetchDraftLayout(stableId()),
 		retry: false,
 		refetchOnWindowFocus: false,
 		gcTime: 0,

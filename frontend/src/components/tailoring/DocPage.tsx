@@ -1,5 +1,6 @@
 import {
 	createEffect,
+	createSignal,
 	For,
 	type JSX,
 	onCleanup,
@@ -37,6 +38,7 @@ export const DEFAULT_BODY_LINE_PT = 15;
 const DEFAULT_FONT_PT = 11;
 const LINE_COUNT_GUTTER_PT = 14;
 const SAME_ROW_TOLERANCE_PX = 2;
+const FILL_EPSILON = 0.005;
 
 export type PageMetrics = {
 	contentPt: number;
@@ -49,7 +51,6 @@ export type PageEditor = {
 	editable: boolean;
 	showCounts: boolean;
 	active: string | undefined;
-	hovered: string | undefined;
 	hasCard: (slotId: string) => boolean;
 	onHover: (slotId: string, over: boolean) => void;
 	text: (slotId: string) => string;
@@ -181,6 +182,26 @@ function measureFit(el: HTMLElement): LineFit {
 	};
 }
 
+function sameMetrics(a: PageMetrics, b: PageMetrics) {
+	const ids = Object.keys(b.fits);
+	return (
+		a.contentPt === b.contentPt &&
+		a.availablePt === b.availablePt &&
+		a.bodyLinePt === b.bodyLinePt &&
+		Object.keys(a.fits).length === ids.length &&
+		ids.every((id) => {
+			const x = a.fits[id];
+			const y = b.fits[id];
+			return (
+				x &&
+				y &&
+				x.lines === y.lines &&
+				Math.abs(x.lastLineFill - y.lastLineFill) < FILL_EPSILON
+			);
+		})
+	);
+}
+
 function EditableLine(props: {
 	slotId: string;
 	editor: PageEditor;
@@ -190,6 +211,19 @@ function EditableLine(props: {
 	let el: HTMLElement | undefined;
 	const text = () => props.editor.text(props.slotId);
 	const diff = () => props.editor.diffFor(props.slotId);
+	const [caret, setCaret] = createSignal<CaretBox>();
+	const placeCaret = () => {
+		if (el) setCaret(caretBox(el));
+	};
+	const trackCaret = () => {
+		document.addEventListener("selectionchange", placeCaret);
+		placeCaret();
+	};
+	const untrackCaret = () => {
+		document.removeEventListener("selectionchange", placeCaret);
+		setCaret(undefined);
+	};
+	onCleanup(untrackCaret);
 	createEffect(() => {
 		const value = text();
 		if (el && el.textContent !== value) el.textContent = value;
@@ -231,8 +265,9 @@ function EditableLine(props: {
 					props.editor.editable && !diff() ? "plaintext-only" : false
 				}
 				spellcheck={false}
+				style={{ "caret-color": "transparent" }}
 				class={cn(
-					"relative block cursor-text caret-primary outline-none selection:bg-primary/30",
+					"relative block cursor-text outline-none selection:bg-primary/30",
 					diff() && "pointer-events-none invisible absolute inset-x-0 top-0",
 				)}
 				onInput={(e) =>
@@ -250,11 +285,48 @@ function EditableLine(props: {
 					if (e.key === "Enter") e.preventDefault();
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
-				onFocus={() => props.editor.onFocus(props.slotId)}
-				onBlur={() => props.editor.onBlur(props.slotId)}
+				onFocus={() => {
+					trackCaret();
+					props.editor.onFocus(props.slotId);
+				}}
+				onBlur={() => {
+					untrackCaret();
+					props.editor.onBlur(props.slotId);
+				}}
 			/>
+			<Show when={caret()}>
+				{(box) => (
+					<span
+						aria-hidden="true"
+						class="doc-caret pointer-events-none absolute w-0.5 bg-black"
+						style={{
+							left: `${box().x - 1}px`,
+							top: `${box().y}px`,
+							height: `${box().h}px`,
+						}}
+					/>
+				)}
+			</Show>
 		</span>
 	);
+}
+
+type CaretBox = { x: number; y: number; h: number };
+
+function caretBox(line: HTMLElement): CaretBox | undefined {
+	const sel = document.getSelection();
+	const host = line.parentElement;
+	if (!sel || !host || !sel.isCollapsed || !line.contains(sel.anchorNode))
+		return undefined;
+	const at =
+		sel.getRangeAt(0).getClientRects()[0] ?? line.getBoundingClientRect();
+	const origin = host.getBoundingClientRect();
+	const k = origin.width / host.offsetWidth || 1;
+	return {
+		x: (at.left - origin.left) / k,
+		y: (at.top - origin.top) / k,
+		h: at.height / k,
+	};
 }
 
 function caretAt(line: HTMLElement, x: number, y: number) {
@@ -377,25 +449,7 @@ function Block(props: {
 						<Show when={ed().active === props.block.slotId}>
 							<span
 								aria-hidden="true"
-								class="absolute -left-2 inset-y-0 w-1 rounded-full bg-primary"
-							/>
-						</Show>
-						<Show
-							when={
-								ed().hasCard(props.block.slotId) ||
-								ed().active === props.block.slotId
-							}
-						>
-							<span
-								aria-hidden="true"
-								data-testid="line-anchor"
-								class={cn(
-									"pointer-events-none absolute inset-0 rounded-sm transition-colors",
-									ed().active === props.block.slotId ||
-										ed().hovered === props.block.slotId
-										? "bg-primary/20"
-										: "bg-accent-subtle",
-								)}
+								class="absolute -left-2 inset-y-0 w-1.5 rounded-full bg-primary"
 							/>
 						</Show>
 						<Show when={ed().showCounts && props.fit}>
@@ -460,6 +514,7 @@ export function DocPage(props: {
 	const lines = new Map<string, HTMLElement>();
 	const [fits, setFits] = createStore<Record<string, LineFit>>({});
 	let content: HTMLDivElement | undefined;
+	let lastMetrics: PageMetrics | undefined;
 
 	const measure = () => {
 		if (!content) return;
@@ -471,12 +526,15 @@ export function DocPage(props: {
 			bodyLinePx ||= Number.parseFloat(getComputedStyle(el).lineHeight);
 		}
 		setFits(reconcile(next));
-		props.onMetrics?.({
+		const metrics: PageMetrics = {
 			contentPt: content.offsetHeight / PX_PER_PT,
 			availablePt: page().height - page().marginTop - page().marginBottom,
 			bodyLinePt: bodyLinePx ? bodyLinePx / PX_PER_PT : DEFAULT_BODY_LINE_PT,
 			fits: next,
-		});
+		};
+		if (lastMetrics && sameMetrics(lastMetrics, metrics)) return;
+		lastMetrics = metrics;
+		props.onMetrics?.(metrics);
 	};
 	const remeasure = () => queueMicrotask(measure);
 
