@@ -1,4 +1,4 @@
-# ADR 0025 — Product events live in a generic events table
+# ADR 0026 — Product events live in a generic events table
 
 Prompted by #617. Scoring needs labelled signal tied to the score a User reacted to: a dismissed job was
 scored too high, an applied job about right or too low. `job_scores` keeps one row per (Job, User) and

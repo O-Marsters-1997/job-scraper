@@ -14,12 +14,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
-func newScraper(t *testing.T, body string, filters map[string]string) (*indeed.Scraper, *sourcetest.Responder) {
+func newScraper(t *testing.T, body string, filters map[string]string, recency ...string) (*indeed.Scraper, *sourcetest.Responder) {
 	t.Helper()
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
-	t.Setenv("BRIGHTDATA_PROXY_URL", "http://user:pass@localhost:7001")
 	t.Setenv("INDEED_API_KEY", "test-key")
-	s := indeed.New("go developer", filters)
+	s := indeed.New("go developer", filters, append(recency, "")[0])
 	r := sourcetest.Respond(body)
 	s.Client().Transport = r
 	return s, r
@@ -149,5 +148,55 @@ func TestFetchPageKeyRejection(t *testing.T) {
 				t.Errorf("FetchPage() errors.Is(ErrSourceKeyRejected) = %v, want %v (err = %v)", got, tt.wantReject, err)
 			}
 		})
+	}
+}
+
+func TestRecency(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	ago := func(d time.Duration) *time.Time {
+		at := now.Add(-d)
+		return &at
+	}
+	tests := []struct {
+		name       string
+		configured string
+		last       *time.Time
+		want       string
+	}{
+		{"no previous success sends nothing", "7", nil, ""},
+		{"sub-day gap is one day", "7", ago(3 * time.Hour), "1"},
+		{"just ran is one day", "7", ago(0), "1"},
+		{"multi-day gap rounds up", "14", ago(50 * time.Hour), "3"},
+		{"margin pushes an exact day over", "14", ago(24 * time.Hour), "2"},
+		{"gap beyond the Target recency keeps stored recency", "3", ago(96 * time.Hour), ""},
+		{"gap equal to the Target recency keeps stored recency", "3", ago(72 * time.Hour), ""},
+		{"no configured recency still narrows", "", ago(48 * time.Hour), "3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := indeed.Recency(tt.configured, tt.last, now); got != tt.want {
+				t.Errorf("Recency(%q) = %q, want %q", tt.configured, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIncrementalQuery(t *testing.T) {
+	s, r := newScraper(t, `{"data":{"jobSearch":{"pageInfo":{"nextCursor":null},"results":[]}}}`, map[string]string{"recency": "14"}, "3")
+	if _, _, err := s.FetchPage(t.Context(), ""); err != nil {
+		t.Fatalf("FetchPage() err = %v", err)
+	}
+	body, _ := io.ReadAll(r.Last.Body)
+	for _, want := range []string{`sort: DATE`, `start: \"72h\"`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("request body missing %s:\n%s", want, body)
+		}
+	}
+	if !s.Cfg().NewestFirst {
+		t.Error("Cfg().NewestFirst = false, want true after a first success")
+	}
+	first, _ := newScraper(t, "", nil)
+	if first.Cfg().NewestFirst {
+		t.Error("Cfg().NewestFirst = true with no prior success, want false")
 	}
 }

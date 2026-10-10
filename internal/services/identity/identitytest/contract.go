@@ -57,6 +57,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		}
 	})
 
+	t.Run("new user is a user and SetRole makes them admin", func(t *testing.T) {
+		st := newStore(t)
+		_, session := newSession(t, st, "olly", time.Hour)
+		got, err := st.GetSession(t.Context(), session.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Role != dto.RoleUser {
+			t.Errorf("GetSession(new user).Role = %q, want %q", got.Role, dto.RoleUser)
+		}
+		if err := st.SetRole(t.Context(), "olly", dto.RoleAdmin); err != nil {
+			t.Fatal(err)
+		}
+		got, err = st.GetSession(t.Context(), session.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Role != dto.RoleAdmin {
+			t.Errorf("GetSession after SetRole.Role = %q, want %q", got.Role, dto.RoleAdmin)
+		}
+	})
+
+	t.Run("set role returns not found for an unknown username", func(t *testing.T) {
+		st := newStore(t)
+		if err := st.SetRole(t.Context(), "nobody", dto.RoleAdmin); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetRole(nobody) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	t.Run("get session returns not found when expired", func(t *testing.T) {
 		st := newStore(t)
 		_, session := newSession(t, st, "erin", -time.Second)

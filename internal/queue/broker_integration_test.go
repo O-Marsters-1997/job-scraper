@@ -42,7 +42,7 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
+	t.Cleanup(func() { _ = container.Terminate(context.WithoutCancel(ctx)) })
 	host, err := container.Host(ctx)
 	if err != nil {
 		t.Fatal(err)

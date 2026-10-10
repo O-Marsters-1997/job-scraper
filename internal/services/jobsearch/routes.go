@@ -22,6 +22,8 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/sources", handlers.GetAll(m.jobs.ListSources))
 	r.Get("/sources/resolve", handlers.Query(m.jobs.ResolveBoard))
 
+	r.With(handlers.RequireAdmin).Get("/usage/proxies", handlers.GetAll(m.proxyUsage.View))
+
 	r.Route("/source-targets", func(r chi.Router) {
 		r.Get("/", handlers.GetAll(m.sourceTargets.List))
 		r.Post("/", handlers.Create(m.sourceTargets.Create))

@@ -3,6 +3,7 @@ package pgtest_test
 import (
 	"context"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,7 @@ func (f *fatalTB) Context() context.Context { return context.Background() }
 func openTxCount(t *testing.T, pool *pgxpool.Pool) int {
 	t.Helper()
 	var n int
-	err := pool.QueryRow(t.Context(), "SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction'").Scan(&n)
+	err := pool.QueryRow(t.Context(), "SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction' AND datname = current_database()").Scan(&n)
 	if err != nil {
 		t.Fatalf("count open transactions: %v", err)
 	}
@@ -100,6 +101,18 @@ func TestNew(t *testing.T) {
 		}
 		if version == 0 {
 			t.Errorf("version = 0, want migrations applied")
+		}
+	})
+
+	t.Run("uses a database of its own", func(t *testing.T) {
+		pool := pgtest.New(t)
+
+		var name string
+		if err := pool.QueryRow(t.Context(), "SELECT current_database()").Scan(&name); err != nil {
+			t.Fatalf("query current_database: %v", err)
+		}
+		if !strings.HasPrefix(name, "pgtest_") {
+			t.Errorf("current_database() = %s, want a pgtest_ database", name)
 		}
 	})
 

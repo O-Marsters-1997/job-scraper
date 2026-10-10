@@ -129,3 +129,53 @@ func TestChatStream(t *testing.T) {
 		}
 	})
 }
+
+func TestGetKey(t *testing.T) {
+	t.Run("parses a limited key and sends the bearer token", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "Bearer k" {
+				t.Errorf("Authorization = %q, want Bearer k", got)
+			}
+			_, _ = w.Write([]byte(`{"data":{"limit":10,"limit_remaining":4,"limit_reset":"monthly","usage":6,"usage_monthly":6}}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		got, err := openrouter.GetKey(t.Context(), srv.Client(), srv.URL, "k")
+		if err != nil {
+			t.Fatalf("GetKey() err = %v", err)
+		}
+		limit, remaining, reset := 10.0, 4.0, "monthly"
+		want := openrouter.KeyInfo{Limit: &limit, LimitRemaining: &remaining, LimitReset: &reset, Usage: 6, UsageMonthly: 6}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetKey() (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("null limit leaves Limit nil", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(`{"data":{"limit":null,"limit_remaining":null,"usage":2.5,"usage_monthly":1.5}}`))
+		}))
+		t.Cleanup(srv.Close)
+
+		got, err := openrouter.GetKey(t.Context(), srv.Client(), srv.URL, "k")
+		if err != nil {
+			t.Fatalf("GetKey() err = %v", err)
+		}
+		if got.Limit != nil || got.UsageMonthly != 1.5 {
+			t.Errorf("GetKey() = %+v, want nil Limit and UsageMonthly 1.5", got)
+		}
+	})
+
+	t.Run("non-200 is a StatusError", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(srv.Close)
+
+		_, err := openrouter.GetKey(t.Context(), srv.Client(), srv.URL, "k")
+		var se *openrouter.StatusError
+		if !errors.As(err, &se) || se.Code != http.StatusUnauthorized {
+			t.Fatalf("GetKey() err = %v, want 401 StatusError", err)
+		}
+	})
+}

@@ -6,7 +6,7 @@ One `*jobsdb.DB` implemented every `providers` interface, so every service could
   - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, source targets with their run state, tracked companies, and the fetch cache (ADR 0016).
   - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox`, Jev and notify. The answer-effect loop becomes `scoring.Run(ctx)`.
   - `applications`: applications and statuses.
-  - `events`: the generic `events` log (ADR 0025). Amendment (2026-10-10): it owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.
+  - `events`: the generic `events` log (ADR 0026). Amendment (2026-10-10): it owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.
   - `cvtemplates`: tracked docs and tabs.
   - `identity`: users, sessions, profile, AI credentials, and the Google Link. The Google Link covers OAuth, tokens and the Docs client, which identity exposes to cvtemplates.
   - `cvtailor`: tailored CVs and the Experience Bank. Its `cvedit` (the Sonnet client and its prompts), `checks` (deterministic gates) and `docedit` (edits to Docs requests) are subpackages; see the amendment under Layout.

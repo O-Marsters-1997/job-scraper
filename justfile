@@ -113,6 +113,10 @@ up:
 down:
     docker compose down
 
+[doc("remove finished worktree stacks, their volumes and leftover test containers (--dry-run to preview)")]
+clean *args:
+    scripts/clean.sh {{args}}
+
 # ── Migrations ────────────────────────────────────────────────────────────────
 
 # show migration status

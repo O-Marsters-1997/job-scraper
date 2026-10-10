@@ -1,5 +1,5 @@
 // Package events is the events context: the generic, append-only events log
-// (ADR 0011, ADR 0025).
+// (ADR 0011, ADR 0026).
 package events
 
 import (

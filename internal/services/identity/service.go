@@ -27,6 +27,7 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (dto.Session, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) error
+	SetRole(ctx context.Context, username, role string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
 	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
@@ -46,10 +47,24 @@ type Service struct {
 	seeder StatusSeeder
 	cipher *tokencrypt.Cipher
 	google googleClient
+
+	keyUsage KeyUsageFetcher
+	now      func() time.Time
+	usage    aiUsageCache
 }
 
 func NewService(deps Deps) *Service {
-	return &Service{store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient}
+	s := &Service{
+		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
+		keyUsage: deps.KeyUsage, now: deps.Now,
+	}
+	if s.keyUsage == nil {
+		s.keyUsage = newHTTPKeyUsage()
+	}
+	if s.now == nil {
+		s.now = time.Now
+	}
+	return s
 }
 
 func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {

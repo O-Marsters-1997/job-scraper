@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,14 +20,6 @@ import (
 
 const maxBodyBytes = 8 << 20
 
-var errZoneExhausted = errors.New("web unlocker zone exhausted (client_10100)")
-var errZonePaused = errors.New("web unlocker zone paused until daily probe")
-
-func IsZonePaused(err error) bool {
-	return errors.Is(err, errZoneExhausted) || errors.Is(err, errZonePaused)
-}
-
-var sharedZone = &ZoneGate{}
 var allSlots = make(chan struct{}, 16)
 var hostSlots sync.Map
 
@@ -49,44 +40,6 @@ func acquire(ctx context.Context, host string) (func(), error) {
 	}
 }
 
-type ZoneGate struct {
-	mu        sync.Mutex
-	paused    bool
-	lastProbe time.Time
-	Now       func() time.Time
-}
-
-func (z *ZoneGate) enter() (bool, error) {
-	z.mu.Lock()
-	defer z.mu.Unlock()
-	if !z.paused {
-		return false, nil
-	}
-	now := time.Now().UTC()
-	if z.Now != nil {
-		now = z.Now()
-	}
-	if now.Year() == z.lastProbe.Year() && now.YearDay() == z.lastProbe.YearDay() {
-		return false, errZonePaused
-	}
-	z.lastProbe = now
-	return true, nil
-}
-
-func (z *ZoneGate) result(exhausted, success, probe bool) {
-	z.mu.Lock()
-	defer z.mu.Unlock()
-	if exhausted {
-		z.paused = true
-		z.lastProbe = time.Now().UTC()
-		if z.Now != nil {
-			z.lastProbe = z.Now()
-		}
-	} else if success && probe {
-		z.paused = false
-	}
-}
-
 type Cache interface {
 	LookupFetch(ctx context.Context, url string) (dto.CachedResponse, bool, error)
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
@@ -99,7 +52,6 @@ func SetCache(c Cache) { sharedCache = c }
 
 type fetchTransport struct {
 	base          http.RoundTripper
-	zone          *ZoneGate
 	cache         Cache
 	route, source string
 }
@@ -119,8 +71,7 @@ func cachedResponse(req *http.Request, c dto.CachedResponse) *http.Response {
 }
 
 func storable(resp *http.Response) bool {
-	ok := resp.StatusCode == http.StatusOK || (resp.StatusCode >= 300 && resp.StatusCode < 400)
-	return ok && resp.Header.Get("X-Brd-Error") == "" && !strings.Contains(strings.ToLower(resp.Header.Get("Proxy-Status")), "error=")
+	return resp.StatusCode == http.StatusOK || (resp.StatusCode >= 300 && resp.StatusCode < 400)
 }
 
 func lookupCached(ctx context.Context, cache Cache, req *http.Request) (*Collector, *http.Response, error) {
@@ -166,14 +117,6 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil || hit != nil {
 		return hit, err
 	}
-	probe := false
-	if f.zone != nil {
-		var err error
-		probe, err = f.zone.enter()
-		if err != nil {
-			return nil, err
-		}
-	}
 	release, err := acquire(req.Context(), req.URL.Hostname())
 	if err != nil {
 		return nil, err
@@ -189,18 +132,7 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
 	record(req, f.source, f.route, resp, err)
 	if err != nil {
-		if f.zone != nil && errors.Is(err, errZoneExhausted) {
-			f.zone.result(true, false, probe)
-		}
 		return nil, err
-	}
-	if f.zone != nil {
-		exhausted := zoneExhausted(resp)
-		f.zone.result(exhausted, resp.StatusCode == http.StatusOK, probe)
-		if exhausted {
-			_ = resp.Body.Close()
-			return nil, errZoneExhausted
-		}
 	}
 	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
 	held = false
@@ -221,10 +153,6 @@ func rewound(req *http.Request) (*http.Request, error) {
 	req = req.Clone(req.Context())
 	req.Body = body
 	return req, nil
-}
-
-func zoneExhausted(resp *http.Response) bool {
-	return resp.Header.Get("X-Brd-Err-Code") == "client_10100" || strings.Contains(resp.Header.Get("Proxy-Status"), "client_10100")
 }
 
 type releasingBody struct {
@@ -290,27 +218,19 @@ func publicIP(ip netip.Addr) bool {
 	return true
 }
 
-// Route is how a Source's requests leave the worker. Neither proxy route ever falls back to direct.
+// Route is how a Source's requests leave the worker. The residential route never falls back to direct.
 type Route int
 
 const (
 	Direct Route = iota
-	// Unlocker sends every request through Bright Data Web Unlocker.
-	Unlocker
-	// Tiered tries Decodo residential first, then Unlocker (docs/adr/0018-hostile-sources-fetch-residential-first.md).
-	Tiered
+	// Residential sends every request through Decodo residential proxies (docs/adr/0024-hostile-sources-fetch-residential-only.md).
+	Residential
 )
 
 func Fetcher(route Route, source string) (http.RoundTripper, error) {
 	switch route {
-	case Unlocker:
-		base, err := Transport(true)
-		if err != nil {
-			return nil, err
-		}
-		return &fetchTransport{base: base, zone: sharedZone, cache: sharedCache, route: routeUnlocker, source: source}, nil
-	case Tiered:
-		return newTiered(sharedCache, source)
+	case Residential:
+		return newResidential(sharedCache, source)
 	case Direct:
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -329,36 +249,6 @@ func Fetcher(route Route, source string) (http.RoundTripper, error) {
 	return &fetchTransport{base: tr, route: routeDirect, source: source}, nil
 }
 
-// Probe checks whether a paused Web Unlocker zone is usable again.
-// Bright Data recommends geo.brdtest.com as its proxy test target
-// (https://docs.brightdata.com/proxy-networks/errorCatalog).
-func Probe(ctx context.Context) error {
-	sharedZone.mu.Lock()
-	paused := sharedZone.paused
-	sharedZone.mu.Unlock()
-	if !paused {
-		return nil
-	}
-	tr, err := Fetcher(Unlocker, "probe")
-	if err != nil {
-		return err
-	}
-	client := &http.Client{Timeout: 15 * time.Second, Transport: tr}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://geo.brdtest.com/welcome.txt", nil)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("web unlocker probe status %s", resp.Status)
-	}
-	return nil
-}
-
-func NewFetchTransport(base http.RoundTripper, zone *ZoneGate, cache Cache) http.RoundTripper {
-	return &fetchTransport{base: base, zone: zone, cache: cache}
+func NewFetchTransport(base http.RoundTripper, cache Cache) http.RoundTripper {
+	return &fetchTransport{base: base, cache: cache}
 }

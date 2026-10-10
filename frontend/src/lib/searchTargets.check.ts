@@ -15,6 +15,7 @@ const info: SourceInfo = {
 	label: "LinkedIn",
 	kind: "filter",
 	role: "discovery",
+	incremental: true,
 	url_prefix: "",
 	filters: [
 		{
@@ -37,6 +38,14 @@ const target = (over: Partial<SourceTarget>): SourceTarget => ({
 	LastRunAt: null,
 	LastRunError: "",
 	DisabledReason: "",
+	RunWindow: {
+		interval_minutes: null,
+		weekdays: [],
+		start: "08:00",
+		end: "18:00",
+		timezone: "Europe/London",
+	},
+	NextRunAt: null,
 	URL: "",
 	...over,
 });

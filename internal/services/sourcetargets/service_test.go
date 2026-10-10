@@ -5,11 +5,17 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/queue/queuetest"
+	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 )
@@ -42,7 +48,7 @@ func (v verifiedBoards) VerifiedBoardsBySlug(_ context.Context, slugs []string) 
 }
 
 func serviceOver(targets sourcetargets.Store, q sourcetargets.QueuePublisher) *sourcetargets.Service {
-	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, verifiedBoards(nil))
+	return sourcetargets.New(targets, fakeSearchConfigReader{}, q, verifiedBoards(nil), sourcetargets.DefaultMaxAutomatic)
 }
 
 func newService(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore, *queuetest.Recorder) {
@@ -54,11 +60,34 @@ func newService(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore,
 
 func createTarget(t *testing.T, st *jobsearchtest.FakeStore, enabled bool) dto.SourceTarget {
 	t.Helper()
-	target, err := st.CreateSourceTarget(t.Context(), userID, wisTarget.Source, wisTarget.Value, enabled, nil)
+	target, err := st.CreateSourceTarget(t.Context(), userID, wisTarget.Source, wisTarget.Value, enabled, nil, dto.RunWindow{}, nil)
 	if err != nil {
 		t.Fatalf("CreateSourceTarget() err = %v", err)
 	}
 	return target
+}
+
+func withInterval(minutes int) func(*dto.RunWindow) {
+	return func(w *dto.RunWindow) { w.IntervalMinutes = &minutes }
+}
+
+func runWindowInput(edit func(*dto.RunWindow)) dto.RunWindowInput {
+	w := runwindow.Default()
+	edit(&w)
+	return dto.RunWindowInput{Set: true, Window: &w}
+}
+
+func assertInDefaultWindow(t *testing.T, at time.Time) {
+	t.Helper()
+	london, err := time.LoadLocation("Europe/London")
+	if err != nil {
+		t.Fatalf("LoadLocation() err = %v", err)
+	}
+	local := at.In(london)
+	minutes := local.Hour()*60 + local.Minute()
+	if local.Weekday() == time.Saturday || local.Weekday() == time.Sunday || minutes < 8*60 || minutes >= 18*60 {
+		t.Errorf("next run %v is outside Mon-Fri 08:00-18:00 Europe/London", local)
+	}
 }
 
 func TestCreate(t *testing.T) {
@@ -93,6 +122,44 @@ func TestCreate(t *testing.T) {
 		}
 		if got := q.Tasks(); len(got) != 1 || got[0].Source != "wis" {
 			t.Errorf("queued tasks = %+v, want one WIS search", got)
+		}
+	})
+
+	t.Run("defaults to the hourly weekday window", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		before := time.Now()
+		target, err := svc.Create(t.Context(), userID, wisTarget)
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+		if diff := cmp.Diff(runwindow.Default(), target.RunWindow); diff != "" {
+			t.Errorf("Create().RunWindow mismatch (-want +got):\n%s", diff)
+		}
+		if target.NextRunAt == nil || !target.NextRunAt.After(before) {
+			t.Fatalf("Create().NextRunAt = %v, want after %v", target.NextRunAt, before)
+		}
+		assertInDefaultWindow(t, *target.NextRunAt)
+	})
+
+	t.Run("a null run window creates a manual target", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		in := wisTarget
+		in.RunWindow = dto.RunWindowInput{Set: true}
+		target, err := svc.Create(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+		if target.RunWindow.IntervalMinutes != nil || target.NextRunAt != nil {
+			t.Errorf("Create(null) interval = %v, next run = %v, want both nil", target.RunWindow.IntervalMinutes, target.NextRunAt)
+		}
+	})
+
+	t.Run("rejects an invalid run window", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		in := wisTarget
+		in.RunWindow = runWindowInput(func(w *dto.RunWindow) { w.Timezone = "Mars/Olympus" })
+		if _, err := svc.Create(t.Context(), userID, in); !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("Create() err = %v, want kind %v", err, apperr.KindInvalid)
 		}
 	})
 
@@ -188,13 +255,11 @@ func TestList(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	t.Run("applies the change", func(t *testing.T) {
 		tests := []struct {
-			name         string
-			in           dto.UpdateSourceTargetInput
-			wantEnabled  bool
-			wantInterval int
+			name        string
+			in          dto.UpdateSourceTargetInput
+			wantEnabled bool
 		}{
 			{name: "enabled flag", in: dto.UpdateSourceTargetInput{Enabled: new(false)}, wantEnabled: false},
-			{name: "check interval", in: dto.UpdateSourceTargetInput{CheckIntervalMinutes: new(60)}, wantEnabled: true, wantInterval: 60},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -204,8 +269,8 @@ func TestUpdate(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Update() err = %v", err)
 				}
-				if got.Enabled != tt.wantEnabled || got.CheckIntervalMinutes != tt.wantInterval {
-					t.Errorf("Update() enabled = %t, interval = %d, want %t, %d", got.Enabled, got.CheckIntervalMinutes, tt.wantEnabled, tt.wantInterval)
+				if got.Enabled != tt.wantEnabled {
+					t.Errorf("Update() enabled = %t, want %t", got.Enabled, tt.wantEnabled)
 				}
 			})
 		}
@@ -218,7 +283,10 @@ func TestUpdate(t *testing.T) {
 			missing  bool
 			wantKind apperr.Kind
 		}{
-			{name: "interval below 60", in: dto.UpdateSourceTargetInput{CheckIntervalMinutes: new(30)}, wantKind: apperr.KindInvalid},
+			{name: "interval below 60", in: dto.UpdateSourceTargetInput{RunWindow: runWindowInput(withInterval(30))}, wantKind: apperr.KindInvalid},
+			{name: "unknown timezone", in: dto.UpdateSourceTargetInput{RunWindow: runWindowInput(func(w *dto.RunWindow) { w.Timezone = "Mars/Olympus" })}, wantKind: apperr.KindInvalid},
+			{name: "no weekdays", in: dto.UpdateSourceTargetInput{RunWindow: runWindowInput(func(w *dto.RunWindow) { w.Weekdays = nil })}, wantKind: apperr.KindInvalid},
+			{name: "inverted window", in: dto.UpdateSourceTargetInput{RunWindow: runWindowInput(func(w *dto.RunWindow) { w.Start, w.End = "18:00", "08:00" })}, wantKind: apperr.KindInvalid},
 			{name: "empty body", wantKind: apperr.KindInvalid},
 			{name: "unknown target", in: dto.UpdateSourceTargetInput{Enabled: new(false)}, missing: true, wantKind: apperr.KindNotFound},
 		}
@@ -234,6 +302,74 @@ func TestUpdate(t *testing.T) {
 					t.Fatalf("Update() err = %v, want kind %v", err, tt.wantKind)
 				}
 			})
+		}
+	})
+
+	t.Run("a run window replaces the schedule and resets the next run", func(t *testing.T) {
+		svc, st, _ := newService(t)
+		created := createTarget(t, st, true)
+
+		before := time.Now()
+		got, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: created.ID, RunWindow: runWindowInput(withInterval(180))})
+		if err != nil {
+			t.Fatalf("Update() err = %v", err)
+		}
+		if iv := got.RunWindow.IntervalMinutes; iv == nil || *iv != 180 {
+			t.Errorf("Update().RunWindow.IntervalMinutes = %v, want 180", iv)
+		}
+		if got.NextRunAt == nil || !got.NextRunAt.After(before) {
+			t.Fatalf("Update().NextRunAt = %v, want after %v", got.NextRunAt, before)
+		}
+		assertInDefaultWindow(t, *got.NextRunAt)
+	})
+
+	t.Run("enabling reschedules the next run", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		in := wisTarget
+		in.Enabled = new(false)
+		created, err := svc.Create(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+		if created.NextRunAt != nil {
+			t.Fatalf("Create(disabled).NextRunAt = %v, want nil", created.NextRunAt)
+		}
+
+		got, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: created.ID, Enabled: new(true)})
+		if err != nil {
+			t.Fatalf("Update() err = %v", err)
+		}
+		if got.NextRunAt == nil {
+			t.Fatal("Update(enable).NextRunAt = nil, want a scheduled run")
+		}
+		assertInDefaultWindow(t, *got.NextRunAt)
+	})
+
+	t.Run("a null run window makes the target manual", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		created, err := svc.Create(t.Context(), userID, wisTarget)
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+
+		got, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: created.ID, RunWindow: dto.RunWindowInput{Set: true}})
+		if err != nil {
+			t.Fatalf("Update() err = %v", err)
+		}
+		if got.RunWindow.IntervalMinutes != nil || got.NextRunAt != nil {
+			t.Errorf("Update(null) interval = %v, next run = %v, want both nil", got.RunWindow.IntervalMinutes, got.NextRunAt)
+		}
+		if got.RunWindow.Timezone != "Europe/London" || len(got.RunWindow.Weekdays) != 5 {
+			t.Errorf("Update(null).RunWindow = %+v, want the stored window kept", got.RunWindow)
+		}
+	})
+
+	t.Run("a null run window on another user's target is not found", func(t *testing.T) {
+		svc, st, _ := newService(t)
+		created := createTarget(t, st, true)
+		_, err := svc.Update(t.Context(), "user-2", dto.UpdateSourceTargetInput{ID: created.ID, RunWindow: dto.RunWindowInput{Set: true}})
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Fatalf("Update() err = %v, want kind %v", err, apperr.KindNotFound)
 		}
 	})
 
@@ -285,10 +421,31 @@ func TestScrape(t *testing.T) {
 		}
 	})
 
+	t.Run("a rerun resets the next run", func(t *testing.T) {
+		svc, _, _ := newService(t)
+		created, err := svc.Create(t.Context(), userID, dto.CreateSourceTargetInput{Source: "wis", Value: "rerun", RunWindow: runWindowInput(withInterval(60))})
+		if err != nil {
+			t.Fatalf("Create() err = %v", err)
+		}
+		if _, err := svc.TransitionSourceTargetRun(t.Context(), created.ID, created.RunID, "succeeded", ""); err != nil {
+			t.Fatalf("TransitionSourceTargetRun() err = %v", err)
+		}
+
+		before := time.Now()
+		rerun, err := svc.Scrape(t.Context(), userID, created.ID)
+		if err != nil {
+			t.Fatalf("Scrape() err = %v", err)
+		}
+		if rerun.NextRunAt == nil || !rerun.NextRunAt.After(before) {
+			t.Fatalf("Scrape().NextRunAt = %v, want after %v", rerun.NextRunAt, before)
+		}
+		assertInDefaultWindow(t, *rerun.NextRunAt)
+	})
+
 	t.Run("retries a failed run", func(t *testing.T) {
 		svc, st, q := newService(t)
 		created := createTarget(t, st, true)
-		started, err := st.StartSourceTargetRun(t.Context(), created.ID)
+		started, err := st.StartSourceTargetRun(t.Context(), created.ID, nil)
 		if err != nil {
 			t.Fatalf("StartSourceTargetRun() err = %v", err)
 		}
@@ -306,5 +463,140 @@ func TestScrape(t *testing.T) {
 		if got := len(q.Tasks()); got != 1 {
 			t.Errorf("queued tasks = %d, want 1", got)
 		}
+	})
+}
+
+func TestDisableSource(t *testing.T) {
+	t.Run("counts the targets it disabled by source and reason", func(t *testing.T) {
+		svc, st, _ := newService(t)
+		createTarget(t, st, true)
+		if _, err := st.CreateSourceTarget(t.Context(), userID, "wis", "designer", true, nil, dto.RunWindow{}, nil); err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		counter := sourcetargets.TargetsDisabled.WithLabelValues("wis", "wis key rejected")
+		before := testutil.ToFloat64(counter)
+
+		n, err := svc.DisableSource(t.Context(), "wis", "wis key rejected")
+		if err != nil || n != 2 {
+			t.Fatalf("DisableSource() = %d, %v, want 2, nil", n, err)
+		}
+		if got := testutil.ToFloat64(counter) - before; got != 2 {
+			t.Errorf("jobscraper_source_targets_disabled_total rose by %v, want 2", got)
+		}
+
+		if _, err := svc.DisableSource(t.Context(), "wis", "wis key rejected"); err != nil {
+			t.Fatalf("second DisableSource() err = %v", err)
+		}
+		if got := testutil.ToFloat64(counter) - before; got != 2 {
+			t.Errorf("counter rose by %v after a no-op disable, want 2", got)
+		}
+	})
+}
+
+func TestAutomaticGuards(t *testing.T) {
+	const cap = 2
+	newCapped := func(t *testing.T) (*sourcetargets.Service, *jobsearchtest.FakeStore) {
+		t.Helper()
+		st := jobsearchtest.NewFakeStore()
+		return sourcetargets.New(st, fakeSearchConfigReader{}, queuetest.NewRecorder(), verifiedBoards(nil), cap), st
+	}
+	automatic := func(value string) dto.CreateSourceTargetInput {
+		return dto.CreateSourceTargetInput{Source: "wis", Value: value}
+	}
+	manual := func(value string) dto.CreateSourceTargetInput {
+		return dto.CreateSourceTargetInput{Source: "wis", Value: value, RunWindow: dto.RunWindowInput{Set: true}}
+	}
+	wantKind := func(t *testing.T, err error, kind apperr.Kind) {
+		t.Helper()
+		if !apperr.IsKind(err, kind) {
+			t.Fatalf("err = %v, want kind %v", err, kind)
+		}
+	}
+
+	t.Run("create past the cap is invalid and a manual one succeeds", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		_, err := svc.Create(t.Context(), userID, automatic("c"))
+		wantKind(t, err, apperr.KindInvalid)
+		if _, err := svc.Create(t.Context(), userID, manual("c")); err != nil {
+			t.Errorf("Create(manual) err = %v, want nil", err)
+		}
+		if _, err := svc.Create(t.Context(), "user-2", automatic("a")); err != nil {
+			t.Errorf("Create(other user) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("disabled targets are not counted", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		in := automatic("c")
+		in.Enabled = new(false)
+		if _, err := svc.Create(t.Context(), userID, in); err != nil {
+			t.Errorf("Create(disabled) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("update past the cap is invalid", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		m, err := svc.Create(t.Context(), userID, manual("c"))
+		if err != nil {
+			t.Fatalf("Create(manual) err = %v", err)
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: m.ID, RunWindow: runWindowInput(withInterval(120))})
+		wantKind(t, err, apperr.KindInvalid)
+	})
+
+	t.Run("update keeps a target at the cap", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		var last dto.SourceTarget
+		for _, v := range []string{"a", "b"} {
+			var err error
+			if last, err = svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		if _, err := svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: last.ID, RunWindow: runWindowInput(withInterval(120))}); err != nil {
+			t.Errorf("Update(retime) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("re-enabling past the cap is invalid", func(t *testing.T) {
+		svc, _ := newCapped(t)
+		in := automatic("off")
+		in.Enabled = new(false)
+		off, err := svc.Create(t.Context(), userID, in)
+		if err != nil {
+			t.Fatalf("Create(disabled) err = %v", err)
+		}
+		for _, v := range []string{"a", "b"} {
+			if _, err := svc.Create(t.Context(), userID, automatic(v)); err != nil {
+				t.Fatalf("Create(%q) err = %v", v, err)
+			}
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: off.ID, Enabled: new(true)})
+		wantKind(t, err, apperr.KindInvalid)
+	})
+
+	t.Run("a non-incremental source cannot take an interval", func(t *testing.T) {
+		svc, st := newCapped(t)
+		ats, err := st.CreateSourceTarget(t.Context(), userID, "greenhouse", "acme", true, nil, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget() err = %v", err)
+		}
+		_, err = svc.Update(t.Context(), userID, dto.UpdateSourceTargetInput{ID: ats.ID, RunWindow: runWindowInput(withInterval(120))})
+		wantKind(t, err, apperr.KindInvalid)
 	})
 }

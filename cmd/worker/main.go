@@ -22,6 +22,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/schedule"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
@@ -42,9 +43,6 @@ func main() {
 	slog.SetDefault(logger.MustFromEnv())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err := proxy.Validate(); err != nil {
-		fatal(ctx, "Web Unlocker config invalid", err)
-	}
 	if err := proxy.ValidateResidential(); err != nil {
 		fatal(ctx, "residential proxy config invalid", err)
 	}
@@ -72,6 +70,7 @@ func main() {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	proxy.RegisterMetrics(reg)
+	jobsearch.RegisterMetrics(reg)
 	telemetry.ServeMetrics(ctx, reg)
 
 	q, err := queue.NewBrokerFromEnv()
@@ -80,7 +79,7 @@ func main() {
 	}
 	defer func() { _ = q.Close() }()
 
-	js := jobsearch.New(pool, q, scoringModule)
+	js := jobsearch.New(pool, q, scoringModule, nil, sourcetargets.DefaultMaxAutomatic)
 	proxy.SetCache(js)
 
 	maxPages := 0
@@ -101,7 +100,7 @@ func main() {
 		return js.PublishBoardChecks(ctx, *forceBoards)
 	})
 	go schedule.Every(ctx, "reconcile", time.Minute, js.RecoverRuns)
-	go schedule.Every(ctx, "proxy probe", 24*time.Hour, proxy.Probe)
+	go schedule.Every(ctx, "discovery runs", time.Minute, js.PublishDueTargets)
 	go schedule.Every(ctx, "candidate cleanup", 24*time.Hour, js.DeleteExpiredCandidates)
 	go schedule.Every(ctx, "fetch cache cleanup", 24*time.Hour, js.DeleteExpiredFetches)
 

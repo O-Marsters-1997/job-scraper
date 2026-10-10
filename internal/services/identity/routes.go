@@ -30,6 +30,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
 
 	r.Get("/ai-prefs", handlers.GetAll(m.service.GetAIPrefs))
+	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
@@ -113,7 +114,7 @@ var meHandler = handlers.Handle(
 		if !ok {
 			return dto.MeView{}, apperr.Unauthorized("unauthorized")
 		}
-		return dto.MeView{ID: session.UserID, Username: session.Username}, nil
+		return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
 	},
 	func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
 	func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {

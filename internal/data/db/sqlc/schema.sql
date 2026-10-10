@@ -35,11 +35,14 @@ CREATE TABLE job_urls (
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TYPE user_role AS ENUM ('user', 'admin');
+
 CREATE TABLE IF NOT EXISTS users (
     id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     username      TEXT        NOT NULL UNIQUE,
     password_hash TEXT        NOT NULL,
     email         TEXT        UNIQUE,
+    role          user_role   NOT NULL DEFAULT 'user',
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -297,8 +300,12 @@ CREATE TABLE IF NOT EXISTS source_targets (
     enabled                BOOLEAN     NOT NULL DEFAULT TRUE,
     filters                JSONB       NOT NULL DEFAULT '{}',
     company_id             UUID        REFERENCES companies(id) ON DELETE SET NULL,
-    check_interval_minutes INT         NOT NULL DEFAULT 360,
-    last_checked_at        TIMESTAMPTZ,
+    interval_minutes       INT         CHECK (interval_minutes IS NULL OR interval_minutes >= 60),
+    weekdays               SMALLINT    NOT NULL DEFAULT 31 CHECK (weekdays BETWEEN 1 AND 127),
+    window_start           TIME        NOT NULL DEFAULT '08:00',
+    window_end             TIME        NOT NULL DEFAULT '18:00',
+    timezone               TEXT        NOT NULL DEFAULT 'Europe/London',
+    next_run_at            TIMESTAMPTZ,
     run_status             TEXT        NOT NULL DEFAULT 'idle' CHECK (run_status IN ('idle', 'queued', 'running', 'succeeded', 'failed')),
     run_id                 UUID,
     last_run_at            TIMESTAMPTZ,
@@ -307,8 +314,12 @@ CREATE TABLE IF NOT EXISTS source_targets (
     disabled_reason        TEXT        NOT NULL DEFAULT '',
     created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, source, value, filters)
+    UNIQUE (user_id, source, value, filters),
+    CONSTRAINT source_targets_window_order CHECK (window_start < window_end)
 );
+
+CREATE INDEX IF NOT EXISTS source_targets_due_idx ON source_targets (next_run_at)
+    WHERE enabled AND interval_minutes IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS tracked_companies (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -25,7 +25,6 @@ __debug_bin*
 
 # Utilities
 .DS_Store
-.treepad.toml
 .agents/
 .env*
 certs/

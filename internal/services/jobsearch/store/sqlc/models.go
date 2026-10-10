@@ -104,6 +104,48 @@ func (ns NullScoringDimension) Value() (driver.Value, error) {
 	return string(ns.ScoringDimension), nil
 }
 
+type UserRole string
+
+const (
+	UserRoleUser  UserRole = "user"
+	UserRoleAdmin UserRole = "admin"
+)
+
+func (e *UserRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UserRole(s)
+	case string:
+		*e = UserRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UserRole: %T", src)
+	}
+	return nil
+}
+
+type NullUserRole struct {
+	UserRole UserRole
+	Valid    bool // Valid is true if UserRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUserRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.UserRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UserRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUserRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UserRole), nil
+}
+
 type Achievement struct {
 	ID         pgtype.UUID
 	PositionID pgtype.UUID
@@ -466,23 +508,27 @@ type Session struct {
 }
 
 type SourceTarget struct {
-	ID                   pgtype.UUID
-	UserID               pgtype.UUID
-	Source               string
-	Value                string
-	Enabled              bool
-	Filters              []byte
-	CompanyID            pgtype.UUID
-	CheckIntervalMinutes int32
-	LastCheckedAt        pgtype.Timestamptz
-	RunStatus            string
-	RunID                pgtype.UUID
-	LastRunAt            pgtype.Timestamptz
-	LastSucceededAt      pgtype.Timestamptz
-	LastRunError         string
-	DisabledReason       string
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
+	ID              pgtype.UUID
+	UserID          pgtype.UUID
+	Source          string
+	Value           string
+	Enabled         bool
+	Filters         []byte
+	CompanyID       pgtype.UUID
+	IntervalMinutes pgtype.Int4
+	Weekdays        int16
+	WindowStart     pgtype.Time
+	WindowEnd       pgtype.Time
+	Timezone        string
+	NextRunAt       pgtype.Timestamptz
+	RunStatus       string
+	RunID           pgtype.UUID
+	LastRunAt       pgtype.Timestamptz
+	LastSucceededAt pgtype.Timestamptz
+	LastRunError    string
+	DisabledReason  string
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
 }
 
 type TailoredCv struct {
@@ -544,6 +590,7 @@ type User struct {
 	Username     string
 	PasswordHash string
 	Email        pgtype.Text
+	Role         UserRole
 	CreatedAt    pgtype.Timestamptz
 }
 

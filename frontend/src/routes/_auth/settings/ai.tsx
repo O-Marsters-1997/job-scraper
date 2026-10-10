@@ -4,9 +4,11 @@ import { createSignal, Show } from "solid-js";
 import { Field } from "@/components/Field";
 import { FormFeedback } from "@/components/FormFeedback";
 import { QueryBoundary } from "@/components/QueryBoundary";
+import { QuotaBar } from "@/components/QuotaBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAiPrefs, useUpdateAiCredentials } from "../../../hooks/useAiPrefs";
+import { useAiUsage } from "../../../hooks/useAiUsage";
 import type { AiPrefs } from "../../../types/aiPrefs";
 
 export const Route = createFileRoute("/_auth/settings/ai")({
@@ -24,6 +26,7 @@ function AiPage() {
 
 function AiForm(props: { data: Accessor<AiPrefs> }) {
 	const mutation = useUpdateAiCredentials();
+	const usage = useAiUsage();
 	const [apiKey, setApiKey] = createSignal("");
 	const [saved, setSaved] = createSignal(false);
 	const [saveError, setSaveError] = createSignal<string | null>(null);
@@ -92,6 +95,16 @@ function AiForm(props: { data: Accessor<AiPrefs> }) {
 					</div>
 				</Show>
 			</Field>
+			<Show when={usage.data?.status === "ok" ? usage.data : undefined}>
+				{(quota) => (
+					<div class="mt-4">
+						<QuotaBar quota={quota()} />
+					</div>
+				)}
+			</Show>
+			<Show when={usage.data?.status === "error" ? usage.data : undefined}>
+				{(quota) => <p class="mt-4 text-xs text-faint">{quota().error}</p>}
+			</Show>
 		</>
 	);
 }

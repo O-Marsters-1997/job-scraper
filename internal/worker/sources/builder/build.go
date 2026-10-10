@@ -48,9 +48,11 @@ var registry = map[string]entry{
 	"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
 	"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
 	"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
-	"indeed":          {build: func(t dto.SourceTarget) sources.Source { return indeed.New(t.Value, t.Filters) }},
-	"remoteok":        {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
-	"remotive":        {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+	"indeed": {build: func(t dto.SourceTarget) sources.Source {
+		return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+	}},
+	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 	"wis": {
 		build: func(t dto.SourceTarget) sources.Source {
 			return wis.New(wis.Search{

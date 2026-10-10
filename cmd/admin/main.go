@@ -22,6 +22,7 @@ import (
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
+	fmt.Fprintln(os.Stderr, "       admin set-role <username> <user|admin>")
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
@@ -42,6 +43,8 @@ func main() {
 	switch os.Args[1] {
 	case "create-user":
 		runCreateUser(os.Args[2:])
+	case "set-role":
+		runSetRole(os.Args[2:])
 	case "options":
 		runOptions(os.Args[2:])
 	case "scoring-feedback":
@@ -98,6 +101,22 @@ func runCreateUser(args []string) {
 	}
 
 	fmt.Printf("User %q created (id: %s)\n", user.Username, user.ID)
+}
+
+func runSetRole(args []string) {
+	if len(args) != 2 {
+		usage()
+	}
+	username, role := args[0], args[1]
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	if err := identity.NewFacade(pool, nil).SetRole(ctx, username, role); err != nil {
+		fatal("set role", err)
+	}
+	fmt.Printf("User %q is now %s\n", username, role)
 }
 
 func runOptions(args []string) {

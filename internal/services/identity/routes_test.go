@@ -86,6 +86,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"POST /auth/logout",
 		"GET /auth/me",
 		"GET /profile",
+		"GET /ai-usage",
 		"PUT /profile",
 		"GET /ai-prefs",
 		"PUT /ai-credentials",
@@ -124,8 +125,8 @@ func TestSessionCookieJourney(t *testing.T) {
 
 	w = serve(t, r, "GET /auth/me", "", session)
 	wantStatus(t, w, http.StatusOK)
-	if got := handlerstest.DecodeJSON[dto.MeView](t, w.Body.Bytes()); got.Username != "alice" {
-		t.Errorf("me body = %+v, want username alice", got)
+	if got := handlerstest.DecodeJSON[dto.MeView](t, w.Body.Bytes()); got.Username != "alice" || got.IsAdmin {
+		t.Errorf("me body = %+v, want username alice and isAdmin false", got)
 	}
 
 	w = serve(t, r, "POST /auth/logout", "", session)

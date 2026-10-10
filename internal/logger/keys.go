@@ -27,4 +27,5 @@ const (
 	KeyURL           = "url"
 	KeyCount         = "count"
 	KeyDeliveryCount = "delivery_count"
+	KeyProvider      = "provider"
 )

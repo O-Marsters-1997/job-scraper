@@ -1,5 +1,6 @@
 import { faker } from "@faker-js/faker";
 import type { CompanyPageParams } from "@/api/companies";
+import { DEFAULT_RUN_WINDOW } from "@/lib/runWindow";
 import type {
 	Company,
 	CompanyBoard,
@@ -343,6 +344,8 @@ function companyToSourceTarget(company: Company): SourceTarget {
 		LastRunError: "",
 		DisabledReason: "",
 		URL: "",
+		RunWindow: { ...DEFAULT_RUN_WINDOW, interval_minutes: null },
+		NextRunAt: null,
 	};
 }
 

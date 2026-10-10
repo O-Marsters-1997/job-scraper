@@ -80,8 +80,9 @@ change-detector: rewrite it at the output or delete it.
 
 ## Store tests
 
-- `pgtest.New(t)` returns a pool on the one shared container per test binary, with every table
-  truncated. No per-package `TestMain`, no own container.
+- `pgtest.New(t)` returns a pool on this test binary's own database, on one container shared
+  machine-wide ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)), with
+  every table truncated. No per-package `TestMain`, no own container.
 - Serial: never `t.Parallel()` in a test that calls `pgtest.New`. Empty tables are guaranteed,
   so length assertions are safe.
 - Test transactions go through `pgtest.InTx(t, pool, commit, fn)`, never `pool.Begin`: it registers
