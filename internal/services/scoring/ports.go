@@ -40,6 +40,10 @@ type Extractor interface {
 	Extract(ctx context.Context, apiKey, text string, options []dto.ScoringOption, dimensions []dto.DimensionSpec) ([]dto.Pick, error)
 }
 
+type CompanyClassifier interface {
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
+}
+
 // Reconsiderer re-evaluates a user's discovered-job candidates against an
 // updated Search Config.
 type Reconsiderer interface {

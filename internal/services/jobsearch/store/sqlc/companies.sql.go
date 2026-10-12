@@ -45,7 +45,7 @@ func (q *Queries) DeleteCompanyTracking(ctx context.Context, arg DeleteCompanyTr
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, kind, last_crawled_at, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
 `
 
 func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, error) {
@@ -59,6 +59,7 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 		&i.AtsToken,
 		&i.Domain,
 		&i.LinkedinCompanyID,
+		&i.Kind,
 		&i.LastCrawledAt,
 		&i.FirstSeenAt,
 		&i.CreatedAt,
@@ -148,7 +149,7 @@ func (q *Queries) KeepNewTrackedCompany(ctx context.Context, arg KeepNewTrackedC
 }
 
 const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
-SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, kind, last_crawled_at, first_seen_at, created_at, updated_at FROM companies
 WHERE domain IS NOT NULL AND ats_source IS NULL
   AND (last_crawled_at IS NULL OR last_crawled_at < NOW() - make_interval(days => 30))
 ORDER BY last_crawled_at NULLS FIRST LIMIT $1
@@ -171,6 +172,7 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 			&i.AtsToken,
 			&i.Domain,
 			&i.LinkedinCompanyID,
+			&i.Kind,
 			&i.LastCrawledAt,
 			&i.FirstSeenAt,
 			&i.CreatedAt,
@@ -575,7 +577,7 @@ ON CONFLICT (slug) DO UPDATE SET
     domain              = COALESCE(companies.domain, EXCLUDED.domain),
     linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
     updated_at = NOW()
-RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at
+RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, kind, last_crawled_at, first_seen_at, created_at, updated_at
 `
 
 type UpsertCompanyParams struct {
@@ -605,6 +607,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		&i.AtsToken,
 		&i.Domain,
 		&i.LinkedinCompanyID,
+		&i.Kind,
 		&i.LastCrawledAt,
 		&i.FirstSeenAt,
 		&i.CreatedAt,

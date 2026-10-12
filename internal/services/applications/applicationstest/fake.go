@@ -205,4 +205,16 @@ func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID stri
 	return nil
 }
 
+func (f *FakeStore) CreateRecruiterContact(_ context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
+	panic("not implemented")
+}
+
+func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID string) ([]dto.RecruiterContact, error) {
+	panic("not implemented")
+}
+
+func (f *FakeStore) SummarizeRecruiterContacts(_ context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
+	panic("not implemented")
+}
+
 var _ applications.Store = (*FakeStore)(nil)

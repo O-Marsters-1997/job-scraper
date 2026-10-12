@@ -23,4 +23,10 @@ func (m *Module) Routes(r chi.Router) {
 		r.Delete("/{id}/chase", handlers.Delete(m.store.ClearChase))
 		r.Get("/for-jobs", handlers.Query(m.service.ForJobs))
 	})
+
+	r.Route("/recruiter-contacts", func(r chi.Router) {
+		r.Get("/", handlers.Query(m.service.ListRecruiterContacts))
+		r.Post("/", handlers.Create(m.service.LogRecruiterContact))
+		r.Get("/for-jobs", handlers.Query(m.service.RecruiterContactsForJobs))
+	})
 }

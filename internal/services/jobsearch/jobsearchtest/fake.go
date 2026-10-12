@@ -1073,6 +1073,14 @@ func (f *FakeStore) DeleteExpiredCandidates(context.Context) error {
 
 var _ Store = (*FakeStore)(nil)
 
+func (f *FakeStore) SetCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) error {
+	panic("not implemented")
+}
+
+func (f *FakeStore) SuggestCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	panic("not implemented")
+}
+
 func (f *FakeStore) LookupFetch(_ context.Context, url string) (dto.CachedResponse, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

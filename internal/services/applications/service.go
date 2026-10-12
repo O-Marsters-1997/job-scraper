@@ -20,6 +20,10 @@ type Store interface {
 	DeleteApplication(ctx context.Context, userID, id string) error
 	GetApplicationsForJobs(ctx context.Context, userID string, jobIDs []string) (map[string]dto.JobApplicationSummary, error)
 
+	CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error)
+	ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error)
+	SummarizeRecruiterContacts(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error)
+
 	CreateApplicationStatus(ctx context.Context, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
 	UpdateApplicationStatus(ctx context.Context, id, userID, name, colour string, replyWindowDays *int) (dto.ApplicationStatus, error)
 	DeleteApplicationStatus(ctx context.Context, id, userID string) error

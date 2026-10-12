@@ -25,6 +25,7 @@ type Job struct {
 	Grade              string
 	Seen               bool
 	CompanyFavourite   bool
+	CompanyKind        CompanyKind
 	Breakdown          []ScoreRow
 	Listings           []JobListing
 }

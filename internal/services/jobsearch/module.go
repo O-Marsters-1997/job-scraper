@@ -74,6 +74,8 @@ type Store interface {
 	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
 	SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
+	SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
 	TouchCompanyCrawled(ctx context.Context, id string) error

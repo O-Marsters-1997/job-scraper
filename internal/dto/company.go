@@ -10,6 +10,7 @@ type Company struct {
 	ATSToken          string
 	Domain            string
 	LinkedInCompanyID string
+	Kind              CompanyKind
 	LastCrawledAt     *time.Time
 	FirstSeenAt       time.Time
 
@@ -36,6 +37,7 @@ type CompaniesQuery struct {
 	Tracked   string `json:"tracked"`
 	Favourite string `json:"favourite"`
 	NoBoard   string `json:"no_board"`
+	Agency    string `json:"agency"`
 	Sort      string `json:"sort"`
 }
 
@@ -46,6 +48,7 @@ type CompanyPageOptions struct {
 	TrackedOnly   bool
 	FavouriteOnly bool
 	NoBoardOnly   bool
+	AgencyOnly    bool
 	Sort          CompanySort
 }
 

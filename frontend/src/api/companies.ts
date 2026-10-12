@@ -5,6 +5,7 @@ import type {
 	CompanyExclusion,
 	CompanyPage,
 	CompanyTracking,
+	ConfirmedKind,
 	NewCompany,
 	ReviewState,
 	TrackedCompany,
@@ -40,6 +41,7 @@ export type CompanyPageParams = {
 	tracked?: boolean;
 	favourite?: boolean;
 	noBoard?: boolean;
+	agency?: boolean;
 	sort?: CompanySort;
 	offset?: number;
 	limit?: number;
@@ -142,6 +144,13 @@ export async function setCompanyReview(
 				jsonInit("PUT", { state }),
 			),
 	);
+}
+
+export async function setCompanyKind(
+	_id: string,
+	_kind: ConfirmedKind,
+): Promise<Company> {
+	throw new Error("not implemented");
 }
 
 export async function excludeCompany(id: string): Promise<CompanyExclusion> {

@@ -1,11 +1,23 @@
 import { z } from "zod";
 
+export const COMPANY_KINDS = [
+	"unclassified",
+	"likely_agency",
+	"likely_direct",
+	"agency",
+	"direct",
+] as const;
+export const companyKindSchema = z.enum(COMPANY_KINDS);
+export type CompanyKind = z.infer<typeof companyKindSchema>;
+export type ConfirmedKind = Extract<CompanyKind, "agency" | "direct">;
+
 export const companySchema = z.object({
 	ID: z.string(),
 	Slug: z.string(),
 	Name: z.string(),
 	ATSSource: z.string(),
 	ATSToken: z.string(),
+	Kind: companyKindSchema.optional(),
 	FirstSeenAt: z.string(),
 	JobCount: z.number(),
 	Tracked: z.boolean(),

@@ -7,6 +7,9 @@ export type GradedFilter = (typeof GRADED_OPTIONS)[number];
 export const SEEN_OPTIONS = ["all", "unseen", "seen"] as const;
 export type SeenFilter = (typeof SEEN_OPTIONS)[number];
 
+export const POSTER_OPTIONS = ["all", "direct", "agency"] as const;
+export type PosterFilter = (typeof POSTER_OPTIONS)[number];
+
 export interface JobFilters {
 	q: string;
 	suit?: number | undefined;
@@ -20,6 +23,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	poster: PosterFilter;
 	sort: JobSort;
 	page?: number | undefined;
 }
@@ -37,6 +41,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	poster: "all",
 	sort: "relevant",
 	page: undefined,
 };
@@ -74,6 +79,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		poster: POSTER_OPTIONS.find((o) => o === raw.poster) ?? "all",
 		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1

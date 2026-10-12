@@ -16,3 +16,13 @@ func (s ReconsidererStub) Reconsider(context.Context, dto.SearchConfig) error {
 }
 
 var _ scoring.Reconsiderer = ReconsidererStub{}
+
+type SuggestedKinds struct {
+	Kinds map[string]dto.CompanyKind
+}
+
+func (s *SuggestedKinds) SuggestCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	panic("not implemented")
+}
+
+var _ scoring.CompanyClassifier = (*SuggestedKinds)(nil)

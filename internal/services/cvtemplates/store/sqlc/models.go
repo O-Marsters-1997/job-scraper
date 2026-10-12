@@ -240,6 +240,7 @@ type Company struct {
 	AtsToken          pgtype.Text
 	Domain            pgtype.Text
 	LinkedinCompanyID pgtype.Text
+	Kind              string
 	LastCrawledAt     pgtype.Timestamptz
 	FirstSeenAt       pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
@@ -462,6 +463,16 @@ type PushSubscription struct {
 	P256dh    string
 	Auth      string
 	CreatedAt pgtype.Timestamptz
+}
+
+type RecruiterContact struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	ContactedOn pgtype.Date
+	Channel     string
+	Outcome     string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type ScoreFeedback struct {
