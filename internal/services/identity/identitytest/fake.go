@@ -99,7 +99,7 @@ func (f *FakeStore) Begin(context.Context) (pgx.Tx, error) { return fakeTx{}, ni
 func (f *FakeStore) CreateSession(_ context.Context, userID string, tokenHash []byte, expiresAt time.Time) (dto.Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s := dto.Session{ID: fmt.Sprintf("session-%d", len(f.sessions)+1), UserID: userID, ExpiresAt: expiresAt}
+	s := dto.Session{ID: fmt.Sprintf("session-%x", tokenHash), UserID: userID, ExpiresAt: expiresAt}
 	f.sessions[string(tokenHash)] = s
 	return s, nil
 }
