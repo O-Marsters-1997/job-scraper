@@ -21,10 +21,9 @@ func TestEvery(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	calls := make(chan struct{})
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		defer close(done)
-		schedule.Every(ctx, "chore", time.Millisecond, func(context.Context) error {
+		done <- schedule.Every(ctx, "chore", time.Millisecond, func(context.Context) error {
 			calls <- struct{}{}
 			return errors.New("boom")
 		})
@@ -43,7 +42,10 @@ func TestEvery(t *testing.T) {
 		}
 	}()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Every() err = %v, want nil on ctx cancel", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Every did not return after ctx cancel")
 	}

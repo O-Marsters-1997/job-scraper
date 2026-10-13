@@ -18,6 +18,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/google"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 type tokenStore struct {
@@ -37,14 +38,16 @@ func (s tokenStore) UpsertGoogleToken(_ context.Context, in dto.UpsertGoogleToke
 }
 func (tokenStore) DeleteGoogleToken(context.Context, string) error { return nil }
 
+var u1AAD = tokencrypt.AAD{Table: tokencrypt.TableGoogleOAuthTokens, Owner: "u1"}
+
 func linkedClient(t *testing.T, rt http.RoundTripper) (context.Context, *google.Client) {
 	t.Helper()
 	cipher := identitytest.NewCipher(t)
-	access, err := cipher.Encrypt("access")
+	access, err := cipher.Encrypt("access", u1AAD)
 	if err != nil {
 		t.Fatal(err)
 	}
-	refresh, err := cipher.Encrypt("refresh")
+	refresh, err := cipher.Encrypt("refresh", u1AAD)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +157,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 	cipher := identitytest.NewCipher(t)
 	encrypt := func(v string) string {
 		t.Helper()
-		enc, err := cipher.Encrypt(v)
+		enc, err := cipher.Encrypt(v, u1AAD)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +171,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 		if err := client.SaveToken(t.Context(), "u1", &oauth2.Token{AccessToken: "a"}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
+		got, err := cipher.Decrypt(saved.RefreshTokenEnc, u1AAD)
 		if err != nil || got != "stored-refresh" {
 			t.Errorf("saved refresh token = %q, %v, want stored-refresh", got, err)
 		}
@@ -181,7 +184,7 @@ func TestSaveTokenKeepsStoredRefreshToken(t *testing.T) {
 		if err := client.SaveToken(t.Context(), "u1", &oauth2.Token{AccessToken: "a", RefreshToken: "new-refresh"}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := cipher.Decrypt(saved.RefreshTokenEnc)
+		got, err := cipher.Decrypt(saved.RefreshTokenEnc, u1AAD)
 		if err != nil || got != "new-refresh" {
 			t.Errorf("saved refresh token = %q, %v, want new-refresh", got, err)
 		}

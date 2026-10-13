@@ -3,6 +3,7 @@ package slug
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Make lowercases s, maps each space or hyphen to a hyphen, drops any other
@@ -16,7 +17,9 @@ func Make(s string) string {
 		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			b.WriteRune(r)
 		case unicode.IsSpace(r) || r == '-':
-			b.WriteByte('-')
+			if n := b.Len(); n > 0 && b.String()[n-1] != '-' {
+				b.WriteByte('-')
+			}
 		}
 	}
 	return strings.Trim(b.String(), "-")
@@ -47,7 +50,11 @@ func Humanize(slug string) string {
 		if w == "" {
 			continue
 		}
-		words[idx] = strings.ToUpper(w[:1]) + w[1:]
+		first, size := utf8.DecodeRuneInString(w)
+		if first == utf8.RuneError {
+			continue
+		}
+		words[idx] = string(unicode.ToTitle(first)) + w[size:]
 	}
 	return strings.Join(words, " ")
 }

@@ -51,7 +51,47 @@ func newApp(t *testing.T) *app {
 	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic)
 	sc := scoring.New(pool, idm, idm, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
-	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc, eventsModule)}
+	router, err := api.NewRouter(idm, js, apps, cv, sc, eventsModule)
+	if err != nil {
+		t.Fatalf("api.NewRouter: %v", err)
+	}
+	return &app{t: t, pool: pool, router: router}
+}
+
+func TestCrossSiteWritesRejected(t *testing.T) {
+	a := newApp(t)
+
+	cases := []struct {
+		name   string
+		header map[string]string
+		want   int
+	}{
+		{"cross-site fetch metadata", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"foreign origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"same-origin fetch metadata", map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusUnauthorized},
+		{"same-site frontend on allowed origin", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+		{"allowed origin", map[string]string{"Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := jsonRequest(t, http.MethodPost, "/auth/logout", nil)
+			for k, v := range tc.header {
+				req.Header.Set(k, v)
+			}
+			w := httptest.NewRecorder()
+			a.router.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Errorf("POST /auth/logout = %d, want %d: %s", w.Code, tc.want, w.Body)
+			}
+		})
+	}
+}
+
+func TestNewRouterRejectsInvalidOrigin(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGIN", "not-an-origin")
+	if _, err := api.NewRouter(nil, nil); err == nil {
+		t.Error("NewRouter with invalid CORS_ALLOWED_ORIGIN returned nil error")
+	}
 }
 
 type user struct {
