@@ -22,7 +22,7 @@ func (c *Client) ClassifyRecruiter(ctx context.Context, apiKey, companyName stri
 	}
 
 	a := answers[recruiterQuestion]
-	if a.PYes > a.PNo {
+	if a.PYes > a.PNo && a.PYes > a.PNotStated {
 		return dto.KindLikelyAgency, usage, nil
 	}
 	return dto.KindLikelyDirect, usage, nil

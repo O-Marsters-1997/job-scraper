@@ -343,8 +343,10 @@ func TestClassifyRecruiter(t *testing.T) {
 			name string
 			yes  float64
 			no   float64
+			ns   float64
 			want dto.CompanyKind
 		}{
+			{name: "not stated dominating is direct", yes: 0.02, no: 0.01, ns: 0.97, want: dto.KindLikelyDirect},
 			{name: "agency", yes: 0.9, no: 0.1, want: dto.KindLikelyAgency},
 			{name: "direct", yes: 0.1, no: 0.8, want: dto.KindLikelyDirect},
 			{name: "tie is direct", yes: 0.5, no: 0.5, want: dto.KindLikelyDirect},
@@ -360,7 +362,7 @@ func TestClassifyRecruiter(t *testing.T) {
 					captured = req
 					resp := wireResponse{Usage: wireUsage{Cost: 0.002}, Answers: map[string]wireAnswer{}}
 					for q := range req.Questions {
-						resp.Answers[q] = wireAnswer{Probabilities: map[string]float64{"yes": tt.yes, "no": tt.no}, Confidence: 1}
+						resp.Answers[q] = wireAnswer{Probabilities: map[string]float64{"yes": tt.yes, "no": tt.no, "not_stated": tt.ns}, Confidence: 1}
 					}
 					writeResponse(w, resp)
 				})
