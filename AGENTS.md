@@ -7,6 +7,8 @@
 - No sycophantic openers or closing fluff. Be concise in output, thorough in reasoning.
 - Before a structural/architectural decision (new package boundary, naming ambiguity), check
   `CONTEXT.md` (domain glossary) and `docs/adr/` (past decisions) — not needed for routine work.
+- Global skills (go-idiomatic, go-testing, postgres-best-practices) override ADRs. When one conflicts
+  with an ADR, follow the skill and amend the ADR.
 - For JS/TS packages, use only the package manager named in each `package.json`'s `packageManager` field.
 
 ## Layout
@@ -73,7 +75,8 @@ Use the `schema-change` skill for the full migration → sqlc → store procedur
 ## Tests
 
 Load the `testing-policy` skill before writing or changing any test: it maps each kind of code to its
-test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-packages.md)).
+test, doubles and assertions ([ADR 0012](docs/adr/0012-test-seams-and-double-packages.md)). It decides
+*what* to test, never *how* a test is written: go-testing owns that.
 
 ## Commands
 
