@@ -64,7 +64,7 @@ func main() {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps,
+	idm, err := identity.New(pool, apps, os.Getenv("SESSION_SECRET"),
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		fatal(ctx, "identity init failed", err)

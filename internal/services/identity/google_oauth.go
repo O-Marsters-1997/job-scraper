@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -34,24 +33,30 @@ func safeReturnPath(p string) string {
 }
 
 type oauthStart struct {
+	userID     string
 	state      string
 	write      bool
 	returnPath string
 }
 
 type oauthRedirect struct {
-	state, authURL, returnPath string
+	userID, state, authURL, returnPath string
 }
 
 func oauthStartHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthStart, error) {
+			uid, err := handlers.UserID(r)
+			if err != nil {
+				return oauthStart{}, err
+			}
 			state, err := generateState()
 			if err != nil {
 				return oauthStart{}, err
 			}
 			q := r.URL.Query()
 			return oauthStart{
+				userID:     uid,
 				state:      state,
 				write:      q.Get("write") == "1",
 				returnPath: safeReturnPath(q.Get("return")),
@@ -59,13 +64,14 @@ func oauthStartHandler(svc *Service) http.HandlerFunc {
 		},
 		func(_ context.Context, in oauthStart) (oauthRedirect, error) {
 			return oauthRedirect{
+				userID:     in.userID,
 				state:      in.state,
 				authURL:    svc.AuthURL(in.state, in.write),
 				returnPath: in.returnPath,
 			}, nil
 		},
 		func(w http.ResponseWriter, r *http.Request, out oauthRedirect) {
-			http.SetCookie(w, newCookie(oauthStateCookie, signOAuthState(out.state), oauthCookieMaxAge))
+			http.SetCookie(w, newCookie(oauthStateCookie, signOAuthState(svc.sessionSecret, out.state, out.userID), oauthCookieMaxAge))
 			http.SetCookie(w, newCookie(oauthReturnCookie, out.returnPath, oauthCookieMaxAge))
 			http.Redirect(w, r, out.authURL, http.StatusTemporaryRedirect)
 		},
@@ -79,16 +85,16 @@ type oauthConnect struct {
 func oauthCallbackHandler(svc *Service) http.HandlerFunc {
 	return handlers.Handle(
 		func(r *http.Request) (oauthConnect, error) {
-			if !validOAuthStateCookie(r, r.URL.Query().Get("state")) {
+			uid, err := handlers.UserID(r)
+			if err != nil {
+				return oauthConnect{}, err
+			}
+			if !validOAuthStateCookie(r, svc.sessionSecret, r.URL.Query().Get("state"), uid) {
 				return oauthConnect{}, apperr.Invalid("invalid oauth state")
 			}
 			code := r.URL.Query().Get("code")
 			if code == "" {
 				return oauthConnect{}, apperr.Invalid("missing code")
-			}
-			uid, err := handlers.UserID(r)
-			if err != nil {
-				return oauthConnect{}, err
 			}
 			returnPath := defaultReturnPath
 			if c, err := r.Cookie(oauthReturnCookie); err == nil {
@@ -115,17 +121,18 @@ func generateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func validOAuthStateCookie(r *http.Request, state string) bool {
+func validOAuthStateCookie(r *http.Request, key []byte, state, userID string) bool {
 	cookie, err := r.Cookie(oauthStateCookie)
 	if err != nil || cookie.Value == "" {
 		return false
 	}
-	return hmac.Equal([]byte(cookie.Value), []byte(signOAuthState(state)))
+	return hmac.Equal([]byte(cookie.Value), []byte(signOAuthState(key, state, userID)))
 }
 
-func signOAuthState(state string) string {
-	secret := os.Getenv("SESSION_SECRET")
-	mac := hmac.New(sha256.New, []byte(secret))
+func signOAuthState(key []byte, state, userID string) string {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(userID))
+	mac.Write([]byte{0})
 	mac.Write([]byte(state))
 	return fmt.Sprintf("%s:%s", state, hex.EncodeToString(mac.Sum(nil)))
 }

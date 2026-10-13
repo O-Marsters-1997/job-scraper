@@ -16,7 +16,6 @@ import (
 
 func newTestRouter(t *testing.T) chi.Router {
 	t.Helper()
-	t.Setenv("SESSION_SECRET", "test-secret")
 	m := identity.Build(testDeps(t, identity.Deps{}))
 	r := chi.NewRouter()
 	m.PublicRoutes(r)
@@ -64,9 +63,9 @@ func signup(t *testing.T, r chi.Router, username string) *http.Cookie {
 	return cookie(t, w, "session_id")
 }
 
-func startOAuth(t *testing.T, r chi.Router, query string) *httptest.ResponseRecorder {
+func startOAuth(t *testing.T, r chi.Router, query string, session *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
-	w := handlerstest.Serve(t, r, "GET /google/oauth/start?"+query, "")
+	w := serve(t, r, "GET /google/oauth/start?"+query, "", session)
 	wantStatus(t, w, http.StatusTemporaryRedirect)
 	return w
 }
@@ -90,6 +89,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /profile",
 		"GET /ai-prefs",
 		"PUT /ai-credentials",
+		"GET /google/oauth/start",
 		"GET /google/oauth/callback",
 		"GET /google/status",
 		"DELETE /google/link",
@@ -160,8 +160,9 @@ func TestProfileAndAIPrefsRoutes(t *testing.T) {
 
 func TestGoogleOAuthStart(t *testing.T) {
 	r := newTestRouter(t)
+	session := signup(t, r, "bob")
 
-	w := startOAuth(t, r, "")
+	w := startOAuth(t, r, "", session)
 	loc := w.Header().Get("Location")
 	if !strings.Contains(loc, "accounts.google.com") {
 		t.Errorf("Location = %q, want a Google auth URL", loc)
@@ -171,7 +172,7 @@ func TestGoogleOAuthStart(t *testing.T) {
 	}
 	cookie(t, w, "oauth_state")
 
-	w = startOAuth(t, r, "write=1")
+	w = startOAuth(t, r, "write=1", session)
 	if loc := w.Header().Get("Location"); !strings.Contains(loc, "include_granted_scopes=true") {
 		t.Errorf("write start Location = %q, want write consent URL", loc)
 	}
@@ -186,7 +187,7 @@ func TestGoogleOAuthConnectJourney(t *testing.T) {
 		return handlerstest.DecodeJSON[dto.GoogleStatus](t, w.Body.Bytes())
 	}
 
-	start := startOAuth(t, r, "")
+	start := startOAuth(t, r, "", session)
 	wantStatus(t, oauthCallback(t, r, "code=auth-code", session, cookie(t, start, "oauth_state")), http.StatusTemporaryRedirect)
 	if !googleStatus().Connected {
 		t.Fatal("status after callback = disconnected, want connected")
@@ -195,6 +196,22 @@ func TestGoogleOAuthConnectJourney(t *testing.T) {
 	wantStatus(t, serve(t, r, "DELETE /google/link", "", session), http.StatusNoContent)
 	if googleStatus().Connected {
 		t.Error("status after unlink = connected, want disconnected")
+	}
+}
+
+func TestGoogleOAuthCallbackRejectsStateSignedForAnotherUser(t *testing.T) {
+	r := newTestRouter(t)
+	alice := signup(t, r, "alice")
+	mallory := signup(t, r, "mallory")
+	start := startOAuth(t, r, "", mallory)
+
+	w := oauthCallback(t, r, "code=c", alice, cookie(t, start, "oauth_state"))
+	wantStatus(t, w, http.StatusBadRequest)
+}
+
+func TestNewRequiresSessionSecret(t *testing.T) {
+	if _, err := identity.New(nil, nil, "", "", "", ""); err == nil {
+		t.Error("New with empty session secret = nil error, want error")
 	}
 }
 
@@ -212,7 +229,7 @@ func TestGoogleOAuthCallbackReturnPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			r := newTestRouter(t)
 			session := signup(t, r, "dave")
-			start := startOAuth(t, r, "write=1&return="+url.QueryEscape(tt.ret))
+			start := startOAuth(t, r, "write=1&return="+url.QueryEscape(tt.ret), session)
 
 			w := oauthCallback(t, r, "code=c", append(start.Result().Cookies(), session)...)
 			if got := w.Header().Get("Location"); got != tt.want {
@@ -224,7 +241,7 @@ func TestGoogleOAuthCallbackReturnPath(t *testing.T) {
 	t.Run("forged return cookie", func(t *testing.T) {
 		r := newTestRouter(t)
 		session := signup(t, r, "erin")
-		state := cookie(t, startOAuth(t, r, ""), "oauth_state")
+		state := cookie(t, startOAuth(t, r, "", session), "oauth_state")
 		forged := &http.Cookie{Name: "oauth_return", Value: "https://evil.example"}
 
 		w := oauthCallback(t, r, "code=c", session, state, forged)

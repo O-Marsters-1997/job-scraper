@@ -35,6 +35,9 @@ func testDeps(t *testing.T, d identity.Deps) identity.Deps {
 	if d.Cipher == nil {
 		d.Cipher = identitytest.NewCipher(t)
 	}
+	if d.SessionSecret == nil {
+		d.SessionSecret = []byte("test-secret")
+	}
 	return d
 }
 
