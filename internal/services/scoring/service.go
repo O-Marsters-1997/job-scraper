@@ -36,7 +36,7 @@ type Store interface {
 	FailAnswerEffect(ctx context.Context, id string, attempts int, failure dto.ScoringFailure) error
 	GetJobForScoring(ctx context.Context, jobID string) (dto.Job, error)
 	GetCompanyProfile(ctx context.Context, companyID string) (dto.CompanyProfile, error)
-	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
+	GetInterestedConfig(ctx context.Context, jobID, userID string) (dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, userID, jobID, fingerprint, model string) (map[string]dto.Answer, error)
 	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
@@ -173,18 +173,15 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return err
 	}
 
-	configs, err := s.store.ListInterestedConfigs(ctx, effect.JobID)
+	cfg, err := s.store.GetInterestedConfig(ctx, effect.JobID, effect.UserID)
+	if errors.Is(err, data.ErrNotFound) {
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		return err
+	}
 	if err != nil {
-		return fail(fmt.Errorf("load interested configs: %w", err))
+		return fail(fmt.Errorf("load interested config: %w", err))
 	}
-	now := time.Now()
-	surviving := make([]dto.SearchConfig, 0, len(configs))
-	for _, cfg := range configs {
-		if _, rejected := filter.Reject(job, cfg); !rejected && !postedBeforeCutoff(job, cfg, now) {
-			surviving = append(surviving, cfg)
-		}
-	}
-	if len(surviving) == 0 {
+	if _, rejected := filter.Reject(job, cfg); rejected || postedBeforeCutoff(job, cfg, time.Now()) {
 		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
 		return err
 	}
@@ -200,23 +197,19 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return fail(fmt.Errorf("load corrections: %w", err))
 	}
 
-	scores := make([]dto.JobScore, 0, len(surviving))
-	scored := make([]dto.SearchConfig, 0, len(surviving))
-	answers := make(map[string]map[string]dto.Answer, len(surviving))
-	for _, cfg := range surviving {
-		fresh, score, ok, err := s.scoreForUser(ctx, effect, job, cfg, byID, corrections)
-		if err != nil {
-			return fail(err)
-		}
-		if !ok {
-			continue
-		}
-		if len(fresh) > 0 {
-			answers[cfg.UserID] = fresh
-		}
-		scores = append(scores, score)
-		scored = append(scored, cfg)
+	fresh, score, ok, err := s.scoreForUser(ctx, effect, job, cfg, byID, corrections)
+	if err != nil {
+		return fail(err)
 	}
+	if !ok {
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		return err
+	}
+	answers := map[string]map[string]dto.Answer{}
+	if len(fresh) > 0 {
+		answers[cfg.UserID] = fresh
+	}
+	scores := []dto.JobScore{score}
 
 	saved, err := s.store.CompleteAnswerEffect(ctx, effect, answers, scores)
 	if err != nil {
@@ -226,7 +219,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		return nil
 	}
 
-	s.notifyNewJob(ctx, job, scored, scores, saved)
+	s.notifyNewJob(ctx, job, []dto.SearchConfig{cfg}, scores, saved)
 	return nil
 }
 

@@ -200,6 +200,7 @@ type CvHeadingMapping struct {
 type EffectOutbox struct {
 	ID             pgtype.UUID
 	JobID          pgtype.UUID
+	UserID         pgtype.UUID
 	Fingerprint    string
 	Model          string
 	FirstDiscovery bool

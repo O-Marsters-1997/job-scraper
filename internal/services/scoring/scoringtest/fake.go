@@ -196,10 +196,15 @@ func (f *FakeStore) GetCompanyProfile(_ context.Context, companyID string) (dto.
 	return profile, nil
 }
 
-func (f *FakeStore) ListInterestedConfigs(_ context.Context, jobID string) ([]dto.SearchConfig, error) {
+func (f *FakeStore) GetInterestedConfig(_ context.Context, jobID, userID string) (dto.SearchConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.configs[jobID], nil
+	for _, cfg := range f.configs[jobID] {
+		if cfg.UserID == userID {
+			return cfg, nil
+		}
+	}
+	return dto.SearchConfig{}, data.ErrNotFound
 }
 
 func (f *FakeStore) ListScoringOptions(context.Context) ([]dto.ScoringOption, error) {
@@ -402,7 +407,7 @@ func (f *FakeStore) GetScoringStatus(_ context.Context, userID string) (dto.Scor
 	defer f.mu.Unlock()
 	var pending int64
 	for _, e := range f.effects {
-		if f.scored[scoredKey(e.JobID, userID)] {
+		if e.UserID == userID && f.scored[scoredKey(e.JobID, userID)] {
 			pending++
 		}
 	}
@@ -419,7 +424,9 @@ func (f *FakeStore) JobsChanged(_ context.Context, _ pgx.Tx, jobIDs []string, fi
 			}
 		}
 		job := f.jobs[jobID]
-		f.effects = append(f.effects, dto.AnswerEffect{JobID: jobID, Fingerprint: job.ContentFingerprint, FirstDiscovery: firstDiscovery})
+		for _, cfg := range f.configs[jobID] {
+			f.effects = append(f.effects, dto.AnswerEffect{JobID: jobID, UserID: cfg.UserID, Fingerprint: job.ContentFingerprint, FirstDiscovery: firstDiscovery})
+		}
 	}
 	return nil
 }
@@ -437,12 +444,12 @@ func (f *FakeStore) JobsClosed(_ context.Context, _ pgx.Tx, jobIDs []string) err
 	return nil
 }
 
-func (f *FakeStore) CompanyTracked(_ context.Context, _ pgx.Tx, _, companyID string) error {
+func (f *FakeStore) CompanyTracked(_ context.Context, _ pgx.Tx, userID, companyID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for jobID, job := range f.jobs {
 		if job.CompanyID == companyID {
-			f.effects = append(f.effects, dto.AnswerEffect{JobID: jobID, Fingerprint: job.ContentFingerprint})
+			f.effects = append(f.effects, dto.AnswerEffect{JobID: jobID, UserID: userID, Fingerprint: job.ContentFingerprint})
 		}
 	}
 	return nil

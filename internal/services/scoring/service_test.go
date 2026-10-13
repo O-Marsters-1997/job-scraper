@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,9 +51,16 @@ func newFakeStore() *scoringtest.FakeStore {
 
 func seedEffect(st *scoringtest.FakeStore, firstDiscovery bool, configs ...dto.SearchConfig) {
 	st.SeedJob(testJob, configs)
-	st.SeedEffect(dto.AnswerEffect{
-		ID: "effect-1", JobID: testJob.ID, Fingerprint: testJob.ContentFingerprint, Attempts: 1, FirstDiscovery: firstDiscovery,
-	})
+	for _, cfg := range configs {
+		st.SeedEffect(dto.AnswerEffect{
+			ID: "effect-" + cfg.UserID, JobID: testJob.ID, UserID: cfg.UserID, Fingerprint: testJob.ContentFingerprint, Attempts: 1, FirstDiscovery: firstDiscovery,
+		})
+	}
+	if len(configs) == 0 {
+		st.SeedEffect(dto.AnswerEffect{
+			ID: "effect-1", JobID: testJob.ID, Fingerprint: testJob.ContentFingerprint, Attempts: 1, FirstDiscovery: firstDiscovery,
+		})
+	}
 }
 
 func picking(userID string, optionIDs ...string) dto.SearchConfig {
@@ -80,11 +88,14 @@ func runTick(t *testing.T, st scoring.Store, opts ...depsOpt) {
 }
 
 type fakeAnswerer struct {
+	mu    sync.Mutex
 	calls [][]string
 	byKey map[string][]string
 }
 
 func (f *fakeAnswerer) Answer(_ context.Context, apiKey string, _ dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, questions)
 	if f.byKey == nil {
 		f.byKey = make(map[string][]string)
@@ -101,6 +112,18 @@ type failingAnswerer struct{}
 
 func (f *failingAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
 	return nil, dto.Usage{}, errors.New("jev boom")
+}
+
+type failingForKey struct {
+	fakeAnswerer
+	bad string
+}
+
+func (f *failingForKey) Answer(ctx context.Context, apiKey string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	if apiKey == f.bad {
+		return nil, dto.Usage{}, errors.New("rate limited")
+	}
+	return f.fakeAnswerer.Answer(ctx, apiKey, job, questions)
 }
 
 type fakeCredentials struct{ key string }
@@ -294,18 +317,17 @@ func TestRunTick(t *testing.T) {
 			t.Errorf("questions per key (-want +got):\n%s", diff)
 		}
 		completed := st.Completed()
-		if len(completed) != 1 {
-			t.Fatalf("completed effects = %d, want 1", len(completed))
+		if len(completed) != 2 {
+			t.Fatalf("completed effects = %d, want one per user", len(completed))
 		}
-		if got := len(completed[0].Answers["user-1"]); got != 2 {
-			t.Errorf("user-1 stored answers = %d, want 2", got)
-		}
-		if got := len(completed[0].Answers["user-2"]); got != 2 {
-			t.Errorf("user-2 stored answers = %d, want 2", got)
-		}
-		for _, sc := range completed[0].Scores {
-			if sc.Cost != 0.0004 {
-				t.Errorf("score for %s cost = %v, want that user's own 0.0004", sc.UserID, sc.Cost)
+		for _, c := range completed {
+			if len(c.Answers) != 1 || len(c.Answers[c.Effect.UserID]) != 2 {
+				t.Errorf("effect for %s stored answers %v, want only its own 2", c.Effect.UserID, c.Answers)
+			}
+			for _, sc := range c.Scores {
+				if sc.Cost != 0.0004 {
+					t.Errorf("score for %s cost = %v, want that user's own 0.0004", sc.UserID, sc.Cost)
+				}
 			}
 		}
 		if lines := scoreCallLines(t, buf); len(lines) != 2 {
@@ -320,12 +342,15 @@ func TestRunTick(t *testing.T) {
 
 		runTick(t, st, withAnswerer(answerer), withCredentials(userKeys{"user-2": "key-2"}))
 
-		completed := st.Completed()
-		if len(completed) != 1 || len(completed[0].Scores) != 1 || completed[0].Scores[0].UserID != "user-2" {
-			t.Fatalf("completed = %+v, want one effect scoring only user-2", completed)
+		scoredBy := map[string]int{}
+		for _, c := range st.Completed() {
+			scoredBy[c.Effect.UserID] += len(c.Scores)
+			if c.Effect.UserID == "user-1" && len(c.Answers) != 0 {
+				t.Errorf("keyless user-1 stored answers, want none")
+			}
 		}
-		if _, ok := completed[0].Answers["user-1"]; ok {
-			t.Errorf("keyless user-1 stored answers, want none")
+		if diff := cmp.Diff(map[string]int{"user-1": 0, "user-2": 1}, scoredBy); diff != "" {
+			t.Errorf("scores per effect user (-want +got):\n%s", diff)
 		}
 	})
 
@@ -357,6 +382,23 @@ func TestRunTick(t *testing.T) {
 		}
 		if failed := st.Failed(); len(failed) != 1 {
 			t.Errorf("failed effects = %d, want 1", len(failed))
+		}
+	})
+
+	t.Run("one user's failing key fails only their effect", func(t *testing.T) {
+		st := newFakeStore()
+		seedEffect(st, false, picking("user-1", "tech:go"), picking("user-2", "tech:go"))
+		answerer := &failingForKey{bad: "key-1"}
+		keys := userKeys{"user-1": "key-1", "user-2": "key-2"}
+
+		runTick(t, st, withAnswerer(answerer), withCredentials(keys))
+
+		if failed := st.Failed(); len(failed) != 1 {
+			t.Errorf("failed effects = %d, want 1", len(failed))
+		}
+		completed := st.Completed()
+		if len(completed) != 1 || completed[0].Effect.UserID != "user-2" || len(completed[0].Scores) != 1 {
+			t.Errorf("completed = %+v, want only user-2's effect scored", completed)
 		}
 	})
 
@@ -412,7 +454,7 @@ func TestRunTick(t *testing.T) {
 			cfg := picking("user-1", "tech:go")
 			cfg.MaxJobAgeDays = tt.maxAgeDays
 			st.SeedJob(job, []dto.SearchConfig{cfg})
-			st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+			st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, UserID: "user-1", Fingerprint: job.ContentFingerprint, Attempts: 1})
 			answerer := &fakeAnswerer{}
 
 			runTick(t, st, withAnswerer(answerer))
@@ -1683,8 +1725,10 @@ func TestCorrections(t *testing.T) {
 		runTick(t, st)
 
 		got := map[string]int{}
-		for _, sc := range st.Completed()[0].Scores {
-			got[sc.UserID] = sc.Score
+		for _, c := range st.Completed() {
+			for _, sc := range c.Scores {
+				got[sc.UserID] = sc.Score
+			}
 		}
 		if diff := cmp.Diff(map[string]int{"user-1": 17, "user-2": 37}, got); diff != "" {
 			t.Errorf("effect scores (-want +got):\n%s", diff)
@@ -1771,7 +1815,7 @@ func TestRunTick_CompanyProfileAnswers(t *testing.T) {
 		job := testJob
 		job.CompanyID = "company-1"
 		st.SeedJob(job, []dto.SearchConfig{picking("user-1", "tech:go", "size:startup", "size:scaleup", "stage:seed", "stage:series_b", "stage:public")})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, UserID: "user-1", Fingerprint: job.ContentFingerprint, Attempts: 1})
 		if profile != nil {
 			st.SeedCompanyProfile("company-1", *profile)
 		}
