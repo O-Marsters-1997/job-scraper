@@ -306,4 +306,4 @@ func commitTx(t *testing.T, st identity.Store, fn func(tx pgx.Tx) error) {
 	}
 }
 
-const missingID ="00000000-0000-0000-0000-000000000000"
+const missingID = "00000000-0000-0000-0000-000000000000"
