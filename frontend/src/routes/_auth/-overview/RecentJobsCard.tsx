@@ -11,7 +11,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/datetime";
+import { postedLabel } from "@/lib/postedLabel";
 import { titleCase } from "@/lib/utils";
 import type { Job } from "@/types/job";
 
@@ -82,7 +82,9 @@ export function RecentJobsCard(props: { jobs: Job[]; ranked: boolean }) {
 										</TableCell>
 									</Show>
 									<TableCell class="font-mono text-xs tabular-nums text-faint">
-										{formatDate(job.ScrapedAt)}
+										<span title={postedLabel(job).listTitle}>
+											{postedLabel(job).list}
+										</span>
 									</TableCell>
 								</TableRow>
 							)}
