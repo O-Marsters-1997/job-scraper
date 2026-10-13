@@ -62,7 +62,7 @@ type sessionUser struct {
 
 func respondSession(status int) func(http.ResponseWriter, *http.Request, sessionUser) {
 	return func(w http.ResponseWriter, _ *http.Request, out sessionUser) {
-		http.SetCookie(w, newCookie("session_id", out.session.ID, 30*24*60*60))
+		http.SetCookie(w, newCookie("session_id", out.session.Token, 30*24*60*60))
 		handlers.WriteJSON(w, status, dto.AuthUserView{Username: out.user.Username})
 	}
 }

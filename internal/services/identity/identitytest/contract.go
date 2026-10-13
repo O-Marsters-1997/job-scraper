@@ -1,6 +1,7 @@
 package identitytest
 
 import (
+	"crypto/sha256"
 	"errors"
 	"slices"
 	"testing"
@@ -48,19 +49,27 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	t.Run("create session then get session returns it", func(t *testing.T) {
 		st := newStore(t)
 		user, session := newSession(t, st, "dana", time.Hour)
-		got, err := st.GetSession(t.Context(), session.ID)
+		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("dana"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.UserID != user.ID || got.Username != "dana" {
-			t.Fatalf("GetSession(...) = %+v", got)
+		if got.ID != session.ID || got.UserID != user.ID || got.Username != "dana" {
+			t.Fatalf("GetSessionByTokenHash(...) = %+v", got)
+		}
+	})
+
+	t.Run("get session returns not found for an unknown token hash", func(t *testing.T) {
+		st := newStore(t)
+		newSession(t, st, "dana", time.Hour)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("other")); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("new user is a user and SetRole makes them admin", func(t *testing.T) {
 		st := newStore(t)
-		_, session := newSession(t, st, "olly", time.Hour)
-		got, err := st.GetSession(t.Context(), session.ID)
+		newSession(t, st, "olly", time.Hour)
+		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("olly"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +79,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if err := st.SetRole(t.Context(), "olly", dto.RoleAdmin); err != nil {
 			t.Fatal(err)
 		}
-		got, err = st.GetSession(t.Context(), session.ID)
+		got, err = st.GetSessionByTokenHash(t.Context(), tokenHash("olly"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,8 +121,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 
 	t.Run("get session returns not found when expired", func(t *testing.T) {
 		st := newStore(t)
-		_, session := newSession(t, st, "erin", -time.Second)
-		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+		newSession(t, st, "erin", -time.Second)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("erin")); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
@@ -124,21 +133,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if err := st.DeleteSession(t.Context(), session.ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("frank")); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("delete expired sessions leaves valid ones", func(t *testing.T) {
 		st := newStore(t)
-		user, valid := newSession(t, st, "grace", time.Hour)
-		if _, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(-time.Second)); err != nil {
+		user, _ := newSession(t, st, "grace", time.Hour)
+		if _, err := st.CreateSession(t.Context(), user.ID, tokenHash("grace-expired"), time.Now().Add(-time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		if err := st.DeleteExpiredSessions(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.GetSession(t.Context(), valid.ID); err != nil {
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("grace")); err != nil {
 			t.Errorf("valid session should survive cleanup: %v", err)
 		}
 	})
@@ -261,11 +270,16 @@ func newUser(t *testing.T, st identity.Store, username string) (identity.Store, 
 func newSession(t *testing.T, st identity.Store, username string, ttl time.Duration) (dto.User, dto.Session) {
 	t.Helper()
 	_, user := newUser(t, st, username)
-	session, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(ttl))
+	session, err := st.CreateSession(t.Context(), user.ID, tokenHash(username), time.Now().Add(ttl))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return user, session
+}
+
+func tokenHash(name string) []byte {
+	sum := sha256.Sum256([]byte(name))
+	return sum[:]
 }
 
 const missingID = "00000000-0000-0000-0000-000000000000"

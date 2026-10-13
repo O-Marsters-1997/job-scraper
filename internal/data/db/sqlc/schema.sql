@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL
+    expires_at TIMESTAMPTZ NOT NULL,
+    token_hash BYTEA       NOT NULL CONSTRAINT sessions_token_hash_key UNIQUE
 );
 
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
