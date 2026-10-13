@@ -95,8 +95,8 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		if err != nil {
 			return err
 		}
-		if card := task.Card.PostedAt; card != nil && (job.PostedAt == nil || card.Before(*job.PostedAt)) {
-			job.PostedAt = card
+		if job.PostedAt == nil {
+			job.PostedAt = task.Card.PostedAt
 		}
 		if err := p.exporter.Export(ctx, job); err != nil {
 			return err

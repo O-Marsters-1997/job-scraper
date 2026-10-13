@@ -49,10 +49,17 @@ SELECT EXISTS (SELECT 1 FROM claimed);
 -- name: MarkCandidateDetailPending :exec
 UPDATE job_candidates SET detail_state = 'pending' WHERE id = $1;
 
+-- name: UpsertBoardCardDate :exec
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, posted_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (normalized_url) DO UPDATE SET
+    posted_at = LEAST(job_candidates.posted_at, EXCLUDED.posted_at);
+
 -- name: ListDatedCandidatesForCompany :many
 SELECT card_title, card_location, posted_at
 FROM job_candidates
 WHERE card_company = $1 AND posted_at IS NOT NULL AND expires_at > NOW()
+ORDER BY posted_at
 LIMIT 200;
 
 -- name: DeleteExpiredCandidates :exec

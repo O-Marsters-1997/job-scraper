@@ -199,7 +199,7 @@ func ParseURLsAt(r io.Reader, scrapedAt time.Time) ([]dto.Job, error) {
 	return jobs, nil
 }
 
-var relativeAge = regexp.MustCompile(`(?i)(\d+)\s+(minute|hour|day|week|month)s?\s+ago`)
+var relativeAge = regexp.MustCompile(`(?i)^\s*(\d{1,3})\s+(minute|hour|day|week|month)s?\s+ago`)
 
 var relativeUnit = map[string]time.Duration{
 	"minute": time.Minute,
@@ -210,20 +210,16 @@ var relativeUnit = map[string]time.Duration{
 }
 
 func cardPostedAt(el *goquery.Selection, scrapedAt time.Time) *time.Time {
-	day, dayErr := time.Parse(time.DateOnly, strings.TrimSpace(el.AttrOr("datetime", "")))
-	var estimate time.Time
-	if m := relativeAge.FindStringSubmatch(el.Text()); m != nil && !scrapedAt.IsZero() {
-		n, _ := strconv.Atoi(m[1])
-		estimate = scrapedAt.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
-	}
-	switch {
-	case dayErr != nil && estimate.IsZero():
+	day, err := time.Parse(time.DateOnly, strings.TrimSpace(el.AttrOr("datetime", "")))
+	if err != nil {
 		return nil
-	case dayErr != nil:
-		return &estimate
-	case estimate.IsZero():
+	}
+	m := relativeAge.FindStringSubmatch(el.Text())
+	if m == nil || scrapedAt.IsZero() {
 		return &day
 	}
+	n, _ := strconv.Atoi(m[1])
+	estimate := scrapedAt.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
 	end := day.Add(24*time.Hour - time.Second)
 	switch {
 	case estimate.Before(day):

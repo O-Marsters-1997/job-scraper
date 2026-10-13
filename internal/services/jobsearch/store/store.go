@@ -424,7 +424,7 @@ func (s *Store) ApplyBoardCards(ctx context.Context, source string, cards []dto.
 			if err != nil {
 				return err
 			}
-			if _, err := queries.UpsertCandidate(ctx, sqlc.UpsertCandidateParams{
+			if err := queries.UpsertBoardCardDate(ctx, sqlc.UpsertBoardCardDateParams{
 				NormalizedUrl: normalized, Source: source, CardTitle: card.Title, CardCompany: card.CompanySlug,
 				CardLocation: card.Location, PostedAt: data.Timestamptz(card.PostedAt),
 			}); err != nil {

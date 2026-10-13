@@ -42,8 +42,10 @@ func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, card
 	if err != nil {
 		return err
 	}
-	if err := s.targets.ApplyBoardCards(ctx, target.Source, boardCards); err != nil {
-		return fmt.Errorf("apply board card dates: %w", err)
+	if len(boardCards) > 0 {
+		if err := s.targets.ApplyBoardCards(ctx, target.Source, boardCards); err != nil {
+			return fmt.Errorf("apply board card dates: %w", err)
+		}
 	}
 	candidates, err := s.targets.SaveCards(ctx, target, cards)
 	if err != nil {

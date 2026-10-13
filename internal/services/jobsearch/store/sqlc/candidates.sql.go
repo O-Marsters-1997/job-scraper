@@ -120,6 +120,7 @@ const listDatedCandidatesForCompany = `-- name: ListDatedCandidatesForCompany :m
 SELECT card_title, card_location, posted_at
 FROM job_candidates
 WHERE card_company = $1 AND posted_at IS NOT NULL AND expires_at > NOW()
+ORDER BY posted_at
 LIMIT 200
 `
 
@@ -171,6 +172,34 @@ type RecordCandidateDiscoveryParams struct {
 
 func (q *Queries) RecordCandidateDiscovery(ctx context.Context, arg RecordCandidateDiscoveryParams) error {
 	_, err := q.db.Exec(ctx, recordCandidateDiscovery, arg.CandidateID, arg.SourceTargetID)
+	return err
+}
+
+const upsertBoardCardDate = `-- name: UpsertBoardCardDate :exec
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, posted_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (normalized_url) DO UPDATE SET
+    posted_at = LEAST(job_candidates.posted_at, EXCLUDED.posted_at)
+`
+
+type UpsertBoardCardDateParams struct {
+	NormalizedUrl string
+	Source        string
+	CardTitle     string
+	CardCompany   string
+	CardLocation  string
+	PostedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertBoardCardDate(ctx context.Context, arg UpsertBoardCardDateParams) error {
+	_, err := q.db.Exec(ctx, upsertBoardCardDate,
+		arg.NormalizedUrl,
+		arg.Source,
+		arg.CardTitle,
+		arg.CardCompany,
+		arg.CardLocation,
+		arg.PostedAt,
+	)
 	return err
 }
 
