@@ -24,6 +24,8 @@ type FakeStore struct {
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
+
+	nextContact int
 }
 
 func NewFakeStore() *FakeStore {
@@ -217,8 +219,9 @@ var _ applications.Store = (*FakeStore)(nil)
 func (f *FakeStore) CreateRecruiterContact(_ context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.nextContact++
 	c := dto.RecruiterContact{
-		ID: fmt.Sprintf("contact-%d", len(f.contacts)+1), JobID: in.JobID, ContactedOn: in.ContactedOn,
+		ID: fmt.Sprintf("contact-%d", f.nextContact), JobID: in.JobID, ContactedOn: in.ContactedOn,
 		Channel: in.Channel, Outcome: in.Outcome, CreatedAt: time.Now(),
 	}
 	f.contacts[userID] = append(f.contacts[userID], c)

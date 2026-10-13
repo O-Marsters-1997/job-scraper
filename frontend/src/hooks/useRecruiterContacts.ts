@@ -21,6 +21,6 @@ export function useLogRecruiterContact(jobId: () => string) {
 	return useInvalidatingMutation(
 		(payload: LogRecruiterContactPayload) =>
 			logRecruiterContact(jobId(), payload),
-		[keys.recruiterContacts(jobId())],
+		(contact) => [keys.recruiterContacts(contact.job_id)],
 	);
 }

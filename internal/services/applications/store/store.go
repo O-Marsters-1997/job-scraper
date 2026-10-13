@@ -373,7 +373,7 @@ func (s *Store) CreateRecruiterContact(ctx context.Context, userID string, in dt
 		UserID: uid, JobID: jid, ContactedOn: on, Channel: string(in.Channel), Outcome: string(in.Outcome),
 	})
 	if err != nil {
-		if data.IsForeignKeyViolation(err) {
+		if data.IsForeignKeyViolation(err, "recruiter_contacts_job_id_fkey") {
 			return dto.RecruiterContact{}, data.ErrNotFound
 		}
 		return dto.RecruiterContact{}, fmt.Errorf("store.CreateRecruiterContact: %w", err)

@@ -16,7 +16,11 @@ import {
 	outcomeLabels,
 } from "@/types/recruiterContact";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+	const now = new Date();
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+};
 
 export function RecruiterContactsCard(props: { jobId: string }) {
 	const contacts = useRecruiterContacts(() => props.jobId);
@@ -25,6 +29,14 @@ export function RecruiterContactsCard(props: { jobId: string }) {
 	const [date, setDate] = createSignal(today());
 	const [channel, setChannel] = createSignal<ContactChannel>("email");
 	const [outcome, setOutcome] = createSignal<ContactOutcome>("no_reply");
+
+	const openForm = () => {
+		log.reset();
+		setDate(today());
+		setChannel("email");
+		setOutcome("no_reply");
+		setOpen(true);
+	};
 
 	const submit = (e: SubmitEvent) => {
 		e.preventDefault();
@@ -47,7 +59,7 @@ export function RecruiterContactsCard(props: { jobId: string }) {
 							variant="outline"
 							size="sm"
 							class="w-full"
-							onClick={() => setOpen(true)}
+							onClick={openForm}
 						>
 							Log recruiter contact
 						</Button>
@@ -118,7 +130,7 @@ export function RecruiterContactsCard(props: { jobId: string }) {
 							{(c) => (
 								<li class="flex items-baseline justify-between gap-2 text-xs">
 									<span class="font-mono tabular-nums text-foreground">
-										{formatDate(c.contacted_on)}
+										{formatDate(`${c.contacted_on}T00:00:00`)}
 									</span>
 									<span class="text-muted">
 										{channelLabels[c.channel]} · {outcomeLabels[c.outcome]}
