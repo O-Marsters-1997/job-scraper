@@ -78,6 +78,14 @@ func StatusFor(err error) (status int, ok bool) {
 	return ae.kind.Status(), true
 }
 
+func MessageFor(err error) string {
+	ae, ok := errors.AsType[*Error](err)
+	if !ok {
+		return ""
+	}
+	return ae.msg
+}
+
 type fielded struct {
 	error
 	fields map[string]any
