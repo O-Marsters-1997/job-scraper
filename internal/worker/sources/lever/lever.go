@@ -72,9 +72,10 @@ func parse(body []byte) ([]dto.Job, error) {
 
 	jobs := make([]dto.Job, 0, len(postings))
 	for _, p := range postings {
-		updatedAt := time.Now().UTC()
+		var postedAt *time.Time
 		if p.CreatedAt != 0 {
-			updatedAt = time.UnixMilli(p.CreatedAt).UTC()
+			t := time.UnixMilli(p.CreatedAt).UTC()
+			postedAt = &t
 		}
 
 		jobs = append(jobs, dto.Job{
@@ -85,7 +86,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       p.DescriptionPlain,
 			SalaryRaw:         p.SalaryRange.String(),
 			WorkArrangement:   workArrangement(p.WorkplaceType),
-			UpdatedAt:         updatedAt,
+			PostedAt:          postedAt,
 		})
 	}
 	return jobs, nil

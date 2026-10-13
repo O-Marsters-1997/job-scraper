@@ -86,7 +86,7 @@ FROM jobs
 WHERE match_title = $1
     AND (company_slug = $2 OR company_id = $3::uuid)
     AND closed_at IS NULL
-    AND updated_at > NOW() - INTERVAL '90 days'
+    AND COALESCE(posted_at, posted_after, first_discovered_at) > NOW() - INTERVAL '90 days'
 FOR UPDATE
 `
 
@@ -129,13 +129,15 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 }
 
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
-INSERT INTO jobs (title, location, url, company_slug, source, updated_at, description,
+INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
     content_fingerprint, content_changed_at, match_title, match_location)
 VALUES ($1, $2, $3, $4,
-    $5, $6, $7, $8,
-    $9, COALESCE($10::uuid, (SELECT id FROM companies WHERE slug = $4)),
-    $11::uuid, $12,
+    $5, $6::timestamptz,
+    (SELECT last_completed_at FROM board_poll_state WHERE board_id = $7::uuid),
+    $8, $9,
+    $10, COALESCE($11::uuid, (SELECT id FROM companies WHERE slug = $4)),
+    $7::uuid, $12,
     $13, NOW(), $14, $15)
 RETURNING id
 `
@@ -146,12 +148,12 @@ type InsertCanonicalJobParams struct {
 	Url             string
 	CompanySlug     string
 	Source          string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
+	BoardID         pgtype.UUID
 	Description     string
 	SalaryRaw       string
 	WorkArrangement string
 	CompanyID       pgtype.UUID
-	BoardID         pgtype.UUID
 	PostingID       pgtype.Text
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
@@ -165,12 +167,12 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.Url,
 		arg.CompanySlug,
 		arg.Source,
-		arg.UpdatedAt,
+		arg.PostedAt,
+		arg.BoardID,
 		arg.Description,
 		arg.SalaryRaw,
 		arg.WorkArrangement,
 		arg.CompanyID,
-		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
 		arg.MatchTitle,
@@ -213,7 +215,9 @@ func (q *Queries) SaveCanonicalJobAlias(ctx context.Context, arg SaveCanonicalJo
 
 const updateChangedCanonicalJob = `-- name: UpdateChangedCanonicalJob :exec
 UPDATE jobs SET title = $1, location = $2,
-    updated_at = $3, description = $4,
+    reposted_at = CASE WHEN $3::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $3::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $3::timestamptz), description = $4,
     salary_raw = $5, work_arrangement = $6,
     content_fingerprint = $7, content_changed_at = NOW(),
     match_title = $8, match_location = $9,
@@ -227,7 +231,7 @@ WHERE id = $14::uuid
 type UpdateChangedCanonicalJobParams struct {
 	Title           string
 	Location        string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
 	WorkArrangement string
@@ -245,7 +249,7 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 	_, err := q.db.Exec(ctx, updateChangedCanonicalJob,
 		arg.Title,
 		arg.Location,
-		arg.UpdatedAt,
+		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
 		arg.WorkArrangement,
@@ -265,8 +269,11 @@ const updateUnchangedCanonicalJob = `-- name: UpdateUnchangedCanonicalJob :exec
 UPDATE jobs SET company_id = COALESCE($1::uuid, company_id, (SELECT id FROM companies WHERE slug = $2)),
     primary_board_id = COALESCE($3::uuid, primary_board_id),
     provider_posting_id = COALESCE($4, provider_posting_id),
-    content_fingerprint = COALESCE(content_fingerprint, $5)
-WHERE id = $6::uuid
+    content_fingerprint = COALESCE(content_fingerprint, $5),
+    reposted_at = CASE WHEN $6::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $6::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $6::timestamptz)
+WHERE id = $7::uuid
 `
 
 type UpdateUnchangedCanonicalJobParams struct {
@@ -275,6 +282,7 @@ type UpdateUnchangedCanonicalJobParams struct {
 	BoardID     pgtype.UUID
 	PostingID   pgtype.Text
 	Fingerprint pgtype.Text
+	PostedAt    pgtype.Timestamptz
 	ID          pgtype.UUID
 }
 
@@ -285,6 +293,7 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 		arg.BoardID,
 		arg.PostingID,
 		arg.Fingerprint,
+		arg.PostedAt,
 		arg.ID,
 	)
 	return err
@@ -292,7 +301,10 @@ func (q *Queries) UpdateUnchangedCanonicalJob(ctx context.Context, arg UpdateUnc
 
 const upgradeCanonicalJob = `-- name: UpgradeCanonicalJob :exec
 UPDATE jobs SET title = $1, location = $2, url = $3,
-    source = $4, updated_at = $5, description = $6,
+    source = $4,
+    reposted_at = CASE WHEN $5::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $5::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $5::timestamptz), description = $6,
     salary_raw = $7, work_arrangement = $8,
     content_fingerprint = $9, content_changed_at = NOW(),
     match_title = $10, match_location = $11,
@@ -307,7 +319,7 @@ type UpgradeCanonicalJobParams struct {
 	Location        string
 	Url             string
 	Source          string
-	UpdatedAt       pgtype.Timestamptz
+	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
 	WorkArrangement string
@@ -327,7 +339,7 @@ func (q *Queries) UpgradeCanonicalJob(ctx context.Context, arg UpgradeCanonicalJ
 		arg.Location,
 		arg.Url,
 		arg.Source,
-		arg.UpdatedAt,
+		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
 		arg.WorkArrangement,

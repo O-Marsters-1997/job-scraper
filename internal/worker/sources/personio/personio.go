@@ -64,7 +64,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			URL:               fmt.Sprintf("https://%s.jobs.personio.com/job/%s", token, p.ID),
 			ProviderPostingID: p.ID,
 			Description:       sb.String(),
-			UpdatedAt:         sources.RFC3339OrNow(p.CreatedAt),
+			PostedAt:          sources.RFC3339OrNil(p.CreatedAt),
 		})
 	}
 	return jobs, nil

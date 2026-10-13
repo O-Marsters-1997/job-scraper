@@ -240,7 +240,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	postingID := data.Text(job.ProviderPostingID)
 	fingerprint := pgtype.Text{String: job.ContentFingerprint, Valid: true}
-	updatedAt := pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true}
+	postedAt := data.Timestamptz(job.PostedAt)
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			jobID = match.ID
 			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
 				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
-				UpdatedAt: updatedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				PostedAt: postedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -310,7 +310,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
-			Source: job.Source, UpdatedAt: updatedAt, Description: job.Description,
+			Source: job.Source, PostedAt: postedAt, Description: job.Description,
 			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
 			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
@@ -332,12 +332,12 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			status = "unchanged"
 			err = queries.UpdateUnchangedCanonicalJob(ctx, sqlc.UpdateUnchangedCanonicalJobParams{
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID,
-				Fingerprint: fingerprint, ID: jobID,
+				Fingerprint: fingerprint, PostedAt: postedAt, ID: jobID,
 			})
 		} else {
 			status = "changed"
 			err = queries.UpdateChangedCanonicalJob(ctx, sqlc.UpdateChangedCanonicalJobParams{
-				Title: job.Title, Location: job.Location, UpdatedAt: updatedAt,
+				Title: job.Title, Location: job.Location, PostedAt: postedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,

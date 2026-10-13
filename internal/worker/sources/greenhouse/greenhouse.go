@@ -81,7 +81,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       bj.Content,
 			SalaryRaw:         bj.salary(),
 			WorkArrangement:   sources.DetectWorkArrangement(bj.Location.Name),
-			UpdatedAt:         sources.RFC3339OrNow(bj.FirstPublished),
+			PostedAt:          sources.RFC3339OrNil(bj.FirstPublished),
 		})
 	}
 	return jobs, nil

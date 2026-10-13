@@ -71,7 +71,7 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		URL: faker.internet.url(),
 		CompanySlug: slugify(company),
 		Source: faker.helpers.arrayElement(SOURCES),
-		UpdatedAt: scrapedAt,
+		PostedAt: scrapedAt,
 		ScrapedAt: scrapedAt,
 		FirstDiscoveredAt: scrapedAt,
 		DaysInOffice: daysInOffice,

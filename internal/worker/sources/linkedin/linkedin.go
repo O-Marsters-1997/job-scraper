@@ -147,13 +147,6 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	if err != nil {
 		return dto.Job{}, err
 	}
-	// LinkedIn's detail page exposes no machine-readable post date (see
-	// ParseJobDetail), so UpdatedAt is stamped here rather than in the pure parser —
-	// keeps the parser deterministic for snapshot testing.
-	if job.UpdatedAt.IsZero() {
-		sources.WarnDefaulted("linkedin", "UpdatedAt", url)
-		job.UpdatedAt = time.Now().UTC()
-	}
 	return job, nil
 }
 

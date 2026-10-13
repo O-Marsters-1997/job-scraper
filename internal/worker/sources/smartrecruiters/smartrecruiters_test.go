@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
@@ -46,7 +45,6 @@ func TestFetchPage_GoldenOverTwoListPagesAndDetails(t *testing.T) {
 	src := smartrecruiters.New("Wise")
 	src.Client().Transport = boardResponder(t, "Wise")
 
-	start := time.Now()
 	got, next, err := src.FetchPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("FetchPage() error: %v", err)
@@ -54,7 +52,7 @@ func TestFetchPage_GoldenOverTwoListPagesAndDetails(t *testing.T) {
 	if next != "" {
 		t.Errorf("FetchPage() next = %q, want empty", next)
 	}
-	sourcetest.MatchGolden(t, "postings_wise.json", got, start)
+	sourcetest.MatchGolden(t, "postings_wise.json", got)
 }
 
 func TestPollBoard_ReportsTotalFound(t *testing.T) {
