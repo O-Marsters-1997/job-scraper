@@ -129,16 +129,16 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 
 	t.Run("delete user sessions removes only that user's sessions", func(t *testing.T) {
 		st := newStore(t)
-		hank, hankSession := newSession(t, st, "hank", time.Hour)
-		_, otherSession := newSession(t, st, "ivy", time.Hour)
+		hank, _ := newSession(t, st, "hank", time.Hour)
+		newSession(t, st, "ivy", time.Hour)
 		commitTx(t, st, func(tx pgx.Tx) error {
 			return st.DeleteUserSessionsTx(t.Context(), tx, hank.ID)
 		})
-		if _, err := st.GetSession(t.Context(), hankSession.ID); !errors.Is(err, data.ErrNotFound) {
-			t.Errorf("GetSession(hank) err = %v, want ErrNotFound", err)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("hank")); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSessionByTokenHash(hank) err = %v, want ErrNotFound", err)
 		}
-		if _, err := st.GetSession(t.Context(), otherSession.ID); err != nil {
-			t.Errorf("GetSession(ivy) err = %v, want nil", err)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("ivy")); err != nil {
+			t.Errorf("GetSessionByTokenHash(ivy) err = %v, want nil", err)
 		}
 	})
 

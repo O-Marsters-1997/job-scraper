@@ -223,7 +223,7 @@ func TestLogout(t *testing.T) {
 	ctx := t.Context()
 	st := identitytest.NewFakeStore()
 	svc := identity.NewService(testDeps(t, identity.Deps{Store: st}))
-	session, _, err := svc.Signup(ctx, "dana", "hunter2", "")
+	session, _, err := svc.Signup(ctx, "dana", "hunter2-ok", "")
 	if err != nil {
 		t.Fatal(err)
 	}

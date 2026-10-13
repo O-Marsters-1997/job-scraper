@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -76,8 +77,8 @@ func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := st.CreateSession(ctx, user.ID, time.Now().Add(time.Hour))
-	if err != nil {
+	tokenHash := sha256.Sum256([]byte("kate"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,8 +86,8 @@ func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
 		return st.DeleteUserSessionsTx(ctx, tx, user.ID)
 	})
 
-	if _, err := st.GetSession(ctx, session.ID); err != nil {
-		t.Errorf("GetSession(kate) err = %v, want session kept after rollback", err)
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); err != nil {
+		t.Errorf("GetSessionByTokenHash(kate) err = %v, want session kept after rollback", err)
 	}
 }
 
@@ -99,8 +100,8 @@ func TestResetPasswordRevokesSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := st.CreateSession(ctx, user.ID, time.Now().Add(time.Hour))
-	if err != nil {
+	tokenHash := sha256.Sum256([]byte("liam"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,8 +109,8 @@ func TestResetPasswordRevokesSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := st.GetSession(ctx, session.ID); !errors.Is(err, data.ErrNotFound) {
-		t.Errorf("GetSession(liam) err = %v, want ErrNotFound after reset", err)
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("GetSessionByTokenHash(liam) err = %v, want ErrNotFound after reset", err)
 	}
 }
 
