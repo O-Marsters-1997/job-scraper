@@ -441,7 +441,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, AtsSource: r.AtsSource, AtsToken: r.AtsToken,
 			Domain: r.Domain, LinkedinCompanyID: r.LinkedinCompanyID, LastCrawledAt: r.LastCrawledAt,
-			FirstSeenAt: r.FirstSeenAt, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
+			FirstSeenAt: r.FirstSeenAt, Kind: r.Kind, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
@@ -712,6 +712,21 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
 		Enabled: row.Enabled, ReviewState: row.ReviewState, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 	}, nil
+}
+
+func (s *Store) SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	n, err := s.queries.SetCompanyKind(ctx, sqlc.SetCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return fmt.Errorf("store.SetCompanyKind: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {

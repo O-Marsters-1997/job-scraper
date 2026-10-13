@@ -129,6 +129,21 @@ export async function setCompanyFavourite(
 	);
 }
 
+export async function setCompanyKind(
+	id: string,
+	kind: "agency" | "direct",
+): Promise<Company> {
+	return mocked(
+		(db) => db.setCompanyKind(id, kind),
+		() =>
+			apiFetch(
+				`/companies/${encodeURIComponent(id)}/kind`,
+				companySchema,
+				jsonInit("PUT", { kind }),
+			),
+	);
+}
+
 export async function setCompanyReview(
 	id: string,
 	state: ReviewState,

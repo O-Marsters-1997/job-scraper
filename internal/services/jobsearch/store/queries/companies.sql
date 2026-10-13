@@ -14,7 +14,7 @@ SELECT * FROM companies WHERE id = $1;
 
 -- name: PageCompaniesForUser :many
 SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -43,7 +43,7 @@ LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
 
 -- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -135,3 +135,6 @@ DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2;
 UPDATE tracked_companies
 SET review_state = 'kept', updated_at = NOW()
 WHERE user_id = $1 AND company_id = $2 AND review_state = 'new';
+
+-- name: SetCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1;

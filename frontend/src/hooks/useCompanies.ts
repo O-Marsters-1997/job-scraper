@@ -14,6 +14,7 @@ import {
 	fetchNewCompanies,
 	fetchTrackedCompanies,
 	setCompanyFavourite,
+	setCompanyKind,
 	setCompanyReview,
 	setCompanyTracking,
 	unexcludeCompany,
@@ -121,6 +122,14 @@ export function useSetCompanyFavourite() {
 	return useInvalidatingMutation(
 		({ id, favourite }: { id: string; favourite: boolean }) =>
 			setCompanyFavourite(id, favourite),
+		[keys.companies.all, keys.jobs.all],
+	);
+}
+
+export function useSetCompanyKind() {
+	return useInvalidatingMutation(
+		({ id, kind }: { id: string; kind: "agency" | "direct" }) =>
+			setCompanyKind(id, kind),
 		[keys.companies.all, keys.jobs.all],
 	);
 }

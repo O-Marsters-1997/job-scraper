@@ -12,6 +12,7 @@ type Company struct {
 	LinkedInCompanyID string
 	LastCrawledAt     *time.Time
 	FirstSeenAt       time.Time
+	Kind              CompanyKind
 
 	JobCount             int
 	Tracked              bool

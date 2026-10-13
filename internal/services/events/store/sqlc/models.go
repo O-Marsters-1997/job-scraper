@@ -244,6 +244,7 @@ type Company struct {
 	FirstSeenAt       pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Kind              string
 }
 
 type CompanyBoard struct {

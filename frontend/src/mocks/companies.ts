@@ -132,6 +132,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		ATSSource: "",
 		ATSToken: "",
 		FirstSeenAt: new Date().toISOString(),
+		Kind: "unclassified",
 		JobCount: 0,
 		Tracked: track,
 		ReviewState: track ? "kept" : "",
@@ -215,6 +216,18 @@ export function setCompanyFavourite(id: string, favourite: boolean): Company {
 			: company;
 	companies = companies.map((c) => (c.ID === id ? updated : c));
 	return withFavourite(updated);
+}
+
+export function setCompanyKind(id: string, kind: "agency" | "direct"): Company {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	const updated: Company = { ...company, Kind: kind };
+	companies = companies.map((c) => (c.ID === id ? updated : c));
+	return withFavourite(updated);
+}
+
+export function getCompanyKind(id: string | undefined): Company["Kind"] {
+	return companies.find((c) => c.ID === id)?.Kind ?? "unclassified";
 }
 
 export function setCompanyReview(

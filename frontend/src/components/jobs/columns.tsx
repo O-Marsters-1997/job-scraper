@@ -20,6 +20,7 @@ export interface JobTableContext {
 	onGrade: (job: Job) => void;
 	onToggleFavourite: (job: Job) => void;
 	onExcludeCompany: (job: Job) => void;
+	onSetCompanyKind: (job: Job, kind: "agency" | "direct") => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -239,6 +240,9 @@ export function createJobColumns(
 						onGrade={() => ctx.onGrade(info.row.original)}
 						onDismiss={() => ctx.onDismiss(info.row.original)}
 						onExcludeCompany={() => ctx.onExcludeCompany(info.row.original)}
+						onSetCompanyKind={(kind) =>
+							ctx.onSetCompanyKind(info.row.original, kind)
+						}
 					/>
 				</div>
 			),
