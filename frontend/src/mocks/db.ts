@@ -6,6 +6,7 @@ export * from "./favourites";
 export * from "./grades";
 export * from "./jobs";
 export * from "./push";
+export * from "./recruiterContacts";
 export * from "./scoreFeedback";
 export * from "./scoring";
 export * from "./seen";

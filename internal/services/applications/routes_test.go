@@ -34,10 +34,13 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
+		"GET /jobs/{id}/recruiter-contacts",
+		"POST /jobs/{id}/recruiter-contacts",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
+		"POST /jobs/{id}/recruiter-contacts",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
@@ -97,6 +100,17 @@ func TestRoutesHappyPaths(t *testing.T) {
 		"GET /applications/for-jobs?job_ids=job-1", "")
 	if _, ok := summaries["job-1"]; !ok {
 		t.Fatalf("for-jobs = %+v, want job-1 present", summaries)
+	}
+
+	logged := handlerstest.Do[dto.RecruiterContact](t, r, http.StatusCreated, "POST /jobs/job-1/recruiter-contacts",
+		`{"contacted_on":"2026-10-01","channel":"email","outcome":"spoke"}`)
+	if logged.JobID != "job-1" {
+		t.Fatalf("logged job_id = %q, want job-1", logged.JobID)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /jobs/job-1/recruiter-contacts",
+		`{"contacted_on":"2026-10-01","channel":"fax","outcome":"spoke"}`)
+	if got := handlerstest.Do[[]dto.RecruiterContact](t, r, http.StatusOK, "GET /jobs/job-1/recruiter-contacts", ""); len(got) != 1 {
+		t.Fatalf("got %d recruiter contacts, want 1", len(got))
 	}
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
