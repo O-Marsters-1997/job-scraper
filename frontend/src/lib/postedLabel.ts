@@ -27,7 +27,8 @@ function windowText(from: Date, to: Date): string {
 }
 
 export function postedLabel(job: PostedFields): PostedLabel {
-	const discovered = new Date(job.FirstDiscoveredAt ?? job.ScrapedAt);
+	const discovered = new Date(job.FirstDiscoveredAt || job.ScrapedAt);
+	if (Number.isNaN(discovered.getTime())) return { list: "—", detail: "—" };
 	const repost = job.RepostedAt
 		? {
 				list: ` · Reposted ${formatRelative(job.RepostedAt)}`,
@@ -44,16 +45,24 @@ export function postedLabel(job: PostedFields): PostedLabel {
 
 	if (job.PostedAt) {
 		const posted = new Date(job.PostedAt);
+		const dayOnly = isDayPrecision(job.PostedAt);
+		const postedDay = dayOnly
+			? day(
+					new Date(
+						posted.getUTCFullYear(),
+						posted.getUTCMonth(),
+						posted.getUTCDate(),
+					),
+				)
+			: day(posted);
 		return withRepost({
-			list: isDayPrecision(job.PostedAt)
-				? day(posted)
-				: formatRelative(job.PostedAt),
-			detail: `Posted ${day(posted)}`,
+			list: dayOnly ? postedDay : formatRelative(job.PostedAt),
+			detail: `Posted ${postedDay}`,
 		});
 	}
 
-	if (job.PostedAfter) {
-		const from = new Date(job.PostedAfter);
+	const from = job.PostedAfter ? new Date(job.PostedAfter) : undefined;
+	if (from && from < discovered) {
 		const mid = new Date((from.getTime() + discovered.getTime()) / 2);
 		const range = windowText(from, discovered);
 		return withRepost({

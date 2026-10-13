@@ -24,6 +24,19 @@ try {
 	assert.equal(dateOnly.list, "12 Oct");
 	assert.equal(dateOnly.detail, "Posted 12 Oct");
 
+	process.env.TZ = "America/New_York";
+	assert.equal(
+		postedLabel({ ...base, PostedAt: "2025-10-12T00:00:00Z" }).detail,
+		"Posted 12 Oct",
+	);
+	process.env.TZ = "Europe/London";
+
+	const inverted = postedLabel({
+		...base,
+		PostedAfter: "2025-10-12T20:00:00.000Z",
+	});
+	assert.equal(inverted.detail, "Posted on or before 12 Oct");
+
 	const range = postedLabel({
 		...base,
 		PostedAfter: "2025-10-12T09:00:00.000Z",
