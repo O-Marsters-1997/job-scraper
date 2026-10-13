@@ -175,3 +175,33 @@ func TestFetchCachesOnlyGetAndHead(t *testing.T) {
 		})
 	}
 }
+
+func TestFetchHeadAndGetDoNotShareCacheEntries(t *testing.T) {
+	cache := &memCache{entries: map[string]dto.CachedResponse{}}
+	var bodies []string
+	tr := proxy.NewFetchTransport(identitytest.RoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		resp := response(200)
+		if req.Method == http.MethodHead {
+			resp.Body = io.NopCloser(strings.NewReader(""))
+		}
+		return resp, nil
+	}), cache)
+	ctx, _ := proxy.WithCollector(t.Context())
+	target := freshURL("/job/1")
+	for _, method := range []string{http.MethodHead, http.MethodGet} {
+		req, err := http.NewRequestWithContext(ctx, method, target, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := tr.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		bodies = append(bodies, string(body))
+	}
+	if diff := cmp.Diff([]string{"", "ok"}, bodies); diff != "" {
+		t.Errorf("bodies (-want +got):\n%s", diff)
+	}
+}

@@ -82,6 +82,13 @@ func cacheable(req *http.Request) bool {
 	return false
 }
 
+func cacheKey(req *http.Request) string {
+	if req.Method == http.MethodHead {
+		return http.MethodHead + " " + req.URL.String()
+	}
+	return req.URL.String()
+}
+
 func lookupCached(ctx context.Context, cache Cache, req *http.Request) (*Collector, *http.Response, error) {
 	if cache == nil || !cacheable(req) {
 		return nil, nil, nil
@@ -90,14 +97,14 @@ func lookupCached(ctx context.Context, cache Cache, req *http.Request) (*Collect
 	if collector == nil {
 		return nil, nil, nil
 	}
-	hit, found, err := cache.LookupFetch(ctx, req.URL.String())
+	hit, found, err := cache.LookupFetch(ctx, cacheKey(req))
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetch cache lookup: %w", err)
 	}
 	if !found {
 		return collector, nil, nil
 	}
-	collector.add(req.URL.String())
+	collector.add(cacheKey(req))
 	return collector, cachedResponse(req, hit), nil
 }
 
@@ -107,7 +114,7 @@ func storeResponse(cache Cache, req *http.Request, resp *http.Response, collecto
 	if err != nil {
 		return nil, err
 	}
-	stored := dto.CachedResponse{URL: req.URL.String(), Status: resp.StatusCode, Header: resp.Header, Body: body}
+	stored := dto.CachedResponse{URL: cacheKey(req), Status: resp.StatusCode, Header: resp.Header, Body: body}
 	if err := cache.PutFetch(req.Context(), stored); err != nil {
 		slog.ErrorContext(req.Context(), "fetch cache write failed", slog.String(logger.KeyURL, stored.URL), slog.Any(logger.KeyErr, err))
 	} else {
