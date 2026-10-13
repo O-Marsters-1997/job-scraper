@@ -1,6 +1,10 @@
 -- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT sqlc.arg('user_id')::uuid, sqlc.arg('job_id')::uuid, sqlc.narg('status_id')::uuid,
+       sqlc.narg('notes')::text, sqlc.narg('applied_at')::date, sqlc.narg('salary_info')::text
+WHERE sqlc.narg('status_id')::uuid IS NULL
+   OR EXISTS (SELECT 1 FROM application_statuses s
+              WHERE s.id = sqlc.narg('status_id')::uuid AND s.user_id = sqlc.arg('user_id')::uuid)
 RETURNING *;
 
 -- name: ListApplications :many
@@ -25,10 +29,12 @@ ORDER BY
     a.updated_at DESC;
 
 -- name: UpdateApplication :one
-UPDATE applications
+UPDATE applications a
 SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
-    chase_by = CASE WHEN status_id IS DISTINCT FROM $3 THEN NULL ELSE chase_by END
-WHERE id = $1 AND user_id = $2
+    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
+WHERE a.id = $1 AND a.user_id = $2
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
 RETURNING *;
 
 -- name: SetApplicationChase :one

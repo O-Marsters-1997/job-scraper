@@ -28,4 +28,5 @@ const (
 	KeyCount         = "count"
 	KeyDeliveryCount = "delivery_count"
 	KeyProvider      = "provider"
+	KeyStack         = "stack"
 )
