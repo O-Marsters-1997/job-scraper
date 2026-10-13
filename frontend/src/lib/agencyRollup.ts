@@ -49,7 +49,10 @@ export function agencyRollup(
 		) {
 			rollup.lastContactedOn = summary.last_contacted_on;
 		}
-		rollup.bestOutcome = bestOutcomeOf(rollup.bestOutcome, summary.best_outcome);
+		rollup.bestOutcome = bestOutcomeOf(
+			rollup.bestOutcome,
+			summary.best_outcome,
+		);
 	}
 	return rollup;
 }
