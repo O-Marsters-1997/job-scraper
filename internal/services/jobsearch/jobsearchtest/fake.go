@@ -14,6 +14,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
@@ -26,6 +27,7 @@ type boardPollState struct {
 	version      int64
 	reported     int
 	parsed       int
+	completedAt  time.Time
 }
 
 type FakeStore struct {
@@ -58,6 +60,7 @@ type FakeStore struct {
 	candidates     map[string]sourcetargets.Candidate
 	candidateByURL map[string]string
 	detailPending  map[string]bool
+	datedCards     map[string]dto.Job
 }
 
 func NewFakeStore() *FakeStore {
@@ -81,6 +84,7 @@ func NewFakeStore() *FakeStore {
 		candidates:     make(map[string]sourcetargets.Candidate),
 		candidateByURL: make(map[string]string),
 		detailPending:  make(map[string]bool),
+		datedCards:     make(map[string]dto.Job),
 	}
 }
 
@@ -153,7 +157,16 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	id, ok := f.jobIdentity(job)
 	if !ok {
 		id = f.nextID("job")
-		job.ID, job.ContentFingerprint = id, fingerprint
+		for _, card := range f.datedCards {
+			if cardMatchesJob(card, job) && (job.PostedAt == nil || card.PostedAt.Before(*job.PostedAt)) {
+				job.PostedAt = card.PostedAt
+			}
+		}
+		job.ID, job.ContentFingerprint, job.FirstDiscoveredAt = id, fingerprint, time.Now()
+		if st := f.pollState[job.BoardID]; st != nil && !st.completedAt.IsZero() {
+			completedAt := st.completedAt
+			job.PostedAfter = &completedAt
+		}
 		f.jobs[id] = job
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
@@ -171,10 +184,26 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		status = "changed"
 	}
 	f.addListing(id, job)
+	job.PostedAt, job.RepostedAt = applyPostedAt(prev, job.PostedAt)
+	job.PostedAfter, job.FirstDiscoveredAt = prev.PostedAfter, prev.FirstDiscoveredAt
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL
 	f.jobs[id] = job
 	f.indexJob(job)
 	return job, status, nil
+}
+
+func applyPostedAt(prev dto.Job, incoming *time.Time) (postedAt, repostedAt *time.Time) {
+	postedAt, repostedAt = prev.PostedAt, prev.RepostedAt
+	switch {
+	case incoming == nil:
+	case postedAt == nil || incoming.Before(*postedAt):
+		postedAt = incoming
+	case incoming.After(postedAt.Add(2 * 24 * time.Hour)):
+		if repostedAt == nil || incoming.After(*repostedAt) {
+			repostedAt = incoming
+		}
+	}
+	return postedAt, repostedAt
 }
 
 func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
@@ -198,7 +227,7 @@ func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOp
 			continue
 		}
 		job := f.jobs[id]
-		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
+		if options.SinceDays > 0 && job.EffectiveAge().Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
 			continue
 		}
 		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
@@ -809,6 +838,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 		urls[job.URL] = true
 	}
 	st.reported, st.parsed = snapshot.Reported, len(urls)
+	st.completedAt = time.Now()
 	return nil
 }
 
@@ -1056,11 +1086,64 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
 		out = append(out, cand)
 		if !sourcespec.CardComplete(target.Source) {
-			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source}
+			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source, PostedAt: card.PostedAt}
 		}
 		f.candidates[id] = cand
+		f.rememberCardDate(card)
+		if jobID, ok := f.byURL[card.URL]; ok && card.PostedAt != nil {
+			f.applyPostedDate(jobID, *card.PostedAt)
+		}
 	}
 	return out, nil
+}
+
+func (f *FakeStore) rememberCardDate(card dto.Job) {
+	if card.PostedAt == nil {
+		return
+	}
+	if prev, ok := f.datedCards[card.URL]; ok && !card.PostedAt.Before(*prev.PostedAt) {
+		return
+	}
+	f.datedCards[card.URL] = card
+}
+
+func (f *FakeStore) applyPostedDate(jobID string, postedAt time.Time) {
+	job := f.jobs[jobID]
+	job.PostedAt, job.RepostedAt = applyPostedAt(job, &postedAt)
+	f.jobs[jobID] = job
+}
+
+func cardMatchesJob(card, job dto.Job) bool {
+	return card.CompanySlug == job.CompanySlug && jobmatch.Title(card.Title) == jobmatch.Title(job.Title) &&
+		jobmatch.LocationsCompatible(jobmatch.Location(card.Location), jobmatch.Location(job.Location))
+}
+
+func (f *FakeStore) ApplyBoardCards(_ context.Context, _ string, cards []dto.Job) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, card := range cards {
+		if card.PostedAt == nil || card.URL == "" {
+			continue
+		}
+		var matches []string
+		for _, id := range f.jobOrder {
+			if cardMatchesJob(card, f.jobs[id]) {
+				matches = append(matches, id)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			normalized, err := store.NormalizeCandidateURL(card.URL)
+			if err != nil {
+				return err
+			}
+			card.URL = normalized
+			f.rememberCardDate(card)
+		case 1:
+			f.applyPostedDate(matches[0], *card.PostedAt)
+		}
+	}
+	return nil
 }
 
 func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int) ([]sourcetargets.Candidate, error) {

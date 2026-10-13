@@ -84,7 +84,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       o.Description,
 			SalaryRaw:         o.salaryRaw(),
 			WorkArrangement:   o.workArrangement(),
-			UpdatedAt:         sources.TimeOrNow(timestampLayout, o.CreatedAt),
+			PostedAt:          sources.TimeOrNil(timestampLayout, o.CreatedAt),
 		})
 	}
 	return jobs, nil

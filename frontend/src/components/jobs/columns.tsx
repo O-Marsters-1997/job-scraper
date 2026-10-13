@@ -5,7 +5,8 @@ import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { formatDate, formatRelative } from "@/lib/datetime";
+import { formatDate } from "@/lib/datetime";
+import { postedLabel } from "@/lib/postedLabel";
 import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import { GRADE_LABEL } from "@/types/grade";
@@ -203,13 +204,19 @@ export function createJobColumns(
 		},
 		{
 			accessorKey: "ScrapedAt",
-			header: "Scraped",
+			header: "Posted",
 			enableGlobalFilter: false,
-			cell: (info) => (
-				<span class="font-mono text-xs tabular-nums text-faint">
-					{formatRelative(info.getValue() as string)}
-				</span>
-			),
+			cell: (info) => {
+				const label = () => postedLabel(info.row.original);
+				return (
+					<span
+						class="font-mono text-xs tabular-nums text-faint"
+						title={label().listTitle}
+					>
+						{label().list}
+					</span>
+				);
+			},
 		},
 		{
 			id: "status",

@@ -138,6 +138,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	runPostedContract(t, newStore)
+
 	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {
 		st, _ := newStore(t)
 		ctx := t.Context()
@@ -527,7 +529,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		job, _, err := st.SaveCanonical(ctx, dto.Job{
 			Title: "Engineer", URL: "https://boards.greenhouse.io/count-co/jobs/1", Source: "greenhouse", CompanySlug: "count-co",
-			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1", UpdatedAt: time.Now(),
+			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1",
 		})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -941,7 +943,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		for i, id := range ids {
 			if _, _, err := st.SaveCanonical(ctx, dto.Job{
-				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id,
+				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id, CompanySlug: fmt.Sprintf("new-co-%d", i),
 			}); err != nil {
 				t.Fatalf("SaveCanonical(...) = %v", err)
 			}

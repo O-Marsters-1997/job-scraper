@@ -279,7 +279,7 @@ func (s *Source) parseDetail(body []byte) (dto.Job, error) {
 		Description:       d.description(),
 		SalaryRaw:         d.salaryRaw(),
 		WorkArrangement:   d.workArrangement(),
-		UpdatedAt:         sources.RFC3339OrNow(d.ReleasedDate),
+		PostedAt:          sources.RFC3339OrNil(d.ReleasedDate),
 	}, nil
 }
 

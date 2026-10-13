@@ -36,7 +36,7 @@ assert.ok(normalizeArrangement({} as never) === "unknown");
 const base = {
 	ID: "1",
 	URL: "",
-	UpdatedAt: "",
+	PostedAt: "",
 	ScrapedAt: "",
 	Location: "London",
 	CompanySlug: "acme",

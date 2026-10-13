@@ -3,7 +3,7 @@ import { FactRow } from "@/components/FactRow";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDate } from "@/lib/datetime";
+import { postedLabel } from "@/lib/postedLabel";
 import { titleCase } from "@/lib/utils";
 import type { Job } from "@/types/job";
 import { workStyle } from "./workStyle";
@@ -25,11 +25,20 @@ export function JobFactsCard(props: { job: Job }) {
 				<FactRow label="Source">
 					<SourceBadge source={props.job.Source} />
 				</FactRow>
-				<FactRow label="Scraped">
+				<FactRow label="Posted">
 					<span class="font-mono text-xs tabular-nums text-foreground">
-						{formatDate(props.job.ScrapedAt)}
+						{postedLabel(props.job).detail}
 					</span>
 				</FactRow>
+				<Show when={postedLabel(props.job).detailRepost}>
+					{(repost) => (
+						<FactRow label="Reposted">
+							<span class="font-mono text-xs tabular-nums text-foreground">
+								{repost()}
+							</span>
+						</FactRow>
+					)}
+				</Show>
 				<Show when={props.job.EmploymentType}>
 					{(et) => <FactRow label="Employment" value={et()} />}
 				</Show>

@@ -109,7 +109,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			ProviderPostingID: it.GUID,
 			Description:       it.Description,
 			WorkArrangement:   it.workArrangement(),
-			UpdatedAt:         sources.TimeOrNow(time.RFC1123Z, it.PubDate),
+			PostedAt:          sources.TimeOrNil(time.RFC1123Z, it.PubDate),
 		})
 	}
 	return jobs, nil

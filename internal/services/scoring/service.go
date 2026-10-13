@@ -261,7 +261,7 @@ func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {
 	if cfg.MaxJobAgeDays <= 0 {
 		return false
 	}
-	return job.UpdatedAt.Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
+	return job.EffectiveAge().Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
 }
 
 func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {
