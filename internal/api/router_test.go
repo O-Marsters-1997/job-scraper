@@ -52,7 +52,7 @@ func newApp(t *testing.T, extra ...api.Module) *app {
 		t.Fatalf("identity.New: %v", err)
 	}
 	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic)
-	sc := scoring.New(pool, idm, idm, js, "", "", scoring.VAPID{})
+	sc := scoring.New(pool, idm, idm, js, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
 	router, err := api.NewRouter(idm, js, append([]api.Module{apps, cv, sc, eventsModule}, extra...)...)
 	if err != nil {
@@ -166,7 +166,7 @@ type ingestResult struct {
 
 func (a *app) ingest(job map[string]string) ingestResult {
 	a.t.Helper()
-	job["UpdatedAt"] = time.Now().Format(time.RFC3339)
+	job["PostedAt"] = time.Now().Format(time.RFC3339)
 	req := jsonRequest(a.t, http.MethodPost, "/ingest", job)
 	req.Header.Set("Authorization", "Bearer "+ingestToken)
 	return send[ingestResult](a, http.StatusOK, req)

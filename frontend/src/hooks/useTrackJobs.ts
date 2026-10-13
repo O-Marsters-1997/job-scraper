@@ -1,19 +1,28 @@
 import type { RowSelectionState } from "@tanstack/solid-table";
 import { createMemo, createSignal } from "solid-js";
-import { createJobColumns } from "@/components/jobs/columns";
+import {
+	createJobColumns,
+	type JobTableContext,
+} from "@/components/jobs/columns";
 import {
 	toApplicationSummary,
 	toExistingApp,
 } from "@/components/jobs/TrackApplicationDialog";
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
+import type { RecruiterContactSummary } from "@/types/recruiterContact";
 import { useApplications } from "./useApplications";
-import { useSetCompanyFavourite } from "./useCompanies";
+import { useSetCompanyFavourite, useSetCompanyKind } from "./useCompanies";
 import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
 import { useMarkJobsSeen } from "./useJobs";
 import { announceBulkSeen } from "./useSeenToast";
 
-export function useTrackJobs(jobs: () => Job[]) {
+export function useTrackJobs(
+	jobs: () => Job[],
+	contactSummaries: () =>
+		| Record<string, RecruiterContactSummary>
+		| undefined = () => undefined,
+) {
 	const applications = useApplications();
 	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
 		Object.fromEntries(
@@ -60,7 +69,8 @@ export function useTrackJobs(jobs: () => Job[]) {
 	const dismiss = useDismissJob();
 	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
-	const columns = createJobColumns({
+	const setKind = useSetCompanyKind();
+	const columnContext: JobTableContext = {
 		appsForJobs,
 		onTrack: openTrack,
 		onDismiss: dismiss.dismiss,
@@ -73,10 +83,20 @@ export function useTrackJobs(jobs: () => Job[]) {
 			});
 		},
 		onExcludeCompany: exclude.exclude,
+		onSetCompanyKind: (job, kind) => {
+			if (!job.CompanyID) return;
+			setKind.mutate({ id: job.CompanyID, kind });
+		},
+	};
+	const columns = createJobColumns(columnContext);
+	const contactColumns = createJobColumns({
+		...columnContext,
+		contactSummaries,
 	});
 
 	return {
 		columns,
+		contactColumns,
 		applications,
 		appsForJobs,
 		openTrack,

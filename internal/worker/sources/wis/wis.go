@@ -35,7 +35,6 @@ const (
 	selTitle       = `h1`
 	selCompany     = `.ui-company`
 	selLocation    = `.ui-location`
-	selTime        = `time[datetime]`
 	selDescription = `.adp-body`
 	selBadge       = `.inline-flex.flex-wrap span`
 )
@@ -285,17 +284,6 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 
 	location := strings.TrimSpace(doc.Find(selLocation).First().Text())
 
-	updatedAt := time.Now().UTC()
-	if dt, ok := doc.Find(selTime).First().Attr("datetime"); ok && dt != "" {
-		if t, err := time.Parse(time.RFC3339, dt); err == nil {
-			updatedAt = t
-		} else if t, err := time.Parse("2006-01-02", dt); err == nil {
-			updatedAt = t.UTC()
-		}
-	} else {
-		sources.WarnDefaulted("wis", "UpdatedAt", url)
-	}
-
 	descNode := doc.Find(selDescription).First()
 	desc, _ := descNode.Html()
 	description := strings.TrimSpace(desc)
@@ -318,7 +306,6 @@ func ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 		URL:             url,
 		CompanySlug:     slug.Company(company),
 		Source:          "wis",
-		UpdatedAt:       updatedAt,
 		Description:     description,
 		SalaryRaw:       salaryRaw,
 		WorkArrangement: workArrangement,

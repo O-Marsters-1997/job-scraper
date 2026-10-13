@@ -96,3 +96,14 @@ func fromInt4(n pgtype.Int4) *int {
 	v := int(n.Int32)
 	return &v
 }
+
+func toRecruiterContactDTO(c sqlc.RecruiterContact) dto.RecruiterContact {
+	return dto.RecruiterContact{
+		ID:          c.ID.String(),
+		JobID:       c.JobID.String(),
+		ContactedOn: c.ContactedOn.Time.Format(time.DateOnly),
+		Channel:     dto.ContactChannel(c.Channel),
+		Outcome:     dto.ContactOutcome(c.Outcome),
+		CreatedAt:   c.CreatedAt.Time,
+	}
+}

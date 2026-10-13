@@ -34,9 +34,10 @@ func (q *Queries) DropStaleAnswers(ctx context.Context, jobIds []pgtype.UUID) er
 }
 
 const getJobForScoring = `-- name: GetJobForScoring :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description,
-    salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
-FROM jobs WHERE id = $1
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at, j.description,
+    j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint,
+    COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
+FROM jobs j WHERE j.id = $1
 `
 
 type GetJobForScoringRow struct {
@@ -46,7 +47,9 @@ type GetJobForScoringRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -55,6 +58,7 @@ type GetJobForScoringRow struct {
 	PrimaryBoardID     pgtype.UUID
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
+	CompanyKind        string
 }
 
 func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobForScoringRow, error) {
@@ -67,7 +71,9 @@ func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobF
 		&i.Url,
 		&i.CompanySlug,
 		&i.Source,
-		&i.UpdatedAt,
+		&i.PostedAt,
+		&i.PostedAfter,
+		&i.FirstDiscoveredAt,
 		&i.ScrapedAt,
 		&i.Description,
 		&i.SalaryRaw,
@@ -76,6 +82,7 @@ func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobF
 		&i.PrimaryBoardID,
 		&i.ProviderPostingID,
 		&i.ContentFingerprint,
+		&i.CompanyKind,
 	)
 	return i, err
 }
@@ -395,7 +402,7 @@ func (q *Queries) ListScoringAnswersForUser(ctx context.Context, arg ListScoring
 }
 
 const listScoringInputJobs = `-- name: ListScoringInputJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at,
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at,
     j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id,
     j.provider_posting_id, j.content_fingerprint,
     EXISTS (
@@ -419,7 +426,9 @@ type ListScoringInputJobsRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -447,7 +456,9 @@ func (q *Queries) ListScoringInputJobs(ctx context.Context, arg ListScoringInput
 			&i.Url,
 			&i.CompanySlug,
 			&i.Source,
-			&i.UpdatedAt,
+			&i.PostedAt,
+			&i.PostedAfter,
+			&i.FirstDiscoveredAt,
 			&i.ScrapedAt,
 			&i.Description,
 			&i.SalaryRaw,

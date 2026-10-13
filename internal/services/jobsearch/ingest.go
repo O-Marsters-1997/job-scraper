@@ -114,7 +114,7 @@ func (s *Service) upsertCompany(ctx context.Context, j dto.Job) {
 	}
 	upsert := dto.CompanyUpsert{Slug: j.CompanySlug, Name: slug.Humanize(j.CompanySlug)}
 	if role, _ := sourcespec.SourceRole(j.Source); role == sourcespec.RoleATS {
-		upsert.ATSSource, upsert.ATSToken = j.Source, j.CompanySlug
+		upsert.ATSSource, upsert.ATSToken, upsert.Kind = j.Source, j.CompanySlug, dto.KindDirect
 	}
 	if _, err := s.store.UpsertCompany(ctx, upsert); err != nil {
 		slog.WarnContext(ctx, "ingest: could not upsert company",

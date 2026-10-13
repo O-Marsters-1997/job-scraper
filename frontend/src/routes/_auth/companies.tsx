@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createEffect, createSignal, For, Show } from "solid-js";
-import type { CompanySort } from "@/api/companies";
+import type { CompanyPoster, CompanySort } from "@/api/companies";
 import { FavouriteStar } from "@/components/FavouriteStar";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
@@ -41,8 +41,24 @@ import { useDebouncedTerm } from "../../hooks/useDebouncedTerm";
 import type { Company } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies")({
+	validateSearch: (
+		raw: Record<string, unknown>,
+	): { poster?: CompanyPoster | undefined } => ({
+		poster:
+			raw.poster === "agency" || raw.poster === "direct"
+				? raw.poster
+				: undefined,
+	}),
 	component: CompaniesPage,
 });
+
+type PosterOption = { value: CompanyPoster | "all"; label: string };
+
+const POSTER_OPTIONS: PosterOption[] = [
+	{ value: "all", label: "All companies" },
+	{ value: "agency", label: "Agencies" },
+	{ value: "direct", label: "Direct employers" },
+];
 
 const SORT_OPTIONS: { value: CompanySort; label: string }[] = [
 	{ value: "relevance", label: "Relevance" },
@@ -55,7 +71,10 @@ function CompaniesPage() {
 	const [noBoardOnly, setNoBoardOnly] = createSignal(false);
 	const [sort, setSort] = createSignal<CompanySort>("relevance");
 	const [page, setPage] = createSignal(1);
+	const urlSearch = Route.useSearch();
+	const navigate = useNavigate({ from: "/companies" });
 	const query = useCompanyPages(() => ({
+		poster: urlSearch().poster,
 		q: term(),
 		favourite: favouritesOnly(),
 		noBoard: noBoardOnly(),
@@ -130,6 +149,39 @@ function CompaniesPage() {
 						<SwitchLabel>No Board discovered</SwitchLabel>
 					</div>
 				</Switch>
+				<Select
+					options={POSTER_OPTIONS}
+					optionValue="value"
+					optionTextValue="label"
+					value={
+						POSTER_OPTIONS.find(
+							(o) => o.value === (urlSearch().poster ?? "all"),
+						) ?? null
+					}
+					onChange={(opt) => {
+						if (!opt) return;
+						setPage(1);
+						navigate({
+							to: "/companies",
+							search: {
+								poster: opt.value === "all" ? undefined : opt.value,
+							},
+							replace: true,
+						});
+					}}
+					itemComponent={(itemProps) => (
+						<SelectItem item={itemProps.item}>
+							<SelectItemLabel>{itemProps.item.rawValue.label}</SelectItemLabel>
+						</SelectItem>
+					)}
+				>
+					<SelectTrigger aria-label="Filter companies by poster">
+						<Select.Value<PosterOption>>
+							{(state) => state.selectedOption()?.label ?? "All companies"}
+						</Select.Value>
+					</SelectTrigger>
+					<SelectContent />
+				</Select>
 				<div class="ml-auto">
 					<Select
 						options={SORT_OPTIONS}

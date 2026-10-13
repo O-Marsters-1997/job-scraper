@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     url          TEXT         NOT NULL UNIQUE,
     company_slug TEXT         NOT NULL,
     source       TEXT         NOT NULL,
-    updated_at   TIMESTAMPTZ  NOT NULL,
+    posted_at    TIMESTAMPTZ,
     scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     content_changed_at  TIMESTAMPTZ,
     first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     match_title         TEXT,
-    match_location      TEXT
+    match_location      TEXT,
+    posted_after        TIMESTAMPTZ,
+    reposted_at         TIMESTAMPTZ
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
@@ -291,7 +293,10 @@ CREATE TABLE IF NOT EXISTS companies (
     last_crawled_at     TIMESTAMPTZ,
     first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind                TEXT        NOT NULL DEFAULT 'unclassified'
+        CONSTRAINT companies_kind_check
+        CHECK (kind IN ('unclassified', 'likely_agency', 'likely_direct', 'agency', 'direct'))
 );
 
 CREATE TABLE IF NOT EXISTS source_targets (
@@ -384,6 +389,7 @@ CREATE TABLE IF NOT EXISTS job_candidates (
     card_company TEXT NOT NULL DEFAULT '',
     card_location TEXT NOT NULL DEFAULT '',
     card JSONB,
+    posted_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '60 days',
@@ -525,3 +531,18 @@ CREATE TABLE events (
 );
 CREATE INDEX events_user_type_created_idx ON events (user_id, type, created_at);
 CREATE INDEX events_user_subject_idx ON events (user_id, subject_id);
+
+CREATE TABLE IF NOT EXISTS recruiter_contacts (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id       UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    contacted_on DATE        NOT NULL,
+    channel      TEXT        NOT NULL
+        CONSTRAINT recruiter_contacts_channel_check
+        CHECK (channel IN ('linkedin_message', 'email', 'call', 'inbound')),
+    outcome      TEXT        NOT NULL
+        CONSTRAINT recruiter_contacts_outcome_check
+        CHECK (outcome IN ('no_reply', 'rejected', 'spoke', 'submitted')),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX recruiter_contacts_user_job_idx ON recruiter_contacts (user_id, job_id, contacted_on DESC);

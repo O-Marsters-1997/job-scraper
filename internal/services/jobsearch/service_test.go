@@ -19,7 +19,7 @@ func seedJobs(t *testing.T, n int) *jobsearchtest.FakeStore {
 	for i := range n {
 		job := dto.Job{
 			Title: "Role", URL: "https://example.com/" + string(rune('a'+i)),
-			ScrapedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Now(),
+			ScrapedAt: time.Date(2026, 1, i+1, 0, 0, 0, 0, time.UTC),
 		}
 		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
@@ -52,11 +52,12 @@ func TestList(t *testing.T) {
 		}
 	})
 
-	t.Run("windows on updated_at, defaulting to 90 days, 0 for none", func(t *testing.T) {
+	t.Run("windows on the effective age, defaulting to 90 days, 0 for none", func(t *testing.T) {
 		st := jobsearchtest.NewFakeStore()
 		now := time.Now()
 		for url, age := range map[string]int{"https://example.com/fresh": 89, "https://example.com/stale": 91} {
-			job := dto.Job{Title: "Role", URL: url, UpdatedAt: now.AddDate(0, 0, -age), ScrapedAt: now}
+			posted := now.AddDate(0, 0, -age)
+			job := dto.Job{Title: "Role", URL: url, PostedAt: &posted, ScrapedAt: now}
 			if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 				t.Fatalf("SaveCanonical(%s) err = %v", url, err)
 			}
@@ -150,7 +151,7 @@ func TestListScored(t *testing.T) {
 	st := jobsearchtest.NewFakeStore()
 	for i, slug := range []string{"acme", "globex", "initech"} {
 		score := 90 - i
-		job := dto.Job{Title: "Role", URL: "https://example.com/" + slug, CompanySlug: slug, UpdatedAt: time.Now(), SuitabilityScore: &score}
+		job := dto.Job{Title: "Role", URL: "https://example.com/" + slug, CompanySlug: slug, SuitabilityScore: &score}
 		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
 		}
@@ -177,7 +178,7 @@ func TestListHidesExcludedCompanies(t *testing.T) {
 		{Title: "Role", URL: "https://example.com/acme", CompanySlug: "acme"},
 		{Title: "Role", URL: "https://example.com/globex", CompanySlug: "globex"},
 	} {
-		job.ScrapedAt, job.UpdatedAt = time.Now(), time.Now()
+		job.ScrapedAt = time.Now()
 		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
 			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
 		}

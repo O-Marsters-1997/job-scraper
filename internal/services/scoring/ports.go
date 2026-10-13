@@ -45,3 +45,13 @@ type Extractor interface {
 type Reconsiderer interface {
 	Reconsider(ctx context.Context, config dto.SearchConfig) error
 }
+
+// RecruiterClassifier asks Jev whether companyName is a recruitment agency,
+// from one of its jobs, billed to apiKey.
+type RecruiterClassifier interface {
+	ClassifyRecruiter(ctx context.Context, apiKey, companyName string, job dto.Job) (dto.CompanyKind, dto.Usage, error)
+}
+
+type CompanyKinds interface {
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
+}

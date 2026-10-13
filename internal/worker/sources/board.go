@@ -160,19 +160,17 @@ func JSONArrayLen(key string) func([]byte) (int, error) {
 	}
 }
 
-// RFC3339OrNow parses an RFC3339 timestamp, falling back to the current UTC time when
-// raw is empty or unparseable.
-func RFC3339OrNow(raw string) time.Time {
-	return TimeOrNow(time.RFC3339, raw)
+func RFC3339OrNil(raw string) *time.Time {
+	return TimeOrNil(time.RFC3339, raw)
 }
 
-// TimeOrNow parses raw with layout, falling back to the current UTC time when raw is
-// empty or unparseable.
-func TimeOrNow(layout, raw string) time.Time {
-	if raw != "" {
-		if t, err := time.Parse(layout, raw); err == nil {
-			return t
-		}
+func TimeOrNil(layout, raw string) *time.Time {
+	if raw == "" {
+		return nil
 	}
-	return time.Now().UTC()
+	t, err := time.Parse(layout, raw)
+	if err != nil {
+		return nil
+	}
+	return &t
 }

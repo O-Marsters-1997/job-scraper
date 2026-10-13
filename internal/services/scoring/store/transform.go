@@ -43,11 +43,12 @@ func toSearchConfigDTO(row sqlc.SearchConfig) (dto.SearchConfig, error) {
 func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 	return dto.Job{
 		ID: row.ID.String(), Title: row.Title, Location: row.Location, URL: row.Url,
-		CompanySlug: row.CompanySlug, Source: row.Source, UpdatedAt: row.UpdatedAt.Time,
-		ScrapedAt: row.ScrapedAt.Time, Description: row.Description, SalaryRaw: row.SalaryRaw,
+		CompanySlug: row.CompanySlug, Source: row.Source,
+		PostedAt: data.TimePtr(row.PostedAt), PostedAfter: data.TimePtr(row.PostedAfter),
+		FirstDiscoveredAt: row.FirstDiscoveredAt.Time, ScrapedAt: row.ScrapedAt.Time, Description: row.Description, SalaryRaw: row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement, CompanyID: row.CompanyID.String(),
 		BoardID: row.PrimaryBoardID.String(), ProviderPostingID: row.ProviderPostingID.String,
-		ContentFingerprint: row.ContentFingerprint.String,
+		ContentFingerprint: row.ContentFingerprint.String, CompanyKind: dto.CompanyKind(row.CompanyKind),
 	}
 }
 

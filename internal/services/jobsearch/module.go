@@ -73,6 +73,8 @@ type Store interface {
 	SetCompanyTracking(ctx context.Context, userID, companyID string, enabled bool, checkIntervalMinutes int) (dto.CompanyTracking, error)
 	TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error)
 	SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error
+	SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
 	SetCompanyReviewState(ctx context.Context, userID, companyID, state string) (dto.CompanyTracking, error)
 	VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error)
 	ListCompaniesToCrawl(ctx context.Context, limit int) ([]dto.Company, error)
@@ -151,6 +153,10 @@ func (m *Module) PublishBoardChecks(ctx context.Context, manual bool) error {
 // whether it did; an existing row of any review state is left untouched.
 func (m *Module) TrackDiscoveredCompany(ctx context.Context, userID, companyID string) (bool, error) {
 	return m.store.TrackDiscoveredCompany(ctx, userID, companyID)
+}
+
+func (m *Module) SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	return m.store.SuggestCompanyKind(ctx, companyID, kind)
 }
 
 // SaveCompanyProfile upserts the profile source reports for companyID.

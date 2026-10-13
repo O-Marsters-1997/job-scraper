@@ -39,7 +39,9 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 		URL:               row.Url,
 		CompanySlug:       row.CompanySlug,
 		Source:            row.Source,
-		UpdatedAt:         row.UpdatedAt.Time,
+		PostedAt:          data.TimePtr(row.PostedAt),
+		PostedAfter:       data.TimePtr(row.PostedAfter),
+		RepostedAt:        data.TimePtr(row.RepostedAt),
 		ScrapedAt:         row.ScrapedAt.Time,
 		FirstDiscoveredAt: row.FirstDiscoveredAt.Time,
 		SalaryRaw:         row.SalaryRaw,
@@ -53,6 +55,7 @@ func toPageJobDTO(row sqlc.PageJobsRow) (dto.Job, error) {
 	j.Grade = row.Grade
 	j.Seen = row.Seen
 	j.CompanyFavourite = row.CompanyFavourite
+	j.CompanyKind = dto.CompanyKind(row.CompanyKind)
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -68,7 +71,9 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 		URL:               row.Url,
 		CompanySlug:       row.CompanySlug,
 		Source:            row.Source,
-		UpdatedAt:         row.UpdatedAt.Time,
+		PostedAt:          data.TimePtr(row.PostedAt),
+		PostedAfter:       data.TimePtr(row.PostedAfter),
+		RepostedAt:        data.TimePtr(row.RepostedAt),
 		ScrapedAt:         row.ScrapedAt.Time,
 		FirstDiscoveredAt: row.FirstDiscoveredAt.Time,
 		Description:       row.Description,
@@ -82,6 +87,7 @@ func toGetJobDTO(row sqlc.GetJobRow) (dto.Job, error) {
 	j.Band = row.Band.String
 	j.Seen = row.Seen
 	j.CompanyFavourite = row.CompanyFavourite
+	j.CompanyKind = dto.CompanyKind(row.CompanyKind)
 	j.CompanyID = row.CompanyID.String()
 	j.BoardID = row.PrimaryBoardID.String()
 	j.ProviderPostingID = row.ProviderPostingID.String
@@ -100,6 +106,7 @@ func toCompanyDTO(row sqlc.Company) dto.Company {
 		LinkedInCompanyID: row.LinkedinCompanyID.String,
 		FirstSeenAt:       row.FirstSeenAt.Time,
 		LastCrawledAt:     data.TimePtr(row.LastCrawledAt),
+		Kind:              dto.CompanyKind(row.Kind),
 	}
 }
 
@@ -120,6 +127,7 @@ func toCompanyForUserDTO(row sqlc.GetCompanyForUserRow) dto.Company {
 		CheckIntervalMinutes: int(row.CheckIntervalMinutes.Int32),
 		LastCheckedAt:        data.TimePtr(row.LastCheckedAt),
 		LastCrawledAt:        data.TimePtr(row.LastCrawledAt),
+		Kind:                 dto.CompanyKind(row.Kind),
 	}
 }
 

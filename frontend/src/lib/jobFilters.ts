@@ -1,3 +1,4 @@
+import { POSTER_OPTIONS, type PosterFilter } from "@/types/company";
 import type { Job } from "@/types/job";
 import { type JobSort, SORT_OPTIONS } from "./jobSort";
 
@@ -20,6 +21,7 @@ export interface JobFilters {
 	graded: GradedFilter;
 	seen: SeenFilter;
 	fav: boolean;
+	poster: PosterFilter;
 	sort: JobSort;
 	page?: number | undefined;
 }
@@ -37,6 +39,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
+	poster: "all",
 	sort: "relevant",
 	page: undefined,
 };
@@ -74,6 +77,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
+		poster: POSTER_OPTIONS.find((o) => o === raw.poster) ?? "all",
 		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1
@@ -130,6 +134,11 @@ export function applyJobFilters(jobs: Job[], f: JobFilters): Job[] {
 		if (f.graded === "graded" && !j.Grade) return false;
 		if (f.seen === "unseen" && j.Seen) return false;
 		if (f.seen === "seen" && !j.Seen) return false;
+		if (f.poster !== "all") {
+			const agency =
+				j.CompanyKind === "agency" || j.CompanyKind === "likely_agency";
+			if (agency !== (f.poster === "agency")) return false;
+		}
 		if (f.fav && !j.CompanyFavourite) return false;
 		if (f.src.length > 0 && !f.src.includes(j.Source)) return false;
 		if (f.work.length > 0 && !f.work.includes(normalizeArrangement(j)))
@@ -154,6 +163,7 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.sal) n++;
 	if (f.graded !== "all") n++;
 	if (f.seen !== "all") n++;
+	if (f.poster !== "all") n++;
 	if (f.fav) n++;
 	return n;
 }

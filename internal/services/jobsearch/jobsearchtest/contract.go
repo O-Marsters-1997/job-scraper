@@ -138,6 +138,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	runPostedContract(t, newStore)
+
 	t.Run("listings are every url of a job in first-seen order", func(t *testing.T) {
 		st, _ := newStore(t)
 		ctx := t.Context()
@@ -367,6 +369,43 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("poster filter splits agency and likely agency from everything else", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		kinds := map[string]dto.CompanyKind{
+			"agency-co": dto.KindAgency, "likely-agency-co": dto.KindLikelyAgency,
+			"direct-co": dto.KindDirect, "likely-direct-co": dto.KindLikelyDirect, "plain-co": dto.KindUnclassified,
+		}
+		for slug, kind := range kinds {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
+			}
+			if kind == dto.KindUnclassified {
+				continue
+			}
+			if err := st.SetCompanyKind(ctx, c.ID, kind); err != nil {
+				t.Fatalf("SetCompanyKind(%q) = %v", slug, err)
+			}
+		}
+		for poster, want := range map[dto.Poster][]string{
+			dto.PosterAgency: {"agency-co", "likely-agency-co"},
+			dto.PosterDirect: {"direct-co", "likely-direct-co", "plain-co"},
+		} {
+			page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Poster: poster})
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%q) = %v", poster, err)
+			}
+			var got []string
+			for _, c := range page.Items {
+				got = append(got, c.Slug)
+			}
+			if diff := cmp.Diff(want, got); diff != "" || page.Total != len(want) {
+				t.Errorf("PageCompaniesForUser(%q) slugs (-want +got):\n%s\ntotal = %d", poster, diff, page.Total)
+			}
+		}
+	})
+
 	t.Run("companies search and tracked filters compose with the offset", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
@@ -490,7 +529,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		job, _, err := st.SaveCanonical(ctx, dto.Job{
 			Title: "Engineer", URL: "https://boards.greenhouse.io/count-co/jobs/1", Source: "greenhouse", CompanySlug: "count-co",
-			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1", UpdatedAt: time.Now(),
+			CompanyID: c.ID, BoardID: board.ID, ProviderPostingID: "1",
 		})
 		if err != nil {
 			t.Fatalf("SaveCanonical(...) = %v", err)
@@ -685,6 +724,91 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("an upsert kind overrides a likely kind, never agency, and an empty kind keeps it", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect})
+		if err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil {
+			t.Fatalf("SetCompanyKind(likely_agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co"}); err != nil || c.Kind != dto.KindLikelyAgency {
+			t.Fatalf("UpsertCompany(empty) = %+v, %v, want likely_agency kept", c, err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindAgency); err != nil {
+			t.Fatalf("SetCompanyKind(agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindAgency {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want agency kept", c, err)
+		}
+	})
+
+	t.Run("a company starts unclassified and its kind shows on the company and its jobs", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "kind-co", Name: "Kind Co"})
+		if err != nil || c.Kind != dto.KindUnclassified {
+			t.Fatalf("UpsertCompany(...) = %+v, %v, want unclassified", c, err)
+		}
+		job, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Engineer", URL: "https://example.com/jobs/kind", CompanySlug: "kind-co"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindAgency); err != nil {
+			t.Fatalf("SetCompanyKind(agency) = %v", err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Kind != dto.KindAgency {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want agency", got, err)
+		}
+		gotJob, err := st.GetJob(ctx, job.ID, userID)
+		if err != nil || gotJob.CompanyKind != dto.KindAgency {
+			t.Fatalf("GetJob(...).CompanyKind = %q, %v, want agency", gotJob.CompanyKind, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindDirect); err != nil {
+			t.Fatalf("SetCompanyKind(direct) = %v", err)
+		}
+		page, err := st.Page(ctx, userID, dto.JobPageOptions{Limit: 10})
+		if err != nil || len(page.Items) != 1 || page.Items[0].CompanyKind != dto.KindDirect {
+			t.Fatalf("Page(...) = %+v, %v, want one direct job", page, err)
+		}
+		if err := st.SetCompanyKind(ctx, "00000000-0000-0000-0000-000000000000", dto.KindAgency); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetCompanyKind(unknown) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("suggesting a company kind writes only over unclassified", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "suggest-co", Name: "Suggest Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		wrote, err := st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency)
+		if err != nil || !wrote {
+			t.Fatalf("SuggestCompanyKind(first) = %v, %v, want true", wrote, err)
+		}
+		wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyDirect)
+		if err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(second) = %v, %v, want false", wrote, err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Kind != dto.KindLikelyAgency {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want likely_agency", got, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindDirect); err != nil {
+			t.Fatalf("SetCompanyKind(direct) = %v", err)
+		}
+		if wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(over direct) = %v, %v, want false", wrote, err)
+		}
+	})
+
 	t.Run("favouriting a new tracked company keeps it, and dismissing it removes the star", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
@@ -819,7 +943,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 		for i, id := range ids {
 			if _, _, err := st.SaveCanonical(ctx, dto.Job{
-				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id,
+				Title: "Go Engineer", URL: fmt.Sprintf("https://example.com/new-co/%d", i), CompanyID: id, CompanySlug: fmt.Sprintf("new-co-%d", i),
 			}); err != nil {
 				t.Fatalf("SaveCanonical(...) = %v", err)
 			}

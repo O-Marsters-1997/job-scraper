@@ -244,6 +244,7 @@ type Company struct {
 	FirstSeenAt       pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Kind              string
 }
 
 type CompanyBoard struct {
@@ -339,7 +340,7 @@ type Job struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -353,6 +354,8 @@ type Job struct {
 	FirstDiscoveredAt  pgtype.Timestamptz
 	MatchTitle         pgtype.Text
 	MatchLocation      pgtype.Text
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
 }
 
 type JobCandidate struct {
@@ -363,6 +366,7 @@ type JobCandidate struct {
 	CardCompany   string
 	CardLocation  string
 	Card          []byte
+	PostedAt      pgtype.Timestamptz
 	FirstSeenAt   pgtype.Timestamptz
 	LastSeenAt    pgtype.Timestamptz
 	ExpiresAt     pgtype.Timestamptz
@@ -462,6 +466,16 @@ type PushSubscription struct {
 	P256dh    string
 	Auth      string
 	CreatedAt pgtype.Timestamptz
+}
+
+type RecruiterContact struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	ContactedOn pgtype.Date
+	Channel     string
+	Outcome     string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type ScoreFeedback struct {

@@ -26,6 +26,10 @@ type Store interface {
 	CountApplicationsUsingStatus(ctx context.Context, statusID, userID string) (int64, error)
 	ListApplicationStatusesByUser(ctx context.Context, userID string) ([]dto.ApplicationStatus, error)
 	SeedDefaultStatuses(ctx context.Context, tx pgx.Tx, userID string) error
+
+	CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error)
+	ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error)
+	GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error)
 }
 
 type Service struct {

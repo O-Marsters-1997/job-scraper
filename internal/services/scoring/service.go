@@ -94,6 +94,8 @@ type Service struct {
 	profiles     ProfileReader
 	candidates   Reconsiderer
 	extractor    Extractor
+	classifier   RecruiterClassifier
+	companyKinds CompanyKinds
 	tickInterval time.Duration
 }
 
@@ -110,6 +112,7 @@ func NewService(deps Deps) *Service {
 		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
 		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
 	}
 }
 
@@ -209,6 +212,8 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 		return err
 	}
 
+	s.classifyCompany(ctx, job, surviving)
+
 	bk, err := s.loadBank(ctx)
 	if err != nil {
 		return fail(fmt.Errorf("load scoring options: %w", err))
@@ -276,7 +281,7 @@ func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {
 	if cfg.MaxJobAgeDays <= 0 {
 		return false
 	}
-	return job.UpdatedAt.Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
+	return job.EffectiveAge().Before(now.AddDate(0, 0, -cfg.MaxJobAgeDays))
 }
 
 func (s *Service) profileAnswers(ctx context.Context, job dto.Job, byID map[string]dto.ScoringOption, asked map[string]string) (map[string]dto.Answer, error) {

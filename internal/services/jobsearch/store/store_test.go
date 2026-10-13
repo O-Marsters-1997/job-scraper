@@ -28,7 +28,6 @@ var baseJob = dto.Job{
 	URL:         "https://example.com/jobs/1",
 	CompanySlug: "example",
 	Source:      "greenhouse",
-	UpdatedAt:   time.Now(),
 }
 
 func newStore(t *testing.T) (*store.Store, *pgxpool.Pool) {
@@ -64,7 +63,7 @@ func insertJob(t *testing.T, pool *pgxpool.Pool, companyID string, n int, scrape
 	t.Helper()
 	id := fmt.Sprintf("20000000-0000-0000-0000-%012d", n)
 	_, err := pool.Exec(t.Context(),
-		`INSERT INTO jobs (id,title,location,url,company_slug,source,updated_at,scraped_at,description,company_id,closed_at)
+		`INSERT INTO jobs (id,title,location,url,company_slug,source,posted_at,scraped_at,description,company_id,closed_at)
 		 VALUES ($1::uuid,'Role','','https://example.com/'||$1::text,'acme','test',$2::timestamptz,$2::timestamptz,'full description',$3,CASE WHEN $4 THEN $2::timestamptz END)`,
 		id, scrapedAt, companyID, closed)
 	if err != nil {
@@ -304,7 +303,7 @@ func TestPage(t *testing.T) {
 		}
 	})
 
-	t.Run("since days windows on updated_at and composes with the cursor", func(t *testing.T) {
+	t.Run("since days windows on the effective age and composes with the cursor", func(t *testing.T) {
 		st, pool, userID := newUserStore(t)
 		ctx := t.Context()
 		company := insertCompany(t, pool, "acme")
@@ -915,7 +914,7 @@ func verifiedBoardFixture(t *testing.T) boardEnv {
 func (e boardEnv) job(n int) dto.Job {
 	return dto.Job{
 		Title: fmt.Sprintf("Role %d", n), URL: fmt.Sprintf("https://boards.greenhouse.io/poll-co/jobs/%d", n), Source: "greenhouse",
-		CompanySlug: "poll-co", CompanyID: e.companyID, BoardID: e.board.ID, UpdatedAt: time.Now(),
+		CompanySlug: "poll-co", CompanyID: e.companyID, BoardID: e.board.ID,
 	}
 }
 
@@ -1134,25 +1133,25 @@ func TestUpsertCompany(t *testing.T) {
 			name:   "conflict fills in missing ats fields",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, ATSSource: "greenhouse", ATSToken: "acme"},
 		},
 		{
 			name:   "conflict never overwrites an existing ats board",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "lever", ATSToken: "acme-other"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, ATSSource: "greenhouse", ATSToken: "acme"},
 		},
 		{
 			name:   "conflict fills in missing domain and linkedin id",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, Domain: "acme.com", LinkedInCompanyID: "12345"},
 		},
 		{
 			name:   "conflict never overwrites an existing domain or linkedin id",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "other.com", LinkedInCompanyID: "99999"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, Domain: "acme.com", LinkedInCompanyID: "12345"},
 		},
 	}
 	ignore := cmpopts.IgnoreFields(dto.Company{}, "ID", "LastCrawledAt", "FirstSeenAt", "LastCheckedAt")

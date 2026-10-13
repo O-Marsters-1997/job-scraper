@@ -7,9 +7,10 @@ import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSetCompanyKind } from "@/hooks/useCompanies";
 import { useSources } from "@/hooks/useSources";
-import { formatDate } from "@/lib/datetime";
 import { otherListings, sourceLabel } from "@/lib/listings";
+import { postedLabel } from "@/lib/postedLabel";
 import { titleCase } from "@/lib/utils";
 import type {
 	ApplicationWithDetails,
@@ -35,6 +36,7 @@ export function JobHeader(props: {
 }) {
 	const navigate = useNavigate();
 	const sources = useSources();
+	const setKind = useSetCompanyKind();
 	const others = () => otherListings(props.job);
 
 	return (
@@ -122,8 +124,15 @@ export function JobHeader(props: {
 							</Show>
 							<SourceBadge source={props.job.Source} />
 							<span class="font-mono text-xs tabular-nums text-faint">
-								{formatDate(props.job.ScrapedAt)}
+								{postedLabel(props.job).detail}
 							</span>
+							<Show when={postedLabel(props.job).detailRepost}>
+								{(repost) => (
+									<span class="font-mono text-xs tabular-nums text-faint">
+										{repost()}
+									</span>
+								)}
+							</Show>
 						</div>
 					</div>
 
@@ -143,6 +152,10 @@ export function JobHeader(props: {
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
+							onSetCompanyKind={(kind) => {
+								const id = props.job.CompanyID;
+								if (id) setKind.mutate({ id, kind });
+							}}
 						/>
 					</div>
 				</div>

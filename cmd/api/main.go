@@ -95,7 +95,7 @@ func run(ctx context.Context) error {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
 	js := jobsearch.New(pool, q, scoringFacade, proxyQuota, maxTargets)
-	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
+	scoringModule := scoring.New(pool, idm, idm, js, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
 		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
 
 	reg := prometheus.NewRegistry()

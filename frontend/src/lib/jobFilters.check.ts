@@ -36,7 +36,7 @@ assert.ok(normalizeArrangement({} as never) === "unknown");
 const base = {
 	ID: "1",
 	URL: "",
-	UpdatedAt: "",
+	PostedAt: "",
 	ScrapedAt: "",
 	Location: "London",
 	CompanySlug: "acme",
@@ -182,6 +182,37 @@ assert.equal(parseSearch({ fav: "1" }).fav, true);
 assert.equal(parseSearch({ fav: true }).fav, true);
 assert.equal(parseSearch({ fav: "nonsense" }).fav, false);
 assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, fav: true }), 1);
+
+{
+	const kinds = [
+		"agency",
+		"likely_agency",
+		"direct",
+		"likely_direct",
+		"unclassified",
+		undefined,
+	];
+	const posted = kinds.map((CompanyKind, i) => ({
+		...(jobs as object[])[0],
+		ID: String(i),
+		CompanyKind,
+	})) as never[];
+	const ids = (r: unknown[]) => r.map((j) => (j as { ID: string }).ID);
+	assert.deepEqual(
+		ids(applyJobFilters(posted, { ...DEFAULT_FILTERS, poster: "agency" })),
+		["0", "1"],
+	);
+	assert.deepEqual(
+		ids(applyJobFilters(posted, { ...DEFAULT_FILTERS, poster: "direct" })),
+		["2", "3", "4", "5"],
+	);
+	assert.equal(applyJobFilters(posted, DEFAULT_FILTERS).length, 6);
+}
+
+assert.equal(parseSearch({}).poster, "all");
+assert.equal(parseSearch({ poster: "agency" }).poster, "agency");
+assert.equal(parseSearch({ poster: "nonsense" }).poster, "all");
+assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, poster: "agency" }), 1);
 
 assert.equal(parseSearch({ page: "3" }).page, 3);
 assert.equal(parseSearch({ page: 3 }).page, 3);

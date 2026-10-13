@@ -5,21 +5,28 @@ import { FavouriteStar } from "@/components/FavouriteStar";
 import { SourceBadge } from "@/components/SourceBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
-import { formatRelative } from "@/lib/datetime";
+import { formatDate } from "@/lib/datetime";
+import { postedLabel } from "@/lib/postedLabel";
 import { cn, titleCase } from "@/lib/utils";
 import type { JobApplicationSummary } from "@/types/application";
 import { GRADE_LABEL } from "@/types/grade";
 import type { Job } from "@/types/job";
+import {
+	outcomeLabels,
+	type RecruiterContactSummary,
+} from "@/types/recruiterContact";
 import { JobActionsMenu } from "./JobActionsMenu";
 import { SuitabilityScoreValue } from "./SuitabilityScoreValue";
 
 export interface JobTableContext {
 	appsForJobs: () => Record<string, JobApplicationSummary> | undefined;
+	contactSummaries?: () => Record<string, RecruiterContactSummary> | undefined;
 	onTrack: (jobId: string) => void;
 	onDismiss: (job: Job) => void;
 	onGrade: (job: Job) => void;
 	onToggleFavourite: (job: Job) => void;
 	onExcludeCompany: (job: Job) => void;
+	onSetCompanyKind: (job: Job, kind: "agency" | "direct") => void;
 }
 
 // Extend TanStack Table's meta type so cells can read expand state
@@ -113,6 +120,9 @@ export function createJobColumns(
 					>
 						{titleCase(info.getValue() as string)}
 					</span>
+					<Show when={info.row.original.CompanyKind === "likely_agency"}>
+						<Badge variant="outline">Maybe recruiter</Badge>
+					</Show>
 				</div>
 			),
 		},
@@ -194,13 +204,19 @@ export function createJobColumns(
 		},
 		{
 			accessorKey: "ScrapedAt",
-			header: "Scraped",
+			header: "Posted",
 			enableGlobalFilter: false,
-			cell: (info) => (
-				<span class="font-mono text-xs tabular-nums text-faint">
-					{formatRelative(info.getValue() as string)}
-				</span>
-			),
+			cell: (info) => {
+				const label = () => postedLabel(info.row.original);
+				return (
+					<span
+						class="font-mono text-xs tabular-nums text-faint"
+						title={label().listTitle}
+					>
+						{label().list}
+					</span>
+				);
+			},
 		},
 		{
 			id: "status",
@@ -226,6 +242,34 @@ export function createJobColumns(
 				</Show>
 			),
 		},
+		...(ctx.contactSummaries
+			? [
+					{
+						id: "contact",
+						header: "Contact",
+						enableSorting: false,
+						enableGlobalFilter: false,
+						cell: (info) => (
+							<Show
+								when={ctx.contactSummaries?.()?.[info.row.original.ID]}
+								fallback={
+									<span class="text-faint">
+										{ctx.contactSummaries?.() ? "No contact" : "—"}
+									</span>
+								}
+							>
+								{(summary) => (
+									<span class="text-xs text-muted">
+										{summary().count}x ·{" "}
+										{formatDate(`${summary().last_contacted_on}T00:00:00`)} ·{" "}
+										{outcomeLabels[summary().best_outcome]}
+									</span>
+								)}
+							</Show>
+						),
+					} satisfies ColumnDef<Job, unknown>,
+				]
+			: []),
 		{
 			id: "actions",
 			enableSorting: false,
@@ -239,6 +283,9 @@ export function createJobColumns(
 						onGrade={() => ctx.onGrade(info.row.original)}
 						onDismiss={() => ctx.onDismiss(info.row.original)}
 						onExcludeCompany={() => ctx.onExcludeCompany(info.row.original)}
+						onSetCompanyKind={(kind) =>
+							ctx.onSetCompanyKind(info.row.original, kind)
+						}
 					/>
 				</div>
 			),

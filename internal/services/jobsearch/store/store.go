@@ -240,7 +240,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 	}
 	postingID := data.Text(job.ProviderPostingID)
 	fingerprint := pgtype.Text{String: job.ContentFingerprint, Valid: true}
-	updatedAt := pgtype.Timestamptz{Time: job.UpdatedAt, Valid: true}
+	postedAt := data.Timestamptz(job.PostedAt)
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			jobID = match.ID
 			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
 				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
-				UpdatedAt: updatedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				PostedAt: postedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -308,9 +308,17 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			}
 			break
 		}
+		cardDate, err := candidatePostedAt(ctx, queries, job, matchTitle, matchLocation)
+		if err != nil {
+			return dto.Job{}, "", err
+		}
+		if cardDate != nil && (job.PostedAt == nil || cardDate.Before(*job.PostedAt)) {
+			job.PostedAt = cardDate
+			postedAt = data.Timestamptz(cardDate)
+		}
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
-			Source: job.Source, UpdatedAt: updatedAt, Description: job.Description,
+			Source: job.Source, PostedAt: postedAt, Description: job.Description,
 			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
 			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
@@ -332,12 +340,12 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			status = "unchanged"
 			err = queries.UpdateUnchangedCanonicalJob(ctx, sqlc.UpdateUnchangedCanonicalJobParams{
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID,
-				Fingerprint: fingerprint, ID: jobID,
+				Fingerprint: fingerprint, PostedAt: postedAt, ID: jobID,
 			})
 		} else {
 			status = "changed"
 			err = queries.UpdateChangedCanonicalJob(ctx, sqlc.UpdateChangedCanonicalJobParams{
-				Title: job.Title, Location: job.Location, UpdatedAt: updatedAt,
+				Title: job.Title, Location: job.Location, PostedAt: postedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
@@ -372,22 +380,83 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 }
 
 func findMatch(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) (sqlc.FindMatchCandidatesRow, bool, error) {
+	candidates, err := matchingJobs(ctx, queries, job, companyID, matchTitle, matchLocation, trusted)
+	if err != nil || len(candidates) != 1 {
+		return sqlc.FindMatchCandidatesRow{}, false, err
+	}
+	return candidates[0], true, nil
+}
+
+func matchingJobs(ctx context.Context, queries *sqlc.Queries, job dto.Job, companyID pgtype.UUID, matchTitle, matchLocation string, trusted bool) ([]sqlc.FindMatchCandidatesRow, error) {
 	if err := queries.LockCanonicalJob(ctx, "match:"+job.CompanySlug+"|"+matchTitle); err != nil {
-		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("lock match: %w", err)
+		return nil, fmt.Errorf("lock match: %w", err)
 	}
 	candidates, err := queries.FindMatchCandidates(ctx, sqlc.FindMatchCandidatesParams{
 		MatchTitle: pgtype.Text{String: matchTitle, Valid: true}, CompanySlug: job.CompanySlug, CompanyID: companyID,
 	})
 	if err != nil {
-		return sqlc.FindMatchCandidatesRow{}, false, fmt.Errorf("find match candidates: %w", err)
+		return nil, fmt.Errorf("find match candidates: %w", err)
 	}
-	candidates = slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
+	return slices.DeleteFunc(candidates, func(c sqlc.FindMatchCandidatesRow) bool {
 		return (trusted && c.PrimaryBoardID.Valid) || !jobmatch.LocationsCompatible(matchLocation, c.MatchLocation)
-	})
-	if len(candidates) != 1 {
-		return sqlc.FindMatchCandidatesRow{}, false, nil
+	}), nil
+}
+
+func (s *Store) ApplyBoardCards(ctx context.Context, source string, cards []dto.Job) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin board card dates: %w", err)
 	}
-	return candidates[0], true, nil
+	defer func() { _ = tx.Rollback(ctx) }()
+	queries := s.queries.WithTx(tx)
+
+	for _, card := range cards {
+		if card.PostedAt == nil || card.URL == "" {
+			continue
+		}
+		matches, err := matchingJobs(ctx, queries, card, pgtype.UUID{}, jobmatch.Title(card.Title), jobmatch.Location(card.Location), false)
+		if err != nil {
+			return err
+		}
+		switch len(matches) {
+		case 0:
+			normalized, err := NormalizeCandidateURL(card.URL)
+			if err != nil {
+				return err
+			}
+			if err := queries.UpsertBoardCardDate(ctx, sqlc.UpsertBoardCardDateParams{
+				NormalizedUrl: normalized, Source: source, CardTitle: card.Title, CardCompany: card.CompanySlug,
+				CardLocation: card.Location, PostedAt: data.Timestamptz(card.PostedAt),
+			}); err != nil {
+				return fmt.Errorf("upsert board card candidate: %w", err)
+			}
+		case 1:
+			if err := queries.ApplyPostedDate(ctx, sqlc.ApplyPostedDateParams{PostedAt: data.Timestamptz(card.PostedAt), ID: matches[0].ID}); err != nil {
+				return fmt.Errorf("apply board card date: %w", err)
+			}
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit board card dates: %w", err)
+	}
+	return nil
+}
+
+func candidatePostedAt(ctx context.Context, queries *sqlc.Queries, job dto.Job, matchTitle, matchLocation string) (*time.Time, error) {
+	rows, err := queries.ListDatedCandidatesForCompany(ctx, job.CompanySlug)
+	if err != nil {
+		return nil, fmt.Errorf("list dated candidates: %w", err)
+	}
+	var earliest *time.Time
+	for _, row := range rows {
+		if jobmatch.Title(row.CardTitle) != matchTitle || !jobmatch.LocationsCompatible(matchLocation, jobmatch.Location(row.CardLocation)) {
+			continue
+		}
+		if earliest == nil || row.PostedAt.Time.Before(*earliest) {
+			earliest = &row.PostedAt.Time
+		}
+	}
+	return earliest, nil
 }
 
 func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Company, error) {
@@ -398,6 +467,7 @@ func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Com
 		AtsToken:          data.Text(c.ATSToken),
 		Domain:            data.Text(c.Domain),
 		LinkedinCompanyID: data.Text(c.LinkedInCompanyID),
+		Kind:              string(c.Kind),
 	})
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("store.UpsertCompany: %w", err)
@@ -429,6 +499,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		FavouriteOnly: options.FavouriteOnly,
 		NoBoardOnly:   options.NoBoardOnly,
 		Sort:          string(options.Sort),
+		Poster:        string(options.Poster),
 		PageLimit:     options.Limit,
 		PageOffset:    options.Offset,
 	})
@@ -441,7 +512,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		page.Items[i] = toCompanyForUserDTO(sqlc.GetCompanyForUserRow{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, AtsSource: r.AtsSource, AtsToken: r.AtsToken,
 			Domain: r.Domain, LinkedinCompanyID: r.LinkedinCompanyID, LastCrawledAt: r.LastCrawledAt,
-			FirstSeenAt: r.FirstSeenAt, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
+			FirstSeenAt: r.FirstSeenAt, Kind: r.Kind, JobCount: r.JobCount, Tracked: r.Tracked, Favourite: r.Favourite,
 			ReviewState: r.ReviewState, CheckIntervalMinutes: r.CheckIntervalMinutes, LastCheckedAt: r.LastCheckedAt,
 		})
 	}
@@ -712,6 +783,33 @@ func (s *Store) SetCompanyReviewState(ctx context.Context, userID, companyID, st
 		UserID: row.UserID.String(), CompanyID: row.CompanyID.String(),
 		Enabled: row.Enabled, ReviewState: row.ReviewState, CheckIntervalMinutes: int(row.CheckIntervalMinutes),
 	}, nil
+}
+
+func (s *Store) SetCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) error {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return ErrInvalidID
+	}
+	n, err := s.queries.SetCompanyKind(ctx, sqlc.SetCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return fmt.Errorf("store.SetCompanyKind: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return false, ErrInvalidID
+	}
+	n, err := s.queries.SuggestCompanyKind(ctx, sqlc.SuggestCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return false, fmt.Errorf("store.SuggestCompanyKind: %w", err)
+	}
+	return n > 0, nil
 }
 
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
@@ -1142,10 +1240,13 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		id, err := queries.UpsertCandidate(ctx, sqlc.UpsertCandidateParams{
 			NormalizedUrl: normalized, Source: target.Source,
 			CardTitle: card.Title, CardCompany: card.CompanySlug, CardLocation: card.Location,
-			Card: payload,
+			Card: payload, PostedAt: data.Timestamptz(card.PostedAt),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("upsert candidate: %w", err)
+		}
+		if err := applySighting(ctx, queries, normalized, card.PostedAt); err != nil {
+			return nil, err
 		}
 		if err := queries.RecordCandidateDiscovery(ctx, sqlc.RecordCandidateDiscoveryParams{
 			CandidateID: id, SourceTargetID: targetID,
@@ -1158,6 +1259,23 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		return nil, fmt.Errorf("commit candidate save: %w", err)
 	}
 	return out, nil
+}
+
+func applySighting(ctx context.Context, queries *sqlc.Queries, normalizedURL string, postedAt *time.Time) error {
+	if postedAt == nil {
+		return nil
+	}
+	jobID, err := queries.FindJobIDByURL(ctx, normalizedURL)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("find job by url: %w", err)
+	}
+	if err := queries.ApplyPostedDate(ctx, sqlc.ApplyPostedDateParams{PostedAt: data.Timestamptz(postedAt), ID: jobID}); err != nil {
+		return fmt.Errorf("apply sighting date: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit int) ([]sourcetargets.Candidate, error) {
@@ -1184,7 +1302,7 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 	out := make([]sourcetargets.Candidate, 0, len(rows))
 	for _, row := range rows {
 		card := dto.Job{URL: row.NormalizedUrl, Title: row.CardTitle, CompanySlug: row.CardCompany,
-			Location: row.CardLocation, Source: row.Source}
+			Location: row.CardLocation, Source: row.Source, PostedAt: data.TimePtr(row.PostedAt)}
 		if row.Card != nil {
 			if err := json.Unmarshal(row.Card, &card); err != nil {
 				return nil, fmt.Errorf("unmarshal candidate card %s: %w", row.ID, err)

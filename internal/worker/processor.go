@@ -95,6 +95,9 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 		if err != nil {
 			return err
 		}
+		if job.PostedAt == nil {
+			job.PostedAt = task.Card.PostedAt
+		}
 		if err := p.exporter.Export(ctx, job); err != nil {
 			return err
 		}
@@ -278,7 +281,7 @@ func (p *Processor) discoveryCompanyID(ctx context.Context, task queue.Task, nam
 	if !errors.Is(err, data.ErrNotFound) {
 		return "", err
 	}
-	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Company(name), Name: name})
+	company, err := p.js.Boards().UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug.Company(name), Name: name, Kind: dto.KindDirect})
 	return company.ID, err
 }
 

@@ -58,7 +58,7 @@ func (q *Queries) DeleteExpiredCandidates(ctx context.Context) error {
 }
 
 const listCandidatesForUser = `-- name: ListCandidatesForUser :many
-SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.source
+SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.posted_at, c.source
 FROM job_candidates c
 WHERE c.id > $2 AND c.expires_at > NOW()
   AND EXISTS (
@@ -83,6 +83,7 @@ type ListCandidatesForUserRow struct {
 	CardCompany   string
 	CardLocation  string
 	Card          []byte
+	PostedAt      pgtype.Timestamptz
 	Source        string
 }
 
@@ -102,8 +103,43 @@ func (q *Queries) ListCandidatesForUser(ctx context.Context, arg ListCandidatesF
 			&i.CardCompany,
 			&i.CardLocation,
 			&i.Card,
+			&i.PostedAt,
 			&i.Source,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDatedCandidatesForCompany = `-- name: ListDatedCandidatesForCompany :many
+SELECT card_title, card_location, posted_at
+FROM job_candidates
+WHERE card_company = $1 AND posted_at IS NOT NULL AND expires_at > NOW()
+ORDER BY posted_at
+LIMIT 200
+`
+
+type ListDatedCandidatesForCompanyRow struct {
+	CardTitle    string
+	CardLocation string
+	PostedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) ListDatedCandidatesForCompany(ctx context.Context, cardCompany string) ([]ListDatedCandidatesForCompanyRow, error) {
+	rows, err := q.db.Query(ctx, listDatedCandidatesForCompany, cardCompany)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDatedCandidatesForCompanyRow
+	for rows.Next() {
+		var i ListDatedCandidatesForCompanyRow
+		if err := rows.Scan(&i.CardTitle, &i.CardLocation, &i.PostedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -139,15 +175,44 @@ func (q *Queries) RecordCandidateDiscovery(ctx context.Context, arg RecordCandid
 	return err
 }
 
-const upsertCandidate = `-- name: UpsertCandidate :one
-INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, card)
+const upsertBoardCardDate = `-- name: UpsertBoardCardDate :exec
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, posted_at)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (normalized_url) DO UPDATE SET
+    posted_at = LEAST(job_candidates.posted_at, EXCLUDED.posted_at)
+`
+
+type UpsertBoardCardDateParams struct {
+	NormalizedUrl string
+	Source        string
+	CardTitle     string
+	CardCompany   string
+	CardLocation  string
+	PostedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertBoardCardDate(ctx context.Context, arg UpsertBoardCardDateParams) error {
+	_, err := q.db.Exec(ctx, upsertBoardCardDate,
+		arg.NormalizedUrl,
+		arg.Source,
+		arg.CardTitle,
+		arg.CardCompany,
+		arg.CardLocation,
+		arg.PostedAt,
+	)
+	return err
+}
+
+const upsertCandidate = `-- name: UpsertCandidate :one
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, card, posted_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (normalized_url) DO UPDATE SET
     source = EXCLUDED.source,
     card_title = EXCLUDED.card_title,
     card_company = EXCLUDED.card_company,
     card_location = EXCLUDED.card_location,
     card = EXCLUDED.card,
+    posted_at = LEAST(job_candidates.posted_at, EXCLUDED.posted_at),
     last_seen_at = NOW(),
     expires_at = NOW() + INTERVAL '60 days'
 RETURNING id
@@ -160,6 +225,7 @@ type UpsertCandidateParams struct {
 	CardCompany   string
 	CardLocation  string
 	Card          []byte
+	PostedAt      pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (pgtype.UUID, error) {
@@ -170,6 +236,7 @@ func (q *Queries) UpsertCandidate(ctx context.Context, arg UpsertCandidateParams
 		arg.CardCompany,
 		arg.CardLocation,
 		arg.Card,
+		arg.PostedAt,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)

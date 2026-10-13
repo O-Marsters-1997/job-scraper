@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { companyKindSchema } from "./company";
 import { GRADES } from "./grade";
 
 export const BANDS = ["great", "good", "fair", "poor"] as const;
@@ -43,7 +44,9 @@ export const jobSchema = z.object({
 	CompanySlug: z.string(),
 	CompanyID: z.string().optional(),
 	Source: z.string(),
-	UpdatedAt: z.string(),
+	PostedAt: z.string().nullable(),
+	PostedAfter: z.string().nullable().optional(),
+	RepostedAt: z.string().nullable().optional(),
 	ScrapedAt: z.string(),
 	FirstDiscoveredAt: z.string().optional(),
 	DaysInOffice: z.number().nullable().optional(),
@@ -54,6 +57,7 @@ export const jobSchema = z.object({
 	Grade: z.enum(GRADES).or(z.literal("")).optional(),
 	Seen: z.boolean().optional(),
 	CompanyFavourite: z.boolean().optional(),
+	CompanyKind: companyKindSchema.optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	Listings: z.array(jobListingSchema).nullable().optional(),
 	// Optional rich fields — populated in demo mode; absent from the live backend

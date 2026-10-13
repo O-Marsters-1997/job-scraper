@@ -147,7 +147,7 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error)
 			if err != nil {
 				return sources.BoardResult{}, company, err
 			}
-			if job != nil && s.now().Sub(job.UpdatedAt) > maxAge {
+			if job != nil && job.PostedAt != nil && s.now().Sub(*job.PostedAt) > maxAge {
 				job = nil
 			}
 		}
@@ -313,7 +313,7 @@ func parseJobPosting(body []byte, id string) (dto.Job, error) {
 		CompanySlug:       slug.Company(p.HiringOrg.Name),
 		ProviderPostingID: id,
 		Source:            name,
-		UpdatedAt:         posted,
+		PostedAt:          &posted,
 		Description:       strings.Join([]string{p.Responsibilities, p.Description, p.Skills}, "\n"),
 	}, nil
 }

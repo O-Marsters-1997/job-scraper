@@ -51,6 +51,10 @@ function mockBand(score: number): Band {
 	return score >= 45 ? "fair" : "poor";
 }
 
+function hoursBefore(iso: string, hours: number): string {
+	return new Date(new Date(iso).getTime() - hours * 3600 * 1000).toISOString();
+}
+
 const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 	const company = faker.helpers.arrayElement(COMPANIES);
 	const location = faker.helpers.arrayElement(LOCATIONS);
@@ -71,7 +75,9 @@ const jobs: Job[] = Array.from({ length: 248 }, (_, i) => {
 		URL: faker.internet.url(),
 		CompanySlug: slugify(company),
 		Source: faker.helpers.arrayElement(SOURCES),
-		UpdatedAt: scrapedAt,
+		PostedAt: i % 4 === 3 ? null : hoursBefore(scrapedAt, 6),
+		PostedAfter: i % 8 === 3 ? hoursBefore(scrapedAt, 5) : null,
+		RepostedAt: i % 7 === 0 ? hoursBefore(scrapedAt, 1) : null,
 		ScrapedAt: scrapedAt,
 		FirstDiscoveredAt: scrapedAt,
 		DaysInOffice: daysInOffice,
@@ -127,6 +133,7 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		ATSSource: hasBoard ? ATS_SOURCES[i % ATS_SOURCES.length]! : "",
 		ATSToken: hasBoard ? slug : "",
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
+		Kind: "unclassified",
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
 		Tracked: tracked,
 		ReviewState: isNew ? "new" : tracked ? "kept" : "",
