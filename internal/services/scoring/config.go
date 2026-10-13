@@ -102,7 +102,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 func (s *Service) textPicks(ctx context.Context, userID, text string, existing dto.Preferences, b bank) ([]dto.Pick, string, error) {
 	hash := hashText(text)
 	if hash == existing.PreferenceTextHash {
-		return existingTextPicks(existing.Picks), hash, nil
+		return existingTextPicks(existing.Picks, b), hash, nil
 	}
 	if text == "" {
 		return nil, hash, nil
@@ -126,10 +126,10 @@ func (s *Service) textPicks(ctx context.Context, userID, text string, existing d
 	return picks, hash, nil
 }
 
-func existingTextPicks(picks []dto.Pick) []dto.Pick {
+func existingTextPicks(picks []dto.Pick, b bank) []dto.Pick {
 	var out []dto.Pick
 	for _, p := range picks {
-		if p.Source == "text" {
+		if opt, ok := b.byID[p.OptionID]; p.Source == "text" && ok && opt.RetiredAt == nil {
 			out = append(out, p)
 		}
 	}
