@@ -55,6 +55,8 @@ export type PageEditor = {
 	onInput: (slotId: string, text: string) => void;
 	onFocus: (slotId: string) => void;
 	onBlur: (slotId: string) => void;
+	onEnter?: ((slotId: string) => void) | undefined;
+	onBackspaceEmpty?: ((slotId: string) => boolean) | undefined;
 	onEditSkills?: (() => void) | undefined;
 };
 
@@ -177,6 +179,16 @@ function measureFit(el: HTMLElement): LineFit {
 	};
 }
 
+function caretAtEnd(el: HTMLElement): boolean {
+	const sel = window.getSelection();
+	if (!sel?.isCollapsed || !sel.focusNode || !el.contains(sel.focusNode))
+		return false;
+	const tail = document.createRange();
+	tail.selectNodeContents(el);
+	tail.setStart(sel.focusNode, sel.focusOffset);
+	return tail.toString() === "";
+}
+
 function EditableLine(props: {
 	slotId: string;
 	editor: PageEditor;
@@ -243,7 +255,17 @@ function EditableLine(props: {
 					document.execCommand("insertText", false, singleLine(pasted));
 				}}
 				onKeyDown={(e) => {
-					if (e.key === "Enter") e.preventDefault();
+					if (e.key === "Enter") {
+						e.preventDefault();
+						if (caretAtEnd(e.currentTarget))
+							props.editor.onEnter?.(props.slotId);
+					}
+					if (
+						e.key === "Backspace" &&
+						!e.currentTarget.textContent &&
+						props.editor.onBackspaceEmpty?.(props.slotId)
+					)
+						e.preventDefault();
 					if (e.key === "Escape") e.currentTarget.blur();
 				}}
 				onFocus={() => props.editor.onFocus(props.slotId)}

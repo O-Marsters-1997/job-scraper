@@ -6,14 +6,15 @@ import {
 	onCleanup,
 	onMount,
 } from "solid-js";
-import { createStore, unwrap } from "solid-js/store";
+import { createStore, produce, reconcile, unwrap } from "solid-js/store";
 import { z } from "zod";
 import { keys } from "@/api/keys";
 import { saveDraftSlots } from "@/api/tailoring";
 import { blockText } from "@/lib/docLayout";
+import { ADDED_PREFIX, isAddedSlot, slotsToSave } from "@/lib/draftSlots";
 import { createSaveLoop, type SaveStatus } from "@/lib/saveLoop";
 import { reviewFindings } from "@/lib/tailoring";
-import type { Draft, DraftLayout } from "@/types/tailoring";
+import type { Draft, DraftLayout, LayoutBlock } from "@/types/tailoring";
 
 export const PROFILE_SLOT = "profile";
 
@@ -44,11 +45,16 @@ export function createDraftEditor(
 ) {
 	const queryClient = useQueryClient();
 	const id = draft().id;
-	const blocks = layout?.blocks ?? [];
-	const slotBlocks = blocks.filter((b) => b.slotId && !b.section);
-	const slotIds = slotBlocks.map((b) => b.slotId);
+	const [blocks, setBlocks] = createSignal<LayoutBlock[]>(layout?.blocks ?? []);
+	const isSlotBlock = (b: LayoutBlock) => b.slotId && !b.section;
+	const slotIds = () =>
+		blocks()
+			.filter(isSlotBlock)
+			.map((b) => b.slotId);
 	const original: Record<string, string> = Object.fromEntries(
-		slotBlocks.map((b) => [b.slotId, blockText(b)]),
+		(layout?.blocks ?? [])
+			.filter(isSlotBlock)
+			.map((b) => [b.slotId, blockText(b)]),
 	);
 
 	const [texts, setTexts] = createStore<Record<string, string>>({
@@ -57,6 +63,7 @@ export function createDraftEditor(
 	const [saved, setSaved] = createStore<Record<string, string>>({
 		...original,
 	});
+	const [removed, setRemoved] = createSignal<string[]>([]);
 	const [status, setStatus] = createSignal<SaveStatus>("saved");
 	const [googleSaved, setGoogleSaved] = createSignal(false);
 	const [resolved, setResolvedMap] = createSignal(readResolved(id));
@@ -69,17 +76,26 @@ export function createDraftEditor(
 			});
 		return out;
 	});
-	const label = (slotId: string) => labels()[slotId] ?? "Line";
+	const label = (slotId: string) =>
+		labels()[slotId] ?? (isAddedSlot(slotId) ? "New bullet" : "Line");
 
 	const text = (slotId: string) => texts[slotId] ?? "";
 
 	const send = async () => {
 		const sent = { ...unwrap(texts) };
-		const slots = slotIds
-			.map((slotId) => ({ slotId, text: (sent[slotId] ?? "").trim() }))
-			.filter((s) => s.text !== "");
+		const gone = removed();
+		const slots = slotsToSave(slotIds(), sent, saved, gone);
 		const result = await saveDraftSlots(id, slots);
-		setSaved(Object.fromEntries(slots.map((s) => [s.slotId, sent[s.slotId]])));
+		setSaved(
+			reconcile(
+				Object.fromEntries(
+					slots
+						.filter((s) => !s.remove)
+						.map((s) => [s.slotId, sent[s.slotId] ?? ""]),
+				),
+			),
+		);
+		setRemoved((now) => now.filter((r) => !gone.includes(r)));
 		setGoogleSaved(true);
 		queryClient.setQueryData(keys.tailoring.draft(id), result);
 	};
@@ -107,7 +123,43 @@ export function createDraftEditor(
 		loop.schedule();
 	};
 
-	const dirty = () => slotIds.some((s) => text(s) !== saved[s]);
+	const addBullet = (afterId: string): string | undefined => {
+		const list = blocks();
+		const at = list.findIndex((b) => b.slotId === afterId);
+		const anchor = list[at];
+		if (!anchor?.bullet || anchor.section || afterId === PROFILE_SLOT) return;
+		if (text(afterId).trim() === "") return;
+		const slotId = `${ADDED_PREFIX}${crypto.randomUUID()}`;
+		const lead = anchor.runs[0];
+		const block: LayoutBlock = {
+			...anchor,
+			slotId,
+			runs: lead ? [{ ...lead, text: " " }] : [],
+		};
+		setTexts(slotId, "");
+		setBlocks([...list.slice(0, at + 1), block, ...list.slice(at + 1)]);
+		return slotId;
+	};
+
+	const removeBullet = (slotId: string): string | undefined => {
+		if (!isAddedSlot(slotId)) return;
+		const list = blocks();
+		const at = list.findIndex((b) => b.slotId === slotId);
+		const before = list.slice(0, at).filter(isSlotBlock).at(-1);
+		if (at < 0 || !before) return;
+		setBlocks(list.filter((_, i) => i !== at));
+		setTexts(
+			produce((t) => {
+				delete t[slotId];
+			}),
+		);
+		if (slotId in saved) setRemoved((now) => [...now, slotId]);
+		loop.schedule();
+		return before.slotId;
+	};
+
+	const dirty = () =>
+		removed().length > 0 || slotIds().some((s) => text(s) !== (saved[s] ?? ""));
 	const pageCountFinding = () =>
 		draft().findings.find((f) => f.check === "page_count");
 	const googlePages = (): number | undefined => {
@@ -124,7 +176,7 @@ export function createDraftEditor(
 			? []
 			: reviewFindings(draft().findings).filter((f) => f.slotId === slotId);
 	const cardKeys = (hasCard: (slotId: string) => boolean) =>
-		slotIds.filter((slotId) => hasCard(slotId) || findingsFor(slotId).length);
+		slotIds().filter((slotId) => hasCard(slotId) || findingsFor(slotId).length);
 
 	const setResolved = (key: string, value: boolean) => {
 		const next = { ...resolved(), [key]: value };
@@ -136,11 +188,17 @@ export function createDraftEditor(
 
 	return {
 		slotIds,
+		blocks,
+		addBullet,
+		removeBullet,
 		label,
 		text,
 		original: (slotId: string) => original[slotId] ?? "",
 		setText,
-		undo: (slotId: string) => setText(slotId, original[slotId] ?? ""),
+		undo: (slotId: string) => {
+			if (!isAddedSlot(slotId)) setText(slotId, original[slotId] ?? "");
+			else if (removeBullet(slotId) === undefined) setText(slotId, "");
+		},
 		edited: (slotId: string) => text(slotId) !== original[slotId],
 		findingsFor,
 		cardKeys,

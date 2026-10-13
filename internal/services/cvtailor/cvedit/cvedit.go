@@ -95,8 +95,40 @@ type Bullet struct {
 }
 
 type PositionEdit struct {
-	PositionID string   `json:"positionId"`
-	Bullets    []Bullet `json:"bullets"`
+	PositionID string        `json:"positionId"`
+	Bullets    []Bullet      `json:"bullets"`
+	Added      []AddedBullet `json:"added,omitempty"`
+}
+
+type AddedBullet struct {
+	SlotID string `json:"slotId"`
+	After  string `json:"after"`
+	Text   string `json:"text"`
+}
+
+type Line struct {
+	SlotID         string
+	Text           string
+	AchievementIDs []string
+	Added          bool
+}
+
+func (pe PositionEdit) Lines() []Line {
+	out := make([]Line, 0, len(pe.Bullets)+len(pe.Added))
+	var follow func(id string)
+	follow = func(id string) {
+		for _, a := range pe.Added {
+			if a.After == id {
+				out = append(out, Line{SlotID: a.SlotID, Text: a.Text, Added: true})
+				follow(a.SlotID)
+			}
+		}
+	}
+	for _, b := range pe.Bullets {
+		out = append(out, Line{SlotID: b.SlotID, Text: b.Text, AchievementIDs: b.AchievementIDs})
+		follow(b.SlotID)
+	}
+	return out
 }
 
 // SkillGroup is one Skill Line: its label ("" when the base CV has none) and

@@ -78,14 +78,14 @@ func baseSlotsByStart(pl plan, edits cvedit.EditSet) map[int]string {
 	for _, slot := range pl.structure.Slots {
 		startOf[slot.ID] = slot.StartIndex
 	}
-	bulletsOf := make(map[string][]cvedit.Bullet, len(edits.Positions))
+	linesOf := make(map[string][]cvedit.Line, len(edits.Positions))
 	for _, pe := range edits.Positions {
-		bulletsOf[pe.PositionID] = pe.Bullets
+		linesOf[pe.PositionID] = pe.Lines()
 	}
 	for _, p := range pl.positions {
 		for i, docSlot := range p.slotIDs {
-			if bullets := bulletsOf[p.ID]; i < len(bullets) && bullets[i].SlotID != "" {
-				out[startOf[docSlot]] = bullets[i].SlotID
+			if lines := linesOf[p.ID]; i < len(lines) && lines[i].SlotID != "" {
+				out[startOf[docSlot]] = lines[i].SlotID
 			}
 		}
 	}

@@ -129,7 +129,7 @@ export function DraftEditor(props: {
 
 	const activeSlot = () => {
 		const key = active();
-		return key && ed.slotIds.includes(key) ? key : undefined;
+		return key && ed.slotIds().includes(key) ? key : undefined;
 	};
 	const wandSlot = () => {
 		const key = activeSlot();
@@ -142,15 +142,22 @@ export function DraftEditor(props: {
 		if (key !== active()) setAskSlot(undefined);
 		setActive(key);
 	};
-	const focusLine = (slotId: string) => {
+	const focusLine = (slotId: string, atEnd = false) => {
 		const root = stage();
-		queueMicrotask(() =>
-			root
-				?.querySelector<HTMLElement>(
-					`[data-slot-id="${slotId}"] [role="textbox"]`,
-				)
-				?.focus({ preventScroll: true }),
-		);
+		queueMicrotask(() => {
+			const line = root?.querySelector<HTMLElement>(
+				`[data-slot-id="${slotId}"] [role="textbox"]`,
+			);
+			line?.focus({ preventScroll: true });
+			if (line && atEnd) {
+				const caret = document.createRange();
+				caret.selectNodeContents(line);
+				caret.collapse(false);
+				const sel = window.getSelection();
+				sel?.removeAllRanges();
+				sel?.addRange(caret);
+			}
+		});
 	};
 	const fitSlot = (slotId: string) => {
 		activate(slotId);
@@ -185,6 +192,16 @@ export function DraftEditor(props: {
 		onInput: ed.setText,
 		onFocus: activate,
 		onBlur: () => void ed.flush(),
+		onEnter: (slotId) => {
+			const added = ed.addBullet(slotId);
+			if (added) focusLine(added);
+		},
+		onBackspaceEmpty: (slotId) => {
+			const previous = ed.removeBullet(slotId);
+			if (previous === undefined) return false;
+			focusLine(previous, true);
+			return true;
+		},
 		get onEditSkills() {
 			return editable() && props.draft.skillsEditable
 				? () => void setSkillsOpen(true)
@@ -395,7 +412,7 @@ export function DraftEditor(props: {
 										}
 									>
 										<DocPage
-											layout={layout()}
+											layout={{ ...layout(), blocks: ed.blocks() }}
 											editor={pageEditor}
 											onMetrics={setMetrics}
 											onMeasurer={(fn) => {

@@ -191,6 +191,8 @@ type DraftJobQuery struct {
 type SlotEdit struct {
 	SlotID string `json:"slotId"`
 	Text   string `json:"text"`
+	After  string `json:"after,omitempty"`
+	Remove bool   `json:"remove,omitempty"`
 }
 
 // DraftSlotsInput carries the bullets and, when Skills is set, the full

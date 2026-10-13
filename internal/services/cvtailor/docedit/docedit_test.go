@@ -196,6 +196,21 @@ func TestRequests(t *testing.T) {
 		}
 	})
 
+	t.Run("added bullets become paragraphs after the position's last slot", func(t *testing.T) {
+		edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: "p1",
+			Bullets:    []cvedit.Bullet{{Text: "a", SlotID: "s0"}, {Text: "b", SlotID: "s1"}},
+			Added:      []cvedit.AddedBullet{{SlotID: "new-1", After: "s0", Text: "mid"}, {SlotID: "new-2", After: "new-1", Text: "end"}},
+		}}}
+
+		got := apply(t, doc.text, requests(t, doc, docedit.PositionSlots{"p1": {"s0", "s1"}}, edits))
+
+		want := string(doc.text[:145]) + "a\nmid\nend\nb\n" + string(doc.text[267:])
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("Requests() applied doc mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("missing profile and skills sections produce no requests", func(t *testing.T) {
 		doc := loadFixture(t, "no_profile_skills.json")
 		profile := "New profile."

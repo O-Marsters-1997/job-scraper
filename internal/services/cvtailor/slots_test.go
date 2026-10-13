@@ -75,6 +75,55 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("an added bullet is written after its anchor and kept in the provenance and content", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		svc := e.editing(t, e.drive)
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+
+		got := e.saved(t, svc, id, dto.SlotEdit{SlotID: "new-a", After: slot, Text: " Mentored two engineers "})
+
+		if inserted := insertedText(t, e.drive); !slices.Contains(inserted, "Mentored two engineers") {
+			t.Errorf("inserted text = %q, want it to include the added bullet", inserted)
+		}
+		bullets := got.Provenance.Positions[0].Bullets
+		if len(bullets) != 2 || bullets[1].SlotID != "new-a" {
+			t.Fatalf("SaveDraftSlots().Provenance bullets = %+v, want the added bullet second", bullets)
+		}
+		if texts := got.Content.Positions[0].Bullets; len(texts) != 2 || texts[1].Text != "Mentored two engineers" {
+			t.Errorf("SaveDraftSlots().Content bullets = %+v, want the added text second", texts)
+		}
+	})
+
+	t.Run("removing an added bullet drops it and re-saving the removal is harmless", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		svc := e.editing(t, e.drive)
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+		e.saved(t, svc, id, dto.SlotEdit{SlotID: "new-a", After: slot, Text: "One"}, dto.SlotEdit{SlotID: "new-b", After: "new-a", Text: "Two"})
+
+		e.saved(t, svc, id, dto.SlotEdit{SlotID: "new-a", Remove: true})
+		got := e.saved(t, svc, id, dto.SlotEdit{SlotID: "new-a", Remove: true})
+
+		bullets := got.Provenance.Positions[0].Bullets
+		if len(bullets) != 2 || bullets[1].SlotID != "new-b" {
+			t.Errorf("SaveDraftSlots().Provenance bullets = %+v, want only new-b added after the base bullet", bullets)
+		}
+	})
+
+	t.Run("rejects removing a base bullet and anchoring on an unknown slot", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+		for _, edit := range []dto.SlotEdit{{SlotID: slot, Remove: true}, {SlotID: "new-a", After: "nope", Text: "x"}} {
+			_, err := e.editing(t, e.drive).SaveDraftSlots(t.Context(), userID, dto.DraftSlotsInput{ID: id, Slots: []dto.SlotEdit{edit}})
+
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("SaveDraftSlots(%+v) error = %v, want an invalid error", edit, err)
+			}
+		}
+	})
+
 	t.Run("saves an ungrounded edit and reports its finding", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
