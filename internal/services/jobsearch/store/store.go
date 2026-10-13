@@ -398,6 +398,7 @@ func (s *Store) UpsertCompany(ctx context.Context, c dto.CompanyUpsert) (dto.Com
 		AtsToken:          data.Text(c.ATSToken),
 		Domain:            data.Text(c.Domain),
 		LinkedinCompanyID: data.Text(c.LinkedInCompanyID),
+		Kind:              string(c.Kind),
 	})
 	if err != nil {
 		return dto.Company{}, fmt.Errorf("store.UpsertCompany: %w", err)
