@@ -1,6 +1,7 @@
 package identity_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -110,15 +111,15 @@ func TestResetPassword(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		session, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(time.Hour))
-		if err != nil {
+		tokenHash := sha256.Sum256([]byte("carl"))
+		if _, err := st.CreateSession(t.Context(), user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
 		if err := m.ResetPassword(t.Context(), "carl", "new-password"); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
-			t.Errorf("GetSession(carl) err = %v, want ErrNotFound", err)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash[:]); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSessionByTokenHash(carl) err = %v, want ErrNotFound", err)
 		}
 	})
 

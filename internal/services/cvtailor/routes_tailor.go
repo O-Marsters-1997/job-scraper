@@ -7,12 +7,15 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
+
+const suggestWriteWindow = 30 * time.Second
 
 func (m *Module) tailorRoutes(r chi.Router) {
 	r.Route("/tailoring", func(r chi.Router) {
@@ -100,9 +103,12 @@ func (m *Module) suggest() http.HandlerFunc {
 		func(w http.ResponseWriter, _ *http.Request, events iter.Seq[SuggestEvent]) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
-			w.WriteHeader(http.StatusOK)
 			rc := http.NewResponseController(w)
+			_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
+			w.WriteHeader(http.StatusOK)
+			_ = rc.Flush()
 			for ev := range events {
+				_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
 				switch {
 				case ev.Err != nil:
 					writeEvent(w, "error", map[string]string{"message": ev.Err.Error()})
@@ -111,7 +117,9 @@ func (m *Module) suggest() http.HandlerFunc {
 				default:
 					writeEvent(w, "delta", map[string]string{"text": ev.Delta})
 				}
-				_ = rc.Flush()
+				if rc.Flush() != nil {
+					return
+				}
 			}
 		},
 	)

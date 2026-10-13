@@ -107,18 +107,18 @@ func (f *FakeStore) DeleteUserSessionsTx(_ context.Context, _ pgx.Tx, userID str
 
 func (f *FakeStore) Begin(context.Context) (pgx.Tx, error) { return fakeTx{}, nil }
 
-func (f *FakeStore) CreateSession(_ context.Context, userID string, expiresAt time.Time) (dto.Session, error) {
+func (f *FakeStore) CreateSession(_ context.Context, userID string, tokenHash []byte, expiresAt time.Time) (dto.Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s := dto.Session{ID: fmt.Sprintf("session-%d", len(f.sessions)+1), UserID: userID, ExpiresAt: expiresAt}
-	f.sessions[s.ID] = s
+	s := dto.Session{ID: fmt.Sprintf("session-%x", tokenHash), UserID: userID, ExpiresAt: expiresAt}
+	f.sessions[string(tokenHash)] = s
 	return s, nil
 }
 
-func (f *FakeStore) GetSession(_ context.Context, id string) (dto.Session, error) {
+func (f *FakeStore) GetSessionByTokenHash(_ context.Context, tokenHash []byte) (dto.Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	s, ok := f.sessions[id]
+	s, ok := f.sessions[string(tokenHash)]
 	if !ok || !s.ExpiresAt.After(time.Now()) {
 		return dto.Session{}, data.ErrNotFound
 	}
@@ -130,7 +130,11 @@ func (f *FakeStore) GetSession(_ context.Context, id string) (dto.Session, error
 func (f *FakeStore) DeleteSession(_ context.Context, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.sessions, id)
+	for hash, s := range f.sessions {
+		if s.ID == id {
+			delete(f.sessions, hash)
+		}
+	}
 	return nil
 }
 

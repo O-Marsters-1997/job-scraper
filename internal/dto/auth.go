@@ -20,6 +20,7 @@ type Session struct {
 	Username  string
 	Role      string
 	ExpiresAt time.Time
+	Token     string `json:"-"`
 }
 
 type LoginInput struct {

@@ -5,6 +5,7 @@ package identity
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,6 +47,8 @@ type Deps struct {
 	Cipher       *tokencrypt.Cipher
 	KeyUsage     KeyUsageFetcher
 	Now          func() time.Time
+
+	SessionSecret []byte
 }
 
 type Module struct {
@@ -65,7 +68,10 @@ func Build(deps Deps) *Module {
 
 // New wires the full identity context, including the Google Link and AI
 // credentials.
-func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+func New(pool *pgxpool.Pool, seeder StatusSeeder, sessionSecret, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+	if sessionSecret == "" {
+		return nil, errors.New("identity.New: session secret is empty")
+	}
 	credCipher, err := tokencrypt.FromEnv("AI_CREDENTIAL_ENC_KEY")
 	if err != nil {
 		return nil, fmt.Errorf("identity.New: %w", err)
@@ -76,10 +82,11 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, googleClientID, googleClientSe
 	}
 	st := store.New(pool)
 	return Build(Deps{
-		Store:        st,
-		Seeder:       seeder,
-		GoogleClient: google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
-		Cipher:       credCipher,
+		Store:         st,
+		Seeder:        seeder,
+		GoogleClient:  google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
+		Cipher:        credCipher,
+		SessionSecret: []byte(sessionSecret),
 	}), nil
 }
 

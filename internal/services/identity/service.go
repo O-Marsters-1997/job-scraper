@@ -25,8 +25,8 @@ type Store interface {
 	CreateUser(ctx context.Context, username, passwordHash, email string) (dto.User, error)
 	CreateUserTx(ctx context.Context, tx pgx.Tx, username, passwordHash, email string) (dto.User, error)
 	Begin(ctx context.Context) (pgx.Tx, error)
-	CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error)
-	GetSession(ctx context.Context, id string) (dto.Session, error)
+	CreateSession(ctx context.Context, userID string, tokenHash []byte, expiresAt time.Time) (dto.Session, error)
+	GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (dto.Session, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	SetRole(ctx context.Context, username, role string) error
@@ -52,6 +52,8 @@ type Service struct {
 	cipher *tokencrypt.Cipher
 	google googleClient
 
+	sessionSecret []byte
+
 	keyUsage KeyUsageFetcher
 	now      func() time.Time
 	usage    aiUsageCache
@@ -62,6 +64,7 @@ func NewService(deps Deps) *Service {
 	s := &Service{
 		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
 		keyUsage: deps.KeyUsage, now: deps.Now,
+		sessionSecret: deps.SessionSecret,
 	}
 	if s.keyUsage == nil {
 		s.keyUsage = newHTTPKeyUsage()
@@ -103,7 +106,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (dto.Ses
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return dto.Session{}, dto.User{}, apperr.Unauthorized("invalid credentials")
 	}
-	session, err := s.store.CreateSession(ctx, user.ID, s.now().Add(sessionTTL))
+	session, err := s.startSession(ctx, user.ID)
 	return session, user, err
 }
 
@@ -182,8 +185,21 @@ func (s *Service) Signup(ctx context.Context, username, password, email string) 
 		return dto.Session{}, dto.User{}, err
 	}
 
-	session, err := s.store.CreateSession(ctx, user.ID, s.now().Add(sessionTTL))
+	session, err := s.startSession(ctx, user.ID)
 	return session, user, err
+}
+
+func (s *Service) startSession(ctx context.Context, userID string) (dto.Session, error) {
+	token, err := newSessionToken()
+	if err != nil {
+		return dto.Session{}, err
+	}
+	session, err := s.store.CreateSession(ctx, userID, hashSessionToken(token), s.now().Add(sessionTTL))
+	if err != nil {
+		return dto.Session{}, err
+	}
+	session.Token = token
+	return session, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sessionID string) error {
