@@ -24,6 +24,7 @@ type attemptLimiter struct {
 	every   time.Duration
 	burst   float64
 	buckets map[string]*bucket
+	sweptAt time.Time
 }
 
 func newAttemptLimiter(now func() time.Time, every time.Duration, burst int) *attemptLimiter {
@@ -35,8 +36,9 @@ func (l *attemptLimiter) Allow(key string) bool {
 	defer l.mu.Unlock()
 
 	now := l.now()
-	if len(l.buckets) >= limiterSweepAt {
+	if len(l.buckets) >= limiterSweepAt && now.Sub(l.sweptAt) >= l.every {
 		l.sweep(now)
+		l.sweptAt = now
 	}
 	b, ok := l.buckets[key]
 	if !ok {
