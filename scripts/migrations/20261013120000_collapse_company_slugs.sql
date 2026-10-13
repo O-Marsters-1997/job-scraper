@@ -12,7 +12,7 @@ winners AS (
     ORDER BY new_slug, id
 ),
 renamed AS (
-    UPDATE companies c SET slug = w.new_slug, updated_at = NOW()
+    UPDATE companies c SET slug = w.new_slug, name = btrim(regexp_replace(c.name, ' {2,}', ' ', 'g')), updated_at = NOW()
     FROM winners w WHERE c.id = w.id
     RETURNING c.id, w.old_slug, w.new_slug
 )

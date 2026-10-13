@@ -54,7 +54,7 @@ func Humanize(slug string) string {
 		if first == utf8.RuneError {
 			continue
 		}
-		words[idx] = string(unicode.ToUpper(first)) + w[size:]
+		words[idx] = string(unicode.ToTitle(first)) + w[size:]
 	}
 	return strings.Join(words, " ")
 }
