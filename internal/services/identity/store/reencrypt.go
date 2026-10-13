@@ -59,7 +59,11 @@ func (s *Store) sweep(
 			return total, nil
 		}
 		for _, id := range ids {
-			if err := s.inTx(ctx, func(q *sqlc.Queries) error { return rewriteRow(q, id) }); err != nil {
+			err := s.inTx(ctx, func(q *sqlc.Queries) error { return rewriteRow(q, id) })
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+			if err != nil {
 				return total, fmt.Errorf("rewrite row %s: %w", id.String(), err)
 			}
 			total++
