@@ -12,7 +12,7 @@ JOIN LATERAL (
     UNION
     SELECT st.user_id FROM source_targets st WHERE st.enabled AND st.source = j.source
 ) i ON TRUE
-WHERE e.user_id IS NULL;
+WHERE e.user_id IS NULL AND e.status IN ('pending', 'running');
 
 DELETE FROM effect_outbox WHERE user_id IS NULL;
 
