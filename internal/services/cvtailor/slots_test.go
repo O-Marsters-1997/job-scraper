@@ -95,6 +95,21 @@ func TestSaveDraftSlots(t *testing.T) {
 		}
 	})
 
+	t.Run("an added bullet is saved and its ungrounded claim is flagged", func(t *testing.T) {
+		e := newDraftEnv(t)
+		id := e.readyDrafts(t, 1)[0]
+		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+
+		got := e.saved(t, e.editing(t, e.drive), id, dto.SlotEdit{SlotID: "new-a", After: slot, Text: "Mentored 40 engineers"})
+
+		if len(findingChecks(got.Findings, "block")) == 0 {
+			t.Errorf("SaveDraftSlots().Findings = %+v, want a block finding for the added bullet", got.Findings)
+		}
+		if len(got.Content.Positions[0].Bullets) != 2 {
+			t.Errorf("SaveDraftSlots().Content bullets = %+v, want the added bullet saved despite the finding", got.Content.Positions[0].Bullets)
+		}
+	})
+
 	t.Run("removing an added bullet drops it and re-saving the removal is harmless", func(t *testing.T) {
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
