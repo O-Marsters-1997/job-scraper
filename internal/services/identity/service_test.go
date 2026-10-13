@@ -201,6 +201,23 @@ func TestUpdateCredential(t *testing.T) {
 		}
 	})
 
+	t.Run("ciphertext copied to another user's row fails to decrypt", func(t *testing.T) {
+		st := identitytest.NewFakeStore()
+		svc := identity.NewService(testDeps(t, identity.Deps{Store: st}))
+		saveKey(t, svc, "anthropic", "sk-test")
+		enc, err := st.GetUserAICredential(ctx, "user-1", "anthropic")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.UpsertUserAICredential(ctx, "user-2", "anthropic", enc); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := svc.GetCredential(ctx, "user-2", "anthropic"); err == nil {
+			t.Error("GetCredential on a copied ciphertext err = nil, want error")
+		}
+	})
+
 	t.Run("nil key deletes the credential", func(t *testing.T) {
 		svc := identity.NewService(testDeps(t, identity.Deps{}))
 		saveKey(t, svc, "anthropic", "sk-test")
