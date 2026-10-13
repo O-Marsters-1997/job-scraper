@@ -1,10 +1,13 @@
 package identitytest
 
 import (
+	"crypto/sha256"
 	"errors"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -48,19 +51,27 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 	t.Run("create session then get session returns it", func(t *testing.T) {
 		st := newStore(t)
 		user, session := newSession(t, st, "dana", time.Hour)
-		got, err := st.GetSession(t.Context(), session.ID)
+		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("dana"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.UserID != user.ID || got.Username != "dana" {
-			t.Fatalf("GetSession(...) = %+v", got)
+		if got.ID != session.ID || got.UserID != user.ID || got.Username != "dana" {
+			t.Fatalf("GetSessionByTokenHash(...) = %+v", got)
+		}
+	})
+
+	t.Run("get session returns not found for an unknown token hash", func(t *testing.T) {
+		st := newStore(t)
+		newSession(t, st, "dana", time.Hour)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("other")); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("new user is a user and SetRole makes them admin", func(t *testing.T) {
 		st := newStore(t)
-		_, session := newSession(t, st, "olly", time.Hour)
-		got, err := st.GetSession(t.Context(), session.ID)
+		newSession(t, st, "olly", time.Hour)
+		got, err := st.GetSessionByTokenHash(t.Context(), tokenHash("olly"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +81,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if err := st.SetRole(t.Context(), "olly", dto.RoleAdmin); err != nil {
 			t.Fatal(err)
 		}
-		got, err = st.GetSession(t.Context(), session.ID)
+		got, err = st.GetSessionByTokenHash(t.Context(), tokenHash("olly"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,9 +102,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if _, err := st.CreateUser(t.Context(), "gina", "old-hash", ""); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.SetPasswordHash(t.Context(), "gina", "new-hash"); err != nil {
-			t.Fatal(err)
-		}
+		commitTx(t, st, func(tx pgx.Tx) error {
+			_, err := st.SetPasswordHashTx(t.Context(), tx, "gina", "new-hash")
+			return err
+		})
 		got, err := st.GetUserByUsername(t.Context(), "gina")
 		if err != nil {
 			t.Fatal(err)
@@ -105,15 +117,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 
 	t.Run("set password hash returns not found for an unknown username", func(t *testing.T) {
 		st := newStore(t)
-		if err := st.SetPasswordHash(t.Context(), "nobody", "hash"); !errors.Is(err, data.ErrNotFound) {
-			t.Fatalf("SetPasswordHash(nobody) err = %v, want ErrNotFound", err)
+		tx, err := st.Begin(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(t.Context()) }()
+		if _, err := st.SetPasswordHashTx(t.Context(), tx, "nobody", "hash"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetPasswordHashTx(nobody) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("delete user sessions removes only that user's sessions", func(t *testing.T) {
+		st := newStore(t)
+		hank, _ := newSession(t, st, "hank", time.Hour)
+		newSession(t, st, "ivy", time.Hour)
+		commitTx(t, st, func(tx pgx.Tx) error {
+			return st.DeleteUserSessionsTx(t.Context(), tx, hank.ID)
+		})
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("hank")); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSessionByTokenHash(hank) err = %v, want ErrNotFound", err)
+		}
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("ivy")); err != nil {
+			t.Errorf("GetSessionByTokenHash(ivy) err = %v, want nil", err)
 		}
 	})
 
 	t.Run("get session returns not found when expired", func(t *testing.T) {
 		st := newStore(t)
-		_, session := newSession(t, st, "erin", -time.Second)
-		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+		newSession(t, st, "erin", -time.Second)
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("erin")); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
@@ -124,21 +156,21 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if err := st.DeleteSession(t.Context(), session.ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("frank")); !errors.Is(err, data.ErrNotFound) {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
 
 	t.Run("delete expired sessions leaves valid ones", func(t *testing.T) {
 		st := newStore(t)
-		user, valid := newSession(t, st, "grace", time.Hour)
-		if _, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(-time.Second)); err != nil {
+		user, _ := newSession(t, st, "grace", time.Hour)
+		if _, err := st.CreateSession(t.Context(), user.ID, tokenHash("grace-expired"), time.Now().Add(-time.Second)); err != nil {
 			t.Fatal(err)
 		}
 		if err := st.DeleteExpiredSessions(t.Context()); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := st.GetSession(t.Context(), valid.ID); err != nil {
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash("grace")); err != nil {
 			t.Errorf("valid session should survive cleanup: %v", err)
 		}
 	})
@@ -261,11 +293,31 @@ func newUser(t *testing.T, st identity.Store, username string) (identity.Store, 
 func newSession(t *testing.T, st identity.Store, username string, ttl time.Duration) (dto.User, dto.Session) {
 	t.Helper()
 	_, user := newUser(t, st, username)
-	session, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(ttl))
+	session, err := st.CreateSession(t.Context(), user.ID, tokenHash(username), time.Now().Add(ttl))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return user, session
+}
+
+func tokenHash(name string) []byte {
+	sum := sha256.Sum256([]byte(name))
+	return sum[:]
+}
+
+func commitTx(t *testing.T, st identity.Store, fn func(tx pgx.Tx) error) {
+	t.Helper()
+	tx, err := st.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(t.Context()) }()
+	if err := fn(tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 const missingID = "00000000-0000-0000-0000-000000000000"

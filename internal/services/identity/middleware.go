@@ -10,7 +10,7 @@ import (
 )
 
 type sessionGetter interface {
-	GetSession(ctx context.Context, id string) (dto.Session, error)
+	GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (dto.Session, error)
 }
 
 func sessionMiddleware(sg sessionGetter) func(http.Handler) http.Handler {
@@ -21,7 +21,7 @@ func sessionMiddleware(sg sessionGetter) func(http.Handler) http.Handler {
 				writeUnauthorized(w)
 				return
 			}
-			session, err := sg.GetSession(r.Context(), cookie.Value)
+			session, err := sg.GetSessionByTokenHash(r.Context(), hashSessionToken(cookie.Value))
 			if err != nil {
 				writeUnauthorized(w)
 				return

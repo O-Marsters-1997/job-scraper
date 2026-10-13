@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -221,20 +222,24 @@ func TestSignup(t *testing.T) {
 func TestLogout(t *testing.T) {
 	ctx := t.Context()
 	st := identitytest.NewFakeStore()
-	user, err := st.CreateUser(ctx, "dana", "hash", "")
+	svc := identity.NewService(testDeps(t, identity.Deps{Store: st}))
+	session, _, err := svc.Signup(ctx, "dana", "hunter2-ok", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := st.CreateSession(ctx, user.ID, time.Now().Add(time.Hour))
-	if err != nil {
-		t.Fatal(err)
+	sum := sha256.Sum256([]byte(session.Token))
+	if got, err := st.GetSessionByTokenHash(ctx, sum[:]); err != nil || got.ID != session.ID {
+		t.Fatalf("GetSessionByTokenHash(sha256(token)) = %+v, %v; want session %s", got, err, session.ID)
+	}
+	if _, err := st.GetSessionByTokenHash(ctx, []byte(session.Token)); err == nil {
+		t.Error("raw token must not look up a session")
 	}
 
-	if err := identity.NewService(testDeps(t, identity.Deps{Store: st})).Logout(ctx, session.ID); err != nil {
+	if err := svc.Logout(ctx, session.ID); err != nil {
 		t.Fatalf("Logout err = %v", err)
 	}
-	if _, err := st.GetSession(ctx, session.ID); err == nil {
-		t.Error("GetSession after logout: want session gone")
+	if _, err := st.GetSessionByTokenHash(ctx, sum[:]); err == nil {
+		t.Error("GetSessionByTokenHash after logout: want session gone")
 	}
 }
 

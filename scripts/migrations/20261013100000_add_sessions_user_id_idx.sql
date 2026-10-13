@@ -1,0 +1,6 @@
+-- +goose NO TRANSACTION
+-- +goose Up
+CREATE INDEX CONCURRENTLY IF NOT EXISTS sessions_user_id_idx ON sessions (user_id);
+
+-- +goose Down
+DROP INDEX CONCURRENTLY IF EXISTS sessions_user_id_idx;

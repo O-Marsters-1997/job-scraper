@@ -12,24 +12,26 @@ import (
 )
 
 const createSession = `-- name: CreateSession :one
-INSERT INTO sessions (user_id, expires_at)
-VALUES ($1, $2)
-RETURNING id, user_id, created_at, expires_at
+INSERT INTO sessions (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+RETURNING id, user_id, created_at, expires_at, token_hash
 `
 
 type CreateSessionParams struct {
 	UserID    pgtype.UUID
+	TokenHash []byte
 	ExpiresAt pgtype.Timestamptz
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
-	row := q.db.QueryRow(ctx, createSession, arg.UserID, arg.ExpiresAt)
+	row := q.db.QueryRow(ctx, createSession, arg.UserID, arg.TokenHash, arg.ExpiresAt)
 	var i Session
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.TokenHash,
 	)
 	return i, err
 }
@@ -78,14 +80,23 @@ func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
-const getSession = `-- name: GetSession :one
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	return err
+}
+
+const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
 SELECT s.id, s.user_id, s.created_at, s.expires_at, u.username, u.role
 FROM sessions s
 JOIN users u ON s.user_id = u.id
-WHERE s.id = $1 AND s.expires_at > NOW()
+WHERE s.token_hash = $1 AND s.expires_at > NOW()
 `
 
-type GetSessionRow struct {
+type GetSessionByTokenHashRow struct {
 	ID        pgtype.UUID
 	UserID    pgtype.UUID
 	CreatedAt pgtype.Timestamptz
@@ -94,9 +105,9 @@ type GetSessionRow struct {
 	Role      UserRole
 }
 
-func (q *Queries) GetSession(ctx context.Context, id pgtype.UUID) (GetSessionRow, error) {
-	row := q.db.QueryRow(ctx, getSession, id)
-	var i GetSessionRow
+func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (GetSessionByTokenHashRow, error) {
+	row := q.db.QueryRow(ctx, getSessionByTokenHash, tokenHash)
+	var i GetSessionByTokenHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -126,8 +137,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
-const setUserPasswordHash = `-- name: SetUserPasswordHash :execrows
-UPDATE users SET password_hash = $2 WHERE username = $1
+const setUserPasswordHash = `-- name: SetUserPasswordHash :one
+UPDATE users SET password_hash = $2 WHERE username = $1 RETURNING id
 `
 
 type SetUserPasswordHashParams struct {
@@ -135,12 +146,11 @@ type SetUserPasswordHashParams struct {
 	PasswordHash string
 }
 
-func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setUserPasswordHash, arg.Username, arg.PasswordHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, setUserPasswordHash, arg.Username, arg.PasswordHash)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const setUserRole = `-- name: SetUserRole :execrows

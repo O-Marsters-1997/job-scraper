@@ -1,6 +1,7 @@
 package identity_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
@@ -102,6 +103,23 @@ func TestResetPassword(t *testing.T) {
 		_, _, err := svc.Login(t.Context(), "bob", "old-password")
 		if status, _ := apperr.StatusFor(err); status != http.StatusUnauthorized {
 			t.Errorf("Login(bob, old-password) status = %d (err %v), want 401", status, err)
+		}
+	})
+
+	t.Run("old session no longer authenticates", func(t *testing.T) {
+		_, user, err := svc.Signup(t.Context(), "carl", "old-password", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		tokenHash := sha256.Sum256([]byte("carl"))
+		if _, err := st.CreateSession(t.Context(), user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.ResetPassword(t.Context(), "carl", "new-password"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.GetSessionByTokenHash(t.Context(), tokenHash[:]); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSessionByTokenHash(carl) err = %v, want ErrNotFound", err)
 		}
 	})
 

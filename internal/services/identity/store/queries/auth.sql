@@ -7,15 +7,15 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: CreateSession :one
-INSERT INTO sessions (user_id, expires_at)
-VALUES ($1, $2)
+INSERT INTO sessions (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: GetSession :one
+-- name: GetSessionByTokenHash :one
 SELECT s.id, s.user_id, s.created_at, s.expires_at, u.username, u.role
 FROM sessions s
 JOIN users u ON s.user_id = u.id
-WHERE s.id = $1 AND s.expires_at > NOW();
+WHERE s.token_hash = $1 AND s.expires_at > NOW();
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = $1;
@@ -26,5 +26,8 @@ DELETE FROM sessions WHERE expires_at <= NOW();
 -- name: SetUserRole :execrows
 UPDATE users SET role = $2 WHERE username = $1;
 
--- name: SetUserPasswordHash :execrows
-UPDATE users SET password_hash = $2 WHERE username = $1;
+-- name: SetUserPasswordHash :one
+UPDATE users SET password_hash = $2 WHERE username = $1 RETURNING id;
+
+-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1;
