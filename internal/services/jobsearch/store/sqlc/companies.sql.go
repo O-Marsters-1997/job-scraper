@@ -590,13 +590,17 @@ func (q *Queries) TrackDiscoveredCompany(ctx context.Context, arg TrackDiscovere
 }
 
 const upsertCompany = `-- name: UpsertCompany :one
-INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id, kind)
+VALUES ($1, $2, $3, $4, $5, $6, COALESCE(NULLIF($7::text, ''), 'unclassified'))
 ON CONFLICT (slug) DO UPDATE SET
     ats_source          = COALESCE(companies.ats_source, EXCLUDED.ats_source),
     ats_token           = COALESCE(companies.ats_token,  EXCLUDED.ats_token),
     domain              = COALESCE(companies.domain, EXCLUDED.domain),
     linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
+    kind                = CASE
+        WHEN companies.kind = 'agency' OR $7::text = '' THEN companies.kind
+        ELSE $7::text
+    END,
     updated_at = NOW()
 RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at, kind
 `
@@ -608,6 +612,7 @@ type UpsertCompanyParams struct {
 	AtsToken          pgtype.Text
 	Domain            pgtype.Text
 	LinkedinCompanyID pgtype.Text
+	Kind              string
 }
 
 func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (Company, error) {
@@ -618,6 +623,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		arg.AtsToken,
 		arg.Domain,
 		arg.LinkedinCompanyID,
+		arg.Kind,
 	)
 	var i Company
 	err := row.Scan(

@@ -284,6 +284,9 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	if id, ok := f.companyBySlug[c.Slug]; ok {
 		existing := f.companies[id]
 		existing.Name = c.Name
+		if c.Kind != "" && existing.Kind != dto.KindAgency {
+			existing.Kind = c.Kind
+		}
 		if existing.ATSSource == "" {
 			existing.ATSSource = c.ATSSource
 		}
@@ -304,6 +307,9 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 		ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken,
 		Domain: c.Domain, LinkedInCompanyID: c.LinkedInCompanyID, FirstSeenAt: time.Now(),
 		Kind: dto.KindUnclassified,
+	}
+	if c.Kind != "" {
+		company.Kind = c.Kind
 	}
 	f.companies[id] = company
 	f.companyBySlug[c.Slug] = id

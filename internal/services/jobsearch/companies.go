@@ -32,6 +32,7 @@ func (s *Service) CreateCompany(ctx context.Context, userID string, in dto.Creat
 	company, err := s.store.UpsertCompany(ctx, dto.CompanyUpsert{
 		Slug: token,
 		Name: slug.Humanize(token),
+		Kind: dto.KindDirect,
 	})
 	if err != nil {
 		return dto.Company{}, err

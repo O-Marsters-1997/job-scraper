@@ -685,6 +685,30 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("an upsert kind overrides a likely kind, never agency, and an empty kind keeps it", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect})
+		if err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil {
+			t.Fatalf("SetCompanyKind(likely_agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co"}); err != nil || c.Kind != dto.KindLikelyAgency {
+			t.Fatalf("UpsertCompany(empty) = %+v, %v, want likely_agency kept", c, err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindDirect {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want direct", c, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindAgency); err != nil {
+			t.Fatalf("SetCompanyKind(agency) = %v", err)
+		}
+		if c, err = st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", Kind: dto.KindDirect}); err != nil || c.Kind != dto.KindAgency {
+			t.Fatalf("UpsertCompany(direct) = %+v, %v, want agency kept", c, err)
+		}
+	})
+
 	t.Run("a company starts unclassified and its kind shows on the company and its jobs", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

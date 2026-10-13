@@ -1,11 +1,15 @@
 -- name: UpsertCompany :one
-INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id, kind)
+VALUES ($1, $2, $3, $4, $5, $6, COALESCE(NULLIF(sqlc.arg(kind)::text, ''), 'unclassified'))
 ON CONFLICT (slug) DO UPDATE SET
     ats_source          = COALESCE(companies.ats_source, EXCLUDED.ats_source),
     ats_token           = COALESCE(companies.ats_token,  EXCLUDED.ats_token),
     domain              = COALESCE(companies.domain, EXCLUDED.domain),
     linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
+    kind                = CASE
+        WHEN companies.kind = 'agency' OR sqlc.arg(kind)::text = '' THEN companies.kind
+        ELSE sqlc.arg(kind)::text
+    END,
     updated_at = NOW()
 RETURNING *;
 
