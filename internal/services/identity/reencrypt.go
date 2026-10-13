@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
@@ -13,7 +14,7 @@ import (
 func ReencryptTokens(ctx context.Context, pool *pgxpool.Pool, credCipher, googleCipher *tokencrypt.Cipher) (credentials, googleTokens int, err error) {
 	st := store.New(pool)
 	credentials, err = st.ReencryptAICredentials(ctx, func(userID, provider, enc string) (string, error) {
-		return reseal(credCipher, enc, credentialAAD(userID, provider))
+		return reseal(credCipher, enc, credentialAAD(userID, dto.Provider(provider)))
 	})
 	if err != nil {
 		return credentials, 0, fmt.Errorf("reencrypt ai credentials: %w", err)
