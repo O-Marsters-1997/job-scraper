@@ -40,9 +40,9 @@ linters:
           msg: use cmp.Diff(want, got) instead (ADR 0012)
         - pattern: '^time\.Sleep$'
           msg: poll with a ticker and a deadline instead (ADR 0012)
-        - pattern: '^slog\.Default$'
+        - pattern: '^slog\.(Default|SetDefault)$'
           msg: inject the *slog.Logger built in main; no global logger (ADR 0013 amendment)
-        - pattern: '^slog\.(Debug|Info|Warn|Error|Log)(Context)?$'
+        - pattern: '^slog\.(Debug|Info|Warn|Error|Log|LogAttrs)(Context)?$'
           msg: log through an injected *slog.Logger at the top of the chain (ADR 0013 amendment)
         - pattern: '^os\.(Getenv|LookupEnv)$'
           msg: read the environment once into a typed Config in cmd/ (ADR 0011 amendment)
@@ -111,11 +111,11 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/apperr
               desc: stores return their own sentinels; the service maps them to apperr kinds (ADR 0011 amendment)
-        pgx-in-store-only:
-          files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/*_test.go"]
+        pgxpool-in-store-only:
+          files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/cmd/**", "!**/*_test.go"]
           deny:
-            - pkg: github.com/jackc/pgx/v5
-              desc: pgx is used only inside store/ and internal/data/db (ADR 0011 amendment)
+            - pkg: github.com/jackc/pgx/v5/pgxpool
+              desc: only stores and internal/data/db hold the pool; pgx.Tx stays legal in tx-scoped ports (ADR 0011)
         sourcetargets:
           files: ["$all", "!**/internal/services/jobsearch/**", "!**/internal/services/sourcetargets/**", "!**/cmd/api/**", "!**/*_test.go"]
           deny:
@@ -184,6 +184,6 @@ formatters:
         - github.com/ollymarsters/job-scraper
 
 issues:
-  new-from-merge-base: main
+  new-from-merge-base: origin/main
   max-issues-per-linter: 0
   max-same-issues: 0

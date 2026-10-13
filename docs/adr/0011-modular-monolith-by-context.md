@@ -69,4 +69,4 @@ The go-idiomatic skill (`references/errors.md`, `secrets.md`) overrides the Erro
   `writeError` sends only the public message and logs the cause.
 - Each binary reads the environment once into a typed `Config` in `main`. Nothing below `cmd/` calls
   `os.Getenv` (`forbidigo`).
-- depguard bans `apperr` inside `store/` and `pgx` outside `store/`.
+- depguard bans `apperr` inside `store/` and `pgxpool` outside `store/`, `internal/data/db` and `cmd/`. `pgx.Tx` stays legal in transaction-scoped ports.
