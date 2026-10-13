@@ -18,10 +18,11 @@ import (
 const missingID = "00000000-0000-0000-0000-000000000000"
 
 type Fixture struct {
-	Store  applications.Store
-	UserID string
-	JobID  string
-	NewJob func() string
+	Store       applications.Store
+	UserID      string
+	OtherUserID string
+	JobID       string
+	NewJob      func() string
 }
 
 func createApp(t *testing.T, f Fixture, in dto.CreateApplicationInput) dto.Application {
@@ -239,6 +240,31 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		_, err := f.Store.UpdateApplication(t.Context(), f.UserID, missingID, dto.UpdateApplicationInput{})
 		if !errors.Is(err, data.ErrNotFound) {
 			t.Errorf("UpdateApplication(missing) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("create with another user's status returns not found", func(t *testing.T) {
+		f := newStore(t)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil)
+		if err != nil {
+			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
+		}
+		_, err = f.Store.CreateApplication(t.Context(), f.UserID, dto.CreateApplicationInput{JobID: f.JobID, StatusID: theirs.ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("CreateApplication(other user's status) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("update with another user's status returns not found", func(t *testing.T) {
+		f := newStore(t)
+		theirs, err := f.Store.CreateApplicationStatus(t.Context(), f.OtherUserID, "Theirs", "#6366f1", nil)
+		if err != nil {
+			t.Fatalf("CreateApplicationStatus(other user) err = %v", err)
+		}
+		created := createApp(t, f, dto.CreateApplicationInput{})
+		_, err = f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: theirs.ID})
+		if !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateApplication(other user's status) err = %v, want ErrNotFound", err)
 		}
 	})
 
