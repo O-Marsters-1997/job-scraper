@@ -20,6 +20,7 @@ import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
+import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) =>
@@ -157,6 +158,10 @@ function JobDetailPage() {
 									app={app()}
 									onTrack={() => track.openTrack(params().id)}
 								/>
+							</div>
+
+							<div class="max-md:order-4">
+								<RecruiterContactsCard jobId={params().id} />
 							</div>
 						</div>
 					</div>

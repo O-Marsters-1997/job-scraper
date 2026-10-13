@@ -14,6 +14,9 @@ func (m *Module) Routes(r chi.Router) {
 		r.Delete("/{id}", handlers.Delete(m.service.DeleteStatus))
 	})
 
+	r.Get("/jobs/{id}/recruiter-contacts", handlers.GetByID(m.store.ListRecruiterContacts))
+	r.Post("/jobs/{id}/recruiter-contacts", handlers.Create(m.service.LogRecruiterContact))
+
 	r.Route("/applications", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.service.List))
 		r.Post("/", handlers.Create(m.service.Create))
