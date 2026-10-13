@@ -12,6 +12,7 @@ import (
 )
 
 func TestStoreContract(t *testing.T) {
+	t.Parallel()
 	eventstest.RunStoreContract(t, func(t *testing.T) eventstest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)
@@ -25,6 +26,7 @@ func TestStoreContract(t *testing.T) {
 }
 
 func TestInsertEventRollsBackWithItsTransaction(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 	userID := pgtest.InsertUser(t, pool)
