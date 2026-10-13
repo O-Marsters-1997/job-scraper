@@ -33,6 +33,8 @@ WHERE (sqlc.arg(search)::text = ''
   AND (NOT sqlc.arg(tracked_only)::bool OR COALESCE(tc.enabled, FALSE))
   AND (NOT sqlc.arg(favourite_only)::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id))
   AND (NOT sqlc.arg(no_board_only)::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
+  AND (sqlc.arg(poster)::text = ''
+       OR (sqlc.arg(poster)::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
 ORDER BY
     CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
     CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE)

@@ -218,6 +218,7 @@ func TestListCompanies(t *testing.T) {
 			{"non-numeric limit", dto.CompaniesQuery{Limit: "x"}},
 			{"negative offset", dto.CompaniesQuery{Offset: "-1"}},
 			{"unknown sort", dto.CompaniesQuery{Sort: "newest"}},
+			{"unknown poster", dto.CompaniesQuery{Poster: "likely_agency"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {

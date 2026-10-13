@@ -429,6 +429,7 @@ func (s *Store) PageCompaniesForUser(ctx context.Context, userID string, options
 		FavouriteOnly: options.FavouriteOnly,
 		NoBoardOnly:   options.NoBoardOnly,
 		Sort:          string(options.Sort),
+		Poster:        string(options.Poster),
 		PageLimit:     options.Limit,
 		PageOffset:    options.Offset,
 	})

@@ -350,13 +350,15 @@ WHERE ($2::text = ''
   AND (NOT $3::bool OR COALESCE(tc.enabled, FALSE))
   AND (NOT $4::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id))
   AND (NOT $5::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
+  AND ($6::text = ''
+       OR ($6::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
 ORDER BY
-    CASE WHEN $6::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
-    CASE WHEN $6::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
+    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
+    CASE WHEN $7::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
           AND EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = $1::uuid AND cf.company_id = c.id)
          THEN 0 ELSE 1 END,
     c.name, c.id
-LIMIT $8::int OFFSET $7::int
+LIMIT $9::int OFFSET $8::int
 `
 
 type PageCompaniesForUserParams struct {
@@ -365,6 +367,7 @@ type PageCompaniesForUserParams struct {
 	TrackedOnly   bool
 	FavouriteOnly bool
 	NoBoardOnly   bool
+	Poster        string
 	Sort          string
 	PageOffset    int32
 	PageLimit     int32
@@ -397,6 +400,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 		arg.TrackedOnly,
 		arg.FavouriteOnly,
 		arg.NoBoardOnly,
+		arg.Poster,
 		arg.Sort,
 		arg.PageOffset,
 		arg.PageLimit,

@@ -61,6 +61,10 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 	if err != nil {
 		return dto.CompanyPage{}, err
 	}
+	poster, err := parseCompanyPoster(q.Poster)
+	if err != nil {
+		return dto.CompanyPage{}, err
+	}
 	options := dto.CompanyPageOptions{
 		Limit:         int32(limit),
 		Offset:        int32(offset),
@@ -69,6 +73,7 @@ func (s *Service) ListCompanies(ctx context.Context, userID string, q dto.Compan
 		FavouriteOnly: q.Favourite == "1",
 		NoBoardOnly:   q.NoBoard == "1",
 		Sort:          sort,
+		Poster:        poster,
 	}
 
 	page, err := s.store.PageCompaniesForUser(ctx, userID, options)
@@ -93,6 +98,15 @@ func parsePageOffset(raw string) (int, error) {
 		return 0, apperr.Invalid("offset must be a non-negative integer")
 	}
 	return offset, nil
+}
+
+func parseCompanyPoster(raw string) (dto.Poster, error) {
+	switch poster := dto.Poster(raw); poster {
+	case "", dto.PosterAgency, dto.PosterDirect:
+		return poster, nil
+	default:
+		return "", apperr.Invalid("poster must be agency or direct")
+	}
 }
 
 func parseCompanySort(raw string) (dto.CompanySort, error) {

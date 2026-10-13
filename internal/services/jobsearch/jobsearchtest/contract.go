@@ -367,6 +367,43 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("poster filter splits agency and likely agency from everything else", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		kinds := map[string]dto.CompanyKind{
+			"agency-co": dto.KindAgency, "likely-agency-co": dto.KindLikelyAgency,
+			"direct-co": dto.KindDirect, "likely-direct-co": dto.KindLikelyDirect, "plain-co": dto.KindUnclassified,
+		}
+		for slug, kind := range kinds {
+			c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: slug, Name: slug})
+			if err != nil {
+				t.Fatalf("UpsertCompany(%q) = %v", slug, err)
+			}
+			if kind == dto.KindUnclassified {
+				continue
+			}
+			if err := st.SetCompanyKind(ctx, c.ID, kind); err != nil {
+				t.Fatalf("SetCompanyKind(%q) = %v", slug, err)
+			}
+		}
+		for poster, want := range map[dto.Poster][]string{
+			dto.PosterAgency: {"agency-co", "likely-agency-co"},
+			dto.PosterDirect: {"direct-co", "likely-direct-co", "plain-co"},
+		} {
+			page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 10, Poster: poster})
+			if err != nil {
+				t.Fatalf("PageCompaniesForUser(%q) = %v", poster, err)
+			}
+			var got []string
+			for _, c := range page.Items {
+				got = append(got, c.Slug)
+			}
+			if diff := cmp.Diff(want, got); diff != "" || page.Total != len(want) {
+				t.Errorf("PageCompaniesForUser(%q) slugs (-want +got):\n%s\ntotal = %d", poster, diff, page.Total)
+			}
+		}
+	})
+
 	t.Run("companies search and tracked filters compose with the offset", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

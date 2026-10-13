@@ -10,6 +10,13 @@ const (
 	KindDirect       CompanyKind = "direct"
 )
 
+type Poster string
+
+const (
+	PosterDirect Poster = "direct"
+	PosterAgency Poster = "agency"
+)
+
 // SetCompanyKindInput's Kind is agency or direct; a user never sets a
 // likely_ or unclassified kind.
 type SetCompanyKindInput struct {
