@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -301,7 +302,7 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			slog.DebugContext(taskCtx, "queue delivery received", slog.Bool("redelivered", task.Redelivered))
 			if err == nil {
 				handlerStart := time.Now()
-				err = handler(taskCtx, task)
+				err = safeHandle(taskCtx, handler, task)
 				logTaskDone(taskCtx, delivery.Timestamp, consumedAt, time.Since(handlerStart), err)
 			}
 			if err != nil {
@@ -332,12 +333,13 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 					slog.Any(logger.KeyErr, err),
 					slog.Int64(logger.KeyDeliveryCount, count),
 				)
-				if terminal != nil && count >= 5 {
+				panicked := errors.Is(err, errPanicked)
+				if terminal != nil && (count >= 5 || panicked) {
 					if terminalErr := terminal(taskCtx, task); terminalErr != nil {
 						return fmt.Errorf("record terminal task failure for %s: %w", task.ID, terminalErr)
 					}
 				}
-				if rejectErr := delivery.Reject(true); rejectErr != nil {
+				if rejectErr := delivery.Reject(!panicked); rejectErr != nil {
 					return rejectErr
 				}
 				continue
@@ -348,6 +350,21 @@ func (b *Broker) consumeSession(ctx context.Context, source string, handler func
 			}
 		}
 	}
+}
+
+var errPanicked = errors.New("handler panicked")
+
+func safeHandle(ctx context.Context, handler func(context.Context, Task) error, task Task) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "queue handler panicked",
+				slog.Any("panic", r),
+				slog.String(logger.KeyStack, string(debug.Stack())),
+			)
+			err = fmt.Errorf("%w: %v", errPanicked, r)
+		}
+	}()
+	return handler(ctx, task)
 }
 
 func logTaskDone(ctx context.Context, publishedAt, consumedAt time.Time, duration time.Duration, err error) {
