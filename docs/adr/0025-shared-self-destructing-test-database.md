@@ -2,7 +2,7 @@
 
 ## Context
 
-`pgtest` started one Postgres container per test binary and relied on Ryuk to remove it. A `go test ./...` started one container per package, and several agent sessions running at once multiplied that. Ryuk missed containers whenever a run was killed, and each container left an anonymous volume behind. On 2026-10-09 the machine had 194 containers and 186 volumes, and Docker was using most of its memory and CPU ([#840](https://github.com/O-Marsters-1997/job-scraper/issues/840)).
+One Postgres container per test binary, removed by Ryuk, means a `go test ./...` starts one container per package, and several agent sessions running at once multiply that. Ryuk misses containers whenever a run is killed, and each container leaves an anonymous volume behind. On 2026-10-09 the machine had 194 containers and 186 volumes, and Docker was using most of its memory and CPU ([#840](https://github.com/O-Marsters-1997/job-scraper/issues/840)).
 
 ## Decision
 
@@ -16,5 +16,5 @@
 ## Consequences
 
 - A full `go test ./...` runs one Postgres container no matter how many packages or sessions run at once, and the first run after an idle spell pays for one container start and one migration.
-- Postgres tests no longer get a fresh server, only a fresh database. Anything server-wide (roles, `pg_stat_activity`, advisory locks) is shared across binaries, so filter by `current_database()`.
+- Postgres tests get a fresh database, not a fresh server. Anything server-wide (roles, `pg_stat_activity`, advisory locks) is shared across binaries, so filter by `current_database()`.
 - The RabbitMQ broker test keeps Ryuk and a real disk, because it restarts the broker and expects messages to survive.

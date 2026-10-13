@@ -5,15 +5,14 @@ description: >
   asserts. TRIGGER — load BEFORE writing, editing or reviewing any _test.go file, a fake, a stub,
   a `*test` package, pgtest, a snapshot golden or a fuzz target; or when the prompt says "write a
   test", "add tests", "cover this", "fix this test", or implements a feature with TDD. Load it
-  alongside go-idiomatic, which owns generic Go test style. SKIP for frontend tests.
+  alongside go-testing, which owns how a Go test is written. SKIP for frontend tests.
 ---
 
 # Testing policy
 
 Decision record: [ADR 0012](../../../docs/adr/0012-test-seams-and-double-packages.md).
-Background: `docs/research/go-testing-synthesis.md`. Generic style (`cmp.Diff`, `errors.Is`,
-tables only for uniform cases, `t.Helper`, `t.Cleanup`, no `time.Sleep`) is in `go-idiomatic`;
-it isn't repeated here.
+How a test is written (assertions, tables, helpers, waits, goldens, fuzzing) is owned by the global
+`go-testing` skill and isn't repeated here.
 
 ## Before writing a test
 
