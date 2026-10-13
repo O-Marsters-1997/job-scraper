@@ -131,13 +131,15 @@ func WriteJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, ok := apperr.StatusFor(err)
-	msg := err.Error()
+	msg := apperr.MessageFor(err)
 	if !ok {
-		slog.ErrorContext(r.Context(), "unhandled handler error",
-			slog.String(logger.KeyMethod, r.Method),
-			slog.String(logger.KeyRoute, chi.RouteContext(r.Context()).RoutePattern()),
-			slog.Any(logger.KeyErr, err),
-		)
+		if !errors.Is(err, context.Canceled) {
+			slog.ErrorContext(r.Context(), "unhandled handler error",
+				slog.String(logger.KeyMethod, r.Method),
+				slog.String(logger.KeyRoute, chi.RouteContext(r.Context()).RoutePattern()),
+				slog.Any(logger.KeyErr, err),
+			)
+		}
 		status = http.StatusInternalServerError
 		msg = "internal server error"
 	}

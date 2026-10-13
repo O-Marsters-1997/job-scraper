@@ -1,8 +1,11 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -146,6 +149,12 @@ func TestErrorResponses(t *testing.T) {
 			wantBody:   map[string]any{"error": "internal server error"},
 		},
 		{
+			name:       "wrapped kinded error does not leak the wrapper text",
+			err:        fmt.Errorf("store.Insert: pq: duplicate key: %w", apperr.Conflict("board exists")),
+			wantStatus: http.StatusConflict,
+			wantBody:   map[string]any{"error": "board exists"},
+		},
+		{
 			name:       "fields attached to an error are merged into the body",
 			err:        apperr.WithFields(apperr.Conflict("status is in use"), map[string]any{"count": float64(3)}),
 			wantStatus: http.StatusConflict,
@@ -163,6 +172,21 @@ func TestErrorResponses(t *testing.T) {
 				t.Errorf("body (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestCanceledErrorIsNotLogged(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	h := handlers.GetAll(func(context.Context, string) (string, error) {
+		return "", fmt.Errorf("query: %w", context.Canceled)
+	})
+	serve(http.MethodGet, "/x", h, authed(http.MethodGet, "/x", ""))
+	if buf.Len() != 0 {
+		t.Errorf("canceled request logged %q, want no log", buf.String())
 	}
 }
 

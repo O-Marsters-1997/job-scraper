@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 
@@ -24,10 +25,15 @@ type Module interface {
 // NewRouter takes idm and js separately from modules so js's PublicRoutes
 // (ingest) can get its own ServiceTokenMiddleware group here, since
 // depguard bars internal/api from internal/services/** (ADR 0011).
-func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) http.Handler {
+func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) (http.Handler, error) {
 	allowedOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
+	}
+
+	cop := http.NewCrossOriginProtection()
+	if err := cop.AddTrustedOrigin(allowedOrigin); err != nil {
+		return nil, fmt.Errorf("add trusted origin %q: %w", allowedOrigin, err)
 	}
 
 	r := chi.NewRouter()
@@ -68,5 +74,5 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 		}
 	})
 
-	return r
+	return cop.Handler(r), nil
 }
