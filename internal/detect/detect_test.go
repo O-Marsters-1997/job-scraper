@@ -31,6 +31,10 @@ func TestDetect(t *testing.T) {
 		{"linkedin is an aggregator", "https://www.linkedin.com/jobs/view/1234567890", detect.Aggregator},
 		{"indeed is an aggregator", "https://indeed.com/viewjob?jk=abc123", detect.Aggregator},
 		{"unknown host", "https://workinstartups.com/job-board/job/12345/software-engineer", detect.UnknownHTML},
+		{"lookalike greenhouse prefix", "https://evilgreenhouse.io/acme", detect.UnknownHTML},
+		{"lookalike greenhouse suffix", "https://greenhouse.io.evil.com/acme", detect.UnknownHTML},
+		{"lookalike linkedin", "https://linkedin.com.evil.com/jobs", detect.UnknownHTML},
+		{"lookalike workable", "https://notworkable.com/acme", detect.UnknownHTML},
 	}
 
 	for _, tt := range tests {
