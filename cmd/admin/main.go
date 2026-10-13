@@ -18,12 +18,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: admin create-user <username>")
 	fmt.Fprintln(os.Stderr, "       admin reset-password <username>")
 	fmt.Fprintln(os.Stderr, "       admin set-role <username> <user|admin>")
+	fmt.Fprintln(os.Stderr, "       admin reencrypt")
 	fmt.Fprintln(os.Stderr, "       admin options add <id> <dimension> <label> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options reword <id> <question>")
 	fmt.Fprintln(os.Stderr, "       admin options retire <id>")
@@ -48,6 +50,8 @@ func main() {
 		runResetPassword(os.Args[2:])
 	case "set-role":
 		runSetRole(os.Args[2:])
+	case "reencrypt":
+		runReencrypt(os.Args[2:])
 	case "options":
 		runOptions(os.Args[2:])
 	case "scoring-feedback":
@@ -147,6 +151,30 @@ func runSetRole(args []string) {
 		fatal("set role", err)
 	}
 	fmt.Printf("User %q is now %s\n", username, role)
+}
+
+func runReencrypt(args []string) {
+	if len(args) != 0 {
+		usage()
+	}
+	credCipher, err := tokencrypt.FromEnv("AI_CREDENTIAL_ENC_KEY")
+	if err != nil {
+		fatal("load credential key", err)
+	}
+	googleCipher, err := tokencrypt.FromEnv("GOOGLE_TOKEN_ENC_KEY")
+	if err != nil {
+		fatal("load google token key", err)
+	}
+
+	ctx := context.Background()
+	pool := connectDB(ctx)
+	defer pool.Close()
+
+	credentials, googleTokens, err := identity.ReencryptTokens(ctx, pool, credCipher, googleCipher)
+	if err != nil {
+		fatal("reencrypt", err)
+	}
+	fmt.Printf("Re-encrypted %d AI credentials and %d Google tokens\n", credentials, googleTokens)
 }
 
 func runOptions(args []string) {
