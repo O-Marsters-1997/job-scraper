@@ -209,6 +209,17 @@ func TestGoogleOAuthCallbackRejectsStateSignedForAnotherUser(t *testing.T) {
 	wantStatus(t, w, http.StatusBadRequest)
 }
 
+func TestGoogleOAuthCallbackRejectsTamperedState(t *testing.T) {
+	r := newTestRouter(t)
+	session := signup(t, r, "alice")
+	start := startOAuth(t, r, "", session)
+	forged := &http.Cookie{Name: "oauth_state", Value: "abc:deadbeef"}
+
+	wantStatus(t, serve(t, r, "GET /google/oauth/callback?code=c&state=abc", "", session, forged), http.StatusBadRequest)
+	wantStatus(t, serve(t, r, "GET /google/oauth/callback?code=c&state=abc", "", session), http.StatusBadRequest)
+	wantStatus(t, serve(t, r, "GET /google/oauth/callback?code=c&state=other", "", session, cookie(t, start, "oauth_state")), http.StatusBadRequest)
+}
+
 func TestNewRequiresSessionSecret(t *testing.T) {
 	if _, err := identity.New(nil, nil, "", "", "", ""); err == nil {
 		t.Error("New with empty session secret = nil error, want error")

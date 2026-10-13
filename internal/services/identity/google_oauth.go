@@ -131,6 +131,7 @@ func validOAuthStateCookie(r *http.Request, key []byte, state, userID string) bo
 
 func signOAuthState(key []byte, state, userID string) string {
 	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte("oauth-state\x00"))
 	mac.Write([]byte(userID))
 	mac.Write([]byte{0})
 	mac.Write([]byte(state))
