@@ -358,6 +358,7 @@ func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.
 			RequiredTitleKeywords: row.RequiredTitleKeywords,
 			NotifyThreshold:       int(row.NotifyThreshold),
 			MaxJobAgeDays:         int(row.MaxJobAgeDays),
+			UpdatedAt:             row.ConfigVersion.Time,
 			CompanyIsNew:          row.CompanyIsNew,
 			CompanyIsFavourite:    row.CompanyIsFavourite,
 			Preferences:           prefs,
@@ -408,7 +409,7 @@ func (s *Store) SaveAnswers(ctx context.Context, jobID, fingerprint, model strin
 
 // CompleteAnswerEffect writes the effect's answers and every surviving
 // user's score, then marks it done, in one transaction.
-func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
 	effectID, err := data.UUID(effect.ID)
 	if err != nil {
 		return nil, err
@@ -416,7 +417,7 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 	var saved []string
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		saved, err = s.completeAnswerEffect(ctx, s.queries.WithTx(tx), effect, effectID, answers, scores)
+		saved, err = s.completeAnswerEffect(ctx, s.queries.WithTx(tx), effect, effectID, answers, scores, rejections)
 		return err
 	})
 	if err != nil {
@@ -425,7 +426,7 @@ func (s *Store) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffec
 	return saved, nil
 }
 
-func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries, effect dto.AnswerEffect, effectID pgtype.UUID, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries, effect dto.AnswerEffect, effectID pgtype.UUID, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
 	rows, err := queries.CompleteAnswerEffect(ctx, sqlc.CompleteAnswerEffectParams{ID: effectID, Attempts: int32(effect.Attempts)})
 	if err != nil {
 		return nil, fmt.Errorf("store.CompleteAnswerEffect: %w", err)
@@ -461,9 +462,59 @@ func (s *Store) completeAnswerEffect(ctx context.Context, queries *sqlc.Queries,
 		if err := upsertJobScore(ctx, queries, sc, effect.Fingerprint, effect.Model); err != nil {
 			return nil, fmt.Errorf("store.CompleteAnswerEffect: %w", err)
 		}
+		userID, err := data.UUID(sc.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if err := queries.DeleteJobRejection(ctx, sqlc.DeleteJobRejectionParams{UserID: userID, JobID: jobID}); err != nil {
+			return nil, fmt.Errorf("store.CompleteAnswerEffect: clear rejection: %w", err)
+		}
 		saved = append(saved, sc.UserID)
 	}
+
+	rejectedAt := time.Now()
+	for _, r := range rejections {
+		userID, err := data.UUID(r.UserID)
+		if err != nil {
+			return nil, err
+		}
+		err = queries.UpsertJobRejection(ctx, sqlc.UpsertJobRejectionParams{
+			UserID: userID, JobID: jobID, Kind: string(r.Kind), Reason: r.Reason,
+			SearchConfigVersion: pgtype.Timestamptz{Time: r.ConfigVersion, Valid: !r.ConfigVersion.IsZero()},
+			ContentFingerprint:  effect.Fingerprint,
+			RejectedAt:          pgtype.Timestamptz{Time: rejectedAt, Valid: true},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("store.CompleteAnswerEffect: save rejection: %w", err)
+		}
+	}
 	return saved, nil
+}
+
+func (s *Store) ListJobRejections(ctx context.Context, userID string, beforeRejectedAt time.Time, beforeJobID string, limit int) ([]dto.JobRejection, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	params := sqlc.ListJobRejectionsParams{UserID: uid, RowLimit: int32(limit)}
+	if !beforeRejectedAt.IsZero() {
+		params.BeforeRejectedAt = pgtype.Timestamptz{Time: beforeRejectedAt, Valid: true}
+		if params.BeforeJobID, err = data.UUID(beforeJobID); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.queries.ListJobRejections(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobRejections: %w", err)
+	}
+	out := make([]dto.JobRejection, len(rows))
+	for i, row := range rows {
+		out[i] = dto.JobRejection{
+			JobID: row.JobID.String(), UserID: userID, Kind: dto.RejectionKind(row.Kind), Reason: row.Reason,
+			ConfigVersion: row.SearchConfigVersion.Time, RejectedAt: row.RejectedAt.Time, IsCurrent: row.IsCurrent,
+		}
+	}
+	return out, nil
 }
 
 func upsertJobScore(ctx context.Context, queries *sqlc.Queries, sc dto.JobScore, fingerprint, model string) error {

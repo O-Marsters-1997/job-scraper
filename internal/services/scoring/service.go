@@ -41,7 +41,7 @@ type Store interface {
 	ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error)
 	ListScoringOptions(ctx context.Context) ([]dto.ScoringOption, error)
 	ListAnswers(ctx context.Context, jobID, fingerprint, model string) (map[string]dto.Answer, error)
-	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error)
+	CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error)
 	SaveAnswers(ctx context.Context, jobID, fingerprint, model string, answers map[string]dto.Answer) error
 	GetSearchConfig(ctx context.Context, userID string) (dto.SearchConfig, error)
 	UpsertSearchConfig(ctx context.Context, cfg dto.SearchConfig) (dto.SearchConfig, error)
@@ -192,7 +192,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 		return fail(fmt.Errorf("load answer job: %w", err))
 	}
 	if job.ContentFingerprint != effect.Fingerprint {
-		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil, nil)
 		return err
 	}
 
@@ -202,13 +202,17 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 	}
 	now := time.Now()
 	surviving := make([]dto.SearchConfig, 0, len(configs))
+	var rejections []dto.JobRejection
 	for _, cfg := range configs {
-		if _, rejected := filter.Reject(job, cfg); !rejected && !postedBeforeCutoff(job, cfg, now) {
-			surviving = append(surviving, cfg)
+		rejection, rejected := rejectionFor(job, cfg, now)
+		if rejected {
+			rejections = append(rejections, rejection)
+			continue
 		}
+		surviving = append(surviving, cfg)
 	}
 	if len(surviving) == 0 {
-		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
+		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil, rejections)
 		return err
 	}
 
@@ -265,7 +269,7 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 		scores = append(scores, score)
 	}
 
-	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores)
+	saved, err := s.store.CompleteAnswerEffect(ctx, effect, fresh, scores, rejections)
 	if err != nil {
 		return err
 	}
@@ -275,6 +279,20 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result 
 
 	s.notifyNewJob(ctx, job, surviving, scores, saved)
 	return nil
+}
+
+func rejectionFor(job dto.Job, cfg dto.SearchConfig, now time.Time) (dto.JobRejection, bool) {
+	rejection := dto.JobRejection{JobID: job.ID, UserID: cfg.UserID, ConfigVersion: cfg.UpdatedAt}
+	if reason, rejected := filter.Reject(job, cfg); rejected {
+		rejection.Kind, rejection.Reason = dto.RejectionKindFilter, reason
+		return rejection, true
+	}
+	if postedBeforeCutoff(job, cfg, now) {
+		rejection.Kind = dto.RejectionKindAge
+		rejection.Reason = fmt.Sprintf("age: older than %d days", cfg.MaxJobAgeDays)
+		return rejection, true
+	}
+	return dto.JobRejection{}, false
 }
 
 func postedBeforeCutoff(job dto.Job, cfg dto.SearchConfig, now time.Time) bool {

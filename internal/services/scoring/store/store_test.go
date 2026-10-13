@@ -273,6 +273,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	saved, err := st.CompleteAnswerEffect(ctx, effect,
 		map[string]dto.Answer{"hash-1": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
 		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Band: "great", Rows: []dto.ScoreRow{}}},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
@@ -314,7 +315,7 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 		{JobID: jobID, UserID: alice, Score: 79, Band: "good", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "nice", Resolved: "yes", Effect: "meets"}}},
 		{JobID: jobID, UserID: bob, Score: 21, Band: "poor", Rows: []dto.ScoreRow{{Key: "tech:go", Stance: "avoid", Resolved: "yes", Effect: "misses"}}},
 	}
-	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores)
+	saved, err := st.CompleteAnswerEffect(t.Context(), effect, map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}}, scores, nil)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
 	}
@@ -341,9 +342,13 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 	saved, err := st.CompleteAnswerEffect(t.Context(), effect,
 		map[string]dto.Answer{"hash-go": {PYes: 0.9, PNo: 0.05, PNotStated: 0.05}},
 		[]dto.JobScore{{JobID: jobID, UserID: userID, Score: 79, Band: "good"}},
+		[]dto.JobRejection{{JobID: jobID, UserID: userID, Kind: dto.RejectionKindFilter, Reason: "company: acme"}},
 	)
 	if err != nil {
 		t.Fatalf("CompleteAnswerEffect() err = %v", err)
+	}
+	if got := countRows(t, pool, "SELECT count(*) FROM job_rejections"); got != 0 {
+		t.Errorf("job_rejections rows = %d, want 0 (fingerprint moved on)", got)
 	}
 	if len(saved) != 0 {
 		t.Errorf("CompleteAnswerEffect() saved users = %v, want none (fingerprint moved on)", saved)
@@ -1385,4 +1390,106 @@ func TestOpsStateFieldCompleteness(t *testing.T) {
 	if diff := cmp.Diff(want, opsState(t, st).FieldCompleteness); diff != "" {
 		t.Errorf("OpsState().FieldCompleteness mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func completeWith(t *testing.T, st *store.Store, pool *pgxpool.Pool, jobID, fingerprint string, scores []dto.JobScore, rejections []dto.JobRejection) {
+	t.Helper()
+	insertEffect(t, pool, jobID, fingerprint)
+	effect, err := st.ClaimAnswerEffect(t.Context())
+	if err != nil {
+		t.Fatalf("ClaimAnswerEffect() err = %v", err)
+	}
+	if _, err := st.CompleteAnswerEffect(t.Context(), effect, nil, scores, rejections); err != nil {
+		t.Fatalf("CompleteAnswerEffect() err = %v", err)
+	}
+}
+
+func TestListJobRejections(t *testing.T) {
+	t.Run("returns the reason and flags it current until the config or job changes", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		jobID := pgtest.InsertJob(t, pool, "Intern", "fp-1")
+		exec(t, pool, "INSERT INTO search_config (user_id) VALUES ($1)", userID)
+		var version time.Time
+		if err := pool.QueryRow(t.Context(), "SELECT updated_at FROM search_config WHERE user_id = $1", userID).Scan(&version); err != nil {
+			t.Fatalf("read config version: %v", err)
+		}
+
+		completeWith(t, st, pool, jobID, "fp-1", nil, []dto.JobRejection{
+			{JobID: jobID, UserID: userID, Kind: dto.RejectionKindFilter, Reason: "title keyword: intern", ConfigVersion: version},
+		})
+
+		got, err := st.ListJobRejections(t.Context(), userID, time.Time{}, "", 10)
+		if err != nil {
+			t.Fatalf("ListJobRejections() err = %v", err)
+		}
+		if len(got) != 1 || got[0].JobID != jobID || got[0].Reason != "title keyword: intern" || !got[0].ConfigVersion.Equal(version) || !got[0].IsCurrent {
+			t.Fatalf("ListJobRejections() = %+v, want one current rejection of %s at version %s", got, jobID, version)
+		}
+
+		exec(t, pool, "UPDATE search_config SET updated_at = NOW() + interval '1 minute' WHERE user_id = $1", userID)
+		got, _ = st.ListJobRejections(t.Context(), userID, time.Time{}, "", 10)
+		if got[0].IsCurrent {
+			t.Error("IsCurrent = true after the config changed, want false")
+		}
+
+		exec(t, pool, "UPDATE search_config SET updated_at = $2 WHERE user_id = $1", userID, version)
+		exec(t, pool, "UPDATE jobs SET content_fingerprint = 'fp-2' WHERE id = $1", jobID)
+		got, _ = st.ListJobRejections(t.Context(), userID, time.Time{}, "", 10)
+		if got[0].IsCurrent {
+			t.Error("IsCurrent = true after the job content changed, want false")
+		}
+	})
+
+	t.Run("a later score clears the rejection and a later rejection replaces it", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+
+		rejection := func(reason string) []dto.JobRejection {
+			return []dto.JobRejection{{JobID: jobID, UserID: userID, Kind: dto.RejectionKindAge, Reason: reason}}
+		}
+		completeWith(t, st, pool, jobID, "fp-1", nil, rejection("age: older than 7 days"))
+		completeWith(t, st, pool, jobID, "fp-1", nil, rejection("age: older than 3 days"))
+		got, _ := st.ListJobRejections(t.Context(), userID, time.Time{}, "", 10)
+		if len(got) != 1 || got[0].Reason != "age: older than 3 days" {
+			t.Fatalf("ListJobRejections() = %+v, want the replaced reason only", got)
+		}
+
+		completeWith(t, st, pool, jobID, "fp-1", []dto.JobScore{{JobID: jobID, UserID: userID, Score: 80, Band: "great", Rows: []dto.ScoreRow{}}}, nil)
+		got, _ = st.ListJobRejections(t.Context(), userID, time.Time{}, "", 10)
+		if len(got) != 0 {
+			t.Errorf("ListJobRejections() = %+v, want none once the job scores", got)
+		}
+	})
+
+	t.Run("pages by keyset", func(t *testing.T) {
+		st, pool := newStore(t)
+		userID := pgtest.InsertUser(t, pool)
+		var want []string
+		for i := range 3 {
+			jobID := pgtest.InsertJob(t, pool, fmt.Sprintf("Job %d", i), fmt.Sprintf("fp-%d", i))
+			completeWith(t, st, pool, jobID, fmt.Sprintf("fp-%d", i), nil, []dto.JobRejection{
+				{JobID: jobID, UserID: userID, Kind: dto.RejectionKindFilter, Reason: "company: x"},
+			})
+			want = append([]string{jobID}, want...)
+		}
+
+		first, err := st.ListJobRejections(t.Context(), userID, time.Time{}, "", 2)
+		if err != nil || len(first) != 2 {
+			t.Fatalf("first page = %+v, err = %v, want 2 rows", first, err)
+		}
+		last := first[1]
+		rest, err := st.ListJobRejections(t.Context(), userID, last.RejectedAt, last.JobID, 2)
+		if err != nil {
+			t.Fatalf("second page err = %v", err)
+		}
+		var got []string
+		for _, r := range append(first, rest...) {
+			got = append(got, r.JobID)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("paged job IDs (-want +got):\n%s", diff)
+		}
+	})
 }

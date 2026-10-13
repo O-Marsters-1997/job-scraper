@@ -26,6 +26,8 @@ type CompletedEffect struct {
 	Effect  dto.AnswerEffect
 	Answers map[string]dto.Answer
 	Scores  []dto.JobScore
+
+	Rejections []dto.JobRejection
 }
 
 // QueuedMissing is one recorded QueueMissingAnswers call.
@@ -241,10 +243,10 @@ func (f *FakeStore) markScored(jobID string, scores []dto.JobScore) {
 	}
 }
 
-func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
+func (f *FakeStore) CompleteAnswerEffect(_ context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.completed = append(f.completed, CompletedEffect{Effect: effect, Answers: answers, Scores: scores})
+	f.completed = append(f.completed, CompletedEffect{Effect: effect, Answers: answers, Scores: scores, Rejections: rejections})
 	f.markScored(effect.JobID, scores)
 	saved := make([]string, len(scores))
 	for i, s := range scores {
