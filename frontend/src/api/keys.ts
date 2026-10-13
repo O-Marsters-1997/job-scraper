@@ -21,6 +21,7 @@ export const keys = {
 			[...applicationsAll, statusId ?? "all", chase] as const,
 	},
 	statuses: ["application-statuses"] as const,
+	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,
 	companies: {
 		all: companiesAll,
 		list: (params: Readonly<Record<string, unknown>>) =>

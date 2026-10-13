@@ -1,9 +1,11 @@
 package applicationstest
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,10 +23,17 @@ type FakeStore struct {
 	mu       sync.Mutex
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
+	contacts map[string][]dto.RecruiterContact
+
+	nextContact int
 }
 
 func NewFakeStore() *FakeStore {
-	return &FakeStore{apps: make(map[string]dto.Application), statuses: make(map[string]dto.ApplicationStatus)}
+	return &FakeStore{
+		apps:     make(map[string]dto.Application),
+		statuses: make(map[string]dto.ApplicationStatus),
+		contacts: make(map[string][]dto.RecruiterContact),
+	}
 }
 
 func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error) {
@@ -206,3 +215,30 @@ func (f *FakeStore) SeedDefaultStatuses(_ context.Context, _ pgx.Tx, userID stri
 }
 
 var _ applications.Store = (*FakeStore)(nil)
+
+func (f *FakeStore) CreateRecruiterContact(_ context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextContact++
+	c := dto.RecruiterContact{
+		ID: fmt.Sprintf("contact-%d", f.nextContact), JobID: in.JobID, ContactedOn: in.ContactedOn,
+		Channel: in.Channel, Outcome: in.Outcome, CreatedAt: time.Now(),
+	}
+	f.contacts[userID] = append(f.contacts[userID], c)
+	return c, nil
+}
+
+func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID string) ([]dto.RecruiterContact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.RecruiterContact{}
+	for _, c := range f.contacts[userID] {
+		if c.JobID == jobID {
+			out = append(out, c)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b dto.RecruiterContact) int {
+		return cmp.Or(strings.Compare(b.ContactedOn, a.ContactedOn), b.CreatedAt.Compare(a.CreatedAt))
+	})
+	return out, nil
+}
