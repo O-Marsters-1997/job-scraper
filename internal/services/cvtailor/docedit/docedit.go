@@ -67,19 +67,27 @@ func Requests(ds docparse.DocStructure, positions PositionSlots, edits cvedit.Ed
 		if len(pe.Bullets) > len(ids) {
 			return nil, fmt.Errorf("%w: position %q has %d bullets for %d slots", ErrTooManyBullets, pe.PositionID, len(pe.Bullets), len(ids))
 		}
+		lines := pe.Lines()
 		for i, id := range ids {
 			slot, ok := slots[id]
 			if !ok {
 				return nil, fmt.Errorf("%w: slot %q not in document", ErrUnknownPosition, id)
 			}
-			if i < len(pe.Bullets) {
-				if pe.Bullets[i].Text == slot.Text {
+			if i < len(lines) {
+				if lines[i].Text == slot.Text {
 					continue
 				}
-				all = append(all, replace(slot.StartIndex, slot.EndIndex-1, pe.Bullets[i].Text))
+				all = append(all, replace(slot.StartIndex, slot.EndIndex-1, lines[i].Text))
 				continue
 			}
 			all = append(all, remove(slot.StartIndex, slot.EndIndex))
+		}
+		if len(lines) > len(ids) && len(ids) > 0 {
+			var extra []string
+			for _, l := range lines[len(ids):] {
+				extra = append(extra, l.Text)
+			}
+			all = append(all, splitParagraph(slots[ids[len(ids)-1]].EndIndex-1, extra))
 		}
 	}
 
@@ -139,6 +147,11 @@ func joinItems(separator string, list bool, items []string) string {
 
 func remove(start, end int) edit {
 	return edit{start: start, reqs: []Request{deleteRange(start, end)}}
+}
+
+func splitParagraph(index int, texts []string) edit {
+	text := "\n" + strings.Join(texts, "\n")
+	return edit{start: index, reqs: []Request{{InsertText: &InsertText{Location: Location{Index: index}, Text: text}}}}
 }
 
 func replace(start, end int, text string) edit {

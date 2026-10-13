@@ -11,9 +11,15 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/checks"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvedit"
+	"github.com/ollymarsters/job-scraper/internal/services/cvtailor/docedit"
 )
 
-const profileSlotID = "profile"
+const (
+	profileSlotID = "profile"
+
+	addedSlotPrefix   = "new-"
+	maxAddedSlotIDLen = 64
+)
 
 // SaveDraftSlots writes the User's bullet and profile edits into the Draft's Doc and
 // re-runs the checks. Findings never block a save.
@@ -84,10 +90,20 @@ func (s *Service) SaveDraftSlots(ctx context.Context, userID string, in dto.Draf
 
 func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditSet, error) {
 	texts := make(map[string]string, len(slots))
+	var changes []dto.SlotEdit
 	for _, e := range slots {
+		if e.Remove {
+			changes = append(changes, e)
+			continue
+		}
 		text := strings.TrimSpace(e.Text)
 		if text == "" || strings.ContainsAny(text, "\r\n") {
 			return edits, apperr.Invalid("an edit must be one non-empty line")
+		}
+		if e.After != "" {
+			e.Text = text
+			changes = append(changes, e)
+			continue
 		}
 		texts[e.SlotID] = text
 	}
@@ -120,7 +136,70 @@ func (pl plan) overlay(edits cvedit.EditSet, slots []dto.SlotEdit) (cvedit.EditS
 	if len(texts) > 0 {
 		return edits, apperr.Invalid("unknown slot")
 	}
+	return pl.applyAddedChanges(edits, changes)
+}
+
+func (pl plan) applyAddedChanges(edits cvedit.EditSet, changes []dto.SlotEdit) (cvedit.EditSet, error) {
+	slotIDs := pl.slotIDs()
+	for _, c := range changes {
+		if !strings.HasPrefix(c.SlotID, addedSlotPrefix) {
+			if c.Remove {
+				return edits, apperr.Invalid("only an added bullet can be removed")
+			}
+			return edits, apperr.Invalid("unknown slot")
+		}
+		if len(c.SlotID) > maxAddedSlotIDLen || strings.ContainsAny(c.SlotID, " \t\r\n/") {
+			return edits, apperr.Invalid("invalid slot id")
+		}
+		if c.Remove {
+			removeAdded(&edits, c.SlotID)
+			continue
+		}
+		if err := upsertAdded(&edits, slotIDs, c); err != nil {
+			return edits, err
+		}
+	}
 	return edits, nil
+}
+
+func removeAdded(edits *cvedit.EditSet, id string) {
+	for pi := range edits.Positions {
+		pe := &edits.Positions[pi]
+		at := slices.IndexFunc(pe.Added, func(a cvedit.AddedBullet) bool { return a.SlotID == id })
+		if at < 0 {
+			continue
+		}
+		after := pe.Added[at].After
+		pe.Added = slices.Delete(pe.Added, at, at+1)
+		for i := range pe.Added {
+			if pe.Added[i].After == id {
+				pe.Added[i].After = after
+			}
+		}
+		return
+	}
+}
+
+func upsertAdded(edits *cvedit.EditSet, slotIDs docedit.PositionSlots, c dto.SlotEdit) error {
+	for pi := range edits.Positions {
+		pe := &edits.Positions[pi]
+		if at := slices.IndexFunc(pe.Added, func(a cvedit.AddedBullet) bool { return a.SlotID == c.SlotID }); at >= 0 {
+			pe.Added[at].Text = c.Text
+			return nil
+		}
+	}
+	for pi := range edits.Positions {
+		pe := &edits.Positions[pi]
+		base := slotIDs[pe.PositionID]
+		follows := slices.Contains(base[:min(len(pe.Bullets), len(base))], c.After) ||
+			slices.ContainsFunc(pe.Added, func(a cvedit.AddedBullet) bool { return a.SlotID == c.After })
+		if !follows {
+			continue
+		}
+		pe.Added = append(pe.Added, cvedit.AddedBullet{SlotID: c.SlotID, After: c.After, Text: c.Text})
+		return nil
+	}
+	return apperr.Invalid("unknown slot")
 }
 
 func (pl plan) overlaySkills(edits cvedit.EditSet, groups []dto.SkillGroup) (cvedit.EditSet, error) {

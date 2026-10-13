@@ -182,12 +182,12 @@ func editedContent(edits cvedit.EditSet) dto.DraftContent {
 	c.Skills, c.SkillGroups = skillContent(edits.Skills)
 	for _, pe := range edits.Positions {
 		dp := dto.DraftPosition{PositionID: pe.PositionID, Bullets: []dto.DraftBullet{}}
-		for _, b := range pe.Bullets {
-			ids := b.AchievementIDs
+		for _, l := range pe.Lines() {
+			ids := l.AchievementIDs
 			if ids == nil {
 				ids = []string{}
 			}
-			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: b.Text, AchievementIDs: ids})
+			dp.Bullets = append(dp.Bullets, dto.DraftBullet{Text: l.Text, AchievementIDs: ids})
 		}
 		c.Positions = append(c.Positions, dp)
 	}
@@ -210,14 +210,14 @@ func provenance(edits cvedit.EditSet, bank []dto.Position) *dto.DraftProvenance 
 	for _, pe := range edits.Positions {
 		p := positionByID[pe.PositionID]
 		pp := dto.ProvenancePosition{PositionID: pe.PositionID, Employer: p.Employer, Title: p.Title, Bullets: []dto.ProvenanceBullet{}}
-		for _, b := range pe.Bullets {
+		for _, l := range pe.Lines() {
 			cited := []dto.Achievement{}
-			for _, id := range b.AchievementIDs {
+			for _, id := range l.AchievementIDs {
 				if a, ok := achievementByID[id]; ok {
 					cited = append(cited, a)
 				}
 			}
-			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: b.SlotID, Achievements: cited})
+			pp.Bullets = append(pp.Bullets, dto.ProvenanceBullet{SlotID: l.SlotID, Achievements: cited})
 		}
 		out.Positions = append(out.Positions, pp)
 	}

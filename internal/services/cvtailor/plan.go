@@ -281,6 +281,9 @@ func (pl plan) draft(edits cvedit.EditSet, basePages, draftPages int) checks.Dra
 			}
 			cp.Bullets = append(cp.Bullets, slot)
 		}
+		for _, a := range pe.Added {
+			cp.Bullets = append(cp.Bullets, checks.Slot{ID: a.SlotID, Text: a.Text})
+		}
 		d.Positions = append(d.Positions, cp)
 	}
 	return d
