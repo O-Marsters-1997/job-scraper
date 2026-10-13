@@ -103,8 +103,10 @@ func (m *Module) suggest() http.HandlerFunc {
 		func(w http.ResponseWriter, _ *http.Request, events iter.Seq[SuggestEvent]) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.Header().Set("Cache-Control", "no-cache")
-			w.WriteHeader(http.StatusOK)
 			rc := http.NewResponseController(w)
+			_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
+			w.WriteHeader(http.StatusOK)
+			_ = rc.Flush()
 			for ev := range events {
 				_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
 				switch {
@@ -115,7 +117,9 @@ func (m *Module) suggest() http.HandlerFunc {
 				default:
 					writeEvent(w, "delta", map[string]string{"text": ev.Delta})
 				}
-				_ = rc.Flush()
+				if rc.Flush() != nil {
+					return
+				}
 			}
 		},
 	)
