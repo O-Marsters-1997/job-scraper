@@ -28,3 +28,9 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 - Raw list impressions are not recorded: refreshes, back-navigation and re-mounts make them noise.
 - Explicit labels stay in `job_grades`, `score_feedback` and `answer_corrections`. Training queries
   SELECT-join them with `events`.
+
+## Dismiss reasons and undo
+
+A dismissal's reason chips are picked after the `job_dismissed` event fires, so
+the event carries no reason. Training reads the reason from `job_grades.reasons`.
+Undoing a dismissal records a second `job_dismissed` event with `props.undone = true`.
