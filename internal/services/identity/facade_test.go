@@ -105,6 +105,23 @@ func TestResetPassword(t *testing.T) {
 		}
 	})
 
+	t.Run("old session no longer authenticates", func(t *testing.T) {
+		_, user, err := svc.Signup(t.Context(), "carl", "old-password", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := m.ResetPassword(t.Context(), "carl", "new-password"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSession(carl) err = %v, want ErrNotFound", err)
+		}
+	})
+
 	for _, pw := range []string{"", "1234567", strings.Repeat("a", 73)} {
 		t.Run(fmt.Sprintf("password of %d bytes is invalid", len(pw)), func(t *testing.T) {
 			err := m.ResetPassword(t.Context(), "bob", pw)

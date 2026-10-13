@@ -253,13 +253,24 @@ func (s *Store) SetRole(ctx context.Context, username, role string) error {
 	return nil
 }
 
-func (s *Store) SetPasswordHash(ctx context.Context, username, passwordHash string) error {
-	n, err := s.queries.SetUserPasswordHash(ctx, sqlc.SetUserPasswordHashParams{Username: username, PasswordHash: passwordHash})
-	if err != nil {
-		return fmt.Errorf("store.SetPasswordHash: %w", err)
+func (s *Store) SetPasswordHashTx(ctx context.Context, tx pgx.Tx, username, passwordHash string) (string, error) {
+	id, err := s.queries.WithTx(tx).SetUserPasswordHash(ctx, sqlc.SetUserPasswordHashParams{Username: username, PasswordHash: passwordHash})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", data.ErrNotFound
 	}
-	if n == 0 {
-		return data.ErrNotFound
+	if err != nil {
+		return "", fmt.Errorf("store.SetPasswordHashTx: %w", err)
+	}
+	return id.String(), nil
+}
+
+func (s *Store) DeleteUserSessionsTx(ctx context.Context, tx pgx.Tx, userID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).DeleteUserSessions(ctx, uid); err != nil {
+		return fmt.Errorf("store.DeleteUserSessionsTx: %w", err)
 	}
 	return nil
 }
