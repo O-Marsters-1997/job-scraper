@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id);
 
 CREATE TABLE IF NOT EXISTS google_oauth_tokens (
     id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -98,6 +99,23 @@ func TestResetPassword(t *testing.T) {
 		_, _, err := svc.Login(t.Context(), "bob", "old-password")
 		if status, _ := apperr.StatusFor(err); status != http.StatusUnauthorized {
 			t.Errorf("Login(bob, old-password) status = %d (err %v), want 401", status, err)
+		}
+	})
+
+	t.Run("old session no longer authenticates", func(t *testing.T) {
+		_, user, err := svc.Signup(t.Context(), "carl", "old-password", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		session, err := st.CreateSession(t.Context(), user.ID, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := m.ResetPassword(t.Context(), "carl", "new-password"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.GetSession(t.Context(), session.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSession(carl) err = %v, want ErrNotFound", err)
 		}
 	})
 

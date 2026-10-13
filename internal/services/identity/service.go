@@ -28,7 +28,8 @@ type Store interface {
 	DeleteSession(ctx context.Context, id string) error
 	DeleteExpiredSessions(ctx context.Context) error
 	SetRole(ctx context.Context, username, role string) error
-	SetPasswordHash(ctx context.Context, username, passwordHash string) error
+	SetPasswordHashTx(ctx context.Context, tx pgx.Tx, username, passwordHash string) (userID string, err error)
+	DeleteUserSessionsTx(ctx context.Context, tx pgx.Tx, userID string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
 	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
@@ -88,7 +89,20 @@ func (s *Service) ResetPassword(ctx context.Context, username, password string) 
 	if err != nil {
 		return err
 	}
-	return s.store.SetPasswordHash(ctx, username, string(hash))
+	tx, err := s.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	userID, err := s.store.SetPasswordHashTx(ctx, tx, username, string(hash))
+	if err != nil {
+		return err
+	}
+	if err := s.store.DeleteUserSessionsTx(ctx, tx, userID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // Signup creates a user and seeds their default application statuses in

@@ -78,6 +78,15 @@ func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteUserSessions = `-- name: DeleteUserSessions :exec
+DELETE FROM sessions WHERE user_id = $1
+`
+
+func (q *Queries) DeleteUserSessions(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserSessions, userID)
+	return err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT s.id, s.user_id, s.created_at, s.expires_at, u.username, u.role
 FROM sessions s
@@ -126,8 +135,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
-const setUserPasswordHash = `-- name: SetUserPasswordHash :execrows
-UPDATE users SET password_hash = $2 WHERE username = $1
+const setUserPasswordHash = `-- name: SetUserPasswordHash :one
+UPDATE users SET password_hash = $2 WHERE username = $1 RETURNING id
 `
 
 type SetUserPasswordHashParams struct {
@@ -135,12 +144,11 @@ type SetUserPasswordHashParams struct {
 	PasswordHash string
 }
 
-func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setUserPasswordHash, arg.Username, arg.PasswordHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, setUserPasswordHash, arg.Username, arg.PasswordHash)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const setUserRole = `-- name: SetUserRole :execrows

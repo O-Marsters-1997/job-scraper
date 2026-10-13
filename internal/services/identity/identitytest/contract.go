@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
@@ -91,9 +93,10 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 		if _, err := st.CreateUser(t.Context(), "gina", "old-hash", ""); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.SetPasswordHash(t.Context(), "gina", "new-hash"); err != nil {
-			t.Fatal(err)
-		}
+		commitTx(t, st, func(tx pgx.Tx) error {
+			_, err := st.SetPasswordHashTx(t.Context(), tx, "gina", "new-hash")
+			return err
+		})
 		got, err := st.GetUserByUsername(t.Context(), "gina")
 		if err != nil {
 			t.Fatal(err)
@@ -105,8 +108,28 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 
 	t.Run("set password hash returns not found for an unknown username", func(t *testing.T) {
 		st := newStore(t)
-		if err := st.SetPasswordHash(t.Context(), "nobody", "hash"); !errors.Is(err, data.ErrNotFound) {
-			t.Fatalf("SetPasswordHash(nobody) err = %v, want ErrNotFound", err)
+		tx, err := st.Begin(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(t.Context()) }()
+		if _, err := st.SetPasswordHashTx(t.Context(), tx, "nobody", "hash"); !errors.Is(err, data.ErrNotFound) {
+			t.Fatalf("SetPasswordHashTx(nobody) err = %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("delete user sessions removes only that user's sessions", func(t *testing.T) {
+		st := newStore(t)
+		hank, hankSession := newSession(t, st, "hank", time.Hour)
+		_, otherSession := newSession(t, st, "ivy", time.Hour)
+		commitTx(t, st, func(tx pgx.Tx) error {
+			return st.DeleteUserSessionsTx(t.Context(), tx, hank.ID)
+		})
+		if _, err := st.GetSession(t.Context(), hankSession.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("GetSession(hank) err = %v, want ErrNotFound", err)
+		}
+		if _, err := st.GetSession(t.Context(), otherSession.ID); err != nil {
+			t.Errorf("GetSession(ivy) err = %v, want nil", err)
 		}
 	})
 
@@ -268,4 +291,19 @@ func newSession(t *testing.T, st identity.Store, username string, ttl time.Durat
 	return user, session
 }
 
-const missingID = "00000000-0000-0000-0000-000000000000"
+func commitTx(t *testing.T, st identity.Store, fn func(tx pgx.Tx) error) {
+	t.Helper()
+	tx, err := st.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(t.Context()) }()
+	if err := fn(tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const missingID ="00000000-0000-0000-0000-000000000000"

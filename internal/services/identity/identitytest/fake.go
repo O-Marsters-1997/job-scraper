@@ -81,16 +81,27 @@ func (f *FakeStore) SetRole(_ context.Context, username, role string) error {
 	return nil
 }
 
-func (f *FakeStore) SetPasswordHash(_ context.Context, username, passwordHash string) error {
+func (f *FakeStore) SetPasswordHashTx(_ context.Context, _ pgx.Tx, username, passwordHash string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	id, ok := f.byName[username]
 	if !ok {
-		return data.ErrNotFound
+		return "", data.ErrNotFound
 	}
 	u := f.users[id]
 	u.PasswordHash = passwordHash
 	f.users[id] = u
+	return id, nil
+}
+
+func (f *FakeStore) DeleteUserSessionsTx(_ context.Context, _ pgx.Tx, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, s := range f.sessions {
+		if s.UserID == userID {
+			delete(f.sessions, id)
+		}
+	}
 	return nil
 }
 
