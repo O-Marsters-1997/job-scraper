@@ -36,9 +36,9 @@ type SignupInput struct {
 
 // CreateUserInput is the identity facade's input for cmd/admin's CreateUser.
 type CreateUserInput struct {
-	Username     string
-	PasswordHash string
-	Email        string
+	Username string
+	Password string
+	Email    string
 }
 
 type AuthUserView struct {

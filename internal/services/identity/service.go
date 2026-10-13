@@ -3,12 +3,14 @@ package identity
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
+	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
@@ -31,9 +33,9 @@ type Store interface {
 	SetPasswordHash(ctx context.Context, username, passwordHash string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
-	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
-	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
-	DeleteUserAICredential(ctx context.Context, userID, provider string) error
+	UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error
+	GetUserAICredential(ctx context.Context, userID string, provider dto.Provider) (string, error)
+	DeleteUserAICredential(ctx context.Context, userID string, provider dto.Provider) error
 	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
 }
 
@@ -52,6 +54,7 @@ type Service struct {
 	keyUsage KeyUsageFetcher
 	now      func() time.Time
 	usage    aiUsageCache
+	attempts *attemptLimiter
 }
 
 func NewService(deps Deps) *Service {
@@ -65,13 +68,36 @@ func NewService(deps Deps) *Service {
 	if s.now == nil {
 		s.now = time.Now
 	}
+	s.attempts = newAttemptLimiter(s.now, userAttemptEvery, userAttemptBurst)
 	return s
 }
 
-func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
-	user, err := s.store.GetUserByUsername(ctx, username)
+var dummyHash = sync.OnceValue(func() []byte {
+	hash, err := bcrypt.GenerateFromPassword([]byte("dummy-password"), bcryptCost)
 	if err != nil {
+		panic(err)
+	}
+	return hash
+})
+
+func (s *Service) allowAttempt(action, username string) error {
+	if !s.attempts.Allow(action + ":" + username) {
+		return apperr.TooManyRequests("too many attempts")
+	}
+	return nil
+}
+
+func (s *Service) Login(ctx context.Context, username, password string) (dto.Session, dto.User, error) {
+	if err := s.allowAttempt("login", username); err != nil {
+		return dto.Session{}, dto.User{}, err
+	}
+	user, err := s.store.GetUserByUsername(ctx, username)
+	switch {
+	case errors.Is(err, data.ErrNotFound):
+		_ = bcrypt.CompareHashAndPassword(dummyHash(), []byte(password))
 		return dto.Session{}, dto.User{}, apperr.Unauthorized("invalid credentials")
+	case err != nil:
+		return dto.Session{}, dto.User{}, err
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return dto.Session{}, dto.User{}, apperr.Unauthorized("invalid credentials")
@@ -80,9 +106,23 @@ func (s *Service) Login(ctx context.Context, username, password string) (dto.Ses
 	return session, user, err
 }
 
+func (s *Service) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.User, error) {
+	if err := validatePassword(in.Password); err != nil {
+		return dto.User{}, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcryptCost)
+	if err != nil {
+		return dto.User{}, err
+	}
+	return s.store.CreateUser(ctx, in.Username, string(hash), in.Email)
+}
+
 func (s *Service) ResetPassword(ctx context.Context, username, password string) error {
-	if password == "" {
-		return apperr.Invalid("password must not be empty")
+	if err := s.allowAttempt("reset", username); err != nil {
+		return err
+	}
+	if err := validatePassword(password); err != nil {
+		return err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
@@ -94,8 +134,14 @@ func (s *Service) ResetPassword(ctx context.Context, username, password string) 
 // Signup creates a user and seeds their default application statuses in
 // one transaction, then starts a session.
 func (s *Service) Signup(ctx context.Context, username, password, email string) (dto.Session, dto.User, error) {
-	if username == "" || password == "" {
+	if err := s.allowAttempt("signup", username); err != nil {
+		return dto.Session{}, dto.User{}, err
+	}
+	if username == "" {
 		return dto.Session{}, dto.User{}, apperr.Invalid("bad request")
+	}
+	if err := validatePassword(password); err != nil {
+		return dto.Session{}, dto.User{}, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
@@ -131,7 +177,7 @@ func (s *Service) startSession(ctx context.Context, userID string) (dto.Session,
 	if err != nil {
 		return dto.Session{}, err
 	}
-	session, err := s.store.CreateSession(ctx, userID, hashSessionToken(token), time.Now().Add(sessionTTL))
+	session, err := s.store.CreateSession(ctx, userID, hashSessionToken(token), s.now().Add(sessionTTL))
 	if err != nil {
 		return dto.Session{}, err
 	}

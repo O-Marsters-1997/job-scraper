@@ -230,7 +230,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) identity.Store) 
 
 	t.Run("list ai credential providers returns every saved provider", func(t *testing.T) {
 		st, user := newUser(t, newStore(t), "judy")
-		for _, provider := range []string{"anthropic", "openrouter"} {
+		for _, provider := range []dto.Provider{dto.ProviderAnthropic, dto.ProviderOpenRouter} {
 			if err := st.UpsertUserAICredential(t.Context(), user.ID, provider, "enc"); err != nil {
 				t.Fatal(err)
 			}

@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ollymarsters/job-scraper/internal/logger"
@@ -120,17 +122,30 @@ func TestMiddleware(t *testing.T) {
 	t.Run("run ID header and generated IDs", func(t *testing.T) {
 		h, buf := newMiddleware(t)
 		req := httptest.NewRequest(http.MethodPost, "/ingest", nil)
-		req.Header.Set(logger.HeaderRunID, "run-42")
+		const runID = "0b9f4c1e-7a53-4e0c-9d63-2f1a8c5e7b10"
+		req.Header.Set(logger.HeaderRunID, runID)
 		h.ServeHTTP(httptest.NewRecorder(), req)
 
 		got := logLines(t, buf)[0]
-		if got[logger.KeyRunID] != "run-42" {
-			t.Errorf("%s = %v, want run-42", logger.KeyRunID, got[logger.KeyRunID])
+		if got[logger.KeyRunID] != runID {
+			t.Errorf("%s = %v, want %s", logger.KeyRunID, got[logger.KeyRunID], runID)
 		}
 		for _, key := range []string{logger.KeyRequestID, logger.KeyTraceID} {
 			if id, ok := got[key].(string); !ok || id == "" {
 				t.Errorf("%s = %v, want a non-empty string", key, got[key])
 			}
+		}
+	})
+
+	t.Run("non-UUID run ID header is replaced", func(t *testing.T) {
+		h, buf := newMiddleware(t)
+		req := httptest.NewRequest(http.MethodPost, "/ingest", nil)
+		req.Header.Set(logger.HeaderRunID, "run-42\nforged=1")
+		h.ServeHTTP(httptest.NewRecorder(), req)
+
+		got, _ := logLines(t, buf)[0][logger.KeyRunID].(string)
+		if _, err := uuid.Parse(got); err != nil {
+			t.Errorf("%s = %q, want a generated UUID", logger.KeyRunID, got)
 		}
 	})
 
@@ -212,3 +227,21 @@ func TestSpanContextOverridesTraceID(t *testing.T) {
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestLogFetchOmitsQueryAndUserinfo(t *testing.T) {
+	log, buf := newJSONLogger(t, "debug")
+	prev := slog.Default()
+	slog.SetDefault(log)
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	u, err := url.Parse("https://user:pw@api.example.com/jobs/1?token=secret#frag")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	logger.LogFetch(t.Context(), u, &http.Response{StatusCode: http.StatusOK}, nil, 0)
+
+	got := logLines(t, buf)[0][logger.KeyURL]
+	if want := "https://api.example.com/jobs/1"; got != want {
+		t.Errorf("%s = %v, want %s", logger.KeyURL, got, want)
+	}
+}

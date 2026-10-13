@@ -138,14 +138,14 @@ func (s *Store) UpdateEmail(ctx context.Context, userID, email string) (dto.Prof
 	return toProfileDTO(row.Username, row.Email), nil
 }
 
-func (s *Store) UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error {
+func (s *Store) UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
 	if _, err := s.queries.UpsertUserAICredential(ctx, sqlc.UpsertUserAICredentialParams{
 		UserID:    uid,
-		Provider:  provider,
+		Provider:  string(provider),
 		ApiKeyEnc: encKey,
 	}); err != nil {
 		return fmt.Errorf("store.UpsertUserAICredential: %w", err)
@@ -153,14 +153,14 @@ func (s *Store) UpsertUserAICredential(ctx context.Context, userID, provider, en
 	return nil
 }
 
-func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string) (string, error) {
+func (s *Store) GetUserAICredential(ctx context.Context, userID string, provider dto.Provider) (string, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return "", err
 	}
 	row, err := s.queries.GetUserAICredential(ctx, sqlc.GetUserAICredentialParams{
 		UserID:   uid,
-		Provider: provider,
+		Provider: string(provider),
 	})
 	if err != nil {
 		return "", data.QueryErr("GetUserAICredential", err)
@@ -168,14 +168,14 @@ func (s *Store) GetUserAICredential(ctx context.Context, userID, provider string
 	return row.ApiKeyEnc, nil
 }
 
-func (s *Store) DeleteUserAICredential(ctx context.Context, userID, provider string) error {
+func (s *Store) DeleteUserAICredential(ctx context.Context, userID string, provider dto.Provider) error {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return err
 	}
 	if err := s.queries.DeleteUserAICredential(ctx, sqlc.DeleteUserAICredentialParams{
 		UserID:   uid,
-		Provider: provider,
+		Provider: string(provider),
 	}); err != nil {
 		return fmt.Errorf("store.DeleteUserAICredential: %w", err)
 	}

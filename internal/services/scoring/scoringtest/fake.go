@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -504,6 +505,11 @@ var _ scoring.Store = (*FakeStore)(nil)
 func (f *FakeStore) UpsertPushSubscription(_ context.Context, userID string, sub dto.PushSubscriptionInput) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for owner, subs := range f.pushes {
+		if owner != userID && slices.ContainsFunc(subs, func(s dto.PushSubscriptionInput) bool { return s.Endpoint == sub.Endpoint }) {
+			return apperr.Conflict("push endpoint belongs to another user")
+		}
+	}
 	f.deletePush(sub.Endpoint)
 	f.pushes[userID] = append(f.pushes[userID], sub)
 	return nil

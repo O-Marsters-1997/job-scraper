@@ -161,27 +161,27 @@ func (f *FakeStore) UpdateEmail(_ context.Context, userID, email string) (dto.Pr
 	return dto.Profile{Username: u.Username, Email: u.Email}, nil
 }
 
-func (f *FakeStore) UpsertUserAICredential(_ context.Context, userID, provider, encKey string) error {
+func (f *FakeStore) UpsertUserAICredential(_ context.Context, userID string, provider dto.Provider, encKey string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.aiCreds[userID+"/"+provider] = encKey
+	f.aiCreds[userID+"/"+string(provider)] = encKey
 	return nil
 }
 
-func (f *FakeStore) GetUserAICredential(_ context.Context, userID, provider string) (string, error) {
+func (f *FakeStore) GetUserAICredential(_ context.Context, userID string, provider dto.Provider) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	enc, ok := f.aiCreds[userID+"/"+provider]
+	enc, ok := f.aiCreds[userID+"/"+string(provider)]
 	if !ok {
 		return "", data.ErrNotFound
 	}
 	return enc, nil
 }
 
-func (f *FakeStore) DeleteUserAICredential(_ context.Context, userID, provider string) error {
+func (f *FakeStore) DeleteUserAICredential(_ context.Context, userID string, provider dto.Provider) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.aiCreds, userID+"/"+provider)
+	delete(f.aiCreds, userID+"/"+string(provider))
 	return nil
 }
 

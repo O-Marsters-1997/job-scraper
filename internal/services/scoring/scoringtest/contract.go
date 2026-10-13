@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
@@ -441,6 +442,29 @@ func RunStoreContract(t *testing.T, newFixture func(t *testing.T) Fixture) {
 		left, err := f.Store.ListScoreFeedback(ctx, other, dto.ScoreFeedbackFilter{Model: "m"}, 10, 0)
 		if err != nil || len(left) != 1 {
 			t.Fatalf("ListScoreFeedback(other) = %+v, %v, want the other user's one entry", left, err)
+		}
+	})
+
+	t.Run("upserting another user's push endpoint conflicts and changes nothing", func(t *testing.T) {
+		f := newFixture(t)
+		ctx := t.Context()
+		owner, other := f.NewUser(), f.NewUser()
+		sub := dto.PushSubscriptionInput{Endpoint: "https://push.example/a", Keys: dto.PushKeys{P256dh: "p1", Auth: "a1"}}
+		if err := f.Store.UpsertPushSubscription(ctx, owner, sub); err != nil {
+			t.Fatalf("UpsertPushSubscription(owner) = %v", err)
+		}
+
+		hijack := dto.PushSubscriptionInput{Endpoint: sub.Endpoint, Keys: dto.PushKeys{P256dh: "p2", Auth: "a2"}}
+		if err := f.Store.UpsertPushSubscription(ctx, other, hijack); !apperr.IsKind(err, apperr.KindConflict) {
+			t.Fatalf("UpsertPushSubscription(other) err = %v, want a conflict", err)
+		}
+
+		got, err := f.Store.ListPushSubscriptions(ctx, owner)
+		if diff := cmp.Diff([]dto.PushSubscriptionInput{sub}, got); err != nil || diff != "" {
+			t.Errorf("ListPushSubscriptions(owner) = %v (-want +got):\n%s", err, diff)
+		}
+		if got, err := f.Store.ListPushSubscriptions(ctx, other); err != nil || len(got) != 0 {
+			t.Errorf("ListPushSubscriptions(other) = %+v, %v, want none", got, err)
 		}
 	})
 }

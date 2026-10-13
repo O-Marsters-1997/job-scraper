@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
 	"github.com/ollymarsters/job-scraper/internal/data/db"
@@ -30,33 +32,47 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 )
 
+const shutdownTimeout = 20 * time.Second
+
 func main() {
 	slog.SetDefault(logger.MustFromEnv())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 
+	err := run(ctx)
+	cancel()
+	if err != nil {
+		slog.Error("api exited", slog.Any(logger.KeyErr, err))
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
 	for _, key := range []string{"SESSION_SECRET", "INGEST_SERVICE_TOKEN"} {
 		if os.Getenv(key) == "" {
-			fatal(ctx, "config invalid", fmt.Errorf("%s is required", key))
+			return fmt.Errorf("config invalid: %s is required", key)
 		}
+	}
+	maxTargets, err := maxAutomaticTargets()
+	if err != nil {
+		return err
 	}
 
 	shutdownTracing, err := telemetry.InitTracing(ctx)
 	if err != nil {
-		fatal(ctx, "tracing init failed", err)
+		return fmt.Errorf("init tracing: %w", err)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
 
 	pool, err := db.Connect(ctx)
 	if err != nil {
-		fatal(ctx, "db init failed", err)
+		return fmt.Errorf("init db: %w", err)
 	}
 	defer pool.Close()
 
 	q, err := queue.NewBrokerFromEnv()
 	if err != nil {
-		fatal(ctx, "queue init failed", err)
+		return fmt.Errorf("init queue: %w", err)
 	}
 	slog.InfoContext(ctx, "queue client ready")
 	defer func() { _ = q.Close() }()
@@ -67,10 +83,8 @@ func main() {
 	idm, err := identity.New(pool, apps,
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
-		fatal(ctx, "identity init failed", err)
+		return fmt.Errorf("init identity: %w", err)
 	}
-
-	go schedule.Every(ctx, "session cleanup", 24*time.Hour, idm.DeleteExpiredSessions)
 
 	notifyFrom := os.Getenv("NOTIFY_EMAIL_FROM")
 	if notifyFrom == "" {
@@ -80,22 +94,13 @@ func main() {
 	if key := os.Getenv("DECODO_API_KEY"); key != "" {
 		proxyQuota = jobsearch.NewDecodoQuota(&http.Client{Timeout: 10 * time.Second}, jobsearch.DecodoSubscriptionsURL, key)
 	}
-	js := jobsearch.New(pool, q, scoringFacade, proxyQuota, maxAutomaticTargets(ctx))
-	if proxyQuota != nil {
-		go schedule.Every(ctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
-	}
+	js := jobsearch.New(pool, q, scoringFacade, proxyQuota, maxTargets)
 	scoringModule := scoring.New(pool, idm, idm, js, os.Getenv("RESEND_API_KEY"), notifyFrom,
 		scoring.VAPID{PublicKey: os.Getenv("VAPID_PUBLIC_KEY"), PrivateKey: os.Getenv("VAPID_PRIVATE_KEY"), Subject: os.Getenv("VAPID_SUBJECT")})
-	go func() {
-		if err := scoringModule.Run(ctx); err != nil {
-			slog.ErrorContext(ctx, "answer effect loop failed", slog.Any(logger.KeyErr, err))
-		}
-	}()
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	reg.MustRegister(telemetry.NewStateCollector(scoringModule))
-	telemetry.ServeMetrics(ctx, reg)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
@@ -103,40 +108,68 @@ func main() {
 	}
 
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
-
 	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm)
-	go func() {
-		if err := cvtailorModule.Run(ctx); err != nil {
-			slog.ErrorContext(ctx, "draft generation loop failed", slog.Any(logger.KeyErr, err))
-		}
-	}()
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)}
-
-	go func() {
-		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-	}()
-
-	slog.InfoContext(ctx, "api server starting", slog.String("addr", port))
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fatal(ctx, "server error", err)
+	router, err := api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)
+	if err != nil {
+		fatal(ctx, "build router", err)
 	}
+	srv := &http.Server{Addr: port, Handler: router}
+
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return schedule.Every(gctx, "session cleanup", 24*time.Hour, idm.DeleteExpiredSessions)
+	})
+	if proxyQuota != nil {
+		g.Go(func() error {
+			return schedule.Every(gctx, "proxy usage refresh", jobsearch.ProxyUsageInterval, js.RefreshProxyUsage)
+		})
+	}
+	g.Go(func() error {
+		if err := scoringModule.Run(gctx); err != nil {
+			return fmt.Errorf("run answer effect loop: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := cvtailorModule.Run(gctx); err != nil {
+			return fmt.Errorf("run draft generation loop: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		if err := telemetry.ServeMetrics(gctx, reg); err != nil {
+			return fmt.Errorf("serve metrics: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		slog.InfoContext(gctx, "api server starting", slog.String("addr", port))
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("serve http: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-gctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown http: %w", err)
+		}
+		return nil
+	})
+	return g.Wait()
 }
 
-func fatal(ctx context.Context, msg string, err error) {
-	slog.ErrorContext(ctx, msg, slog.Any(logger.KeyErr, err)) //nolint:sloglint // pedantic: msg is a literal at every call site
-	os.Exit(1)
-}
-
-func maxAutomaticTargets(ctx context.Context) int {
+func maxAutomaticTargets() (int, error) {
 	raw := os.Getenv("MAX_AUTOMATIC_TARGETS")
 	if raw == "" {
-		return sourcetargets.DefaultMaxAutomatic
+		return sourcetargets.DefaultMaxAutomatic, nil
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 {
-		fatal(ctx, "config invalid", fmt.Errorf("MAX_AUTOMATIC_TARGETS must be a positive integer, got %q", raw))
+		return 0, fmt.Errorf("config invalid: MAX_AUTOMATIC_TARGETS must be a positive integer, got %q", raw)
 	}
-	return n
+	return n, nil
 }
