@@ -111,7 +111,11 @@ func main() {
 		}
 	}()
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)}
+	router, err := api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)
+	if err != nil {
+		fatal(ctx, "build router", err)
+	}
+	srv := &http.Server{Addr: port, Handler: router}
 
 	go func() {
 		<-ctx.Done()
