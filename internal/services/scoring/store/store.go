@@ -496,7 +496,8 @@ func (s *Store) ListJobRejections(ctx context.Context, userID string, beforeReje
 	if err != nil {
 		return nil, err
 	}
-	params := sqlc.ListJobRejectionsParams{UserID: uid, RowLimit: int32(limit)}
+	const maxRejectionPage = 200
+	params := sqlc.ListJobRejectionsParams{UserID: uid, RowLimit: int32(min(max(limit, 1), maxRejectionPage))}
 	if !beforeRejectedAt.IsZero() {
 		params.BeforeRejectedAt = pgtype.Timestamptz{Time: beforeRejectedAt, Valid: true}
 		if params.BeforeJobID, err = data.UUID(beforeJobID); err != nil {
