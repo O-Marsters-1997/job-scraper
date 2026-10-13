@@ -111,7 +111,14 @@ func main() {
 		}
 	}()
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)}
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 
 	go func() {
 		<-ctx.Done()

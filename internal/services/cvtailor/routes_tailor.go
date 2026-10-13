@@ -7,12 +7,15 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
+
+const suggestWriteWindow = 30 * time.Second
 
 func (m *Module) tailorRoutes(r chi.Router) {
 	r.Route("/tailoring", func(r chi.Router) {
@@ -103,6 +106,7 @@ func (m *Module) suggest() http.HandlerFunc {
 			w.WriteHeader(http.StatusOK)
 			rc := http.NewResponseController(w)
 			for ev := range events {
+				_ = rc.SetWriteDeadline(time.Now().Add(suggestWriteWindow))
 				switch {
 				case ev.Err != nil:
 					writeEvent(w, "error", map[string]string{"message": ev.Err.Error()})
