@@ -201,6 +201,23 @@ func TestListCompanies(t *testing.T) {
 		}
 	})
 
+	t.Run("poster narrows the list to that bucket", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		agency := seedCompany(t, st, dto.CompanyUpsert{Slug: "recruit-co", Name: "Recruit Co"})
+		seedCompany(t, st, dto.CompanyUpsert{Slug: "plain-co", Name: "Plain Co"})
+		if err := st.SetCompanyKind(t.Context(), agency.ID, dto.KindAgency); err != nil {
+			t.Fatal(err)
+		}
+		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Poster: "agency"})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != agency.ID {
+			t.Fatalf("ListCompanies(poster=agency) = %+v, %v, want only Recruit Co", page, err)
+		}
+		page, err = svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Poster: "direct"})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "plain-co" {
+			t.Fatalf("ListCompanies(poster=direct) = %+v, %v, want only Plain Co", page, err)
+		}
+	})
+
 	t.Run("an empty result is an empty list", func(t *testing.T) {
 		svc, _ := newCompanyService(queuetest.NewRecorder())
 		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Q: "nothing"})
