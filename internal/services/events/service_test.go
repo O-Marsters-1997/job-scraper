@@ -98,8 +98,23 @@ func TestRecord(t *testing.T) {
 			t.Fatalf("Record() err = %v", err)
 		}
 
-		if got := props(t, only(t, st)); got["undone"] != true {
-			t.Errorf("props = %v, want undone", got)
+		got := props(t, only(t, st))
+		if got["undone"] != true || got["score"] != nil || got["breakdown"] != nil {
+			t.Errorf("props = %v, want undone with no score stamp", got)
+		}
+	})
+
+	t.Run("ignores undone on other event types", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.ScoresAs(scored))
+
+		in := dto.EventInput{Type: events.JobOpened, SubjectID: jobID, Undone: true}
+		if _, err := svc.Record(t.Context(), userID, in); err != nil {
+			t.Fatalf("Record() err = %v", err)
+		}
+
+		if got := props(t, only(t, st)); got["undone"] != nil {
+			t.Errorf("props = %v, want no undone", got)
 		}
 	})
 

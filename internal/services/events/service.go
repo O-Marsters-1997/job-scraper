@@ -82,8 +82,9 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	if len(in.Reason) > maxReasonLen {
 		return struct{}{}, apperr.Invalid("reason too long")
 	}
+	undone := in.Undone && in.Type == JobDismissed
 	var snap *dto.JobScoreEvidence
-	if in.SubjectID != "" {
+	if in.SubjectID != "" && !undone {
 		var err error
 		if snap, err = s.snapshots.ScoreSnapshot(ctx, userID, in.SubjectID); err != nil {
 			return struct{}{}, fmt.Errorf("events.Record: snapshot: %w", err)
@@ -91,7 +92,7 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	}
 	props := stampFrom(snap, in.Type == JobDismissed)
 	props.Reason = in.Reason
-	props.Undone = in.Undone && in.Type == JobDismissed
+	props.Undone = undone
 	return struct{}{}, s.insert(ctx, nil, userID, in.Type, in.SubjectID, props)
 }
 
