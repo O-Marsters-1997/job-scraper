@@ -102,6 +102,65 @@ func TestLogin(t *testing.T) {
 	}
 }
 
+type failingGetUser struct {
+	identity.Store
+	err error
+}
+
+func (f failingGetUser) GetUserByUsername(context.Context, string) (dto.User, error) {
+	return dto.User{}, f.err
+}
+
+func TestLoginFailures(t *testing.T) {
+	t.Run("store error is returned, not invalid credentials", func(t *testing.T) {
+		boom := errors.New("db down")
+		svc := identity.NewService(testDeps(t, identity.Deps{Store: failingGetUser{identitytest.NewFakeStore(), boom}}))
+
+		_, _, err := svc.Login(t.Context(), "alice", "secret")
+		if !errors.Is(err, boom) {
+			t.Errorf("Login err = %v, want %v", err, boom)
+		}
+		if _, ok := apperr.StatusFor(err); ok {
+			t.Errorf("Login err = %v, want an error with no apperr kind (500)", err)
+		}
+	})
+
+	t.Run("attempts for one username are limited until the bucket refills", func(t *testing.T) {
+		now := time.Unix(1_700_000_000, 0)
+		st := identitytest.NewFakeStore()
+		seedUser(t, st, "alice", "secret")
+		svc := identity.NewService(testDeps(t, identity.Deps{Store: st, Now: func() time.Time { return now }}))
+
+		for range 5 {
+			_, _, _ = svc.Login(t.Context(), "alice", "wrong")
+		}
+		if _, _, err := svc.Login(t.Context(), "alice", "secret"); !apperr.IsKind(err, apperr.KindTooManyRequests) {
+			t.Fatalf("Login after burst err = %v, want KindTooManyRequests", err)
+		}
+		if _, _, err := svc.Login(t.Context(), "bob", "secret"); apperr.IsKind(err, apperr.KindTooManyRequests) {
+			t.Errorf("Login(bob) err = %v, want another username unaffected", err)
+		}
+
+		now = now.Add(time.Minute)
+		if _, _, err := svc.Login(t.Context(), "alice", "secret"); err != nil {
+			t.Errorf("Login after refill err = %v, want nil", err)
+		}
+	})
+}
+
+func TestSignupRateLimit(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	svc := identity.NewService(testDeps(t, identity.Deps{Now: func() time.Time { return now }}))
+
+	var err error
+	for range 6 {
+		_, _, err = svc.Signup(t.Context(), "bob", "password1", "")
+	}
+	if !apperr.IsKind(err, apperr.KindTooManyRequests) {
+		t.Errorf("6th Signup err = %v, want KindTooManyRequests", err)
+	}
+}
+
 func TestSignup(t *testing.T) {
 	ctx := t.Context()
 
@@ -109,7 +168,7 @@ func TestSignup(t *testing.T) {
 		statuses := applicationstest.NewFakeStore()
 		deps := testDeps(t, identity.Deps{Seeder: applications.Build(applications.Deps{Store: statuses})})
 
-		session, user, err := identity.NewService(deps).Signup(ctx, "bob", "hunter2", "bob@example.com")
+		session, user, err := identity.NewService(deps).Signup(ctx, "bob", "hunter22", "bob@example.com")
 		if err != nil {
 			t.Fatalf("Signup(bob) err = %v", err)
 		}
@@ -139,8 +198,9 @@ func TestSignup(t *testing.T) {
 		check            func(error) bool
 	}{
 		{"missing credentials", "", "", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindInvalid) }},
-		{"duplicate username", "alice", "pass", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindConflict) }},
-		{"seeding fails", "bob", "hunter2", failingSeeder{seedErr}, func(err error) bool { return errors.Is(err, seedErr) }},
+		{"short password", "bob", "1234567", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindInvalid) }},
+		{"duplicate username", "alice", "password1", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindConflict) }},
+		{"seeding fails", "bob", "hunter22", failingSeeder{seedErr}, func(err error) bool { return errors.Is(err, seedErr) }},
 	}
 	for _, tt := range errCases {
 		t.Run(tt.name, func(t *testing.T) {

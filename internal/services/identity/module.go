@@ -49,12 +49,18 @@ type Deps struct {
 }
 
 type Module struct {
-	store   Store
-	service *Service
+	store     Store
+	service   *Service
+	ipLimiter *attemptLimiter
 }
 
 func Build(deps Deps) *Module {
-	return &Module{store: deps.Store, service: NewService(deps)}
+	svc := NewService(deps)
+	return &Module{
+		store:     deps.Store,
+		service:   svc,
+		ipLimiter: newAttemptLimiter(svc.now, ipAttemptEvery, ipAttemptBurst),
+	}
 }
 
 // New wires the full identity context, including the Google Link and AI
@@ -98,7 +104,7 @@ func (m *Module) DeleteExpiredSessions(ctx context.Context) error {
 // CreateUser is called by cmd/admin's create-user command; it does not seed
 // default application statuses or start a session.
 func (m *Module) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.User, error) {
-	return m.store.CreateUser(ctx, in.Username, in.PasswordHash, in.Email)
+	return m.service.CreateUser(ctx, in)
 }
 
 // UserIDByUsername resolves a username to its user ID for cmd/admin's

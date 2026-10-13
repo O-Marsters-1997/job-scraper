@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 
 	"log/slog"
@@ -77,15 +76,6 @@ func runCreateUser(args []string) {
 	username := args[0]
 
 	passwordBytes := readPassword("Password: ")
-	if len(passwordBytes) == 0 {
-		fmt.Fprintln(os.Stderr, "password must not be empty")
-		os.Exit(1)
-	}
-
-	hash, err := bcrypt.GenerateFromPassword(passwordBytes, 12)
-	if err != nil {
-		fatal("hash password", err)
-	}
 
 	ctx := context.Background()
 	pool := connectDB(ctx)
@@ -93,7 +83,7 @@ func runCreateUser(args []string) {
 
 	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)))
 	idm := identity.NewFacade(pool, apps)
-	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, PasswordHash: string(hash)})
+	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, Password: string(passwordBytes)})
 	if err != nil {
 		fatal("create user", err)
 	}
