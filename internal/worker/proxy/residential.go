@@ -121,7 +121,7 @@ func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Resp
 	attempt := req.WithContext(context.WithValue(req.Context(), sessionKey{}, session))
 	start := time.Now()
 	resp, err := t.residential.RoundTrip(attempt)
-	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	logger.LogFetch(req.Context(), req.URL, resp, err, time.Since(start))
 	record(req, t.source, routeResidential, resp, err)
 	if err != nil {
 		if req.Context().Err() == nil {
