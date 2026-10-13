@@ -13,8 +13,9 @@ import (
 )
 
 func (m *Module) PublicRoutes(r chi.Router) {
-	r.Post("/auth/login", loginHandler(m.service))
-	r.Post("/auth/signup", signupHandler(m.service))
+	limited := r.With(limitByRemoteHost(m.ipLimiter))
+	limited.Post("/auth/login", loginHandler(m.service))
+	limited.Post("/auth/signup", signupHandler(m.service))
 }
 
 // Routes mounts logout, me, profile, AI credentials/prefs and the rest of
@@ -37,17 +38,12 @@ func (m *Module) Routes(r chi.Router) {
 }
 
 func newCookie(name, value string, maxAge int) *http.Cookie {
-	secure := os.Getenv("COOKIE_SECURE") == "true"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
 	return &http.Cookie{
 		Name:     name,
 		Value:    value,
 		HttpOnly: true,
-		SameSite: sameSite,
-		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
 		Path:     "/",
 		MaxAge:   maxAge,
 	}

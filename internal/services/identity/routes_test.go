@@ -58,7 +58,7 @@ func cookie(t *testing.T, w *httptest.ResponseRecorder, name string) *http.Cooki
 
 func signup(t *testing.T, r chi.Router, username string) *http.Cookie {
 	t.Helper()
-	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"`+username+`","password":"hunter2"}`)
+	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"`+username+`","password":"hunter22"}`)
 	wantStatus(t, w, http.StatusCreated)
 	return cookie(t, w, "session_id")
 }
@@ -104,10 +104,20 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	)
 }
 
+func TestAuthRoutesLimitByRemoteHost(t *testing.T) {
+	r := newTestRouter(t)
+
+	for range 30 {
+		wantStatus(t, handlerstest.Serve(t, r, "POST /auth/login", `{`), http.StatusBadRequest)
+	}
+	wantStatus(t, handlerstest.Serve(t, r, "POST /auth/login", `{`), http.StatusTooManyRequests)
+	wantStatus(t, handlerstest.Serve(t, r, "POST /auth/signup", `{`), http.StatusTooManyRequests)
+}
+
 func TestSessionCookieJourney(t *testing.T) {
 	r := newTestRouter(t)
 
-	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"alice","password":"hunter2"}`)
+	w := handlerstest.Serve(t, r, "POST /auth/signup", `{"username":"alice","password":"hunter22"}`)
 	wantStatus(t, w, http.StatusCreated)
 	session := cookie(t, w, "session_id")
 	if session.Value == "" {
@@ -117,7 +127,7 @@ func TestSessionCookieJourney(t *testing.T) {
 		t.Errorf("signup body = %+v, want username alice", got)
 	}
 
-	w = handlerstest.Serve(t, r, "POST /auth/login", `{"username":"alice","password":"hunter2"}`)
+	w = handlerstest.Serve(t, r, "POST /auth/login", `{"username":"alice","password":"hunter22"}`)
 	wantStatus(t, w, http.StatusOK)
 	if cookie(t, w, "session_id").Value == "" {
 		t.Error("login: want a session_id cookie")

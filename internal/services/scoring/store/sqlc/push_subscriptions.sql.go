@@ -57,11 +57,12 @@ func (q *Queries) ListPushSubscriptions(ctx context.Context, userID pgtype.UUID)
 	return items, nil
 }
 
-const upsertPushSubscription = `-- name: UpsertPushSubscription :exec
+const upsertPushSubscription = `-- name: UpsertPushSubscription :execrows
 INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
 VALUES ($1::uuid, $2::text, $3::text, $4::text)
 ON CONFLICT (endpoint) DO UPDATE
-SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+WHERE push_subscriptions.user_id = EXCLUDED.user_id
 `
 
 type UpsertPushSubscriptionParams struct {
@@ -71,12 +72,15 @@ type UpsertPushSubscriptionParams struct {
 	Auth     string
 }
 
-func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) error {
-	_, err := q.db.Exec(ctx, upsertPushSubscription,
+func (q *Queries) UpsertPushSubscription(ctx context.Context, arg UpsertPushSubscriptionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, upsertPushSubscription,
 		arg.UserID,
 		arg.Endpoint,
 		arg.P256dh,
 		arg.Auth,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

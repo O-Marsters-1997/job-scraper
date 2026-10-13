@@ -130,4 +130,30 @@ func TestMatch(t *testing.T) {
 			t.Errorf("Match(extra) diff = %q", diff)
 		}
 	})
+
+	t.Run("empty second PDF reports a mismatch", func(t *testing.T) {
+		ok, diff := pdftext.Match(base, nil, 0.5)
+		if ok || !strings.Contains(diff, "missing from the second PDF") {
+			t.Errorf("Match(runs, nil) = %v, %q; want false, missing", ok, diff)
+		}
+	})
+
+	t.Run("two empty PDFs match", func(t *testing.T) {
+		if ok, diff := pdftext.Match(nil, nil, 0.5); !ok {
+			t.Errorf("Match(nil, nil) = false, %q; want true", diff)
+		}
+	})
+}
+
+func FuzzMatch(f *testing.F) {
+	f.Add("a", "b", 1.0, 2.0, 0.5, true)
+	f.Fuzz(func(t *testing.T, ta, tb string, x, y, tol float64, emptyB bool) {
+		a := []pdftext.Run{{Page: 1, X: x, Y: y, Text: ta}, {Page: 1, X: y, Y: x, Text: tb}}
+		b := a[:1]
+		if emptyB {
+			b = nil
+		}
+		pdftext.Match(a, b, tol)
+		pdftext.Match(b, a, tol)
+	})
 }
