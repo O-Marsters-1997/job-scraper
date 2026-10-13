@@ -14,6 +14,7 @@ SELECT u.id AS user_id,
     COALESCE(sc.notify_threshold, 70) AS notify_threshold,
     COALESCE(sc.preferences, '{}'::jsonb) AS preferences,
     COALESCE(sc.max_job_age_days, 7) AS max_job_age_days,
+    sc.updated_at AS config_version,
     EXISTS (
         SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
         WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'

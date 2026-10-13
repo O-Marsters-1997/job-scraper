@@ -498,8 +498,8 @@ func (f *flakyClaimStore) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffe
 	return f.FakeStore.ClaimAnswerEffect(ctx)
 }
 
-func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore) ([]string, error) {
-	saved, err := f.FakeStore.CompleteAnswerEffect(ctx, effect, answers, scores)
+func (f *flakyClaimStore) CompleteAnswerEffect(ctx context.Context, effect dto.AnswerEffect, answers map[string]dto.Answer, scores []dto.JobScore, rejections []dto.JobRejection) ([]string, error) {
+	saved, err := f.FakeStore.CompleteAnswerEffect(ctx, effect, answers, scores, rejections)
 	f.completed <- struct{}{}
 	return saved, err
 }
@@ -1779,6 +1779,63 @@ func TestRunTick_CompanyProfileAnswers(t *testing.T) {
 
 		if len(answerer.calls) != 1 || len(answerer.calls[0]) != 6 {
 			t.Errorf("Answer calls = %v, want one call with all six questions", answerer.calls)
+		}
+	})
+}
+
+func TestRunTick_RecordsRejections(t *testing.T) {
+	version := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+
+	t.Run("a filtered-out user is recorded with the reason and config version while others are scored", func(t *testing.T) {
+		st := newFakeStore()
+		st.SeedAnswers(testJob.ID, testJob.ContentFingerprint, jev.Model, cachedAnswers())
+		rejecting := picking("user-1", "tech:go")
+		rejecting.ExcludedCompanies = []string{"monzo"}
+		rejecting.UpdatedAt = version
+		seedEffect(st, false, rejecting, picking("user-2", "tech:go"))
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Scores) != 1 || completed[0].Scores[0].UserID != "user-2" {
+			t.Fatalf("completed = %+v, want user-2 scored alone", completed)
+		}
+		want := []dto.JobRejection{{
+			JobID: testJob.ID, UserID: "user-1", Kind: dto.RejectionKindFilter, Reason: "company: monzo", ConfigVersion: version,
+		}}
+		if diff := cmp.Diff(want, completed[0].Rejections); diff != "" {
+			t.Errorf("rejections (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("nobody surviving still records every rejection", func(t *testing.T) {
+		st := newFakeStore()
+		rejecting := picking("user-1", "tech:go")
+		rejecting.ExcludedTitleKeywords = []string{"backend"}
+		seedEffect(st, false, rejecting)
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Rejections) != 1 || completed[0].Rejections[0].Reason != "title keyword: backend" {
+			t.Errorf("completed = %+v, want one title-keyword rejection", completed)
+		}
+	})
+
+	t.Run("a job past the age cutoff is recorded as an age rejection", func(t *testing.T) {
+		st := newFakeStore()
+		old := testJob
+		old.PostedAt = ptr(time.Now().AddDate(0, 0, -30))
+		cfg := picking("user-1", "tech:go")
+		cfg.MaxJobAgeDays = 7
+		st.SeedJob(old, []dto.SearchConfig{cfg})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: old.ID, Fingerprint: old.ContentFingerprint, Attempts: 1})
+
+		runTick(t, st)
+
+		completed := st.Completed()
+		if len(completed) != 1 || len(completed[0].Rejections) != 1 || completed[0].Rejections[0].Kind != dto.RejectionKindAge {
+			t.Errorf("completed = %+v, want one age rejection", completed)
 		}
 	})
 }
