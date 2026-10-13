@@ -52,6 +52,7 @@ type jobProps struct {
 	ScoreFingerprint string         `json:"score_fingerprint,omitempty"`
 	Breakdown        []dto.ScoreRow `json:"breakdown,omitempty"`
 	Reason           string         `json:"reason,omitempty"`
+	Undone           bool           `json:"undone,omitempty"`
 }
 
 type applicationProps struct {
@@ -90,6 +91,7 @@ func (s *Service) Record(ctx context.Context, userID string, in dto.EventInput) 
 	}
 	props := stampFrom(snap, in.Type == JobDismissed)
 	props.Reason = in.Reason
+	props.Undone = in.Undone && in.Type == JobDismissed
 	return struct{}{}, s.insert(ctx, nil, userID, in.Type, in.SubjectID, props)
 }
 

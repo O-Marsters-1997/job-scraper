@@ -89,6 +89,20 @@ func TestRecord(t *testing.T) {
 		}
 	})
 
+	t.Run("marks an undone dismissal", func(t *testing.T) {
+		st := eventstest.NewFakeStore()
+		svc := events.NewService(st, eventstest.ScoresAs(scored))
+
+		in := dto.EventInput{Type: events.JobDismissed, SubjectID: jobID, Undone: true}
+		if _, err := svc.Record(t.Context(), userID, in); err != nil {
+			t.Fatalf("Record() err = %v", err)
+		}
+
+		if got := props(t, only(t, st)); got["undone"] != true {
+			t.Errorf("props = %v, want undone", got)
+		}
+	})
+
 	t.Run("records an alert open without a subject", func(t *testing.T) {
 		st := eventstest.NewFakeStore()
 		svc := events.NewService(st, eventstest.ScoresAs(scored))

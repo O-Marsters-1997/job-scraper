@@ -60,6 +60,7 @@ export function useDismissJob() {
 		},
 		undo: async (jobId: string) => {
 			await clear.mutateAsync(jobId);
+			recordEvent({ type: "job_dismissed", subject_id: jobId, undone: true });
 			showFor(null);
 		},
 		setReasons: async (jobId: string, reasons: GradeReason[]) => {
