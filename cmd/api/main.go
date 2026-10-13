@@ -114,7 +114,14 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build router: %w", err)
 	}
-	srv := &http.Server{Addr: port, Handler: router}
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
