@@ -172,6 +172,17 @@ func (a *app) ingest(job map[string]string) ingestResult {
 	return send[ingestResult](a, http.StatusOK, req)
 }
 
+func TestRouterRejectsBadBodies(t *testing.T) {
+	a := newApp(t)
+
+	tooBig := jsonRequest(t, http.MethodPost, "/auth/login", map[string]string{"email": strings.Repeat("x", 2<<20)})
+	send[map[string]any](a, http.StatusRequestEntityTooLarge, tooBig)
+
+	text := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{}`))
+	text.Header.Set("Content-Type", "text/plain")
+	send[map[string]any](a, http.StatusUnsupportedMediaType, text)
+}
+
 type panickingModule struct{}
 
 func (panickingModule) Routes(chi.Router) {}

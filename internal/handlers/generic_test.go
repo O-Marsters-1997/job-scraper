@@ -80,6 +80,55 @@ func TestHandle(t *testing.T) {
 	})
 }
 
+type decodeIn struct{ A int }
+
+func decodeBody(body string) (decodeIn, error) {
+	r := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body))
+	r.Body = http.MaxBytesReader(httptest.NewRecorder(), r.Body, 32)
+	return handlers.DecodeBody[decodeIn](r)
+}
+
+func TestDecodeBody(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want decodeIn
+	}{
+		{"value", `{"A":1}`, decodeIn{A: 1}},
+		{"empty body is the zero value", ``, decodeIn{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := decodeBody(tt.body)
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("(-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDecodeBodyErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want apperr.Kind
+	}{
+		{"trailing value", `{"A":1}{"A":2}`, apperr.KindInvalid},
+		{"trailing garbage", `{"A":1} x`, apperr.KindInvalid},
+		{"over the limit", `{"A":1,"B":"` + strings.Repeat("x", 64) + `"}`, apperr.KindTooLarge},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := decodeBody(tt.body); !apperr.IsKind(err, tt.want) {
+				t.Fatalf("err = %v, want kind %v", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestErrorResponses(t *testing.T) {
 	tests := []struct {
 		name       string

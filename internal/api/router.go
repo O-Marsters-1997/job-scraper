@@ -48,13 +48,17 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) (h
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
+	r.Use(requireJSON)
 
 	allModules := append([]Module{idm}, modules...)
-	for _, m := range allModules {
-		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
-			pm.PublicRoutes(r)
+	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
+		for _, m := range allModules {
+			if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
+				pm.PublicRoutes(r)
+			}
 		}
-	}
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
@@ -62,6 +66,7 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) (h
 	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
 		r.Use(idm.Middleware())
 
 		js.Routes(r)
