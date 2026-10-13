@@ -24,6 +24,7 @@ func newStore(t *testing.T) (st *store.Store, pool *pgxpool.Pool, userID string)
 }
 
 func TestStoreContract(t *testing.T) {
+	t.Parallel()
 	applicationstest.RunStoreContract(t, func(t *testing.T) applicationstest.Fixture {
 		t.Helper()
 		st, pool, userID := newStore(t)
@@ -38,6 +39,7 @@ func TestStoreContract(t *testing.T) {
 }
 
 func TestCreateApplicationRejectsDuplicate(t *testing.T) {
+	t.Parallel()
 	st, pool, userID := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
 
@@ -51,6 +53,7 @@ func TestCreateApplicationRejectsDuplicate(t *testing.T) {
 }
 
 func TestListApplicationsJoinsJobDetails(t *testing.T) {
+	t.Parallel()
 	st, pool, userID := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Staff Engineer", "Staff Engineer")
 	if _, err := st.CreateApplication(t.Context(), userID, dto.CreateApplicationInput{JobID: jobID}); err != nil {
@@ -67,6 +70,7 @@ func TestListApplicationsJoinsJobDetails(t *testing.T) {
 }
 
 func TestListApplicationsFiltersByStatus(t *testing.T) {
+	t.Parallel()
 	st, pool, userID := newStore(t)
 	matching := pgtest.InsertJob(t, pool, "Match", "Match")
 	other := pgtest.InsertJob(t, pool, "Other", "Other")
@@ -93,6 +97,7 @@ func TestListApplicationsFiltersByStatus(t *testing.T) {
 }
 
 func TestListApplicationsReportsClosedJob(t *testing.T) {
+	t.Parallel()
 	st, pool, userID := newStore(t)
 	closed := pgtest.InsertJob(t, pool, "Closed", "Closed")
 	open := pgtest.InsertJob(t, pool, "Open", "Open")
@@ -117,6 +122,7 @@ func TestListApplicationsReportsClosedJob(t *testing.T) {
 }
 
 func TestSeedDefaultStatuses(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		commit bool
@@ -127,6 +133,7 @@ func TestSeedDefaultStatuses(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			st, pool, userID := newStore(t)
 			pgtest.InTx(t, pool, tt.commit, func(tx pgx.Tx) error {
 				return st.SeedDefaultStatuses(t.Context(), tx, userID)
@@ -144,6 +151,7 @@ func TestSeedDefaultStatuses(t *testing.T) {
 }
 
 func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
+	t.Parallel()
 	st, pool, userID := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "Engineer")
 
@@ -182,6 +190,7 @@ func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 }
 
 func TestCreateRecruiterContactMissingJobIsNotFound(t *testing.T) {
+	t.Parallel()
 	st, _, userID := newStore(t)
 	in := dto.LogRecruiterContactInput{
 		JobID: "00000000-0000-0000-0000-000000000000", ContactedOn: "2026-10-01",

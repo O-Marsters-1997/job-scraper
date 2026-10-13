@@ -25,6 +25,7 @@ func newStore(t *testing.T) *store.Store {
 }
 
 func TestIdentityStoreContract(t *testing.T) {
+	t.Parallel()
 	identitytest.RunStoreContract(t, func(t *testing.T) identity.Store {
 		t.Helper()
 		return newStore(t)
@@ -32,6 +33,7 @@ func TestIdentityStoreContract(t *testing.T) {
 }
 
 func TestCreateUserTxCommits(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 
@@ -46,6 +48,7 @@ func TestCreateUserTxCommits(t *testing.T) {
 }
 
 func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 	ctx := t.Context()
@@ -69,6 +72,7 @@ func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
 }
 
 func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 	ctx := t.Context()
@@ -92,6 +96,7 @@ func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
 }
 
 func TestResetPasswordRevokesSessions(t *testing.T) {
+	t.Parallel()
 	st := newStore(t)
 	svc := identity.NewService(identity.Deps{Store: st})
 	ctx := t.Context()
@@ -115,6 +120,7 @@ func TestResetPasswordRevokesSessions(t *testing.T) {
 }
 
 func TestGoogleToken(t *testing.T) {
+	t.Parallel()
 	st := newStore(t)
 	ctx := t.Context()
 
@@ -168,6 +174,7 @@ func TestGoogleToken(t *testing.T) {
 }
 
 func TestReencryptTokens(t *testing.T) {
+	t.Parallel()
 	pool := pgtest.New(t)
 	st := store.New(pool)
 	ctx := t.Context()

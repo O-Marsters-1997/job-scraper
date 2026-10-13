@@ -18,6 +18,7 @@ import (
 const missingID = "00000000-0000-0000-0000-00000000dead"
 
 func TestStoreContract(t *testing.T) {
+	t.Parallel()
 	cvtailortest.RunStoreContract(t, func(t *testing.T) cvtailortest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)
@@ -34,6 +35,7 @@ func newStore(t *testing.T) (*store.Store, *pgxpool.Pool, string) {
 }
 
 func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
+	t.Parallel()
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
@@ -68,6 +70,7 @@ func TestClaimDraftReclaimsAfterLeaseExpiry(t *testing.T) {
 }
 
 func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
+	t.Parallel()
 	st, _, uid := newStore(t)
 
 	_, err := st.CreateDraft(t.Context(), uid, dto.DraftInput{JobID: missingID, DocID: "doc", TabID: "t.0", AchievementIDs: []string{missingID}}, nil)
@@ -78,6 +81,7 @@ func TestCreateDraftUnknownJobIsNotFound(t *testing.T) {
 }
 
 func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
+	t.Parallel()
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
@@ -135,6 +139,7 @@ func TestCreateDraftAppendsBulletLabelsPerAttempt(t *testing.T) {
 }
 
 func TestOnlyOneKeptTailoredCVPerJob(t *testing.T) {
+	t.Parallel()
 	_, pool, uid := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
@@ -155,6 +160,7 @@ func TestOnlyOneKeptTailoredCVPerJob(t *testing.T) {
 }
 
 func TestImportPositionsIsAllOrNothing(t *testing.T) {
+	t.Parallel()
 	st, pool, uid := newStore(t)
 	ctx := t.Context()
 
@@ -177,6 +183,7 @@ func TestImportPositionsIsAllOrNothing(t *testing.T) {
 }
 
 func TestJobDescription(t *testing.T) {
+	t.Parallel()
 	st, pool, _ := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Role", "fp-1")
 

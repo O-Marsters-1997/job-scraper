@@ -1,14 +1,15 @@
 // Package pgtest provides a shared Postgres testcontainer for integration
-// tests, one database per test binary (https://github.com/O-Marsters-1997/job-scraper/issues/840).
+// tests, one database per test (https://github.com/O-Marsters-1997/job-scraper/issues/932).
 package pgtest
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -21,10 +22,13 @@ import (
 )
 
 const (
-	containerName = "job-scraper-pgtest-v1"
-	image         = "postgres:17-alpine"
-	maxConns      = 4
-	idleSeconds   = 300
+	containerName  = "job-scraper-pgtest-v1"
+	image          = "postgres:17-alpine"
+	serverEnv      = "TEST_DATABASE_URL"
+	maxConns       = 4
+	idleSeconds    = 300
+	startupTimeout = 2 * time.Minute
+	dropTimeout    = 30 * time.Second
 )
 
 // Ryuk reaps a reused container with its creator, so it stops itself when idle: https://golang.testcontainers.org/features/garbage_collector/
@@ -40,33 +44,34 @@ var entrypoint = fmt.Sprintf(`
 exec docker-entrypoint.sh "$@"
 `, idleSeconds)
 
-var (
-	once    sync.Once
-	pool    *pgxpool.Pool
-	initErr error
-)
-
-// Pool returns the pool shared by this test binary, starting the
-// container and applying migrations on the first call.
-func Pool() (*pgxpool.Pool, error) {
-	once.Do(func() {
-		pool, initErr = start(context.Background())
-	})
-	return pool, initErr
+type server struct {
+	admin    *pgxpool.Pool
+	template string
 }
 
-// New returns the pool shared by this test binary (see Pool), with
-// every table truncated so the caller starts from an empty database.
+var (
+	once     sync.Once
+	shared   *server
+	startErr error
+)
+
 func New(tb testing.TB) *pgxpool.Pool {
 	tb.Helper()
 
-	p, err := Pool()
+	once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(tb.Context()), startupTimeout)
+		defer cancel()
+		shared, startErr = start(ctx)
+	})
+	if startErr != nil {
+		tb.Fatalf("pgtest: %v", startErr)
+	}
+
+	pool, err := shared.create(tb)
 	if err != nil {
 		tb.Fatalf("pgtest: %v", err)
 	}
-	truncateAll(tb, p)
-
-	return p
+	return pool
 }
 
 func InTx(tb testing.TB, pool *pgxpool.Pool, commit bool, fn func(pgx.Tx) error) {
@@ -93,53 +98,92 @@ func InTx(tb testing.TB, pool *pgxpool.Pool, commit bool, fn func(pgx.Tx) error)
 	}
 }
 
-func start(ctx context.Context) (*pgxpool.Pool, error) {
+func start(ctx context.Context) (*server, error) {
 	if err := chdirToRepoRoot(); err != nil {
 		return nil, err
 	}
 
-	cfg, name, err := provision(ctx)
-	if err != nil {
-		cfg, name, err = provision(ctx)
+	if raw := os.Getenv(serverEnv); raw != "" {
+		return connect(ctx, raw)
 	}
+
+	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
+		return nil, fmt.Errorf("disable ryuk: %w", err)
+	}
+	var errs []error
+	for range 2 {
+		s, err := runAndConnect(ctx)
+		if err == nil {
+			return s, nil
+		}
+		errs = append(errs, err)
+	}
+	return nil, fmt.Errorf("start postgres (needs Docker running, or %s set to a server URL): %w", serverEnv, errors.Join(errs...))
+}
+
+func runAndConnect(ctx context.Context) (*server, error) {
+	connStr, err := runContainer(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return connect(ctx, connStr)
+}
 
-	cfg.ConnConfig.Database = name
+func connect(ctx context.Context, connStr string) (*server, error) {
+	cfg, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse connection string: %w", err)
+	}
 	cfg.MaxConns = maxConns
-	cfg.MinConns = 1
-	cfg.MaxConnLifetime = 24 * time.Hour
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	admin, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres connect: %w", err)
 	}
+
+	s := &server{admin: admin}
+	if err := s.prepare(ctx); err != nil {
+		admin.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *server) create(tb testing.TB) (*pgxpool.Pool, error) {
+	tb.Helper()
+	ctx := tb.Context()
+	name := fmt.Sprintf("pgtest_%d_%08x", time.Now().Unix(), rand.Uint32())
+	if _, err := s.admin.Exec(ctx, "CREATE DATABASE "+ident(name)+" TEMPLATE "+ident(s.template)); err != nil {
+		return nil, fmt.Errorf("create database %s: %w", name, err)
+	}
+
+	cfg := s.admin.Config()
+	cfg.ConnConfig.Database = name
+	cfg.MaxConns = maxConns
+	cfg.MinConns = 0
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("postgres connect: %w", err), s.drop(name))
+	}
+
+	tb.Cleanup(func() {
+		pool.Close()
+		if err := s.drop(name); err != nil {
+			tb.Errorf("pgtest: %v", err)
+		}
+	})
 	return pool, nil
 }
 
-func provision(ctx context.Context) (*pgxpool.Config, string, error) {
-	adminConnStr, err := runContainer(ctx)
-	if err != nil {
-		return nil, "", err
+func (s *server) drop(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dropTimeout)
+	defer cancel()
+	if _, err := s.admin.Exec(ctx, "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)"); err != nil {
+		return fmt.Errorf("drop database %s: %w", name, err)
 	}
-
-	cfg, err := pgxpool.ParseConfig(adminConnStr)
-	if err != nil {
-		return nil, "", fmt.Errorf("parse connection string: %w", err)
-	}
-
-	name, err := createDatabase(ctx, cfg.Copy())
-	if err != nil {
-		return nil, "", err
-	}
-	return cfg, name, nil
+	return nil
 }
 
 func runContainer(ctx context.Context) (string, error) {
-	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
-		return "", fmt.Errorf("disable ryuk: %w", err)
-	}
-
 	c, err := postgres.Run(ctx, image,
 		testcontainers.WithReuseByName(containerName),
 		testcontainers.WithEntrypoint("sh", "-c", entrypoint, "pgtest"),
@@ -168,37 +212,4 @@ func chdirToRepoRoot() error {
 		return fmt.Errorf("pgtest: cannot determine caller")
 	}
 	return os.Chdir(filepath.Join(filepath.Dir(filename), "../.."))
-}
-
-func truncateAll(tb testing.TB, pool *pgxpool.Pool) {
-	tb.Helper()
-	ctx := tb.Context()
-
-	rows, err := pool.Query(ctx, `
-		SELECT table_name FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name != 'goose_db_version'
-	`)
-	if err != nil {
-		tb.Fatalf("pgtest: list tables: %v", err)
-	}
-	defer rows.Close()
-
-	var tables []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			tb.Fatalf("pgtest: scan table name: %v", err)
-		}
-		tables = append(tables, name)
-	}
-	if err := rows.Err(); err != nil {
-		tb.Fatalf("pgtest: list tables: %v", err)
-	}
-	if len(tables) == 0 {
-		return
-	}
-
-	if _, err := pool.Exec(ctx, "TRUNCATE "+strings.Join(tables, ", ")+" CASCADE"); err != nil {
-		tb.Fatalf("pgtest: truncate: %v", err)
-	}
 }

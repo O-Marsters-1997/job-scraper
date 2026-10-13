@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,73 +20,90 @@ import (
 
 const (
 	migrationsDir   = "scripts/migrations"
-	templateLockKey = 840
-	orphanAge       = time.Minute
+	templateLockKey = 932
+	staleAfter      = 5 * time.Minute
 )
 
-var binaryDatabase = regexp.MustCompile(`^pgtest_([0-9]+)_[0-9a-f]+$`)
+var testDatabase = regexp.MustCompile(`^pgtest_([0-9]+)_[0-9a-f]{8}$`)
 
-func createDatabase(ctx context.Context, admin *pgxpool.Config) (string, error) {
-	conn, err := pgx.ConnectConfig(ctx, admin.ConnConfig)
+func (s *server) prepare(ctx context.Context) error {
+	if err := s.ping(ctx); err != nil {
+		return err
+	}
+	if err := s.sweep(ctx, time.Now()); err != nil {
+		return err
+	}
+	template, err := s.ensureTemplate(ctx)
 	if err != nil {
-		return "", fmt.Errorf("postgres connect: %w", err)
+		return err
 	}
-	defer func() { _ = conn.Close(context.WithoutCancel(ctx)) }()
+	s.template = template
+	return nil
+}
 
-	now := time.Now()
-	if err := dropOrphans(ctx, conn, now); err != nil {
-		return "", err
+// A reused container can pass the log wait before accepting connections: https://github.com/testcontainers/testcontainers-go/issues/3671
+func (s *server) ping(ctx context.Context) error {
+	for {
+		_, err := s.admin.Exec(ctx, "SELECT 1")
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("ping server: %w", err)
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
+}
 
+func (s *server) ensureTemplate(ctx context.Context) (template string, err error) {
 	hash, err := migrationsHash()
 	if err != nil {
 		return "", err
 	}
-	template := "pgtest_tpl_" + hash
+	template = "pgtest_tpl_" + hash
+
+	conn, err := s.admin.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("acquire admin connection: %w", err)
+	}
+	defer conn.Release()
 
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", templateLockKey); err != nil {
 		return "", fmt.Errorf("lock template: %w", err)
 	}
-	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", templateLockKey) }()
+	defer func() {
+		if _, uerr := conn.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", templateLockKey); uerr != nil {
+			err = errors.Join(err, fmt.Errorf("unlock template: %w", uerr))
+		}
+	}()
 
-	if err := ensureTemplate(ctx, conn, admin, template); err != nil {
-		return "", err
-	}
-
-	name := fmt.Sprintf("pgtest_%d_%08x", now.Unix(), rand.Uint32())
-	if _, err := conn.Exec(ctx, "CREATE DATABASE "+ident(name)+" TEMPLATE "+ident(template)); err != nil {
-		return "", fmt.Errorf("create database %s: %w", name, err)
-	}
-	return name, nil
-}
-
-func ensureTemplate(ctx context.Context, conn *pgx.Conn, admin *pgxpool.Config, template string) error {
 	var exists bool
 	if err := conn.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", template).Scan(&exists); err != nil {
-		return fmt.Errorf("find template: %w", err)
+		return "", fmt.Errorf("find template: %w", err)
 	}
 	if exists {
-		return nil
+		return template, nil
 	}
 
 	build := template + "_build"
 	if _, err := conn.Exec(ctx, "DROP DATABASE IF EXISTS "+ident(build)+" WITH (FORCE)"); err != nil {
-		return fmt.Errorf("drop stale template build: %w", err)
+		return "", fmt.Errorf("drop stale template build: %w", err)
 	}
 	if _, err := conn.Exec(ctx, "CREATE DATABASE "+ident(build)); err != nil {
-		return fmt.Errorf("create template: %w", err)
+		return "", fmt.Errorf("create template: %w", err)
 	}
-	if err := migrate(ctx, admin, build); err != nil {
-		return err
+	if err := s.migrate(ctx, build); err != nil {
+		return "", err
 	}
 	if _, err := conn.Exec(ctx, "ALTER DATABASE "+ident(build)+" RENAME TO "+ident(template)); err != nil {
-		return fmt.Errorf("publish template: %w", err)
+		return "", fmt.Errorf("publish template: %w", err)
 	}
-	return nil
+	return template, nil
 }
 
-func migrate(ctx context.Context, admin *pgxpool.Config, database string) error {
-	cfg := admin.Copy()
+func (s *server) migrate(ctx context.Context, database string) error {
+	cfg := s.admin.Config()
 	cfg.ConnConfig.Database = database
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -100,8 +117,8 @@ func migrate(ctx context.Context, admin *pgxpool.Config, database string) error 
 	return nil
 }
 
-func dropOrphans(ctx context.Context, conn *pgx.Conn, now time.Time) error {
-	rows, err := conn.Query(ctx, `
+func (s *server) sweep(ctx context.Context, now time.Time) error {
+	rows, err := s.admin.Query(ctx, `
 		SELECT datname FROM pg_database d
 		WHERE NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)
 	`)
@@ -114,16 +131,16 @@ func dropOrphans(ctx context.Context, conn *pgx.Conn, now time.Time) error {
 	}
 
 	for _, name := range names {
-		m := binaryDatabase.FindStringSubmatch(name)
+		m := testDatabase.FindStringSubmatch(name)
 		if m == nil {
 			continue
 		}
 		created, err := strconv.ParseInt(m[1], 10, 64)
-		if err != nil || now.Sub(time.Unix(created, 0)) < orphanAge {
+		if err != nil || now.Sub(time.Unix(created, 0)) < staleAfter {
 			continue
 		}
-		if _, err := conn.Exec(ctx, "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)"); err != nil {
-			return fmt.Errorf("drop orphan %s: %w", name, err)
+		if err := s.drop(name); err != nil {
+			return fmt.Errorf("sweep: %w", err)
 		}
 	}
 	return nil

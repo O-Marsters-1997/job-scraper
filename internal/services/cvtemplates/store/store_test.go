@@ -9,6 +9,7 @@ import (
 )
 
 func TestStoreContract(t *testing.T) {
+	t.Parallel()
 	cvtemplatestest.RunStoreContract(t, func(t *testing.T) cvtemplatestest.Fixture {
 		t.Helper()
 		pool := pgtest.New(t)

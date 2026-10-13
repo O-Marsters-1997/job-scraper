@@ -87,9 +87,11 @@ func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) s
 }
 
 func TestScoringStoreContract(t *testing.T) {
+	t.Parallel()
 	scoringtest.RunStoreContract(t, func(t *testing.T) scoringtest.Fixture {
 		t.Helper()
 		st, pool := newStore(t)
+		exec(t, pool, "DELETE FROM scoring_options")
 		return scoringtest.Fixture{
 			Store:   st,
 			NewUser: func() string { return pgtest.InsertUser(t, pool) },
@@ -102,6 +104,7 @@ func TestScoringStoreContract(t *testing.T) {
 }
 
 func TestSearchConfig_UpsertThenGetRoundTrips(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	ctx := t.Context()
 	userID := pgtest.InsertUser(t, pool)
@@ -142,6 +145,7 @@ func migrationSection(t *testing.T, path, section string) string {
 }
 
 func TestSeniorityLadderMigration(t *testing.T) {
+	t.Parallel()
 	const path = "scripts/migrations/20261004162905_seniority_ladder.sql"
 	st, pool := newStore(t)
 	ctx := t.Context()
@@ -190,6 +194,7 @@ func TestSeniorityLadderMigration(t *testing.T) {
 }
 
 func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	scored := pgtest.InsertJob(t, pool, "Engineer", "fp-scored")
@@ -211,6 +216,7 @@ func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 }
 
 func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	_, userID := insertTrackedCompany(t, pool, "acme")
@@ -225,6 +231,7 @@ func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
 }
 
 func TestListInterestedConfigs_DefaultsMaxJobAgeWithoutSearchConfig(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertTrackedCompany(t, pool, "acme")
@@ -239,6 +246,7 @@ func TestListInterestedConfigs_DefaultsMaxJobAgeWithoutSearchConfig(t *testing.T
 }
 
 func TestListInterestedConfigs_FlagsNewCompany(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	companyID, _ := insertTrackedCompany(t, pool, "acme")
@@ -256,6 +264,7 @@ func TestListInterestedConfigs_FlagsNewCompany(t *testing.T) {
 }
 
 func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	ctx := t.Context()
 	userID := pgtest.InsertUser(t, pool)
@@ -300,6 +309,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 }
 
 func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	alice := pgtest.InsertUser(t, pool)
 	bob := pgtest.InsertUser(t, pool)
@@ -328,6 +338,7 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 }
 
 func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -365,6 +376,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 }
 
 func TestFailAnswerEffect_ReschedulesForRetry(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
@@ -384,6 +396,7 @@ func TestFailAnswerEffect_ReschedulesForRetry(t *testing.T) {
 }
 
 func TestListScoringInputs(t *testing.T) {
+	t.Parallel()
 	const model = "typesafe/jev-1.13"
 	tests := []struct {
 		name        string
@@ -395,6 +408,7 @@ func TestListScoringInputs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			st, pool := newStore(t)
 			userID := pgtest.InsertUser(t, pool)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -413,6 +427,7 @@ func TestListScoringInputs(t *testing.T) {
 }
 
 func TestListCompanyAnswers(t *testing.T) {
+	t.Parallel()
 	const model = "typesafe/jev-1.13"
 	st, pool := newStore(t)
 	companyID, _ := insertTrackedCompany(t, pool, "acme")
@@ -459,6 +474,7 @@ func TestListCompanyAnswers(t *testing.T) {
 }
 
 func TestSaveScores(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -491,6 +507,7 @@ func insertTrackedCompany(t *testing.T, pool *pgxpool.Pool, slug string) (compan
 }
 
 func TestJobsChanged(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		commit      bool
@@ -502,6 +519,7 @@ func TestJobsChanged(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			st, pool := newStore(t)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-new")
 			insertAnswer(t, pool, jobID, "fp-old", "hash-1", "typesafe/jev-1.13")
@@ -522,6 +540,7 @@ func TestJobsChanged(t *testing.T) {
 }
 
 func TestJobsClosed(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		commit      bool
@@ -532,6 +551,7 @@ func TestJobsClosed(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			st, pool := newStore(t)
 			jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 			insertAnswer(t, pool, jobID, "fp-1", "hash-1", "typesafe/jev-1.13")
@@ -548,6 +568,7 @@ func TestJobsClosed(t *testing.T) {
 }
 
 func TestCompanyTracked(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		commit      bool
@@ -558,6 +579,7 @@ func TestCompanyTracked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			st, pool := newStore(t)
 			companyID, userID := insertTrackedCompany(t, pool, "tracked-co")
 			var jobID string
@@ -607,6 +629,7 @@ func storedScore(t *testing.T, pool *pgxpool.Pool, jobID, userID string) int {
 }
 
 func TestListInterestedConfigs_FlagsFavouriteCompany(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	companyID, userID := insertTrackedCompany(t, pool, "acme")
 	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
@@ -626,6 +649,7 @@ func TestListInterestedConfigs_FlagsFavouriteCompany(t *testing.T) {
 }
 
 func TestListScoringInputs_FlagsFavourite(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	companyID, userID := insertTrackedCompany(t, pool, "acme")
 	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
@@ -646,6 +670,7 @@ func TestListScoringInputs_FlagsFavourite(t *testing.T) {
 }
 
 func TestIsJobCompanyFavourite(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	companyID, userID := insertTrackedCompany(t, pool, "acme")
 	other := pgtest.InsertUser(t, pool)
@@ -699,7 +724,9 @@ func (f favouriteFixture) rescore(t *testing.T, commit bool) {
 }
 
 func TestCompanyFavouriteChanged(t *testing.T) {
+	t.Parallel()
 	t.Run("commit re-scores only that user's open jobs at that company", func(t *testing.T) {
+		t.Parallel()
 		f := newFavouriteFixture(t)
 		f.rescore(t, true)
 
@@ -722,6 +749,7 @@ func TestCompanyFavouriteChanged(t *testing.T) {
 	})
 
 	t.Run("rollback leaves every score untouched", func(t *testing.T) {
+		t.Parallel()
 		f := newFavouriteFixture(t)
 		f.rescore(t, false)
 
@@ -731,6 +759,7 @@ func TestCompanyFavouriteChanged(t *testing.T) {
 	})
 
 	t.Run("un-starring returns the job to its non-favourite score", func(t *testing.T) {
+		t.Parallel()
 		f := newFavouriteFixture(t)
 		f.rescore(t, true)
 		exec(t, f.pool, `DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2`, f.alice, f.companyID)
@@ -768,7 +797,9 @@ func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time
 }
 
 func TestOpsState(t *testing.T) {
+	t.Parallel()
 	t.Run("counts pending, running and failed effects", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		now := time.Now()
 		insertEffectOutbox(t, pool, pgtest.InsertJob(t, pool, "Engineer", "fp-1"), "pending", now.Add(-2*time.Hour))
@@ -790,6 +821,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("counts verified unleased boards past due as overdue", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		now := time.Now()
 		overdue := now.Add(-2 * time.Hour)
@@ -808,6 +840,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("counts verified boards with three consecutive failures as failing", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		due := time.Now().Add(time.Hour)
 		insertBoard(t, pool, "verified", due, nil, 3)
@@ -820,6 +853,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("counts source targets whose last run failed", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		for i, status := range []string{"failed", "failed", "succeeded", "idle"} {
@@ -834,6 +868,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("counts disabled source targets per source", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		for i, row := range []struct{ source, reason string }{{"indeed", "indeed key rejected"}, {"indeed", "indeed key rejected"}, {"indeed", ""}, {"linkedin", ""}} {
@@ -849,6 +884,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("counts unique relevant jobs per source", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		type u struct {
@@ -880,6 +916,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("reports harvest age per harvester", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		now := time.Now()
 		for harvester, at := range map[string]time.Time{"ashby": now.Add(-3 * time.Hour), "lever": now.Add(-time.Minute)} {
@@ -899,6 +936,7 @@ func TestOpsState(t *testing.T) {
 	})
 
 	t.Run("gauges boards, relevant jobs and admitted companies by discovery route", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		exec(t, pool, `INSERT INTO harvest_runs (harvester, last_succeeded_at) VALUES ('ashby', NOW())`)
@@ -962,6 +1000,7 @@ func insertManualBoard(t *testing.T, pool *pgxpool.Pool, slug, source, status st
 }
 
 func TestOpsStateEmptiedBoards(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	seed := func(slug, source, status string, emptyPolls int, completedAgo time.Duration) {
 		boardID := insertManualBoard(t, pool, slug, source, status)
@@ -984,6 +1023,7 @@ func TestOpsStateEmptiedBoards(t *testing.T) {
 }
 
 func TestOpsStateUnderparsedBoards(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	seed := func(slug, source, status string, reported, parsed int) {
 		boardID := insertManualBoard(t, pool, slug, source, status)
@@ -1006,9 +1046,11 @@ func TestOpsStateUnderparsedBoards(t *testing.T) {
 }
 
 func TestQueueMissingAnswers(t *testing.T) {
+	t.Parallel()
 	const model = "typesafe/jev-1.13"
 
 	t.Run("queues only open scored fingerprinted jobs missing the hash", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userA := pgtest.InsertUser(t, pool)
 		userB := pgtest.InsertUser(t, pool)
@@ -1041,6 +1083,7 @@ func TestQueueMissingAnswers(t *testing.T) {
 	})
 
 	t.Run("quiesces when an effect is pending or no gap remains", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -1069,6 +1112,7 @@ func TestQueueMissingAnswers(t *testing.T) {
 }
 
 func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertEffect(t, pool, jobID, "fp-1")
@@ -1099,6 +1143,7 @@ func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 }
 
 func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	ctx := t.Context()
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -1120,6 +1165,7 @@ func TestSaveAnswers_KeepsExistingAndRoundTrips(t *testing.T) {
 }
 
 func TestPushSubscriptions(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	ctx := t.Context()
 	userID := pgtest.InsertUser(t, pool)
@@ -1153,6 +1199,7 @@ func TestPushSubscriptions(t *testing.T) {
 }
 
 func TestScoreFeedback_BlankReasonIsRejectedAndWritesNothing(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 
@@ -1166,6 +1213,7 @@ func TestScoreFeedback_BlankReasonIsRejectedAndWritesNothing(t *testing.T) {
 }
 
 func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	picks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
@@ -1190,6 +1238,7 @@ func TestScoreFeedback_InsertRoundTripsPicksAndModel(t *testing.T) {
 }
 
 func TestScoreFeedback_JobEntryRoundTripsAndSurvivesJobDelete(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -1219,6 +1268,7 @@ func TestScoreFeedback_JobEntryRoundTripsAndSurvivesJobDelete(t *testing.T) {
 }
 
 func TestScoreFeedback_DirectionWithoutJobKindIsRejected(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	direction := "lower"
@@ -1230,6 +1280,7 @@ func TestScoreFeedback_DirectionWithoutJobKindIsRejected(t *testing.T) {
 }
 
 func TestGetJobScoreForFeedback(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -1250,6 +1301,7 @@ func TestGetJobScoreForFeedback(t *testing.T) {
 }
 
 func TestListJobScoresForCollection(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID, otherID := pgtest.InsertUser(t, pool), pgtest.InsertUser(t, pool)
 	scored := pgtest.InsertJob(t, pool, "Scored", "fp-1")
@@ -1276,6 +1328,7 @@ func TestListJobScoresForCollection(t *testing.T) {
 }
 
 func TestAnswerCorrections(t *testing.T) {
+	t.Parallel()
 	const model = "typesafe/jev-1.13"
 	st, pool := newStore(t)
 	ctx := t.Context()
@@ -1325,6 +1378,7 @@ func TestAnswerCorrections(t *testing.T) {
 }
 
 func TestListImpliedPositives(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	other := pgtest.InsertUser(t, pool)
@@ -1347,6 +1401,7 @@ func TestListImpliedPositives(t *testing.T) {
 }
 
 func TestGetCompanyProfile_ReturnsNewestProfile(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	companyID, _ := insertTrackedCompany(t, pool, "acme")
 	exec(t, pool, `INSERT INTO company_profiles (company_id, source, data, fetched_at) VALUES ($1, 'old', '{"size":"1-10"}', NOW() - INTERVAL '1 day')`, companyID)
@@ -1363,6 +1418,7 @@ func TestGetCompanyProfile_ReturnsNewestProfile(t *testing.T) {
 }
 
 func TestOpsStateFieldCompleteness(t *testing.T) {
+	t.Parallel()
 	st, pool := newStore(t)
 	insert := func(n int, source, location, salary string, scrapedAgo time.Duration, closed bool) {
 		var closedAt *time.Time
@@ -1405,7 +1461,9 @@ func completeWith(t *testing.T, st *store.Store, pool *pgxpool.Pool, jobID, fing
 }
 
 func TestListJobRejections(t *testing.T) {
+	t.Parallel()
 	t.Run("returns the reason and flags it current until the config or job changes", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		jobID := pgtest.InsertJob(t, pool, "Intern", "fp-1")
@@ -1442,6 +1500,7 @@ func TestListJobRejections(t *testing.T) {
 	})
 
 	t.Run("a later score clears the rejection and a later rejection replaces it", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
@@ -1464,6 +1523,7 @@ func TestListJobRejections(t *testing.T) {
 	})
 
 	t.Run("pages by keyset", func(t *testing.T) {
+		t.Parallel()
 		st, pool := newStore(t)
 		userID := pgtest.InsertUser(t, pool)
 		var want []string
