@@ -48,6 +48,8 @@ type Deps struct {
 	Profiles       ProfileReader
 	Candidates     Reconsiderer
 	Extractor      Extractor
+	Classifier     RecruiterClassifier
+	CompanyKinds   CompanyKinds
 	TickInterval   time.Duration
 }
 
@@ -64,7 +66,7 @@ func (v VAPID) configured() bool { return v.PublicKey != "" && v.PrivateKey != "
 // New wires the scoring context: its own store, the answer-effect loop and
 // Search Config orchestration. notifyAPIKey empty disables new-job email
 // alerts (dev default).
-func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
+func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, candidates Reconsiderer, companyKinds CompanyKinds, notifyAPIKey, notifyFrom string, vapid VAPID) *Module {
 	st := store.New(pool)
 
 	var alerter Alerter = noopAlerter{}
@@ -77,9 +79,11 @@ func New(pool *pgxpool.Pool, credentials Credentials, profiles ProfileReader, ca
 		pusher = notify.NewWebPusher(vapid.PublicKey, vapid.PrivateKey, vapid.Subject)
 	}
 
+	jevClient := jev.NewClient()
 	return Build(Deps{
-		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jev.NewClient(), Credentials: credentials,
+		Store: st, Pusher: pusher, VAPIDPublicKey: vapid.PublicKey, Answerer: jevClient, Credentials: credentials,
 		Alerter: alerter, Profiles: profiles, Candidates: candidates, Extractor: extract.NewClient(),
+		Classifier: jevClient, CompanyKinds: companyKinds,
 	})
 }
 

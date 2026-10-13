@@ -561,6 +561,23 @@ func (q *Queries) SetCompanyTracking(ctx context.Context, arg SetCompanyTracking
 	return i, err
 }
 
+const suggestCompanyKind = `-- name: SuggestCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1 AND kind = 'unclassified'
+`
+
+type SuggestCompanyKindParams struct {
+	ID   pgtype.UUID
+	Kind string
+}
+
+func (q *Queries) SuggestCompanyKind(ctx context.Context, arg SuggestCompanyKindParams) (int64, error) {
+	result, err := q.db.Exec(ctx, suggestCompanyKind, arg.ID, arg.Kind)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const touchCompanyCrawled = `-- name: TouchCompanyCrawled :exec
 UPDATE companies SET last_crawled_at = NOW(), updated_at = NOW() WHERE id = $1
 `

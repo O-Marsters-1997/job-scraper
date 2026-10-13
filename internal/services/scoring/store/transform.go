@@ -47,7 +47,7 @@ func toJobDTO(row sqlc.GetJobForScoringRow) dto.Job {
 		ScrapedAt: row.ScrapedAt.Time, Description: row.Description, SalaryRaw: row.SalaryRaw,
 		WorkArrangement: row.WorkArrangement, CompanyID: row.CompanyID.String(),
 		BoardID: row.PrimaryBoardID.String(), ProviderPostingID: row.ProviderPostingID.String,
-		ContentFingerprint: row.ContentFingerprint.String,
+		ContentFingerprint: row.ContentFingerprint.String, CompanyKind: dto.CompanyKind(row.CompanyKind),
 	}
 }
 

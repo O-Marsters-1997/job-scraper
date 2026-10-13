@@ -397,6 +397,18 @@ func (f *FakeStore) SetCompanyKind(_ context.Context, companyID string, kind dto
 	return nil
 }
 
+func (f *FakeStore) SuggestCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok || c.Kind != dto.KindUnclassified {
+		return false, nil
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return true, nil
+}
+
 func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID string, favourite bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

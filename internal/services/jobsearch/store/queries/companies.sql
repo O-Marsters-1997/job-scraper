@@ -138,3 +138,6 @@ WHERE user_id = $1 AND company_id = $2 AND review_state = 'new';
 
 -- name: SetCompanyKind :execrows
 UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1;
+
+-- name: SuggestCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1 AND kind = 'unclassified';

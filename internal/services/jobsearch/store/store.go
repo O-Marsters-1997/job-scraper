@@ -729,6 +729,18 @@ func (s *Store) SetCompanyKind(ctx context.Context, companyID string, kind dto.C
 	return nil
 }
 
+func (s *Store) SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	cid, err := data.UUID(companyID)
+	if err != nil {
+		return false, ErrInvalidID
+	}
+	n, err := s.queries.SuggestCompanyKind(ctx, sqlc.SuggestCompanyKindParams{ID: cid, Kind: string(kind)})
+	if err != nil {
+		return false, fmt.Errorf("store.SuggestCompanyKind: %w", err)
+	}
+	return n > 0, nil
+}
+
 func (s *Store) SetCompanyFavourite(ctx context.Context, userID, companyID string, favourite bool) error {
 	uid, err := data.UUID(userID)
 	if err != nil {

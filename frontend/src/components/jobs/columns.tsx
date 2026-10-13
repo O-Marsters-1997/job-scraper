@@ -114,6 +114,9 @@ export function createJobColumns(
 					>
 						{titleCase(info.getValue() as string)}
 					</span>
+					<Show when={info.row.original.CompanyKind === "likely_agency"}>
+						<Badge variant="outline">Maybe recruiter</Badge>
+					</Show>
 				</div>
 			),
 		},

@@ -51,3 +51,7 @@ type Reconsiderer interface {
 type RecruiterClassifier interface {
 	ClassifyRecruiter(ctx context.Context, apiKey, companyName string, job dto.Job) (dto.CompanyKind, dto.Usage, error)
 }
+
+type CompanyKinds interface {
+	SuggestCompanyKind(ctx context.Context, companyID string, kind dto.CompanyKind) (bool, error)
+}
