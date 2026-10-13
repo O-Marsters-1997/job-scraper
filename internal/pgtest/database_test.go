@@ -3,7 +3,6 @@ package pgtest
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -18,11 +17,11 @@ func adminServer(t *testing.T) *server {
 
 func createScratch(t *testing.T, s *server, created time.Time) string {
 	t.Helper()
-	name := fmt.Sprintf("pgtest_%d_%08x", created.Unix(), rand.Uint32())
+	name := fmt.Sprintf("pgtest_%d_%08x", created.Unix(), randomSuffix())
 	if _, err := s.admin.Exec(t.Context(), "CREATE DATABASE "+ident(name)); err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
-	t.Cleanup(func() { _ = s.drop(name) })
+	t.Cleanup(func() { _ = s.drop(context.WithoutCancel(t.Context()), name) })
 	return name
 }
 
@@ -36,6 +35,7 @@ func databaseExists(t *testing.T, s *server, name string) bool {
 }
 
 func TestSweep(t *testing.T) {
+	t.Parallel()
 	s := adminServer(t)
 	now := time.Now()
 
@@ -66,6 +66,7 @@ func TestSweep(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := databaseExists(t, s, tt.database); got != tt.want {
 				t.Errorf("exists(%s) after sweep = %v, want %v", tt.database, got, tt.want)
 			}
@@ -74,6 +75,7 @@ func TestSweep(t *testing.T) {
 }
 
 func TestEnsureTemplate(t *testing.T) {
+	t.Parallel()
 	s := adminServer(t)
 
 	got, err := s.ensureTemplate(t.Context())

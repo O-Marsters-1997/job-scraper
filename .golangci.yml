@@ -166,7 +166,7 @@ linters:
           - forbidigo
         text: 'reflect\.DeepEqual|time\.Sleep'
       # main owns the environment and builds the logger (ADR 0011 and ADR 0013).
-      - path: ^cmd/|_test\.go
+      - path: ^cmd/|^internal/pgtest/|_test\.go
         linters:
           - forbidigo
         text: 'os\.(Getenv|LookupEnv)|slog\.'

@@ -4,9 +4,10 @@ package pgtest
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -151,7 +152,7 @@ func connect(ctx context.Context, connStr string) (*server, error) {
 func (s *server) create(tb testing.TB) (*pgxpool.Pool, error) {
 	tb.Helper()
 	ctx := tb.Context()
-	name := fmt.Sprintf("pgtest_%d_%08x", time.Now().Unix(), rand.Uint32())
+	name := fmt.Sprintf("pgtest_%d_%08x", time.Now().Unix(), randomSuffix())
 	if _, err := s.admin.Exec(ctx, "CREATE DATABASE "+ident(name)+" TEMPLATE "+ident(s.template)); err != nil {
 		return nil, fmt.Errorf("create database %s: %w", name, err)
 	}
@@ -162,20 +163,28 @@ func (s *server) create(tb testing.TB) (*pgxpool.Pool, error) {
 	cfg.MinConns = 0
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("postgres connect: %w", err), s.drop(name))
+		return nil, errors.Join(fmt.Errorf("postgres connect: %w", err), s.drop(ctx, name))
 	}
 
 	tb.Cleanup(func() {
 		pool.Close()
-		if err := s.drop(name); err != nil {
+		if err := s.drop(context.WithoutCancel(ctx), name); err != nil {
 			tb.Errorf("pgtest: %v", err)
 		}
 	})
 	return pool, nil
 }
 
-func (s *server) drop(name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), dropTimeout)
+func randomSuffix() uint32 {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return binary.BigEndian.Uint32(b[:])
+}
+
+func (s *server) drop(ctx context.Context, name string) error {
+	ctx, cancel := context.WithTimeout(ctx, dropTimeout)
 	defer cancel()
 	if _, err := s.admin.Exec(ctx, "DROP DATABASE IF EXISTS "+ident(name)+" WITH (FORCE)"); err != nil {
 		return fmt.Errorf("drop database %s: %w", name, err)

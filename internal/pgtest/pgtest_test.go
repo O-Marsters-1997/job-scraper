@@ -117,6 +117,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("gives each call a database of its own", func(t *testing.T) {
+		t.Parallel()
 		ctx := t.Context()
 		first := pgtest.New(t)
 		second := pgtest.New(t)
@@ -135,20 +136,24 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("drops the database when its test ends", func(t *testing.T) {
+		t.Parallel()
 		observer := pgtest.New(t)
 		var name string
+		t.Cleanup(func() {
+			var exists bool
+			if err := observer.QueryRow(context.WithoutCancel(t.Context()), "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", name).Scan(&exists); err != nil {
+				t.Errorf("find %s: %v", name, err)
+				return
+			}
+			if exists {
+				t.Errorf("database %s exists after its test ended, want dropped", name)
+			}
+		})
 		t.Run("create", func(t *testing.T) {
+			t.Parallel()
 			if err := pgtest.New(t).QueryRow(t.Context(), "SELECT current_database()").Scan(&name); err != nil {
 				t.Fatalf("query current_database: %v", err)
 			}
 		})
-
-		var exists bool
-		if err := observer.QueryRow(t.Context(), "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", name).Scan(&exists); err != nil {
-			t.Fatalf("find %s: %v", name, err)
-		}
-		if exists {
-			t.Errorf("database %s exists after its test ended, want dropped", name)
-		}
 	})
 }

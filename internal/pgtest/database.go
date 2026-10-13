@@ -139,7 +139,7 @@ func (s *server) sweep(ctx context.Context, now time.Time) error {
 		if err != nil || now.Sub(time.Unix(created, 0)) < staleAfter {
 			continue
 		}
-		if err := s.drop(name); err != nil {
+		if err := s.drop(ctx, name); err != nil {
 			return fmt.Errorf("sweep: %w", err)
 		}
 	}
