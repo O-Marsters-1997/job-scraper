@@ -17,6 +17,8 @@ const (
 	KindUpstream
 	KindUnavailable
 	KindForbidden
+	KindTooLarge
+	KindUnsupportedMedia
 )
 
 func (k Kind) Status() int {
@@ -27,6 +29,10 @@ func (k Kind) Status() int {
 		return http.StatusUnauthorized
 	case KindForbidden:
 		return http.StatusForbidden
+	case KindTooLarge:
+		return http.StatusRequestEntityTooLarge
+	case KindUnsupportedMedia:
+		return http.StatusUnsupportedMediaType
 	case KindNotFound:
 		return http.StatusNotFound
 	case KindConflict:
@@ -61,6 +67,10 @@ func Conflict(msg string) error      { return &Error{kind: KindConflict, msg: ms
 func Unprocessable(msg string) error { return &Error{kind: KindUnprocessable, msg: msg} }
 func Upstream(msg string) error      { return &Error{kind: KindUpstream, msg: msg} }
 func Unavailable(msg string) error   { return &Error{kind: KindUnavailable, msg: msg} }
+func TooLarge(msg string) error      { return &Error{kind: KindTooLarge, msg: msg} }
+func UnsupportedMedia(msg string) error {
+	return &Error{kind: KindUnsupportedMedia, msg: msg}
+}
 
 // StatusFor reports the HTTP status for err's kind, found via errors.As so a
 // wrapped apperr.Error is still detected.

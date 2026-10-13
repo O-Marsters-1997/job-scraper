@@ -35,6 +35,8 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	r.Use(chimw.RequestID)
 	r.Use(logger.Middleware)
 	r.Use(telemetry.AccessLog)
+	r.Use(limitBody(maxBodyBytes))
+	r.Use(requireJSON)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{allowedOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},

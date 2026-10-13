@@ -49,10 +49,27 @@ func respondJSON[Res any](status int) func(http.ResponseWriter, *http.Request, R
 // the zero value.
 func DecodeBody[T any](r *http.Request) (T, error) {
 	var in T
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
-		return in, apperr.Invalid("bad request")
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&in); err != nil {
+		if errors.Is(err, io.EOF) {
+			return in, nil
+		}
+		return in, bodyError(err)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return in, apperr.Invalid("bad request")
+		}
+		return in, bodyError(err)
 	}
 	return in, nil
+}
+
+func bodyError(err error) error {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		return apperr.TooLarge("request body too large")
+	}
+	return apperr.Invalid("bad request")
 }
 
 // DecodeQuery decodes the request's URL query string into Q, matching query
