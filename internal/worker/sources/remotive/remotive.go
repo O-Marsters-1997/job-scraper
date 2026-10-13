@@ -3,7 +3,6 @@ package remotive
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
@@ -60,22 +59,10 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:     fj.Description,
 			SalaryRaw:       fj.Salary,
 			WorkArrangement: "remote",
-			UpdatedAt:       parsePublicationDate(fj.PublicationDate),
+			PostedAt:        sources.TimeOrNil(publicationDateLayout, fj.PublicationDate),
 		})
 	}
 	return jobs, nil
 }
 
-// publicationDateLayout matches Remotive's publication_date, e.g.
-// "2026-07-04T16:53:04" — no timezone offset, so it doesn't fit
-// sources.RFC3339OrNow. Remotive's own docs treat these timestamps as UTC.
 const publicationDateLayout = "2006-01-02T15:04:05"
-
-func parsePublicationDate(raw string) time.Time {
-	if raw != "" {
-		if t, err := time.Parse(publicationDateLayout, raw); err == nil {
-			return t.UTC()
-		}
-	}
-	return time.Now().UTC()
-}

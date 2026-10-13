@@ -31,7 +31,7 @@ function buildWithDetails(app: Application): ApplicationWithDetails {
 		JobCompanySlug: job.CompanySlug,
 		JobLocation: job.Location,
 		JobURL: job.URL,
-		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.UpdatedAt : null,
+		JobClosedAt: seed.closedJobIDs.has(job.ID) ? job.PostedAt : null,
 		StatusName: status.Name,
 		StatusColour: status.Colour,
 	};

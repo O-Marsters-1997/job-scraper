@@ -37,6 +37,7 @@ type jobResult struct {
 	Location  jobLocation `json:"location"`
 	Remote    bool        `json:"remote"`
 	Workplace string      `json:"workplace"`
+	Published string      `json:"published"`
 }
 
 type jobLocation struct {
@@ -94,7 +95,7 @@ func parse(body []byte, token string) ([]dto.Job, error) {
 			URL:               fmt.Sprintf("https://apply.workable.com/%s/j/%s/", token, r.Shortcode),
 			ProviderPostingID: r.Shortcode,
 			WorkArrangement:   workArrangement(r),
-			UpdatedAt:         time.Now().UTC(),
+			PostedAt:          sources.RFC3339OrNil(r.Published),
 		})
 	}
 	return jobs, nil

@@ -55,3 +55,10 @@ func TimePtr(t pgtype.Timestamptz) *time.Time {
 	v := t.Time
 	return &v
 }
+
+func Timestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}

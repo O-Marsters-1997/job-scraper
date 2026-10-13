@@ -11,14 +11,21 @@
     "ProviderPostingID": "4310f31c-90e1-4e8d-bdcf-dce39c145b8c",
     "ContentFingerprint": "",
     "Source": "lever",
-    "UpdatedAt": "2026-07-09T14:55:35.95Z",
+    "PostedAt": "2026-07-09T14:55:35.95Z",
+    "PostedAfter": null,
+    "RepostedAt": null,
     "ScrapedAt": "0001-01-01T00:00:00Z",
+    "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
     "Description": "The Audiobooks Mission is a team in the Product \u0026 Technology organisation focused on the ecosystem and strategies of Audiobooks on Spotify. We work across both the creator and consumer audiobooks ecos",
     "SalaryRaw": "",
     "WorkArrangement": "remote",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
+    "Breakdown": null,
+    "Listings": null
   },
   {
     "ID": "",
@@ -32,13 +39,20 @@
     "ProviderPostingID": "2193db3f-77c5-43b8-b030-8f92c9882bf1",
     "ContentFingerprint": "",
     "Source": "lever",
-    "UpdatedAt": "2026-06-23T11:29:45.805Z",
+    "PostedAt": "2026-06-23T11:29:45.805Z",
+    "PostedAfter": null,
+    "RepostedAt": null,
     "ScrapedAt": "0001-01-01T00:00:00Z",
+    "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
     "Description": "We design Spotify’s consumer experience—end to end, moment to moment, across every screen, platform, and partner integration. Our mission is to make listening feel effortless, personal, and joyful for",
     "SalaryRaw": "",
     "WorkArrangement": "hybrid",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
+    "Breakdown": null,
+    "Listings": null
   }
 ]

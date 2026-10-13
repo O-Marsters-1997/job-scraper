@@ -34,7 +34,7 @@ func (q *Queries) DropStaleAnswers(ctx context.Context, jobIds []pgtype.UUID) er
 }
 
 const getJobForScoring = `-- name: GetJobForScoring :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description,
+SELECT id, title, location, url, company_slug, source, posted_at, posted_after, first_discovered_at, scraped_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
 FROM jobs WHERE id = $1
 `
@@ -46,7 +46,9 @@ type GetJobForScoringRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -67,7 +69,9 @@ func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobF
 		&i.Url,
 		&i.CompanySlug,
 		&i.Source,
-		&i.UpdatedAt,
+		&i.PostedAt,
+		&i.PostedAfter,
+		&i.FirstDiscoveredAt,
 		&i.ScrapedAt,
 		&i.Description,
 		&i.SalaryRaw,
@@ -395,7 +399,7 @@ func (q *Queries) ListScoringAnswersForUser(ctx context.Context, arg ListScoring
 }
 
 const listScoringInputJobs = `-- name: ListScoringInputJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at,
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at,
     j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id,
     j.provider_posting_id, j.content_fingerprint,
     EXISTS (
@@ -419,7 +423,9 @@ type ListScoringInputJobsRow struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
+	PostedAfter        pgtype.Timestamptz
+	FirstDiscoveredAt  pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -447,7 +453,9 @@ func (q *Queries) ListScoringInputJobs(ctx context.Context, arg ListScoringInput
 			&i.Url,
 			&i.CompanySlug,
 			&i.Source,
-			&i.UpdatedAt,
+			&i.PostedAt,
+			&i.PostedAfter,
+			&i.FirstDiscoveredAt,
 			&i.ScrapedAt,
 			&i.Description,
 			&i.SalaryRaw,

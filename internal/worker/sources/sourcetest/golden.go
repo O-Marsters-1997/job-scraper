@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -34,21 +33,16 @@ func RunGolden(t *testing.T, fixture string, src sources.Source) {
 	}
 	withClient.Client().Transport = Respond(string(body))
 
-	start := time.Now()
 	got, _, err := src.FetchPage(t.Context(), "")
 	if err != nil {
 		t.Fatalf("FetchPage(%s) error: %v", fixture, err)
 	}
-	MatchGolden(t, fixture, got, start)
+	MatchGolden(t, fixture, got)
 }
 
-// MatchGolden compares got to snapshots/<fixture minus extension>.golden.json, ignoring
-// UpdatedAt values that fell back to the time of the fetch begun at start. Run with -update
-// to rewrite the golden.
-func MatchGolden(t *testing.T, fixture string, got []dto.Job, start time.Time) {
+func MatchGolden(t *testing.T, fixture string, got []dto.Job) {
 	t.Helper()
 
-	clearTimeNowFallbacks(got, start)
 	goldenPath := filepath.Join("snapshots", strings.TrimSuffix(fixture, filepath.Ext(fixture))+".golden.json")
 	if *update {
 		out, err := json.MarshalIndent(got, "", "  ")
@@ -71,14 +65,6 @@ func MatchGolden(t *testing.T, fixture string, got []dto.Job, start time.Time) {
 
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FetchPage(%s) mismatch (-want +got):\n%s", fixture, diff)
-	}
-}
-
-func clearTimeNowFallbacks(jobs []dto.Job, parseStart time.Time) {
-	for i := range jobs {
-		if !jobs[i].UpdatedAt.Before(parseStart) {
-			jobs[i].UpdatedAt = time.Time{}
-		}
 	}
 }
 

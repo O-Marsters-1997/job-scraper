@@ -52,8 +52,8 @@ func TestFetchPage(t *testing.T) {
 		if !strings.HasPrefix(got.Description, "<p>Orientate is growing") {
 			t.Errorf("Description = %q, want the card's html", got.Description)
 		}
-		if want := time.UnixMilli(1790945211332).UTC(); !got.UpdatedAt.Equal(want) {
-			t.Errorf("UpdatedAt = %v, want %v", got.UpdatedAt, want)
+		if want := time.UnixMilli(1790945211332).UTC(); got.PostedAt == nil || !got.PostedAt.Equal(want) {
+			t.Errorf("PostedAt = %v, want %v", got.PostedAt, want)
 		}
 		if next == "" {
 			t.Error("next cursor is empty, want the response's nextCursor")
