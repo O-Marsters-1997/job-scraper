@@ -17,7 +17,7 @@ import (
 const (
 	openRouterKeyURL = "https://openrouter.ai/api/v1/key"
 	aiUsageTTL       = 15 * time.Minute
-	aiUsageProvider  = "openrouter"
+	aiUsageProvider  = string(dto.ProviderOpenRouter)
 )
 
 // KeyUsageFetcher reads the spend and limit of one OpenRouter API key.
@@ -94,7 +94,7 @@ func (s *Service) AIUsage(ctx context.Context, userID string) (dto.QuotaView, er
 	generation := s.usage.generation(userID)
 	view := dto.QuotaView{Provider: aiUsageProvider, Unit: "USD", Level: dto.UsageOK}
 
-	apiKey, err := s.GetCredential(ctx, userID, aiUsageProvider)
+	apiKey, err := s.GetCredential(ctx, userID, dto.ProviderOpenRouter)
 	if errors.Is(err, data.ErrNotFound) {
 		view.Status = dto.QuotaNotConfigured
 		return view, nil

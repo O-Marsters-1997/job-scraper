@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
 func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.UpsertCredentialInput) (struct{}, error) {
-	if in.Provider == "" {
-		return struct{}{}, apperr.Invalid("provider required")
+	provider, err := dto.ParseProvider(string(in.Provider))
+	if err != nil {
+		return struct{}{}, err
 	}
 	if in.APIKey == nil {
-		err := s.store.DeleteUserAICredential(ctx, userID, in.Provider)
+		err := s.store.DeleteUserAICredential(ctx, userID, provider)
 		s.usage.drop(userID)
 		return struct{}{}, err
 	}
@@ -22,12 +22,12 @@ func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.Up
 	if err != nil {
 		return struct{}{}, fmt.Errorf("identity.UpdateCredential: %w", err)
 	}
-	err = s.store.UpsertUserAICredential(ctx, userID, in.Provider, enc)
+	err = s.store.UpsertUserAICredential(ctx, userID, provider, enc)
 	s.usage.drop(userID)
 	return struct{}{}, err
 }
 
-func (s *Service) GetCredential(ctx context.Context, userID, provider string) (string, error) {
+func (s *Service) GetCredential(ctx context.Context, userID string, provider dto.Provider) (string, error) {
 	enc, err := s.store.GetUserAICredential(ctx, userID, provider)
 	if err != nil {
 		return "", err

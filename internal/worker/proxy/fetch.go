@@ -129,7 +129,7 @@ func (f *fetchTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}()
 	start := time.Now()
 	resp, err := f.base.RoundTrip(req)
-	logger.LogFetch(req.Context(), req.URL.String(), resp, err, time.Since(start))
+	logger.LogFetch(req.Context(), req.URL, resp, err, time.Since(start))
 	record(req, f.source, f.route, resp, err)
 	if err != nil {
 		return nil, err

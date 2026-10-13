@@ -62,7 +62,7 @@ func seedUser(t *testing.T, st identity.Store, username, password string) {
 	}
 }
 
-func saveKey(t *testing.T, svc *identity.Service, provider, key string) {
+func saveKey(t *testing.T, svc *identity.Service, provider dto.Provider, key string) {
 	t.Helper()
 	if _, err := svc.UpdateCredential(t.Context(), "user-1", dto.UpsertCredentialInput{Provider: provider, APIKey: &key}); err != nil {
 		t.Fatal(err)
@@ -183,6 +183,14 @@ func TestUpdateCredential(t *testing.T) {
 
 	t.Run("requires a provider", func(t *testing.T) {
 		_, err := identity.NewService(testDeps(t, identity.Deps{})).UpdateCredential(ctx, "user-1", dto.UpsertCredentialInput{})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("err = %v, want KindInvalid", err)
+		}
+	})
+
+	t.Run("rejects an unknown provider", func(t *testing.T) {
+		key := "sk-test"
+		_, err := identity.NewService(testDeps(t, identity.Deps{})).UpdateCredential(ctx, "user-1", dto.UpsertCredentialInput{Provider: "mallory", APIKey: &key})
 		if !apperr.IsKind(err, apperr.KindInvalid) {
 			t.Errorf("err = %v, want KindInvalid", err)
 		}

@@ -22,8 +22,12 @@ func Middleware(next http.Handler) http.Handler {
 			slog.String(KeyRequestID, middleware.GetReqID(r.Context())),
 			slog.String(KeyTraceID, uuid.NewString()),
 		)
-		if runID := r.Header.Get(HeaderRunID); runID != "" {
-			ctx = With(ctx, slog.String(KeyRunID, runID))
+		if header := r.Header.Get(HeaderRunID); header != "" {
+			runID, err := uuid.Parse(header)
+			if err != nil {
+				runID = uuid.New()
+			}
+			ctx = With(ctx, slog.String(KeyRunID, runID.String()))
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
