@@ -110,7 +110,11 @@ func run(ctx context.Context) error {
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm)
 
-	srv := &http.Server{Addr: port, Handler: api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)}
+	router, err := api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)
+	if err != nil {
+		fatal(ctx, "build router", err)
+	}
+	srv := &http.Server{Addr: port, Handler: router}
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

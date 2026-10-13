@@ -40,17 +40,12 @@ func (m *Module) Routes(r chi.Router) {
 }
 
 func newCookie(name, value string, maxAge int) *http.Cookie {
-	secure := os.Getenv("COOKIE_SECURE") == "true"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
 	return &http.Cookie{
 		Name:     name,
 		Value:    value,
 		HttpOnly: true,
-		SameSite: sameSite,
-		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   os.Getenv("COOKIE_SECURE") == "true",
 		Path:     "/",
 		MaxAge:   maxAge,
 	}
