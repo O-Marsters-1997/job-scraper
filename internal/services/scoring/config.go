@@ -43,16 +43,15 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 		return dto.ScoringConfigView{}, err
 	}
 
-	manualPicks, err := validatedPicks(b, in.Preferences.Picks)
+	existing, err := s.searchConfigOrDefault(ctx, userID)
+	if err != nil {
+		return dto.ScoringConfigView{}, err
+	}
+	manualPicks, dropped, err := validatedPicks(b, in.Preferences.Picks, existing.Preferences.Picks)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
 	floor, err := validatedSalaryFloor(in.Preferences.SalaryFloor)
-	if err != nil {
-		return dto.ScoringConfigView{}, err
-	}
-
-	existing, err := s.searchConfigOrDefault(ctx, userID)
 	if err != nil {
 		return dto.ScoringConfigView{}, err
 	}
@@ -96,6 +95,7 @@ func (s *Service) UpdateConfig(ctx context.Context, userID string, in dto.Scorin
 	}
 	view := toView(updated)
 	view.BackfillQueued = queued
+	view.DroppedOptionIDs = dropped
 	return view, nil
 }
 
@@ -162,27 +162,35 @@ func newBank(options []dto.ScoringOption) bank {
 	return bank{byID: byID, dimensions: dimensionSpecs, live: live}
 }
 
-func validatedPicks(b bank, picks []dto.Pick) ([]dto.Pick, error) {
-	out := make([]dto.Pick, len(picks))
-	for i, p := range picks {
+func validatedPicks(b bank, picks, stored []dto.Pick) (kept []dto.Pick, dropped []string, err error) {
+	storedIDs := make(map[string]bool, len(stored))
+	for _, p := range stored {
+		storedIDs[p.OptionID] = true
+	}
+	out := make([]dto.Pick, 0, len(picks))
+	for _, p := range picks {
 		opt, ok := b.byID[p.OptionID]
 		if !ok || opt.RetiredAt != nil {
-			return nil, apperr.Invalid("unknown or retired option: " + p.OptionID)
+			if storedIDs[p.OptionID] {
+				dropped = append(dropped, p.OptionID)
+				continue
+			}
+			return nil, nil, apperr.Invalid("unknown or retired option: " + p.OptionID)
 		}
 		spec := b.dimensions[opt.Dimension]
 		if !stanceAllowed(spec, p.Stance) {
-			return nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
+			return nil, nil, apperr.Invalid("stance not allowed for dimension " + string(opt.Dimension) + ": " + p.Stance)
 		}
 		isLadder := spec.Kind == ladderKind
 		if isLadder && (p.Weight < 1 || p.Weight > maxLadderWeight) {
-			return nil, apperr.Invalid(fmt.Sprintf("weight for %s must be between 1 and %d", p.OptionID, maxLadderWeight))
+			return nil, nil, apperr.Invalid(fmt.Sprintf("weight for %s must be between 1 and %d", p.OptionID, maxLadderWeight))
 		}
 		if !isLadder && p.Weight != 0 {
-			return nil, apperr.Invalid("weight is only allowed on ladder dimensions: " + p.OptionID)
+			return nil, nil, apperr.Invalid("weight is only allowed on ladder dimensions: " + p.OptionID)
 		}
-		out[i] = dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Weight: p.Weight, Source: "manual"}
+		out = append(out, dto.Pick{OptionID: p.OptionID, Stance: p.Stance, Weight: p.Weight, Source: "manual"})
 	}
-	return out, nil
+	return out, dropped, nil
 }
 
 func validatedSalaryFloor(floor *dto.Money) (*dto.Money, error) {

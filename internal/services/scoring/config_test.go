@@ -152,6 +152,37 @@ func TestUpdateConfig(t *testing.T) {
 	}
 }
 
+func TestUpdateConfigDropsStoredStalePicks(t *testing.T) {
+	st := newFakeStore()
+	st.SeedSearchConfig(dto.SearchConfig{UserID: "user-1", Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:vercel", Stance: "nice", Source: "manual"},
+		{OptionID: "tech:go", Stance: "nice", Source: "manual"},
+	}}})
+	svc := newService(t, st)
+
+	got, err := svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:vercel", Stance: "nice"},
+		{OptionID: "tech:go", Stance: "nice"},
+	}}})
+	if err != nil {
+		t.Fatalf("UpdateConfig() err = %v", err)
+	}
+	wantPicks := []dto.Pick{{OptionID: "tech:go", Stance: "nice", Source: "manual"}}
+	if diff := cmp.Diff(wantPicks, got.Preferences.Picks); diff != "" {
+		t.Errorf("picks (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"tech:vercel"}, got.DroppedOptionIDs); diff != "" {
+		t.Errorf("dropped option IDs (-want +got):\n%s", diff)
+	}
+
+	_, err = svc.UpdateConfig(t.Context(), "user-1", dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{
+		{OptionID: "tech:cobol", Stance: "nice"},
+	}}})
+	if !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("new unknown pick err = %v, want an invalid apperr", err)
+	}
+}
+
 func TestUpdateConfigFailures(t *testing.T) {
 	withGo := dto.ScoringConfigView{Preferences: dto.Preferences{Picks: []dto.Pick{{OptionID: "tech:go", Stance: "nice"}}}}
 	tests := []struct {
