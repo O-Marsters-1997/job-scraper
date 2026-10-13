@@ -74,8 +74,16 @@ func storable(resp *http.Response) bool {
 	return resp.StatusCode == http.StatusOK || (resp.StatusCode >= 300 && resp.StatusCode < 400)
 }
 
+func cacheable(req *http.Request) bool {
+	switch req.Method {
+	case "", http.MethodGet, http.MethodHead:
+		return true
+	}
+	return false
+}
+
 func lookupCached(ctx context.Context, cache Cache, req *http.Request) (*Collector, *http.Response, error) {
-	if cache == nil {
+	if cache == nil || !cacheable(req) {
 		return nil, nil, nil
 	}
 	collector, _ := ctx.Value(collectorKey{}).(*Collector)
