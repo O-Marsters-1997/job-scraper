@@ -197,6 +197,7 @@ func TestRequests(t *testing.T) {
 	})
 
 	t.Run("added bullets become paragraphs after the position's last slot", func(t *testing.T) {
+		t.Parallel()
 		edits := cvedit.EditSet{Positions: []cvedit.PositionEdit{{
 			PositionID: "p1",
 			Bullets:    []cvedit.Bullet{{Text: "a", SlotID: "s0"}, {Text: "b", SlotID: "s1"}},

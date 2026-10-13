@@ -76,6 +76,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	})
 
 	t.Run("an added bullet is written after its anchor and kept in the provenance and content", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 		svc := e.editing(t, e.drive)
@@ -96,6 +97,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	})
 
 	t.Run("an added bullet is saved and its ungrounded claim is flagged", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
@@ -111,6 +113,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	})
 
 	t.Run("removing an added bullet drops it and re-saving the removal is harmless", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 		svc := e.editing(t, e.drive)
@@ -127,6 +130,7 @@ func TestSaveDraftSlots(t *testing.T) {
 	})
 
 	t.Run("rejects removing a base bullet and anchoring on an unknown slot", func(t *testing.T) {
+		t.Parallel()
 		e := newDraftEnv(t)
 		id := e.readyDrafts(t, 1)[0]
 		slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
