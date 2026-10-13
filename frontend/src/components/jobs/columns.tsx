@@ -85,7 +85,7 @@ export function createJobColumns(
 						to="/jobs/$id"
 						params={{ id: info.row.original.ID }}
 						class={cn(
-							"block max-w-[11vw] truncate text-foreground transition-colors hover:text-primary",
+							"block max-w-[10vw] truncate text-foreground transition-colors hover:text-primary",
 							info.row.original.Seen ? "font-medium" : "font-bold",
 						)}
 						title={info.getValue() as string}
@@ -210,8 +210,8 @@ export function createJobColumns(
 				const label = () => postedLabel(info.row.original);
 				return (
 					<span
-						class="font-mono text-xs tabular-nums text-faint"
-						title={label().listTitle}
+						class="block max-w-[6vw] truncate font-mono text-xs tabular-nums text-faint"
+						title={label().listTitle ?? label().list}
 					>
 						{label().list}
 					</span>
