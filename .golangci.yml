@@ -17,6 +17,19 @@ linters:
     - errorlint # error wrapping correctness
     - usetesting # prefer testing package helpers over manual equivalents
     - sloglint # consistent slog usage: *Context calls, attrs, snake_case keys (ADR 0013)
+    - gosec # security checks; G112 kept, G115/G304 excluded by path below
+    - noctx # HTTP requests and exec without a context
+    - contextcheck # ctx passed down instead of context.Background
+    - errchkjson # unchecked or impossible json marshal errors
+    - nilerr # returning nil when err is non-nil
+    - bodyclose # unclosed HTTP response bodies
+    - sqlclosecheck # unclosed sql rows and statements
+    - rowserrcheck # unchecked rows.Err
+    - forcetypeassert # unchecked type assertions
+    - recvcheck # mixed value and pointer receivers
+    - canonicalheader # non-canonical HTTP header keys
+    - modernize # stdlib modernisations
+    - paralleltest # missing t.Parallel (ADR 0012)
   settings:
     usetesting:
       context-background: true
@@ -27,6 +40,12 @@ linters:
           msg: use cmp.Diff(want, got) instead (ADR 0012)
         - pattern: '^time\.Sleep$'
           msg: poll with a ticker and a deadline instead (ADR 0012)
+        - pattern: '^slog\.Default$'
+          msg: inject the *slog.Logger built in main; no global logger (ADR 0013 amendment)
+        - pattern: '^slog\.(Debug|Info|Warn|Error|Log)(Context)?$'
+          msg: log through an injected *slog.Logger at the top of the chain (ADR 0013 amendment)
+        - pattern: '^os\.(Getenv|LookupEnv)$'
+          msg: read the environment once into a typed Config in cmd/ (ADR 0011 amendment)
     sloglint:
       attr-only: true
       context: scope
@@ -58,6 +77,8 @@ linters:
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
             - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtailor/cvtailortest
               desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
+            - pkg: github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest
+              desc: test-double packages (*test) are only imported from _test.go files (ADR 0012)
         no-testify:
           files: ["**/*_test.go"]
           deny:
@@ -85,6 +106,21 @@ linters:
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/services
               desc: the shared kernel never imports a context; move this code into the context that owns it (ADR 0011)
+        no-apperr-in-store:
+          files: ["**/internal/services/*/store/**"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/apperr
+              desc: stores return their own sentinels; the service maps them to apperr kinds (ADR 0011 amendment)
+        pgx-in-store-only:
+          files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/*_test.go"]
+          deny:
+            - pkg: github.com/jackc/pgx/v5
+              desc: pgx is used only inside store/ and internal/data/db (ADR 0011 amendment)
+        sourcetargets:
+          files: ["$all", "!**/internal/services/jobsearch/**", "!**/internal/services/sourcetargets/**", "!**/cmd/api/**", "!**/*_test.go"]
+          deny:
+            - pkg: github.com/ollymarsters/job-scraper/internal/services/sourcetargets
+              desc: sourcetargets is a split-out feature of jobsearch; reach it through the jobsearch Module (ADR 0011)
         applications-store:
           files: ["$all", "!**/internal/services/applications/**"]
           deny:
@@ -121,12 +157,23 @@ linters:
             - pkg: github.com/ollymarsters/job-scraper/internal/services/cvtailor/store
               desc: only the cvtailor context uses its store; call the cvtailor Module facade (ADR 0011)
   exclusions:
+    paths:
+      - frontend
     rules:
-      # forbidigo's reflect.DeepEqual/time.Sleep bans are a test-only policy (ADR 0012);
-      # production code may legitimately use either.
+      # reflect.DeepEqual and time.Sleep are banned in tests only (ADR 0012); production code may use either.
       - path-except: _test\.go
         linters:
           - forbidigo
+        text: 'reflect\.DeepEqual|time\.Sleep'
+      # main owns the environment and builds the logger (ADR 0011 and ADR 0013 amendments).
+      - path: ^cmd/|_test\.go
+        linters:
+          - forbidigo
+        text: 'os\.(Getenv|LookupEnv)|slog\.'
+      - path: _test\.go
+        linters:
+          - gosec
+        text: G115|G304
 
 formatters:
   enable:
@@ -137,5 +184,6 @@ formatters:
         - github.com/ollymarsters/job-scraper
 
 issues:
+  new-from-merge-base: main
   max-issues-per-linter: 0
   max-same-issues: 0

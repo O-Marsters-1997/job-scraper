@@ -1,5 +1,7 @@
 # ADR 0013 — Structured logging for local debugging
 
+Status: superseded (2026-10-13, #874); see "Superseded" at the end.
+
 ## Context
 
 The main reader of our logs is a developer running `just run` and `just run-api` and following a
@@ -77,3 +79,20 @@ Rejected:
   the chain breaks at that hop.
 - The `instrument-logging` skill describes how to follow this ADR. Its Valkey, cron and
   store-DEBUG guidance is removed.
+
+## Superseded (2026-10-13, #874)
+
+The go-idiomatic skill (`references/errors.md`, logging) overrides this ADR. The decision above
+stands only for the pieces not listed here.
+
+- `main` builds one logger (the same OTel and ctx-attribute handler `New` builds) and injects it into
+  top-of-chain components only: `writeError`, worker processors, queue consumers and schedulers. Lower
+  code returns errors and does not log.
+- No `slog.Default`, no `slog.SetDefault` and no package-level `slog.*` calls. `forbidigo` enforces it
+  (`.golangci.yml`). `With`, `Middleware`, `Transport`, the key consts and `sloglint` stay.
+- The origin `file:line` of an error is captured once at the seam where it enters the process
+  (`errsite.Mark`: store, outbound HTTP, queue publish) and logged as `err_site` by the top-of-chain
+  logger.
+- Wraps are short, `<verb> <noun> <id>: %w`, replacing `pkg.Func:` prefixes.
+- "New lines go at boundaries" still holds, but a boundary is a top-of-chain component holding the
+  injected logger, not any call site using the default.

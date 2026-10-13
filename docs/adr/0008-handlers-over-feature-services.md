@@ -9,3 +9,13 @@
 - **Tests.** Rules are tested on services with hand fakes of their store interface. Stores are tested against Postgres via `internal/pgtest`. The adapter is tested once in `generic_test.go`, and wiring with a router table test.
 
 Trade-off: the `struct{}` → 204 convention and string-typed query decoding are implicit; `generic_test.go` guards them. Nothing mechanically enforces "every handler uses `Handle`"; review does.
+
+## Amendment (2026-10-13, #874): error maps
+
+The go-idiomatic skill (`references/errors.md`) overrides the Errors bullet above.
+
+- Each module's routes declare one error map from service or store sentinel to `apperr` kind and public
+  message. The CRUD generics (`GetAll`, `GetByID`, `Query`, `Create`, `Update`, `Delete`) take it as an
+  argument and keep binding a store method value directly.
+- `writeError` sends the public message only and logs the cause (see ADR 0011's amendment). An error with
+  no entry in the map is a 500.

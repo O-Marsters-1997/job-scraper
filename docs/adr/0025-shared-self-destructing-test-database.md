@@ -18,3 +18,15 @@
 - A full `go test ./...` runs one Postgres container no matter how many packages or sessions run at once, and the first run after an idle spell pays for one container start and one migration.
 - Postgres tests no longer get a fresh server, only a fresh database. Anything server-wide (roles, `pg_stat_activity`, advisory locks) is shared across binaries, so filter by `current_database()`.
 - The RabbitMQ broker test keeps Ryuk and a real disk, because it restarts the broker and expects messages to survive.
+
+## Amendment (2026-10-13, #874): one clone per test
+
+The go-testing skill (integration tests) overrides "One database per test binary".
+
+- The migrated template stays. Each test, not each binary, clones its own database from it
+  (`CREATE DATABASE … TEMPLATE`) and drops it in cleanup, so DB tests run with `t.Parallel()` and none
+  truncates. The orphan sweep also drops leftover per-test databases.
+- Cloning needs the template to have no connections, so pgtest never leaves one open on it.
+- The shared container, Ryuk setting, watchdog and `just clean` are unchanged. The 500 connection cap
+  bounds how many tests run at once.
+- The `testing-policy` comparison of this layout and the follow-up work are in #859.

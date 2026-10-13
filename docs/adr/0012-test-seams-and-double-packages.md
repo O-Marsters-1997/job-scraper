@@ -22,3 +22,15 @@ Rejected alternatives:
 Trade-off: each context gains up to two exported test packages and each module a second constructor. Contract suites must be kept in step with store interfaces by hand.
 
 Status: rolled out (2026-09-28). Every context, the worker and the shared kernel follow it.
+
+## Amendment (2026-10-13, #874): parallel store tests
+
+The go-testing skill (integration tests) overrides the Store tests bullet and the "Per-test database
+clones or `t.Parallel()`" rejection above. Both are reversed.
+
+- Every DB test gets its own database, cloned from a migrated template, and calls `t.Parallel()`. Nothing
+  truncates: a test owns its data by owning its database. See ADR 0025 for the pgtest mechanics.
+- The contract suite and `forbidigo` rules are unchanged. `paralleltest` joins the lint set
+  (`.golangci.yml`).
+- `testing-policy` decides what to test. How a test is written (tables, doubles, waits, assertions) is
+  owned by go-testing.

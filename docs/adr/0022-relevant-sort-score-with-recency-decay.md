@@ -46,3 +46,11 @@ were rarely useful and made the order unpredictable. The only way to re-sort was
 - Relevant depends on the whole list being loaded. If the list is ever paginated, the sort has to move to
   the server.
 - Wildcard code and its tests are gone; nothing replaces the occasional low-ranked job surfacing.
+
+## Amendment (2026-10-13, #874): missing posting dates
+
+The postgres-best-practices skill (nullable over sentinel values) overrides any placeholder date.
+
+- A missing or unparseable posting date is stored as NULL `posted_at`, never a zero value or the scrape time.
+- Recency decay falls back to `first_discovered_at` when `posted_at` is NULL.
+- Parse failures are counted per source, so a source whose dates broke shows up in metrics.

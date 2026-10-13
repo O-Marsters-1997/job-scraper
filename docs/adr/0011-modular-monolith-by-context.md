@@ -56,3 +56,17 @@ Rejected alternatives:
 Trade-off: transaction-scoped ports put `pgx.Tx` in interfaces that cross contexts, and read-joins mean a context can't change its tables freely without checking who reads them. sqlc also generates duplicate model structs in each package, which get mapped to `dto` anyway.
 
 Status: complete (2026-09-28, PR #305) — `internal/data/providers` and the legacy sqlc block removed.
+
+## Amendment (2026-10-13, #874): errors and config
+
+The go-idiomatic skill (`references/errors.md`, `secrets.md`) overrides the Errors bullets above.
+
+- Each context's store exports its own sentinels: `ErrNotFound`, `ErrInvalidID` and constraint-named
+  conflicts (`ErrUsernameTaken`). `data.ErrNotFound` is removed, which reverses the 2026-09-28 amendment:
+  a shared sentinel let one context's not-found pass for another's.
+- Stores never import `apperr`. The service maps a store sentinel to an `apperr` kind.
+- `apperr` gets a `KindUnknown` zero value, `Wrap(kind, publicMsg, cause)` and `KindOf(err)`.
+  `writeError` sends only the public message and logs the cause.
+- Each binary reads the environment once into a typed `Config` in `main`. Nothing below `cmd/` calls
+  `os.Getenv` (`forbidigo`).
+- depguard bans `apperr` inside `store/` and `pgx` outside `store/`.

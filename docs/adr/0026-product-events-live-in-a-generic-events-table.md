@@ -34,3 +34,12 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 A dismissal's reason chips are picked after the `job_dismissed` event fires, so
 the event carries no reason. Training reads the reason from `job_grades.reasons`.
 Undoing a dismissal records a second `job_dismissed` event with `props.undone = true`.
+
+## Amendment (2026-10-13, #874): text plus CHECK, not enums
+
+The postgres-best-practices skill (status columns) overrides the Postgres enum for `type`.
+
+- `event_type`, `user_role` and `scoring_dimension` become `text` with a named CHECK constraint
+  (`events_type_check`). Adding a value is a one-statement constraint swap in a normal migration, with no
+  `ALTER TYPE ADD VALUE` transaction restriction, and a value can be dropped.
+- Go gets typed sets from sqlc overrides, so `events.Type` and its siblings stay compile-time checked.
