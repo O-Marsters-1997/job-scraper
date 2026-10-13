@@ -15,8 +15,9 @@ import (
 // PublicRoutes mounts login, signup and the Google OAuth start redirect
 // outside the session-protected group.
 func (m *Module) PublicRoutes(r chi.Router) {
-	r.Post("/auth/login", loginHandler(m.service))
-	r.Post("/auth/signup", signupHandler(m.service))
+	limited := r.With(limitByRemoteHost(m.ipLimiter))
+	limited.Post("/auth/login", loginHandler(m.service))
+	limited.Post("/auth/signup", signupHandler(m.service))
 	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 }
 
