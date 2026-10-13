@@ -69,6 +69,7 @@ func TestCrossSiteWritesRejected(t *testing.T) {
 		{"cross-site fetch metadata", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
 		{"foreign origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
 		{"same-origin fetch metadata", map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusUnauthorized},
+		{"same-site frontend on allowed origin", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "http://localhost:3000"}, http.StatusUnauthorized},
 		{"allowed origin", map[string]string{"Origin": "http://localhost:3000"}, http.StatusUnauthorized},
 	}
 	for _, tc := range cases {
