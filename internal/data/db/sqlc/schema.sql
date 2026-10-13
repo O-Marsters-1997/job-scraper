@@ -384,6 +384,7 @@ CREATE TABLE IF NOT EXISTS job_candidates (
     card_company TEXT NOT NULL DEFAULT '',
     card_location TEXT NOT NULL DEFAULT '',
     card JSONB,
+    posted_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '60 days',

@@ -25,6 +25,7 @@ type Candidate struct {
 
 type CandidateStore interface {
 	SaveCards(context.Context, dto.SourceTarget, []dto.Job) ([]Candidate, error)
+	ApplyBoardCards(ctx context.Context, source string, cards []dto.Job) error
 	ListForUser(context.Context, string, string, int) ([]Candidate, error)
 	Assess(context.Context, string, string, time.Time, bool) (bool, error)
 	MarkDetailPending(context.Context, string) error
@@ -37,9 +38,14 @@ type CardBoards interface {
 }
 
 func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error {
-	cards, err := s.dropBoardCards(ctx, target, cards)
+	cards, boardCards, err := s.splitBoardCards(ctx, target, cards)
 	if err != nil {
 		return err
+	}
+	if len(boardCards) > 0 {
+		if err := s.targets.ApplyBoardCards(ctx, target.Source, boardCards); err != nil {
+			return fmt.Errorf("apply board card dates: %w", err)
+		}
 	}
 	candidates, err := s.targets.SaveCards(ctx, target, cards)
 	if err != nil {
@@ -48,9 +54,9 @@ func (s *Service) CapturePage(ctx context.Context, target dto.SourceTarget, card
 	return s.assess(ctx, candidates, config)
 }
 
-func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) ([]dto.Job, error) {
+func (s *Service) splitBoardCards(ctx context.Context, target dto.SourceTarget, cards []dto.Job) (kept, boardCards []dto.Job, err error) {
 	if target.Source != "linkedin" || len(cards) == 0 {
-		return cards, nil
+		return cards, nil, nil
 	}
 	slugs := make([]string, len(cards))
 	for i, card := range cards {
@@ -58,12 +64,17 @@ func (s *Service) dropBoardCards(ctx context.Context, target dto.SourceTarget, c
 	}
 	boards, err := s.boards.VerifiedBoardsBySlug(ctx, slugs)
 	if err != nil {
-		return nil, fmt.Errorf("look up verified boards: %w", err)
+		return nil, nil, fmt.Errorf("look up verified boards: %w", err)
 	}
 	s.harvestUntracked(ctx, boards)
-	return slices.DeleteFunc(slices.Clone(cards), func(card dto.Job) bool {
-		return slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug })
-	}), nil
+	for _, card := range cards {
+		if slices.ContainsFunc(boards, func(b dto.CardBoard) bool { return b.CompanySlug == card.CompanySlug }) {
+			boardCards = append(boardCards, card)
+		} else {
+			kept = append(kept, card)
+		}
+	}
+	return kept, boardCards, nil
 }
 
 func (s *Service) harvestUntracked(ctx context.Context, boards []dto.CardBoard) {

@@ -2,6 +2,7 @@ package linkedin_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,36 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
+
+func TestParseURLsAt(t *testing.T) {
+	scrapedAt := time.Date(2026, 10, 13, 15, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		datetime string
+		text     string
+		want     time.Time
+	}{
+		{"hours ago keeps hour precision", "2026-10-13", "3 hours ago", scrapedAt.Add(-3 * time.Hour)},
+		{"minutes ago on the same day", "2026-10-13", "20 minutes ago", scrapedAt.Add(-20 * time.Minute)},
+		{"estimate before the datetime day clamps to its start", "2026-10-13", "20 hours ago", time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC)},
+		{"estimate after the datetime day clamps to its end", "2026-10-04", "1 week ago", time.Date(2026, 10, 4, 23, 59, 59, 0, time.UTC)},
+		{"days ago inside the datetime day", "2026-10-11", "2 days ago", time.Date(2026, 10, 11, 15, 30, 0, 0, time.UTC)},
+		{"unparseable text falls back to the datetime day", "2026-10-09", "Be an early applicant", time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			html := `<div class="base-search-card" data-entity-urn="urn:li:jobPosting:1"><h3 class="base-search-card__title">Engineer</h3>` +
+				`<time class="job-search-card__listdate" datetime="` + tt.datetime + `">` + tt.text + `</time></div>`
+			jobs, err := linkedin.ParseURLsAt(strings.NewReader(html), scrapedAt)
+			if err != nil || len(jobs) != 1 {
+				t.Fatalf("ParseURLsAt(...) = %v, %v, want one card", jobs, err)
+			}
+			if got := jobs[0].PostedAt; got == nil || !got.Equal(tt.want) {
+				t.Errorf("PostedAt = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestSnapshots(t *testing.T) {
 	sourcetest.RunSnapshotTests(t, linkedin.New("", nil, ""))

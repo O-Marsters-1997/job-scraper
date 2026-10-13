@@ -74,6 +74,19 @@ UPDATE jobs SET company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (
     posted_at = LEAST(posted_at, sqlc.narg(posted_at)::timestamptz)
 WHERE id = sqlc.arg(id)::uuid;
 
+-- name: ApplyPostedDate :exec
+UPDATE jobs SET
+    reposted_at = CASE WHEN sqlc.arg(posted_at)::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, sqlc.arg(posted_at)::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, sqlc.arg(posted_at)::timestamptz)
+WHERE id = sqlc.arg(id)::uuid;
+
+-- name: FindJobIDByURL :one
+SELECT id FROM jobs WHERE url = sqlc.arg(url)
+UNION ALL
+SELECT job_id FROM job_urls WHERE normalized_url = sqlc.arg(url)
+LIMIT 1;
+
 -- name: SaveCanonicalJobAlias :execrows
 INSERT INTO job_urls (job_id, normalized_url, source)
 VALUES ($1::uuid, $2, $3)

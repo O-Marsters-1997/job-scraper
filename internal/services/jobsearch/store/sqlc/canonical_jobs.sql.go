@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const applyPostedDate = `-- name: ApplyPostedDate :exec
+UPDATE jobs SET
+    reposted_at = CASE WHEN $1::timestamptz > posted_at + INTERVAL '2 days'
+        THEN GREATEST(reposted_at, $1::timestamptz) ELSE reposted_at END,
+    posted_at = LEAST(posted_at, $1::timestamptz)
+WHERE id = $2::uuid
+`
+
+type ApplyPostedDateParams struct {
+	PostedAt pgtype.Timestamptz
+	ID       pgtype.UUID
+}
+
+func (q *Queries) ApplyPostedDate(ctx context.Context, arg ApplyPostedDateParams) error {
+	_, err := q.db.Exec(ctx, applyPostedDate, arg.PostedAt, arg.ID)
+	return err
+}
+
 const backfillCompanyJobFingerprints = `-- name: BackfillCompanyJobFingerprints :exec
 UPDATE jobs j SET content_fingerprint = encode(sha256(convert_to(
     replace(replace(replace(replace(replace(to_json(ARRAY[
@@ -78,6 +96,20 @@ func (q *Queries) FindCanonicalJob(ctx context.Context, arg FindCanonicalJobPara
 		&i.ProviderPostingID,
 	)
 	return i, err
+}
+
+const findJobIDByURL = `-- name: FindJobIDByURL :one
+SELECT id FROM jobs WHERE url = $1
+UNION ALL
+SELECT job_id FROM job_urls WHERE normalized_url = $1
+LIMIT 1
+`
+
+func (q *Queries) FindJobIDByURL(ctx context.Context, url string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, findJobIDByURL, url)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const findMatchCandidates = `-- name: FindMatchCandidates :many
