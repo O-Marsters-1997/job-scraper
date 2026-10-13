@@ -54,7 +54,7 @@ func (m *Module) Routes(r chi.Router) {
 // router applies ServiceTokenMiddleware itself: depguard's "shared" rule
 // keeps internal/api out of internal/services/** (ADR 0011).
 func (m *Module) PublicRoutes(r chi.Router) {
-	r.Post("/ingest", handlers.Handle(
+	r.With(chimw.RequestSize(1<<20)).Post("/ingest", handlers.Handle(
 		handlers.DecodeBody[dto.Job],
 		func(ctx context.Context, job dto.Job) (IngestResult, error) {
 			results, err := m.jobs.IngestJobs(ctx, []dto.Job{job})

@@ -35,21 +35,23 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	r.Use(chimw.RequestID)
 	r.Use(logger.Middleware)
 	r.Use(telemetry.AccessLog)
-	r.Use(limitBody(maxBodyBytes))
-	r.Use(requireJSON)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{allowedOrigin},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
+	r.Use(requireJSON)
 
 	allModules := append([]Module{idm}, modules...)
-	for _, m := range allModules {
-		if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
-			pm.PublicRoutes(r)
+	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
+		for _, m := range allModules {
+			if pm, ok := m.(interface{ PublicRoutes(chi.Router) }); ok {
+				pm.PublicRoutes(r)
+			}
 		}
-	}
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.ServiceTokenMiddleware)
@@ -57,6 +59,7 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) ht
 	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(limitBody(maxBodyBytes))
 		r.Use(idm.Middleware())
 
 		js.Routes(r)
