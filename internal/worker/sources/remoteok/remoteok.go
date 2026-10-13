@@ -61,7 +61,7 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:     fj.Description,
 			SalaryRaw:       formatSalary(fj.SalaryMin, fj.SalaryMax),
 			WorkArrangement: "remote",
-			UpdatedAt:       sources.RFC3339OrNow(fj.Date),
+			PostedAt:        sources.RFC3339OrNil(fj.Date),
 		})
 	}
 	return jobs, nil

@@ -344,7 +344,8 @@ func TestRunTick(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			st := newFakeStore()
 			job := testJob
-			job.UpdatedAt = time.Now().Add(-tt.postedAgo)
+			posted := time.Now().Add(-tt.postedAgo)
+			job.PostedAt = &posted
 			cfg := picking("user-1", "tech:go")
 			cfg.MaxJobAgeDays = tt.maxAgeDays
 			st.SeedJob(job, []dto.SearchConfig{cfg})

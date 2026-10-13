@@ -26,6 +26,7 @@ type boardPollState struct {
 	version      int64
 	reported     int
 	parsed       int
+	completedAt  time.Time
 }
 
 type FakeStore struct {
@@ -153,7 +154,11 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	id, ok := f.jobIdentity(job)
 	if !ok {
 		id = f.nextID("job")
-		job.ID, job.ContentFingerprint = id, fingerprint
+		job.ID, job.ContentFingerprint, job.FirstDiscoveredAt = id, fingerprint, time.Now()
+		if st := f.pollState[job.BoardID]; st != nil && !st.completedAt.IsZero() {
+			completedAt := st.completedAt
+			job.PostedAfter = &completedAt
+		}
 		f.jobs[id] = job
 		f.jobOrder = append(f.jobOrder, id)
 		f.indexJob(job)
@@ -171,10 +176,37 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 		status = "changed"
 	}
 	f.addListing(id, job)
+	job.PostedAt, job.RepostedAt = applyPostedAt(prev, job.PostedAt)
+	job.PostedAfter, job.FirstDiscoveredAt = prev.PostedAfter, prev.FirstDiscoveredAt
 	job.ID, job.ContentFingerprint, job.URL = id, fingerprint, prev.URL
 	f.jobs[id] = job
 	f.indexJob(job)
 	return job, status, nil
+}
+
+func effectiveAge(job dto.Job) time.Time {
+	switch {
+	case job.PostedAt != nil:
+		return *job.PostedAt
+	case job.PostedAfter != nil:
+		return *job.PostedAfter
+	default:
+		return job.FirstDiscoveredAt
+	}
+}
+
+func applyPostedAt(prev dto.Job, incoming *time.Time) (postedAt, repostedAt *time.Time) {
+	postedAt, repostedAt = prev.PostedAt, prev.RepostedAt
+	switch {
+	case incoming == nil:
+	case postedAt == nil || incoming.Before(*postedAt):
+		postedAt = incoming
+	case incoming.After(postedAt.Add(2 * 24 * time.Hour)):
+		if repostedAt == nil || incoming.After(*repostedAt) {
+			repostedAt = incoming
+		}
+	}
+	return postedAt, repostedAt
 }
 
 func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
@@ -197,7 +229,7 @@ func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOp
 			continue
 		}
 		job := f.jobs[id]
-		if options.SinceDays > 0 && job.UpdatedAt.Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
+		if options.SinceDays > 0 && effectiveAge(job).Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
 			continue
 		}
 		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {
@@ -774,6 +806,7 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 		urls[job.URL] = true
 	}
 	st.reported, st.parsed = snapshot.Reported, len(urls)
+	st.completedAt = time.Now()
 	return nil
 }
 

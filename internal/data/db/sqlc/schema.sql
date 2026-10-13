@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     url          TEXT         NOT NULL UNIQUE,
     company_slug TEXT         NOT NULL,
     source       TEXT         NOT NULL,
-    updated_at   TIMESTAMPTZ  NOT NULL,
+    posted_at    TIMESTAMPTZ,
     scraped_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     description      TEXT         NOT NULL DEFAULT '',
     salary_raw       TEXT         NOT NULL DEFAULT '',
@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     content_changed_at  TIMESTAMPTZ,
     first_discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     match_title         TEXT,
-    match_location      TEXT
+    match_location      TEXT,
+    posted_after        TIMESTAMPTZ,
+    reposted_at         TIMESTAMPTZ
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);

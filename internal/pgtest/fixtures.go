@@ -27,7 +27,7 @@ func InsertJob(tb testing.TB, pool *pgxpool.Pool, title, fingerprint string) str
 	var id string
 	url := fmt.Sprintf("https://example.com/%s/%d", tb.Name(), seedCounter.Add(1))
 	err := pool.QueryRow(tb.Context(),
-		`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, description, content_fingerprint)
+		`INSERT INTO jobs (title, location, url, company_slug, source, posted_at, description, content_fingerprint)
 		 VALUES ($1, 'Remote', $2, 'acme', 'greenhouse', NOW(), 'Build things in Go', $3) RETURNING id`,
 		title, url, fingerprint).Scan(&id)
 	if err != nil {

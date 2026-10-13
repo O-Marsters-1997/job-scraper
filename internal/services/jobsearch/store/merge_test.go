@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -50,7 +49,7 @@ func loadListing(t *testing.T, url string) dto.Job {
 		}
 		job := dto.Job{
 			Title: r.Title, Location: r.Location, URL: r.URL, CompanySlug: r.CompanySlug,
-			Source: r.Source, UpdatedAt: time.Now(), Description: r.Description,
+			Source: r.Source, Description: r.Description,
 			SalaryRaw: r.SalaryRaw, WorkArrangement: r.WorkArrangement,
 		}
 		if r.PostingID != nil {
@@ -166,7 +165,7 @@ func TestSaveCanonicalMergesAggregatorListings(t *testing.T) {
 
 	for _, tt := range []struct{ name, set string }{
 		{"closed", "closed_at = NOW()"},
-		{"outside the 90-day window", "updated_at = NOW() - INTERVAL '91 days'"},
+		{"outside the 90-day window", "posted_at = NOW() - INTERVAL '91 days'"},
 	} {
 		t.Run("a "+tt.name+" candidate is not merged into", func(t *testing.T) {
 			st, pool, _ := newUserStore(t)

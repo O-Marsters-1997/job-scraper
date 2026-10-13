@@ -1,5 +1,5 @@
 -- name: GetJobForScoring :one
-SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description,
+SELECT id, title, location, url, company_slug, source, posted_at, posted_after, first_discovered_at, scraped_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
 FROM jobs WHERE id = $1;
 
@@ -66,7 +66,7 @@ UPDATE job_scores SET suitability_score = sqlc.arg(score)::int, band = sqlc.arg(
 WHERE job_id = sqlc.arg(job_id)::uuid AND user_id = sqlc.arg(user_id)::uuid;
 
 -- name: ListScoringInputJobs :many
-SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.updated_at, j.scraped_at,
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at,
     j.description, j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id,
     j.provider_posting_id, j.content_fingerprint,
     EXISTS (

@@ -11,14 +11,21 @@
     "ProviderPostingID": "abc123",
     "ContentFingerprint": "",
     "Source": "lever",
-    "UpdatedAt": "2024-06-01T08:00:00Z",
+    "PostedAt": "2024-06-01T08:00:00Z",
+    "PostedAfter": null,
+    "RepostedAt": null,
     "ScrapedAt": "0001-01-01T00:00:00Z",
+    "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
     "Description": "We are looking for a Senior Backend Engineer to join our team.",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
+    "Breakdown": null,
+    "Listings": null
   },
   {
     "ID": "",
@@ -32,13 +39,20 @@
     "ProviderPostingID": "def456",
     "ContentFingerprint": "",
     "Source": "lever",
-    "UpdatedAt": "2024-06-02T08:00:00Z",
+    "PostedAt": "2024-06-02T08:00:00Z",
+    "PostedAfter": null,
+    "RepostedAt": null,
     "ScrapedAt": "0001-01-01T00:00:00Z",
+    "FirstDiscoveredAt": "0001-01-01T00:00:00Z",
     "Description": "Join our design team as a Product Designer.",
     "SalaryRaw": "",
     "WorkArrangement": "",
     "SuitabilityScore": null,
     "Band": "",
-    "Breakdown": null
+    "Grade": "",
+    "Seen": false,
+    "CompanyFavourite": false,
+    "Breakdown": null,
+    "Listings": null
   }
 ]

@@ -414,7 +414,7 @@ func TestListCompanyAnswers(t *testing.T) {
 	insertCompanyJob := func(url, fingerprint, closedAt string) string {
 		var id string
 		err := pool.QueryRow(t.Context(),
-			`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint, closed_at)
+			`INSERT INTO jobs (title, location, url, company_slug, company_id, source, posted_at, content_fingerprint, closed_at)
 			 VALUES ('Engineer', 'Remote', $1, 'acme', $2, 'greenhouse', NOW(), $3, NULLIF($4, '')::timestamptz) RETURNING id`,
 			url, companyID, fingerprint, closedAt).Scan(&id)
 		if err != nil {
@@ -557,7 +557,7 @@ func TestCompanyTracked(t *testing.T) {
 			companyID, userID := insertTrackedCompany(t, pool, "tracked-co")
 			var jobID string
 			err := pool.QueryRow(t.Context(),
-				`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
+				`INSERT INTO jobs (title, location, url, company_slug, company_id, source, posted_at, content_fingerprint)
 				 VALUES ('Engineer', 'Remote', 'https://example.com/tracked', 'tracked-co', $1, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
 				companyID).Scan(&jobID)
 			if err != nil {
@@ -582,7 +582,7 @@ func insertCompanyJob(t *testing.T, pool *pgxpool.Pool, companyID, slug, url str
 	t.Helper()
 	var jobID string
 	err := pool.QueryRow(t.Context(),
-		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, updated_at, content_fingerprint)
+		`INSERT INTO jobs (title, location, url, company_slug, company_id, source, posted_at, content_fingerprint)
 		 VALUES ('Engineer', 'Remote', $1, $2, $3, 'greenhouse', NOW(), 'fp-1') RETURNING id`,
 		url, slug, companyID).Scan(&jobID)
 	if err != nil {
@@ -1366,7 +1366,7 @@ func TestOpsStateFieldCompleteness(t *testing.T) {
 			closedAt = &now
 		}
 		exec(t, pool,
-			`INSERT INTO jobs (title, location, url, company_slug, source, updated_at, scraped_at, description, salary_raw, closed_at)
+			`INSERT INTO jobs (title, location, url, company_slug, source, posted_at, scraped_at, description, salary_raw, closed_at)
 			 VALUES ('Engineer', $1, $2, 'acme', $3, NOW(), $4, 'desc', $5, $6)`,
 			location, fmt.Sprintf("https://example.com/%s/%d", source, n), source, time.Now().Add(-scrapedAgo), salary, closedAt)
 	}

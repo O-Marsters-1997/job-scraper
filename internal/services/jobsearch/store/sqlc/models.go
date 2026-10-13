@@ -339,7 +339,7 @@ type Job struct {
 	Url                string
 	CompanySlug        string
 	Source             string
-	UpdatedAt          pgtype.Timestamptz
+	PostedAt           pgtype.Timestamptz
 	ScrapedAt          pgtype.Timestamptz
 	Description        string
 	SalaryRaw          string
@@ -353,6 +353,8 @@ type Job struct {
 	FirstDiscoveredAt  pgtype.Timestamptz
 	MatchTitle         pgtype.Text
 	MatchLocation      pgtype.Text
+	PostedAfter        pgtype.Timestamptz
+	RepostedAt         pgtype.Timestamptz
 }
 
 type JobCandidate struct {

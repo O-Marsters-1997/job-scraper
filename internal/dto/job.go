@@ -14,7 +14,9 @@ type Job struct {
 	ProviderPostingID  string
 	ContentFingerprint string
 	Source             string
-	UpdatedAt          time.Time
+	PostedAt           *time.Time
+	PostedAfter        *time.Time
+	RepostedAt         *time.Time
 	ScrapedAt          time.Time
 	FirstDiscoveredAt  time.Time
 	Description        string

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -98,7 +97,6 @@ func parse(body []byte) ([]dto.Job, error) {
 			Description:       p.fullDescription(),
 			SalaryRaw:         p.salaryRaw(),
 			WorkArrangement:   p.workArrangement(),
-			UpdatedAt:         time.Now().UTC(),
 		})
 	}
 	return jobs, nil

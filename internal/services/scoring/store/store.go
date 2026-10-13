@@ -565,7 +565,8 @@ func listScoringInputs(ctx context.Context, queries *sqlc.Queries, userID, model
 	for i, row := range jobRows {
 		job := toJobDTO(sqlc.GetJobForScoringRow{
 			ID: row.ID, Title: row.Title, Location: row.Location, Url: row.Url, CompanySlug: row.CompanySlug,
-			Source: row.Source, UpdatedAt: row.UpdatedAt, ScrapedAt: row.ScrapedAt, Description: row.Description,
+			Source: row.Source, PostedAt: row.PostedAt, PostedAfter: row.PostedAfter,
+			FirstDiscoveredAt: row.FirstDiscoveredAt, ScrapedAt: row.ScrapedAt, Description: row.Description,
 			SalaryRaw: row.SalaryRaw, WorkArrangement: row.WorkArrangement, CompanyID: row.CompanyID,
 			PrimaryBoardID: row.PrimaryBoardID, ProviderPostingID: row.ProviderPostingID,
 			ContentFingerprint: row.ContentFingerprint,
