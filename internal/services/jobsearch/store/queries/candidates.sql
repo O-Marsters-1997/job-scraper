@@ -1,12 +1,13 @@
 -- name: UpsertCandidate :one
-INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, card)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO job_candidates (normalized_url, source, card_title, card_company, card_location, card, posted_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (normalized_url) DO UPDATE SET
     source = EXCLUDED.source,
     card_title = EXCLUDED.card_title,
     card_company = EXCLUDED.card_company,
     card_location = EXCLUDED.card_location,
     card = EXCLUDED.card,
+    posted_at = LEAST(job_candidates.posted_at, EXCLUDED.posted_at),
     last_seen_at = NOW(),
     expires_at = NOW() + INTERVAL '60 days'
 RETURNING id;
@@ -17,7 +18,7 @@ VALUES ($1, $2)
 ON CONFLICT (candidate_id, source_target_id) DO UPDATE SET last_seen_at = NOW();
 
 -- name: ListCandidatesForUser :many
-SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.source
+SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.posted_at, c.source
 FROM job_candidates c
 WHERE c.id > $2 AND c.expires_at > NOW()
   AND EXISTS (
@@ -47,6 +48,12 @@ SELECT EXISTS (SELECT 1 FROM claimed);
 
 -- name: MarkCandidateDetailPending :exec
 UPDATE job_candidates SET detail_state = 'pending' WHERE id = $1;
+
+-- name: ListDatedCandidatesForCompany :many
+SELECT card_title, card_location, posted_at
+FROM job_candidates
+WHERE card_company = $1 AND posted_at IS NOT NULL AND expires_at > NOW()
+LIMIT 200;
 
 -- name: DeleteExpiredCandidates :exec
 DELETE FROM job_candidates WHERE expires_at <= NOW();

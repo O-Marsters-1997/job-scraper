@@ -38,6 +38,7 @@ const (
 	selCardTitleAlt = `span.sr-only`
 	selCardCompany  = `h4.base-search-card__subtitle a`
 	selCardLocation = `span.job-search-card__location`
+	selCardListDate = `time[class*="job-search-card__listdate"]`
 
 	selDetailTitle        = `.top-card-layout__title.topcard__title`
 	selDetailCompany      = `a.topcard__org-name-link`
@@ -128,7 +129,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	if err != nil {
 		return nil, "", err
 	}
-	jobs, err := ParseURLs(bytes.NewReader(body))
+	jobs, err := ParseURLsAt(bytes.NewReader(body), time.Now())
 	if err != nil {
 		return nil, "", err
 	}
@@ -163,6 +164,10 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func ParseURLs(r io.Reader) ([]dto.Job, error) {
+	return ParseURLsAt(r, time.Time{})
+}
+
+func ParseURLsAt(r io.Reader, scrapedAt time.Time) ([]dto.Job, error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {
 		return nil, err
@@ -188,9 +193,45 @@ func ParseURLs(r io.Reader) ([]dto.Job, error) {
 			Location:    location,
 			URL:         baseURL + "/jobs/view/" + id,
 			CompanySlug: slug.Company(company),
+			PostedAt:    cardPostedAt(card.Find(selCardListDate).First(), scrapedAt),
 		})
 	})
 	return jobs, nil
+}
+
+var relativeAge = regexp.MustCompile(`(?i)(\d+)\s+(minute|hour|day|week|month)s?\s+ago`)
+
+var relativeUnit = map[string]time.Duration{
+	"minute": time.Minute,
+	"hour":   time.Hour,
+	"day":    24 * time.Hour,
+	"week":   7 * 24 * time.Hour,
+	"month":  30 * 24 * time.Hour,
+}
+
+func cardPostedAt(el *goquery.Selection, scrapedAt time.Time) *time.Time {
+	day, dayErr := time.Parse(time.DateOnly, strings.TrimSpace(el.AttrOr("datetime", "")))
+	var estimate time.Time
+	if m := relativeAge.FindStringSubmatch(el.Text()); m != nil && !scrapedAt.IsZero() {
+		n, _ := strconv.Atoi(m[1])
+		estimate = scrapedAt.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
+	}
+	switch {
+	case dayErr != nil && estimate.IsZero():
+		return nil
+	case dayErr != nil:
+		return &estimate
+	case estimate.IsZero():
+		return &day
+	}
+	end := day.Add(24*time.Hour - time.Second)
+	switch {
+	case estimate.Before(day):
+		estimate = day
+	case estimate.After(end):
+		estimate = end
+	}
+	return &estimate
 }
 
 // cardJobID prefers the structured data-entity-urn attribute (urn:li:jobPosting:{id})

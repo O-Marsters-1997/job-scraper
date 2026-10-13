@@ -3,6 +3,7 @@ package worker_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -115,6 +116,7 @@ func (oneBoardJob) FetchBoard(context.Context, dto.BoardPoll) (sources.BoardResu
 type ingest struct {
 	server   *httptest.Server
 	requests atomic.Int32
+	lastJob  atomic.Pointer[dto.Job]
 }
 
 func newIngest(t *testing.T, status int) *ingest {
@@ -122,6 +124,10 @@ func newIngest(t *testing.T, status int) *ingest {
 	in := &ingest{}
 	in.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		in.requests.Add(1)
+		var job dto.Job
+		if json.NewDecoder(r.Body).Decode(&job) == nil {
+			in.lastJob.Store(&job)
+		}
 		w.WriteHeader(status)
 		if strings.HasSuffix(r.URL.Path, "/batch") {
 			_, _ = w.Write([]byte(`{"results":[{"status":"new"}]}`))
@@ -247,6 +253,20 @@ func TestProcess(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("detail task exports the card's posted date", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		postedAt := time.Date(2026, 10, 12, 8, 0, 0, 0, time.UTC)
+		task := queuetest.DetailTask("wis")
+		task.Card.PostedAt = &postedAt
+		if err := f.processor.Process(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		job := f.ingest.lastJob.Load()
+		if job == nil || job.PostedAt == nil || !job.PostedAt.Equal(postedAt) {
+			t.Fatalf("exported job = %+v, want PostedAt %v", job, postedAt)
+		}
+	})
 
 	t.Run("gone detail is acked without exporting", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")

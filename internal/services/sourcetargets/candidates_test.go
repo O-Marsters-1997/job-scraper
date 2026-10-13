@@ -100,6 +100,26 @@ func TestCapturePage(t *testing.T) {
 		}
 	})
 
+	t.Run("a dropped board card dates the held job it matches", func(t *testing.T) {
+		st := jobsearchtest.NewFakeStore()
+		svc := sourcetargets.New(st, fakeSearchConfigReader{}, queuetest.NewRecorder(), verifiedBoards{{CompanySlug: "acme", Source: "ashby", BoardToken: "acme"}}, sourcetargets.DefaultMaxAutomatic)
+		held, _, err := st.SaveCanonical(t.Context(), dto.Job{Title: "Engineer", CompanySlug: "acme", URL: "https://jobs.example.com/acme/1"})
+		if err != nil {
+			t.Fatalf("SaveCanonical() err = %v", err)
+		}
+		postedAt := time.Date(2026, 10, 9, 8, 0, 0, 0, time.UTC)
+		card := dto.Job{URL: "https://linkedin.com/jobs/view/9", Title: "Engineer", CompanySlug: "acme", PostedAt: &postedAt}
+		linkedin := dto.SourceTarget{ID: "target-2", UserID: userID, Source: "linkedin"}
+		config := dto.SearchConfig{UserID: userID, UpdatedAt: time.Now().UTC()}
+		if err := svc.CapturePage(t.Context(), linkedin, []dto.Job{card}, config); err != nil {
+			t.Fatalf("CapturePage() err = %v", err)
+		}
+		got, err := st.GetJob(t.Context(), held.ID, "")
+		if err != nil || got.PostedAt == nil || !got.PostedAt.Equal(postedAt) {
+			t.Errorf("GetJob() = %+v, %v, want PostedAt %v", got, err, postedAt)
+		}
+	})
+
 	t.Run("retains a rejected card and reconsideration queues it once", func(t *testing.T) {
 		svc, _, q := newService(t)
 		card := captureCard

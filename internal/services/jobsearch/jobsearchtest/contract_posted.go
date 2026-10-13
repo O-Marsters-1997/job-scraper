@@ -7,8 +7,111 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+func runCardDatesContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
+	t.Helper()
+
+	posted := time.Date(2026, 10, 10, 9, 0, 0, 0, time.UTC)
+	card := func(url string, at time.Time) dto.Job {
+		return dto.Job{Title: "Platform Engineer", Location: "London", CompanySlug: "card-co", URL: url, PostedAt: &at}
+	}
+	job := func(url string, at *time.Time) dto.Job {
+		return dto.Job{Title: "Platform Engineer", Location: "London", CompanySlug: "card-co", URL: url, Source: "pinpoint", PostedAt: at}
+	}
+	postedOf := func(t *testing.T, st Store, id string) dto.Job {
+		t.Helper()
+		got, err := st.GetJob(t.Context(), id, missingID)
+		if err != nil {
+			t.Fatalf("GetJob(%s) = %v", id, err)
+		}
+		return got
+	}
+
+	t.Run("a re-sighting of a held job runs the date rule and a later date sets the repost", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		target, err := st.CreateSourceTarget(ctx, userID, "linkedin", "sighting", true, map[string]string{}, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(...) = %v", err)
+		}
+		saved, _, err := st.SaveCanonical(ctx, job("https://www.linkedin.com/jobs/view/501", &posted))
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		repost := posted.AddDate(0, 0, 5)
+		if _, err := st.SaveCards(ctx, target, []dto.Job{card("https://www.linkedin.com/jobs/view/501", repost)}); err != nil {
+			t.Fatalf("SaveCards(...) = %v", err)
+		}
+		got := postedOf(t, st, saved.ID)
+		if got.PostedAt == nil || !got.PostedAt.Equal(posted) || got.RepostedAt == nil || !got.RepostedAt.Equal(repost) {
+			t.Fatalf("GetJob(...) PostedAt, RepostedAt = %v, %v, want %v, %v", got.PostedAt, got.RepostedAt, posted, repost)
+		}
+	})
+
+	t.Run("a board card fills a missing posted date or moves it earlier on exactly one match", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		saved, _, err := st.SaveCanonical(ctx, job("https://jobs.example.com/card-co/1", nil))
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		if err := st.ApplyBoardCards(ctx, "linkedin", []dto.Job{card("https://www.linkedin.com/jobs/view/502", posted)}); err != nil {
+			t.Fatalf("ApplyBoardCards(...) = %v", err)
+		}
+		if got := postedOf(t, st, saved.ID); got.PostedAt == nil || !got.PostedAt.Equal(posted) {
+			t.Fatalf("GetJob(...).PostedAt = %v, want %v", got.PostedAt, posted)
+		}
+		earlier := posted.AddDate(0, 0, -2)
+		if err := st.ApplyBoardCards(ctx, "linkedin", []dto.Job{card("https://www.linkedin.com/jobs/view/503", earlier)}); err != nil {
+			t.Fatalf("ApplyBoardCards(earlier) = %v", err)
+		}
+		if got := postedOf(t, st, saved.ID); got.PostedAt == nil || !got.PostedAt.Equal(earlier) {
+			t.Fatalf("GetJob(...).PostedAt = %v, want %v", got.PostedAt, earlier)
+		}
+	})
+
+	t.Run("a board card matching several jobs applies nothing", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		first, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Platform Engineer", Location: "London", CompanySlug: "card-co", URL: "https://jobs.example.com/card-co/a", Description: "a"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(first) = %v", err)
+		}
+		second, _, err := st.SaveCanonical(ctx, dto.Job{Title: "Platform Engineer", Location: "Leeds", CompanySlug: "card-co", URL: "https://jobs.example.com/card-co/b", Description: "b"})
+		if err != nil {
+			t.Fatalf("SaveCanonical(second) = %v", err)
+		}
+		cardAnywhere := card("https://www.linkedin.com/jobs/view/504", posted)
+		cardAnywhere.Location = ""
+		if err := st.ApplyBoardCards(ctx, "linkedin", []dto.Job{cardAnywhere}); err != nil {
+			t.Fatalf("ApplyBoardCards(...) = %v", err)
+		}
+		for _, id := range []string{first.ID, second.ID} {
+			if got := postedOf(t, st, id); got.PostedAt != nil {
+				t.Fatalf("GetJob(%s).PostedAt = %v, want nil", id, got.PostedAt)
+			}
+		}
+	})
+
+	t.Run("a board card kept before its job exists dates the job when it is inserted", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.ApplyBoardCards(ctx, "linkedin", []dto.Job{card("https://www.linkedin.com/jobs/view/505", posted)}); err != nil {
+			t.Fatalf("ApplyBoardCards(...) = %v", err)
+		}
+		saved, _, err := st.SaveCanonical(ctx, job("https://jobs.example.com/card-co/2", nil))
+		if err != nil {
+			t.Fatalf("SaveCanonical(...) = %v", err)
+		}
+		if got := postedOf(t, st, saved.ID); got.PostedAt == nil || !got.PostedAt.Equal(posted) {
+			t.Fatalf("GetJob(...).PostedAt = %v, want %v", got.PostedAt, posted)
+		}
+	})
+}
+
 func runPostedContract(t *testing.T, newStore func(t *testing.T) (Store, string)) {
 	t.Helper()
+
+	runCardDatesContract(t, newStore)
 
 	t.Run("a later save fills a missing posted date and a missing date never overwrites it", func(t *testing.T) {
 		st, _ := newStore(t)
