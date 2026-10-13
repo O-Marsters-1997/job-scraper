@@ -184,17 +184,6 @@ func (f *FakeStore) SaveCanonical(_ context.Context, job dto.Job) (dto.Job, stri
 	return job, status, nil
 }
 
-func effectiveAge(job dto.Job) time.Time {
-	switch {
-	case job.PostedAt != nil:
-		return *job.PostedAt
-	case job.PostedAfter != nil:
-		return *job.PostedAfter
-	default:
-		return job.FirstDiscoveredAt
-	}
-}
-
 func applyPostedAt(prev dto.Job, incoming *time.Time) (postedAt, repostedAt *time.Time) {
 	postedAt, repostedAt = prev.PostedAt, prev.RepostedAt
 	switch {
@@ -229,7 +218,7 @@ func (f *FakeStore) Page(_ context.Context, userID string, options dto.JobPageOp
 			continue
 		}
 		job := f.jobs[id]
-		if options.SinceDays > 0 && effectiveAge(job).Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
+		if options.SinceDays > 0 && job.EffectiveAge().Before(time.Now().AddDate(0, 0, -int(options.SinceDays))) {
 			continue
 		}
 		if slices.Contains(options.ExcludedCompanySlugs, job.CompanySlug) {

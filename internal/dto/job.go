@@ -31,6 +31,17 @@ type Job struct {
 	Listings           []JobListing
 }
 
+func (j Job) EffectiveAge() time.Time {
+	switch {
+	case j.PostedAt != nil:
+		return *j.PostedAt
+	case j.PostedAfter != nil:
+		return *j.PostedAfter
+	default:
+		return j.FirstDiscoveredAt
+	}
+}
+
 type JobListing struct {
 	Source      string    `json:"source"`
 	URL         string    `json:"url"`
