@@ -334,3 +334,91 @@ func TestStateFor(t *testing.T) {
 		t.Errorf("StateFor mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestClassifyRecruiter(t *testing.T) {
+	ctx := t.Context()
+
+	t.Run("sends the company name and industries line and maps the answer", func(t *testing.T) {
+		tests := []struct {
+			name string
+			yes  float64
+			no   float64
+			want dto.CompanyKind
+		}{
+			{name: "agency", yes: 0.9, no: 0.1, want: dto.KindLikelyAgency},
+			{name: "direct", yes: 0.1, no: 0.8, want: dto.KindLikelyDirect},
+			{name: "tie is direct", yes: 0.5, no: 0.5, want: dto.KindLikelyDirect},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var captured wireRequest
+				client := newClient(t, func(w http.ResponseWriter, r *http.Request) {
+					if got := r.Header.Get("Authorization"); got != "Bearer "+apiKey {
+						t.Errorf("Authorization header = %q, want Bearer %s", got, apiKey)
+					}
+					req, _ := readRequest(t, r)
+					captured = req
+					resp := wireResponse{Usage: wireUsage{Cost: 0.002}, Answers: map[string]wireAnswer{}}
+					for q := range req.Questions {
+						resp.Answers[q] = wireAnswer{Probabilities: map[string]float64{"yes": tt.yes, "no": tt.no}, Confidence: 1}
+					}
+					writeResponse(w, resp)
+				})
+				job := dto.Job{Description: "<p>Great role</p><p>Industries: Staffing and Recruiting</p>"}
+
+				got, usage, err := client.ClassifyRecruiter(ctx, apiKey, "Acme Talent", job)
+
+				if err != nil {
+					t.Fatalf("ClassifyRecruiter() err = %v", err)
+				}
+				if got != tt.want {
+					t.Errorf("ClassifyRecruiter() kind = %q, want %q", got, tt.want)
+				}
+				wantUsage := dto.Usage{Model: "typesafe/jev-1.13-20260917", Cost: 0.002}
+				if diff := cmp.Diff(wantUsage, usage); diff != "" {
+					t.Errorf("ClassifyRecruiter() usage mismatch (-want +got):\n%s", diff)
+				}
+				if captured.State.Company != "Acme Talent" {
+					t.Errorf("state company = %q, want Acme Talent", captured.State.Company)
+				}
+				if !strings.Contains(captured.State.Description, "Industries: Staffing and Recruiting") {
+					t.Errorf("state description = %q, want industries line", captured.State.Description)
+				}
+			})
+		}
+	})
+
+	t.Run("status errors", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			status         int
+			retryAfter     string
+			wantTerminal   bool
+			wantRetryAfter time.Duration
+		}{
+			{name: "401 is terminal", status: http.StatusUnauthorized, wantTerminal: true},
+			{name: "429 carries retry-after", status: http.StatusTooManyRequests, retryAfter: "30", wantRetryAfter: 30 * time.Second},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				client := newClient(t, func(w http.ResponseWriter, _ *http.Request) {
+					if tt.retryAfter != "" {
+						w.Header().Set("Retry-After", tt.retryAfter)
+					}
+					w.WriteHeader(tt.status)
+				})
+
+				_, _, err := client.ClassifyRecruiter(ctx, apiKey, "Acme", dto.Job{})
+
+				jevErr, ok := errors.AsType[*jev.Error](err)
+				if !ok {
+					t.Fatalf("ClassifyRecruiter() err = %v, want *jev.Error", err)
+				}
+				if jevErr.Terminal != tt.wantTerminal || jevErr.RetryAfter != tt.wantRetryAfter {
+					t.Errorf("Terminal, RetryAfter = %v, %v, want %v, %v",
+						jevErr.Terminal, jevErr.RetryAfter, tt.wantTerminal, tt.wantRetryAfter)
+				}
+			})
+		}
+	})
+}
