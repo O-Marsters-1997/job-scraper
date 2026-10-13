@@ -52,6 +52,8 @@ type Service struct {
 	cipher *tokencrypt.Cipher
 	google googleClient
 
+	sessionSecret []byte
+
 	keyUsage KeyUsageFetcher
 	now      func() time.Time
 	usage    aiUsageCache
@@ -62,6 +64,7 @@ func NewService(deps Deps) *Service {
 	s := &Service{
 		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
 		keyUsage: deps.KeyUsage, now: deps.Now,
+		sessionSecret: deps.SessionSecret,
 	}
 	if s.keyUsage == nil {
 		s.keyUsage = newHTTPKeyUsage()

@@ -12,13 +12,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-// PublicRoutes mounts login, signup and the Google OAuth start redirect
-// outside the session-protected group.
 func (m *Module) PublicRoutes(r chi.Router) {
 	limited := r.With(limitByRemoteHost(m.ipLimiter))
 	limited.Post("/auth/login", loginHandler(m.service))
 	limited.Post("/auth/signup", signupHandler(m.service))
-	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 }
 
 // Routes mounts logout, me, profile, AI credentials/prefs and the rest of
@@ -34,6 +31,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
+	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
 	r.Get("/google/status", handlers.GetAll(m.service.GoogleStatus))
 	r.Delete("/google/link", handlers.Delete(m.service.DisconnectGoogle))

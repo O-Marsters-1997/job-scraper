@@ -47,7 +47,7 @@ func newApp(t *testing.T, extra ...api.Module) *app {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps, "", "", "")
+	idm, err := identity.New(pool, apps, "test-session-secret", "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
