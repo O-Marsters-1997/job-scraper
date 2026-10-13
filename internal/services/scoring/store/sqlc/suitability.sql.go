@@ -33,6 +33,76 @@ func (q *Queries) DropStaleAnswers(ctx context.Context, jobIds []pgtype.UUID) er
 	return err
 }
 
+const getInterestedConfig = `-- name: GetInterestedConfig :one
+SELECT u.id AS user_id,
+    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
+    COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
+    COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
+    COALESCE(sc.required_locations, '{}')::text[] AS required_locations,
+    COALESCE(sc.required_title_keywords, '{}')::text[] AS required_title_keywords,
+    COALESCE(sc.notify_threshold, 70) AS notify_threshold,
+    COALESCE(sc.preferences, '{}'::jsonb) AS preferences,
+    COALESCE(sc.max_job_age_days, 7) AS max_job_age_days,
+    EXISTS (
+        SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+        WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'
+          AND (c.id = j.company_id OR c.slug = j.company_slug)
+    ) AS company_is_new,
+    EXISTS (
+        SELECT 1 FROM company_favourites cf
+        WHERE cf.user_id = u.id AND cf.company_id = j.company_id
+    ) AS company_is_favourite
+FROM users u
+LEFT JOIN search_config sc ON sc.user_id = u.id
+JOIN jobs j ON j.id = $1::uuid
+WHERE u.id = $2::uuid AND (
+    EXISTS (
+        SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+        WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
+    ) OR EXISTS (
+        SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
+    )
+)
+`
+
+type GetInterestedConfigParams struct {
+	JobID  pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type GetInterestedConfigRow struct {
+	UserID                pgtype.UUID
+	ExcludedTitleKeywords []string
+	ExcludedCompanies     []string
+	ExcludedLocations     []string
+	RequiredLocations     []string
+	RequiredTitleKeywords []string
+	NotifyThreshold       int32
+	Preferences           []byte
+	MaxJobAgeDays         int32
+	CompanyIsNew          bool
+	CompanyIsFavourite    bool
+}
+
+func (q *Queries) GetInterestedConfig(ctx context.Context, arg GetInterestedConfigParams) (GetInterestedConfigRow, error) {
+	row := q.db.QueryRow(ctx, getInterestedConfig, arg.JobID, arg.UserID)
+	var i GetInterestedConfigRow
+	err := row.Scan(
+		&i.UserID,
+		&i.ExcludedTitleKeywords,
+		&i.ExcludedCompanies,
+		&i.ExcludedLocations,
+		&i.RequiredLocations,
+		&i.RequiredTitleKeywords,
+		&i.NotifyThreshold,
+		&i.Preferences,
+		&i.MaxJobAgeDays,
+		&i.CompanyIsNew,
+		&i.CompanyIsFavourite,
+	)
+	return i, err
+}
+
 const getJobForScoring = `-- name: GetJobForScoring :one
 SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, description,
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
@@ -83,8 +153,8 @@ func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobF
 const getScoringStatus = `-- name: GetScoringStatus :one
 SELECT count(*) AS pending
 FROM effect_outbox e
-JOIN job_scores s ON s.job_id = e.job_id AND s.user_id = $1::uuid
-WHERE e.status IN ('pending', 'running')
+JOIN job_scores s ON s.job_id = e.job_id AND s.user_id = e.user_id
+WHERE e.user_id = $1::uuid AND e.status IN ('pending', 'running')
 `
 
 func (q *Queries) GetScoringStatus(ctx context.Context, userID pgtype.UUID) (int64, error) {
@@ -185,82 +255,6 @@ func (q *Queries) ListCompanyJobAnswers(ctx context.Context, arg ListCompanyJobA
 			&i.PNo,
 			&i.PNotStated,
 			&i.Confidence,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInterestedConfigs = `-- name: ListInterestedConfigs :many
-SELECT u.id AS user_id,
-    COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
-    COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
-    COALESCE(sc.excluded_locations, '{}')::text[] AS excluded_locations,
-    COALESCE(sc.required_locations, '{}')::text[] AS required_locations,
-    COALESCE(sc.required_title_keywords, '{}')::text[] AS required_title_keywords,
-    COALESCE(sc.notify_threshold, 70) AS notify_threshold,
-    COALESCE(sc.preferences, '{}'::jsonb) AS preferences,
-    COALESCE(sc.max_job_age_days, 7) AS max_job_age_days,
-    EXISTS (
-        SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
-        WHERE tc.user_id = u.id AND tc.enabled AND tc.review_state = 'new'
-          AND (c.id = j.company_id OR c.slug = j.company_slug)
-    ) AS company_is_new,
-    EXISTS (
-        SELECT 1 FROM company_favourites cf
-        WHERE cf.user_id = u.id AND cf.company_id = j.company_id
-    ) AS company_is_favourite
-FROM users u
-LEFT JOIN search_config sc ON sc.user_id = u.id
-JOIN jobs j ON j.id = $1::uuid
-WHERE EXISTS (
-    SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
-    WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
-) OR EXISTS (
-    SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
-)
-`
-
-type ListInterestedConfigsRow struct {
-	UserID                pgtype.UUID
-	ExcludedTitleKeywords []string
-	ExcludedCompanies     []string
-	ExcludedLocations     []string
-	RequiredLocations     []string
-	RequiredTitleKeywords []string
-	NotifyThreshold       int32
-	Preferences           []byte
-	MaxJobAgeDays         int32
-	CompanyIsNew          bool
-	CompanyIsFavourite    bool
-}
-
-func (q *Queries) ListInterestedConfigs(ctx context.Context, jobID pgtype.UUID) ([]ListInterestedConfigsRow, error) {
-	rows, err := q.db.Query(ctx, listInterestedConfigs, jobID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListInterestedConfigsRow
-	for rows.Next() {
-		var i ListInterestedConfigsRow
-		if err := rows.Scan(
-			&i.UserID,
-			&i.ExcludedTitleKeywords,
-			&i.ExcludedCompanies,
-			&i.ExcludedLocations,
-			&i.RequiredLocations,
-			&i.RequiredTitleKeywords,
-			&i.NotifyThreshold,
-			&i.Preferences,
-			&i.MaxJobAgeDays,
-			&i.CompanyIsNew,
-			&i.CompanyIsFavourite,
 		); err != nil {
 			return nil, err
 		}

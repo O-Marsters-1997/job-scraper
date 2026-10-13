@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS job_scores (
 CREATE TABLE effect_outbox (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     fingerprint TEXT NOT NULL,
     model TEXT NOT NULL DEFAULT 'typesafe/jev-1.13',
     first_discovery BOOLEAN NOT NULL DEFAULT FALSE,
@@ -237,8 +238,9 @@ CREATE TABLE effect_outbox (
     last_error TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, fingerprint, model)
+CREATE UNIQUE INDEX effect_outbox_pending_idx ON effect_outbox (job_id, user_id, fingerprint, model)
     WHERE status IN ('pending', 'running');
+CREATE INDEX effect_outbox_user_id_idx ON effect_outbox (user_id);
 CREATE INDEX job_scores_user_job_idx ON job_scores (user_id, job_id);
 
 CREATE TABLE answer_corrections (

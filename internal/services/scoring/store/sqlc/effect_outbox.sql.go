@@ -21,12 +21,13 @@ WITH next AS (
 UPDATE effect_outbox e SET status = 'running', attempts = attempts + 1,
     lease_until = NOW() + interval '5 minutes'
 FROM next WHERE e.id = next.id
-RETURNING e.id, e.job_id, e.fingerprint, e.model, e.attempts, e.first_discovery
+RETURNING e.id, e.job_id, e.user_id, e.fingerprint, e.model, e.attempts, e.first_discovery
 `
 
 type ClaimAnswerEffectRow struct {
 	ID             pgtype.UUID
 	JobID          pgtype.UUID
+	UserID         pgtype.UUID
 	Fingerprint    string
 	Model          string
 	Attempts       int32
@@ -39,6 +40,7 @@ func (q *Queries) ClaimAnswerEffect(ctx context.Context) (ClaimAnswerEffectRow, 
 	err := row.Scan(
 		&i.ID,
 		&i.JobID,
+		&i.UserID,
 		&i.Fingerprint,
 		&i.Model,
 		&i.Attempts,
@@ -94,38 +96,33 @@ func (q *Queries) FailAnswerEffect(ctx context.Context, arg FailAnswerEffectPara
 	return err
 }
 
-const queueAnswerEffect = `-- name: QueueAnswerEffect :exec
-INSERT INTO effect_outbox (job_id, fingerprint, first_discovery)
-SELECT $1::uuid, $2::text, $3::boolean
+const queueAnswerEffects = `-- name: QueueAnswerEffects :exec
+INSERT INTO effect_outbox (job_id, user_id, fingerprint, first_discovery)
+SELECT j.id, i.user_id, j.content_fingerprint, $1::boolean
 FROM jobs j
-WHERE j.id = $1::uuid
-    AND (
-        EXISTS (
-            SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
-            WHERE tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
-        )
-        OR EXISTS (
-            SELECT 1 FROM source_targets st
-            WHERE st.enabled AND st.source = j.source
-        )
-    )
-ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+JOIN LATERAL (
+    SELECT tc.user_id FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+    WHERE tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
+    UNION
+    SELECT st.user_id FROM source_targets st WHERE st.enabled AND st.source = j.source
+) i ON TRUE
+WHERE j.id = ANY($2::uuid[]) AND j.content_fingerprint IS NOT NULL
+ON CONFLICT (job_id, user_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
 `
 
-type QueueAnswerEffectParams struct {
-	JobID          pgtype.UUID
-	Fingerprint    string
+type QueueAnswerEffectsParams struct {
 	FirstDiscovery bool
+	JobIds         []pgtype.UUID
 }
 
-func (q *Queries) QueueAnswerEffect(ctx context.Context, arg QueueAnswerEffectParams) error {
-	_, err := q.db.Exec(ctx, queueAnswerEffect, arg.JobID, arg.Fingerprint, arg.FirstDiscovery)
+func (q *Queries) QueueAnswerEffects(ctx context.Context, arg QueueAnswerEffectsParams) error {
+	_, err := q.db.Exec(ctx, queueAnswerEffects, arg.FirstDiscovery, arg.JobIds)
 	return err
 }
 
 const queueMissingAnswers = `-- name: QueueMissingAnswers :execrows
-INSERT INTO effect_outbox (job_id, fingerprint, model, first_discovery)
-SELECT DISTINCT j.id, j.content_fingerprint, $1::text, FALSE
+INSERT INTO effect_outbox (job_id, user_id, fingerprint, model, first_discovery)
+SELECT DISTINCT j.id, s.user_id, j.content_fingerprint, $1::text, FALSE
 FROM job_scores s
 JOIN jobs j ON j.id = s.job_id
 WHERE s.user_id = $2::uuid
@@ -139,7 +136,7 @@ WHERE s.user_id = $2::uuid
                 AND a.model = $1::text AND a.question_hash = missing.hash
         )
     )
-ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+ON CONFLICT (job_id, user_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
 `
 
 type QueueMissingAnswersParams struct {
@@ -157,11 +154,11 @@ func (q *Queries) QueueMissingAnswers(ctx context.Context, arg QueueMissingAnswe
 }
 
 const queueOptionBackfill = `-- name: QueueOptionBackfill :exec
-INSERT INTO effect_outbox (job_id, fingerprint)
-SELECT DISTINCT j.id, j.content_fingerprint
+INSERT INTO effect_outbox (job_id, user_id, fingerprint)
+SELECT DISTINCT j.id, s.user_id, j.content_fingerprint
 FROM jobs j JOIN job_scores s ON s.job_id = j.id
 WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
-ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+ON CONFLICT (job_id, user_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
 `
 
 func (q *Queries) QueueOptionBackfill(ctx context.Context) error {
@@ -170,15 +167,20 @@ func (q *Queries) QueueOptionBackfill(ctx context.Context) error {
 }
 
 const queueTrackingScores = `-- name: QueueTrackingScores :exec
-INSERT INTO effect_outbox (job_id, fingerprint)
-SELECT j.id, j.content_fingerprint
-FROM jobs j JOIN companies c ON c.id = $1::uuid
+INSERT INTO effect_outbox (job_id, user_id, fingerprint)
+SELECT j.id, $1::uuid, j.content_fingerprint
+FROM jobs j JOIN companies c ON c.id = $2::uuid
 WHERE j.closed_at IS NULL AND j.content_fingerprint IS NOT NULL
     AND (j.company_id = c.id OR j.company_slug = c.slug)
-ON CONFLICT (job_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
+ON CONFLICT (job_id, user_id, fingerprint, model) WHERE status IN ('pending', 'running') DO NOTHING
 `
 
-func (q *Queries) QueueTrackingScores(ctx context.Context, companyID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, queueTrackingScores, companyID)
+type QueueTrackingScoresParams struct {
+	UserID    pgtype.UUID
+	CompanyID pgtype.UUID
+}
+
+func (q *Queries) QueueTrackingScores(ctx context.Context, arg QueueTrackingScoresParams) error {
+	_, err := q.db.Exec(ctx, queueTrackingScores, arg.UserID, arg.CompanyID)
 	return err
 }

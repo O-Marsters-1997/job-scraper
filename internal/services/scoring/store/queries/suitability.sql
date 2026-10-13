@@ -3,7 +3,7 @@ SELECT id, title, location, url, company_slug, source, updated_at, scraped_at, d
     salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
 FROM jobs WHERE id = $1;
 
--- name: ListInterestedConfigs :many
+-- name: GetInterestedConfig :one
 SELECT u.id AS user_id,
     COALESCE(sc.excluded_title_keywords, '{}')::text[] AS excluded_title_keywords,
     COALESCE(sc.excluded_companies, '{}')::text[] AS excluded_companies,
@@ -25,11 +25,13 @@ SELECT u.id AS user_id,
 FROM users u
 LEFT JOIN search_config sc ON sc.user_id = u.id
 JOIN jobs j ON j.id = sqlc.arg(job_id)::uuid
-WHERE EXISTS (
-    SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
-    WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
-) OR EXISTS (
-    SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
+WHERE u.id = sqlc.arg(user_id)::uuid AND (
+    EXISTS (
+        SELECT 1 FROM tracked_companies tc JOIN companies c ON c.id = tc.company_id
+        WHERE tc.user_id = u.id AND tc.enabled AND (c.id = j.company_id OR c.slug = j.company_slug)
+    ) OR EXISTS (
+        SELECT 1 FROM source_targets st WHERE st.user_id = u.id AND st.enabled AND st.source = j.source
+    )
 );
 
 -- name: ListOptionAnswers :many
@@ -87,8 +89,8 @@ WHERE s.user_id = sqlc.arg(user_id)::uuid AND a.model = sqlc.arg(model)::text;
 -- name: GetScoringStatus :one
 SELECT count(*) AS pending
 FROM effect_outbox e
-JOIN job_scores s ON s.job_id = e.job_id AND s.user_id = sqlc.arg(user_id)::uuid
-WHERE e.status IN ('pending', 'running');
+JOIN job_scores s ON s.job_id = e.job_id AND s.user_id = e.user_id
+WHERE e.user_id = sqlc.arg(user_id)::uuid AND e.status IN ('pending', 'running');
 
 -- name: ListOpenCompanyJobs :many
 SELECT id, company_id FROM jobs

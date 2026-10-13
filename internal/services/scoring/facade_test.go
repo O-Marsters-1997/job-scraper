@@ -261,7 +261,7 @@ func TestFavouriteScoresIdenticallyOnEveryPath(t *testing.T) {
 		cfg := picking(userID, "tech:go")
 		cfg.CompanyIsFavourite = true
 		st.SeedJob(job, []dto.SearchConfig{cfg})
-		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, Fingerprint: job.ContentFingerprint, Attempts: 1})
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-1", JobID: job.ID, UserID: userID, Fingerprint: job.ContentFingerprint, Attempts: 1})
 		runTick(t, st)
 		return st.Completed()[0].Scores[0].Score
 	}

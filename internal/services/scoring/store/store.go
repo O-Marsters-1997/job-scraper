@@ -51,17 +51,9 @@ func (s *Store) JobsChanged(ctx context.Context, tx pgx.Tx, jobIDs []string, fir
 	if err := queries.DropStaleAnswers(ctx, ids); err != nil {
 		return fmt.Errorf("store.JobsChanged: drop stale answers: %w", err)
 	}
-	for _, jobID := range ids {
-		job, err := queries.GetJobForScoring(ctx, jobID)
-		if err != nil {
-			return fmt.Errorf("store.JobsChanged: load job: %w", err)
-		}
-		err = queries.QueueAnswerEffect(ctx, sqlc.QueueAnswerEffectParams{
-			JobID: jobID, Fingerprint: job.ContentFingerprint.String, FirstDiscovery: firstDiscovery,
-		})
-		if err != nil {
-			return fmt.Errorf("store.JobsChanged: queue answer effect: %w", err)
-		}
+	err = queries.QueueAnswerEffects(ctx, sqlc.QueueAnswerEffectsParams{JobIds: ids, FirstDiscovery: firstDiscovery})
+	if err != nil {
+		return fmt.Errorf("store.JobsChanged: queue answer effects: %w", err)
 	}
 	return nil
 }
@@ -82,11 +74,15 @@ func (s *Store) JobsClosed(ctx context.Context, tx pgx.Tx, jobIDs []string) erro
 // Jobs within tx, with first_discovery left false so scoring's Run loop
 // doesn't alert (ADR 0011).
 func (s *Store) CompanyTracked(ctx context.Context, tx pgx.Tx, userID, companyID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
 	cid, err := data.UUID(companyID)
 	if err != nil {
 		return err
 	}
-	if err := s.queries.WithTx(tx).QueueTrackingScores(ctx, cid); err != nil {
+	if err := s.queries.WithTx(tx).QueueTrackingScores(ctx, sqlc.QueueTrackingScoresParams{UserID: uid, CompanyID: cid}); err != nil {
 		return fmt.Errorf("store.CompanyTracked: %w", err)
 	}
 	return nil
@@ -280,7 +276,7 @@ func (s *Store) ClaimAnswerEffect(ctx context.Context) (dto.AnswerEffect, error)
 		return dto.AnswerEffect{}, data.QueryErr("ClaimAnswerEffect", err)
 	}
 	return dto.AnswerEffect{
-		ID: row.ID.String(), JobID: row.JobID.String(), Fingerprint: row.Fingerprint,
+		ID: row.ID.String(), JobID: row.JobID.String(), UserID: row.UserID.String(), Fingerprint: row.Fingerprint,
 		Model: row.Model, Attempts: int(row.Attempts), FirstDiscovery: row.FirstDiscovery,
 	}, nil
 }
@@ -334,36 +330,36 @@ func (s *Store) GetCompanyProfile(ctx context.Context, companyID string) (dto.Co
 	return profile, nil
 }
 
-func (s *Store) ListInterestedConfigs(ctx context.Context, jobID string) ([]dto.SearchConfig, error) {
+func (s *Store) GetInterestedConfig(ctx context.Context, jobID, userID string) (dto.SearchConfig, error) {
 	jid, err := data.UUID(jobID)
 	if err != nil {
-		return nil, err
+		return dto.SearchConfig{}, err
 	}
-	rows, err := s.queries.ListInterestedConfigs(ctx, jid)
+	uid, err := data.UUID(userID)
 	if err != nil {
-		return nil, fmt.Errorf("store.ListInterestedConfigs: %w", err)
+		return dto.SearchConfig{}, err
 	}
-	configs := make([]dto.SearchConfig, len(rows))
-	for i, row := range rows {
-		var prefs dto.Preferences
-		if err := json.Unmarshal(row.Preferences, &prefs); err != nil {
-			return nil, fmt.Errorf("store.ListInterestedConfigs: unmarshal preferences: %w", err)
-		}
-		configs[i] = dto.SearchConfig{
-			UserID:                row.UserID.String(),
-			ExcludedTitleKeywords: row.ExcludedTitleKeywords,
-			ExcludedCompanies:     row.ExcludedCompanies,
-			ExcludedLocations:     row.ExcludedLocations,
-			RequiredLocations:     row.RequiredLocations,
-			RequiredTitleKeywords: row.RequiredTitleKeywords,
-			NotifyThreshold:       int(row.NotifyThreshold),
-			MaxJobAgeDays:         int(row.MaxJobAgeDays),
-			CompanyIsNew:          row.CompanyIsNew,
-			CompanyIsFavourite:    row.CompanyIsFavourite,
-			Preferences:           prefs,
-		}
+	row, err := s.queries.GetInterestedConfig(ctx, sqlc.GetInterestedConfigParams{JobID: jid, UserID: uid})
+	if err != nil {
+		return dto.SearchConfig{}, data.QueryErr("GetInterestedConfig", err)
 	}
-	return configs, nil
+	var prefs dto.Preferences
+	if err := json.Unmarshal(row.Preferences, &prefs); err != nil {
+		return dto.SearchConfig{}, fmt.Errorf("store.GetInterestedConfig: unmarshal preferences: %w", err)
+	}
+	return dto.SearchConfig{
+		UserID:                row.UserID.String(),
+		ExcludedTitleKeywords: row.ExcludedTitleKeywords,
+		ExcludedCompanies:     row.ExcludedCompanies,
+		ExcludedLocations:     row.ExcludedLocations,
+		RequiredLocations:     row.RequiredLocations,
+		RequiredTitleKeywords: row.RequiredTitleKeywords,
+		NotifyThreshold:       int(row.NotifyThreshold),
+		MaxJobAgeDays:         int(row.MaxJobAgeDays),
+		CompanyIsNew:          row.CompanyIsNew,
+		CompanyIsFavourite:    row.CompanyIsFavourite,
+		Preferences:           prefs,
+	}, nil
 }
 
 // ListAnswers returns the Answers userID paid for on one job version.

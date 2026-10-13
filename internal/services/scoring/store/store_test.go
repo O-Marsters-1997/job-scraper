@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -74,12 +75,12 @@ func closeJob(t *testing.T, pool *pgxpool.Pool, jobID string) {
 	exec(t, pool, "UPDATE jobs SET closed_at = NOW() WHERE id = $1", jobID)
 }
 
-func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, fingerprint string) string {
+func insertEffect(t *testing.T, pool *pgxpool.Pool, jobID, userID, fingerprint string) string {
 	t.Helper()
 	var id string
 	err := pool.QueryRow(t.Context(),
-		`INSERT INTO effect_outbox (job_id, fingerprint) VALUES ($1, $2) RETURNING id`,
-		jobID, fingerprint).Scan(&id)
+		`INSERT INTO effect_outbox (job_id, user_id, fingerprint) VALUES ($1, $2, $3) RETURNING id`,
+		jobID, userID, fingerprint).Scan(&id)
 	if err != nil {
 		t.Fatalf("insert effect: %v", err)
 	}
@@ -210,47 +211,55 @@ func TestAddScoringOption_QueuesBackfillForScoredOpenJobsOnly(t *testing.T) {
 	}
 }
 
-func TestListInterestedConfigs_JoinsTrackedCompany(t *testing.T) {
+func TestGetInterestedConfig_JoinsTrackedCompany(t *testing.T) {
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	_, userID := insertTrackedCompany(t, pool, "acme")
 
-	configs, err := st.ListInterestedConfigs(t.Context(), jobID)
-	if err != nil {
-		t.Fatalf("ListInterestedConfigs() err = %v", err)
-	}
-	if len(configs) != 1 || configs[0].UserID != userID {
-		t.Fatalf("ListInterestedConfigs() = %+v, want one config for %q", configs, userID)
+	cfg, err := st.GetInterestedConfig(t.Context(), jobID, userID)
+	if err != nil || cfg.UserID != userID {
+		t.Fatalf("GetInterestedConfig() = %+v, %v, want config for %q", cfg, err, userID)
 	}
 }
 
-func TestListInterestedConfigs_DefaultsMaxJobAgeWithoutSearchConfig(t *testing.T) {
+func TestGetInterestedConfig_UninterestedUserIsNotFound(t *testing.T) {
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
 	insertTrackedCompany(t, pool, "acme")
+	other := pgtest.InsertUser(t, pool)
 
-	configs, err := st.ListInterestedConfigs(t.Context(), jobID)
-	if err != nil || len(configs) != 1 {
-		t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+	if _, err := st.GetInterestedConfig(t.Context(), jobID, other); !errors.Is(err, data.ErrNotFound) {
+		t.Fatalf("GetInterestedConfig() err = %v, want ErrNotFound", err)
 	}
-	if got := configs[0].MaxJobAgeDays; got != 7 {
+}
+
+func TestGetInterestedConfig_DefaultsMaxJobAgeWithoutSearchConfig(t *testing.T) {
+	st, pool := newStore(t)
+	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
+	_, userID := insertTrackedCompany(t, pool, "acme")
+
+	cfg, err := st.GetInterestedConfig(t.Context(), jobID, userID)
+	if err != nil {
+		t.Fatalf("GetInterestedConfig() err = %v", err)
+	}
+	if got := cfg.MaxJobAgeDays; got != 7 {
 		t.Errorf("MaxJobAgeDays = %d, want 7", got)
 	}
 }
 
-func TestListInterestedConfigs_FlagsNewCompany(t *testing.T) {
+func TestGetInterestedConfig_FlagsNewCompany(t *testing.T) {
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	companyID, _ := insertTrackedCompany(t, pool, "acme")
+	companyID, userID := insertTrackedCompany(t, pool, "acme")
 
 	for state, want := range map[string]bool{"kept": false, "new": true} {
 		exec(t, pool, `UPDATE tracked_companies SET review_state = $1 WHERE company_id = $2`, state, companyID)
-		configs, err := st.ListInterestedConfigs(t.Context(), jobID)
-		if err != nil || len(configs) != 1 {
-			t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+		cfg, err := st.GetInterestedConfig(t.Context(), jobID, userID)
+		if err != nil {
+			t.Fatalf("GetInterestedConfig() err = %v", err)
 		}
-		if configs[0].CompanyIsNew != want {
-			t.Errorf("CompanyIsNew with review_state %q = %v, want %v", state, configs[0].CompanyIsNew, want)
+		if cfg.CompanyIsNew != want {
+			t.Errorf("CompanyIsNew with review_state %q = %v, want %v", state, cfg.CompanyIsNew, want)
 		}
 	}
 }
@@ -260,7 +269,7 @@ func TestClaimAnswerEffect_ThenCompleteWritesAnswersAndScores(t *testing.T) {
 	ctx := t.Context()
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+	insertEffect(t, pool, jobID, userID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(t.Context())
 	if err != nil {
@@ -303,7 +312,7 @@ func TestCompleteAnswerEffect_CommitsBothUsersScoresTogether(t *testing.T) {
 	alice := pgtest.InsertUser(t, pool)
 	bob := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+	insertEffect(t, pool, jobID, alice, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(t.Context())
 	if err != nil {
@@ -330,7 +339,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 	st, pool := newStore(t)
 	userID := pgtest.InsertUser(t, pool)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+	insertEffect(t, pool, jobID, userID, "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(t.Context())
 	if err != nil {
@@ -362,7 +371,7 @@ func TestCompleteAnswerEffect_FingerprintMismatchWritesNothing(t *testing.T) {
 func TestFailAnswerEffect_ReschedulesForRetry(t *testing.T) {
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+	insertEffect(t, pool, jobID, pgtest.InsertUser(t, pool), "fp-1")
 
 	effect, err := st.ClaimAnswerEffect(t.Context())
 	if err != nil {
@@ -604,7 +613,7 @@ func storedScore(t *testing.T, pool *pgxpool.Pool, jobID, userID string) int {
 	return countRows(t, pool, `SELECT suitability_score FROM job_scores WHERE job_id = $1 AND user_id = $2`, jobID, userID)
 }
 
-func TestListInterestedConfigs_FlagsFavouriteCompany(t *testing.T) {
+func TestGetInterestedConfig_FlagsFavouriteCompany(t *testing.T) {
 	st, pool := newStore(t)
 	companyID, userID := insertTrackedCompany(t, pool, "acme")
 	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
@@ -613,13 +622,84 @@ func TestListInterestedConfigs_FlagsFavouriteCompany(t *testing.T) {
 		if starred {
 			favourite(t, pool, userID, companyID)
 		}
-		configs, err := st.ListInterestedConfigs(t.Context(), jobID)
-		if err != nil || len(configs) != 1 {
-			t.Fatalf("ListInterestedConfigs() = %+v, %v, want one config", configs, err)
+		cfg, err := st.GetInterestedConfig(t.Context(), jobID, userID)
+		if err != nil {
+			t.Fatalf("GetInterestedConfig() err = %v", err)
 		}
-		if configs[0].CompanyIsFavourite != starred {
-			t.Errorf("CompanyIsFavourite = %v, want %v", configs[0].CompanyIsFavourite, starred)
+		if cfg.CompanyIsFavourite != starred {
+			t.Errorf("CompanyIsFavourite = %v, want %v", cfg.CompanyIsFavourite, starred)
 		}
+	}
+}
+
+func outboxUsers(t *testing.T, pool *pgxpool.Pool, jobID string) []string {
+	t.Helper()
+	rows, err := pool.Query(t.Context(), `SELECT user_id FROM effect_outbox WHERE job_id = $1 ORDER BY user_id`, jobID)
+	if err != nil {
+		t.Fatalf("query outbox users: %v", err)
+	}
+	users, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatalf("collect outbox users: %v", err)
+	}
+	return users
+}
+
+func TestJobsChanged_QueuesOneEffectPerInterestedUser(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, alice := insertTrackedCompany(t, pool, "acme")
+	bob := pgtest.InsertUser(t, pool)
+	exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, true)`, bob, companyID)
+	pgtest.InsertUser(t, pool)
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		return st.JobsChanged(t.Context(), tx, []string{jobID}, true)
+	})
+
+	want := []string{alice, bob}
+	slices.Sort(want)
+	if diff := cmp.Diff(want, outboxUsers(t, pool, jobID)); diff != "" {
+		t.Errorf("outbox users (-want +got):\n%s", diff)
+	}
+}
+
+func TestCompanyTracked_QueuesOnlyTheTrackingUser(t *testing.T) {
+	st, pool := newStore(t)
+	companyID, alice := insertTrackedCompany(t, pool, "acme")
+	bob := pgtest.InsertUser(t, pool)
+	exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, true)`, bob, companyID)
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+
+	pgtest.InTx(t, pool, true, func(tx pgx.Tx) error {
+		return st.CompanyTracked(t.Context(), tx, alice, companyID)
+	})
+
+	if diff := cmp.Diff([]string{alice}, outboxUsers(t, pool, jobID)); diff != "" {
+		t.Errorf("outbox users (-want +got):\n%s", diff)
+	}
+}
+
+func TestEffectOutboxPerUserMigration(t *testing.T) {
+	const path = "scripts/migrations/20261013201147_own_effect_outbox_per_user.sql"
+	_, pool := newStore(t)
+	companyID, alice := insertTrackedCompany(t, pool, "acme")
+	bob := pgtest.InsertUser(t, pool)
+	exec(t, pool, `INSERT INTO tracked_companies (user_id, company_id, enabled) VALUES ($1, $2, true)`, bob, companyID)
+	pgtest.InsertUser(t, pool)
+	jobID := insertCompanyJob(t, pool, companyID, "acme", "https://example.com/1")
+
+	exec(t, pool, migrationSection(t, path, "Down"))
+	exec(t, pool, `INSERT INTO effect_outbox (job_id, fingerprint, status) VALUES ($1, 'fp-1', 'pending')`, jobID)
+	exec(t, pool, migrationSection(t, path, "Up"))
+
+	want := []string{alice, bob}
+	slices.Sort(want)
+	if diff := cmp.Diff(want, outboxUsers(t, pool, jobID)); diff != "" {
+		t.Errorf("outbox users after Up (-want +got):\n%s", diff)
+	}
+	if got := countRows(t, pool, `SELECT count(*) FROM effect_outbox WHERE job_id = $1 AND status = 'pending'`, jobID); got != 2 {
+		t.Errorf("pending rows after Up = %d, want 2", got)
 	}
 }
 
@@ -743,8 +823,8 @@ func TestCompanyFavouriteChanged(t *testing.T) {
 func insertEffectOutbox(t *testing.T, pool *pgxpool.Pool, jobID, status string, createdAt time.Time) {
 	t.Helper()
 	exec(t, pool,
-		`INSERT INTO effect_outbox (job_id, fingerprint, status, created_at) VALUES ($1, 'fp', $2, $3)`,
-		jobID, status, createdAt)
+		`INSERT INTO effect_outbox (job_id, user_id, fingerprint, status, created_at) VALUES ($1, $2, 'fp', $3, $4)`,
+		jobID, pgtest.InsertUser(t, pool), status, createdAt)
 }
 
 func insertBoard(t *testing.T, pool *pgxpool.Pool, status string, nextDueAt time.Time, leaseUntil *time.Time, failures int) {
@@ -1069,7 +1149,7 @@ func TestQueueMissingAnswers(t *testing.T) {
 func TestClaimAnswerEffect_ConcurrentClaimsExactlyOneWinner(t *testing.T) {
 	st, pool := newStore(t)
 	jobID := pgtest.InsertJob(t, pool, "Engineer", "fp-1")
-	insertEffect(t, pool, jobID, "fp-1")
+	insertEffect(t, pool, jobID, pgtest.InsertUser(t, pool), "fp-1")
 
 	const claimers = 8
 	var wins, notFounds atomic.Int64
