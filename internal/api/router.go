@@ -37,6 +37,7 @@ func NewRouter(idm *identity.Module, js *jobsearch.Module, modules ...Module) (h
 	}
 
 	r := chi.NewRouter()
+	r.Use(recoverer)
 	r.Use(otelhttp.NewMiddleware("api"))
 	r.Use(chimw.RequestID)
 	r.Use(logger.Middleware)
