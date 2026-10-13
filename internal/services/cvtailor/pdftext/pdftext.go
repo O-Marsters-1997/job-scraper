@@ -103,12 +103,15 @@ func Match(a, b []Run, tol float64) (ok bool, diff string) {
 	line, lastY, lastPage := 0, 0.0, 0
 	for i := 0; i < max(len(a), len(b)); i++ {
 		var x, y Run
-		ref := b[min(i, len(b)-1)]
 		if i < len(a) {
-			x, ref = a[i], a[i]
+			x = a[i]
 		}
 		if i < len(b) {
 			y = b[i]
+		}
+		ref := x
+		if i >= len(a) {
+			ref = y
 		}
 		if ref.Page != lastPage {
 			line = 1
