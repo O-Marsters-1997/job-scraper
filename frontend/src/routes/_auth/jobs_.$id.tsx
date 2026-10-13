@@ -11,6 +11,7 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
@@ -160,9 +161,11 @@ function JobDetailPage() {
 								/>
 							</div>
 
-							<div class="max-md:order-4">
-								<RecruiterContactsCard jobId={params().id} />
-							</div>
+							<Show when={isAgencyKind(j().CompanyKind)}>
+								<div class="max-md:order-4">
+									<RecruiterContactsCard jobId={params().id} />
+								</div>
+							</Show>
 						</div>
 					</div>
 

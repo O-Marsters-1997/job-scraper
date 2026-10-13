@@ -1,6 +1,8 @@
+import { bestOutcomeOf } from "@/lib/agencyRollup";
 import type {
 	LogRecruiterContactPayload,
 	RecruiterContact,
+	RecruiterContactSummary,
 } from "@/types/recruiterContact";
 
 let contacts: RecruiterContact[] = [];
@@ -27,4 +29,23 @@ export function logRecruiterContact(
 	};
 	contacts = [...contacts, contact];
 	return contact;
+}
+
+export function getRecruiterContactSummaries(
+	jobIds: string[],
+): Record<string, RecruiterContactSummary> {
+	const out: Record<string, RecruiterContactSummary> = {};
+	for (const c of contacts) {
+		if (!jobIds.includes(c.job_id)) continue;
+		const prev = out[c.job_id];
+		out[c.job_id] = {
+			count: (prev?.count ?? 0) + 1,
+			last_contacted_on:
+				prev && prev.last_contacted_on > c.contacted_on
+					? prev.last_contacted_on
+					: c.contacted_on,
+			best_outcome: bestOutcomeOf(prev?.best_outcome ?? null, c.outcome),
+		};
+	}
+	return out;
 }

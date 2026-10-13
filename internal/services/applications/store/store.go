@@ -400,3 +400,31 @@ func (s *Store) ListRecruiterContacts(ctx context.Context, userID, jobID string)
 	}
 	return out, nil
 }
+
+func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	pgIDs := make([]pgtype.UUID, 0, len(jobIDs))
+	for _, id := range jobIDs {
+		jid, err := data.UUID(id)
+		if err != nil {
+			return nil, apperr.Invalid("invalid job id")
+		}
+		pgIDs = append(pgIDs, jid)
+	}
+	rows, err := s.queries.GetRecruiterContactSummaries(ctx, sqlc.GetRecruiterContactSummariesParams{UserID: uid, Column2: pgIDs})
+	if err != nil {
+		return nil, fmt.Errorf("store.GetRecruiterContactSummaries: %w", err)
+	}
+	out := make(map[string]dto.RecruiterContactSummary, len(rows))
+	for _, row := range rows {
+		out[row.JobID.String()] = dto.RecruiterContactSummary{
+			Count:           int(row.ContactCount),
+			LastContactedOn: row.LastContactedOn.Time.Format(time.DateOnly),
+			BestOutcome:     dto.ContactOutcome(row.BestOutcome),
+		}
+	}
+	return out, nil
+}

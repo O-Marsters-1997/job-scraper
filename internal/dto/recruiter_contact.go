@@ -35,3 +35,14 @@ type LogRecruiterContactInput struct {
 	Channel     ContactChannel `json:"channel"`
 	Outcome     ContactOutcome `json:"outcome"`
 }
+
+// RecruiterContactSummariesQuery is answered as map[jobID]RecruiterContactSummary; jobs with no contact are absent.
+type RecruiterContactSummariesQuery struct {
+	JobIDs string `json:"job_ids"` // comma-separated
+}
+
+type RecruiterContactSummary struct {
+	Count           int            `json:"count"`
+	LastContactedOn string         `json:"last_contacted_on"`
+	BestOutcome     ContactOutcome `json:"best_outcome"`
+}
