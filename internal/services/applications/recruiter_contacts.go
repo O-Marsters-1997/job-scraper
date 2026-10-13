@@ -2,6 +2,7 @@ package applications
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,8 +29,14 @@ func (s *Service) LogRecruiterContact(ctx context.Context, userID string, in dto
 
 // RecruiterContactSummaries returns each of q.JobIDs's contact summary, keyed by job ID.
 func (s *Service) RecruiterContactSummaries(ctx context.Context, userID string, q dto.RecruiterContactSummariesQuery) (map[string]dto.RecruiterContactSummary, error) {
-	if q.JobIDs == "" {
+	var ids []string
+	for _, id := range strings.Split(q.JobIDs, ",") {
+		if id = strings.TrimSpace(id); id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
 		return map[string]dto.RecruiterContactSummary{}, nil
 	}
-	return s.store.GetRecruiterContactSummaries(ctx, userID, strings.Split(q.JobIDs, ","))
+	return s.store.GetRecruiterContactSummaries(ctx, userID, ids)
 }

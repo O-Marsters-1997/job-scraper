@@ -46,18 +46,3 @@ type RecruiterContactSummary struct {
 	LastContactedOn string         `json:"last_contacted_on"`
 	BestOutcome     ContactOutcome `json:"best_outcome"`
 }
-
-// Rank orders outcomes submitted > spoke > rejected > no_reply; unknown outcomes rank lowest.
-func (o ContactOutcome) Rank() int {
-	switch o {
-	case OutcomeSubmitted:
-		return 4
-	case OutcomeSpoke:
-		return 3
-	case OutcomeRejected:
-		return 2
-	case OutcomeNoReply:
-		return 1
-	}
-	return 0
-}

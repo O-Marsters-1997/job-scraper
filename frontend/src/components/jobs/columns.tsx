@@ -242,7 +242,11 @@ export function createJobColumns(
 						cell: (info) => (
 							<Show
 								when={ctx.contactSummaries?.()?.[info.row.original.ID]}
-								fallback={<span class="text-faint">No contact</span>}
+								fallback={
+									<span class="text-faint">
+										{ctx.contactSummaries?.() ? "No contact" : "—"}
+									</span>
+								}
 							>
 								{(summary) => (
 									<span class="text-xs text-muted">

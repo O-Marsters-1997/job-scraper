@@ -410,7 +410,7 @@ func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string,
 	for _, id := range jobIDs {
 		jid, err := data.UUID(id)
 		if err != nil {
-			return nil, err
+			return nil, apperr.Invalid("invalid job id")
 		}
 		pgIDs = append(pgIDs, jid)
 	}

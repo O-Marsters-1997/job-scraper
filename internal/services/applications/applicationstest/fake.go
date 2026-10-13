@@ -243,6 +243,10 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	return out, nil
 }
 
+var outcomeRank = map[dto.ContactOutcome]int{
+	dto.OutcomeNoReply: 1, dto.OutcomeRejected: 2, dto.OutcomeSpoke: 3, dto.OutcomeSubmitted: 4,
+}
+
 func (f *FakeStore) GetRecruiterContactSummaries(_ context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -254,7 +258,7 @@ func (f *FakeStore) GetRecruiterContactSummaries(_ context.Context, userID strin
 		sum := out[c.JobID]
 		sum.Count++
 		sum.LastContactedOn = max(sum.LastContactedOn, c.ContactedOn)
-		if c.Outcome.Rank() > sum.BestOutcome.Rank() {
+		if outcomeRank[c.Outcome] > outcomeRank[sum.BestOutcome] {
 			sum.BestOutcome = c.Outcome
 		}
 		out[c.JobID] = sum

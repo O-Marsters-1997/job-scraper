@@ -73,7 +73,7 @@ function CompanyDetailPage() {
 
 	const track = useTrackJobs(
 		() => jobsQuery.data ?? [],
-		() => summaries.data ?? {},
+		() => summaries.data,
 	);
 
 	return (

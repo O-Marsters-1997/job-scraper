@@ -1,4 +1,8 @@
-import { createQuery, queryOptions } from "@tanstack/solid-query";
+import {
+	createQuery,
+	keepPreviousData,
+	queryOptions,
+} from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	fetchRecruiterContactSummaries,
@@ -34,5 +38,6 @@ export function useRecruiterContactSummaries(jobIds: () => string[]) {
 		queryKey: keys.recruiterContactSummaries.for(jobIds()),
 		queryFn: () => fetchRecruiterContactSummaries(jobIds()),
 		enabled: jobIds().length > 0,
+		placeholderData: keepPreviousData,
 	}));
 }
