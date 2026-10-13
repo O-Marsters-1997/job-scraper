@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -334,6 +335,34 @@ func TestRabbitMQWorkQueue(t *testing.T) {
 		}
 		cancel()
 		<-done
+	})
+
+	t.Run("panicking handler dead-letters without requeue", func(t *testing.T) {
+		task := queuetest.DetailTask("wis")
+		if err := broker.Publish(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		consumeCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var calls atomic.Int32
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = broker.Consume(consumeCtx, func(context.Context, queue.Task) error {
+				calls.Add(1)
+				panic("boom")
+			}, nil)
+		}()
+		waitForDeadLetterCount(t, broker, 1)
+		cancel()
+		<-done
+		if got := calls.Load(); got != 1 {
+			t.Errorf("handler calls = %d, want 1 (a panic is never requeued)", got)
+		}
+		dead, ok, err := ch.Get(deadQueue, true)
+		if err != nil || !ok || dead.MessageId != task.ID {
+			t.Errorf("dead queue Get() = %v, %v, %v, want task %s", dead.MessageId, ok, err, task.ID)
+		}
 	})
 
 	t.Run("deferred task waits out the pause and never dead-letters", func(t *testing.T) {

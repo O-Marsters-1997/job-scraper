@@ -89,7 +89,7 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 		if data.IsUniqueViolation(err) {
 			return dto.Application{}, ErrApplicationExists
 		}
-		return dto.Application{}, fmt.Errorf("store.CreateApplication: %w", err)
+		return dto.Application{}, data.QueryErr("CreateApplication", err)
 	}
 	return out, nil
 }

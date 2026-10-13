@@ -29,7 +29,11 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 
 const createApplication = `-- name: CreateApplication :one
 INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
-VALUES ($1, $2, $3, $4, $5, $6)
+SELECT $1::uuid, $2::uuid, $3::uuid,
+       $4::text, $5::date, $6::text
+WHERE $3::uuid IS NULL
+   OR EXISTS (SELECT 1 FROM application_statuses s
+              WHERE s.id = $3::uuid AND s.user_id = $1::uuid)
 RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
@@ -273,10 +277,12 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 }
 
 const updateApplication = `-- name: UpdateApplication :one
-UPDATE applications
+UPDATE applications a
 SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
-    chase_by = CASE WHEN status_id IS DISTINCT FROM $3 THEN NULL ELSE chase_by END
-WHERE id = $1 AND user_id = $2
+    chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
+WHERE a.id = $1 AND a.user_id = $2
+  AND ($3::uuid IS NULL
+       OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
 RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
