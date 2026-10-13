@@ -69,13 +69,14 @@ func (s *Store) Begin(ctx context.Context) (pgx.Tx, error) {
 	return s.pool.Begin(ctx)
 }
 
-func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time.Time) (dto.Session, error) {
+func (s *Store) CreateSession(ctx context.Context, userID string, tokenHash []byte, expiresAt time.Time) (dto.Session, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.Session{}, err
 	}
 	sess, err := s.queries.CreateSession(ctx, sqlc.CreateSessionParams{
 		UserID:    uid,
+		TokenHash: tokenHash,
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
@@ -84,14 +85,10 @@ func (s *Store) CreateSession(ctx context.Context, userID string, expiresAt time
 	return toSessionDTO(sess), nil
 }
 
-func (s *Store) GetSession(ctx context.Context, id string) (dto.Session, error) {
-	sid, err := data.UUID(id)
+func (s *Store) GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (dto.Session, error) {
+	row, err := s.queries.GetSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return dto.Session{}, err
-	}
-	row, err := s.queries.GetSession(ctx, sid)
-	if err != nil {
-		return dto.Session{}, data.QueryErr("GetSession", err)
+		return dto.Session{}, data.QueryErr("GetSessionByTokenHash", err)
 	}
 	return toSessionRowDTO(row), nil
 }
@@ -256,13 +253,24 @@ func (s *Store) SetRole(ctx context.Context, username, role string) error {
 	return nil
 }
 
-func (s *Store) SetPasswordHash(ctx context.Context, username, passwordHash string) error {
-	n, err := s.queries.SetUserPasswordHash(ctx, sqlc.SetUserPasswordHashParams{Username: username, PasswordHash: passwordHash})
-	if err != nil {
-		return fmt.Errorf("store.SetPasswordHash: %w", err)
+func (s *Store) SetPasswordHashTx(ctx context.Context, tx pgx.Tx, username, passwordHash string) (string, error) {
+	id, err := s.queries.WithTx(tx).SetUserPasswordHash(ctx, sqlc.SetUserPasswordHashParams{Username: username, PasswordHash: passwordHash})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", data.ErrNotFound
 	}
-	if n == 0 {
-		return data.ErrNotFound
+	if err != nil {
+		return "", fmt.Errorf("store.SetPasswordHashTx: %w", err)
+	}
+	return id.String(), nil
+}
+
+func (s *Store) DeleteUserSessionsTx(ctx context.Context, tx pgx.Tx, userID string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	if err := s.queries.WithTx(tx).DeleteUserSessions(ctx, uid); err != nil {
+		return fmt.Errorf("store.DeleteUserSessionsTx: %w", err)
 	}
 	return nil
 }

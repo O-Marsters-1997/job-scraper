@@ -1,9 +1,12 @@
 package cvtailor_test
 
 import (
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/go-cmp/cmp"
@@ -225,4 +228,31 @@ func TestSuggestRoute(t *testing.T) {
 			t.Errorf("POST suggest = %d, want 200 using the path ids: %s", w.Code, w.Body)
 		}
 	})
+}
+
+func TestSuggestRouteOutlivesWriteTimeout(t *testing.T) {
+	e := newDraftEnv(t)
+	id := e.readyDrafts(t, 1)[0]
+	slot := e.draft(t, id).Provenance.Positions[0].Bullets[0].SlotID
+	r := newRouter(cvtailor.Deps{Store: e.store, Editor: cvtailortest.SuggestingEvery(150*time.Millisecond, "a", "b", "c", "d"), Creds: apiKey})
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		r.ServeHTTP(w, handlerstest.Authed(req))
+	}))
+	srv.Config.WriteTimeout = 300 * time.Millisecond
+	srv.Start()
+	t.Cleanup(srv.Close)
+
+	resp, err := http.Post(srv.URL+"/tailoring/drafts/"+id+"/slots/"+slot+"/suggest", "application/json",
+		strings.NewReader(`{"action":"tighten","text":"Cut p99 latency"}`))
+	if err != nil {
+		t.Fatalf("POST suggest: %v", err)
+	}
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading stream: %v", err)
+	}
+	if !strings.Contains(string(body), "event: done") {
+		t.Errorf("stream body = %q, want it to run to the done event", body)
+	}
 }

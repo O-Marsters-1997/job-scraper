@@ -12,13 +12,10 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/handlers"
 )
 
-// PublicRoutes mounts login, signup and the Google OAuth start redirect
-// outside the session-protected group.
 func (m *Module) PublicRoutes(r chi.Router) {
 	limited := r.With(limitByRemoteHost(m.ipLimiter))
 	limited.Post("/auth/login", loginHandler(m.service))
 	limited.Post("/auth/signup", signupHandler(m.service))
-	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 }
 
 // Routes mounts logout, me, profile, AI credentials/prefs and the rest of
@@ -34,6 +31,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Get("/ai-usage", handlers.GetAll(m.service.AIUsage))
 	r.Put("/ai-credentials", handlers.Update(m.service.UpdateCredential))
 
+	r.Get("/google/oauth/start", oauthStartHandler(m.service))
 	r.Get("/google/oauth/callback", oauthCallbackHandler(m.service))
 	r.Get("/google/status", handlers.GetAll(m.service.GoogleStatus))
 	r.Delete("/google/link", handlers.Delete(m.service.DisconnectGoogle))
@@ -58,7 +56,7 @@ type sessionUser struct {
 
 func respondSession(status int) func(http.ResponseWriter, *http.Request, sessionUser) {
 	return func(w http.ResponseWriter, _ *http.Request, out sessionUser) {
-		http.SetCookie(w, newCookie("session_id", out.session.ID, 30*24*60*60))
+		http.SetCookie(w, newCookie("session_id", out.session.Token, 30*24*60*60))
 		handlers.WriteJSON(w, status, dto.AuthUserView{Username: out.user.Username})
 	}
 }

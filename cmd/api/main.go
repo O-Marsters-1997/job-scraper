@@ -80,7 +80,7 @@ func run(ctx context.Context) error {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps,
+	idm, err := identity.New(pool, apps, os.Getenv("SESSION_SECRET"),
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		return fmt.Errorf("init identity: %w", err)
@@ -114,7 +114,14 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build router: %w", err)
 	}
-	srv := &http.Server{Addr: port, Handler: router}
+	srv := &http.Server{
+		Addr:              port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

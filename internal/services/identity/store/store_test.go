@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -64,6 +65,52 @@ func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
 
 	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, data.ErrNotFound) {
 		t.Errorf("GetUserByUsername(frank) err = %v, want ErrNotFound after rollback", err)
+	}
+}
+
+func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := t.Context()
+
+	user, err := st.CreateUser(ctx, "kate", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("kate"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	pgtest.InTx(t, pool, false, func(tx pgx.Tx) error {
+		return st.DeleteUserSessionsTx(ctx, tx, user.ID)
+	})
+
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); err != nil {
+		t.Errorf("GetSessionByTokenHash(kate) err = %v, want session kept after rollback", err)
+	}
+}
+
+func TestResetPasswordRevokesSessions(t *testing.T) {
+	st := newStore(t)
+	svc := identity.NewService(identity.Deps{Store: st})
+	ctx := t.Context()
+
+	user, err := st.CreateUser(ctx, "liam", "old-hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("liam"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ResetPassword(ctx, "liam", "new-password"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("GetSessionByTokenHash(liam) err = %v, want ErrNotFound after reset", err)
 	}
 }
 
