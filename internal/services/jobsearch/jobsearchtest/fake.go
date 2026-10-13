@@ -341,6 +341,9 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 		if options.NoBoardOnly && f.hasBoard(c.ID) {
 			continue
 		}
+		if options.Poster != "" && (options.Poster == dto.PosterAgency) != (c.Kind == dto.KindAgency || c.Kind == dto.KindLikelyAgency) {
+			continue
+		}
 		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
 			continue
 		}

@@ -38,6 +38,7 @@ type CompaniesQuery struct {
 	Favourite string `json:"favourite"`
 	NoBoard   string `json:"no_board"`
 	Sort      string `json:"sort"`
+	Poster    string `json:"poster"`
 }
 
 type CompanyPageOptions struct {
@@ -48,6 +49,7 @@ type CompanyPageOptions struct {
 	FavouriteOnly bool
 	NoBoardOnly   bool
 	Sort          CompanySort
+	Poster        Poster // empty means all
 }
 
 type CompanyPage struct {

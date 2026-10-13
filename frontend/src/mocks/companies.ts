@@ -102,6 +102,12 @@ export function getCompanyPage(params: CompanyPageParams): {
 		.filter((c) => !params.noBoard || !boardedCompanyIds.has(c.ID))
 		.filter(
 			(c) =>
+				!params.poster ||
+				(params.poster === "agency") ===
+					(c.Kind === "agency" || c.Kind === "likely_agency"),
+		)
+		.filter(
+			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
 		)
 		.sort(params.sort === "alphabetical" ? byName : byRelevance);
