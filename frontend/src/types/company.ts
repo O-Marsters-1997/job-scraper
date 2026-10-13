@@ -10,6 +10,9 @@ export const companyKindSchema = z.enum([
 
 export type CompanyKind = z.infer<typeof companyKindSchema>;
 
+export const POSTER_OPTIONS = ["all", "direct", "agency"] as const;
+export type PosterFilter = (typeof POSTER_OPTIONS)[number];
+
 export const companySchema = z.object({
 	ID: z.string(),
 	Slug: z.string(),
