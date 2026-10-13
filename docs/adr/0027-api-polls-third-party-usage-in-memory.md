@@ -1,4 +1,4 @@
-# ADR 0025 — The API polls third-party usage and holds it in memory
+# ADR 0027 — The API polls third-party usage and holds it in memory
 
 Issue: [#833](https://github.com/O-Marsters-1997/job-scraper/issues/833)
 
@@ -28,7 +28,7 @@ database and events from logs.
 
 ## Consequences
 
-- The API now makes one outbound call to a third party on a timer, and `DECODO_API_KEY` joins its
+- The API makes one outbound call to a third party on a timer, and `DECODO_API_KEY` joins its
   environment.
 - A second API replica would poll separately; at one replica this is fine.
 - A new provider means another `QuotaFetcher` and another entry in the `providers` list.
