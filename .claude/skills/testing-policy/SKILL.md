@@ -12,8 +12,7 @@ description: >
 
 Decision record: [ADR 0012](../../../docs/adr/0012-test-seams-and-double-packages.md).
 How a test is written (assertions, tables, helpers, waits, goldens, fuzzing) is owned by the global
-`go-testing` skill and isn't repeated here. Comparison with it:
-[docs/testing-policy-vs-go-testing.md](../../../docs/testing-policy-vs-go-testing.md).
+`go-testing` skill and isn't repeated here.
 
 ## Before writing a test
 
@@ -47,7 +46,7 @@ whose only behaviour is calling something else.
 
 ## Doubles
 
-Fidelity order: real > fake > stub, as in `go-testing`. No generated mocks, no testify.
+Fidelity order: real > fake > stub. No generated mocks, no testify.
 
 - **Store the service owns → stateful fake.** A map plus the sentinels the real store returns,
   exported from `internal/services/<ctx>/<ctx>test`, one fake and one contract for the whole context `Store`. It must pass `RunStoreContract`,
@@ -83,10 +82,8 @@ change-detector: rewrite it at the output or delete it.
 - `pgtest.New(t)` returns a pool on this test binary's own database, on one container shared
   machine-wide ([ADR 0025](../../../docs/adr/0025-shared-self-destructing-test-database.md)), with
   every table truncated. No per-package `TestMain`, no own container.
-- Serial for now: never `t.Parallel()` in a test that calls `pgtest.New`, because the database is
-  shared and truncated. Empty tables are guaranteed, so length assertions are safe. Where
-  `go-testing` says DB tests can be parallel, this rule wins until #932 gives each test its own
-  database cloned from the template.
+- Serial: never `t.Parallel()` in a test that calls `pgtest.New`. Empty tables are guaranteed,
+  so length assertions are safe.
 - Test transactions go through `pgtest.InTx(t, pool, commit, fn)`, never `pool.Begin`: it registers
   the rollback as cleanup, so a `t.Fatal` can't leave locks that block the next `TRUNCATE`.
 - Run from the repo root (migrations resolve relative to CWD).
