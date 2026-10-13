@@ -13,4 +13,5 @@ type ScoringConfigView struct {
 	MaxJobAgeDays         int         `json:"maxJobAgeDays"`
 	UpdatedAt             time.Time   `json:"updatedAt"`
 	BackfillQueued        int64       `json:"backfillQueued"`
+	DroppedOptionIDs      []string    `json:"droppedOptionIds,omitempty"`
 }

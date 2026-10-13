@@ -11,6 +11,7 @@ type EventInput struct {
 	Type      string `json:"type"`
 	SubjectID string `json:"subject_id"`
 	Reason    string `json:"reason"`
+	Undone    bool   `json:"undone"`
 }
 
 // Event is a stored events row; Props is the per-type JSON payload.
