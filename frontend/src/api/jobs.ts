@@ -19,6 +19,7 @@ export async function fetchAllJobs(): Promise<Job[]> {
 					Grade: db.getGrade(job.ID)?.grade ?? "",
 					Seen: db.isSeen(job.ID),
 					CompanyFavourite: db.isCompanyFavourite(job.CompanyID),
+					CompanyKind: db.getCompanyKind(job.CompanyID),
 				})),
 		() => apiFetch("/jobs/all", jobSchema.array()),
 	);
@@ -33,6 +34,7 @@ export async function fetchJob(id: string): Promise<Job> {
 				...job,
 				Seen: db.isSeen(job.ID),
 				CompanyFavourite: db.isCompanyFavourite(job.CompanyID),
+				CompanyKind: db.getCompanyKind(job.CompanyID),
 			};
 		},
 		() => apiFetch(`/jobs/${encodeURIComponent(id)}`, jobSchema),

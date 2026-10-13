@@ -45,7 +45,7 @@ func (q *Queries) DeleteCompanyTracking(ctx context.Context, arg DeleteCompanyTr
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies WHERE id = $1
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at, kind FROM companies WHERE id = $1
 `
 
 func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, error) {
@@ -63,13 +63,14 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 		&i.FirstSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Kind,
 	)
 	return i, err
 }
 
 const getCompanyForUser = `-- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -100,6 +101,7 @@ type GetCompanyForUserRow struct {
 	LinkedinCompanyID    pgtype.Text
 	LastCrawledAt        pgtype.Timestamptz
 	FirstSeenAt          pgtype.Timestamptz
+	Kind                 string
 	JobCount             int64
 	Tracked              bool
 	Favourite            bool
@@ -121,6 +123,7 @@ func (q *Queries) GetCompanyForUser(ctx context.Context, arg GetCompanyForUserPa
 		&i.LinkedinCompanyID,
 		&i.LastCrawledAt,
 		&i.FirstSeenAt,
+		&i.Kind,
 		&i.JobCount,
 		&i.Tracked,
 		&i.Favourite,
@@ -148,7 +151,7 @@ func (q *Queries) KeepNewTrackedCompany(ctx context.Context, arg KeepNewTrackedC
 }
 
 const listCompaniesToCrawl = `-- name: ListCompaniesToCrawl :many
-SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at FROM companies
+SELECT id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at, kind FROM companies
 WHERE domain IS NOT NULL AND ats_source IS NULL
   AND (last_crawled_at IS NULL OR last_crawled_at < NOW() - make_interval(days => 30))
 ORDER BY last_crawled_at NULLS FIRST LIMIT $1
@@ -175,6 +178,7 @@ func (q *Queries) ListCompaniesToCrawl(ctx context.Context, limit int32) ([]Comp
 			&i.FirstSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -327,7 +331,7 @@ func (q *Queries) ListTrackedCompaniesForUser(ctx context.Context, userID pgtype
 
 const pageCompaniesForUser = `-- name: PageCompaniesForUser :many
 SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1::uuid
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -377,6 +381,7 @@ type PageCompaniesForUserRow struct {
 	LinkedinCompanyID    pgtype.Text
 	LastCrawledAt        pgtype.Timestamptz
 	FirstSeenAt          pgtype.Timestamptz
+	Kind                 string
 	JobCount             int64
 	Tracked              bool
 	Favourite            bool
@@ -414,6 +419,7 @@ func (q *Queries) PageCompaniesForUser(ctx context.Context, arg PageCompaniesFor
 			&i.LinkedinCompanyID,
 			&i.LastCrawledAt,
 			&i.FirstSeenAt,
+			&i.Kind,
 			&i.JobCount,
 			&i.Tracked,
 			&i.Favourite,
@@ -457,6 +463,23 @@ type RenameCompanyParams struct {
 func (q *Queries) RenameCompany(ctx context.Context, arg RenameCompanyParams) error {
 	_, err := q.db.Exec(ctx, renameCompany, arg.ID, arg.Name)
 	return err
+}
+
+const setCompanyKind = `-- name: SetCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1
+`
+
+type SetCompanyKindParams struct {
+	ID   pgtype.UUID
+	Kind string
+}
+
+func (q *Queries) SetCompanyKind(ctx context.Context, arg SetCompanyKindParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCompanyKind, arg.ID, arg.Kind)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setCompanyReviewState = `-- name: SetCompanyReviewState :one
@@ -575,7 +598,7 @@ ON CONFLICT (slug) DO UPDATE SET
     domain              = COALESCE(companies.domain, EXCLUDED.domain),
     linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
     updated_at = NOW()
-RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at
+RETURNING id, slug, name, ats_source, ats_token, domain, linkedin_company_id, last_crawled_at, first_seen_at, created_at, updated_at, kind
 `
 
 type UpsertCompanyParams struct {
@@ -609,6 +632,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		&i.FirstSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Kind,
 	)
 	return i, err
 }

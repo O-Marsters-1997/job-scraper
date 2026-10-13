@@ -8,7 +8,7 @@ import {
 import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import { useApplications } from "./useApplications";
-import { useSetCompanyFavourite } from "./useCompanies";
+import { useSetCompanyFavourite, useSetCompanyKind } from "./useCompanies";
 import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
 import { useMarkJobsSeen } from "./useJobs";
 import { announceBulkSeen } from "./useSeenToast";
@@ -60,6 +60,7 @@ export function useTrackJobs(jobs: () => Job[]) {
 	const dismiss = useDismissJob();
 	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
+	const setKind = useSetCompanyKind();
 	const columns = createJobColumns({
 		appsForJobs,
 		onTrack: openTrack,
@@ -73,6 +74,10 @@ export function useTrackJobs(jobs: () => Job[]) {
 			});
 		},
 		onExcludeCompany: exclude.exclude,
+		onSetCompanyKind: (job, kind) => {
+			if (!job.CompanyID) return;
+			setKind.mutate({ id: job.CompanyID, kind });
+		},
 	});
 
 	return {

@@ -1134,25 +1134,25 @@ func TestUpsertCompany(t *testing.T) {
 			name:   "conflict fills in missing ats fields",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, ATSSource: "greenhouse", ATSToken: "acme"},
 		},
 		{
 			name:   "conflict never overwrites an existing ats board",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", ATSSource: "lever", ATSToken: "acme-other"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", ATSSource: "greenhouse", ATSToken: "acme"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, ATSSource: "greenhouse", ATSToken: "acme"},
 		},
 		{
 			name:   "conflict fills in missing domain and linkedin id",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, Domain: "acme.com", LinkedInCompanyID: "12345"},
 		},
 		{
 			name:   "conflict never overwrites an existing domain or linkedin id",
 			first:  dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
 			second: dto.CompanyUpsert{Slug: "acme", Name: "Acme", Domain: "other.com", LinkedInCompanyID: "99999"},
-			want:   dto.Company{Slug: "acme", Name: "Acme", Domain: "acme.com", LinkedInCompanyID: "12345"},
+			want:   dto.Company{Slug: "acme", Name: "Acme", Kind: dto.KindUnclassified, Domain: "acme.com", LinkedInCompanyID: "12345"},
 		},
 	}
 	ignore := cmpopts.IgnoreFields(dto.Company{}, "ID", "LastCrawledAt", "FirstSeenAt", "LastCheckedAt")

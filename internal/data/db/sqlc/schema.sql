@@ -289,7 +289,10 @@ CREATE TABLE IF NOT EXISTS companies (
     last_crawled_at     TIMESTAMPTZ,
     first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    kind                TEXT        NOT NULL DEFAULT 'unclassified'
+        CONSTRAINT companies_kind_check
+        CHECK (kind IN ('unclassified', 'likely_agency', 'likely_direct', 'agency', 'direct'))
 );
 
 CREATE TABLE IF NOT EXISTS source_targets (

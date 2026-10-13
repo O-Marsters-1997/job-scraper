@@ -309,6 +309,44 @@ func TestSetCompanyTracking(t *testing.T) {
 	})
 }
 
+func TestSetCompanyKind(t *testing.T) {
+	t.Run("agency and direct are stored and returned", func(t *testing.T) {
+		for _, kind := range []dto.CompanyKind{dto.KindAgency, dto.KindDirect} {
+			svc, st := newCompanyService(queuetest.NewRecorder())
+			company := seedAcme(t, st)
+			got, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: company.ID, Kind: kind})
+			if err != nil || got.Kind != kind {
+				t.Fatalf("SetCompanyKind(%q) = %+v, %v, want kind %q", kind, got, err, kind)
+			}
+		}
+	})
+
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			companyID func(id string) string
+			kind      dto.CompanyKind
+			wantKind  apperr.Kind
+		}{
+			{"unclassified", func(id string) string { return id }, dto.KindUnclassified, apperr.KindInvalid},
+			{"likely agency", func(id string) string { return id }, dto.KindLikelyAgency, apperr.KindInvalid},
+			{"likely direct", func(id string) string { return id }, dto.KindLikelyDirect, apperr.KindInvalid},
+			{"unknown value", func(id string) string { return id }, "bogus", apperr.KindInvalid},
+			{"unknown company", func(string) string { return "missing" }, dto.KindAgency, apperr.KindNotFound},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company := seedAcme(t, st)
+				_, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: tt.companyID(company.ID), Kind: tt.kind})
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("SetCompanyKind() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
+		}
+	})
+}
+
 func TestListCompanyBoards(t *testing.T) {
 	t.Run("returns not found for an unknown company", func(t *testing.T) {
 		svc, _ := newCompanyService(queuetest.NewRecorder())

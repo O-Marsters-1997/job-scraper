@@ -181,6 +181,7 @@ func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
 	job.Seen = f.seen[userID][job.ID]
 	companyID := cmp.Or(job.CompanyID, f.companyBySlug[job.CompanySlug])
 	job.CompanyFavourite = f.favourites[trackingKey(userID, companyID)]
+	job.CompanyKind = cmp.Or(f.companies[companyID].Kind, dto.KindUnclassified)
 	return job
 }
 
@@ -302,6 +303,7 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	company := dto.Company{
 		ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken,
 		Domain: c.Domain, LinkedInCompanyID: c.LinkedInCompanyID, FirstSeenAt: time.Now(),
+		Kind: dto.KindUnclassified,
 	}
 	f.companies[id] = company
 	f.companyBySlug[c.Slug] = id
@@ -381,6 +383,18 @@ func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto
 	}
 	c.Favourite = f.favourites[trackingKey(userID, c.ID)]
 	return c, nil
+}
+
+func (f *FakeStore) SetCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok {
+		return data.ErrNotFound
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return nil
 }
 
 func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID string, favourite bool) error {
