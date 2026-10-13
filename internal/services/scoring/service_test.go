@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -96,6 +97,19 @@ type failingAnswerer struct{}
 
 func (f *failingAnswerer) Answer(context.Context, string, dto.Job, []string) (map[string]dto.Answer, dto.Usage, error) {
 	return nil, dto.Usage{}, errors.New("jev boom")
+}
+
+type panicOnceAnswerer struct {
+	once sync.Once
+}
+
+func (p *panicOnceAnswerer) Answer(ctx context.Context, key string, job dto.Job, questions []string) (map[string]dto.Answer, dto.Usage, error) {
+	panicked := false
+	p.once.Do(func() { panicked = true })
+	if panicked {
+		panic("boom")
+	}
+	return (&fakeAnswerer{}).Answer(ctx, key, job, questions)
 }
 
 type fakeCredentials struct{ key string }
@@ -286,13 +300,37 @@ func TestRunTick(t *testing.T) {
 		st := newFakeStore()
 		seedEffect(st, false, picking("user-1", "tech:go"))
 
-		runTick(t, st, withAnswerer(&failingAnswerer{}))
+		svc := newService(t, st, withKey("sk-or-test"), withAnswerer(&failingAnswerer{}))
+		err := svc.RunTick(t.Context())
 
+		if err == nil {
+			t.Error("RunTick() err = nil, want the joined effect error")
+		}
 		if lines := scoreCallLines(t, buf); len(lines) != 0 {
 			t.Errorf("score.call lines = %v, want none after a failed Answer call", lines)
 		}
 		if failed := st.Failed(); len(failed) != 1 {
 			t.Errorf("failed effects = %d, want 1", len(failed))
+		}
+	})
+
+	t.Run("a panicking effect is failed and the others still run", func(t *testing.T) {
+		st := newFakeStore()
+		seedEffect(st, false, picking("user-1", "tech:go"))
+		st.SeedEffect(dto.AnswerEffect{ID: "effect-2", JobID: testJob.ID, Fingerprint: testJob.ContentFingerprint, Attempts: 1})
+		answerer := &panicOnceAnswerer{}
+
+		svc := newService(t, st, withKey("sk-or-test"), withAnswerer(answerer))
+		err := svc.RunTick(t.Context())
+
+		if err == nil || !strings.Contains(err.Error(), "panicked") {
+			t.Errorf("RunTick() err = %v, want a panicked effect error", err)
+		}
+		if failed := st.Failed(); len(failed) != 1 || !strings.Contains(failed[0].Reason, "boom") {
+			t.Errorf("failed effects = %+v, want 1 carrying the panic value", failed)
+		}
+		if completed := st.Completed(); len(completed) != 1 {
+			t.Errorf("completed effects = %d, want 1 (the non-panicking one)", len(completed))
 		}
 	})
 

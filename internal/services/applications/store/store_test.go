@@ -28,10 +28,11 @@ func TestStoreContract(t *testing.T) {
 		t.Helper()
 		st, pool, userID := newStore(t)
 		return applicationstest.Fixture{
-			Store:  st,
-			UserID: userID,
-			JobID:  pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
-			NewJob: func() string { return pgtest.InsertJob(t, pool, "Other Job", "Other Job") },
+			Store:       st,
+			UserID:      userID,
+			OtherUserID: pgtest.InsertUser(t, pool),
+			JobID:       pgtest.InsertJob(t, pool, "Contract Job", "Contract Job"),
+			NewJob:      func() string { return pgtest.InsertJob(t, pool, "Other Job", "Other Job") },
 		}
 	})
 }

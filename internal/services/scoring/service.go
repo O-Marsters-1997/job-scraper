@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -134,6 +136,10 @@ func (s *Service) Run(ctx context.Context) error {
 func (s *Service) RunTick(ctx context.Context) error {
 	g := &errgroup.Group{}
 	g.SetLimit(maxConcurrentEffects)
+	var (
+		mu         sync.Mutex
+		effectErrs []error
+	)
 	for {
 		effect, err := s.store.ClaimAnswerEffect(ctx)
 		if errors.Is(err, data.ErrNotFound) {
@@ -146,14 +152,18 @@ func (s *Service) RunTick(ctx context.Context) error {
 		g.Go(func() error {
 			if err := s.process(ctx, effect); err != nil {
 				slog.ErrorContext(ctx, "answer effect failed", slog.String("effect_id", effect.ID), slog.Any(logger.KeyErr, err))
+				mu.Lock()
+				effectErrs = append(effectErrs, err)
+				mu.Unlock()
 			}
 			return nil
 		})
 	}
-	return g.Wait()
+	_ = g.Wait()
+	return errors.Join(effectErrs...)
 }
 
-func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
+func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) (result error) {
 	fail := func(err error) error {
 		failure := dto.ScoringFailure{Reason: err.Error()}
 		var jevErr *jev.Error
@@ -166,6 +176,16 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		}
 		return err
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			slog.ErrorContext(ctx, "answer effect panicked",
+				slog.String("effect_id", effect.ID),
+				slog.Any("panic", r),
+				slog.String(logger.KeyStack, string(debug.Stack())),
+			)
+			result = fail(fmt.Errorf("answer effect panicked: %v", r))
+		}
+	}()
 
 	job, err := s.store.GetJobForScoring(ctx, effect.JobID)
 	if err != nil {

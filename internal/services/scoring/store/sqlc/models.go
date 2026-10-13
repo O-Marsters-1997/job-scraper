@@ -519,6 +519,7 @@ type Session struct {
 	UserID    pgtype.UUID
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
+	TokenHash []byte
 }
 
 type SourceTarget struct {

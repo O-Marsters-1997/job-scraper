@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -9,7 +10,7 @@ import (
 )
 
 type sessionGetter interface {
-	GetSession(ctx context.Context, id string) (dto.Session, error)
+	GetSessionByTokenHash(ctx context.Context, tokenHash []byte) (dto.Session, error)
 }
 
 func sessionMiddleware(sg sessionGetter) func(http.Handler) http.Handler {
@@ -20,7 +21,7 @@ func sessionMiddleware(sg sessionGetter) func(http.Handler) http.Handler {
 				writeUnauthorized(w)
 				return
 			}
-			session, err := sg.GetSession(r.Context(), cookie.Value)
+			session, err := sg.GetSessionByTokenHash(r.Context(), hashSessionToken(cookie.Value))
 			if err != nil {
 				writeUnauthorized(w)
 				return
@@ -35,4 +36,22 @@ func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+}
+
+func limitByRemoteHost(l *attemptLimiter) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				host = r.RemoteAddr
+			}
+			if !l.Allow(host) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = w.Write([]byte(`{"error":"too many attempts"}`))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

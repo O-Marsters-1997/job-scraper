@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/services/cvtailor"
@@ -35,6 +36,7 @@ type RecordingEditor struct {
 
 	deltas        []string
 	suggestErr    error
+	pace          time.Duration
 	SuggestInputs []cvedit.SuggestInput
 
 	explanation   string
@@ -56,6 +58,10 @@ func Suggesting(deltas ...string) *RecordingEditor {
 	return &RecordingEditor{deltas: deltas}
 }
 
+func SuggestingEvery(pace time.Duration, deltas ...string) *RecordingEditor {
+	return &RecordingEditor{deltas: deltas, pace: pace}
+}
+
 // SuggestFailing streams the deltas, then fails with err; with no deltas the
 // stream never opens.
 func SuggestFailing(err error, deltas ...string) *RecordingEditor {
@@ -65,6 +71,7 @@ func SuggestFailing(err error, deltas ...string) *RecordingEditor {
 func (e *RecordingEditor) Suggest(_ context.Context, _ string, in cvedit.SuggestInput, onDelta func(string)) (cvedit.SuggestResult, error) {
 	e.SuggestInputs = append(e.SuggestInputs, in)
 	for _, d := range e.deltas {
+		time.Sleep(e.pace)
 		onDelta(d)
 	}
 	return cvedit.SuggestResult{Text: strings.Join(e.deltas, ""), Cost: 0.001}, e.suggestErr

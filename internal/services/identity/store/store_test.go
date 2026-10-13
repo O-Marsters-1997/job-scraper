@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/store"
+	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
 func newStore(t *testing.T) *store.Store {
@@ -63,6 +65,52 @@ func TestSignupSeedingFailureLeavesNoUserRow(t *testing.T) {
 
 	if _, err := st.GetUserByUsername(ctx, "frank"); !errors.Is(err, data.ErrNotFound) {
 		t.Errorf("GetUserByUsername(frank) err = %v, want ErrNotFound after rollback", err)
+	}
+}
+
+func TestDeleteUserSessionsTxRollsBack(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := t.Context()
+
+	user, err := st.CreateUser(ctx, "kate", "hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("kate"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	pgtest.InTx(t, pool, false, func(tx pgx.Tx) error {
+		return st.DeleteUserSessionsTx(ctx, tx, user.ID)
+	})
+
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); err != nil {
+		t.Errorf("GetSessionByTokenHash(kate) err = %v, want session kept after rollback", err)
+	}
+}
+
+func TestResetPasswordRevokesSessions(t *testing.T) {
+	st := newStore(t)
+	svc := identity.NewService(identity.Deps{Store: st})
+	ctx := t.Context()
+
+	user, err := st.CreateUser(ctx, "liam", "old-hash", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenHash := sha256.Sum256([]byte("liam"))
+	if _, err := st.CreateSession(ctx, user.ID, tokenHash[:], time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ResetPassword(ctx, "liam", "new-password"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := st.GetSessionByTokenHash(ctx, tokenHash[:]); !errors.Is(err, data.ErrNotFound) {
+		t.Errorf("GetSessionByTokenHash(liam) err = %v, want ErrNotFound after reset", err)
 	}
 }
 
@@ -116,5 +164,61 @@ func TestGoogleToken(t *testing.T) {
 	}
 	if _, err := st.GetGoogleToken(ctx, user.ID); !errors.Is(err, google.ErrTokenNotFound) {
 		t.Errorf("GetGoogleToken after delete err = %v, want google.ErrTokenNotFound", err)
+	}
+}
+
+func TestReencryptTokens(t *testing.T) {
+	pool := pgtest.New(t)
+	st := store.New(pool)
+	ctx := t.Context()
+	cipher := identitytest.NewCipher(t)
+
+	user, err := st.CreateUser(ctx, "ivy", "hash", "")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	credAAD := tokencrypt.AAD{Table: tokencrypt.TableAICredentials, Owner: user.ID + ":anthropic"}
+	googleAAD := tokencrypt.AAD{Table: tokencrypt.TableGoogleOAuthTokens, Owner: user.ID}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO user_ai_credentials (user_id, provider, api_key_enc) VALUES ($1, 'anthropic', $2)`,
+		user.ID, identitytest.SealLegacy(t, "sk-legacy")); err != nil {
+		t.Fatalf("seed credential: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO google_oauth_tokens (user_id, access_token_enc, refresh_token_enc, token_type, scope) VALUES ($1, $2, $3, 'Bearer', 's')`,
+		user.ID, identitytest.SealLegacy(t, "access"), identitytest.SealLegacy(t, "refresh")); err != nil {
+		t.Fatalf("seed google token: %v", err)
+	}
+
+	creds, tokens, err := identity.ReencryptTokens(ctx, pool, cipher, cipher)
+	if err != nil {
+		t.Fatalf("ReencryptTokens: %v", err)
+	}
+	if creds != 1 || tokens != 1 {
+		t.Errorf("ReencryptTokens = (%d, %d), want (1, 1)", creds, tokens)
+	}
+
+	enc, err := st.GetUserAICredential(ctx, user.ID, "anthropic")
+	if err != nil {
+		t.Fatalf("GetUserAICredential: %v", err)
+	}
+	if got, err := cipher.Decrypt(enc, credAAD); err != nil || got != "sk-legacy" || tokencrypt.IsLegacy(enc) {
+		t.Errorf("credential = %q, %v, legacy=%t, want sk-legacy as v1", got, err, tokencrypt.IsLegacy(enc))
+	}
+	row, err := st.GetGoogleToken(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetGoogleToken: %v", err)
+	}
+	if got, err := cipher.Decrypt(row.RefreshTokenEnc, googleAAD); err != nil || got != "refresh" || tokencrypt.IsLegacy(row.RefreshTokenEnc) {
+		t.Errorf("refresh token = %q, %v, want refresh as v1", got, err)
+	}
+	if got, err := cipher.Decrypt(row.AccessTokenEnc, googleAAD); err != nil || got != "access" || tokencrypt.IsLegacy(row.AccessTokenEnc) {
+		t.Errorf("access token = %q, %v, want access as v1", got, err)
+	}
+
+	creds, tokens, err = identity.ReencryptTokens(ctx, pool, cipher, cipher)
+	if err != nil || creds != 0 || tokens != 0 {
+		t.Errorf("second ReencryptTokens = (%d, %d, %v), want (0, 0, nil)", creds, tokens, err)
 	}
 }

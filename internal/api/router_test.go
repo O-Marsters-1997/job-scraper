@@ -5,11 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ollymarsters/job-scraper/internal/api"
@@ -34,7 +37,7 @@ type app struct {
 	router http.Handler
 }
 
-func newApp(t *testing.T) *app {
+func newApp(t *testing.T, extra ...api.Module) *app {
 	t.Helper()
 	t.Setenv("INGEST_SERVICE_TOKEN", ingestToken)
 	t.Setenv("AI_CREDENTIAL_ENC_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
@@ -44,14 +47,54 @@ func newApp(t *testing.T) *app {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps, "", "", "")
+	idm, err := identity.New(pool, apps, "test-session-secret", "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
 	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic)
 	sc := scoring.New(pool, idm, idm, js, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
-	return &app{t: t, pool: pool, router: api.NewRouter(idm, js, apps, cv, sc, eventsModule)}
+	router, err := api.NewRouter(idm, js, append([]api.Module{apps, cv, sc, eventsModule}, extra...)...)
+	if err != nil {
+		t.Fatalf("api.NewRouter: %v", err)
+	}
+	return &app{t: t, pool: pool, router: router}
+}
+
+func TestCrossSiteWritesRejected(t *testing.T) {
+	a := newApp(t)
+
+	cases := []struct {
+		name   string
+		header map[string]string
+		want   int
+	}{
+		{"cross-site fetch metadata", map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"foreign origin", map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"same-origin fetch metadata", map[string]string{"Sec-Fetch-Site": "same-origin"}, http.StatusUnauthorized},
+		{"same-site frontend on allowed origin", map[string]string{"Sec-Fetch-Site": "same-site", "Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+		{"allowed origin", map[string]string{"Origin": "http://localhost:3000"}, http.StatusUnauthorized},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := jsonRequest(t, http.MethodPost, "/auth/logout", nil)
+			for k, v := range tc.header {
+				req.Header.Set(k, v)
+			}
+			w := httptest.NewRecorder()
+			a.router.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Errorf("POST /auth/logout = %d, want %d: %s", w.Code, tc.want, w.Body)
+			}
+		})
+	}
+}
+
+func TestNewRouterRejectsInvalidOrigin(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGIN", "not-an-origin")
+	if _, err := api.NewRouter(nil, nil); err == nil {
+		t.Error("NewRouter with invalid CORS_ALLOWED_ORIGIN returned nil error")
+	}
 }
 
 type user struct {
@@ -127,6 +170,57 @@ func (a *app) ingest(job map[string]string) ingestResult {
 	req := jsonRequest(a.t, http.MethodPost, "/ingest", job)
 	req.Header.Set("Authorization", "Bearer "+ingestToken)
 	return send[ingestResult](a, http.StatusOK, req)
+}
+
+func TestRouterRejectsBadBodies(t *testing.T) {
+	a := newApp(t)
+
+	tooBig := jsonRequest(t, http.MethodPost, "/auth/login", map[string]string{"email": strings.Repeat("x", 2<<20)})
+	send[map[string]any](a, http.StatusRequestEntityTooLarge, tooBig)
+
+	text := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(`{}`))
+	text.Header.Set("Content-Type", "text/plain")
+	send[map[string]any](a, http.StatusUnsupportedMediaType, text)
+}
+
+type panickingModule struct{}
+
+func (panickingModule) Routes(chi.Router) {}
+
+func (panickingModule) PublicRoutes(r chi.Router) {
+	r.Get("/boom", func(http.ResponseWriter, *http.Request) { panic("boom") })
+	r.Get("/ok", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+}
+
+func TestPanickingHandlerReturnsJSON500AndKeepsServing(t *testing.T) {
+	a := newApp(t, panickingModule{})
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	w := httptest.NewRecorder()
+	a.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/boom", http.NoBody))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("content type = %q, want application/json", ct)
+	}
+	body := handlerstest.DecodeJSON[map[string]string](t, w.Body.Bytes())
+	if body["error"] != "internal server error" {
+		t.Errorf("body = %v", body)
+	}
+	if !strings.Contains(logs.String(), "handler panic") || !strings.Contains(logs.String(), "recover.go") {
+		t.Errorf("panic log lacks message or stack: %s", logs.String())
+	}
+
+	w = httptest.NewRecorder()
+	a.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/ok", http.NoBody))
+	if w.Code != http.StatusNoContent {
+		t.Errorf("after panic status = %d, want 204", w.Code)
+	}
 }
 
 func TestSignupSeedsDefaultStatuses(t *testing.T) {

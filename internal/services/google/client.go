@@ -92,11 +92,12 @@ func (c *Client) SaveToken(ctx context.Context, userID string, tok *oauth2.Token
 		kept.RefreshToken = stored.RefreshToken
 		tok = &kept
 	}
-	accessEnc, err := c.cipher.Encrypt(tok.AccessToken)
+	aad := tokenAAD(userID)
+	accessEnc, err := c.cipher.Encrypt(tok.AccessToken, aad)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt access: %w", err)
 	}
-	refreshEnc, err := c.cipher.Encrypt(tok.RefreshToken)
+	refreshEnc, err := c.cipher.Encrypt(tok.RefreshToken, aad)
 	if err != nil {
 		return fmt.Errorf("google.SaveToken encrypt refresh: %w", err)
 	}
@@ -133,17 +134,22 @@ func (c *Client) DeleteToken(ctx context.Context, userID string) error {
 	return c.store.DeleteGoogleToken(ctx, userID)
 }
 
+func tokenAAD(userID string) tokencrypt.AAD {
+	return tokencrypt.AAD{Table: tokencrypt.TableGoogleOAuthTokens, Owner: userID}
+}
+
 func (c *Client) getToken(ctx context.Context, userID string) (*oauth2.Token, error) {
 	row, err := c.store.GetGoogleToken(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	access, err := c.cipher.Decrypt(row.AccessTokenEnc)
+	aad := tokenAAD(userID)
+	access, err := c.cipher.Decrypt(row.AccessTokenEnc, aad)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt access: %w", ErrTokenUnusable, err)
 	}
-	refresh, err := c.cipher.Decrypt(row.RefreshTokenEnc)
+	refresh, err := c.cipher.Decrypt(row.RefreshTokenEnc, aad)
 	if err != nil {
 		return nil, fmt.Errorf("%w: decrypt refresh: %w", ErrTokenUnusable, err)
 	}

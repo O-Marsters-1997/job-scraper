@@ -39,6 +39,9 @@ func NewFakeStore() *FakeStore {
 func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.CreateApplicationInput) (dto.Application, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if !f.ownsStatus(userID, in.StatusID) {
+		return dto.Application{}, data.ErrNotFound
+	}
 	app := dto.Application{
 		ID:         fmt.Sprintf("app-%d", len(f.apps)+1),
 		UserID:     userID,
@@ -90,6 +93,14 @@ func (f *FakeStore) ClearChase(_ context.Context, userID, id string) error {
 	return nil
 }
 
+func (f *FakeStore) ownsStatus(userID, statusID string) bool {
+	if statusID == "" {
+		return true
+	}
+	s, ok := f.statuses[statusID]
+	return ok && s.UserID == userID
+}
+
 func parseDate(s *string) *time.Time {
 	if s == nil {
 		return nil
@@ -113,6 +124,9 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 	defer f.mu.Unlock()
 	app, ok := f.apps[id]
 	if !ok || app.UserID != userID {
+		return dto.Application{}, data.ErrNotFound
+	}
+	if !f.ownsStatus(userID, in.StatusID) {
 		return dto.Application{}, data.ErrNotFound
 	}
 	if app.StatusID != in.StatusID {
