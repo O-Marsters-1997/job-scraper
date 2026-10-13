@@ -1,4 +1,4 @@
-# ADR 0027 — Added bullets are draft-only entries in the edit set
+# ADR 0032 — Added bullets are draft-only entries in the edit set
 
 Extends [ADR 0019](0019-in-app-page-edits-google-renders-record.md).
 
