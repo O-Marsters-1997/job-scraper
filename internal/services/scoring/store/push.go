@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring/store/sqlc"
@@ -14,11 +15,14 @@ func (s *Store) UpsertPushSubscription(ctx context.Context, userID string, sub d
 	if err != nil {
 		return err
 	}
-	err = s.queries.UpsertPushSubscription(ctx, sqlc.UpsertPushSubscriptionParams{
+	n, err := s.queries.UpsertPushSubscription(ctx, sqlc.UpsertPushSubscriptionParams{
 		UserID: uid, Endpoint: sub.Endpoint, P256dh: sub.Keys.P256dh, Auth: sub.Keys.Auth,
 	})
 	if err != nil {
 		return fmt.Errorf("store.UpsertPushSubscription: %w", err)
+	}
+	if n == 0 {
+		return apperr.Conflict("push endpoint belongs to another user")
 	}
 	return nil
 }

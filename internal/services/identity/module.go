@@ -129,7 +129,11 @@ func (m *Module) ResetPassword(ctx context.Context, username, password string) e
 // Get returns userID's decrypted AI provider key, satisfying scoring's
 // Credentials port.
 func (m *Module) Get(ctx context.Context, userID, provider string) (string, error) {
-	return m.service.GetCredential(ctx, userID, provider)
+	p, err := dto.ParseProvider(provider)
+	if err != nil {
+		return "", err
+	}
+	return m.service.GetCredential(ctx, userID, p)
 }
 
 // GetProfile satisfies scoring's ProfileReader port.

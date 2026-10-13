@@ -31,9 +31,9 @@ type Store interface {
 	SetPasswordHash(ctx context.Context, username, passwordHash string) error
 	GetProfile(ctx context.Context, userID string) (dto.Profile, error)
 	UpdateEmail(ctx context.Context, userID, email string) (dto.Profile, error)
-	UpsertUserAICredential(ctx context.Context, userID, provider, encKey string) error
-	GetUserAICredential(ctx context.Context, userID, provider string) (string, error)
-	DeleteUserAICredential(ctx context.Context, userID, provider string) error
+	UpsertUserAICredential(ctx context.Context, userID string, provider dto.Provider, encKey string) error
+	GetUserAICredential(ctx context.Context, userID string, provider dto.Provider) (string, error)
+	DeleteUserAICredential(ctx context.Context, userID string, provider dto.Provider) error
 	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
 }
 
