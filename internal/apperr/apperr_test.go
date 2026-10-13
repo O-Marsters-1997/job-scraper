@@ -44,6 +44,27 @@ func TestStatusFor(t *testing.T) {
 	})
 }
 
+func TestMessageFor(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"apperr", apperr.Conflict("dup"), "dup"},
+		{"wrapped apperr drops the wrapper text", fmt.Errorf("service.Create: pq: secret: %w", apperr.Conflict("dup")), "dup"},
+		{"with fields", apperr.WithFields(apperr.Conflict("dup"), map[string]any{"n": 1}), "dup"},
+		{"plain error", errors.New("plain"), ""},
+		{"nil", nil, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := apperr.MessageFor(tc.err); got != tc.want {
+				t.Errorf("MessageFor(%v) = %q, want %q", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestErrorsIs(t *testing.T) {
 	errConflict := apperr.Conflict("application already exists")
 	wrapped := fmt.Errorf("db.Create: %w", errConflict)
