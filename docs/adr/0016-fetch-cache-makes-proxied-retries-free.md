@@ -1,6 +1,6 @@
 # ADR 0016 — A fetch cache makes proxied retries free
 
-A failed task is requeued and refetched from scratch (ADR 0006), so every retry of a LinkedIn or Indeed task paid for proxied bandwidth again. On 2026-09-30, with the API down, about 93 paid requests saved 4 jobs. The proxy bills every response it delivers from the target, whatever its status (ADR 0018 records the current residential route). The goal is that no retry of any post-fetch failure (export, parse, crash, DLQ replay) pays twice.
+A failed task is requeued and refetched from scratch (ADR 0006), so every retry of a LinkedIn or Indeed task paid for proxied bandwidth again. On 2026-09-30, with the API down, about 93 paid requests saved 4 jobs. The proxy bills every response it delivers from the target, whatever its status (ADR 0018). The goal is that no retry of any post-fetch failure (export, parse, crash, DLQ replay) pays twice.
 
 - **Where.** `residentialTransport.RoundTrip` in `internal/worker/proxy`, on proxied requests only, and only when the ctx carries a per-task collector. The processor attaches one per task, so non-task callers stay live.
 - **What.** A 200 or a 3xx redirect hop. Those are the responses a replay can use. `fetch_cache(url PK, status, header jsonb, body bytea, fetched_at)` stores the whole response, so `Get` and its redirect handling behave the same as on a live fetch. Other billed statuses are not cached: a 403 or 5xx may be transient, and replaying a cached one would stop a real retry from succeeding. A block (429, 403, 999 or an authwall redirect) is retried on a fresh IP by the residential transport (ADR 0018) and never cached.
@@ -11,6 +11,3 @@ A failed task is requeued and refetched from scratch (ADR 0006), so every retry 
 - **Failure.** A failed lookup fails the task without fetching, which costs a delivery attempt but no proxy spend. A failed write after a paid fetch is logged at ERROR and the task carries on. The worker stays up, and the existing Error burst and Dead letters alerts cover a database outage.
 
 Trade-offs: retries become free but aren't prevented. With the API down, a task still dead-letters after 5 attempts, and its Job Candidate stays pending until it is replayed. Two duplicate detail tasks in flight at once can both miss the cache and both pay. A retried 403 or 5xx still pays each time. A gone job's Job Candidate stays pending until it expires.
-
-Amended (2026-10-13, #874): the Unlocker tier this ADR was written against has been removed (ADR 0018).
-Its billing measurements are dropped; residential proxies bill bandwidth, so a replayed response costs bytes.

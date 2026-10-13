@@ -1,22 +1,17 @@
 # ADR 0018 — Hostile Sources fetch through residential proxies
 
-Amended (2026-10-13, #874): this ADR first shipped as "residential-first, with an Unlocker fallback". The
-Unlocker tier has since been removed, so the Decision below describes what is built. The Unlocker prices stay
-in Context as the cost history. The code cites the residential-only change as "ADR 0024", a file that was
-never committed (see `docs/adr/README.md`).
-
-Supersedes the "Bright Data Web Unlocker for protected sources" section of ADR 0003. The rest of 0003 stands.
+ADR 0003 covers source classification and capabilities; this ADR covers how Hostile Sources are fetched.
 
 ## Context
 
-LinkedIn is the most valuable discovery Source, and every LinkedIn and Indeed request first went through Web
-Unlocker at $1.50 per 1,000. About 91% of those requests are detail fetches, one per Job, so the price per
+LinkedIn is the most valuable discovery Source, and a hosted unblocker (Bright Data Web Unlocker) charges
+$1.50 per 1,000 requests. About 91% of those requests are detail fetches, one per Job, so the price per
 request sets the bill. Measured on 2026-10-01:
 
 - LinkedIn's `jobs-guest` endpoints are public by design but rate-limited per IP. From a home IP, 41 search
   pages at 1 req/s drew no 429. The worker runs on Hetzner, whose datacenter IPs these sites flag, so
   going direct is not an option.
-- Logged-out detail pages never carry `applyUrl` (0 of 40). Unlocker was logged out too, so it bought nothing
+- Logged-out detail pages never carry `applyUrl` (0 of 40). Unlocker is logged out too, so it buys nothing
   a residential IP doesn't.
 - `jobs-guest/jobs/api/jobPosting/{id}` is about 8KB gzipped, against 30KB for `/jobs/view/{id}`.
 - At Decodo's $4/GB, a detailed Job costs about 18KB including retries and TLS setup, so roughly $0.07 per
@@ -25,8 +20,7 @@ request sets the bill. Measured on 2026-10-01:
 
 ## Decision
 
-- **Each Source declares a route, `Direct` or `Residential`** (`proxy.Route`). It replaces the `UseProxy`
-  bool. LinkedIn and Indeed are `Residential`; ATS APIs and cooperative boards stay `Direct`. Routes are a
+- **Each Source declares a route, `Direct` or `Residential`** (`proxy.Route`). LinkedIn and Indeed are `Residential`; ATS APIs and cooperative boards stay `Direct`. Routes are a
   static property of the Source, never user config.
 - **`Residential` sends every request through Decodo.** `DECODO_PROXY_URL` must be valid or the worker
   refuses to start while a `Residential` Source is registered.
@@ -48,7 +42,7 @@ request sets the bill. Measured on 2026-10-01:
 Rejected:
 
 - **Unlocker as the primary or fallback tier:** about 20× the cost per Job, and a second vendor, credential
-  and budget guard to keep valid. It was built first and removed.
+  and budget guard to keep valid.
 - **Scraping APIs (Scrapingdog $0.50–1.10/1K) and Apify actors ($0.37–1.00/1K):** cost more and add a
   third-party parser that can break.
 - **LinkedIn alert emails:** they replace only search pages, about 9% of requests.

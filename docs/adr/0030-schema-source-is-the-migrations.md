@@ -1,8 +1,7 @@
 # ADR 0030 — The migrations are the schema source
 
 Issue: [#874](https://github.com/O-Marsters-1997/job-scraper/issues/874). The postgres-best-practices skill
-and go-idiomatic (`secrets.md`, config) are the authority. Amends the sqlc and migrations rules in
-AGENTS.md; implemented in W2 onward.
+and go-idiomatic (`secrets.md`, config) are the authority. Implemented in W2 onward.
 
 ## Decision
 
@@ -16,6 +15,6 @@ AGENTS.md; implemented in W2 onward.
 ## Consequences
 
 - One source of truth, so schema and migrations cannot drift.
-- The "run from the repo root" gotcha in AGENTS.md goes away once the embed lands.
+- Binaries and tests run from any directory.
 - sqlc must understand every migration statement, so a migration using unsupported DDL needs a
   sqlc-friendly shape or an override.

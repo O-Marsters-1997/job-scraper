@@ -8,9 +8,10 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 
 - **One `events` table, owned by the `events` context.** Columns: `id`, `user_id`, `type`, `subject_id`,
   `props` (jsonb) and `created_at`. Company and application events fit later without a new table.
-- **`type` is the Postgres enum `event_type`.** A later migration adds a value with
-  `ALTER TYPE event_type ADD VALUE`. Postgres cannot use a new value in the transaction that adds it, so
-  that migration does nothing else, and cannot drop a value, so each value is permanent.
+- **`type` is `text` with a named CHECK constraint** (`events_type_check`), per the postgres-best-practices
+  skill (status columns). Adding or dropping a value is a one-statement constraint swap in an ordinary
+  migration. The other closed sets, `user_role` and `scoring_dimension`, follow the same shape. Go gets
+  typed sets from sqlc overrides, so `events.Type` and its siblings stay compile-time checked.
 - **`subject_id` has no foreign key.** The type decides what it points at. The log outlives the row.
 - **`props` is one Go struct per type, validated on write.** Job and application events carry the score
   snapshot (`score`, `band`, `score_model`, `score_fingerprint`, `breakdown`), taken server side from
@@ -34,12 +35,3 @@ overwrites it on every rescore, so a later join returns today's score, not the o
 A dismissal's reason chips are picked after the `job_dismissed` event fires, so
 the event carries no reason. Training reads the reason from `job_grades.reasons`.
 Undoing a dismissal records a second `job_dismissed` event with `props.undone = true`.
-
-## Amendment (2026-10-13, #874): text plus CHECK, not enums
-
-The postgres-best-practices skill (status columns) overrides the Postgres enum for `type`.
-
-- `event_type`, `user_role` and `scoring_dimension` become `text` with a named CHECK constraint
-  (`events_type_check`). Adding a value is a one-statement constraint swap in a normal migration, with no
-  `ALTER TYPE ADD VALUE` transaction restriction, and a value can be dropped.
-- Go gets typed sets from sqlc overrides, so `events.Type` and its siblings stay compile-time checked.

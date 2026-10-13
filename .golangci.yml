@@ -41,11 +41,11 @@ linters:
         - pattern: '^time\.Sleep$'
           msg: poll with a ticker and a deadline instead (ADR 0012)
         - pattern: '^slog\.(Default|SetDefault)$'
-          msg: inject the *slog.Logger built in main; no global logger (ADR 0013 amendment)
+          msg: inject the *slog.Logger built in main; no global logger (ADR 0013)
         - pattern: '^slog\.(Debug|Info|Warn|Error|Log|LogAttrs)(Context)?$'
-          msg: log through an injected *slog.Logger at the top of the chain (ADR 0013 amendment)
+          msg: log through an injected *slog.Logger at the top of the chain (ADR 0013)
         - pattern: '^os\.(Getenv|LookupEnv)$'
-          msg: read the environment once into a typed Config in cmd/ (ADR 0011 amendment)
+          msg: read the environment once into a typed Config in cmd/ (ADR 0011)
     sloglint:
       attr-only: true
       context: scope
@@ -110,7 +110,7 @@ linters:
           files: ["**/internal/services/*/store/**"]
           deny:
             - pkg: github.com/ollymarsters/job-scraper/internal/apperr
-              desc: stores return their own sentinels; the service maps them to apperr kinds (ADR 0011 amendment)
+              desc: stores return their own sentinels; the service maps them to apperr kinds (ADR 0011)
         pgxpool-in-store-only:
           files: ["$all", "!**/internal/services/*/store/**", "!**/internal/data/db/**", "!**/internal/pgtest/**", "!**/cmd/**", "!**/*_test.go"]
           deny:
@@ -165,7 +165,7 @@ linters:
         linters:
           - forbidigo
         text: 'reflect\.DeepEqual|time\.Sleep'
-      # main owns the environment and builds the logger (ADR 0011 and ADR 0013 amendments).
+      # main owns the environment and builds the logger (ADR 0011 and ADR 0013).
       - path: ^cmd/|_test\.go
         linters:
           - forbidigo

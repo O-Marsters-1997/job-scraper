@@ -6,7 +6,7 @@ the rules below.
 
 ## Decision
 
-Status: only the panic rule is built (#910). The rest are rules W2 onward implements and reviews against.
+Built: panic recovery (#910). Not built: `queue.Permanent`. The other rules are the contract handlers are written and reviewed against.
 
 - **Delivery is at-least-once.** Every handler, queue task or scoring effect, must be safe to run twice.
 - **Failures are retryable by default.** A returned error requeues the task until the attempt cap, then it is
@@ -27,5 +27,5 @@ Status: only the panic rule is built (#910). The rest are rules W2 onward implem
 - Idempotency is a property of each handler, enforced by `ON CONFLICT` upserts and by the fetch cache
   (ADR 0016), not by the broker.
 - A poison message costs `max attempts` deliveries until `queue.Permanent` exists.
-- Top-of-chain components own logging (ADR 0013 amendment): the broker logs the failure once. Once `errsite.Mark`
-  lands (ADR 0013 amendment) the line carries the `err_site` of the first seam.
+- Top-of-chain components own logging (ADR 0013): the broker logs the failure once, with the `err_site` of
+  the first seam.
