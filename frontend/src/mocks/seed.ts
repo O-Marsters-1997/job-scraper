@@ -133,6 +133,7 @@ const companies: Company[] = Array.from(new Set(COMPANIES)).map((name, i) => {
 		ATSSource: hasBoard ? ATS_SOURCES[i % ATS_SOURCES.length]! : "",
 		ATSToken: hasBoard ? slug : "",
 		FirstSeenAt: faker.date.past({ years: 1 }).toISOString(),
+		Kind: "unclassified",
 		JobCount: jobs.filter((j) => j.CompanySlug === slug).length,
 		Tracked: tracked,
 		ReviewState: isNew ? "new" : tracked ? "kept" : "",

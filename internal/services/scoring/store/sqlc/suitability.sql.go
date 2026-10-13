@@ -34,9 +34,10 @@ func (q *Queries) DropStaleAnswers(ctx context.Context, jobIds []pgtype.UUID) er
 }
 
 const getJobForScoring = `-- name: GetJobForScoring :one
-SELECT id, title, location, url, company_slug, source, posted_at, posted_after, first_discovered_at, scraped_at, description,
-    salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id, content_fingerprint
-FROM jobs WHERE id = $1
+SELECT j.id, j.title, j.location, j.url, j.company_slug, j.source, j.posted_at, j.posted_after, j.first_discovered_at, j.scraped_at, j.description,
+    j.salary_raw, j.work_arrangement, j.company_id, j.primary_board_id, j.provider_posting_id, j.content_fingerprint,
+    COALESCE((SELECT kc.kind FROM companies kc WHERE kc.id = j.company_id OR kc.slug = j.company_slug ORDER BY (kc.id = j.company_id) DESC LIMIT 1), 'unclassified')::text AS company_kind
+FROM jobs j WHERE j.id = $1
 `
 
 type GetJobForScoringRow struct {
@@ -57,6 +58,7 @@ type GetJobForScoringRow struct {
 	PrimaryBoardID     pgtype.UUID
 	ProviderPostingID  pgtype.Text
 	ContentFingerprint pgtype.Text
+	CompanyKind        string
 }
 
 func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobForScoringRow, error) {
@@ -80,6 +82,7 @@ func (q *Queries) GetJobForScoring(ctx context.Context, id pgtype.UUID) (GetJobF
 		&i.PrimaryBoardID,
 		&i.ProviderPostingID,
 		&i.ContentFingerprint,
+		&i.CompanyKind,
 	)
 	return i, err
 }

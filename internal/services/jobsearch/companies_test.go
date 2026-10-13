@@ -201,6 +201,23 @@ func TestListCompanies(t *testing.T) {
 		}
 	})
 
+	t.Run("poster narrows the list to that bucket", func(t *testing.T) {
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		agency := seedCompany(t, st, dto.CompanyUpsert{Slug: "recruit-co", Name: "Recruit Co"})
+		seedCompany(t, st, dto.CompanyUpsert{Slug: "plain-co", Name: "Plain Co"})
+		if err := st.SetCompanyKind(t.Context(), agency.ID, dto.KindAgency); err != nil {
+			t.Fatal(err)
+		}
+		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Poster: "agency"})
+		if err != nil || len(page.Items) != 1 || page.Items[0].ID != agency.ID {
+			t.Fatalf("ListCompanies(poster=agency) = %+v, %v, want only Recruit Co", page, err)
+		}
+		page, err = svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Poster: "direct"})
+		if err != nil || len(page.Items) != 1 || page.Items[0].Slug != "plain-co" {
+			t.Fatalf("ListCompanies(poster=direct) = %+v, %v, want only Plain Co", page, err)
+		}
+	})
+
 	t.Run("an empty result is an empty list", func(t *testing.T) {
 		svc, _ := newCompanyService(queuetest.NewRecorder())
 		page, err := svc.ListCompanies(t.Context(), userID, dto.CompaniesQuery{Q: "nothing"})
@@ -218,6 +235,7 @@ func TestListCompanies(t *testing.T) {
 			{"non-numeric limit", dto.CompaniesQuery{Limit: "x"}},
 			{"negative offset", dto.CompaniesQuery{Offset: "-1"}},
 			{"unknown sort", dto.CompaniesQuery{Sort: "newest"}},
+			{"unknown poster", dto.CompaniesQuery{Poster: "likely_agency"}},
 		}
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
@@ -305,6 +323,44 @@ func TestSetCompanyTracking(t *testing.T) {
 		}
 		if tracking.Enabled || tracking.CheckIntervalMinutes != 180 {
 			t.Errorf("tracking = %+v, want paused at 180 minutes", tracking)
+		}
+	})
+}
+
+func TestSetCompanyKind(t *testing.T) {
+	t.Run("agency and direct are stored and returned", func(t *testing.T) {
+		for _, kind := range []dto.CompanyKind{dto.KindAgency, dto.KindDirect} {
+			svc, st := newCompanyService(queuetest.NewRecorder())
+			company := seedAcme(t, st)
+			got, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: company.ID, Kind: kind})
+			if err != nil || got.Kind != kind {
+				t.Fatalf("SetCompanyKind(%q) = %+v, %v, want kind %q", kind, got, err, kind)
+			}
+		}
+	})
+
+	t.Run("rejects bad input", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			companyID func(id string) string
+			kind      dto.CompanyKind
+			wantKind  apperr.Kind
+		}{
+			{"unclassified", func(id string) string { return id }, dto.KindUnclassified, apperr.KindInvalid},
+			{"likely agency", func(id string) string { return id }, dto.KindLikelyAgency, apperr.KindInvalid},
+			{"likely direct", func(id string) string { return id }, dto.KindLikelyDirect, apperr.KindInvalid},
+			{"unknown value", func(id string) string { return id }, "bogus", apperr.KindInvalid},
+			{"unknown company", func(string) string { return "missing" }, dto.KindAgency, apperr.KindNotFound},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				svc, st := newCompanyService(queuetest.NewRecorder())
+				company := seedAcme(t, st)
+				_, err := svc.SetCompanyKind(t.Context(), userID, dto.SetCompanyKindInput{CompanyID: tt.companyID(company.ID), Kind: tt.kind})
+				if !apperr.IsKind(err, tt.wantKind) {
+					t.Fatalf("SetCompanyKind() err = %v, want kind %v", err, tt.wantKind)
+				}
+			})
 		}
 	})
 }

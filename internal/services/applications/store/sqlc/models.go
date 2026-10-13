@@ -244,6 +244,7 @@ type Company struct {
 	FirstSeenAt       pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Kind              string
 }
 
 type CompanyBoard struct {
@@ -465,6 +466,16 @@ type PushSubscription struct {
 	P256dh    string
 	Auth      string
 	CreatedAt pgtype.Timestamptz
+}
+
+type RecruiterContact struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	ContactedOn pgtype.Date
+	Channel     string
+	Outcome     string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type ScoreFeedback struct {

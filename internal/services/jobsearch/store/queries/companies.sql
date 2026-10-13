@@ -1,11 +1,15 @@
 -- name: UpsertCompany :one
-INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO companies (slug, name, ats_source, ats_token, domain, linkedin_company_id, kind)
+VALUES ($1, $2, $3, $4, $5, $6, COALESCE(NULLIF(sqlc.arg(kind)::text, ''), 'unclassified'))
 ON CONFLICT (slug) DO UPDATE SET
     ats_source          = COALESCE(companies.ats_source, EXCLUDED.ats_source),
     ats_token           = COALESCE(companies.ats_token,  EXCLUDED.ats_token),
     domain              = COALESCE(companies.domain, EXCLUDED.domain),
     linkedin_company_id = COALESCE(companies.linkedin_company_id, EXCLUDED.linkedin_company_id),
+    kind                = CASE
+        WHEN companies.kind = 'agency' OR sqlc.arg(kind)::text = '' THEN companies.kind
+        ELSE sqlc.arg(kind)::text
+    END,
     updated_at = NOW()
 RETURNING *;
 
@@ -14,7 +18,7 @@ SELECT * FROM companies WHERE id = $1;
 
 -- name: PageCompaniesForUser :many
 SELECT COUNT(*) OVER ()::bigint AS total, c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = sqlc.arg(user_id)::uuid
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -33,6 +37,8 @@ WHERE (sqlc.arg(search)::text = ''
   AND (NOT sqlc.arg(tracked_only)::bool OR COALESCE(tc.enabled, FALSE))
   AND (NOT sqlc.arg(favourite_only)::bool OR EXISTS (SELECT 1 FROM company_favourites cf WHERE cf.user_id = sqlc.arg(user_id)::uuid AND cf.company_id = c.id))
   AND (NOT sqlc.arg(no_board_only)::bool OR NOT EXISTS (SELECT 1 FROM company_boards cb WHERE cb.company_id = c.id))
+  AND (sqlc.arg(poster)::text = ''
+       OR (sqlc.arg(poster)::text = 'agency') = (c.kind IN ('agency', 'likely_agency')))
 ORDER BY
     CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE) THEN 0 ELSE 1 END,
     CASE WHEN sqlc.arg(sort)::text = 'relevance' AND COALESCE(tc.enabled, FALSE)
@@ -43,7 +49,7 @@ LIMIT sqlc.arg(page_limit)::int OFFSET sqlc.arg(page_offset)::int;
 
 -- name: GetCompanyForUser :one
 SELECT c.id, c.slug, c.name, c.ats_source, c.ats_token, c.domain, c.linkedin_company_id,
-    c.last_crawled_at, c.first_seen_at,
+    c.last_crawled_at, c.first_seen_at, c.kind,
     (SELECT COUNT(*) FROM jobs j JOIN job_scores js ON js.job_id = j.id AND js.user_id = $1
      WHERE j.company_id = c.id AND j.closed_at IS NULL
        AND NOT js.breakdown @> '[{"effect":"blocked"}]'::jsonb) AS job_count,
@@ -135,3 +141,9 @@ DELETE FROM company_favourites WHERE user_id = $1 AND company_id = $2;
 UPDATE tracked_companies
 SET review_state = 'kept', updated_at = NOW()
 WHERE user_id = $1 AND company_id = $2 AND review_state = 'new';
+
+-- name: SetCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1;
+
+-- name: SuggestCompanyKind :execrows
+UPDATE companies SET kind = $2, updated_at = NOW() WHERE id = $1 AND kind = 'unclassified';

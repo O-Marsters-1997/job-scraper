@@ -210,6 +210,7 @@ func (f *FakeStore) withUserState(userID string, job dto.Job) dto.Job {
 	job.Seen = f.seen[userID][job.ID]
 	companyID := cmp.Or(job.CompanyID, f.companyBySlug[job.CompanySlug])
 	job.CompanyFavourite = f.favourites[trackingKey(userID, companyID)]
+	job.CompanyKind = cmp.Or(f.companies[companyID].Kind, dto.KindUnclassified)
 	return job
 }
 
@@ -312,6 +313,9 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	if id, ok := f.companyBySlug[c.Slug]; ok {
 		existing := f.companies[id]
 		existing.Name = c.Name
+		if c.Kind != "" && existing.Kind != dto.KindAgency {
+			existing.Kind = c.Kind
+		}
 		if existing.ATSSource == "" {
 			existing.ATSSource = c.ATSSource
 		}
@@ -331,6 +335,10 @@ func (f *FakeStore) UpsertCompany(_ context.Context, c dto.CompanyUpsert) (dto.C
 	company := dto.Company{
 		ID: id, Slug: c.Slug, Name: c.Name, ATSSource: c.ATSSource, ATSToken: c.ATSToken,
 		Domain: c.Domain, LinkedInCompanyID: c.LinkedInCompanyID, FirstSeenAt: time.Now(),
+		Kind: dto.KindUnclassified,
+	}
+	if c.Kind != "" {
+		company.Kind = c.Kind
 	}
 	f.companies[id] = company
 	f.companyBySlug[c.Slug] = id
@@ -360,6 +368,9 @@ func (f *FakeStore) PageCompaniesForUser(_ context.Context, userID string, optio
 			continue
 		}
 		if options.NoBoardOnly && f.hasBoard(c.ID) {
+			continue
+		}
+		if options.Poster != "" && (options.Poster == dto.PosterAgency) != (c.Kind == dto.KindAgency || c.Kind == dto.KindLikelyAgency) {
 			continue
 		}
 		if !strings.Contains(strings.ToLower(c.Name), search) && !strings.Contains(c.Slug, search) {
@@ -410,6 +421,30 @@ func (f *FakeStore) GetCompanyForUser(_ context.Context, userID, id string) (dto
 	}
 	c.Favourite = f.favourites[trackingKey(userID, c.ID)]
 	return c, nil
+}
+
+func (f *FakeStore) SetCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok {
+		return data.ErrNotFound
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return nil
+}
+
+func (f *FakeStore) SuggestCompanyKind(_ context.Context, companyID string, kind dto.CompanyKind) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.companies[companyID]
+	if !ok || c.Kind != dto.KindUnclassified {
+		return false, nil
+	}
+	c.Kind = kind
+	f.companies[companyID] = c
+	return true, nil
 }
 
 func (f *FakeStore) SetCompanyFavourite(_ context.Context, userID, companyID string, favourite bool) error {

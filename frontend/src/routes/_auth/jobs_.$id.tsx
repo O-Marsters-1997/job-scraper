@@ -11,6 +11,7 @@ import { QueryBoundary } from "@/components/QueryBoundary";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
@@ -20,6 +21,7 @@ import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
+import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) =>
@@ -158,6 +160,12 @@ function JobDetailPage() {
 									onTrack={() => track.openTrack(params().id)}
 								/>
 							</div>
+
+							<Show when={isAgencyKind(j().CompanyKind)}>
+								<div class="max-md:order-4">
+									<RecruiterContactsCard jobId={params().id} />
+								</div>
+							</Show>
 						</div>
 					</div>
 

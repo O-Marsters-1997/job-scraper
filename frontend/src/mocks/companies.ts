@@ -102,6 +102,12 @@ export function getCompanyPage(params: CompanyPageParams): {
 		.filter((c) => !params.noBoard || !boardedCompanyIds.has(c.ID))
 		.filter(
 			(c) =>
+				!params.poster ||
+				(params.poster === "agency") ===
+					(c.Kind === "agency" || c.Kind === "likely_agency"),
+		)
+		.filter(
+			(c) =>
 				c.Name.toLowerCase().includes(q) || c.Slug.toLowerCase().includes(q),
 		)
 		.sort(params.sort === "alphabetical" ? byName : byRelevance);
@@ -132,6 +138,7 @@ export function addCompany(url: string, track: boolean): Company | null {
 		ATSSource: "",
 		ATSToken: "",
 		FirstSeenAt: new Date().toISOString(),
+		Kind: "unclassified",
 		JobCount: 0,
 		Tracked: track,
 		ReviewState: track ? "kept" : "",
@@ -215,6 +222,18 @@ export function setCompanyFavourite(id: string, favourite: boolean): Company {
 			: company;
 	companies = companies.map((c) => (c.ID === id ? updated : c));
 	return withFavourite(updated);
+}
+
+export function setCompanyKind(id: string, kind: "agency" | "direct"): Company {
+	const company = companies.find((c) => c.ID === id);
+	if (!company) throw new Error("Company not found");
+	const updated: Company = { ...company, Kind: kind };
+	companies = companies.map((c) => (c.ID === id ? updated : c));
+	return withFavourite(updated);
+}
+
+export function getCompanyKind(id: string | undefined): Company["Kind"] {
+	return companies.find((c) => c.ID === id)?.Kind ?? "unclassified";
 }
 
 export function setCompanyReview(

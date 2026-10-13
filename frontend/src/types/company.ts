@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const companyKindSchema = z.enum([
+	"unclassified",
+	"likely_agency",
+	"likely_direct",
+	"agency",
+	"direct",
+]);
+
+export type CompanyKind = z.infer<typeof companyKindSchema>;
+
+export const POSTER_OPTIONS = ["all", "direct", "agency"] as const;
+export type PosterFilter = (typeof POSTER_OPTIONS)[number];
+
 export const companySchema = z.object({
 	ID: z.string(),
 	Slug: z.string(),
@@ -7,6 +20,7 @@ export const companySchema = z.object({
 	ATSSource: z.string(),
 	ATSToken: z.string(),
 	FirstSeenAt: z.string(),
+	Kind: companyKindSchema,
 	JobCount: z.number(),
 	Tracked: z.boolean(),
 	Favourite: z.boolean().optional(),

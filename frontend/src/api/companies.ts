@@ -35,7 +35,10 @@ export class UnresolvableBoardError extends Error {
 
 export type CompanySort = "relevance" | "alphabetical";
 
+export type CompanyPoster = "agency" | "direct";
+
 export type CompanyPageParams = {
+	poster?: CompanyPoster | undefined;
 	q?: string;
 	tracked?: boolean;
 	favourite?: boolean;
@@ -57,6 +60,7 @@ export async function fetchCompanyPage(
 			if (params.favourite) query.set("favourite", "1");
 			if (params.noBoard) query.set("no_board", "1");
 			if (params.sort) query.set("sort", params.sort);
+			if (params.poster) query.set("poster", params.poster);
 			if (params.offset) query.set("offset", String(params.offset));
 			if (params.limit) query.set("limit", String(params.limit));
 			return apiFetch(`/companies?${query}`, companyPageSchema);
@@ -125,6 +129,21 @@ export async function setCompanyFavourite(
 				{
 					method: favourite ? "PUT" : "DELETE",
 				},
+			),
+	);
+}
+
+export async function setCompanyKind(
+	id: string,
+	kind: "agency" | "direct",
+): Promise<Company> {
+	return mocked(
+		(db) => db.setCompanyKind(id, kind),
+		() =>
+			apiFetch(
+				`/companies/${encodeURIComponent(id)}/kind`,
+				companySchema,
+				jsonInit("PUT", { kind }),
 			),
 	);
 }

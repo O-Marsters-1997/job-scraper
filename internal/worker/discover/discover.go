@@ -203,7 +203,7 @@ func (r *Runner) recordUndiscovered(ctx context.Context, log *slog.Logger, via s
 }
 
 func (r *Runner) recordCompany(ctx context.Context, via string, c Company) error {
-	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name, Domain: c.Domain})
+	company, err := r.catalog.UpsertCompany(ctx, dto.CompanyUpsert{Slug: c.Slug, Name: c.Name, Domain: c.Domain, Kind: dto.KindDirect})
 	if err != nil {
 		return err
 	}

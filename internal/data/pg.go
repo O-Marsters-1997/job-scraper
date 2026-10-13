@@ -56,6 +56,11 @@ func TimePtr(t pgtype.Timestamptz) *time.Time {
 	return &v
 }
 
+func IsForeignKeyViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == constraint
+}
+
 func Timestamptz(t *time.Time) pgtype.Timestamptz {
 	if t == nil {
 		return pgtype.Timestamptz{}

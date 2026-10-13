@@ -365,4 +365,73 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("CountApplicationsUsingStatus(in use) = %d, want 1", count)
 		}
 	})
+
+	t.Run("recruiter contacts list newest first and a second adds a row", func(t *testing.T) {
+		f := newStore(t)
+		for _, c := range []struct {
+			on      string
+			outcome dto.ContactOutcome
+		}{{"2026-10-01", dto.OutcomeNoReply}, {"2026-10-05", dto.OutcomeSpoke}} {
+			in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: c.on, Channel: dto.ChannelEmail, Outcome: c.outcome}
+			if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateRecruiterContact(%+v) err = %v", in, err)
+			}
+		}
+		got, err := f.Store.ListRecruiterContacts(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListRecruiterContacts(...) err = %v", err)
+		}
+		var dates []string
+		for _, c := range got {
+			dates = append(dates, c.ContactedOn)
+		}
+		if diff := cmp.Diff([]string{"2026-10-05", "2026-10-01"}, dates); diff != "" {
+			t.Errorf("ListRecruiterContacts(...) dates mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	t.Run("recruiter contacts are scoped to the user", func(t *testing.T) {
+		f := newStore(t)
+		in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: "2026-10-01", Channel: dto.ChannelCall, Outcome: dto.OutcomeSpoke}
+		if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+			t.Fatalf("CreateRecruiterContact(...) err = %v", err)
+		}
+		got, err := f.Store.ListRecruiterContacts(t.Context(), missingID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListRecruiterContacts(other user) err = %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("ListRecruiterContacts(other user) = %+v, want none", got)
+		}
+	})
+
+	t.Run("recruiter contact summaries roll up per job and rank the best outcome", func(t *testing.T) {
+		f := newStore(t)
+		for _, c := range []struct {
+			on      string
+			outcome dto.ContactOutcome
+		}{{"2026-10-05", dto.OutcomeSpoke}, {"2026-10-01", dto.OutcomeSubmitted}, {"2026-10-03", dto.OutcomeNoReply}} {
+			in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: c.on, Channel: dto.ChannelEmail, Outcome: c.outcome}
+			if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateRecruiterContact(%+v) err = %v", in, err)
+			}
+		}
+		got, err := f.Store.GetRecruiterContactSummaries(t.Context(), f.UserID, []string{f.JobID, missingID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(...) err = %v", err)
+		}
+		want := map[string]dto.RecruiterContactSummary{
+			f.JobID: {Count: 3, LastContactedOn: "2026-10-05", BestOutcome: dto.OutcomeSubmitted},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetRecruiterContactSummaries(...) mismatch (-want +got):\n%s", diff)
+		}
+		other, err := f.Store.GetRecruiterContactSummaries(t.Context(), missingID, []string{f.JobID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(other user) err = %v", err)
+		}
+		if len(other) != 0 {
+			t.Errorf("GetRecruiterContactSummaries(other user) = %+v, want none", other)
+		}
+	})
 }
