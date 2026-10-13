@@ -112,7 +112,7 @@ func run(ctx context.Context) error {
 
 	router, err := api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)
 	if err != nil {
-		fatal(ctx, "build router", err)
+		return fmt.Errorf("build router: %w", err)
 	}
 	srv := &http.Server{
 		Addr:              port,

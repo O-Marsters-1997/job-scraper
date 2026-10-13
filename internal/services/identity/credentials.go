@@ -9,8 +9,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
-func credentialAAD(userID, provider string) tokencrypt.AAD {
-	return tokencrypt.AAD{Table: tokencrypt.TableAICredentials, Owner: userID + ":" + provider}
+func credentialAAD(userID string, provider dto.Provider) tokencrypt.AAD {
+	return tokencrypt.AAD{Table: tokencrypt.TableAICredentials, Owner: userID + ":" + string(provider)}
 }
 
 func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.UpsertCredentialInput) (struct{}, error) {
@@ -23,7 +23,7 @@ func (s *Service) UpdateCredential(ctx context.Context, userID string, in dto.Up
 		s.usage.drop(userID)
 		return struct{}{}, err
 	}
-	enc, err := s.cipher.Encrypt(strings.Trim(*in.APIKey, `"`), credentialAAD(userID, in.Provider))
+	enc, err := s.cipher.Encrypt(strings.Trim(*in.APIKey, `"`), credentialAAD(userID, provider))
 	if err != nil {
 		return struct{}{}, fmt.Errorf("identity.UpdateCredential: %w", err)
 	}
