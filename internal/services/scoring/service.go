@@ -92,6 +92,8 @@ type Service struct {
 	profiles     ProfileReader
 	candidates   Reconsiderer
 	extractor    Extractor
+	classifier   RecruiterClassifier
+	companyKinds CompanyKinds
 	tickInterval time.Duration
 }
 
@@ -108,6 +110,7 @@ func NewService(deps Deps) *Service {
 		store: deps.Store, answerer: deps.Answerer, credentials: deps.Credentials, alerter: deps.Alerter,
 		pusher: pusher, vapidKey: deps.VAPIDPublicKey,
 		profiles: deps.Profiles, candidates: deps.Candidates, extractor: deps.Extractor, tickInterval: tickInterval,
+		classifier: deps.Classifier, companyKinds: deps.CompanyKinds,
 	}
 }
 
@@ -188,6 +191,8 @@ func (s *Service) process(ctx context.Context, effect dto.AnswerEffect) error {
 		_, err := s.store.CompleteAnswerEffect(ctx, effect, nil, nil)
 		return err
 	}
+
+	s.classifyCompany(ctx, job, surviving)
 
 	bk, err := s.loadBank(ctx)
 	if err != nil {

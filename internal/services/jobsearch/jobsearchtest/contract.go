@@ -743,6 +743,33 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("suggesting a company kind writes only over unclassified", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "suggest-co", Name: "Suggest Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		wrote, err := st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency)
+		if err != nil || !wrote {
+			t.Fatalf("SuggestCompanyKind(first) = %v, %v, want true", wrote, err)
+		}
+		wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyDirect)
+		if err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(second) = %v, %v, want false", wrote, err)
+		}
+		got, err := st.GetCompanyForUser(ctx, userID, c.ID)
+		if err != nil || got.Kind != dto.KindLikelyAgency {
+			t.Fatalf("GetCompanyForUser(...) = %+v, %v, want likely_agency", got, err)
+		}
+		if err := st.SetCompanyKind(ctx, c.ID, dto.KindDirect); err != nil {
+			t.Fatalf("SetCompanyKind(direct) = %v", err)
+		}
+		if wrote, err = st.SuggestCompanyKind(ctx, c.ID, dto.KindLikelyAgency); err != nil || wrote {
+			t.Fatalf("SuggestCompanyKind(over direct) = %v, %v, want false", wrote, err)
+		}
+	})
+
 	t.Run("favouriting a new tracked company keeps it, and dismissing it removes the star", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()
