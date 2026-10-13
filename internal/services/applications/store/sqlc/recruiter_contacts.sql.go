@@ -46,6 +46,58 @@ func (q *Queries) CreateRecruiterContact(ctx context.Context, arg CreateRecruite
 	return i, err
 }
 
+const getRecruiterContactSummaries = `-- name: GetRecruiterContactSummaries :many
+SELECT
+    job_id,
+    COUNT(*)::int AS contact_count,
+    MAX(contacted_on)::date AS last_contacted_on,
+    (ARRAY_AGG(outcome ORDER BY CASE outcome
+        WHEN 'submitted' THEN 4
+        WHEN 'spoke' THEN 3
+        WHEN 'rejected' THEN 2
+        ELSE 1 END DESC))[1]::text AS best_outcome
+FROM recruiter_contacts
+WHERE user_id = $1 AND job_id = ANY($2::uuid[])
+GROUP BY job_id
+`
+
+type GetRecruiterContactSummariesParams struct {
+	UserID  pgtype.UUID
+	Column2 []pgtype.UUID
+}
+
+type GetRecruiterContactSummariesRow struct {
+	JobID           pgtype.UUID
+	ContactCount    int32
+	LastContactedOn pgtype.Date
+	BestOutcome     string
+}
+
+func (q *Queries) GetRecruiterContactSummaries(ctx context.Context, arg GetRecruiterContactSummariesParams) ([]GetRecruiterContactSummariesRow, error) {
+	rows, err := q.db.Query(ctx, getRecruiterContactSummaries, arg.UserID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecruiterContactSummariesRow
+	for rows.Next() {
+		var i GetRecruiterContactSummariesRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.ContactCount,
+			&i.LastContactedOn,
+			&i.BestOutcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecruiterContactsForJob = `-- name: ListRecruiterContactsForJob :many
 SELECT id, user_id, job_id, contacted_on, channel, outcome, created_at FROM recruiter_contacts
 WHERE user_id = $1 AND job_id = $2

@@ -13,12 +13,15 @@ import {
 	SwitchLabel,
 	SwitchThumb,
 } from "@/components/ui/switch";
+import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
+import { formatDate } from "@/lib/datetime";
 import {
 	applyJobFilters,
 	DEFAULT_FILTERS,
 	filterCompanyJobs,
 	sourceOptions,
 } from "@/lib/jobFilters";
+import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
 	useCompany,
@@ -27,6 +30,7 @@ import {
 } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs } from "../../hooks/useJobs";
+import { useRecruiterContactSummaries } from "../../hooks/useRecruiterContacts";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
@@ -60,7 +64,17 @@ function CompanyDetailPage() {
 		applyJobFilters(jobsForCompany(), filters()),
 	);
 
-	const track = useTrackJobs(() => jobsQuery.data ?? []);
+	const isAgency = () => isAgencyKind(company()?.Kind);
+	const jobIds = createMemo(() => jobsForCompany().map((j) => j.ID));
+	const summaries = useRecruiterContactSummaries(() =>
+		isAgency() ? jobIds() : [],
+	);
+	const rollup = createMemo(() => agencyRollup(jobIds(), summaries.data ?? {}));
+
+	const track = useTrackJobs(
+		() => jobsQuery.data ?? [],
+		() => summaries.data ?? {},
+	);
 
 	return (
 		<QueryBoundary
@@ -138,6 +152,38 @@ function CompanyDetailPage() {
 									</SwitchLabel>
 								</Switch>
 							</div>
+							<Show when={isAgency()}>
+								<dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+									<div>
+										<dt class="text-xs text-faint">Roles</dt>
+										<dd class="font-semibold text-foreground">
+											{rollup().roles}
+										</dd>
+									</div>
+									<div>
+										<dt class="text-xs text-faint">With a contact</dt>
+										<dd class="font-semibold text-foreground">
+											{rollup().contacted}
+										</dd>
+									</div>
+									<div>
+										<dt class="text-xs text-faint">Last contact</dt>
+										<dd class="font-semibold text-foreground">
+											<Show when={rollup().lastContactedOn} fallback="—">
+												{(on) => formatDate(`${on()}T00:00:00`)}
+											</Show>
+										</dd>
+									</div>
+									<div>
+										<dt class="text-xs text-faint">Best outcome</dt>
+										<dd class="font-semibold text-foreground">
+											<Show when={rollup().bestOutcome} fallback="—">
+												{(outcome) => outcomeLabels[outcome()]}
+											</Show>
+										</dd>
+									</div>
+								</dl>
+							</Show>
 						</CardContent>
 					</Card>
 
@@ -166,7 +212,7 @@ function CompanyDetailPage() {
 									}
 								>
 									<JobsDataTable
-										columns={track.columns}
+										columns={isAgency() ? track.contactColumns : track.columns}
 										data={companyJobs()}
 										filters={filters()}
 										onChange={setFilterPatch}

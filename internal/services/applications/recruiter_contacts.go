@@ -2,6 +2,7 @@ package applications
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
@@ -23,4 +24,12 @@ func (s *Service) LogRecruiterContact(ctx context.Context, userID string, in dto
 		return dto.RecruiterContact{}, apperr.Invalid("invalid outcome")
 	}
 	return s.store.CreateRecruiterContact(ctx, userID, in)
+}
+
+// RecruiterContactSummaries returns each of q.JobIDs's contact summary, keyed by job ID.
+func (s *Service) RecruiterContactSummaries(ctx context.Context, userID string, q dto.RecruiterContactSummariesQuery) (map[string]dto.RecruiterContactSummary, error) {
+	if q.JobIDs == "" {
+		return map[string]dto.RecruiterContactSummary{}, nil
+	}
+	return s.store.GetRecruiterContactSummaries(ctx, userID, strings.Split(q.JobIDs, ","))
 }

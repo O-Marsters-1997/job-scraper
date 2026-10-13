@@ -242,3 +242,22 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	})
 	return out, nil
 }
+
+func (f *FakeStore) GetRecruiterContactSummaries(_ context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]dto.RecruiterContactSummary{}
+	for _, c := range f.contacts[userID] {
+		if !slices.Contains(jobIDs, c.JobID) {
+			continue
+		}
+		sum := out[c.JobID]
+		sum.Count++
+		sum.LastContactedOn = max(sum.LastContactedOn, c.ContactedOn)
+		if c.Outcome.Rank() > sum.BestOutcome.Rank() {
+			sum.BestOutcome = c.Outcome
+		}
+		out[c.JobID] = sum
+	}
+	return out, nil
+}

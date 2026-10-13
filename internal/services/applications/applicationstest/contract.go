@@ -404,4 +404,34 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("ListRecruiterContacts(other user) = %+v, want none", got)
 		}
 	})
+
+	t.Run("recruiter contact summaries roll up per job and rank the best outcome", func(t *testing.T) {
+		f := newStore(t)
+		for _, c := range []struct {
+			on      string
+			outcome dto.ContactOutcome
+		}{{"2026-10-05", dto.OutcomeSpoke}, {"2026-10-01", dto.OutcomeSubmitted}, {"2026-10-03", dto.OutcomeNoReply}} {
+			in := dto.LogRecruiterContactInput{JobID: f.JobID, ContactedOn: c.on, Channel: dto.ChannelEmail, Outcome: c.outcome}
+			if _, err := f.Store.CreateRecruiterContact(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateRecruiterContact(%+v) err = %v", in, err)
+			}
+		}
+		got, err := f.Store.GetRecruiterContactSummaries(t.Context(), f.UserID, []string{f.JobID, missingID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(...) err = %v", err)
+		}
+		want := map[string]dto.RecruiterContactSummary{
+			f.JobID: {Count: 3, LastContactedOn: "2026-10-05", BestOutcome: dto.OutcomeSubmitted},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("GetRecruiterContactSummaries(...) mismatch (-want +got):\n%s", diff)
+		}
+		other, err := f.Store.GetRecruiterContactSummaries(t.Context(), missingID, []string{f.JobID})
+		if err != nil {
+			t.Fatalf("GetRecruiterContactSummaries(other user) err = %v", err)
+		}
+		if len(other) != 0 {
+			t.Errorf("GetRecruiterContactSummaries(other user) = %+v, want none", other)
+		}
+	})
 }

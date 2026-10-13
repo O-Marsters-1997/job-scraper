@@ -1,6 +1,7 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
+	fetchRecruiterContactSummaries,
 	fetchRecruiterContacts,
 	logRecruiterContact,
 } from "../api/recruiterContacts";
@@ -21,6 +22,17 @@ export function useLogRecruiterContact(jobId: () => string) {
 	return useInvalidatingMutation(
 		(payload: LogRecruiterContactPayload) =>
 			logRecruiterContact(jobId(), payload),
-		(contact) => [keys.recruiterContacts(contact.job_id)],
+		(contact) => [
+			keys.recruiterContacts(contact.job_id),
+			keys.recruiterContactSummaries.all,
+		],
 	);
+}
+
+export function useRecruiterContactSummaries(jobIds: () => string[]) {
+	return createQuery(() => ({
+		queryKey: keys.recruiterContactSummaries.for(jobIds()),
+		queryFn: () => fetchRecruiterContactSummaries(jobIds()),
+		enabled: jobIds().length > 0,
+	}));
 }

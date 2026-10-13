@@ -44,3 +44,13 @@ export const outcomeLabels: Record<ContactOutcome, string> = {
 	spoke: "Spoke",
 	submitted: "Submitted",
 };
+
+export const recruiterContactSummarySchema = z.object({
+	count: z.number(),
+	last_contacted_on: z.string(),
+	best_outcome: contactOutcomeSchema,
+});
+
+export type RecruiterContactSummary = z.infer<
+	typeof recruiterContactSummarySchema
+>;

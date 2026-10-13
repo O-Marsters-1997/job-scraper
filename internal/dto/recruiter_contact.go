@@ -35,3 +35,29 @@ type LogRecruiterContactInput struct {
 	Channel     ContactChannel `json:"channel"`
 	Outcome     ContactOutcome `json:"outcome"`
 }
+
+// RecruiterContactSummariesQuery is answered as map[jobID]RecruiterContactSummary; jobs with no contact are absent.
+type RecruiterContactSummariesQuery struct {
+	JobIDs string `json:"job_ids"` // comma-separated
+}
+
+type RecruiterContactSummary struct {
+	Count           int            `json:"count"`
+	LastContactedOn string         `json:"last_contacted_on"`
+	BestOutcome     ContactOutcome `json:"best_outcome"`
+}
+
+// Rank orders outcomes submitted > spoke > rejected > no_reply; unknown outcomes rank lowest.
+func (o ContactOutcome) Rank() int {
+	switch o {
+	case OutcomeSubmitted:
+		return 4
+	case OutcomeSpoke:
+		return 3
+	case OutcomeRejected:
+		return 2
+	case OutcomeNoReply:
+		return 1
+	}
+	return 0
+}

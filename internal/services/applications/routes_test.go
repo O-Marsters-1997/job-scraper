@@ -34,6 +34,7 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"PUT /applications/{id}/chase",
 		"DELETE /applications/{id}/chase",
 		"GET /applications/for-jobs",
+		"GET /recruiter-contacts/summaries",
 		"GET /jobs/{id}/recruiter-contacts",
 		"POST /jobs/{id}/recruiter-contacts",
 	)
@@ -111,6 +112,10 @@ func TestRoutesHappyPaths(t *testing.T) {
 		`{"contacted_on":"2026-10-01","channel":"fax","outcome":"spoke"}`)
 	if got := handlerstest.Do[[]dto.RecruiterContact](t, r, http.StatusOK, "GET /jobs/job-1/recruiter-contacts", ""); len(got) != 1 {
 		t.Fatalf("got %d recruiter contacts, want 1", len(got))
+	}
+	sums := handlerstest.Do[map[string]dto.RecruiterContactSummary](t, r, http.StatusOK, "GET /recruiter-contacts/summaries?job_ids=job-1,job-2", "")
+	if sums["job-1"].Count != 1 || sums["job-1"].BestOutcome != dto.OutcomeSpoke || len(sums) != 1 {
+		t.Fatalf("summaries = %+v, want only job-1 with 1 spoke contact", sums)
 	}
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")
