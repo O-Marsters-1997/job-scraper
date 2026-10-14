@@ -84,11 +84,11 @@ func residentialFetcher(t *testing.T, residential *fakeProxy, cache proxy.Cache)
 	t.Setenv("DECODO_PROXY_URL", "http://res:pw@"+strings.TrimPrefix(residential.URL, "http://"))
 	proxy.SetCache(cache)
 	t.Cleanup(func() { proxy.SetCache(nil) })
-	t.Cleanup(proxy.SetRetryBackoff(0))
 	tr, err := proxy.Fetcher(proxy.Residential, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
+	proxy.WithRetryBackoff(tr, 0)
 	return tr
 }
 
@@ -207,7 +207,7 @@ func TestResidentialFetcherBacksOffBetweenBlockedAttempts(t *testing.T) { //noli
 		status(429, "")(w, r)
 	})
 	tr := residentialFetcher(t, residential, nil)
-	t.Cleanup(proxy.SetRetryBackoff(backoff))
+	proxy.WithRetryBackoff(tr, backoff)
 	resp, err := tr.RoundTrip(httpTarget(t))
 	if err == nil {
 		_ = resp.Body.Close()
@@ -228,7 +228,7 @@ func TestResidentialFetcherBacksOffBetweenBlockedAttempts(t *testing.T) { //noli
 func TestResidentialFetcherStopsBackingOffOnCancel(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
 	residential := newFakeProxy(t, status(429, ""))
 	tr := residentialFetcher(t, residential, nil)
-	t.Cleanup(proxy.SetRetryBackoff(time.Hour))
+	proxy.WithRetryBackoff(tr, time.Hour)
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	resp, err := tr.RoundTrip(httpTarget(t).WithContext(ctx))

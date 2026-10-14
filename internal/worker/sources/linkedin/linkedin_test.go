@@ -12,9 +12,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
+
+func noGap() *sources.Gate { return sources.NewGate(0, 0) }
 
 func TestParseURLsAt(t *testing.T) {
 	scrapedAt := time.Date(2026, 10, 13, 15, 30, 0, 0, time.UTC)
@@ -47,11 +50,11 @@ func TestParseURLsAt(t *testing.T) {
 }
 
 func TestSnapshots(t *testing.T) {
-	sourcetest.RunSnapshotTests(t, linkedin.New("", nil, ""))
+	sourcetest.RunSnapshotTests(t, linkedin.New("", nil, "", noGap()))
 }
 
 func FuzzParse(f *testing.F) {
-	sourcetest.FuzzSnapshots(f, linkedin.New("", nil, ""))
+	sourcetest.FuzzSnapshots(f, linkedin.New("", nil, "", noGap()))
 }
 
 func TestFetchPage_SearchQuery(t *testing.T) {
@@ -174,7 +177,7 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			src := linkedin.New(tt.keywords, tt.filters, "")
+			src := linkedin.New(tt.keywords, tt.filters, "", noGap())
 			recorder := sourcetest.Respond("<html></html>")
 			src.Client().Transport = recorder
 			if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
@@ -219,7 +222,7 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
-	src := linkedin.New("", nil, "")
+	src := linkedin.New("", nil, "", noGap())
 	recorder := sourcetest.Respond(string(html))
 	src.Client().Transport = recorder
 
@@ -253,11 +256,11 @@ func (r *stampedResponder) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 	const gap = 80 * time.Millisecond
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
-	t.Cleanup(linkedin.SetLimiterGap(gap))
+	shared := sources.NewGate(gap, 0)
 	stamps := &stampedResponder{}
-	listing := linkedin.New("go", nil, "")
+	listing := linkedin.New("go", nil, "", shared)
 	listing.Client().Transport = stamps
-	detail := linkedin.New("", nil, "")
+	detail := linkedin.New("", nil, "", shared)
 	detail.Client().Transport = stamps
 
 	if _, _, err := listing.FetchPage(t.Context(), ""); err != nil {
@@ -281,7 +284,7 @@ func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 
 func TestClientTimeoutCoversBlockedRetries(t *testing.T) {
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
-	if got := linkedin.New("", nil, "").Client().Timeout; got < 45*time.Second {
+	if got := linkedin.New("", nil, "", noGap()).Client().Timeout; got < 45*time.Second {
 		t.Errorf("client timeout = %v, want at least 45s to fit three attempts and their backoff", got)
 	}
 }
@@ -316,7 +319,7 @@ func TestRecency(t *testing.T) {
 func TestFetchPage_NarrowedRecencyOverridesFilter(t *testing.T) {
 	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
 	filters := map[string]string{"recency": "r604800"}
-	src := linkedin.New("go", filters, "r176400")
+	src := linkedin.New("go", filters, "r176400", noGap())
 	recorder := sourcetest.Respond("<html></html>")
 	src.Client().Transport = recorder
 	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {

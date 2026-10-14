@@ -1,9 +1,14 @@
 package proxy
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 
-func SetRetryBackoff(d time.Duration) (restore func()) {
-	prev := retryBackoff
-	retryBackoff = d
-	return func() { retryBackoff = prev }
+func WithRetryBackoff(tr http.RoundTripper, d time.Duration) {
+	rt, ok := tr.(*residentialTransport)
+	if !ok {
+		panic("WithRetryBackoff needs the residential transport")
+	}
+	rt.backoff = d
 }

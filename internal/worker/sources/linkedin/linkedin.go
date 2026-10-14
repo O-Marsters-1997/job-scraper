@@ -55,10 +55,12 @@ const (
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
-var limiter = sources.NewGate(2500*time.Millisecond, 0)
+const requestGap = 2500 * time.Millisecond
+
+func NewGate() *sources.Gate { return sources.NewGate(requestGap, 0) }
 
 func (s *Scraper) get(ctx context.Context, url string) ([]byte, error) {
-	if err := limiter.Wait(ctx); err != nil {
+	if err := s.gate.Wait(ctx); err != nil {
 		return nil, err
 	}
 	return s.Get(ctx, url)
@@ -91,6 +93,7 @@ type Scraper struct {
 	keywords string
 	filters  map[string]string
 	recency  string
+	gate     *sources.Gate
 }
 
 const recencyMargin = time.Hour
@@ -114,7 +117,7 @@ var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(keywords string, filters map[string]string, recency string) *Scraper {
+func New(keywords string, filters map[string]string, recency string, gate *sources.Gate) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "linkedin",
@@ -123,6 +126,7 @@ func New(keywords string, filters map[string]string, recency string) *Scraper {
 		keywords: keywords,
 		filters:  filters,
 		recency:  recency,
+		gate:     gate,
 	}
 }
 
