@@ -42,10 +42,6 @@ export class JobsPage {
 		return this.rows.first().getByRole("link").first();
 	}
 
-	async sortByCompany() {
-		await this.page.getByRole("columnheader", { name: "Company" }).click();
-	}
-
 	firstRowCompanyText() {
 		return this.rows.first().locator("td").nth(1);
 	}
@@ -77,8 +73,15 @@ export class JobsPage {
 		}
 	}
 
+	async chooseBulkAction(name: string) {
+		await this.page
+			.getByRole("button", { name: "Actions", exact: true })
+			.click();
+		await this.page.getByRole("menuitem", { name, exact: true }).click();
+	}
+
 	async openBulkGrade() {
-		await this.page.getByRole("button", { name: "Grade", exact: true }).click();
+		await this.chooseBulkAction("Grade");
 	}
 
 	async undoBulkGrade() {

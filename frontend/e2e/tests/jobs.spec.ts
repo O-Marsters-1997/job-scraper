@@ -130,7 +130,6 @@ test.describe("Jobs", () => {
 	test("tracking a job from the table updates its Status cell without a page or sort change", async ({
 		jobsPage,
 	}) => {
-		await jobsPage.sortByCompany();
 		const companyBeforeTracking = await jobsPage
 			.firstRowCompanyText()
 			.textContent();
@@ -268,11 +267,11 @@ test.describe("Jobs", () => {
 		const bold = page.locator("tbody a.font-bold");
 		const before = await bold.count();
 		await jobsPage.selectRows(2);
-		await page.getByRole("button", { name: "Mark seen" }).click();
+		await jobsPage.chooseBulkAction("Mark seen");
 		await expect(bold).toHaveCount(before - 2);
 
 		await jobsPage.selectRows(2);
-		await page.getByRole("button", { name: "Mark unseen" }).click();
+		await jobsPage.chooseBulkAction("Mark unseen");
 		await expect(bold).toHaveCount(before);
 	});
 

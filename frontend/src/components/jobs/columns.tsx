@@ -34,6 +34,7 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
+		selectRow: (rowId: string, extendRange: boolean) => void;
 	}
 }
 
@@ -65,7 +66,13 @@ export function createJobColumns(
 					aria-label={`Select ${info.row.original.Title}`}
 					class="size-4 cursor-pointer align-middle accent-primary"
 					checked={info.row.getIsSelected()}
-					onChange={info.row.getToggleSelectedHandler()}
+					onMouseDown={(e) => {
+						if (e.shiftKey) e.preventDefault();
+					}}
+					onClick={(e) => {
+						info.table.options.meta?.selectRow(info.row.id, e.shiftKey);
+						e.currentTarget.checked = info.row.getIsSelected();
+					}}
 				/>
 			),
 		},
@@ -114,12 +121,31 @@ export function createJobColumns(
 							onToggle={() => ctx.onToggleFavourite(info.row.original)}
 						/>
 					</Show>
-					<span
-						class="block max-w-[7vw] truncate text-muted"
-						title={titleCase(info.getValue() as string)}
+					<Show
+						when={info.row.original.CompanyID}
+						fallback={
+							<span
+								class="block max-w-[7vw] truncate text-muted"
+								title={titleCase(info.getValue() as string)}
+							>
+								{titleCase(info.getValue() as string)}
+							</span>
+						}
 					>
-						{titleCase(info.getValue() as string)}
-					</span>
+						{(companyId) => (
+							<Link
+								to="/companies/$id"
+								params={{ id: companyId() }}
+								class="block max-w-[7vw] truncate text-muted transition-colors hover:text-primary"
+								title={titleCase(info.getValue() as string)}
+							>
+								{titleCase(info.getValue() as string)}
+							</Link>
+						)}
+					</Show>
+					<Show when={info.row.original.CompanyKind === "agency"}>
+						<Badge variant="outline">Agency</Badge>
+					</Show>
 					<Show when={info.row.original.CompanyKind === "likely_agency"}>
 						<Badge variant="outline">Maybe recruiter</Badge>
 					</Show>

@@ -30,12 +30,12 @@ func TestRoutesRequireAuth(t *testing.T) {
 	r := chi.NewRouter()
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	handlerstest.RequiresAuth(t, r,
-		"GET /jobs", "POST /jobs/seen", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/all", "GET /jobs/{id}",
+		"GET /jobs", "POST /jobs/seen", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/{id}",
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",
 		"GET /companies", "GET /companies/{id}", "GET /companies/new", "GET /companies/tracked", "POST /companies",
-		"PUT /companies/{id}/tracking", "PUT /companies/{id}/review", "PUT /companies/{id}/exclusion", "POST /companies/{id}/exclusion/undo", "DELETE /companies/{id}/tracking",
+		"PUT /companies/{id}/tracking", "PUT /companies/{id}/review", "PUT /companies/{id}/exclusion", "POST /companies/{id}/exclusion/undo", "POST /companies/exclusions", "POST /companies/exclusions/undo", "PUT /companies/kind", "DELETE /companies/{id}/tracking",
 		"GET /companies/{id}/boards", "POST /companies/{id}/boards",
 		"GET /usage/proxies",
 	)

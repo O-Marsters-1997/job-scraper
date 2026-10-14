@@ -15,7 +15,6 @@ import (
 
 func (m *Module) Routes(r chi.Router) {
 	r.Get("/jobs", handlers.Query(m.jobs.List))
-	r.Get("/jobs/all", handlers.GetAll(m.jobs.ListScored))
 	r.Post("/jobs/seen", handlers.Create(m.jobs.MarkSeen))
 	r.Get("/jobs/{id}", handlers.GetByID(m.jobs.Get))
 
@@ -35,6 +34,9 @@ func (m *Module) Routes(r chi.Router) {
 	r.Route("/companies", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.jobs.ListCompanies))
 		r.Post("/", handlers.Create(m.jobs.CreateCompany))
+		r.Put("/kind", handlers.Update(m.jobs.SetCompaniesKind))
+		r.Post("/exclusions", handlers.Create(m.ExcludeCompanies))
+		r.Post("/exclusions/undo", handlers.Update(m.UnexcludeCompanies))
 		r.Get("/{id}", handlers.GetByID(m.jobs.GetCompany))
 		r.Get("/new", handlers.GetAll(m.ListNewCompanies))
 		r.Get("/tracked", handlers.GetAll(m.jobs.ListTrackedCompanies))

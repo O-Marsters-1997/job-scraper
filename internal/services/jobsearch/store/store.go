@@ -4,6 +4,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -24,6 +25,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
+	"github.com/ollymarsters/job-scraper/internal/salary"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -73,65 +75,85 @@ func nonNil(items []string) []string {
 	return items
 }
 
-func (s *Store) ListJobs(ctx context.Context, userID string, excludedCompanySlugs []string) ([]dto.Job, error) {
-	var uid pgtype.UUID
-	if userID != "" {
-		var err error
-		uid, err = data.UUID(userID)
-		if err != nil {
-			return nil, fmt.Errorf("store.ListJobs: %w", err)
-		}
-	}
-	rows, err := s.queries.ListJobs(ctx, sqlc.ListJobsParams{UserID: uid, ExcludedCompanySlugs: nonNil(excludedCompanySlugs)})
-	if err != nil {
-		return nil, fmt.Errorf("store.ListJobs: %w", err)
-	}
-	jobs := make([]dto.Job, len(rows))
-	for i, row := range rows {
-		job, err := toPageJobDTO(sqlc.PageJobsRow(row))
-		if err != nil {
-			return nil, fmt.Errorf("store.ListJobs: %w", err)
-		}
-		jobs[i] = job
-	}
-	return jobs, nil
-}
-
 func (s *Store) Page(ctx context.Context, userID string, options dto.JobPageOptions) (dto.JobPage, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {
 		return dto.JobPage{}, ErrInvalidID
 	}
-	params := sqlc.PageJobsParams{UserID: uid, Availability: options.Availability, PageLimit: options.Limit, ScoredOnly: options.ScoredOnly, SinceDays: options.SinceDays, ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs)}
-	if params.Availability == "" {
-		params.Availability = "open"
-	}
-	if options.CursorID != "" {
-		params.CursorID, err = data.UUID(options.CursorID)
-		if err != nil {
-			return dto.JobPage{}, ErrInvalidID
-		}
-		params.CursorTime = pgtype.Timestamptz{Time: options.CursorTime, Valid: true}
-	}
+	var companyID pgtype.UUID
 	if options.CompanyID != "" {
-		params.CompanyID, err = data.UUID(options.CompanyID)
-		if err != nil {
+		if companyID, err = data.UUID(options.CompanyID); err != nil {
 			return dto.JobPage{}, ErrInvalidID
 		}
 	}
-	rows, err := s.queries.PageJobs(ctx, params)
+	now := options.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	filters := sqlc.CountJobsParams{
+		UserID:               uid,
+		Now:                  pgtype.Timestamptz{Time: now, Valid: true},
+		ExcludedCompanySlugs: nonNil(options.ExcludedCompanySlugs),
+		CompanyID:            companyID,
+		ScoredOnly:           options.ScoredOnly,
+		Graded:               cmp.Or(options.Graded, "all"),
+		Seen:                 cmp.Or(options.Seen, "all"),
+		Poster:               cmp.Or(string(options.Poster), "all"),
+		FavouriteOnly:        options.FavouriteOnly,
+		Sources:              nonNil(options.Sources),
+		Arrangements:         nonNil(options.Arrangements),
+		SalaryOnly:           options.SalaryOnly,
+		SearchPattern:        likePattern(options.Search),
+	}
+	if options.MinSuitability != nil {
+		filters.MinSuitability = pgtype.Int4{Int32: *options.MinSuitability, Valid: true}
+	}
+	if options.SalaryMin != nil {
+		filters.SalaryFloor = pgtype.Float8{Float64: *options.SalaryMin, Valid: true}
+	}
+	if options.SalaryMax != nil {
+		filters.SalaryCeiling = pgtype.Float8{Float64: *options.SalaryMax, Valid: true}
+	}
+
+	rows, err := s.queries.PageJobs(ctx, sqlc.PageJobsParams{
+		UserID: filters.UserID, Now: filters.Now, ExcludedCompanySlugs: filters.ExcludedCompanySlugs,
+		CompanyID: filters.CompanyID, ScoredOnly: filters.ScoredOnly, MinSuitability: filters.MinSuitability,
+		Graded: filters.Graded, Seen: filters.Seen, Poster: filters.Poster, FavouriteOnly: filters.FavouriteOnly,
+		Sources: filters.Sources, Arrangements: filters.Arrangements, SalaryOnly: filters.SalaryOnly,
+		SalaryFloor: filters.SalaryFloor, SalaryCeiling: filters.SalaryCeiling, SearchPattern: filters.SearchPattern,
+		Sort: string(options.Sort), PageOffset: options.Offset, PageLimit: options.Limit,
+	})
 	if err != nil {
-		return dto.JobPage{}, fmt.Errorf("store.Page: %w", err)
+		return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
 	}
 	page := dto.JobPage{Items: make([]dto.Job, len(rows))}
 	for i, row := range rows {
 		job, err := toPageJobDTO(row)
 		if err != nil {
-			return dto.JobPage{}, fmt.Errorf("store.Page: %w", err)
+			return dto.JobPage{}, fmt.Errorf("page jobs: %w", err)
 		}
 		page.Items[i] = job
 	}
+
+	if len(rows) > 0 && len(rows) < int(options.Limit) {
+		page.Total = int(options.Offset) + len(rows)
+		return page, nil
+	}
+	total, err := s.queries.CountJobs(ctx, filters)
+	if err != nil {
+		return dto.JobPage{}, fmt.Errorf("count jobs: %w", err)
+	}
+	page.Total = int(total)
 	return page, nil
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+func likePattern(search string) string {
+	if search = strings.TrimSpace(search); search == "" {
+		return ""
+	}
+	return "%" + likeEscaper.Replace(search) + "%"
 }
 
 func (s *Store) GetJob(ctx context.Context, jobID, userID string) (dto.Job, error) {
@@ -223,6 +245,14 @@ func jobFingerprint(job dto.Job) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
 
+func salaryBounds(raw string) (lo, hi pgtype.Float8) {
+	floor, ceiling, ok := salary.Parse(raw)
+	if !ok {
+		return lo, hi
+	}
+	return pgtype.Float8{Float64: floor, Valid: true}, pgtype.Float8{Float64: ceiling, Valid: true}
+}
+
 func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error) {
 	normalizedURL, err := normalizeJobURL(job.URL)
 	if err != nil {
@@ -268,6 +298,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
 	}
 
+	salaryMin, salaryMax := salaryBounds(job.SalaryRaw)
 	matchTitle := jobmatch.Title(job.Title)
 	matchLocation := jobmatch.Location(job.Location)
 	trusted := boardID.Valid && postingID.Valid
@@ -298,6 +329,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
 				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
 				PostedAt: postedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -319,8 +351,9 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
 			Source: job.Source, PostedAt: postedAt, Description: job.Description,
-			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
-			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
+			SalaryRaw: job.SalaryRaw, SalaryMin: salaryMin, SalaryMax: salaryMax,
+			WorkArrangement: job.WorkArrangement,
+			CompanyID:       companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 			MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
 		})
@@ -347,6 +380,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			err = queries.UpdateChangedCanonicalJob(ctx, sqlc.UpdateChangedCanonicalJobParams{
 				Title: job.Title, Location: job.Location, PostedAt: postedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
 			})

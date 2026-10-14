@@ -16,12 +16,13 @@ LIMIT 1 FOR UPDATE OF j;
 
 -- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
-    salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
+    salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
     content_fingerprint, content_changed_at, match_title, match_location)
 VALUES (sqlc.arg(title), sqlc.arg(location), sqlc.arg(url), sqlc.arg(company_slug),
     sqlc.arg(source), sqlc.narg(posted_at)::timestamptz,
     (SELECT last_completed_at FROM board_poll_state WHERE board_id = sqlc.narg(board_id)::uuid),
     sqlc.arg(description), sqlc.arg(salary_raw),
+    sqlc.narg(salary_min)::float8, sqlc.narg(salary_max)::float8,
     sqlc.arg(work_arrangement), COALESCE(sqlc.narg(company_id)::uuid, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
     sqlc.narg(board_id)::uuid, sqlc.narg(posting_id),
     sqlc.arg(fingerprint), NOW(), sqlc.arg(match_title), sqlc.arg(match_location))
@@ -32,7 +33,8 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location),
     reposted_at = CASE WHEN sqlc.narg(posted_at)::timestamptz > posted_at + INTERVAL '2 days'
         THEN GREATEST(reposted_at, sqlc.narg(posted_at)::timestamptz) ELSE reposted_at END,
     posted_at = LEAST(posted_at, sqlc.narg(posted_at)::timestamptz), description = sqlc.arg(description),
-    salary_raw = sqlc.arg(salary_raw), work_arrangement = sqlc.arg(work_arrangement),
+    salary_raw = sqlc.arg(salary_raw), salary_min = sqlc.narg(salary_min)::float8,
+    salary_max = sqlc.narg(salary_max)::float8, work_arrangement = sqlc.arg(work_arrangement),
     content_fingerprint = sqlc.arg(fingerprint), content_changed_at = NOW(),
     match_title = sqlc.arg(match_title), match_location = sqlc.arg(match_location),
     company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),
@@ -47,7 +49,8 @@ UPDATE jobs SET title = sqlc.arg(title), location = sqlc.arg(location), url = sq
     reposted_at = CASE WHEN sqlc.narg(posted_at)::timestamptz > posted_at + INTERVAL '2 days'
         THEN GREATEST(reposted_at, sqlc.narg(posted_at)::timestamptz) ELSE reposted_at END,
     posted_at = LEAST(posted_at, sqlc.narg(posted_at)::timestamptz), description = sqlc.arg(description),
-    salary_raw = sqlc.arg(salary_raw), work_arrangement = sqlc.arg(work_arrangement),
+    salary_raw = sqlc.arg(salary_raw), salary_min = sqlc.narg(salary_min)::float8,
+    salary_max = sqlc.narg(salary_max)::float8, work_arrangement = sqlc.arg(work_arrangement),
     content_fingerprint = sqlc.arg(fingerprint), content_changed_at = NOW(),
     match_title = sqlc.arg(match_title), match_location = sqlc.arg(match_location),
     company_id = COALESCE(sqlc.narg(company_id)::uuid, company_id, (SELECT id FROM companies WHERE slug = sqlc.arg(company_slug))),

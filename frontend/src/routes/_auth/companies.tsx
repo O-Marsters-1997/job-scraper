@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, For, on, Show, untrack } from "solid-js";
 import type { CompanyPoster, CompanySort } from "@/api/companies";
 import { FavouriteStar } from "@/components/FavouriteStar";
 import { PageHeading } from "@/components/PageHeading";
@@ -30,6 +30,11 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import {
+	type CompanyListState,
+	companySearchPatch,
+	parseCompanySearch,
+} from "@/lib/companyFilters";
 import { formatDate } from "@/lib/datetime";
 import {
 	COMPANY_PAGE_SIZE,
@@ -41,14 +46,8 @@ import { useDebouncedTerm } from "../../hooks/useDebouncedTerm";
 import type { Company } from "../../types/company";
 
 export const Route = createFileRoute("/_auth/companies")({
-	validateSearch: (
-		raw: Record<string, unknown>,
-	): { poster?: CompanyPoster | undefined } => ({
-		poster:
-			raw.poster === "agency" || raw.poster === "direct"
-				? raw.poster
-				: undefined,
-	}),
+	validateSearch: (raw: Record<string, unknown>): Partial<CompanyListState> =>
+		parseCompanySearch(raw),
 	component: CompaniesPage,
 });
 
@@ -67,27 +66,23 @@ const SORT_OPTIONS: { value: CompanySort; label: string }[] = [
 
 function CompaniesPage() {
 	const [term, search] = useDebouncedTerm();
-	const [favouritesOnly, setFavouritesOnly] = createSignal(false);
-	const [noBoardOnly, setNoBoardOnly] = createSignal(false);
-	const [sort, setSort] = createSignal<CompanySort>("relevance");
-	const [page, setPage] = createSignal(1);
 	const urlSearch = Route.useSearch();
+	const state = () => parseCompanySearch(urlSearch());
 	const navigate = useNavigate({ from: "/companies" });
-	const query = useCompanyPages(() => ({
-		poster: urlSearch().poster,
-		q: term(),
-		favourite: favouritesOnly(),
-		noBoard: noBoardOnly(),
-		sort: sort(),
-		offset: (page() - 1) * COMPANY_PAGE_SIZE,
-	}));
+	const table = useCompanyPages(state, (patch) =>
+		navigate({
+			to: "/companies",
+			search: (prev) => ({ ...prev, ...companySearchPatch(patch) }),
+			replace: true,
+		}),
+	);
+	const query = table.query;
 
-	createEffect(() => {
-		const total = query.data?.total;
-		if (total === undefined || query.isPlaceholderData) return;
-		const lastPage = Math.max(1, Math.ceil(total / COMPANY_PAGE_SIZE));
-		if (page() > lastPage) setPage(lastPage);
-	});
+	createEffect(
+		on(term, (q) => table.setFilters({ q }), {
+			defer: true,
+		}),
+	);
 
 	const trackMutation = useSetCompanyTracking();
 	const favouriteMutation = useSetCompanyFavourite();
@@ -115,18 +110,13 @@ function CompaniesPage() {
 					<Input
 						id="companies-search"
 						placeholder="Search companies…"
-						onInput={(e) => {
-							search(e.currentTarget.value);
-							setPage(1);
-						}}
+						value={untrack(() => state().q)}
+						onInput={(e) => search(e.currentTarget.value)}
 					/>
 				</div>
 				<Switch
-					checked={favouritesOnly()}
-					onChange={(checked) => {
-						setFavouritesOnly(checked);
-						setPage(1);
-					}}
+					checked={state().favourite}
+					onChange={(favourite) => table.setFilters({ favourite })}
 				>
 					<div class="flex items-center gap-2">
 						<SwitchControl>
@@ -136,11 +126,8 @@ function CompaniesPage() {
 					</div>
 				</Switch>
 				<Switch
-					checked={noBoardOnly()}
-					onChange={(checked) => {
-						setNoBoardOnly(checked);
-						setPage(1);
-					}}
+					checked={state().noBoard}
+					onChange={(noBoard) => table.setFilters({ noBoard })}
 				>
 					<div class="flex items-center gap-2">
 						<SwitchControl>
@@ -154,19 +141,13 @@ function CompaniesPage() {
 					optionValue="value"
 					optionTextValue="label"
 					value={
-						POSTER_OPTIONS.find(
-							(o) => o.value === (urlSearch().poster ?? "all"),
-						) ?? null
+						POSTER_OPTIONS.find((o) => o.value === (state().poster ?? "all")) ??
+						null
 					}
 					onChange={(opt) => {
 						if (!opt) return;
-						setPage(1);
-						navigate({
-							to: "/companies",
-							search: {
-								poster: opt.value === "all" ? undefined : opt.value,
-							},
-							replace: true,
+						table.setFilters({
+							poster: opt.value === "all" ? undefined : opt.value,
 						});
 					}}
 					itemComponent={(itemProps) => (
@@ -187,11 +168,9 @@ function CompaniesPage() {
 						options={SORT_OPTIONS}
 						optionValue="value"
 						optionTextValue="label"
-						value={SORT_OPTIONS.find((o) => o.value === sort()) ?? null}
+						value={SORT_OPTIONS.find((o) => o.value === state().sort) ?? null}
 						onChange={(opt) => {
-							if (!opt) return;
-							setSort(opt.value);
-							setPage(1);
+							if (opt) table.setFilters({ sort: opt.value });
 						}}
 						itemComponent={(itemProps) => (
 							<SelectItem item={itemProps.item}>
@@ -293,10 +272,10 @@ function CompaniesPage() {
 							</Table>
 							<Pager
 								total={data().total}
-								page={page()}
+								page={table.page()}
 								pageSize={COMPANY_PAGE_SIZE}
 								noun="companies"
-								onPage={setPage}
+								onPage={table.setPage}
 							/>
 						</Card>
 					</>

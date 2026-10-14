@@ -34,12 +34,15 @@ func TestList(t *testing.T) {
 			name  string
 			query dto.JobsQuery
 		}{
-			{"limit too large", dto.JobsQuery{Limit: "9999"}},
-			{"cursor not base64", dto.JobsQuery{Cursor: "not-base64"}},
-			{"unknown availability", dto.JobsQuery{Availability: "unknown"}},
-			{"negative since_days", dto.JobsQuery{SinceDays: "-1"}},
-			{"huge since_days", dto.JobsQuery{SinceDays: "2147483647"}},
-			{"non-numeric since_days", dto.JobsQuery{SinceDays: "week"}},
+			{"page zero", dto.JobsQuery{Page: "0"}},
+			{"page not a number", dto.JobsQuery{Page: "next"}},
+			{"page offset overflows", dto.JobsQuery{Page: "2147483647"}},
+			{"page_size zero", dto.JobsQuery{PageSize: "0"}},
+			{"unknown graded", dto.JobsQuery{Graded: "maybe"}},
+			{"unknown seen", dto.JobsQuery{Seen: "maybe"}},
+			{"unknown poster", dto.JobsQuery{Poster: "recruiter"}},
+			{"suit not a number", dto.JobsQuery{Suit: "high"}},
+			{"salary_min not a number", dto.JobsQuery{SalaryMin: "lots"}},
 		}
 		svc := jobsearch.NewService(jobsearchtest.NewFakeStore(), nil, jobsearchtest.NewNoopScoring())
 		for _, tt := range tests {
@@ -52,53 +55,29 @@ func TestList(t *testing.T) {
 		}
 	})
 
-	t.Run("windows on the effective age, defaulting to 90 days, 0 for none", func(t *testing.T) {
-		st := jobsearchtest.NewFakeStore()
-		now := time.Now()
-		for url, age := range map[string]int{"https://example.com/fresh": 89, "https://example.com/stale": 91} {
-			posted := now.AddDate(0, 0, -age)
-			job := dto.Job{Title: "Role", URL: url, PostedAt: &posted, ScrapedAt: now}
-			if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
-				t.Fatalf("SaveCanonical(%s) err = %v", url, err)
-			}
-		}
-		svc := jobsearch.NewService(st, nil, jobsearchtest.NewNoopScoring())
-
-		for _, tt := range []struct {
-			query dto.JobsQuery
-			want  int
-		}{
-			{dto.JobsQuery{}, 1},
-			{dto.JobsQuery{SinceDays: "0"}, 2},
-			{dto.JobsQuery{SinceDays: "7"}, 0},
-		} {
-			page, err := svc.List(t.Context(), userID, tt.query)
-			if err != nil {
-				t.Fatalf("List(%+v) err = %v", tt.query, err)
-			}
-			if len(page.Items) != tt.want {
-				t.Errorf("List(%+v) = %d items, want %d", tt.query, len(page.Items), tt.want)
-			}
-		}
-	})
-
-	t.Run("paginates", func(t *testing.T) {
+	t.Run("pages with offset and total", func(t *testing.T) {
+		t.Parallel()
 		svc := jobsearch.NewService(seedJobs(t, 3), nil, jobsearchtest.NewNoopScoring())
 
-		page, err := svc.List(t.Context(), userID, dto.JobsQuery{Limit: "2"})
-		if err != nil {
-			t.Fatalf("List(first) err = %v", err)
-		}
-		if len(page.Items) != 2 || page.NextCursor == "" {
-			t.Fatalf("first page = %+v, want 2 items and a cursor", page)
-		}
-
-		next, err := svc.List(t.Context(), userID, dto.JobsQuery{Limit: "2", Cursor: page.NextCursor})
-		if err != nil {
-			t.Fatalf("List(next) err = %v", err)
-		}
-		if len(next.Items) != 1 || next.NextCursor != "" {
-			t.Errorf("next page = %+v, want 1 item and no cursor", next)
+		for _, tt := range []struct {
+			name      string
+			query     dto.JobsQuery
+			wantItems int
+		}{
+			{"first page", dto.JobsQuery{Page: "1", PageSize: "2"}, 2},
+			{"last page", dto.JobsQuery{Page: "2", PageSize: "2"}, 1},
+			{"past the end", dto.JobsQuery{Page: "9", PageSize: "2"}, 0},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				page, err := svc.List(t.Context(), userID, tt.query)
+				if err != nil {
+					t.Fatalf("List(%+v) err = %v", tt.query, err)
+				}
+				if len(page.Items) != tt.wantItems || page.Total != 3 {
+					t.Errorf("List(%+v) = %d items, total %d, want %d items, total 3", tt.query, len(page.Items), page.Total, tt.wantItems)
+				}
+			})
 		}
 	})
 }
@@ -145,31 +124,6 @@ func TestGet(t *testing.T) {
 			t.Errorf("Get().URL = %q, want the primary %q", job.URL, want[0].URL)
 		}
 	})
-}
-
-func TestListScored(t *testing.T) {
-	st := jobsearchtest.NewFakeStore()
-	for i, slug := range []string{"acme", "globex", "initech"} {
-		score := 90 - i
-		job := dto.Job{Title: "Role", URL: "https://example.com/" + slug, CompanySlug: slug, SuitabilityScore: &score}
-		if _, _, err := st.SaveCanonical(t.Context(), job); err != nil {
-			t.Fatalf("SaveCanonical(%s) err = %v", job.URL, err)
-		}
-	}
-	scoring := jobsearchtest.NewNoopScoring()
-	scoring.SeedSearchConfig(dto.SearchConfig{UserID: userID, ExcludedCompanies: []string{"Globex"}})
-
-	jobs, err := jobsearch.NewService(st, nil, scoring).ListScored(t.Context(), userID)
-	if err != nil {
-		t.Fatalf("ListScored() err = %v", err)
-	}
-	var got []string
-	for _, job := range jobs {
-		got = append(got, job.CompanySlug)
-	}
-	if diff := cmp.Diff([]string{"acme", "initech"}, got); diff != "" {
-		t.Errorf("ListScored() companies (-want +got):\n%s", diff)
-	}
 }
 
 func TestListHidesExcludedCompanies(t *testing.T) {
