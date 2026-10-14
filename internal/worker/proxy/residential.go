@@ -18,6 +18,23 @@ import (
 
 const residentialAttempts = 3
 
+const defaultRetryBackoff = 3 * time.Second
+
+func (t *residentialTransport) backoffFor(attempt int) time.Duration {
+	return time.Duration((0.5 + t.jitter()) * float64(t.backoff) * float64(attempt+1))
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // ErrBlocked is returned when every residential attempt for a request was blocked.
 var ErrBlocked = errors.New("residential fetch blocked on every attempt")
 
@@ -26,6 +43,8 @@ type sessionKey struct{}
 type residentialTransport struct {
 	residential *http.Transport
 	cache       Cache
+	backoff     time.Duration
+	jitter      func() float64
 
 	session   atomic.Value
 	rotations atomic.Int64
@@ -71,6 +90,8 @@ func newResidential(cache Cache, source string) (*residentialTransport, error) {
 	t := &residentialTransport{
 		residential: tr,
 		cache:       cache,
+		backoff:     defaultRetryBackoff,
+		jitter:      rand.Float64,
 		source:      source,
 	}
 	t.session.Store(newSession())
@@ -112,6 +133,11 @@ func (t *residentialTransport) fetch(req *http.Request) (*http.Response, error) 
 		}
 		if attempt == residentialAttempts-1 {
 			break
+		}
+		if wasBlocked := lastErr == nil; wasBlocked {
+			if err := sleep(req.Context(), t.backoffFor(attempt)); err != nil {
+				return nil, err
+			}
 		}
 		if req, err = rewound(req); err != nil {
 			return nil, err

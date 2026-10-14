@@ -36,39 +36,44 @@ func boardEntry(newSource func(token string) sources.Source) entry {
 	return entry{build: func(t dto.SourceTarget) sources.Source { return newSource(t.Value) }}
 }
 
-var registry = map[string]entry{
-	"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
-	"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
-	"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
-	"workable":        boardEntry(func(v string) sources.Source { return workable.New(v) }),
-	"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
-	"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
-	"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
-	"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
-	"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
-	"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
-	"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
-	"indeed": {build: func(t dto.SourceTarget) sources.Source {
-		return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
-	}},
-	"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
-	"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
-	"wis": {
-		build: func(t dto.SourceTarget) sources.Source {
-			return wis.New(wis.Search{
-				Keywords: t.Value,
-				Filters:  t.Filters,
-				Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
-			})
+var registry = newRegistry()
+
+func newRegistry() map[string]entry {
+	linkedinGate := linkedin.NewGate()
+	return map[string]entry{
+		"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
+		"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
+		"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
+		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v) }),
+		"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
+		"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
+		"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
+		"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
+		"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
+		"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
+		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
+		"indeed": {build: func(t dto.SourceTarget) sources.Source {
+			return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+		}},
+		"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
+		"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
+		"wis": {
+			build: func(t dto.SourceTarget) sources.Source {
+				return wis.New(wis.Search{
+					Keywords: t.Value,
+					Filters:  t.Filters,
+					Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
+				})
+			},
+			detail: wis.New(wis.Search{}),
 		},
-		detail: wis.New(wis.Search{}),
-	},
-	"linkedin": {
-		build: func(t dto.SourceTarget) sources.Source {
-			return linkedin.New(t.Value, t.Filters, linkedin.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
+		"linkedin": {
+			build: func(t dto.SourceTarget) sources.Source {
+				return linkedin.New(t.Value, t.Filters, linkedin.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()), linkedinGate)
+			},
+			detail: linkedin.New("", nil, "", linkedinGate),
 		},
-		detail: linkedin.New("", nil, ""),
-	},
+	}
 }
 
 // BuildSource builds the Source for one enabled target. It returns false when

@@ -18,6 +18,7 @@ import (
 
 const (
 	DefaultTimeout       = 15 * time.Second
+	ResidentialTimeout   = 60 * time.Second
 	maxRetryAfterSeconds = 24 * 60 * 60
 	userAgent            = "Mozilla/5.0 (compatible; job-scraper/1.0)"
 )
@@ -100,10 +101,14 @@ func NewBase(cfg Config) PaginatedBase {
 	if cfg.Cookies {
 		jar, _ = cookiejar.New(nil)
 	}
+	timeout := DefaultTimeout
+	if cfg.Route == RouteResidential {
+		timeout = ResidentialTimeout
+	}
 	return PaginatedBase{
 		cfg:     cfg,
 		initErr: err,
-		client: &http.Client{Jar: jar, Timeout: DefaultTimeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		client: &http.Client{Jar: jar, Timeout: timeout, Transport: logger.OutboundSpans(transport), CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("too many redirects")
 			}

@@ -55,6 +55,17 @@ const (
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
+const requestGap = 2500 * time.Millisecond
+
+func NewGate() *sources.Gate { return sources.NewGate(requestGap, 0) }
+
+func (s *Scraper) get(ctx context.Context, url string) ([]byte, error) {
+	if err := s.gate.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, url)
+}
+
 func pageURL(keywords string, filters map[string]string, recency string, start int) string {
 	v := url.Values{}
 	v.Set("keywords", keywords)
@@ -82,6 +93,7 @@ type Scraper struct {
 	keywords string
 	filters  map[string]string
 	recency  string
+	gate     *sources.Gate
 }
 
 const recencyMargin = time.Hour
@@ -105,7 +117,7 @@ var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 var _ sources.SnapshotSource = (*Scraper)(nil)
 
-func New(keywords string, filters map[string]string, recency string) *Scraper {
+func New(keywords string, filters map[string]string, recency string, gate *sources.Gate) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:  "linkedin",
@@ -114,6 +126,7 @@ func New(keywords string, filters map[string]string, recency string) *Scraper {
 		keywords: keywords,
 		filters:  filters,
 		recency:  recency,
+		gate:     gate,
 	}
 }
 
@@ -126,7 +139,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 			return nil, "", fmt.Errorf("invalid linkedin cursor %q", cursor)
 		}
 	}
-	body, err := s.Get(ctx, pageURL(s.keywords, s.filters, s.recency, start))
+	body, err := s.get(ctx, pageURL(s.keywords, s.filters, s.recency, start))
 	if err != nil {
 		return nil, "", err
 	}
@@ -141,7 +154,7 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 }
 
 func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.Get(ctx, fragmentURL(url))
+	body, err := s.get(ctx, fragmentURL(url))
 	if err != nil {
 		return dto.Job{}, err
 	}
