@@ -225,11 +225,11 @@ func jobFingerprint(job dto.Job) string {
 }
 
 func salaryBounds(raw string) (lo, hi pgtype.Float8) {
-	min, max, ok := salary.Parse(raw)
+	floor, ceiling, ok := salary.Parse(raw)
 	if !ok {
 		return lo, hi
 	}
-	return pgtype.Float8{Float64: min, Valid: true}, pgtype.Float8{Float64: max, Valid: true}
+	return pgtype.Float8{Float64: floor, Valid: true}, pgtype.Float8{Float64: ceiling, Valid: true}
 }
 
 func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error) {
