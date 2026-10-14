@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -83,6 +84,7 @@ func residentialFetcher(t *testing.T, residential *fakeProxy, cache proxy.Cache)
 	t.Setenv("DECODO_PROXY_URL", "http://res:pw@"+strings.TrimPrefix(residential.URL, "http://"))
 	proxy.SetCache(cache)
 	t.Cleanup(func() { proxy.SetCache(nil) })
+	t.Cleanup(proxy.SetRetryBackoff(0))
 	tr, err := proxy.Fetcher(proxy.Residential, t.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -192,6 +194,53 @@ func TestResidentialFetcher(t *testing.T) {
 			t.Fatalf("residential=%d, want 1", residential.hits())
 		}
 	})
+}
+
+func TestResidentialFetcherBacksOffBetweenBlockedAttempts(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	const backoff = 40 * time.Millisecond
+	var mu sync.Mutex
+	var times []time.Time
+	residential := newFakeProxy(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		times = append(times, time.Now())
+		mu.Unlock()
+		status(429, "")(w, r)
+	})
+	tr := residentialFetcher(t, residential, nil)
+	t.Cleanup(proxy.SetRetryBackoff(backoff))
+	resp, err := tr.RoundTrip(httpTarget(t))
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	if !errors.Is(err, proxy.ErrBlocked) {
+		t.Fatalf("RoundTrip() error = %v, want ErrBlocked", err)
+	}
+	if len(times) != 3 {
+		t.Fatalf("attempts = %d, want 3", len(times))
+	}
+	for i := 1; i < len(times); i++ {
+		if gap := times[i].Sub(times[i-1]); gap < backoff/2 {
+			t.Errorf("gap before attempt %d = %v, want at least %v", i+1, gap, backoff/2)
+		}
+	}
+}
+
+func TestResidentialFetcherStopsBackingOffOnCancel(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, status(429, ""))
+	tr := residentialFetcher(t, residential, nil)
+	t.Cleanup(proxy.SetRetryBackoff(time.Hour))
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	resp, err := tr.RoundTrip(httpTarget(t).WithContext(ctx))
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RoundTrip() error = %v, want DeadlineExceeded", err)
+	}
+	if got := residential.hits(); got != 1 {
+		t.Errorf("attempts = %d, want 1", got)
+	}
 }
 
 func TestResidentialFetcherCachesOnlySuccess(t *testing.T) {

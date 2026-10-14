@@ -2,8 +2,10 @@ package linkedin_test
 
 import (
 	"bytes"
+	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -233,6 +235,42 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	wantURL := "https://www.linkedin.com/jobs/view/4335312853"
 	if job.URL != wantURL {
 		t.Errorf("Job.URL = %q, want %q", job.URL, wantURL)
+	}
+}
+
+type stampedResponder struct {
+	mu    sync.Mutex
+	times []time.Time
+}
+
+func (r *stampedResponder) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.mu.Lock()
+	r.times = append(r.times, time.Now())
+	r.mu.Unlock()
+	return sourcetest.Respond("<html></html>").RoundTrip(req)
+}
+
+func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
+	const gap = 80 * time.Millisecond
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+	t.Cleanup(linkedin.SetLimiterGap(gap))
+	stamps := &stampedResponder{}
+	listing := linkedin.New("go", nil, "")
+	listing.Client().Transport = stamps
+	detail := linkedin.New("", nil, "")
+	detail.Client().Transport = stamps
+
+	_, _, _ = listing.FetchPage(t.Context(), "")
+	_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/1")
+	_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/2")
+
+	if len(stamps.times) != 3 {
+		t.Fatalf("requests = %d, want 3", len(stamps.times))
+	}
+	for i := 1; i < len(stamps.times); i++ {
+		if got := stamps.times[i].Sub(stamps.times[i-1]); got < gap/2 {
+			t.Errorf("gap before request %d = %v, want at least %v", i+1, got, gap/2)
+		}
 	}
 }
 
