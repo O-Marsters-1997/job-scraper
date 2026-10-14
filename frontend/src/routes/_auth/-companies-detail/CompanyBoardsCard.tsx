@@ -1,7 +1,9 @@
 import { createSignal, For, onCleanup, Show } from "solid-js";
+import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
 	useAddCompanyBoard,
 	useCompanyBoards,
@@ -109,7 +111,13 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 					>
 						<For each={boardsQuery.data ?? []}>
 							{(board) => (
-								<div class="flex items-start justify-between gap-2 border-b border-border pb-2 text-xs">
+								<div
+									class={cn(
+										"flex items-start justify-between gap-2 border-b border-border pb-2 text-xs",
+										board.Status === "verified" &&
+											"border-l-2 border-l-primary pl-2",
+									)}
+								>
 									<div class="min-w-0">
 										<p class="font-medium text-foreground">{board.Source}</p>
 										<p class="break-all font-mono text-faint">
@@ -123,7 +131,33 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 											)}
 										</Show>
 									</div>
-									<span class="capitalize text-muted">{board.Status}</span>
+									<div class="flex items-center gap-1.5">
+										<Show
+											when={board.Status === "verified" && boardURLFor(board)}
+										>
+											{(url) => (
+												<a
+													href={url()}
+													target="_blank"
+													rel="noopener noreferrer"
+													aria-label={`Open ${board.Source} board`}
+													class="text-primary"
+												>
+													<Icon name="externalLink" size={14} />
+												</a>
+											)}
+										</Show>
+										<span
+											class={cn(
+												"capitalize",
+												board.Status === "verified"
+													? "font-medium text-primary"
+													: "text-muted",
+											)}
+										>
+											{board.Status}
+										</span>
+									</div>
 								</div>
 							)}
 						</For>
