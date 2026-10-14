@@ -308,7 +308,19 @@ func TestResidentialFetcherWireBytes(t *testing.T) { //nolint:paralleltest // re
 	}
 	_ = resp.Body.Close()
 	for _, direction := range []string{"read", "write"} {
-		if got := testutil.ToFloat64(proxy.FetchWireBytes.WithLabelValues(t.Name(), "residential", direction)); got <= 0 {
+		counter := proxy.FetchWireBytes.WithLabelValues(t.Name(), "residential", direction)
+		tick := time.NewTicker(time.Millisecond)
+		deadline := time.After(5 * time.Second)
+		for testutil.ToFloat64(counter) <= 0 {
+			select {
+			case <-tick.C:
+				continue
+			case <-deadline:
+			}
+			break
+		}
+		tick.Stop()
+		if got := testutil.ToFloat64(counter); got <= 0 {
 			t.Errorf("wire bytes %s = %v, want > 0", direction, got)
 		}
 	}

@@ -2,4 +2,8 @@ package wttj
 
 import "github.com/ollymarsters/job-scraper/internal/worker/sources"
 
-func ResetLimiter() { limiter = sources.NewGate(0, 0) }
+func NewSharedNoGap() *Shared {
+	s := NewShared()
+	s.gate = sources.NewGate(0, 0)
+	return s
+}

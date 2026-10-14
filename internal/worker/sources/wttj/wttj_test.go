@@ -86,8 +86,12 @@ func newSite(t *testing.T, company string) *site {
 
 func poll(t *testing.T, token string, s *site) ([]dto.Job, error) {
 	t.Helper()
-	wttj.ResetLimiter()
-	src := wttj.New(token, func() time.Time { return now })
+	return pollWith(t, wttj.NewSharedNoGap(), token, s)
+}
+
+func pollWith(t *testing.T, shared *wttj.Shared, token string, s *site) ([]dto.Job, error) {
+	t.Helper()
+	src := wttj.New(token, func() time.Time { return now }, shared)
 	src.Client().Transport = s
 	jobs, _, err := src.FetchPage(t.Context(), "")
 	return jobs, err
@@ -150,12 +154,13 @@ func TestFetchPage(t *testing.T) {
 
 	t.Run("second poll fetches no job page already read", func(t *testing.T) {
 		s := newSite(t, "company_faculty.html")
-		first, err := poll(t, "faculty-repeat", s)
+		shared := wttj.NewSharedNoGap()
+		first, err := pollWith(t, shared, "faculty-repeat", s)
 		if err != nil {
 			t.Fatal(err)
 		}
 		fetched := s.jobRequests()
-		second, err := poll(t, "faculty-repeat", s)
+		second, err := pollWith(t, shared, "faculty-repeat", s)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,8 +188,12 @@ func TestFetchPage(t *testing.T) {
 
 func pollBoard(t *testing.T, token string, s *site) (sources.BoardResult, error) {
 	t.Helper()
-	wttj.ResetLimiter()
-	src := wttj.New(token, func() time.Time { return now })
+	return pollBoardWith(t, wttj.NewSharedNoGap(), token, s)
+}
+
+func pollBoardWith(t *testing.T, shared *wttj.Shared, token string, s *site) (sources.BoardResult, error) {
+	t.Helper()
+	src := wttj.New(token, func() time.Time { return now }, shared)
 	src.Client().Transport = s
 	return src.PollBoard(t.Context())
 }
@@ -241,11 +250,12 @@ func TestPollBoard(t *testing.T) {
 	t.Run("a 429 defers every later wttj request until the next day", func(t *testing.T) {
 		s := newSite(t, "company_faculty.html")
 		s.status = http.StatusTooManyRequests
-		if _, err := pollBoard(t, "limited", s); err == nil {
+		shared := wttj.NewSharedNoGap()
+		if _, err := pollBoardWith(t, shared, "limited", s); err == nil {
 			t.Fatal("PollBoard on 429 = nil error, want error")
 		}
 		other := newSite(t, "company_faculty.html")
-		src := wttj.New("other", func() time.Time { return now })
+		src := wttj.New("other", func() time.Time { return now }, shared)
 		src.Client().Transport = other
 		if _, err := src.PollBoard(t.Context()); !errors.Is(err, sources.ErrDeferred) || len(other.requests) != 0 {
 			t.Errorf("PollBoard after 429 = %v with %d requests, want ErrDeferred and none", err, len(other.requests))
@@ -256,8 +266,7 @@ func TestPollBoard(t *testing.T) {
 func TestDiscover(t *testing.T) {
 	discover := func(t *testing.T, s *site) (wttj.Discovery, error) {
 		t.Helper()
-		wttj.ResetLimiter()
-		src := wttj.New("discover", func() time.Time { return now })
+		src := wttj.New("discover", func() time.Time { return now }, wttj.NewSharedNoGap())
 		src.Client().Transport = s
 		return src.Discover(t.Context())
 	}

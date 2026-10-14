@@ -14,7 +14,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/smartrecruiters"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/teamtailor"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
@@ -33,16 +32,16 @@ type Discovery struct {
 
 // DiscoverBoard fetches a Board's Jobs and its display name, falling back to
 // token when the ATS exposes no usable name.
-func DiscoverBoard(ctx context.Context, source, token string) (Discovery, error) {
+func DiscoverBoard(ctx context.Context, build SourceBuilder, source, token string) (Discovery, error) {
 	if role, ok := sourcespec.SourceRole(source); !ok || role != sourcespec.RoleATS || !sourcespec.ValidBoardToken(token) {
 		return Discovery{}, errors.New("unsupported board configuration")
 	}
 	if source == "wttj" {
-		return discoverWTTJ(ctx, token)
+		return discoverWTTJ(ctx, build, token)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	src, ok := builder.BuildSource(dto.SourceTarget{Source: source, Value: token, Enabled: true})
+	src, ok := build(dto.SourceTarget{Source: source, Value: token, Enabled: true})
 	if !ok {
 		return Discovery{}, errors.New("unsupported board source")
 	}
@@ -68,10 +67,15 @@ func DiscoverBoard(ctx context.Context, source, token string) (Discovery, error)
 	return Discovery{Name: name, Jobs: jobs, Recheck: true}, nil
 }
 
-func discoverWTTJ(ctx context.Context, token string) (Discovery, error) {
+func discoverWTTJ(ctx context.Context, build SourceBuilder, token string) (Discovery, error) {
 	ctx, cancel := context.WithTimeout(ctx, wttj.DiscoverTimeout)
 	defer cancel()
-	d, err := wttj.New(token, time.Now).Discover(ctx)
+	src, ok := build(dto.SourceTarget{Source: "wttj", Value: token, Enabled: true})
+	wttjSource, isWTTJ := src.(*wttj.Source)
+	if !ok || !isWTTJ {
+		return Discovery{}, errors.New("unsupported board source")
+	}
+	d, err := wttjSource.Discover(ctx)
 	if err != nil {
 		return Discovery{}, err
 	}

@@ -22,7 +22,7 @@ func (m *Module) PublicRoutes(r chi.Router) {
 // the Google Link inside the session-protected group.
 func (m *Module) Routes(r chi.Router) {
 	r.Post("/auth/logout", logoutHandler(m.service))
-	r.Get("/auth/me", meHandler)
+	r.Get("/auth/me", meHandler())
 
 	r.Get("/profile", handlers.GetAll(m.store.GetProfile))
 	r.Put("/profile", handlers.Update(m.service.UpdateProfile))
@@ -102,16 +102,18 @@ func logoutHandler(svc *Service) http.HandlerFunc {
 	)
 }
 
-var meHandler = handlers.Handle(
-	func(r *http.Request) (dto.MeView, error) {
-		session, ok := handlers.Session(r)
-		if !ok {
-			return dto.MeView{}, apperr.Unauthorized("unauthorized")
-		}
-		return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
-	},
-	func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
-	func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {
-		handlers.WriteJSON(w, http.StatusOK, res)
-	},
-)
+func meHandler() http.HandlerFunc {
+	return handlers.Handle(
+		func(r *http.Request) (dto.MeView, error) {
+			session, ok := handlers.Session(r)
+			if !ok {
+				return dto.MeView{}, apperr.Unauthorized("unauthorized")
+			}
+			return dto.MeView{ID: session.UserID, Username: session.Username, IsAdmin: session.Role == dto.RoleAdmin}, nil
+		},
+		func(_ context.Context, v dto.MeView) (dto.MeView, error) { return v, nil },
+		func(w http.ResponseWriter, _ *http.Request, res dto.MeView) {
+			handlers.WriteJSON(w, http.StatusOK, res)
+		},
+	)
+}

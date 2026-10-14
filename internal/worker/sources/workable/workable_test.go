@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -15,12 +16,14 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/workable"
 )
 
+func noGap() *sources.Gate { return sources.NewGate(0, time.Hour) }
+
 func TestFetchPage_Golden(t *testing.T) {
-	sourcetest.RunGolden(t, "jobs_pearltalent.json", workable.New("pearltalent"))
+	sourcetest.RunGolden(t, "jobs_pearltalent.json", workable.New("pearltalent", noGap()))
 }
 
 func TestPollBoard_Reported(t *testing.T) {
-	if got, want := sourcetest.PollReported(t, "jobs_pearltalent.json", workable.New("pearltalent")), 2; got != want {
+	if got, want := sourcetest.PollReported(t, "jobs_pearltalent.json", workable.New("pearltalent", noGap())), 2; got != want {
 		t.Errorf("PollBoard(%s).Reported = %d, want %d", "jobs_pearltalent.json", got, want)
 	}
 }
@@ -44,7 +47,7 @@ func TestPollBoard_FollowsNextPage(t *testing.T) {
 		`{"total":2,"results":[{"shortcode":"A","title":"a","workplace":"hybrid"}],"nextPage":"tok1"}`,
 		`{"total":2,"results":[{"shortcode":"B","title":"b","workplace":"on_site"}],"nextPage":null}`,
 	}}
-	src := workable.New("acme")
+	src := workable.New("acme", noGap())
 	src.Client().Transport = tr
 
 	res, err := src.PollBoard(t.Context())
@@ -80,16 +83,16 @@ func (r *refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestPollBoard_RateLimitDefersLaterRequests(t *testing.T) {
-	workable.ResetLimiter()
+	gate := noGap()
 	tr := &refusingTransport{}
-	first := workable.New("acme")
+	first := workable.New("acme", gate)
 	first.Client().Transport = tr
 	_, err := first.PollBoard(t.Context())
 	var status *sources.StatusError
 	if !errors.As(err, &status) || status.Code != http.StatusTooManyRequests {
 		t.Fatalf("PollBoard() = %v, want a 429 StatusError", err)
 	}
-	other := workable.New("other")
+	other := workable.New("other", gate)
 	other.Client().Transport = tr
 	_, err = other.PollBoard(t.Context())
 	if !errors.Is(err, sources.ErrDeferred) {
