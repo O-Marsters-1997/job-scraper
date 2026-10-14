@@ -42,7 +42,7 @@ func boardResponder(t *testing.T, token string) *sourcetest.PathResponder {
 }
 
 func TestFetchPage_GoldenOverTwoListPagesAndDetails(t *testing.T) {
-	src := smartrecruiters.New("Wise")
+	src := smartrecruiters.New("Wise", smartrecruiters.NewPostingCache())
 	src.Client().Transport = boardResponder(t, "Wise")
 
 	got, next, err := src.FetchPage(t.Context(), "")
@@ -56,7 +56,7 @@ func TestFetchPage_GoldenOverTwoListPagesAndDetails(t *testing.T) {
 }
 
 func TestPollBoard_ReportsTotalFound(t *testing.T) {
-	src := smartrecruiters.New("Reported")
+	src := smartrecruiters.New("Reported", smartrecruiters.NewPostingCache())
 	responder := sourcetest.RespondByPath(map[string]string{
 		"/v1/companies/Reported/postings": `{"totalFound":0,"content":[]}`,
 	})
@@ -70,7 +70,7 @@ func TestPollBoard_ReportsTotalFound(t *testing.T) {
 		t.Errorf("PollBoard() = %d jobs, Reported %d, want none", len(res.Jobs), res.Reported)
 	}
 
-	src = smartrecruiters.New("WiseReported")
+	src = smartrecruiters.New("WiseReported", smartrecruiters.NewPostingCache())
 	src.Client().Transport = boardResponder(t, "WiseReported")
 	res, err = src.PollBoard(t.Context())
 	if err != nil {
@@ -83,7 +83,7 @@ func TestPollBoard_ReportsTotalFound(t *testing.T) {
 
 func TestPollBoard_SecondPollMakesNoDetailCalls(t *testing.T) {
 	responder := boardResponder(t, "WiseCached")
-	src := smartrecruiters.New("WiseCached")
+	src := smartrecruiters.New("WiseCached", smartrecruiters.NewPostingCache())
 	src.Client().Transport = responder
 
 	first, err := src.PollBoard(t.Context())
@@ -107,7 +107,7 @@ func TestPollBoard_SecondPollMakesNoDetailCalls(t *testing.T) {
 
 func TestPollBoard_SkipsWithdrawnPosting(t *testing.T) {
 	listPath := listPath("WiseWithdrawn")
-	src := smartrecruiters.New("WiseWithdrawn")
+	src := smartrecruiters.New("WiseWithdrawn", smartrecruiters.NewPostingCache())
 	src.Client().Transport = sourcetest.RespondByPath(map[string]string{
 		listPath + "?limit=100&offset=0": fixture(t, "postings_page1.json"),
 		listPath + "?limit=100&offset=2": fixture(t, "postings_page2.json"),
@@ -125,7 +125,7 @@ func TestPollBoard_SkipsWithdrawnPosting(t *testing.T) {
 }
 
 func TestPollBoard_ServerErrorFailsThePoll(t *testing.T) {
-	src := smartrecruiters.New("Down")
+	src := smartrecruiters.New("Down", smartrecruiters.NewPostingCache())
 	src.Client().Transport = sourcetest.RespondStatus(http.StatusInternalServerError, "")
 
 	if _, err := src.PollBoard(t.Context()); err == nil {

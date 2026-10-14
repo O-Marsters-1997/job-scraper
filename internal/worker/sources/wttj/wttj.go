@@ -39,10 +39,19 @@ var (
 		"CAMBRIDGE": true, "OXFORD": true, "BIRMINGHAM": true, "LEEDS": true, "GLASGOW": true,
 		"BELFAST": true, "CARDIFF": true,
 	}
-
-	postings = &postingCache{byToken: map[string]map[string]*dto.Job{}}
-	limiter  = sources.NewGate(2*time.Second, blockFor)
 )
+
+type Shared struct {
+	gate     *sources.Gate
+	postings *postingCache
+}
+
+func NewShared() *Shared {
+	return &Shared{
+		gate:     sources.NewGate(2*time.Second, blockFor),
+		postings: &postingCache{byToken: map[string]map[string]*dto.Job{}},
+	}
+}
 
 // postingCache remembers, per Board token, every job page already fetched, so a repeat poll
 // re-reads only the company page. A nil entry is a page that failed the age gate.
@@ -66,14 +75,15 @@ func (c *postingCache) put(token string, jobs map[string]*dto.Job) {
 // Source polls one WTTJ company: the Board token is the company's urlSafeName.
 type Source struct {
 	sources.PaginatedBase
-	token string
-	now   func() time.Time
+	token  string
+	now    func() time.Time
+	shared *Shared
 }
 
 var _ sources.Source = (*Source)(nil)
 
-func New(token string, now func() time.Time) *Source {
-	return &Source{PaginatedBase: sources.NewBase(sources.Config{Name: name}), token: token, now: now}
+func New(token string, now func() time.Time, shared *Shared) *Source {
+	return &Source{PaginatedBase: sources.NewBase(sources.Config{Name: name}), token: token, now: now, shared: shared}
 }
 
 func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, string, error) {
@@ -85,13 +95,13 @@ func (s *Source) FetchPage(ctx context.Context, cursor string) ([]dto.Job, strin
 }
 
 func (s *Source) get(ctx context.Context, url string) ([]byte, error) {
-	if err := limiter.Wait(ctx); err != nil {
+	if err := s.shared.gate.Wait(ctx); err != nil {
 		return nil, err
 	}
 	body, err := s.Get(ctx, url)
 	var statusErr *sources.StatusError
 	if errors.As(err, &statusErr) && (statusErr.Code == http.StatusForbidden || statusErr.Code == http.StatusTooManyRequests) {
-		limiter.Block(blockFor)
+		s.shared.gate.Block(blockFor)
 	}
 	return body, err
 }
@@ -134,7 +144,7 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error)
 		return sources.BoardResult{NextPollIn: otherPollIn, Profile: company.Profile}, company, nil
 	}
 
-	known := postings.get(s.token)
+	known := s.shared.postings.get(s.token)
 	seen := make(map[string]*dto.Job, len(company.Jobs))
 	var jobs []dto.Job
 	for _, cj := range company.Jobs {
@@ -156,7 +166,7 @@ func (s *Source) poll(ctx context.Context) (sources.BoardResult, company, error)
 			jobs = append(jobs, *job)
 		}
 	}
-	postings.put(s.token, seen)
+	s.shared.postings.put(s.token, seen)
 	return sources.BoardResult{Jobs: jobs, NextPollIn: ukPollIn, Profile: company.Profile}, company, nil
 }
 

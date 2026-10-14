@@ -6,24 +6,27 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/recruitee"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 )
 
+func noGap() *sources.Gate { return sources.NewGate(0, time.Hour) }
+
 func TestFetchPage_Golden(t *testing.T) {
-	sourcetest.RunGolden(t, "offers_acme.json", recruitee.New("acme"))
+	sourcetest.RunGolden(t, "offers_acme.json", recruitee.New("acme", noGap()))
 }
 
 func TestPollBoard_Reported(t *testing.T) {
-	if got, want := sourcetest.PollReported(t, "offers_acme.json", recruitee.New("acme")), 2; got != want {
+	if got, want := sourcetest.PollReported(t, "offers_acme.json", recruitee.New("acme", noGap())), 2; got != want {
 		t.Errorf("PollBoard(%s).Reported = %d, want %d", "offers_acme.json", got, want)
 	}
 }
 
 func TestFetchPage_GoldenSalaryAndArrangement(t *testing.T) {
-	sourcetest.RunGolden(t, "offers_tellent.json", recruitee.New("tellent"))
+	sourcetest.RunGolden(t, "offers_tellent.json", recruitee.New("tellent", noGap()))
 }
 
 type refusingTransport struct{ requests int }
@@ -35,16 +38,16 @@ func (r *refusingTransport) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func TestPollBoard_RateLimitDefersLaterRequests(t *testing.T) {
-	recruitee.ResetLimiter()
+	gate := noGap()
 	tr := &refusingTransport{}
-	first := recruitee.New("acme")
+	first := recruitee.New("acme", gate)
 	first.Client().Transport = tr
 	_, err := first.PollBoard(t.Context())
 	var status *sources.StatusError
 	if !errors.As(err, &status) || status.Code != http.StatusTooManyRequests {
 		t.Fatalf("PollBoard() = %v, want a 429 StatusError", err)
 	}
-	other := recruitee.New("other")
+	other := recruitee.New("other", gate)
 	other.Client().Transport = tr
 	_, err = other.PollBoard(t.Context())
 	if !errors.Is(err, sources.ErrDeferred) {

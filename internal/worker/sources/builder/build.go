@@ -36,22 +36,31 @@ func boardEntry(newSource func(token string) sources.Source) entry {
 	return entry{build: func(t dto.SourceTarget) sources.Source { return newSource(t.Value) }}
 }
 
-var registry = newRegistry()
+type Builder struct {
+	registry map[string]entry
+}
+
+func New() *Builder { return &Builder{registry: newRegistry()} }
 
 func newRegistry() map[string]entry {
 	linkedinGate := linkedin.NewGate()
+	workableGate := workable.NewGate()
+	recruiteeGate := recruitee.NewGate()
+	wisGate := wis.NewGate()
+	wttjShared := wttj.NewShared()
+	postings := smartrecruiters.NewPostingCache()
 	return map[string]entry{
 		"greenhouse":      boardEntry(func(v string) sources.Source { return greenhouse.New(v) }),
 		"lever":           boardEntry(func(v string) sources.Source { return lever.New(v) }),
 		"ashby":           boardEntry(func(v string) sources.Source { return ashby.New(v) }),
-		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v) }),
-		"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v) }),
+		"workable":        boardEntry(func(v string) sources.Source { return workable.New(v, workableGate) }),
+		"recruitee":       boardEntry(func(v string) sources.Source { return recruitee.New(v, recruiteeGate) }),
 		"personio":        boardEntry(func(v string) sources.Source { return personio.New(v) }),
 		"pinpoint":        boardEntry(func(v string) sources.Source { return pinpoint.New(v) }),
 		"teamtailor":      boardEntry(func(v string) sources.Source { return teamtailor.New(v) }),
 		"hibob":           boardEntry(func(v string) sources.Source { return hibob.New(v) }),
-		"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v) }),
-		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now) }},
+		"smartrecruiters": boardEntry(func(v string) sources.Source { return smartrecruiters.New(v, postings) }),
+		"wttj":            {build: func(t dto.SourceTarget) sources.Source { return wttj.New(t.Value, time.Now, wttjShared) }},
 		"indeed": {build: func(t dto.SourceTarget) sources.Source {
 			return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
 		}},
@@ -63,9 +72,9 @@ func newRegistry() map[string]entry {
 					Keywords: t.Value,
 					Filters:  t.Filters,
 					Recency:  wis.Recency(t.LastSucceededAt, time.Now()),
-				})
+				}, wisGate)
 			},
-			detail: wis.New(wis.Search{}),
+			detail: wis.New(wis.Search{}, wisGate),
 		},
 		"linkedin": {
 			build: func(t dto.SourceTarget) sources.Source {
@@ -78,8 +87,8 @@ func newRegistry() map[string]entry {
 
 // BuildSource builds the Source for one enabled target. It returns false when
 // the target is disabled or its source is unknown.
-func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
-	e, ok := registry[t.Source]
+func (b *Builder) BuildSource(t dto.SourceTarget) (sources.Source, bool) {
+	e, ok := b.registry[t.Source]
 	if !ok || !t.Enabled {
 		return nil, false
 	}
@@ -87,9 +96,9 @@ func BuildSource(t dto.SourceTarget) (sources.Source, bool) {
 }
 
 // Detailers returns the detail fetcher of every source that has one.
-func Detailers() map[string]sources.DetailFetcher {
+func (b *Builder) Detailers() map[string]sources.DetailFetcher {
 	out := map[string]sources.DetailFetcher{}
-	for name, e := range registry {
+	for name, e := range b.registry {
 		if e.detail != nil {
 			out[name] = e.detail
 		}
@@ -98,9 +107,9 @@ func Detailers() map[string]sources.DetailFetcher {
 }
 
 // CardComplete returns the sources whose listing card is already the full job.
-func CardComplete() map[string]bool {
+func (b *Builder) CardComplete() map[string]bool {
 	out := map[string]bool{}
-	for name := range registry {
+	for name := range b.registry {
 		if sourcespec.CardComplete(name) {
 			out[name] = true
 		}

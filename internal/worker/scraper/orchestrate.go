@@ -27,14 +27,16 @@ type CandidateCapturer interface {
 	CapturePage(ctx context.Context, target dto.SourceTarget, cards []dto.Job, config dto.SearchConfig) error
 }
 
+type SourceBuilder func(dto.SourceTarget) (sources.Source, bool)
+
 type Orchestrator struct {
 	db          URLChecker
 	cfgDB       SearchConfigReader
-	buildTarget func(dto.SourceTarget) (sources.Source, bool)
+	buildTarget SourceBuilder
 	candidates  CandidateCapturer
 }
 
-func New(db URLChecker, cfgDB SearchConfigReader, buildTarget func(dto.SourceTarget) (sources.Source, bool), candidates CandidateCapturer) *Orchestrator {
+func New(db URLChecker, cfgDB SearchConfigReader, buildTarget SourceBuilder, candidates CandidateCapturer) *Orchestrator {
 	return &Orchestrator{db: db, cfgDB: cfgDB, buildTarget: buildTarget, candidates: candidates}
 }
 

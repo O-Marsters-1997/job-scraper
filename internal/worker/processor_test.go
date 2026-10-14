@@ -179,6 +179,9 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 		Boards:       scraper.NewBoardPoller(store, oneBoardJob{}, exporter),
 		Exporter:     exporter,
 		MaxPages:     maxPages,
+		Verify: func(ctx context.Context, source, token string) (scraper.Verification, error) {
+			return scraper.VerifyBoard(ctx, build, source, token)
+		},
 		CardComplete: map[string]bool{"remoteok": true},
 		Detailers: map[string]sources.DetailFetcher{
 			"wis":      detailStub{},

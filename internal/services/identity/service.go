@@ -18,7 +18,7 @@ import (
 
 const sessionTTL = 30 * 24 * time.Hour
 
-var bcryptCost = bcrypt.DefaultCost
+const bcryptCost = bcrypt.DefaultCost
 
 type Store interface {
 	GetUserByUsername(ctx context.Context, username string) (dto.User, error)

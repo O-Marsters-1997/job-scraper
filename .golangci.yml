@@ -30,6 +30,7 @@ linters:
     - canonicalheader # non-canonical HTTP header keys
     - modernize # stdlib modernisations
     - paralleltest # missing t.Parallel (ADR 0012)
+    - gochecknoglobals # package-level state; inject dependencies instead
   settings:
     usetesting:
       context-background: true
@@ -174,6 +175,22 @@ linters:
         linters:
           - gosec
         text: G115|G304
+      - path: _test\.go|^internal/pgtest/|^internal/worker/sources/sourcetest/|test/[a-z]+\.go$
+        linters:
+          - gochecknoglobals
+      - path: ^cmd/
+        linters:
+          - gochecknoglobals
+      - path: ^internal/worker/proxy/fetch\.go$
+        linters:
+          - gochecknoglobals
+        text: '\b(allSlots|hostSlots|sharedCache)\b'
+      - linters:
+          - gochecknoglobals
+        text: '\b(FetchRequests|FetchBytes|FetchWireBytes|TargetsDisabled|\w+Desc)\b'
+      - linters:
+          - gochecknoglobals
+        text: '\b(atsSourceName|teamtailorReserved|hibobReserved|searchBoards|unsupportedBoards|sniffPatterns|separators|sessionKey|placeWords|remoteWords|symbols|foldText|PromptVersion|SuggestPromptVersion|checkNames|titleSeps|dateForms|suggestActions|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|dimensionSpecs|ladderLevels|currencySymbols|legalSuffixes|entries|patterns|notBoards|workArrangements|salaryPeriods|apiHeaders|relativeUnit|browserHeader|ukLocations)\b'
 
 formatters:
   enable:

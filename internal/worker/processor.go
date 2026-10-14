@@ -46,6 +46,8 @@ type IncludeFilterConfigs interface {
 
 type DiscoverFunc func(ctx context.Context, source, token string) (scraper.Discovery, error)
 
+type VerifyFunc func(ctx context.Context, source, token string) (scraper.Verification, error)
+
 type Deps struct {
 	JS           *jobsearch.Module
 	Broker       Publisher
@@ -57,6 +59,7 @@ type Deps struct {
 	MaxPages     int
 	Scoring      IncludeFilterConfigs
 	Discover     DiscoverFunc
+	Verify       VerifyFunc
 }
 
 type Processor struct {
@@ -70,10 +73,11 @@ type Processor struct {
 	maxPages     int
 	scoring      IncludeFilterConfigs
 	discover     DiscoverFunc
+	verify       VerifyFunc
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -128,7 +132,7 @@ func (p *Processor) forgetFetches(ctx context.Context, c *proxy.Collector) {
 }
 
 func (p *Processor) verifyBoard(ctx context.Context, task queue.Task) error {
-	verified, err := scraper.VerifyBoard(ctx, task.Source, task.BoardToken)
+	verified, err := p.verify(ctx, task.Source, task.BoardToken)
 	if err != nil {
 		slog.WarnContext(ctx, "board verification failed", slog.String(logger.KeyCompanyID, task.CompanyID), slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		return nil

@@ -52,7 +52,7 @@ var browserHeader = http.Header{
 	"Upgrade-Insecure-Requests": {"1"},
 }
 
-var limiter = sources.NewGate(wisGap, wisDefaultBlock)
+func NewGate() *sources.Gate { return sources.NewGate(wisGap, wisDefaultBlock) }
 
 // DetectWorkArrangement checks the REMOTE badge first — it's the authoritative signal —
 // then falls back to detecting hybrid/onsite from the description text.
@@ -122,13 +122,14 @@ func pageURL(s Search, page int) string {
 type Scraper struct {
 	sources.PaginatedBase
 	search      Search
+	gate        *sources.Gate
 	lastListing atomic.Pointer[string]
 }
 
 var _ sources.Source = (*Scraper)(nil)
 var _ sources.DetailFetcher = (*Scraper)(nil)
 
-func New(search Search) *Scraper {
+func New(search Search, gate *sources.Gate) *Scraper {
 	return &Scraper{
 		PaginatedBase: sources.NewBase(sources.Config{
 			Name:        "wis",
@@ -138,6 +139,7 @@ func New(search Search) *Scraper {
 			NewestFirst: true,
 		}),
 		search: search,
+		gate:   gate,
 	}
 }
 
@@ -150,7 +152,7 @@ func (s *Scraper) ParseJobDetail(r io.Reader, url string) (dto.Job, error) {
 }
 
 func (s *Scraper) get(ctx context.Context, url, referer string) ([]byte, error) {
-	if err := limiter.Wait(ctx); err != nil {
+	if err := s.gate.Wait(ctx); err != nil {
 		return nil, err
 	}
 	header := http.Header{"Sec-Fetch-Site": {"none"}}
@@ -161,7 +163,7 @@ func (s *Scraper) get(ctx context.Context, url, referer string) ([]byte, error) 
 	body, err := s.GetHeader(ctx, url, header)
 	var statusErr *sources.StatusError
 	if errors.As(err, &statusErr) && statusErr.Code == http.StatusTooManyRequests {
-		limiter.Block(statusErr.RetryAfter)
+		s.gate.Block(statusErr.RetryAfter)
 	}
 	return body, err
 }

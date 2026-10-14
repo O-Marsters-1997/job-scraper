@@ -100,11 +100,17 @@ func run(ctx context.Context) error {
 	proxy.SetCache(js)
 
 	exporter := scraper.NewAPIExporter(apiBaseURL, ingestToken)
-	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Profiles: js}, exporter)
-	orch := scraper.New(js.Boards(), scoringModule, builder.BuildSource, js.Targets())
+	sourceBuilder := builder.New()
+	boardPoller := scraper.NewBoardPoller(js.Boards(), scraper.SourceBoardFetcher{Build: sourceBuilder.BuildSource, Profiles: js}, exporter)
+	orch := scraper.New(js.Boards(), scoringModule, sourceBuilder.BuildSource, js.Targets())
 	processor := worker.NewProcessor(worker.Deps{
-		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: scraper.DiscoverBoard,
-		Detailers: builder.Detailers(), CardComplete: builder.CardComplete(),
+		JS: js, Broker: q, Orchestrator: orch, Boards: boardPoller, Exporter: exporter, MaxPages: maxPages, Scoring: scoringModule, Discover: func(ctx context.Context, source, token string) (scraper.Discovery, error) {
+			return scraper.DiscoverBoard(ctx, sourceBuilder.BuildSource, source, token)
+		},
+		Verify: func(ctx context.Context, source, token string) (scraper.Verification, error) {
+			return scraper.VerifyBoard(ctx, sourceBuilder.BuildSource, source, token)
+		},
+		Detailers: sourceBuilder.Detailers(), CardComplete: sourceBuilder.CardComplete(),
 	})
 
 	domainBase := sources.NewBase(sources.Config{Name: "domain-resolver"})

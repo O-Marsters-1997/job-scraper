@@ -17,7 +17,7 @@ import (
 func newScraper(tb testing.TB, search wis.Search) *wis.Scraper {
 	tb.Helper()
 	tb.Setenv("DECODO_PROXY_URL", "http://user:pass@localhost:7000")
-	return wis.New(search)
+	return wis.New(search, sources.NewGate(0, time.Hour))
 }
 
 func TestSnapshots(t *testing.T) {
@@ -139,7 +139,6 @@ func (c *countingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 }
 
 func TestRequests_BrowserHeaders(t *testing.T) {
-	wis.ResetLimiter()
 	src := newScraper(t, wis.Search{Keywords: "go"})
 	tr := &countingTransport{status: http.StatusOK}
 	src.Client().Transport = tr
@@ -167,7 +166,6 @@ func TestRateLimit(t *testing.T) {
 		{"429 without Retry-After blocks later requests", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			wis.ResetLimiter()
 			src := newScraper(t, wis.Search{Keywords: "go"})
 			tr := &countingTransport{status: http.StatusTooManyRequests, retryAfter: tt.retryAfter}
 			src.Client().Transport = tr

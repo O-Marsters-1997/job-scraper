@@ -7,7 +7,6 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wttj"
 )
 
@@ -25,7 +24,7 @@ type Verification struct {
 
 // VerifyBoard confirms the Board exists. A wttj Board needs only its company page,
 // whose existence is the evidence because the token came from WTTJ's own sitemap.
-func VerifyBoard(ctx context.Context, source, token string) (Verification, error) {
+func VerifyBoard(ctx context.Context, build SourceBuilder, source, token string) (Verification, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if role, ok := sourcespec.SourceRole(source); !ok || role != sourcespec.RoleATS || !sourcespec.ValidBoardToken(token) {
@@ -38,7 +37,7 @@ func VerifyBoard(ctx context.Context, source, token string) (Verification, error
 		}
 		return Verification{Method: MethodWTTJOrigin, CompanyName: name}, nil
 	}
-	src, ok := builder.BuildSource(dto.SourceTarget{Source: source, Value: token, Enabled: true})
+	src, ok := build(dto.SourceTarget{Source: source, Value: token, Enabled: true})
 	if !ok {
 		return Verification{}, errors.New("unsupported board source")
 	}

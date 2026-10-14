@@ -12,7 +12,6 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
-	"github.com/ollymarsters/job-scraper/internal/worker/sources/builder"
 )
 
 type BoardPollStore interface {
@@ -98,12 +97,13 @@ type ProfileSaver interface {
 }
 
 type SourceBoardFetcher struct {
+	Build    SourceBuilder
 	Profiles ProfileSaver
 }
 
 func (f SourceBoardFetcher) FetchBoard(ctx context.Context, board dto.BoardPoll) (sources.BoardResult, error) {
 	target := dto.SourceTarget{Source: board.Source, Value: board.Token, Enabled: true}
-	src, ok := builder.BuildSource(target)
+	src, ok := f.Build(target)
 	if !ok {
 		return sources.BoardResult{}, fmt.Errorf("unsupported board source %q", board.Source)
 	}
