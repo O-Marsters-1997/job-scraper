@@ -44,6 +44,7 @@ const (
 	selDetailCompany      = `a.topcard__org-name-link`
 	selDetailFlavorRow    = `.topcard__flavor-row`
 	selDetailFlavorBullet = `.topcard__flavor--bullet`
+	selDetailPostedAgo    = `span.posted-time-ago__text`
 	selDescription        = `div.show-more-less-html__markup`
 	selCriteriaItem       = `li.description__job-criteria-item`
 	selCriteriaHeader     = `h3.description__job-criteria-subheader`
@@ -144,7 +145,7 @@ func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
 	if err != nil {
 		return dto.Job{}, err
 	}
-	job, err := ParseJobDetail(bytes.NewReader(body), url)
+	job, err := ParseJobDetailAt(bytes.NewReader(body), url, time.Now())
 	if err != nil {
 		return dto.Job{}, err
 	}
@@ -209,6 +210,20 @@ var relativeUnit = map[string]time.Duration{
 	"month":  30 * 24 * time.Hour,
 }
 
+func relativeEstimate(m []string, now time.Time) time.Time {
+	n, _ := strconv.Atoi(m[1])
+	return now.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
+}
+
+func detailPostedAt(doc *goquery.Document, now time.Time) *time.Time {
+	m := relativeAge.FindStringSubmatch(strings.TrimSpace(doc.Find(selDetailPostedAgo).First().Text()))
+	if m == nil || now.IsZero() {
+		return nil
+	}
+	estimate := relativeEstimate(m, now)
+	return &estimate
+}
+
 func cardPostedAt(el *goquery.Selection, scrapedAt time.Time) *time.Time {
 	day, err := time.Parse(time.DateOnly, strings.TrimSpace(el.AttrOr("datetime", "")))
 	if err != nil {
@@ -218,8 +233,7 @@ func cardPostedAt(el *goquery.Selection, scrapedAt time.Time) *time.Time {
 	if m == nil || scrapedAt.IsZero() {
 		return &day
 	}
-	n, _ := strconv.Atoi(m[1])
-	estimate := scrapedAt.UTC().Add(-time.Duration(n) * relativeUnit[strings.ToLower(m[2])])
+	estimate := relativeEstimate(m, scrapedAt)
 	end := day.Add(24*time.Hour - time.Second)
 	switch {
 	case estimate.Before(day):
@@ -251,6 +265,10 @@ func cardJobID(card *goquery.Selection) string {
 }
 
 func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
+	return ParseJobDetailAt(r, jobURL, time.Time{})
+}
+
+func ParseJobDetailAt(r io.Reader, jobURL string, scrapedAt time.Time) (dto.Job, error) {
 	doc, err := sources.ParseHTML(r)
 	if err != nil {
 		return dto.Job{}, err
@@ -302,6 +320,7 @@ func ParseJobDetail(r io.Reader, jobURL string) (dto.Job, error) {
 		URL:             resolvedURL,
 		CompanySlug:     slug.Company(company),
 		Source:          "linkedin",
+		PostedAt:        detailPostedAt(doc, scrapedAt),
 		Description:     description,
 		SalaryRaw:       salaryRaw,
 		WorkArrangement: workArrangement,

@@ -1,6 +1,7 @@
 package linkedin_test
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -188,6 +189,25 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 				t.Errorf("query params (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestParseJobDetailAt(t *testing.T) {
+	t.Parallel()
+	html, err := os.ReadFile("snapshots/detail_details.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+
+	job, err := linkedin.ParseJobDetailAt(bytes.NewReader(html), "https://www.linkedin.com/jobs/view/1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := now.Add(-10 * 30 * 24 * time.Hour)
+	if job.PostedAt == nil || !job.PostedAt.Equal(want) {
+		t.Errorf("PostedAt = %v, want %v", job.PostedAt, want)
 	}
 }
 
