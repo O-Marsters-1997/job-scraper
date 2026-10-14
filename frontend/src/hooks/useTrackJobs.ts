@@ -1,4 +1,3 @@
-import type { RowSelectionState } from "@tanstack/solid-table";
 import { createMemo, createSignal } from "solid-js";
 import {
 	createJobColumns,
@@ -33,6 +32,7 @@ export function useTrackJobs(
 	contactSummaries: () =>
 		| Record<string, RecruiterContactSummary>
 		| undefined = () => undefined,
+	clearSelection: () => void = () => undefined,
 ) {
 	const applications = useApplications();
 	const appsForJobs = createMemo<Record<string, JobApplicationSummary>>(() =>
@@ -58,7 +58,6 @@ export function useTrackJobs(
 		return app ? toExistingApp(app) : undefined;
 	};
 
-	const [selection, setSelection] = createSignal<RowSelectionState>({});
 	const [gradeJobs, setGradeJobs] = createSignal<Job[]>([]);
 	const [gradeOpen, setGradeOpen] = createSignal(false);
 	const openGrade = (target: Job[]) => {
@@ -69,7 +68,7 @@ export function useTrackJobs(
 	const markSeen = useMarkJobsSeen();
 	const bulkSeen = async (target: Job[], seen: boolean) => {
 		await markSeen.mutateAsync({ jobIds: target.map((j) => j.ID), seen });
-		setSelection({});
+		clearSelection();
 	};
 	const markAllSeen = async (unseen: Job[]) => {
 		const jobIds = unseen.map((j) => j.ID);
@@ -131,8 +130,6 @@ export function useTrackJobs(
 		setModalOpen,
 		currentJob,
 		existingApp,
-		selection,
-		setSelection,
 		gradeJobs,
 		gradeOpen,
 		setGradeOpen,

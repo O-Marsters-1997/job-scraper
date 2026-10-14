@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     match_title         TEXT,
     match_location      TEXT,
     posted_after        TIMESTAMPTZ,
-    reposted_at         TIMESTAMPTZ
+    reposted_at         TIMESTAMPTZ,
+    salary_min          DOUBLE PRECISION,
+    salary_max          DOUBLE PRECISION
 );
 
 CREATE INDEX jobs_page_idx ON jobs (scraped_at DESC, id DESC);
