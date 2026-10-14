@@ -6,7 +6,6 @@ import {
 import {
 	addCompany,
 	addCompanyBoard,
-	type CompanyPageParams,
 	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
@@ -20,17 +19,35 @@ import {
 	unexcludeCompany,
 } from "../api/companies";
 import { keys } from "../api/keys";
+import type { CompanyListState } from "../lib/companyFilters";
 import type { CompanyBoard, ReviewState } from "../types/company";
+import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
+import { useServerTable } from "./useServerTable";
 
 export const COMPANY_PAGE_SIZE = 50;
 
-export function useCompanyPages(params: () => CompanyPageParams) {
-	return createQuery(() => ({
-		queryKey: keys.companies.list(params()),
-		queryFn: () => fetchCompanyPage({ ...params(), limit: COMPANY_PAGE_SIZE }),
-		placeholderData: keepPreviousData,
-	}));
+export function useCompanyPages(
+	state: () => CompanyListState,
+	onChange: (patch: Partial<CompanyListState>) => void,
+) {
+	return useServerTable({
+		state,
+		onChange,
+		pageSize: COMPANY_PAGE_SIZE,
+		queryKey: (s) => keys.companies.list(s),
+		queryFn: (s) =>
+			fetchCompanyPage({
+				poster: s.poster,
+				q: s.q,
+				favourite: s.favourite,
+				noBoard: s.noBoard,
+				sort: s.sort,
+				offset: ((s.page ?? 1) - 1) * COMPANY_PAGE_SIZE,
+				limit: COMPANY_PAGE_SIZE,
+			}),
+		rowId: (company) => company.ID,
+	});
 }
 
 const PICKER_LIMIT = 20;
@@ -123,6 +140,12 @@ export function useSetCompanyFavourite() {
 		({ id, favourite }: { id: string; favourite: boolean }) =>
 			setCompanyFavourite(id, favourite),
 		[keys.companies.all, keys.jobs.all],
+		{
+			patch: (queryClient, _result, { id, favourite }) =>
+				patchJobPages(queryClient, (job) => job.CompanyID === id, {
+					CompanyFavourite: favourite,
+				}),
+		},
 	);
 }
 

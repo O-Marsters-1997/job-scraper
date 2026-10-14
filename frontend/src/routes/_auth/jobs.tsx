@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createMemo, Show } from "solid-js";
+import { Show } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
@@ -7,14 +7,14 @@ import { PageHeading } from "@/components/PageHeading";
 import { Button } from "@/components/ui/button";
 import { SkeletonList } from "@/components/ui/skeleton";
 import type { JobFilters } from "@/lib/jobFilters";
-import { applyJobFilters, parseSearch, sourceOptions } from "@/lib/jobFilters";
-import { sortJobs } from "@/lib/jobSort";
+import { parseSearch } from "@/lib/jobFilters";
 import { JobsDataTable } from "../../components/jobs/JobsDataTable";
 import { aiPrefsQueryOptions, useAiPrefs } from "../../hooks/useAiPrefs";
 import { useCompany } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
-import { useAllJobs } from "../../hooks/useJobs";
+import { useJobPages } from "../../hooks/useJobs";
 import { SeenToast } from "../../hooks/useSeenToast";
+import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 
@@ -29,31 +29,26 @@ function JobsPage() {
 	const search = Route.useSearch();
 	const navigate = useNavigate({ from: "/jobs" });
 
-	const query = useAllJobs();
 	const aiPrefs = useAiPrefs();
-	const jobs = () => query.data ?? [];
 
 	const filters = () => parseSearch(search() as Record<string, unknown>);
-	const company = useCompany(() => filters().company ?? "");
-	const companyName = () => company.data?.Name ?? "Selected company";
-	const filtered = createMemo(() =>
-		sortJobs(applyJobFilters(jobs(), filters()), filters().sort),
-	);
-	const srcOptions = () => sourceOptions(jobs());
-
-	const setFilters = (patch: Partial<JobFilters>) => {
+	const table = useJobPages(filters, (patch) =>
 		navigate({
 			to: "/jobs",
-			search: (p) => ({
-				...p,
-				...("page" in patch ? {} : { page: undefined }),
-				...patch,
-			}),
+			search: (p) => ({ ...p, ...patch }),
 			replace: true,
-		});
-	};
+		}),
+	);
+	const query = table.query;
+	const company = useCompany(() => filters().company ?? "");
+	const companyName = () => company.data?.Name ?? "Selected company";
+	const sourceOptions = useSourceOptions();
 
-	const track = useTrackJobs(jobs);
+	const track = useTrackJobs(
+		table.items,
+		() => undefined,
+		table.clearSelection,
+	);
 
 	return (
 		<div class="px-7 py-6">
@@ -94,7 +89,7 @@ function JobsPage() {
 							variant="outline"
 							size="sm"
 							aria-label={`Clear company filter: ${companyName()}`}
-							onClick={() => setFilters({ company: undefined })}
+							onClick={() => table.setFilters({ company: undefined })}
 						>
 							{companyName()}
 							<Icon name="x" size={12} />
@@ -105,7 +100,7 @@ function JobsPage() {
 							variant="outline"
 							size="sm"
 							aria-label="Clear scored filter"
-							onClick={() => setFilters({ scored: false })}
+							onClick={() => table.setFilters({ scored: false })}
 						>
 							Scored for me
 							<Icon name="x" size={12} />
@@ -114,18 +109,21 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isSuccess}>
+			<Show when={query.data}>
 				<JobsDataTable
 					columns={track.columns}
-					data={filtered()}
+					data={table.items()}
+					total={table.total()}
+					page={table.page()}
+					pageSize={table.pageSize}
+					onPage={table.setPage}
 					filters={filters()}
-					onChange={setFilters}
-					page={filters().page}
-					onPageChange={(page) => setFilters({ page })}
-					sourceOptions={srcOptions()}
+					onChange={table.setFilters}
+					sourceOptions={sourceOptions()}
 					sortControl
-					selection={track.selection()}
-					onSelectionChange={track.setSelection}
+					selection={table.rowSelection()}
+					onSelectionChange={table.select}
+					selectedJobs={table.selectedItems()}
 					onBulkGrade={track.openGrade}
 					onBulkSeen={track.bulkSeen}
 					onMarkAllSeen={track.markAllSeen}
@@ -140,7 +138,7 @@ function JobsPage() {
 				onOpenChange={track.setGradeOpen}
 				jobs={track.gradeJobs()}
 				onSaved={(jobIds, priors) => {
-					track.setSelection({});
+					table.clearSelection();
 					if (jobIds.length > 1) announceBulkGrading({ jobIds, priors });
 				}}
 			/>
