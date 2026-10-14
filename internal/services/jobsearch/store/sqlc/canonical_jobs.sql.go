@@ -162,15 +162,16 @@ func (q *Queries) FindMatchCandidates(ctx context.Context, arg FindMatchCandidat
 
 const insertCanonicalJob = `-- name: InsertCanonicalJob :one
 INSERT INTO jobs (title, location, url, company_slug, source, posted_at, posted_after, description,
-    salary_raw, work_arrangement, company_id, primary_board_id, provider_posting_id,
+    salary_raw, salary_min, salary_max, work_arrangement, company_id, primary_board_id, provider_posting_id,
     content_fingerprint, content_changed_at, match_title, match_location)
 VALUES ($1, $2, $3, $4,
     $5, $6::timestamptz,
     (SELECT last_completed_at FROM board_poll_state WHERE board_id = $7::uuid),
     $8, $9,
-    $10, COALESCE($11::uuid, (SELECT id FROM companies WHERE slug = $4)),
-    $7::uuid, $12,
-    $13, NOW(), $14, $15)
+    $10::float8, $11::float8,
+    $12, COALESCE($13::uuid, (SELECT id FROM companies WHERE slug = $4)),
+    $7::uuid, $14,
+    $15, NOW(), $16, $17)
 RETURNING id
 `
 
@@ -184,6 +185,8 @@ type InsertCanonicalJobParams struct {
 	BoardID         pgtype.UUID
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	CompanyID       pgtype.UUID
 	PostingID       pgtype.Text
@@ -203,6 +206,8 @@ func (q *Queries) InsertCanonicalJob(ctx context.Context, arg InsertCanonicalJob
 		arg.BoardID,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.CompanyID,
 		arg.PostingID,
@@ -250,14 +255,15 @@ UPDATE jobs SET title = $1, location = $2,
     reposted_at = CASE WHEN $3::timestamptz > posted_at + INTERVAL '2 days'
         THEN GREATEST(reposted_at, $3::timestamptz) ELSE reposted_at END,
     posted_at = LEAST(posted_at, $3::timestamptz), description = $4,
-    salary_raw = $5, work_arrangement = $6,
-    content_fingerprint = $7, content_changed_at = NOW(),
-    match_title = $8, match_location = $9,
-    company_id = COALESCE($10::uuid, company_id, (SELECT id FROM companies WHERE slug = $11)),
-    primary_board_id = COALESCE($12::uuid, primary_board_id),
-    provider_posting_id = COALESCE($13, provider_posting_id),
+    salary_raw = $5, salary_min = $6::float8,
+    salary_max = $7::float8, work_arrangement = $8,
+    content_fingerprint = $9, content_changed_at = NOW(),
+    match_title = $10, match_location = $11,
+    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
+    primary_board_id = COALESCE($14::uuid, primary_board_id),
+    provider_posting_id = COALESCE($15, provider_posting_id),
     scraped_at = NOW()
-WHERE id = $14::uuid
+WHERE id = $16::uuid
 `
 
 type UpdateChangedCanonicalJobParams struct {
@@ -266,6 +272,8 @@ type UpdateChangedCanonicalJobParams struct {
 	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
@@ -284,6 +292,8 @@ func (q *Queries) UpdateChangedCanonicalJob(ctx context.Context, arg UpdateChang
 		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.Fingerprint,
 		arg.MatchTitle,
@@ -337,13 +347,14 @@ UPDATE jobs SET title = $1, location = $2, url = $3,
     reposted_at = CASE WHEN $5::timestamptz > posted_at + INTERVAL '2 days'
         THEN GREATEST(reposted_at, $5::timestamptz) ELSE reposted_at END,
     posted_at = LEAST(posted_at, $5::timestamptz), description = $6,
-    salary_raw = $7, work_arrangement = $8,
-    content_fingerprint = $9, content_changed_at = NOW(),
-    match_title = $10, match_location = $11,
-    company_id = COALESCE($12::uuid, company_id, (SELECT id FROM companies WHERE slug = $13)),
-    primary_board_id = $14::uuid, provider_posting_id = $15,
+    salary_raw = $7, salary_min = $8::float8,
+    salary_max = $9::float8, work_arrangement = $10,
+    content_fingerprint = $11, content_changed_at = NOW(),
+    match_title = $12, match_location = $13,
+    company_id = COALESCE($14::uuid, company_id, (SELECT id FROM companies WHERE slug = $15)),
+    primary_board_id = $16::uuid, provider_posting_id = $17,
     scraped_at = NOW()
-WHERE id = $16::uuid
+WHERE id = $18::uuid
 `
 
 type UpgradeCanonicalJobParams struct {
@@ -354,6 +365,8 @@ type UpgradeCanonicalJobParams struct {
 	PostedAt        pgtype.Timestamptz
 	Description     string
 	SalaryRaw       string
+	SalaryMin       pgtype.Float8
+	SalaryMax       pgtype.Float8
 	WorkArrangement string
 	Fingerprint     pgtype.Text
 	MatchTitle      pgtype.Text
@@ -374,6 +387,8 @@ func (q *Queries) UpgradeCanonicalJob(ctx context.Context, arg UpgradeCanonicalJ
 		arg.PostedAt,
 		arg.Description,
 		arg.SalaryRaw,
+		arg.SalaryMin,
+		arg.SalaryMax,
 		arg.WorkArrangement,
 		arg.Fingerprint,
 		arg.MatchTitle,

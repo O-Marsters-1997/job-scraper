@@ -24,6 +24,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/jobmatch"
 	"github.com/ollymarsters/job-scraper/internal/runwindow"
+	"github.com/ollymarsters/job-scraper/internal/salary"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/store/sqlc"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
@@ -223,6 +224,14 @@ func jobFingerprint(job dto.Job) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
 
+func salaryBounds(raw string) (lo, hi pgtype.Float8) {
+	floor, ceiling, ok := salary.Parse(raw)
+	if !ok {
+		return lo, hi
+	}
+	return pgtype.Float8{Float64: floor, Valid: true}, pgtype.Float8{Float64: ceiling, Valid: true}
+}
+
 func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string, error) {
 	normalizedURL, err := normalizeJobURL(job.URL)
 	if err != nil {
@@ -268,6 +277,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		return dto.Job{}, "", fmt.Errorf("%w: URL belongs to another trusted posting", ErrCanonicalConflict)
 	}
 
+	salaryMin, salaryMax := salaryBounds(job.SalaryRaw)
 	matchTitle := jobmatch.Title(job.Title)
 	matchLocation := jobmatch.Location(job.Location)
 	trusted := boardID.Valid && postingID.Valid
@@ -298,6 +308,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			err = queries.UpgradeCanonicalJob(ctx, sqlc.UpgradeCanonicalJobParams{
 				Title: job.Title, Location: job.Location, Url: job.URL, Source: job.Source,
 				PostedAt: postedAt, Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 				MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
@@ -319,8 +330,9 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 		jobID, err = queries.InsertCanonicalJob(ctx, sqlc.InsertCanonicalJobParams{
 			Title: job.Title, Location: job.Location, Url: job.URL, CompanySlug: job.CompanySlug,
 			Source: job.Source, PostedAt: postedAt, Description: job.Description,
-			SalaryRaw: job.SalaryRaw, WorkArrangement: job.WorkArrangement,
-			CompanyID: companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
+			SalaryRaw: job.SalaryRaw, SalaryMin: salaryMin, SalaryMax: salaryMax,
+			WorkArrangement: job.WorkArrangement,
+			CompanyID:       companyID, BoardID: boardID, PostingID: postingID, Fingerprint: fingerprint,
 			MatchTitle:    pgtype.Text{String: matchTitle, Valid: true},
 			MatchLocation: pgtype.Text{String: matchLocation, Valid: true},
 		})
@@ -347,6 +359,7 @@ func (s *Store) SaveCanonical(ctx context.Context, job dto.Job) (dto.Job, string
 			err = queries.UpdateChangedCanonicalJob(ctx, sqlc.UpdateChangedCanonicalJobParams{
 				Title: job.Title, Location: job.Location, PostedAt: postedAt,
 				Description: job.Description, SalaryRaw: job.SalaryRaw,
+				SalaryMin: salaryMin, SalaryMax: salaryMax,
 				WorkArrangement: job.WorkArrangement, Fingerprint: fingerprint,
 				CompanyID: companyID, CompanySlug: job.CompanySlug, BoardID: boardID, PostingID: postingID, ID: jobID,
 			})

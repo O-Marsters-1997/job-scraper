@@ -513,6 +513,34 @@ func TestSaveCanonical(t *testing.T) {
 	const boardA = "11111111-1111-1111-1111-111111111111"
 	const boardB = "22222222-2222-2222-2222-222222222222"
 
+	t.Run("salary bounds follow salary_raw on insert and change", func(t *testing.T) {
+		t.Parallel()
+		st, pool := newStore(t)
+		job := baseJob
+		job.URL = "https://example.com/jobs/salary"
+		job.SalaryRaw = "£80k - £95k"
+		saved, _ := saveJob(t, st, job)
+
+		bounds := func() (lo, hi *float64) {
+			err := pool.QueryRow(t.Context(),
+				`SELECT salary_min, salary_max FROM jobs WHERE id = $1`, saved.ID).Scan(&lo, &hi)
+			if err != nil {
+				t.Fatalf("select salary bounds err = %v", err)
+			}
+			return lo, hi
+		}
+		lo, hi := bounds()
+		if lo == nil || hi == nil || *lo != 80000 || *hi != 95000 {
+			t.Fatalf("after insert bounds = %v, %v, want 80000, 95000", lo, hi)
+		}
+
+		job.SalaryRaw = "Competitive"
+		saveJob(t, st, job)
+		if lo, hi = bounds(); lo != nil || hi != nil {
+			t.Errorf("after unparseable change bounds = %v, %v, want nil, nil", lo, hi)
+		}
+	})
+
 	t.Run("URL aliases and replays keep one job", func(t *testing.T) {
 		t.Parallel()
 		st, pool, userID := newUserStore(t)
