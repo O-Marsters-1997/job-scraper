@@ -126,8 +126,17 @@ function JobsPage() {
 					sortControl
 					selection={track.selection()}
 					onSelectionChange={track.setSelection}
-					onBulkGrade={track.openGrade}
-					onBulkSeen={track.bulkSeen}
+					bulkActions={[
+						{ label: "Grade", icon: "check", onSelect: track.openGrade },
+						{
+							label: "Mark seen",
+							onSelect: (jobs) => track.bulkSeen(jobs, true),
+						},
+						{
+							label: "Mark unseen",
+							onSelect: (jobs) => track.bulkSeen(jobs, false),
+						},
+					]}
 					onMarkAllSeen={track.markAllSeen}
 				/>
 			</Show>

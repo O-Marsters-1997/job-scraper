@@ -9,7 +9,7 @@ import {
 	type SortingState,
 } from "@tanstack/solid-table";
 import { createEffect, createSignal, For, on, Show } from "solid-js";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Kbd } from "@/components/Kbd";
@@ -17,6 +17,12 @@ import { Pager } from "@/components/Pager";
 import { SortableTableHead } from "@/components/SortableTableHead";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,6 +44,12 @@ import { activeFilterCount, type JobFilters } from "@/lib/jobFilters";
 import { type JobSort, SORT_LABELS, SORT_OPTIONS } from "@/lib/jobSort";
 import type { Job } from "@/types/job";
 
+export interface BulkAction<TData> {
+	label: string;
+	icon?: IconName;
+	onSelect: (jobs: TData[]) => void;
+}
+
 interface JobsDataTableProps<TData extends Job> {
 	columns: ColumnDef<TData, unknown>[];
 	data: TData[];
@@ -49,8 +61,7 @@ interface JobsDataTableProps<TData extends Job> {
 	sortControl?: boolean;
 	selection?: RowSelectionState;
 	onSelectionChange?: (next: RowSelectionState) => void;
-	onBulkGrade?: (jobs: TData[]) => void;
-	onBulkSeen?: (jobs: TData[], seen: boolean) => void;
+	bulkActions?: BulkAction<TData>[];
 	onMarkAllSeen?: (jobs: TData[]) => void;
 }
 
@@ -326,7 +337,11 @@ export function JobsDataTable<TData extends Job>(
 						</Select>
 					</div>
 				</Show>
-				<Show when={props.onBulkGrade && selectedJobs().length > 0}>
+				<Show
+					when={
+						(props.bulkActions?.length ?? 0) > 0 && selectedJobs().length > 0
+					}
+				>
 					<div class="flex items-center gap-2">
 						<span class="font-mono text-xs tabular-nums text-muted">
 							{selectedJobs().length} selected
@@ -334,29 +349,26 @@ export function JobsDataTable<TData extends Job>(
 						<Button variant="ghost" size="sm" onClick={() => setSelection({})}>
 							Clear
 						</Button>
-						<Button
-							size="sm"
-							onClick={() => props.onBulkGrade?.(selectedJobs())}
-						>
-							<Icon name="check" size={14} />
-							Grade
-						</Button>
-						<Show when={props.onBulkSeen}>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => props.onBulkSeen?.(selectedJobs(), true)}
-							>
-								Mark seen
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => props.onBulkSeen?.(selectedJobs(), false)}
-							>
-								Mark unseen
-							</Button>
-						</Show>
+						<DropdownMenu>
+							<DropdownMenuTrigger as={Button} variant="outline" size="sm">
+								Actions
+								<Icon name="moreVertical" size={14} />
+							</DropdownMenuTrigger>
+							<DropdownMenuContent>
+								<For each={props.bulkActions}>
+									{(action) => (
+										<DropdownMenuItem
+											onSelect={() => action.onSelect(selectedJobs())}
+										>
+											<Show when={action.icon}>
+												{(icon) => <Icon name={icon()} size={14} />}
+											</Show>
+											{action.label}
+										</DropdownMenuItem>
+									)}
+								</For>
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</Show>
 			</div>

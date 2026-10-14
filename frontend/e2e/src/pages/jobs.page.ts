@@ -77,8 +77,15 @@ export class JobsPage {
 		}
 	}
 
+	async chooseBulkAction(name: string) {
+		await this.page
+			.getByRole("button", { name: "Actions", exact: true })
+			.click();
+		await this.page.getByRole("menuitem", { name, exact: true }).click();
+	}
+
 	async openBulkGrade() {
-		await this.page.getByRole("button", { name: "Grade", exact: true }).click();
+		await this.chooseBulkAction("Grade");
 	}
 
 	async undoBulkGrade() {
