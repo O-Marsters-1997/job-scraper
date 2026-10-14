@@ -72,8 +72,11 @@ export function JobsDataTable<TData extends Job>(
 		{},
 	);
 	const selection = () => props.selection ?? localSelection();
-	const setSelection = (next: RowSelectionState) =>
+	let selectionAnchor: string | undefined;
+	const setSelection = (next: RowSelectionState) => {
+		if (Object.keys(next).length === 0) selectionAnchor = undefined;
 		(props.onSelectionChange ?? setLocalSelection)(next);
+	};
 
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
 	const isExpanded = (rowId: string) => expandedRow() === rowId;
@@ -107,7 +110,6 @@ export function JobsDataTable<TData extends Job>(
 		if (requestedPageIndex() > pageIndex()) setPageIndex(pageIndex());
 	});
 
-	let selectionAnchor: string | undefined;
 	const selectRow = (rowId: string, extendRange: boolean) => {
 		const ids = table.getRowModel().rows.map((row) => row.id);
 		const from =
@@ -176,10 +178,7 @@ export function JobsDataTable<TData extends Job>(
 	createEffect(
 		on(
 			[() => props.data, sorting, () => table.getState().pagination.pageIndex],
-			() => {
-				selectionAnchor = undefined;
-				setSelection({});
-			},
+			() => setSelection({}),
 			{ defer: true },
 		),
 	);
