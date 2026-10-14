@@ -18,12 +18,10 @@ useful and make the order unpredictable. The User also needs to re-sort without 
 - **Unscored jobs use a prior of 50**, the middle of the scale, so they are neither hidden at the bottom
   nor ranked as Great.
 - **Ties break by `first_discovered_at` DESC, then ID**, so the order is deterministic.
-- **It runs in the client**, over the already-loaded unpaginated list. No server sort parameter; `GET
-  /jobs/all` keeps plain server order (score DESC, `scraped_at` DESC). The constants (`HALF_LIFE_DAYS`,
-  `UNSCORED_PRIOR`) sit beside the function in `frontend/src/lib/jobSort.ts`.
+- **It runs in SQL**, in `GET /jobs` with `sort=relevant`, so it works on a server-paged list. The client
+  copy (`frontend/src/lib/jobSort.ts`) is deleted. Design: `docs/jobs-server-paging.md`.
 - **A sort control sits top-right of the table** with Relevant, Newest and Best match. The choice lives in
-  the `sort` URL param; an absent or unknown value means Relevant. A header sort shows the control as
-  "Custom".
+  the `sort` URL param; an absent or unknown value means Relevant. Column headers are not sortable.
 - **There are no wildcard slots.** The order is the formula and nothing else.
 
 ## Alternatives
@@ -34,15 +32,11 @@ useful and make the order unpredictable. The User also needs to re-sort without 
 - **Recency buckets** (today, this week, older, each sorted by score). Easy to explain but a job moves
   rank in a step at midnight, and the bucket edges are arbitrary.
 - **Sort by Suitability only, or by recency only.** Both failure modes in Context.
-- **A server-side sort parameter.** The list is already loaded whole, and a second implementation of the
-  formula in SQL would have to be kept in step.
 - **Wildcard slots beside Relevant.** They fight the formula: the decay already lets fresh unscored jobs
   surface.
 
 ## Consequences
 
-- Changing the half-life or prior is a one-line edit with a check in `jobSort.check.ts`.
+- Changing the half-life or prior is an edit to the SQL expression, covered by a store test.
 - The order shifts as jobs age, even with no new scrapes. Reloading later can reorder the list.
-- Relevant depends on the whole list being loaded. Once the list is paged by keyset (ADR 0031), the sort has
-  to move to the server.
 - A low-ranked job never surfaces out of order; the decay lets fresh unscored jobs rise instead.
