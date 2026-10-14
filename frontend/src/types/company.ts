@@ -39,6 +39,20 @@ export const companyExclusionSchema = z.object({
 
 export type CompanyExclusion = z.infer<typeof companyExclusionSchema>;
 
+export const companiesExclusionSchema = z.object({
+	companies: z.array(
+		z.object({
+			companyId: z.string(),
+			name: z.string(),
+			added: z.boolean(),
+		}),
+	),
+});
+
+export type CompaniesExclusion = z.infer<typeof companiesExclusionSchema>;
+
+export const companiesKindResultSchema = z.object({ updated: z.number() });
+
 export const companyPageSchema = z.object({
 	items: z.array(companySchema),
 	total: z.number(),

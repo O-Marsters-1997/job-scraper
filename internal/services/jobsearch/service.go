@@ -19,10 +19,11 @@ import (
 )
 
 const (
-	defaultPageLimit = 50
-	defaultSinceDays = 90
-	maxSinceDays     = 36500
-	maxSeenJobIDs    = 5000
+	defaultPageLimit  = 50
+	defaultSinceDays  = 90
+	maxSinceDays      = 36500
+	maxSeenJobIDs     = 5000
+	maxBulkCompanyIDs = 500
 )
 
 type jobCursor struct {

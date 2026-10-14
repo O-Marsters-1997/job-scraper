@@ -136,6 +136,14 @@ function JobsPage() {
 							label: "Mark unseen",
 							onSelect: (jobs) => track.bulkSeen(jobs, false),
 						},
+						{
+							label: "Exclude companies",
+							onSelect: track.bulkExcludeCompanies,
+						},
+						{
+							label: "Mark as recruiter",
+							onSelect: track.bulkMarkRecruiters,
+						},
 					]}
 					onMarkAllSeen={track.markAllSeen}
 				/>

@@ -1,5 +1,6 @@
 import type {
 	AddCompanyPayload,
+	CompaniesExclusion,
 	Company,
 	CompanyBoard,
 	CompanyExclusion,
@@ -10,6 +11,8 @@ import type {
 	TrackedCompany,
 } from "../types/company";
 import {
+	companiesExclusionSchema,
+	companiesKindResultSchema,
 	companyBoardSchema,
 	companyExclusionSchema,
 	companyPageSchema,
@@ -186,6 +189,49 @@ export async function unexcludeCompany(
 				`/companies/${id}/exclusion/undo`,
 				companyExclusionSchema,
 				jsonInit("POST", { removeName }),
+			),
+	);
+}
+
+export async function excludeCompanies(
+	ids: string[],
+): Promise<CompaniesExclusion> {
+	return mocked(
+		(db) => db.excludeCompanies(ids),
+		() =>
+			apiFetch(
+				"/companies/exclusions",
+				companiesExclusionSchema,
+				jsonInit("POST", { companyIds: ids }),
+			),
+	);
+}
+
+export async function unexcludeCompanies(
+	companies: { companyId: string; removeName: boolean }[],
+): Promise<CompaniesExclusion> {
+	return mocked(
+		(db) => db.unexcludeCompanies(companies),
+		() =>
+			apiFetch(
+				"/companies/exclusions/undo",
+				companiesExclusionSchema,
+				jsonInit("POST", { companies }),
+			),
+	);
+}
+
+export async function setCompaniesKind(
+	ids: string[],
+	kind: "agency" | "direct",
+): Promise<{ updated: number }> {
+	return mocked(
+		(db) => db.setCompaniesKind(ids, kind),
+		() =>
+			apiFetch(
+				"/companies/kind",
+				companiesKindResultSchema,
+				jsonInit("PUT", { companyIds: ids, kind }),
 			),
 	);
 }

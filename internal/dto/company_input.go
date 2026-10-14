@@ -32,6 +32,38 @@ type CompanyExclusion struct {
 	Added bool   `json:"added"`
 }
 
+type ExcludeCompaniesInput struct {
+	CompanyIDs []string `json:"companyIds"`
+}
+
+type CompaniesExclusion struct {
+	Companies []CompanyExclusionEntry `json:"companies"`
+}
+
+type CompanyExclusionEntry struct {
+	CompanyID string `json:"companyId"`
+	Name      string `json:"name"`
+	Added     bool   `json:"added"`
+}
+
+type UnexcludeCompaniesInput struct {
+	Companies []UnexcludeCompanyEntry `json:"companies"`
+}
+
+type UnexcludeCompanyEntry struct {
+	CompanyID  string `json:"companyId"`
+	RemoveName bool   `json:"removeName"`
+}
+
+type SetCompaniesKindInput struct {
+	CompanyIDs []string    `json:"companyIds"`
+	Kind       CompanyKind `json:"kind"`
+}
+
+type CompaniesKindResult struct {
+	Updated int `json:"updated"`
+}
+
 type AddCompanyBoardInput struct {
 	CompanyID string `json:"-" path:"id"`
 	URL       string `json:"url"`
