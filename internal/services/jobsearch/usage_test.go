@@ -124,8 +124,8 @@ func TestNewDecodoQuota(t *testing.T) {
 		return srv, &auth
 	}
 
-	t.Run("parses the string fields and sends the key", func(t *testing.T) {
-		srv, auth := serve(http.StatusOK, `[{"traffic_per_period":"1.5","traffic_limit":"8","valid_until":"2026-11-01"}]`)
+	t.Run("parses numeric and string figures and sends the bare key", func(t *testing.T) {
+		srv, auth := serve(http.StatusOK, `[{"traffic":1.5,"traffic_limit":"8","valid_until":"2026-11-01"}]`)
 		got, err := jobsearch.NewDecodoQuota(srv.Client(), srv.URL, "k").FetchQuota(t.Context())
 		if err != nil {
 			t.Fatalf("FetchQuota() = %v", err)
@@ -134,8 +134,8 @@ func TestNewDecodoQuota(t *testing.T) {
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("quota (-want +got):\n%s", diff)
 		}
-		if *auth != "Basic k" {
-			t.Errorf("Authorization = %q, want %q", *auth, "Basic k")
+		if *auth != "k" {
+			t.Errorf("Authorization = %q, want %q", *auth, "k")
 		}
 	})
 
@@ -145,8 +145,10 @@ func TestNewDecodoQuota(t *testing.T) {
 	}{
 		"non-200":       {http.StatusUnauthorized, `{}`},
 		"empty list":    {http.StatusOK, `[]`},
-		"bad number":    {http.StatusOK, `[{"traffic_per_period":"x","traffic_limit":"8","valid_until":"2026-11-01"}]`},
-		"bad timestamp": {http.StatusOK, `[{"traffic_per_period":"1","traffic_limit":"8","valid_until":"soon"}]`},
+		"bad number":    {http.StatusOK, `[{"traffic":"x","traffic_limit":"8","valid_until":"2026-11-01"}]`},
+		"wrong type":    {http.StatusOK, `[{"traffic":true,"traffic_limit":"8","valid_until":"2026-11-01"}]`},
+		"missing field": {http.StatusOK, `[{"traffic_limit":"8","valid_until":"2026-11-01"}]`},
+		"bad timestamp": {http.StatusOK, `[{"traffic":1,"traffic_limit":"8","valid_until":"soon"}]`},
 	} {
 		t.Run(name+" is an error", func(t *testing.T) {
 			srv, _ := serve(tc.status, tc.body)

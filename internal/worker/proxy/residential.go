@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,16 +28,29 @@ type residentialTransport struct {
 	residential *http.Transport
 	cache       Cache
 
-	session   atomic.Value
+	session   atomic.Pointer[session]
 	rotations atomic.Int64
 	source    string
 }
 
-func newSession() string {
+type session struct {
+	id  string
+	jar http.CookieJar
+}
+
+func newSession() *session {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(err)
+	}
+	return &session{id: newSessionID(), jar: jar}
+}
+
+func newSessionID() string {
 	return strconv.FormatUint(rand.Uint64(), 36)
 }
 
-func (t *residentialTransport) rotate(ctx context.Context, stale, reason string, status int) {
+func (t *residentialTransport) rotate(ctx context.Context, stale *session, reason string, status int) {
 	if t.session.CompareAndSwap(stale, newSession()) {
 		slog.InfoContext(ctx, "residential session rotated",
 			slog.String(logger.KeySource, t.source),
@@ -44,7 +59,6 @@ func (t *residentialTransport) rotate(ctx context.Context, stale, reason string,
 			slog.Int64(logger.KeyCount, t.rotations.Add(1)),
 		)
 	}
-	t.residential.CloseIdleConnections()
 }
 
 func newResidential(cache Cache, source string) (*residentialTransport, error) {
@@ -54,11 +68,19 @@ func newResidential(cache Cache, source string) (*residentialTransport, error) {
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = func(req *http.Request) (*url.URL, error) {
-		session, _ := req.Context().Value(sessionKey{}).(string)
+		id, _ := req.Context().Value(sessionKey{}).(string)
 		pu := *u
 		password, _ := u.User.Password()
-		pu.User = url.UserPassword(u.User.Username()+"-session-"+session, password)
+		pu.User = url.UserPassword(u.User.Username()+"-session-"+id, password)
 		return &pu, nil
+	}
+	dial := tr.DialContext
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return newCountingConn(conn, source, routeResidential), nil
 	}
 	t := &residentialTransport{
 		residential: tr,
@@ -117,21 +139,31 @@ func (t *residentialTransport) residentialAttempt(req *http.Request) (*http.Resp
 	if err != nil {
 		return nil, err
 	}
-	session := t.session.Load().(string)
-	attempt := req.WithContext(context.WithValue(req.Context(), sessionKey{}, session))
+	sess := t.session.Load()
+	attempt := req.WithContext(context.WithValue(req.Context(), sessionKey{}, sess.id))
+	attempt.Header = req.Header.Clone()
+	if attempt.Header == nil {
+		attempt.Header = http.Header{}
+	}
+	for _, c := range sess.jar.Cookies(req.URL) {
+		attempt.AddCookie(c)
+	}
 	start := time.Now()
 	resp, err := t.residential.RoundTrip(attempt)
 	logger.LogFetch(req.Context(), req.URL, resp, err, time.Since(start))
+	if err == nil {
+		sess.jar.SetCookies(req.URL, resp.Cookies())
+	}
 	record(req, t.source, routeResidential, resp, err)
 	if err != nil {
 		if req.Context().Err() == nil {
-			t.rotate(req.Context(), session, "error", 0)
+			t.rotate(req.Context(), sess, "error", 0)
 		}
 		release()
 		return nil, err
 	}
 	if blocked(req, resp) {
-		t.rotate(req.Context(), session, "blocked", resp.StatusCode)
+		t.rotate(req.Context(), sess, "blocked", resp.StatusCode)
 	}
 	resp.Body = &releasingBody{ReadCloser: http.MaxBytesReader(nil, resp.Body, maxBodyBytes), release: release}
 	return resp, nil

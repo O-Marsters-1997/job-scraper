@@ -10,11 +10,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -248,6 +250,57 @@ func TestResidentialFetcherLogsRotations(t *testing.T) {
 	}
 	if len(counts) != 3 || counts[0] != 1 || counts[2] != 3 {
 		t.Errorf("rotation counts = %v, want 1..3", counts)
+	}
+}
+
+func TestResidentialFetcherSessionCookies(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	var (
+		mu      sync.Mutex
+		cookies []string
+		calls   int
+	)
+	residential := newFakeProxy(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		n := calls
+		cookies = append(cookies, r.Header.Get("Cookie"))
+		mu.Unlock()
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: strconv.Itoa(n)})
+		if n == 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	tr := residentialFetcher(t, residential, nil)
+	target := httpTarget(t)
+	for range 4 {
+		resp, err := tr.RoundTrip(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	want := []string{"", "sid=1", "sid=2", "", "sid=4"}
+	mu.Lock()
+	defer mu.Unlock()
+	if diff := cmp.Diff(want, cookies); diff != "" {
+		t.Errorf("Cookie headers per attempt (-want +got):\n%s", diff)
+	}
+}
+
+func TestResidentialFetcherWireBytes(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, status(200, ""))
+	resp, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	for _, direction := range []string{"read", "write"} {
+		if got := testutil.ToFloat64(proxy.FetchWireBytes.WithLabelValues(t.Name(), "residential", direction)); got <= 0 {
+			t.Errorf("wire bytes %s = %v, want > 0", direction, got)
+		}
 	}
 }
 
