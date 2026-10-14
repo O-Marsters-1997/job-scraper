@@ -30,7 +30,7 @@ func TestRoutesRequireAuth(t *testing.T) {
 	r := chi.NewRouter()
 	jobsearch.Build(jobsearchtest.NewDeps(jobsearchtest.NewFakeStore())).Routes(r)
 	handlerstest.RequiresAuth(t, r,
-		"GET /jobs", "POST /jobs/seen", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/all", "GET /jobs/{id}",
+		"GET /jobs", "POST /jobs/seen", "PUT /companies/{id}/favourite", "DELETE /companies/{id}/favourite", "GET /jobs/{id}",
 		"GET /sources", "GET /sources/resolve",
 		"GET /source-targets", "POST /source-targets", "PATCH /source-targets/{id}",
 		"POST /source-targets/{id}/scrape", "DELETE /source-targets/{id}",

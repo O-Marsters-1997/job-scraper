@@ -1,7 +1,15 @@
+import { z } from "zod";
 import type { Job } from "../types/job";
 import { jobSchema } from "../types/job";
 import { apiFetch, apiFetchVoid, jsonInit } from "./client";
 import { mocked } from "./config";
+
+const JOBS_PAGE_SIZE = 100;
+
+const jobPageSchema = z.object({
+	items: jobSchema.array(),
+	total: z.number(),
+});
 
 export async function fetchAllJobs(): Promise<Job[]> {
 	return mocked(
@@ -21,7 +29,17 @@ export async function fetchAllJobs(): Promise<Job[]> {
 					CompanyFavourite: db.isCompanyFavourite(job.CompanyID),
 					CompanyKind: db.getCompanyKind(job.CompanyID),
 				})),
-		() => apiFetch("/jobs/all", jobSchema.array()),
+		async () => {
+			const jobs: Job[] = [];
+			for (let page = 1; ; page++) {
+				const res = await apiFetch(
+					`/jobs?scored=1&page=${page}&page_size=${JOBS_PAGE_SIZE}`,
+					jobPageSchema,
+				);
+				jobs.push(...res.items);
+				if (res.items.length === 0 || jobs.length >= res.total) return jobs;
+			}
+		},
 	);
 }
 
