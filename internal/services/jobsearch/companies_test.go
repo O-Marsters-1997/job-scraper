@@ -650,3 +650,94 @@ func TestExcludeCompany(t *testing.T) {
 		}
 	})
 }
+
+func TestExcludeCompanies(t *testing.T) {
+	t.Parallel()
+	setup := func(t *testing.T) (*jobsearch.Module, *jobsearchtest.NoopScoring, []string) {
+		t.Helper()
+		st := jobsearchtest.NewFakeStore()
+		scoring := jobsearchtest.NewNoopScoring()
+		deps := jobsearchtest.NewDeps(st)
+		deps.Scoring = scoring
+		var ids []string
+		for _, slug := range []string{"a", "b", "c", "d", "e"} {
+			ids = append(ids, seedCompany(t, st, dto.CompanyUpsert{Slug: slug, Name: "Co " + slug}).ID)
+		}
+		return jobsearch.Build(deps), scoring, ids
+	}
+	excluded := func(t *testing.T, scoring *jobsearchtest.NoopScoring) []string {
+		t.Helper()
+		cfg, err := scoring.SearchConfig(t.Context(), userID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg.ExcludedCompanies
+	}
+	want := []string{"co a", "co b", "co c", "co d", "co e"}
+
+	t.Run("excludes every distinct company and undo restores all", func(t *testing.T) {
+		t.Parallel()
+		m, scoring, ids := setup(t)
+		got, err := m.ExcludeCompanies(t.Context(), userID, dto.ExcludeCompaniesInput{CompanyIDs: append(ids, ids[0])})
+		if err != nil || len(got.Companies) != 5 {
+			t.Fatalf("ExcludeCompanies() = %+v, %v, want 5 companies", got, err)
+		}
+		if diff := cmp.Diff(want, excluded(t, scoring)); diff != "" {
+			t.Errorf("ExcludedCompanies (-want +got):\n%s", diff)
+		}
+
+		undo := dto.UnexcludeCompaniesInput{}
+		for _, c := range got.Companies {
+			undo.Companies = append(undo.Companies, dto.UnexcludeCompanyEntry{CompanyID: c.CompanyID, RemoveName: c.Added})
+		}
+		if _, err := m.UnexcludeCompanies(t.Context(), userID, undo); err != nil {
+			t.Fatalf("UnexcludeCompanies() err = %v", err)
+		}
+		if got := excluded(t, scoring); len(got) != 0 {
+			t.Errorf("ExcludedCompanies = %v, want empty", got)
+		}
+	})
+
+	t.Run("rejects more IDs than the cap", func(t *testing.T) {
+		t.Parallel()
+		m, _, _ := setup(t)
+		_, err := m.ExcludeCompanies(t.Context(), userID, dto.ExcludeCompaniesInput{CompanyIDs: make([]string, 501)})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Fatalf("ExcludeCompanies() err = %v, want invalid", err)
+		}
+	})
+}
+
+func TestSetCompaniesKind(t *testing.T) {
+	t.Parallel()
+	t.Run("sets the kind on every distinct company", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		a := seedCompany(t, st, dto.CompanyUpsert{Slug: "a", Name: "A"})
+		b := seedCompany(t, st, dto.CompanyUpsert{Slug: "b", Name: "B"})
+		got, err := svc.SetCompaniesKind(t.Context(), userID, dto.SetCompaniesKindInput{CompanyIDs: []string{a.ID, b.ID, a.ID}, Kind: dto.KindAgency})
+		if err != nil || got.Updated != 2 {
+			t.Fatalf("SetCompaniesKind() = %+v, %v, want 2 updated", got, err)
+		}
+		for _, id := range []string{a.ID, b.ID} {
+			c, err := st.GetCompany(t.Context(), id)
+			if err != nil || c.Kind != dto.KindAgency {
+				t.Errorf("company %s = %+v, %v, want agency", id, c, err)
+			}
+		}
+	})
+
+	t.Run("rejects bad input", func(t *testing.T) {
+		t.Parallel()
+		svc, st := newCompanyService(queuetest.NewRecorder())
+		a := seedCompany(t, st, dto.CompanyUpsert{Slug: "a", Name: "A"})
+		_, err := svc.SetCompaniesKind(t.Context(), userID, dto.SetCompaniesKindInput{CompanyIDs: []string{a.ID}, Kind: dto.KindLikelyAgency})
+		if !apperr.IsKind(err, apperr.KindInvalid) {
+			t.Errorf("likely_agency err = %v, want invalid", err)
+		}
+		_, err = svc.SetCompaniesKind(t.Context(), userID, dto.SetCompaniesKindInput{CompanyIDs: []string{"missing"}, Kind: dto.KindAgency})
+		if !apperr.IsKind(err, apperr.KindNotFound) {
+			t.Errorf("unknown company err = %v, want not found", err)
+		}
+	})
+}

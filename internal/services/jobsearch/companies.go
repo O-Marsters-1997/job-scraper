@@ -167,6 +167,28 @@ func (s *Service) SetCompanyKind(ctx context.Context, userID string, in dto.SetC
 	return s.GetCompany(ctx, userID, in.CompanyID)
 }
 
+func (s *Service) SetCompaniesKind(ctx context.Context, _ string, in dto.SetCompaniesKindInput) (dto.CompaniesKindResult, error) {
+	if in.Kind != dto.KindAgency && in.Kind != dto.KindDirect {
+		return dto.CompaniesKindResult{}, apperr.Invalid("kind must be agency or direct")
+	}
+	ids, err := distinctCompanyIDs(in.CompanyIDs)
+	if err != nil {
+		return dto.CompaniesKindResult{}, err
+	}
+	for _, id := range ids {
+		err := s.store.SetCompanyKind(ctx, id, in.Kind)
+		switch {
+		case errors.Is(err, data.ErrNotFound):
+			return dto.CompaniesKindResult{}, apperr.NotFound("company not found")
+		case errors.Is(err, store.ErrInvalidID):
+			return dto.CompaniesKindResult{}, apperr.Invalid("invalid company ID")
+		case err != nil:
+			return dto.CompaniesKindResult{}, err
+		}
+	}
+	return dto.CompaniesKindResult{Updated: len(ids)}, nil
+}
+
 func (s *Service) SetCompanyTracking(ctx context.Context, userID string, in dto.SetCompanyTrackingInput) (dto.CompanyTracking, error) {
 	if in.Enabled == nil {
 		return dto.CompanyTracking{}, apperr.Invalid("enabled is required")

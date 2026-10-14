@@ -2,6 +2,7 @@ import { faker } from "@faker-js/faker";
 import type { CompanyPageParams } from "@/api/companies";
 import { DEFAULT_RUN_WINDOW } from "@/lib/runWindow";
 import type {
+	CompaniesExclusion,
 	Company,
 	CompanyBoard,
 	CompanyExclusion,
@@ -275,6 +276,35 @@ export function unexcludeCompany(
 	if (removeName) unexcludeCompanyName(company.Name);
 	if (trackedCompanyIds.has(id)) setCompanyReview(id, "new");
 	return { name: company.Name, added: false };
+}
+
+export function excludeCompanies(ids: string[]): CompaniesExclusion {
+	return {
+		companies: [...new Set(ids)].map((id) => ({
+			companyId: id,
+			...excludeCompany(id),
+		})),
+	};
+}
+
+export function unexcludeCompanies(
+	companies: { companyId: string; removeName: boolean }[],
+): CompaniesExclusion {
+	return {
+		companies: companies.map((c) => ({
+			companyId: c.companyId,
+			...unexcludeCompany(c.companyId, c.removeName),
+		})),
+	};
+}
+
+export function setCompaniesKind(
+	ids: string[],
+	kind: "agency" | "direct",
+): { updated: number } {
+	const distinct = [...new Set(ids)];
+	for (const id of distinct) setCompanyKind(id, kind);
+	return { updated: distinct.length };
 }
 
 export function getCompanyBoards(companyID: string): CompanyBoard[] {

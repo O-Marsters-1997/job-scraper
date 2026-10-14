@@ -7,16 +7,19 @@ import {
 	addCompany,
 	addCompanyBoard,
 	type CompanyPageParams,
+	excludeCompanies,
 	excludeCompany,
 	fetchCompany,
 	fetchCompanyBoards,
 	fetchCompanyPage,
 	fetchNewCompanies,
 	fetchTrackedCompanies,
+	setCompaniesKind,
 	setCompanyFavourite,
 	setCompanyKind,
 	setCompanyReview,
 	setCompanyTracking,
+	unexcludeCompanies,
 	unexcludeCompany,
 } from "../api/companies";
 import { keys } from "../api/keys";
@@ -149,6 +152,22 @@ export function useUnexcludeCompany() {
 		({ id, removeName }: { id: string; removeName: boolean }) =>
 			unexcludeCompany(id, removeName),
 		excludeInvalidations,
+	);
+}
+
+export function useExcludeCompanies() {
+	return useInvalidatingMutation(excludeCompanies, excludeInvalidations);
+}
+
+export function useUnexcludeCompanies() {
+	return useInvalidatingMutation(unexcludeCompanies, excludeInvalidations);
+}
+
+export function useSetCompaniesKind() {
+	return useInvalidatingMutation(
+		({ ids, kind }: { ids: string[]; kind: "agency" | "direct" }) =>
+			setCompaniesKind(ids, kind),
+		[keys.companies.all, keys.jobs.all],
 	);
 }
 

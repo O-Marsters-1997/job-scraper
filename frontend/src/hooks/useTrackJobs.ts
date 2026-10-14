@@ -12,8 +12,18 @@ import type { JobApplicationSummary } from "@/types/application";
 import type { Job } from "@/types/job";
 import type { RecruiterContactSummary } from "@/types/recruiterContact";
 import { useApplications } from "./useApplications";
-import { useSetCompanyFavourite, useSetCompanyKind } from "./useCompanies";
-import { useDismissJob, useExcludeJobCompany } from "./useDismissJob";
+import {
+	useSetCompaniesKind,
+	useSetCompanyFavourite,
+	useSetCompanyKind,
+} from "./useCompanies";
+import {
+	announceNotice,
+	describeKind,
+	useDismissJob,
+	useExcludeJobCompanies,
+	useExcludeJobCompany,
+} from "./useDismissJob";
 import { useMarkJobsSeen } from "./useJobs";
 import { announceBulkSeen } from "./useSeenToast";
 
@@ -66,6 +76,21 @@ export function useTrackJobs(
 		announceBulkSeen(jobIds);
 	};
 
+	const bulkExclude = useExcludeJobCompanies();
+	const setKinds = useSetCompaniesKind();
+	const bulkSetKind = async (target: Job[], kind: "agency" | "direct") => {
+		const ids = [
+			...new Set(target.flatMap((j) => (j.CompanyID ? [j.CompanyID] : []))),
+		];
+		const skipped = target.filter((j) => !j.CompanyID).length;
+		if (ids.length === 0) {
+			announceNotice(describeKind(0, kind, skipped));
+			return;
+		}
+		const result = await setKinds.mutateAsync({ ids, kind });
+		announceNotice(describeKind(result.updated, kind, skipped));
+	};
+
 	const dismiss = useDismissJob();
 	const setFavourite = useSetCompanyFavourite();
 	const exclude = useExcludeJobCompany();
@@ -112,5 +137,7 @@ export function useTrackJobs(
 		openGrade,
 		bulkSeen,
 		markAllSeen,
+		bulkExcludeCompanies: bulkExclude.exclude,
+		bulkMarkRecruiters: (target: Job[]) => bulkSetKind(target, "agency"),
 	};
 }
