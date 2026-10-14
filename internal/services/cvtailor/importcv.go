@@ -12,8 +12,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 )
 
+const dateToken = `(?:[A-Za-z]{3,9}\.?\s+\d{4}|\d{1,2}/\d{4}|\d{4})`
+
 var (
-	dateToken = `(?:[A-Za-z]{3,9}\.?\s+\d{4}|\d{1,2}/\d{4}|\d{4})`
 	dateRange = regexp.MustCompile(`(?i)\(?\s*(` + dateToken + `)\s*(?:-|–|—|to)\s*(present|current|now|` + dateToken + `)\s*\)?`)
 	titleSeps = []string{" at ", " @ ", " | ", " – ", " — ", " - ", ", "}
 	dateForms = []string{"January 2006", "Jan 2006", "Jan. 2006", "1/2006", "01/2006", "2006"}

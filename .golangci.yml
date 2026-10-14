@@ -185,12 +185,26 @@ linters:
         linters:
           - gochecknoglobals
         text: '\b(allSlots|hostSlots|sharedCache)\b'
-      - linters:
+      - path: ^internal/(telemetry/state|worker/proxy/metrics|services/sourcetargets/metrics)\.go$
+        linters:
           - gochecknoglobals
         text: '\b(FetchRequests|FetchBytes|FetchWireBytes|TargetsDisabled|\w+Desc)\b'
-      - linters:
+      - path: ^internal/detect/
+        linters:
           - gochecknoglobals
-        text: '\b(atsSourceName|teamtailorReserved|hibobReserved|searchBoards|unsupportedBoards|sniffPatterns|separators|sessionKey|placeWords|remoteWords|symbols|foldText|PromptVersion|SuggestPromptVersion|checkNames|titleSeps|dateForms|suggestActions|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|dimensionSpecs|ladderLevels|currencySymbols|legalSuffixes|entries|patterns|notBoards|workArrangements|salaryPeriods|apiHeaders|relativeUnit|browserHeader|ukLocations)\b'
+        text: '\b(atsSourceName|teamtailorReserved|hibobReserved|searchBoards|unsupportedBoards|sniffPatterns)\b'
+      - path: ^internal/(docparse|handlers|jobmatch|salary|slug|sourcespec)/
+        linters:
+          - gochecknoglobals
+        text: '\b(separators|sessionKey|placeWords|remoteWords|symbols|legalSuffixes|entries)\b'
+      - path: ^internal/services/
+        linters:
+          - gochecknoglobals
+        text: '\b(foldText|PromptVersion|SuggestPromptVersion|checkNames|titleSeps|dateForms|suggestActions|promptTemplate|picksSchema|dummyHash|choiceCriteria|likeEscaper|individualTemplate|sizeOptionIDs|stageOptionIDs|pickStrength|defaultBands|cellEscaper|gradeValues|gradeReasons|Dimensions|dimensionSpecs|ladderLevels|currencySymbols)\b'
+      - path: ^internal/worker/(discover|sources)/
+        linters:
+          - gochecknoglobals
+        text: '\b(patterns|notBoards|workArrangements|salaryPeriods|apiHeaders|relativeUnit|browserHeader|ukLocations)\b'
 
 formatters:
   enable:
