@@ -34,6 +34,7 @@ declare module "@tanstack/solid-table" {
 	interface TableMeta<TData> {
 		isExpanded: (rowId: string) => boolean;
 		toggleExpanded: (rowId: string) => void;
+		selectRow: (rowId: string, extendRange: boolean) => void;
 	}
 }
 
@@ -65,7 +66,13 @@ export function createJobColumns(
 					aria-label={`Select ${info.row.original.Title}`}
 					class="size-4 cursor-pointer align-middle accent-primary"
 					checked={info.row.getIsSelected()}
-					onChange={info.row.getToggleSelectedHandler()}
+					onMouseDown={(e) => {
+						if (e.shiftKey) e.preventDefault();
+					}}
+					onClick={(e) => {
+						info.table.options.meta?.selectRow(info.row.id, e.shiftKey);
+						e.currentTarget.checked = info.row.getIsSelected();
+					}}
 				/>
 			),
 		},

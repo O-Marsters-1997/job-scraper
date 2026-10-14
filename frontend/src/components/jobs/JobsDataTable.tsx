@@ -72,8 +72,11 @@ export function JobsDataTable<TData extends Job>(
 		{},
 	);
 	const selection = () => props.selection ?? localSelection();
-	const setSelection = (next: RowSelectionState) =>
+	let selectionAnchor: string | undefined;
+	const setSelection = (next: RowSelectionState) => {
+		if (Object.keys(next).length === 0) selectionAnchor = undefined;
 		(props.onSelectionChange ?? setLocalSelection)(next);
+	};
 
 	const [expandedRow, setExpandedRow] = createSignal<string | null>(null);
 	const isExpanded = (rowId: string) => expandedRow() === rowId;
@@ -106,6 +109,25 @@ export function JobsDataTable<TData extends Job>(
 		if (!controlled() || props.data.length === 0) return;
 		if (requestedPageIndex() > pageIndex()) setPageIndex(pageIndex());
 	});
+
+	const selectRow = (rowId: string, extendRange: boolean) => {
+		const ids = table.getRowModel().rows.map((row) => row.id);
+		const from =
+			selectionAnchor === undefined ? -1 : ids.indexOf(selectionAnchor);
+		const to = ids.indexOf(rowId);
+		const next = { ...selection() };
+		if (extendRange && from !== -1 && to !== -1) {
+			for (const id of ids.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+				next[id] = true;
+			}
+		} else if (next[rowId]) {
+			delete next[rowId];
+		} else {
+			next[rowId] = true;
+		}
+		setSelection(next);
+		selectionAnchor = rowId;
+	};
 
 	const table = createSolidTable({
 		get data() {
@@ -149,6 +171,7 @@ export function JobsDataTable<TData extends Job>(
 		meta: {
 			isExpanded,
 			toggleExpanded,
+			selectRow,
 		},
 	});
 
