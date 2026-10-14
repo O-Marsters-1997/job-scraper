@@ -26,7 +26,7 @@ import {
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useAllJobs, useJobPages } from "../../hooks/useJobs";
 import { useRecruiterContactSummaries } from "../../hooks/useRecruiterContacts";
-import { useSources } from "../../hooks/useSources";
+import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
@@ -56,9 +56,7 @@ function CompanyDetailPage() {
 	const table = useJobPages(filters, (patch) =>
 		setLocalFilters((f) => ({ ...f, ...patch })),
 	);
-	const sources = useSources();
-	const sourceOptions = () =>
-		(sources.data ?? []).map((s) => ({ value: s.name, label: s.label }));
+	const sourceOptions = useSourceOptions();
 
 	const jobsForCompany = createMemo(() => {
 		const selected = company();

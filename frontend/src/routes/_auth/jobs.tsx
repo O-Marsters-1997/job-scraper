@@ -14,7 +14,7 @@ import { useCompany } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
 import { useJobPages } from "../../hooks/useJobs";
 import { SeenToast } from "../../hooks/useSeenToast";
-import { useSources } from "../../hooks/useSources";
+import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 
@@ -42,9 +42,7 @@ function JobsPage() {
 	const query = table.query;
 	const company = useCompany(() => filters().company ?? "");
 	const companyName = () => company.data?.Name ?? "Selected company";
-	const sources = useSources();
-	const sourceOptions = () =>
-		(sources.data ?? []).map((s) => ({ value: s.name, label: s.label }));
+	const sourceOptions = useSourceOptions();
 
 	const track = useTrackJobs(
 		table.items,
