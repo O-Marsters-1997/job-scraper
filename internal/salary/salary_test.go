@@ -7,6 +7,7 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		raw    string
@@ -27,6 +28,7 @@ func TestParse(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			lo, hi, ok := salary.Parse(tc.raw)
 			if ok != tc.ok || lo != tc.lo || hi != tc.hi {
 				t.Errorf("Parse(%q) = %v, %v, %v; want %v, %v, %v", tc.raw, lo, hi, ok, tc.lo, tc.hi, tc.ok)
