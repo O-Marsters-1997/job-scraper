@@ -698,6 +698,17 @@ func TestExcludeCompanies(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects an empty list and a blank ID", func(t *testing.T) {
+		t.Parallel()
+		m, _, _ := setup(t)
+		for _, ids := range [][]string{nil, {""}} {
+			_, err := m.ExcludeCompanies(t.Context(), userID, dto.ExcludeCompaniesInput{CompanyIDs: ids})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("ExcludeCompanies(%q) err = %v, want invalid", ids, err)
+			}
+		}
+	})
+
 	t.Run("rejects more IDs than the cap", func(t *testing.T) {
 		t.Parallel()
 		m, _, _ := setup(t)

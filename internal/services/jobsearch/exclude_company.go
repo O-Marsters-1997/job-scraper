@@ -83,12 +83,18 @@ func (m *Module) UnexcludeCompanies(ctx context.Context, userID string, in dto.U
 }
 
 func distinctCompanyIDs(ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, apperr.Invalid("company IDs are required")
+	}
 	if len(ids) > maxBulkCompanyIDs {
 		return nil, apperr.Invalid("too many company IDs")
 	}
 	out := make([]string, 0, len(ids))
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
+		if id == "" {
+			return nil, apperr.Invalid("invalid company ID")
+		}
 		if !seen[id] {
 			seen[id] = true
 			out = append(out, id)

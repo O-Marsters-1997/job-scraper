@@ -35,6 +35,13 @@ export function announceNotice(text: string) {
 	noticeTimer = setTimeout(() => setNotice(null), TOAST_MS);
 }
 
+export function companyIdsOf(jobs: { CompanyID?: string | undefined }[]) {
+	const ids = [
+		...new Set(jobs.flatMap((j) => (j.CompanyID ? [j.CompanyID] : []))),
+	];
+	return { ids, skipped: jobs.filter((j) => !j.CompanyID).length };
+}
+
 function pluralCompanies(n: number) {
 	return n === 1 ? "1 company" : `${n} companies`;
 }
@@ -116,16 +123,17 @@ export function useExcludeJobCompanies() {
 	const exclude = useExcludeCompanies();
 	return {
 		exclude: async (jobs: { CompanyID?: string | undefined }[]) => {
-			const ids = [
-				...new Set(jobs.flatMap((j) => (j.CompanyID ? [j.CompanyID] : []))),
-			];
-			const skipped = jobs.filter((j) => !j.CompanyID).length;
+			const { ids, skipped } = companyIdsOf(jobs);
 			if (ids.length === 0) {
 				announceNotice(`No companies to exclude.${skippedSuffix(skipped)}`);
 				return;
 			}
-			const result = await exclude.mutateAsync(ids);
-			showExclusion({ companies: result.companies, skipped });
+			try {
+				const result = await exclude.mutateAsync(ids);
+				showExclusion({ companies: result.companies, skipped });
+			} catch {
+				announceNotice("Could not exclude companies.");
+			}
 		},
 	};
 }

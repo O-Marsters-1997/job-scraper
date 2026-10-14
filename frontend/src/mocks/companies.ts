@@ -291,7 +291,9 @@ export function unexcludeCompanies(
 	companies: { companyId: string; removeName: boolean }[],
 ): CompaniesExclusion {
 	return {
-		companies: companies.map((c) => ({
+		companies: [
+			...new Map(companies.map((c) => [c.companyId, c])).values(),
+		].map((c) => ({
 			companyId: c.companyId,
 			...unexcludeCompany(c.companyId, c.removeName),
 		})),

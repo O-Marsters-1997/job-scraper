@@ -19,6 +19,7 @@ import {
 } from "./useCompanies";
 import {
 	announceNotice,
+	companyIdsOf,
 	describeKind,
 	useDismissJob,
 	useExcludeJobCompanies,
@@ -79,16 +80,17 @@ export function useTrackJobs(
 	const bulkExclude = useExcludeJobCompanies();
 	const setKinds = useSetCompaniesKind();
 	const bulkSetKind = async (target: Job[], kind: "agency" | "direct") => {
-		const ids = [
-			...new Set(target.flatMap((j) => (j.CompanyID ? [j.CompanyID] : []))),
-		];
-		const skipped = target.filter((j) => !j.CompanyID).length;
+		const { ids, skipped } = companyIdsOf(target);
 		if (ids.length === 0) {
 			announceNotice(describeKind(0, kind, skipped));
 			return;
 		}
-		const result = await setKinds.mutateAsync({ ids, kind });
-		announceNotice(describeKind(result.updated, kind, skipped));
+		try {
+			const result = await setKinds.mutateAsync({ ids, kind });
+			announceNotice(describeKind(result.updated, kind, skipped));
+		} catch {
+			announceNotice("Could not update companies.");
+		}
 	};
 
 	const dismiss = useDismissJob();
