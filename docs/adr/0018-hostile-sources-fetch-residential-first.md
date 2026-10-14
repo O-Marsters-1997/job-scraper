@@ -32,9 +32,8 @@ request sets the bill. Measured on 2026-10-01:
   connection error rotates it too, since Decodo sessions expire. Spike #536 measured a `jobPosting` fetch at
   18.5KB billed with a new connection and session each time, of which about 5KB was CONNECT and TLS. One
   reused connection on one session cost 12.85KB (30.6% less), with 0 blocks in 15. A 404 or 410 means the Job
-  is gone and is never retried. Each session owns a cookie jar that rotation discards, and rotation leaves
-  other sessions' warm connections open; a blocked session's idle connections age out through `IdleConnTimeout`
-  (#967).
+  is gone and is never retried. Rotation leaves other sessions' warm connections open; a blocked session's idle
+  connections age out through `IdleConnTimeout` (#967).
 - **The route never falls back to direct.** 0003 banned silent fallback because it hides that the wrong
   route was used. Requests are counted per route and outcome:
   `jobscraper_fetch_requests_total{source,route,outcome}` and `jobscraper_fetch_bytes_total{source,route}` (decoded body bytes) and
