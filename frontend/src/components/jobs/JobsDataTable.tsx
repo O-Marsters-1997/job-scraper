@@ -327,11 +327,7 @@ export function JobsDataTable<TData extends Job>(
 							Clear
 						</Button>
 						<DropdownMenu>
-							<DropdownMenuTrigger
-								as="button"
-								class="flex h-8 items-center gap-1 rounded-md border border-border px-2 text-sm transition-colors hover:bg-accent-subtle"
-								aria-label="Actions"
-							>
+							<DropdownMenuTrigger as={Button} variant="outline" size="sm">
 								Actions
 								<Icon name="moreVertical" size={14} />
 							</DropdownMenuTrigger>
