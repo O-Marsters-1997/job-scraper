@@ -1,7 +1,17 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
-import { fetchAllJobs, fetchJob, markJobsSeen } from "../api/jobs";
+import {
+	fetchAllJobs,
+	fetchJob,
+	fetchJobPage,
+	markJobsSeen,
+} from "../api/jobs";
 import { keys } from "../api/keys";
+import type { JobFilters } from "../lib/jobFilters";
+import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
+import { useServerTable } from "./useServerTable";
+
+export const JOBS_PAGE_SIZE = 25;
 
 export const allJobsQueryOptions = queryOptions({
 	queryKey: keys.jobs.full(),
@@ -10,6 +20,20 @@ export const allJobsQueryOptions = queryOptions({
 
 export function useAllJobs() {
 	return createQuery(() => allJobsQueryOptions);
+}
+
+export function useJobPages(
+	state: () => JobFilters,
+	onChange: (patch: Partial<JobFilters>) => void,
+) {
+	return useServerTable({
+		state,
+		onChange,
+		pageSize: JOBS_PAGE_SIZE,
+		queryKey: (filters) => keys.jobs.list(filters),
+		queryFn: (filters) => fetchJobPage(filters, JOBS_PAGE_SIZE),
+		rowId: (job) => job.ID,
+	});
 }
 
 export function jobQueryOptions(id: string) {
@@ -24,7 +48,12 @@ export function useJob(id: () => string) {
 }
 
 export function useMarkJobsSeen() {
-	return useInvalidatingMutation(markJobsSeen, [keys.jobs.all]);
+	return useInvalidatingMutation(markJobsSeen, [keys.jobs.all], {
+		patch: (queryClient, _result, { jobIds, seen }) => {
+			const ids = new Set(jobIds);
+			patchJobPages(queryClient, (job) => ids.has(job.ID), { Seen: seen });
+		},
+	});
 }
 
 export function useMarkSeenAfterGrade() {

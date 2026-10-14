@@ -12,6 +12,12 @@ export function useSources() {
 	return createQuery(() => sourcesQueryOptions);
 }
 
+export function useSourceOptions() {
+	const sources = useSources();
+	return () =>
+		(sources.data ?? []).map((s) => ({ value: s.name, label: s.label }));
+}
+
 export function useResolveUrl(
 	url: () => string,
 	enabled: () => boolean = () => url() !== "",

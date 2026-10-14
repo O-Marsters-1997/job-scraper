@@ -356,6 +356,8 @@ type Job struct {
 	MatchLocation      pgtype.Text
 	PostedAfter        pgtype.Timestamptz
 	RepostedAt         pgtype.Timestamptz
+	SalaryMin          pgtype.Float8
+	SalaryMax          pgtype.Float8
 }
 
 type JobCandidate struct {
