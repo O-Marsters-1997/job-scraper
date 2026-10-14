@@ -109,7 +109,7 @@ function JobsPage() {
 				</div>
 			</Show>
 
-			<Show when={query.isSuccess}>
+			<Show when={query.data}>
 				<JobsDataTable
 					columns={track.columns}
 					data={table.items()}

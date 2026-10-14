@@ -67,7 +67,12 @@ export function useServerTable<
 		setPage,
 		setFilters,
 		rowSelection,
-		selectedItems: () => Object.values(selected()),
+		selectedItems: () => {
+			const onPage = new Map(items().map((item) => [opts.rowId(item), item]));
+			return Object.entries(selected()).map(
+				([id, item]) => onPage.get(id) ?? item,
+			);
+		},
 		select,
 		clearSelection,
 	};

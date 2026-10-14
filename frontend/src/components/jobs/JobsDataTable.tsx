@@ -5,7 +5,7 @@ import {
 	getCoreRowModel,
 	type RowSelectionState,
 } from "@tanstack/solid-table";
-import { createEffect, createSignal, For, on, Show } from "solid-js";
+import { createEffect, createSignal, For, on, Show, untrack } from "solid-js";
 import { Icon } from "@/components/Icon";
 import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
@@ -181,7 +181,7 @@ export function JobsDataTable<TData extends Job>(
 							aria-keyshortcuts="/"
 							type="search"
 							placeholder="Search by role or company…"
-							value={props.filters.q}
+							value={untrack(() => props.filters.q)}
 							onInput={(e) => search(e.currentTarget.value)}
 							onFocus={() => setSearchFocused(true)}
 							onBlur={() => setSearchFocused(false)}

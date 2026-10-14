@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createEffect, For, on, Show } from "solid-js";
+import { createEffect, For, on, Show, untrack } from "solid-js";
 import type { CompanyPoster, CompanySort } from "@/api/companies";
 import { FavouriteStar } from "@/components/FavouriteStar";
 import { PageHeading } from "@/components/PageHeading";
@@ -110,7 +110,7 @@ function CompaniesPage() {
 					<Input
 						id="companies-search"
 						placeholder="Search companies…"
-						value={state().q}
+						value={untrack(() => state().q)}
 						onInput={(e) => search(e.currentTarget.value)}
 					/>
 				</div>

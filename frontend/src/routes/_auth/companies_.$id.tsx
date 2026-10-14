@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
 import { GradeDialog } from "@/components/jobs/GradeDialog";
 import { JobsDataTable } from "@/components/jobs/JobsDataTable";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
@@ -48,6 +48,13 @@ function CompanyDetailPage() {
 	const company = () => companyQuery.data ?? undefined;
 
 	const [localFilters, setLocalFilters] = createSignal(DEFAULT_FILTERS);
+	createEffect(
+		on(
+			() => params().id,
+			() => setLocalFilters(DEFAULT_FILTERS),
+			{ defer: true },
+		),
+	);
 	const filters = () => ({
 		...localFilters(),
 		scored: true,
