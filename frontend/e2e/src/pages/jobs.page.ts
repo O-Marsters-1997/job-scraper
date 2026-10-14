@@ -78,7 +78,9 @@ export class JobsPage {
 	}
 
 	async chooseBulkAction(name: string) {
-		await this.page.getByRole("button", { name: "Actions", exact: true }).click();
+		await this.page
+			.getByRole("button", { name: "Actions", exact: true })
+			.click();
 		await this.page.getByRole("menuitem", { name, exact: true }).click();
 	}
 
