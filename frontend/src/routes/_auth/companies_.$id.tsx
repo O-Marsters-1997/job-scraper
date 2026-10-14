@@ -15,12 +15,7 @@ import {
 } from "@/components/ui/switch";
 import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
 import { formatDate } from "@/lib/datetime";
-import {
-	applyJobFilters,
-	DEFAULT_FILTERS,
-	filterCompanyJobs,
-	sourceOptions,
-} from "@/lib/jobFilters";
+import { DEFAULT_FILTERS, filterCompanyJobs } from "@/lib/jobFilters";
 import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
@@ -29,8 +24,9 @@ import {
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
-import { useAllJobs } from "../../hooks/useJobs";
+import { useAllJobs, useJobPages } from "../../hooks/useJobs";
 import { useRecruiterContactSummaries } from "../../hooks/useRecruiterContacts";
+import { useSources } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { CompanyBoardsCard } from "./-companies-detail/CompanyBoardsCard";
@@ -51,18 +47,24 @@ function CompanyDetailPage() {
 
 	const company = () => companyQuery.data ?? undefined;
 
-	const [filters, setFilters] = createSignal(DEFAULT_FILTERS);
-	const setFilterPatch = (patch: Partial<typeof DEFAULT_FILTERS>) =>
-		setFilters((f) => ({ ...f, ...patch }));
+	const [localFilters, setLocalFilters] = createSignal(DEFAULT_FILTERS);
+	const filters = () => ({
+		...localFilters(),
+		scored: true,
+		company: params().id,
+	});
+	const table = useJobPages(filters, (patch) =>
+		setLocalFilters((f) => ({ ...f, ...patch })),
+	);
+	const sources = useSources();
+	const sourceOptions = () =>
+		(sources.data ?? []).map((s) => ({ value: s.name, label: s.label }));
 
 	const jobsForCompany = createMemo(() => {
 		const selected = company();
 		if (!selected) return [];
 		return filterCompanyJobs(jobsQuery.data ?? [], selected);
 	});
-	const companyJobs = createMemo(() =>
-		applyJobFilters(jobsForCompany(), filters()),
-	);
 
 	const isAgency = () => isAgencyKind(company()?.Kind);
 	const jobIds = createMemo(() => jobsForCompany().map((j) => j.ID));
@@ -72,8 +74,9 @@ function CompanyDetailPage() {
 	const rollup = createMemo(() => agencyRollup(jobIds(), summaries.data ?? {}));
 
 	const track = useTrackJobs(
-		() => jobsQuery.data ?? [],
+		table.items,
 		() => summaries.data,
+		table.clearSelection,
 	);
 
 	return (
@@ -213,12 +216,17 @@ function CompanyDetailPage() {
 								>
 									<JobsDataTable
 										columns={isAgency() ? track.contactColumns : track.columns}
-										data={companyJobs()}
+										data={table.items()}
+										total={table.total()}
+										page={table.page()}
+										pageSize={table.pageSize}
+										onPage={table.setPage}
 										filters={filters()}
-										onChange={setFilterPatch}
-										sourceOptions={sourceOptions(jobsForCompany())}
-										selection={track.selection()}
-										onSelectionChange={track.setSelection}
+										onChange={table.setFilters}
+										sourceOptions={sourceOptions()}
+										selection={table.rowSelection()}
+										onSelectionChange={table.select}
+										selectedJobs={table.selectedItems()}
 										onBulkGrade={track.openGrade}
 									/>
 								</Show>
@@ -236,7 +244,7 @@ function CompanyDetailPage() {
 						onOpenChange={track.setGradeOpen}
 						jobs={track.gradeJobs()}
 						onSaved={(jobIds, priors) => {
-							track.setSelection({});
+							table.clearSelection();
 							if (jobIds.length > 1) announceBulkGrading({ jobIds, priors });
 						}}
 					/>

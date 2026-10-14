@@ -42,10 +42,6 @@ export class JobsPage {
 		return this.rows.first().getByRole("link").first();
 	}
 
-	async sortByCompany() {
-		await this.page.getByRole("columnheader", { name: "Company" }).click();
-	}
-
 	firstRowCompanyText() {
 		return this.rows.first().locator("td").nth(1);
 	}

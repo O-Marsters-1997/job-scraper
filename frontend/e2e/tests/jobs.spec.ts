@@ -130,7 +130,6 @@ test.describe("Jobs", () => {
 	test("tracking a job from the table updates its Status cell without a page or sort change", async ({
 		jobsPage,
 	}) => {
-		await jobsPage.sortByCompany();
 		const companyBeforeTracking = await jobsPage
 			.firstRowCompanyText()
 			.textContent();

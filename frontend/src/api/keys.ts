@@ -8,6 +8,7 @@ export const keys = {
 	jobs: {
 		all: jobsAll,
 		page: () => [...jobsAll, "page"] as const,
+		list: (params: object) => [...jobsAll, "page", params] as const,
 		full: () => [...jobsAll, "full"] as const,
 		detail: (id: string) => [...jobsAll, "detail", id] as const,
 	},
@@ -29,8 +30,7 @@ export const keys = {
 	},
 	companies: {
 		all: companiesAll,
-		list: (params: Readonly<Record<string, unknown>>) =>
-			[...companiesAll, "list", params] as const,
+		list: (params: object) => [...companiesAll, "list", params] as const,
 		search: (q: string) => [...companiesAll, "search", q] as const,
 		detail: (id: string) => [...companiesAll, "detail", id] as const,
 		tracked: [...companiesAll, "tracked"] as const,
