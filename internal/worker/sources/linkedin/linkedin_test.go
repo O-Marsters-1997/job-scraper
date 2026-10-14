@@ -260,10 +260,15 @@ func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 	detail := linkedin.New("", nil, "")
 	detail.Client().Transport = stamps
 
-	_, _, _ = listing.FetchPage(t.Context(), "")
-	_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/1")
-	_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/2")
+	if _, _, err := listing.FetchPage(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"1", "2"} {
+		_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/"+id)
+	}
 
+	stamps.mu.Lock()
+	defer stamps.mu.Unlock()
 	if len(stamps.times) != 3 {
 		t.Fatalf("requests = %d, want 3", len(stamps.times))
 	}
@@ -271,6 +276,13 @@ func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 		if got := stamps.times[i].Sub(stamps.times[i-1]); got < gap/2 {
 			t.Errorf("gap before request %d = %v, want at least %v", i+1, got, gap/2)
 		}
+	}
+}
+
+func TestClientTimeoutCoversBlockedRetries(t *testing.T) {
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+	if got := linkedin.New("", nil, "").Client().Timeout; got < 45*time.Second {
+		t.Errorf("client timeout = %v, want at least 45s to fit three attempts and their backoff", got)
 	}
 }
 

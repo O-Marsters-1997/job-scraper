@@ -19,7 +19,7 @@ import (
 const residentialAttempts = 3
 
 var (
-	retryBackoff = 5 * time.Second
+	retryBackoff = 3 * time.Second
 	jitter       = rand.Float64
 )
 
@@ -133,7 +133,7 @@ func (t *residentialTransport) fetch(req *http.Request) (*http.Response, error) 
 		if attempt == residentialAttempts-1 {
 			break
 		}
-		if lastErr == nil {
+		if wasBlocked := lastErr == nil; wasBlocked {
 			if err := sleep(req.Context(), backoffFor(attempt)); err != nil {
 				return nil, err
 			}
