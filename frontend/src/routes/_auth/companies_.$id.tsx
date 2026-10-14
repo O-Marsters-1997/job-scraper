@@ -219,7 +219,13 @@ function CompanyDetailPage() {
 										sourceOptions={sourceOptions(jobsForCompany())}
 										selection={track.selection()}
 										onSelectionChange={track.setSelection}
-										onBulkGrade={track.openGrade}
+										bulkActions={[
+											{
+												label: "Grade",
+												icon: "check",
+												onSelect: track.openGrade,
+											},
+										]}
 									/>
 								</Show>
 							</CardContent>
