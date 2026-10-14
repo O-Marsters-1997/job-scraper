@@ -251,6 +251,20 @@ func TestResidentialFetcherLogsRotations(t *testing.T) {
 	}
 }
 
+func TestResidentialFetcherWireBytes(t *testing.T) { //nolint:paralleltest // residentialFetcher calls t.Setenv, which forbids t.Parallel
+	residential := newFakeProxy(t, status(200, ""))
+	resp, err := residentialFetcher(t, residential, nil).RoundTrip(httpTarget(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	for _, direction := range []string{"read", "write"} {
+		if got := testutil.ToFloat64(proxy.FetchWireBytes.WithLabelValues(t.Name(), "residential", direction)); got <= 0 {
+			t.Errorf("wire bytes %s = %v, want > 0", direction, got)
+		}
+	}
+}
+
 func TestValidateResidential(t *testing.T) {
 	t.Setenv("DECODO_PROXY_URL", "")
 	if err := proxy.ValidateResidential(); err == nil {

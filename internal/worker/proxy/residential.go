@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -44,7 +45,6 @@ func (t *residentialTransport) rotate(ctx context.Context, stale, reason string,
 			slog.Int64(logger.KeyCount, t.rotations.Add(1)),
 		)
 	}
-	t.residential.CloseIdleConnections()
 }
 
 func newResidential(cache Cache, source string) (*residentialTransport, error) {
@@ -59,6 +59,14 @@ func newResidential(cache Cache, source string) (*residentialTransport, error) {
 		password, _ := u.User.Password()
 		pu.User = url.UserPassword(u.User.Username()+"-session-"+session, password)
 		return &pu, nil
+	}
+	dial := tr.DialContext
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := dial(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return newCountingConn(conn, source, routeResidential), nil
 	}
 	t := &residentialTransport{
 		residential: tr,

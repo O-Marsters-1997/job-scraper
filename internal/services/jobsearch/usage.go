@@ -50,9 +50,31 @@ func NewDecodoQuota(hc *http.Client, url, apiKey string) QuotaFetcher {
 }
 
 type decodoSubscription struct {
-	TrafficPerPeriod string `json:"traffic_per_period"`
-	TrafficLimit     string `json:"traffic_limit"`
-	ValidUntil       string `json:"valid_until"`
+	Traffic      *decodoNumber `json:"traffic"`
+	TrafficLimit *decodoNumber `json:"traffic_limit"`
+	ValidUntil   string        `json:"valid_until"`
+}
+
+type decodoNumber float64
+
+func (n *decodoNumber) UnmarshalJSON(b []byte) error {
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch v := v.(type) {
+	case float64:
+		*n = decodoNumber(v)
+	case string:
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("number %q: %w", v, err)
+		}
+		*n = decodoNumber(f)
+	default:
+		return fmt.Errorf("number %s: want a number or numeric string", b)
+	}
+	return nil
 }
 
 func (d decodoQuota) FetchQuota(ctx context.Context) (ProxyQuota, error) {
@@ -60,7 +82,7 @@ func (d decodoQuota) FetchQuota(ctx context.Context) (ProxyQuota, error) {
 	if err != nil {
 		return ProxyQuota{}, err
 	}
-	req.Header.Set("Authorization", "Basic "+d.apiKey)
+	req.Header.Set("Authorization", d.apiKey)
 	req.Header.Set("Accept", "application/json")
 	resp, err := d.hc.Do(req)
 	if err != nil {
@@ -81,19 +103,14 @@ func (d decodoQuota) FetchQuota(ctx context.Context) (ProxyQuota, error) {
 }
 
 func (s decodoSubscription) quota() (ProxyQuota, error) {
-	used, err := strconv.ParseFloat(s.TrafficPerPeriod, 64)
-	if err != nil {
-		return ProxyQuota{}, fmt.Errorf("decodo traffic_per_period %q: %w", s.TrafficPerPeriod, err)
-	}
-	limit, err := strconv.ParseFloat(s.TrafficLimit, 64)
-	if err != nil {
-		return ProxyQuota{}, fmt.Errorf("decodo traffic_limit %q: %w", s.TrafficLimit, err)
+	if s.Traffic == nil || s.TrafficLimit == nil {
+		return ProxyQuota{}, errors.New("decodo subscription: traffic or traffic_limit missing")
 	}
 	resets, err := parseValidUntil(s.ValidUntil)
 	if err != nil {
 		return ProxyQuota{}, fmt.Errorf("decodo valid_until %q: %w", s.ValidUntil, err)
 	}
-	return ProxyQuota{Used: used, Limit: limit, ResetsAt: resets}, nil
+	return ProxyQuota{Used: float64(*s.Traffic), Limit: float64(*s.TrafficLimit), ResetsAt: resets}, nil
 }
 
 func parseValidUntil(s string) (time.Time, error) {
