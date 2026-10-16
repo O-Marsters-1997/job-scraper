@@ -475,6 +475,13 @@ func TestCompanyBoards(t *testing.T) {
 		if got := atsSource(); got != "ashby" {
 			t.Errorf("ATSSource with wttj and ashby verified = %q, want ashby", got)
 		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 100})
+		if err != nil {
+			t.Fatalf("PageCompaniesForUser() err = %v", err)
+		}
+		if len(page.Items) != 1 || page.Items[0].ATSSource != "ashby" {
+			t.Errorf("PageCompaniesForUser() = %+v, want one company with ATSSource ashby", page.Items)
+		}
 	})
 
 	t.Run("a board resolves to its owning company", func(t *testing.T) {
