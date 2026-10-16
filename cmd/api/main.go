@@ -30,6 +30,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
+	"github.com/ollymarsters/job-scraper/scripts/migrations"
 )
 
 const shutdownTimeout = 20 * time.Second
@@ -69,6 +70,10 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("init db: %w", err)
 	}
 	defer pool.Close()
+
+	if err := db.CheckSchemaNotAhead(ctx, pool, migrations.FS); err != nil {
+		return err
+	}
 
 	q, err := queue.NewBrokerFromEnv()
 	if err != nil {
