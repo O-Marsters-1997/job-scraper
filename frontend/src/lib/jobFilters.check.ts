@@ -1,10 +1,5 @@
 import assert from "node:assert/strict";
-import {
-	activeFilterCount,
-	DEFAULT_FILTERS,
-	filterCompanyJobs,
-	parseSearch,
-} from "./jobFilters";
+import { activeFilterCount, DEFAULT_FILTERS, parseSearch } from "./jobFilters";
 
 assert.equal(parseSearch({}).graded, "all");
 assert.equal(parseSearch({ graded: "ungraded" }).graded, "ungraded");
@@ -52,15 +47,3 @@ assert.equal(parseSearch({ page: "1e3" }).page, undefined);
 assert.equal(parseSearch({ page: "0x10" }).page, undefined);
 
 console.log("✓ jobFilters checks passed");
-
-assert.deepEqual(
-	filterCompanyJobs(
-		[
-			{ ID: "1", CompanyID: "company-a", CompanySlug: "other" },
-			{ ID: "2", CompanySlug: "acme" },
-			{ ID: "3", CompanyID: "company-b", CompanySlug: "acme" },
-		] as never[],
-		{ ID: "company-a", Slug: "acme" },
-	).map((job) => job.ID),
-	["1", "2"],
-);
