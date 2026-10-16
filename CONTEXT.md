@@ -71,7 +71,7 @@ An applicant tracking system (Greenhouse, Lever, Ashby, Workable, Recruitee, Per
 _Avoid_: Platform (when ambiguous), provider
 
 **Aggregator**:
-A discovery-only Source (LinkedIn, Indeed) used to find job URLs, never to extract content; a discovered URL is re-classified and extracted from its underlying ATS where possible.
+A discovery-only Source (LinkedIn, Indeed) used to find job URLs, never to extract content; a discovered URL is re-classified and extracted from its underlying ATS where possible. Welcome to the Jungle (WTTJ) is also an Aggregator, not an ATS: a Company may have a WTTJ Board alongside its ATS Board (ADR 0007), and the UI labels it an aggregator.
 _Avoid_: Board — an Aggregator is not a Source of content
 
 **ATSType**:
