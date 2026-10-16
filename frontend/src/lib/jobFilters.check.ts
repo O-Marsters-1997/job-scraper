@@ -31,10 +31,10 @@ assert.equal(parseSearch({ fav: true }).fav, true);
 assert.equal(parseSearch({ fav: "nonsense" }).fav, false);
 assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, fav: true }), 1);
 
-assert.equal(parseSearch({}).poster, "all");
+assert.equal(parseSearch({}).poster, "direct");
 assert.equal(parseSearch({ poster: "agency" }).poster, "agency");
-assert.equal(parseSearch({ poster: "nonsense" }).poster, "all");
-assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, poster: "agency" }), 1);
+assert.equal(parseSearch({ poster: "nonsense" }).poster, "direct");
+assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, poster: "agency" }), 0);
 
 assert.equal(parseSearch({ page: "3" }).page, 3);
 assert.equal(parseSearch({ page: 3 }).page, 3);

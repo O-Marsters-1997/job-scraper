@@ -46,7 +46,7 @@ export const DEFAULT_FILTERS: JobFilters = {
 	graded: "all",
 	seen: "all",
 	fav: false,
-	poster: "all",
+	poster: "direct",
 	sort: "relevant",
 	page: undefined,
 };
@@ -84,7 +84,7 @@ export function parseSearch(raw: Record<string, unknown>): JobFilters {
 		graded: GRADED_OPTIONS.find((o) => o === raw.graded) ?? "all",
 		seen: SEEN_OPTIONS.find((o) => o === raw.seen) ?? "all",
 		fav: raw.fav === true || raw.fav === "1" || raw.fav === 1,
-		poster: POSTER_OPTIONS.find((o) => o === raw.poster) ?? "all",
+		poster: POSTER_OPTIONS.find((o) => o === raw.poster) ?? "direct",
 		sort: SORT_OPTIONS.find((o) => o === raw.sort) ?? "relevant",
 		page:
 			typeof page === "number" && Number.isInteger(page) && page > 1
@@ -102,7 +102,6 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.sal) n++;
 	if (f.graded !== "all") n++;
 	if (f.seen !== "all") n++;
-	if (f.poster !== "all") n++;
 	if (f.fav) n++;
 	return n;
 }

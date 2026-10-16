@@ -49,7 +49,7 @@ setDemoData(false);
 
 assert.equal(
 	jobPageQuery(DEFAULT_FILTERS, 25).toString(),
-	"page_size=25&sort=relevant",
+	"page_size=25&sort=relevant&poster=direct",
 );
 assert.equal(
 	jobPageQuery(
