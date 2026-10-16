@@ -933,8 +933,21 @@ func TestPageCompaniesForUser(t *testing.T) {
 		if got := pageCompanies(t, st, userID); len(got) != 1 || got[0].JobCount != 1 {
 			t.Errorf("PageCompaniesForUser() = %+v, want one company with job count 1", got)
 		}
-		if got, err := st.GetCompanyForUser(t.Context(), userID, acme); err != nil || got.JobCount != 1 {
-			t.Errorf("GetCompanyForUser() = %+v, %v, want job count 1", got, err)
+	})
+
+	t.Run("GetCompanyForUser counts every open job regardless of score", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		acme := insertCompany(t, pool, "acme")
+		scored := insertJob(t, pool, acme, 1, time.Now(), false)
+		blocked := insertJob(t, pool, acme, 2, time.Now(), false)
+		insertJob(t, pool, acme, 3, time.Now(), true)
+		insertJob(t, pool, acme, 4, time.Now(), false)
+		scoreJob(t, pool, scored, userID, `[]`)
+		scoreJob(t, pool, blocked, userID, `[{"effect":"blocked"}]`)
+
+		if got, err := st.GetCompanyForUser(t.Context(), userID, acme); err != nil || got.JobCount != 3 {
+			t.Errorf("GetCompanyForUser() = %+v, %v, want job count 3", got, err)
 		}
 	})
 

@@ -1,5 +1,4 @@
 import { POSTER_OPTIONS, type PosterFilter } from "@/types/company";
-import type { Job } from "@/types/job";
 
 export const SORT_OPTIONS = ["relevant", "newest", "best"] as const;
 export type JobSort = (typeof SORT_OPTIONS)[number];
@@ -106,15 +105,4 @@ export function activeFilterCount(f: JobFilters): number {
 	if (f.poster !== "all") n++;
 	if (f.fav) n++;
 	return n;
-}
-
-export function filterCompanyJobs(
-	jobs: Job[],
-	company: { ID: string; Slug: string },
-): Job[] {
-	return jobs.filter((job) =>
-		job.CompanyID
-			? job.CompanyID === company.ID
-			: job.CompanySlug === company.Slug,
-	);
 }
