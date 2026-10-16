@@ -267,19 +267,19 @@ export function JobsDataTable<TData extends Job>(
 						</Button>
 					</Show>
 				</div>
-				<Show when={props.sortControl}>
-					<div class="ml-auto flex shrink-0 items-center gap-2">
-						<For each={POSTER_CHIPS}>
-							{(chip) => (
-								<ToggleChip
-									solid
-									active={props.filters.poster === chip.value}
-									onClick={() => props.onChange({ poster: chip.value })}
-								>
-									{chip.label}
-								</ToggleChip>
-							)}
-						</For>
+				<div class="ml-auto flex shrink-0 items-center gap-2">
+					<For each={POSTER_CHIPS}>
+						{(chip) => (
+							<ToggleChip
+								solid
+								active={props.filters.poster === chip.value}
+								onClick={() => props.onChange({ poster: chip.value })}
+							>
+								{chip.label}
+							</ToggleChip>
+						)}
+					</For>
+					<Show when={props.sortControl}>
 						<Select
 							options={SORT_CHOICES}
 							optionValue={(o) => o?.value ?? ""}
@@ -304,8 +304,8 @@ export function JobsDataTable<TData extends Job>(
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
-					</div>
-				</Show>
+					</Show>
+				</div>
 				<Show
 					when={
 						(props.bulkActions?.length ?? 0) > 0 &&
