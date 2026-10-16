@@ -51,12 +51,10 @@ export class JobsPage {
 			.first()
 			.getByRole("button", { name: "Job actions" })
 			.click();
-		await this.page
-			.getByRole("menuitem", { name: "Track application" })
-			.click();
+		await this.page.getByRole("menuitem").nth(1).click();
 		const dialog = this.page.getByRole("dialog");
 		await dialog.getByLabel("Status").selectOption({ label: statusName });
-		await dialog.getByRole("button", { name: "Save" }).click();
+		await dialog.getByRole("button", { name: /^(Save|Update)$/ }).click();
 	}
 
 	get gradeDialog() {

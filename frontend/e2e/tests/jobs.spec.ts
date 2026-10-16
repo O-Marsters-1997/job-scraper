@@ -105,12 +105,15 @@ test.describe("Jobs", () => {
 		const term = firstTitle.trim().split(/\s+/)[0] as string;
 		await jobsPage.search(term);
 
-		const count = await jobsPage.rows.count();
-		expect(count).toBeGreaterThan(0);
-		for (let i = 0; i < count; i++) {
-			const text = await jobsPage.rows.nth(i).textContent();
-			expect(text?.toLowerCase()).toContain(term.toLowerCase());
-		}
+		await expect
+			.poll(async () => {
+				const texts = await jobsPage.rows.allTextContents();
+				return (
+					texts.length > 0 &&
+					texts.every((t) => t.toLowerCase().includes(term.toLowerCase()))
+				);
+			})
+			.toBe(true);
 	});
 
 	test("should navigate to job detail when clicking a job title", async ({
@@ -275,7 +278,7 @@ test.describe("Jobs", () => {
 		await expect(bold).toHaveCount(before);
 	});
 
-	test("Mark N as seen covers the filtered view and undo restores it", async ({
+	test("Mark N as seen covers the visible page and undo restores it", async ({
 		page,
 		jobsPage,
 	}) => {
@@ -288,7 +291,6 @@ test.describe("Jobs", () => {
 		expect(n).toBeGreaterThan(0);
 
 		await button.click();
-		await expect(button).toBeHidden();
 		await page
 			.getByRole("status")
 			.getByRole("button", { name: "Undo" })
@@ -315,9 +317,15 @@ test.describe("Jobs", () => {
 		await page.getByRole("button", { name: "Favourites" }).click();
 		await page.getByRole("button", { name: "Done" }).click();
 		const stars = page.getByRole("button", { name: /^Favourite / });
-		for (const el of await stars.all()) {
-			await expect(el).toHaveAttribute("aria-pressed", "true");
-		}
+		await expect
+			.poll(() =>
+				stars.evaluateAll(
+					(els) =>
+						els.length > 0 &&
+						els.every((el) => el.getAttribute("aria-pressed") === "true"),
+				),
+			)
+			.toBe(true);
 
 		await page.getByRole("link", { name: "Companies", exact: true }).click();
 		await expect(

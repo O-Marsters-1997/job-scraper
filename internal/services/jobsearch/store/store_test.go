@@ -438,6 +438,52 @@ func TestCompanyBoards(t *testing.T) {
 		}
 	})
 
+	t.Run("company ATS comes from verified boards, preferring a true ATS over wttj", func(t *testing.T) {
+		t.Parallel()
+		st, _, userID := newUserStore(t)
+		ctx := t.Context()
+		company := upsertCompany(t, st, dto.CompanyUpsert{Slug: "ats-co", Name: "Ats Co", ATSSource: "greenhouse"})
+		atsSource := func() string {
+			t.Helper()
+			got, err := st.GetCompanyForUser(ctx, userID, company.ID)
+			if err != nil {
+				t.Fatalf("GetCompanyForUser() err = %v", err)
+			}
+			return got.ATSSource
+		}
+		if got := atsSource(); got != "" {
+			t.Errorf("ATSSource with no verified board = %q, want empty", got)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "ashby", "ats-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(ashby) err = %v", err)
+		}
+		if got := atsSource(); got != "" {
+			t.Errorf("ATSSource with only a candidate board = %q, want empty", got)
+		}
+		if _, err := st.UpsertCandidateBoard(ctx, company.ID, "wttj", "ats-co"); err != nil {
+			t.Fatalf("UpsertCandidateBoard(wttj) err = %v", err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, company.ID, "wttj", "ats-co", "test", "test"); err != nil {
+			t.Fatalf("VerifyCompanyBoard(wttj) err = %v", err)
+		}
+		if got := atsSource(); got != "wttj" {
+			t.Errorf("ATSSource with only wttj verified = %q, want wttj", got)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, company.ID, "ashby", "ats-co", "test", "test"); err != nil {
+			t.Fatalf("VerifyCompanyBoard(ashby) err = %v", err)
+		}
+		if got := atsSource(); got != "ashby" {
+			t.Errorf("ATSSource with wttj and ashby verified = %q, want ashby", got)
+		}
+		page, err := st.PageCompaniesForUser(ctx, userID, dto.CompanyPageOptions{Limit: 100})
+		if err != nil {
+			t.Fatalf("PageCompaniesForUser() err = %v", err)
+		}
+		if len(page.Items) != 1 || page.Items[0].ATSSource != "ashby" {
+			t.Errorf("PageCompaniesForUser() = %+v, want one company with ATSSource ashby", page.Items)
+		}
+	})
+
 	t.Run("a board resolves to its owning company", func(t *testing.T) {
 		t.Parallel()
 		st, _ := newStore(t)
@@ -933,8 +979,21 @@ func TestPageCompaniesForUser(t *testing.T) {
 		if got := pageCompanies(t, st, userID); len(got) != 1 || got[0].JobCount != 1 {
 			t.Errorf("PageCompaniesForUser() = %+v, want one company with job count 1", got)
 		}
-		if got, err := st.GetCompanyForUser(t.Context(), userID, acme); err != nil || got.JobCount != 1 {
-			t.Errorf("GetCompanyForUser() = %+v, %v, want job count 1", got, err)
+	})
+
+	t.Run("GetCompanyForUser counts every open job regardless of score", func(t *testing.T) {
+		t.Parallel()
+		st, pool, userID := newUserStore(t)
+		acme := insertCompany(t, pool, "acme")
+		scored := insertJob(t, pool, acme, 1, time.Now(), false)
+		blocked := insertJob(t, pool, acme, 2, time.Now(), false)
+		insertJob(t, pool, acme, 3, time.Now(), true)
+		insertJob(t, pool, acme, 4, time.Now(), false)
+		scoreJob(t, pool, scored, userID, `[]`)
+		scoreJob(t, pool, blocked, userID, `[{"effect":"blocked"}]`)
+
+		if got, err := st.GetCompanyForUser(t.Context(), userID, acme); err != nil || got.JobCount != 3 {
+			t.Errorf("GetCompanyForUser() = %+v, %v, want job count 3", got, err)
 		}
 	})
 

@@ -97,13 +97,20 @@ test.describe("Companies", () => {
 		await withJobs.first().getByRole("link").first().click();
 		await expect(page).toHaveURL(/\/companies\/.+/);
 
-		const jobRow = page
+		const jobRows = page
 			.getByRole("row")
-			.filter({ hasNot: page.getByRole("columnheader") })
-			.first();
-		await expect(jobRow).toBeVisible();
-		await jobRow.getByRole("button", { name: "Job actions" }).click();
-		await page.getByRole("menuitem", { name: "Track application" }).click();
+			.filter({ hasNot: page.getByRole("columnheader") });
+		await expect(jobRows.first()).toBeVisible();
+		const track = page.getByRole("menuitem", { name: "Track application" });
+		let jobRow = jobRows.first();
+		for (let i = 0; i < (await jobRows.count()); i++) {
+			jobRow = jobRows.nth(i);
+			await jobRow.getByRole("button", { name: "Job actions" }).click();
+			await expect(page.getByRole("menuitem").first()).toBeVisible();
+			if ((await track.count()) > 0) break;
+			await page.keyboard.press("Escape");
+		}
+		await track.click();
 		const dialog = page.getByRole("dialog");
 		await dialog.getByLabel("Status").selectOption({ label: "Applied" });
 		await dialog.getByRole("button", { name: "Save" }).click();

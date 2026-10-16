@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/switch";
 import { agencyRollup, isAgencyKind } from "@/lib/agencyRollup";
 import { formatDate } from "@/lib/datetime";
-import { DEFAULT_FILTERS, filterCompanyJobs } from "@/lib/jobFilters";
+import { activeFilterCount, DEFAULT_FILTERS } from "@/lib/jobFilters";
 import { outcomeLabels } from "@/types/recruiterContact";
 import {
 	companyQueryOptions,
@@ -24,7 +24,7 @@ import {
 	useSetCompanyTracking,
 } from "../../hooks/useCompanies";
 import { announceBulkGrading, DismissToast } from "../../hooks/useDismissJob";
-import { useAllJobs, useJobPages } from "../../hooks/useJobs";
+import { useJobPages } from "../../hooks/useJobs";
 import { useRecruiterContactSummaries } from "../../hooks/useRecruiterContacts";
 import { useSourceOptions } from "../../hooks/useSources";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
@@ -41,7 +41,6 @@ export const Route = createFileRoute("/_auth/companies_/$id")({
 function CompanyDetailPage() {
 	const params = Route.useParams();
 	const companyQuery = useCompany(() => params().id);
-	const jobsQuery = useAllJobs();
 	const trackMutation = useSetCompanyTracking();
 	const reviewMutation = useSetCompanyReview();
 
@@ -57,7 +56,6 @@ function CompanyDetailPage() {
 	);
 	const filters = () => ({
 		...localFilters(),
-		scored: true,
 		company: params().id,
 	});
 	const table = useJobPages(filters, (patch) =>
@@ -65,14 +63,11 @@ function CompanyDetailPage() {
 	);
 	const sourceOptions = useSourceOptions();
 
-	const jobsForCompany = createMemo(() => {
-		const selected = company();
-		if (!selected) return [];
-		return filterCompanyJobs(jobsQuery.data ?? [], selected);
-	});
+	const hasFilters = () =>
+		activeFilterCount(localFilters()) > 0 || localFilters().q !== "";
 
 	const isAgency = () => isAgencyKind(company()?.Kind);
-	const jobIds = createMemo(() => jobsForCompany().map((j) => j.ID));
+	const jobIds = createMemo(() => table.items().map((j) => j.ID));
 	const summaries = useRecruiterContactSummaries(() =>
 		isAgency() ? jobIds() : [],
 	);
@@ -201,18 +196,20 @@ function CompanyDetailPage() {
 								<CardTitle>Jobs at {c().Name}</CardTitle>
 							</CardHeader>
 							<CardContent class="gap-0">
-								<Show when={jobsQuery.isPending}>
+								<Show when={table.query.isPending}>
 									<p class="text-sm text-muted">Loading jobs…</p>
 								</Show>
-								<Show when={jobsQuery.isError}>
+								<Show when={table.query.isError}>
 									<p class="text-sm text-destructive-strong">
 										Could not load jobs.
 									</p>
 								</Show>
 								<Show
-									when={jobsQuery.isSuccess && jobsForCompany().length > 0}
+									when={
+										table.query.isSuccess && (table.total() > 0 || hasFilters())
+									}
 									fallback={
-										<Show when={jobsQuery.isSuccess}>
+										<Show when={table.query.isSuccess}>
 											<p class="text-sm text-faint">
 												No jobs from this company yet.
 											</p>

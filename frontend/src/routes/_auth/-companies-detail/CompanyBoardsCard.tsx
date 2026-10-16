@@ -119,7 +119,11 @@ export function CompanyBoardsCard(props: { companyId: string }) {
 									)}
 								>
 									<div class="min-w-0">
-										<p class="font-medium text-foreground">{board.Source}</p>
+										<p class="font-medium text-foreground">
+											{board.Source === "wttj"
+												? "Welcome to the Jungle · aggregator"
+												: board.Source}
+										</p>
 										<p class="break-all font-mono text-faint">
 											{board.BoardToken}
 										</p>

@@ -115,7 +115,7 @@ func toCompanyForUserDTO(row sqlc.GetCompanyForUserRow) dto.Company {
 		ID:                   row.ID.String(),
 		Slug:                 row.Slug,
 		Name:                 row.Name,
-		ATSSource:            row.AtsSource.String,
+		ATSSource:            row.AtsSource,
 		ATSToken:             row.AtsToken.String,
 		Domain:               row.Domain.String,
 		LinkedInCompanyID:    row.LinkedinCompanyID.String,

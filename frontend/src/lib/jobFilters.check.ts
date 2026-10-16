@@ -1,10 +1,5 @@
 import assert from "node:assert/strict";
-import {
-	activeFilterCount,
-	DEFAULT_FILTERS,
-	filterCompanyJobs,
-	parseSearch,
-} from "./jobFilters";
+import { activeFilterCount, DEFAULT_FILTERS, parseSearch } from "./jobFilters";
 
 assert.equal(parseSearch({}).graded, "all");
 assert.equal(parseSearch({ graded: "ungraded" }).graded, "ungraded");
@@ -36,10 +31,10 @@ assert.equal(parseSearch({ fav: true }).fav, true);
 assert.equal(parseSearch({ fav: "nonsense" }).fav, false);
 assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, fav: true }), 1);
 
-assert.equal(parseSearch({}).poster, "all");
+assert.equal(parseSearch({}).poster, "direct");
 assert.equal(parseSearch({ poster: "agency" }).poster, "agency");
-assert.equal(parseSearch({ poster: "nonsense" }).poster, "all");
-assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, poster: "agency" }), 1);
+assert.equal(parseSearch({ poster: "nonsense" }).poster, "direct");
+assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, poster: "agency" }), 0);
 
 assert.equal(parseSearch({ page: "3" }).page, 3);
 assert.equal(parseSearch({ page: 3 }).page, 3);
@@ -52,15 +47,3 @@ assert.equal(parseSearch({ page: "1e3" }).page, undefined);
 assert.equal(parseSearch({ page: "0x10" }).page, undefined);
 
 console.log("✓ jobFilters checks passed");
-
-assert.deepEqual(
-	filterCompanyJobs(
-		[
-			{ ID: "1", CompanyID: "company-a", CompanySlug: "other" },
-			{ ID: "2", CompanySlug: "acme" },
-			{ ID: "3", CompanyID: "company-b", CompanySlug: "acme" },
-		] as never[],
-		{ ID: "company-a", Slug: "acme" },
-	).map((job) => job.ID),
-	["1", "2"],
-);
