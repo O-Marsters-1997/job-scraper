@@ -24,7 +24,6 @@ import {
 	SEEN_OPTIONS,
 } from "@/lib/jobFilters";
 import { cn } from "@/lib/utils";
-import { POSTER_OPTIONS } from "@/types/company";
 
 interface JobFiltersDialogProps {
 	open: boolean;
@@ -50,12 +49,6 @@ const SEEN_LABEL = {
 	all: "All",
 	unseen: "Unseen",
 	seen: "Seen",
-} as const;
-
-const POSTER_LABEL = {
-	all: "All",
-	direct: "Direct",
-	agency: "Agency",
 } as const;
 
 const toggle = <T,>(arr: T[], val: T): T[] =>
@@ -144,21 +137,6 @@ export function JobFiltersDialog(props: JobFiltersDialogProps) {
 												label={SEEN_LABEL[opt]}
 												active={props.filters.seen === opt}
 												onClick={() => props.onChange({ seen: opt })}
-											/>
-										)}
-									</For>
-								</div>
-							</div>
-
-							<div class="flex flex-col gap-2">
-								<p class="text-xs font-medium text-muted">Posted by</p>
-								<div class="flex flex-wrap gap-1.5">
-									<For each={POSTER_OPTIONS}>
-										{(opt) => (
-											<FilterChip
-												label={POSTER_LABEL[opt]}
-												active={props.filters.poster === opt}
-												onClick={() => props.onChange({ poster: opt })}
 											/>
 										)}
 									</For>

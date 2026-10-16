@@ -11,6 +11,7 @@ import { JobFiltersDialog } from "@/components/jobs/JobFiltersDialog";
 import { JobRowExpander } from "@/components/jobs/JobRowExpander";
 import { Kbd } from "@/components/Kbd";
 import { Pager } from "@/components/Pager";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,6 +76,12 @@ const SORT_CHOICES = SORT_OPTIONS.map((value) => ({
 	value,
 	label: SORT_LABELS[value],
 }));
+
+const POSTER_CHIPS = [
+	{ value: "direct", label: "Direct" },
+	{ value: "agency", label: "Agency" },
+	{ value: "all", label: "All" },
+] as const;
 
 export function JobsDataTable<TData extends Job>(
 	props: JobsDataTableProps<TData>,
@@ -244,7 +251,7 @@ export function JobsDataTable<TData extends Job>(
 						<Icon name="filter" size={14} />
 						Filters
 						<Show when={filterCount() > 0}>
-							<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
+							<Badge class="ml-0.5 h-4 min-w-4 px-1 text-[10px] leading-none">
 								{filterCount()}
 							</Badge>
 						</Show>
@@ -261,7 +268,18 @@ export function JobsDataTable<TData extends Job>(
 					</Show>
 				</div>
 				<Show when={props.sortControl}>
-					<div class="ml-auto">
+					<div class="ml-auto flex shrink-0 items-center gap-2">
+						<For each={POSTER_CHIPS}>
+							{(chip) => (
+								<ToggleChip
+									solid
+									active={props.filters.poster === chip.value}
+									onClick={() => props.onChange({ poster: chip.value })}
+								>
+									{chip.label}
+								</ToggleChip>
+							)}
+						</For>
 						<Select
 							options={SORT_CHOICES}
 							optionValue={(o) => o?.value ?? ""}
