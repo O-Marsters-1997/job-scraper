@@ -49,7 +49,14 @@ export function JobHeader(props: {
 
 					<div class="min-w-0 flex-1">
 						<h1 class="text-xl font-bold tracking-tight text-foreground">
-							{props.job.Title}
+							<a
+								href={props.job.URL}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="hover:underline"
+							>
+								{props.job.Title}
+							</a>
 						</h1>
 						<p class="mt-0.5 text-sm text-muted">
 							{titleCase(props.job.CompanySlug)} · {props.job.Location}
