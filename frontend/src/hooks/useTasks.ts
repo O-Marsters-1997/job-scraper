@@ -1,6 +1,7 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
+	createTask,
 	createTaskType,
 	deleteTaskType,
 	fetchTasks,
@@ -55,6 +56,16 @@ const taskTypesQueryOptions = queryOptions({
 	queryFn: fetchTaskTypes,
 });
 
+const JOB_TASKS_LIMIT = 50;
+
+export function useJobOpenTasks(jobId: () => string) {
+	return createQuery(() => ({
+		queryKey: keys.tasks.forJob(jobId()),
+		queryFn: () =>
+			fetchTasks({ page: 1, pageSize: JOB_TASKS_LIMIT, jobId: jobId() }),
+	}));
+}
+
 export function useTaskTypes() {
 	return createQuery(() => taskTypesQueryOptions);
 }
@@ -79,6 +90,10 @@ export function useUpdateTaskType() {
 
 export function useDeleteTaskType() {
 	return useInvalidatingMutation(deleteTaskType, TASK_TYPE_INVALIDATES);
+}
+
+export function useCreateTask() {
+	return useInvalidatingMutation(createTask, [keys.tasks.all]);
 }
 
 export function useSetTaskDone() {

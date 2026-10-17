@@ -5,7 +5,8 @@ import {
 	type TaskType,
 	TaskTypeNameTakenError,
 } from "@/types/task";
-import type { TasksQuery } from "../api/tasks";
+import { ApiError } from "../api/apiError";
+import type { CreateTaskInput, TasksQuery } from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -103,6 +104,36 @@ export function deleteTaskType(id: string): void {
 	tasks = allTasks().filter((t) => t.TypeID !== id);
 }
 
+export function createTask(input: CreateTaskInput): Task {
+	failIfRequested("createTask");
+	const type = types.find((t) => t.ID === input.type_id);
+	if (!type) throw new Error("Unknown task type");
+	if (input.link && !/^https?:\/\//.test(input.link)) {
+		throw new ApiError(400, "/tasks/", {
+			error: "link must be an http or https URL",
+		});
+	}
+	const job = getJobs().find((j) => j.ID === input.job_id);
+	const now = new Date().toISOString();
+	const task: Task = {
+		ID: faker.string.uuid(),
+		TypeID: type.ID,
+		TypeName: type.Name,
+		TypeColour: type.Colour,
+		JobID: job?.ID ?? null,
+		JobTitle: job?.Title ?? "",
+		JobCompanySlug: job?.CompanySlug ?? "",
+		JobPostedAt: job?.PostedAt ?? null,
+		Link: input.link,
+		Notes: input.notes,
+		CompletedAt: null,
+		CreatedAt: now,
+		UpdatedAt: now,
+	};
+	tasks = [...allTasks(), task];
+	return task;
+}
+
 const postedMs = (t: Task) =>
 	t.JobPostedAt ? new Date(t.JobPostedAt).getTime() : Number.NEGATIVE_INFINITY;
 
@@ -110,6 +141,7 @@ export function getTaskPage(q: TasksQuery): TaskPage {
 	const rows = allTasks()
 		.filter((t) => (t.CompletedAt !== null) === (q.done ?? false))
 		.filter((t) => !q.typeId || t.TypeID === q.typeId)
+		.filter((t) => !q.jobId || t.JobID === q.jobId)
 		.sort((a, b) =>
 			q.sort === "job_posted"
 				? postedMs(b) - postedMs(a)

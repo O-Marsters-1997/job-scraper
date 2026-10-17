@@ -21,6 +21,7 @@ export interface TasksQuery {
 	typeId?: string | undefined;
 	sort?: TaskSort | undefined;
 	done?: boolean | undefined;
+	jobId?: string | undefined;
 }
 
 export async function fetchTasks(q: TasksQuery): Promise<TaskPage> {
@@ -34,6 +35,7 @@ export async function fetchTasks(q: TasksQuery): Promise<TaskPage> {
 			});
 			if (q.typeId) query.set("type_id", q.typeId);
 			if (q.sort) query.set("sort", q.sort);
+			if (q.jobId) query.set("job_id", q.jobId);
 			return apiFetch(`/tasks/?${query}`, taskPageSchema);
 		},
 	);
@@ -81,6 +83,20 @@ export async function deleteTaskType(id: string): Promise<void> {
 	return mocked(
 		(db) => db.deleteTaskType(id),
 		() => apiFetchVoid(`/task-types/${id}`, { method: "DELETE" }),
+	);
+}
+
+export interface CreateTaskInput {
+	type_id: string;
+	job_id: string | null;
+	link: string;
+	notes: string;
+}
+
+export async function createTask(input: CreateTaskInput): Promise<Task> {
+	return mocked(
+		(db) => db.createTask(input),
+		() => apiFetch("/tasks/", taskSchema, jsonInit("POST", input)),
 	);
 }
 
