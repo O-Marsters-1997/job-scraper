@@ -13,7 +13,14 @@ type TaskType struct {
 	ID        string
 	Name      string
 	Colour    string
+	TaskCount int
 	CreatedAt time.Time
+}
+
+type TaskTypeInput struct {
+	ID     string `json:"-" path:"id"`
+	Name   string `json:"name"`
+	Colour string `json:"colour"`
 }
 
 type Task struct {

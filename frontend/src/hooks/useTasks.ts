@@ -2,10 +2,13 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	createTask,
+	createTaskType,
+	deleteTaskType,
 	fetchTasks,
 	fetchTaskTypes,
 	setTaskDone,
 	TASKS_PAGE_SIZE,
+	updateTaskType,
 } from "../api/tasks";
 import type { TaskSort } from "../types/task";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
@@ -48,6 +51,11 @@ export function useOpenTaskCount() {
 	return createQuery(() => openTaskCountQueryOptions);
 }
 
+const taskTypesQueryOptions = queryOptions({
+	queryKey: keys.tasks.types,
+	queryFn: fetchTaskTypes,
+});
+
 const JOB_TASKS_LIMIT = 50;
 
 export function useJobOpenTasks(jobId: () => string) {
@@ -59,10 +67,29 @@ export function useJobOpenTasks(jobId: () => string) {
 }
 
 export function useTaskTypes() {
-	return createQuery(() => ({
-		queryKey: keys.tasks.types,
-		queryFn: fetchTaskTypes,
-	}));
+	return createQuery(() => taskTypesQueryOptions);
+}
+
+const TASK_TYPE_INVALIDATES = [keys.tasks.all];
+
+export function useCreateTaskType() {
+	return useInvalidatingMutation(
+		({ name, colour }: { name: string; colour: string }) =>
+			createTaskType(name, colour),
+		TASK_TYPE_INVALIDATES,
+	);
+}
+
+export function useUpdateTaskType() {
+	return useInvalidatingMutation(
+		({ id, name, colour }: { id: string; name: string; colour: string }) =>
+			updateTaskType(id, name, colour),
+		TASK_TYPE_INVALIDATES,
+	);
+}
+
+export function useDeleteTaskType() {
+	return useInvalidatingMutation(deleteTaskType, TASK_TYPE_INVALIDATES);
 }
 
 export function useCreateTask() {

@@ -17,9 +17,10 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	r := chi.NewRouter()
 	tasks.Build(tasks.Deps{Store: taskstest.NewFakeStore()}).Routes(r)
 
-	handlerstest.RequiresAuth(t, r, "GET /task-types", "GET /tasks/", "POST /tasks/", "PUT /tasks/{id}/done")
-	handlerstest.RejectsMalformedBody(t, r, "POST /tasks/", "PUT /tasks/{id}/done")
-	handlerstest.RejectsBadPathID(t, r, "PUT /tasks/{id}/done")
+	handlerstest.RequiresAuth(t, r, "GET /task-types/", "POST /task-types/", "PATCH /task-types/{id}", "DELETE /task-types/{id}",
+		"GET /tasks/", "POST /tasks/", "PUT /tasks/{id}/done")
+	handlerstest.RejectsMalformedBody(t, r, "POST /task-types/", "PATCH /task-types/{id}", "POST /tasks/", "PUT /tasks/{id}/done")
+	handlerstest.RejectsBadPathID(t, r, "DELETE /task-types/{id}", "PUT /tasks/{id}/done")
 }
 
 func TestRoutesHappyPath(t *testing.T) {
@@ -32,10 +33,18 @@ func TestRoutesHappyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	types := handlerstest.Do[[]dto.TaskType](t, r, http.StatusOK, "GET /task-types", "")
+	types := handlerstest.Do[[]dto.TaskType](t, r, http.StatusOK, "GET /task-types/", "")
 	if len(types) != 4 {
 		t.Fatalf("got %d task types, want 4", len(types))
 	}
+	offer := handlerstest.Do[dto.TaskType](t, r, http.StatusCreated, "POST /task-types/", `{"name":"Offer","colour":"#15803d"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusConflict, "POST /task-types/", `{"name":"Offer","colour":"#15803d"}`)
+	renamed := handlerstest.Do[dto.TaskType](t, r, http.StatusOK, "PATCH /task-types/"+offer.ID, `{"name":"Offers","colour":"#000000"}`)
+	if renamed.Name != "Offers" || renamed.Colour != "#000000" {
+		t.Fatalf("renamed type = %+v, want Offers #000000", renamed)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /task-types/"+offer.ID, "")
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /task-types/"+offer.ID, "")
 
 	created := handlerstest.Do[dto.Task](t, r, http.StatusCreated, "POST /tasks/",
 		`{"type_id":"`+types[0].ID+`","link":"https://example.com/a","notes":"call"}`)

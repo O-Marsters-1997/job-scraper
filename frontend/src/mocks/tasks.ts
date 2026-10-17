@@ -1,5 +1,10 @@
 import { faker } from "@faker-js/faker";
-import type { Task, TaskPage, TaskType } from "@/types/task";
+import {
+	type Task,
+	type TaskPage,
+	type TaskType,
+	TaskTypeNameTakenError,
+} from "@/types/task";
 import { ApiError } from "../api/apiError";
 import type { CreateTaskInput, TasksQuery } from "../api/tasks";
 import { failIfRequested } from "./helpers";
@@ -10,6 +15,13 @@ const TYPES = [
 	{ ID: "task-type-follow-up", Name: "Follow up", Colour: "#c2410c" },
 	{ ID: "task-type-reach-out", Name: "Reach out", Colour: "#15803d" },
 ] as const;
+
+const seedCreatedAt = new Date(Date.now() - 86_400_000).toISOString();
+
+let types: Omit<TaskType, "TaskCount">[] = [
+	...TYPES,
+	{ ID: "task-type-prep", Name: "Prep", Colour: "#64748b" },
+].map((t) => ({ ...t, CreatedAt: seedCreatedAt }));
 
 function seedTasks(): Task[] {
 	const jobs = getJobs();
@@ -41,13 +53,60 @@ function allTasks(): Task[] {
 	return tasks;
 }
 
+function withCount(type: Omit<TaskType, "TaskCount">): TaskType {
+	return {
+		...type,
+		TaskCount: allTasks().filter((t) => t.TypeID === type.ID).length,
+	};
+}
+
+function assertNameFree(name: string, exceptId?: string) {
+	if (types.some((t) => t.Name === name && t.ID !== exceptId)) {
+		throw new TaskTypeNameTakenError();
+	}
+}
+
 export function getTaskTypes(): TaskType[] {
-	return TYPES.map((t) => ({ ...t, CreatedAt: new Date(0).toISOString() }));
+	return types.map(withCount);
+}
+
+export function createTaskType(name: string, colour: string): TaskType {
+	failIfRequested("createTaskType");
+	assertNameFree(name);
+	const type = {
+		ID: faker.string.uuid(),
+		Name: name,
+		Colour: colour,
+		CreatedAt: new Date().toISOString(),
+	};
+	types = [...types, type];
+	return withCount(type);
+}
+
+export function updateTaskType(
+	id: string,
+	name: string,
+	colour: string,
+): TaskType {
+	const prev = types.find((t) => t.ID === id);
+	if (!prev) throw new Error("Task type not found");
+	assertNameFree(name, id);
+	const updated = { ...prev, Name: name, Colour: colour };
+	types = types.map((t) => (t.ID === id ? updated : t));
+	tasks = allTasks().map((t) =>
+		t.TypeID === id ? { ...t, TypeName: name, TypeColour: colour } : t,
+	);
+	return withCount(updated);
+}
+
+export function deleteTaskType(id: string): void {
+	types = types.filter((t) => t.ID !== id);
+	tasks = allTasks().filter((t) => t.TypeID !== id);
 }
 
 export function createTask(input: CreateTaskInput): Task {
 	failIfRequested("createTask");
-	const type = TYPES.find((t) => t.ID === input.type_id);
+	const type = types.find((t) => t.ID === input.type_id);
 	if (!type) throw new Error("Unknown task type");
 	if (input.link && !/^https?:\/\//.test(input.link)) {
 		throw new ApiError(400, "/tasks/", {

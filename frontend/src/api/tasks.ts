@@ -3,12 +3,15 @@ import {
 	type TaskPage,
 	type TaskSort,
 	type TaskType,
+	TaskTypeNameTakenError,
 	taskPageSchema,
 	taskSchema,
 	taskTypeSchema,
 } from "../types/task";
-import { apiFetch, jsonInit } from "./client";
+import { apiFetch, apiFetchVoid, jsonInit, rethrowStatus } from "./client";
 import { mocked } from "./config";
+
+const nameTaken = rethrowStatus({ 409: () => new TaskTypeNameTakenError() });
 
 export const TASKS_PAGE_SIZE = 25;
 
@@ -42,6 +45,44 @@ export async function fetchTaskTypes(): Promise<TaskType[]> {
 	return mocked(
 		(db) => db.getTaskTypes(),
 		() => apiFetch("/task-types", taskTypeSchema.array()),
+	);
+}
+
+export async function createTaskType(
+	name: string,
+	colour: string,
+): Promise<TaskType> {
+	return mocked(
+		(db) => db.createTaskType(name, colour),
+		() =>
+			apiFetch(
+				"/task-types",
+				taskTypeSchema,
+				jsonInit("POST", { name, colour }),
+			).catch(nameTaken),
+	);
+}
+
+export async function updateTaskType(
+	id: string,
+	name: string,
+	colour: string,
+): Promise<TaskType> {
+	return mocked(
+		(db) => db.updateTaskType(id, name, colour),
+		() =>
+			apiFetch(
+				`/task-types/${id}`,
+				taskTypeSchema,
+				jsonInit("PATCH", { name, colour }),
+			).catch(nameTaken),
+	);
+}
+
+export async function deleteTaskType(id: string): Promise<void> {
+	return mocked(
+		(db) => db.deleteTaskType(id),
+		() => apiFetchVoid(`/task-types/${id}`, { method: "DELETE" }),
 	);
 }
 
