@@ -1,6 +1,12 @@
 import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
-import { fetchOpenTasks, setTaskDone, TASKS_PAGE_SIZE } from "../api/tasks";
+import {
+	createTask,
+	fetchOpenTasks,
+	fetchTaskTypes,
+	setTaskDone,
+	TASKS_PAGE_SIZE,
+} from "../api/tasks";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 import { useServerTable } from "./useServerTable";
 
@@ -29,6 +35,26 @@ const openTaskCountQueryOptions = queryOptions({
 
 export function useOpenTaskCount() {
 	return createQuery(() => openTaskCountQueryOptions);
+}
+
+const JOB_TASKS_LIMIT = 50;
+
+export function useJobOpenTasks(jobId: () => string) {
+	return createQuery(() => ({
+		queryKey: keys.tasks.forJob(jobId()),
+		queryFn: () => fetchOpenTasks(1, JOB_TASKS_LIMIT, jobId()),
+	}));
+}
+
+export function useTaskTypes() {
+	return createQuery(() => ({
+		queryKey: keys.tasks.types,
+		queryFn: fetchTaskTypes,
+	}));
+}
+
+export function useCreateTask() {
+	return useInvalidatingMutation(createTask, [keys.tasks.all]);
 }
 
 export function useSetTaskDone() {

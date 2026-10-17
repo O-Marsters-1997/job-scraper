@@ -5,6 +5,7 @@ import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Card } from "@/components/ui/card";
+import { formatRelative } from "@/lib/datetime";
 import { taskHeadline } from "@/lib/taskHeadline";
 import { useSetTaskDone, useTaskPages } from "../../hooks/useTasks";
 
@@ -66,6 +67,11 @@ function TasksPage() {
 														>
 															{task.JobCompanySlug}
 														</Link>
+														<Show when={task.JobPostedAt}>
+															{(posted) => (
+																<> · posted {formatRelative(posted())}</>
+															)}
+														</Show>
 													</p>
 												</Show>
 											</div>

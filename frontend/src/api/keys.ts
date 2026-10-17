@@ -26,6 +26,8 @@ export const keys = {
 		all: tasksAll,
 		list: (page: number) => [...tasksAll, "list", page] as const,
 		count: [...tasksAll, "count"] as const,
+		types: [...tasksAll, "types"] as const,
+		forJob: (jobId: string) => [...tasksAll, "job", jobId] as const,
 	},
 	statuses: ["application-statuses"] as const,
 	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,
