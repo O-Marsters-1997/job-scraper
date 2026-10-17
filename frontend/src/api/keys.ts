@@ -27,6 +27,7 @@ export const keys = {
 		list: (params: object) => [...tasksAll, "list", params] as const,
 		types: [...tasksAll, "types"] as const,
 		count: [...tasksAll, "count"] as const,
+		forJob: (jobId: string) => [...tasksAll, "job", jobId] as const,
 	},
 	statuses: ["application-statuses"] as const,
 	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,

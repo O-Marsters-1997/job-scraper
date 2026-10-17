@@ -33,6 +33,7 @@ export function JobHeader(props: {
 	app: ApplicationWithDetails | undefined;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onAddTask: () => void;
 }) {
 	const navigate = useNavigate();
 	const sources = useSources();
@@ -159,6 +160,7 @@ export function JobHeader(props: {
 							job={props.job}
 							appSummary={props.appSummary}
 							onTrack={props.onTrack}
+							onAddTask={props.onAddTask}
 							onSetCompanyKind={(kind) => {
 								const id = props.job.CompanyID;
 								if (id) setKind.mutate({ id, kind });

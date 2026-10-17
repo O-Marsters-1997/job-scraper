@@ -7,9 +7,26 @@ VALUES
     ($1, 'Prep',      '#64748b');
 
 -- name: ListTaskTypes :many
-SELECT id, name, colour, created_at FROM task_types
-WHERE user_id = $1
-ORDER BY created_at ASC, name ASC;
+SELECT tt.id, tt.name, tt.colour, tt.created_at,
+    (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count
+FROM task_types tt
+WHERE tt.user_id = $1
+ORDER BY tt.created_at ASC, tt.name ASC;
+
+-- name: CreateTaskType :one
+INSERT INTO task_types (user_id, name, colour)
+VALUES ($1, $2, $3)
+RETURNING id, name, colour, created_at, 0::int AS task_count;
+
+-- name: UpdateTaskType :one
+UPDATE task_types tt
+SET name = sqlc.arg(name), colour = sqlc.arg(colour)
+WHERE tt.id = sqlc.arg(id) AND tt.user_id = sqlc.arg(user_id)
+RETURNING tt.id, tt.name, tt.colour, tt.created_at,
+    (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count;
+
+-- name: DeleteTaskType :execrows
+DELETE FROM task_types WHERE id = $1 AND user_id = $2;
 
 -- name: PageTasks :many
 SELECT

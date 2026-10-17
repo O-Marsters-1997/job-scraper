@@ -9,6 +9,7 @@ import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { JobDrafts } from "@/components/tailoring/JobDrafts";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isAgencyKind } from "@/lib/agencyRollup";
@@ -21,6 +22,7 @@ import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
+import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
 import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
 export const Route = createFileRoute("/_auth/jobs_/$id")({
@@ -35,6 +37,7 @@ export const Route = createFileRoute("/_auth/jobs_/$id")({
 function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
+	const [taskOpen, setTaskOpen] = createSignal(false);
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
 	const { dismiss } = useDismissJob();
@@ -93,6 +96,7 @@ function JobDetailPage() {
 						app={app()}
 						appSummary={track.appsForJobs()[params().id]}
 						onTrack={() => track.openTrack(params().id)}
+						onAddTask={() => setTaskOpen(true)}
 					/>
 
 					<div class="grid grid-cols-1 items-start lg:grid-cols-[1fr_284px] gap-4">
@@ -161,6 +165,13 @@ function JobDetailPage() {
 								/>
 							</div>
 
+							<div class="max-md:order-4">
+								<JobTasksCard
+									jobId={params().id}
+									onAdd={() => setTaskOpen(true)}
+								/>
+							</div>
+
 							<Show when={isAgencyKind(j().CompanyKind)}>
 								<div class="max-md:order-4">
 									<RecruiterContactsCard jobId={params().id} />
@@ -179,6 +190,11 @@ function JobDetailPage() {
 					/>
 					<DismissToast />
 
+					<CreateTaskDialog
+						open={taskOpen()}
+						onOpenChange={setTaskOpen}
+						job={j()}
+					/>
 					<TrackApplicationDialog
 						open={track.modalOpen()}
 						onOpenChange={track.setModalOpen}

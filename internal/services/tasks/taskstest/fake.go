@@ -11,6 +11,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks/store"
 )
 
 var defaultTypeNames = []string{"Apply", "Follow up", "Reach out", "Prep"}
@@ -71,11 +72,84 @@ func (f *FakeStore) ListTaskTypes(_ context.Context, userID string) ([]dto.TaskT
 	out := []dto.TaskType{}
 	for _, t := range f.types {
 		if t.userID == userID {
-			out = append(out, t.TaskType)
+			out = append(out, f.withCount(t.TaskType))
 		}
 	}
 	slices.SortFunc(out, func(a, b dto.TaskType) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	return out, nil
+}
+
+func (f *FakeStore) withCount(t dto.TaskType) dto.TaskType {
+	t.TaskCount = 0
+	for _, task := range f.tasks {
+		if task.TypeID == t.ID {
+			t.TaskCount++
+		}
+	}
+	return t
+}
+
+func (f *FakeStore) nameTaken(userID, name, exceptID string) bool {
+	for _, t := range f.types {
+		if t.userID == userID && t.Name == name && t.ID != exceptID {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *FakeStore) CreateTaskType(_ context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.nameTaken(userID, in.Name, "") {
+		return dto.TaskType{}, store.ErrTaskTypeExists
+	}
+	f.seq++
+	t := dto.TaskType{
+		ID:        fakeID(f.seq),
+		Name:      in.Name,
+		Colour:    in.Colour,
+		CreatedAt: epoch.Add(time.Duration(f.seq) * time.Second),
+	}
+	f.types[t.ID] = ownedType{userID: userID, TaskType: t}
+	return t, nil
+}
+
+func (f *FakeStore) UpdateTaskType(_ context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.types[in.ID]
+	if !ok || t.userID != userID {
+		return dto.TaskType{}, data.ErrNotFound
+	}
+	if f.nameTaken(userID, in.Name, in.ID) {
+		return dto.TaskType{}, store.ErrTaskTypeExists
+	}
+	t.Name, t.Colour = in.Name, in.Colour
+	f.types[in.ID] = t
+	for id, task := range f.tasks {
+		if task.TypeID == in.ID {
+			task.TypeName, task.TypeColour = in.Name, in.Colour
+			f.tasks[id] = task
+		}
+	}
+	return f.withCount(t.TaskType), nil
+}
+
+func (f *FakeStore) DeleteTaskType(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.types[id]
+	if !ok || t.userID != userID {
+		return data.ErrNotFound
+	}
+	delete(f.types, id)
+	for taskID, task := range f.tasks {
+		if task.TypeID == id {
+			delete(f.tasks, taskID)
+		}
+	}
+	return nil
 }
 
 func (f *FakeStore) ListTasks(_ context.Context, userID string, opts dto.TaskPageOptions) (dto.TaskPage, error) {
