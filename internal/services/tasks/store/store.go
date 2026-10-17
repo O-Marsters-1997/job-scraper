@@ -70,11 +70,11 @@ func (s *Store) ListTasks(ctx context.Context, userID string, opts dto.TaskPageO
 		Sort: string(opts.Sort), PageLimit: opts.Limit, PageOffset: opts.Offset,
 	})
 	if err != nil {
-		return dto.TaskPage{}, fmt.Errorf("store.ListTasks: %w", err)
+		return dto.TaskPage{}, fmt.Errorf("store.ListTasks page: %w", err)
 	}
 	total, err := s.queries.CountTasks(ctx, sqlc.CountTasksParams{UserID: uid, TypeID: typeID, JobID: jobID, Done: opts.Done})
 	if err != nil {
-		return dto.TaskPage{}, fmt.Errorf("store.ListTasks: %w", err)
+		return dto.TaskPage{}, fmt.Errorf("store.ListTasks count: %w", err)
 	}
 	items := make([]dto.Task, len(rows))
 	for i, row := range rows {
