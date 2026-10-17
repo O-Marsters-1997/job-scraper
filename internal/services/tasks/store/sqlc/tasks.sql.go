@@ -375,6 +375,83 @@ func (q *Queries) SetTaskDone(ctx context.Context, arg SetTaskDoneParams) (SetTa
 	return i, err
 }
 
+const updateTask = `-- name: UpdateTask :one
+WITH updated AS (
+    UPDATE tasks
+    SET type_id = tt.id,
+        link = $1::text,
+        notes = $2::text,
+        updated_at = $3::timestamptz
+    FROM task_types tt
+    WHERE tasks.id = $4::uuid AND tasks.user_id = $5::uuid
+      AND tt.id = $6::uuid AND tt.user_id = $5::uuid
+    RETURNING tasks.id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+)
+SELECT
+    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    tt.name   AS type_name,
+    tt.colour AS type_colour,
+    j.title        AS job_title,
+    j.company_slug AS job_company_slug,
+    COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
+FROM updated t
+JOIN task_types tt ON tt.id = t.type_id
+LEFT JOIN jobs j ON j.id = t.job_id
+`
+
+type UpdateTaskParams struct {
+	Link   pgtype.Text
+	Notes  pgtype.Text
+	Now    pgtype.Timestamptz
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+	TypeID pgtype.UUID
+}
+
+type UpdateTaskRow struct {
+	ID             pgtype.UUID
+	TypeID         pgtype.UUID
+	JobID          pgtype.UUID
+	Link           pgtype.Text
+	Notes          pgtype.Text
+	CompletedAt    pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	TypeName       string
+	TypeColour     string
+	JobTitle       pgtype.Text
+	JobCompanySlug pgtype.Text
+	JobPostedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error) {
+	row := q.db.QueryRow(ctx, updateTask,
+		arg.Link,
+		arg.Notes,
+		arg.Now,
+		arg.ID,
+		arg.UserID,
+		arg.TypeID,
+	)
+	var i UpdateTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.TypeID,
+		&i.JobID,
+		&i.Link,
+		&i.Notes,
+		&i.CompletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TypeName,
+		&i.TypeColour,
+		&i.JobTitle,
+		&i.JobCompanySlug,
+		&i.JobPostedAt,
+	)
+	return i, err
+}
+
 const updateTaskType = `-- name: UpdateTaskType :one
 UPDATE task_types tt
 SET name = $1, colour = $2

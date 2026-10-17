@@ -167,6 +167,29 @@ func (s *Store) CreateTask(ctx context.Context, userID string, in dto.CreateTask
 	return toTaskDTO(sqlc.PageTasksRow(row)), nil
 }
 
+func (s *Store) UpdateTask(ctx context.Context, userID string, in dto.UpdateTaskInput, now time.Time) (dto.Task, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	id, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.Task{}, data.ErrNotFound
+	}
+	typeID, err := data.UUID(in.TypeID)
+	if err != nil {
+		return dto.Task{}, data.ErrNotFound
+	}
+	row, err := s.queries.UpdateTask(ctx, sqlc.UpdateTaskParams{
+		ID: id, UserID: uid, TypeID: typeID, Link: data.Text(in.Link), Notes: data.Text(in.Notes),
+		Now: pgtype.Timestamptz{Time: now, Valid: true},
+	})
+	if err != nil {
+		return dto.Task{}, data.QueryErr("UpdateTask", err)
+	}
+	return toTaskDTO(sqlc.PageTasksRow(row)), nil
+}
+
 func (s *Store) SetTaskDone(ctx context.Context, userID, id string, done bool, now time.Time) (dto.Task, error) {
 	uid, err := data.UUID(userID)
 	if err != nil {

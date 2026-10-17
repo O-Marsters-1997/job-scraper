@@ -8,6 +8,7 @@ import {
 	fetchTaskTypes,
 	setTaskDone,
 	TASKS_PAGE_SIZE,
+	updateTask,
 	updateTaskType,
 } from "../api/tasks";
 import type { TaskSort } from "../types/task";
@@ -94,6 +95,10 @@ export function useDeleteTaskType() {
 
 export function useCreateTask() {
 	return useInvalidatingMutation(createTask, [keys.tasks.all]);
+}
+
+export function useUpdateTask() {
+	return useInvalidatingMutation(updateTask, [keys.tasks.all]);
 }
 
 export function useSetTaskDone() {

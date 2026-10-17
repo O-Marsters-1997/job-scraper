@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show, untrack } from "solid-js";
 import { ApiError } from "@/api/client";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFormSubmit } from "@/hooks/useFormSubmit";
-import { useCreateTask, useTaskTypes } from "@/hooks/useTasks";
+import { useCreateTask, useTaskTypes, useUpdateTask } from "@/hooks/useTasks";
 import type { Job } from "@/types/job";
+import type { Task } from "@/types/task";
 
 const DEFAULT_TYPE_NAME = "Apply";
 
@@ -21,21 +22,24 @@ interface CreateTaskDialogProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	job?: Pick<Job, "ID" | "Title"> | undefined;
+	task?: Task | undefined;
 }
 
 export function CreateTaskDialog(props: CreateTaskDialogProps) {
+	const jobTitle = () => props.task?.JobTitle || props.job?.Title;
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Add task</DialogTitle>
-					<Show when={props.job}>
-						{(job) => <p class="text-sm text-muted">{job().Title}</p>}
+					<DialogTitle>{props.task ? "Edit task" : "Add task"}</DialogTitle>
+					<Show when={jobTitle()}>
+						{(title) => <p class="text-sm text-muted">{title()}</p>}
 					</Show>
 				</DialogHeader>
 				<Show when={props.open}>
 					<CreateTaskForm
 						job={props.job}
+						task={props.task}
 						onClose={() => props.onOpenChange(false)}
 					/>
 				</Show>
@@ -54,13 +58,16 @@ function errorMessage(err: unknown): string {
 
 function CreateTaskForm(props: {
 	job: Pick<Job, "ID" | "Title"> | undefined;
+	task: Task | undefined;
 	onClose: () => void;
 }) {
 	const types = useTaskTypes();
 	const create = useCreateTask();
-	const [typeId, setTypeId] = createSignal("");
-	const [link, setLink] = createSignal("");
-	const [notes, setNotes] = createSignal("");
+	const update = useUpdateTask();
+	const initial = untrack(() => props.task);
+	const [typeId, setTypeId] = createSignal(initial?.TypeID ?? "");
+	const [link, setLink] = createSignal(initial?.Link ?? "");
+	const [notes, setNotes] = createSignal(initial?.Notes ?? "");
 
 	const selectedTypeId = () =>
 		typeId() ||
@@ -69,12 +76,16 @@ function CreateTaskForm(props: {
 		"";
 
 	const form = useFormSubmit(async () => {
-		await create.mutateAsync({
+		const fields = {
 			type_id: selectedTypeId(),
-			job_id: props.job?.ID ?? null,
 			link: link().trim(),
 			notes: notes().trim(),
-		});
+		};
+		if (props.task) {
+			await update.mutateAsync({ id: props.task.ID, ...fields });
+		} else {
+			await create.mutateAsync({ ...fields, job_id: props.job?.ID ?? null });
+		}
 		props.onClose();
 	}, errorMessage);
 

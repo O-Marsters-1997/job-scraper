@@ -94,3 +94,26 @@ SELECT
 FROM updated t
 JOIN task_types tt ON tt.id = t.type_id
 LEFT JOIN jobs j ON j.id = t.job_id;
+
+-- name: UpdateTask :one
+WITH updated AS (
+    UPDATE tasks
+    SET type_id = tt.id,
+        link = sqlc.narg(link)::text,
+        notes = sqlc.narg(notes)::text,
+        updated_at = sqlc.arg(now)::timestamptz
+    FROM task_types tt
+    WHERE tasks.id = sqlc.arg(id)::uuid AND tasks.user_id = sqlc.arg(user_id)::uuid
+      AND tt.id = sqlc.arg(type_id)::uuid AND tt.user_id = sqlc.arg(user_id)::uuid
+    RETURNING tasks.id, tasks.type_id, tasks.job_id, tasks.link, tasks.notes, tasks.completed_at, tasks.created_at, tasks.updated_at
+)
+SELECT
+    t.id, t.type_id, t.job_id, t.link, t.notes, t.completed_at, t.created_at, t.updated_at,
+    tt.name   AS type_name,
+    tt.colour AS type_colour,
+    j.title        AS job_title,
+    j.company_slug AS job_company_slug,
+    COALESCE(j.posted_at, j.posted_after, j.first_discovered_at) AS job_posted_at
+FROM updated t
+JOIN task_types tt ON tt.id = t.type_id
+LEFT JOIN jobs j ON j.id = t.job_id;

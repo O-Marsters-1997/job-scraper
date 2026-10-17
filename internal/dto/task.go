@@ -60,6 +60,13 @@ type CreateTaskInput struct {
 	Notes  string  `json:"notes"`
 }
 
+type UpdateTaskInput struct {
+	ID     string `json:"-" path:"id"`
+	TypeID string `json:"type_id"`
+	Link   string `json:"link"`
+	Notes  string `json:"notes"`
+}
+
 type TaskDoneInput struct {
 	ID   string `json:"-" path:"id"`
 	Done bool   `json:"done"`
