@@ -16,6 +16,20 @@ export class TasksPage {
 		await this.heading.waitFor({ state: "visible" });
 	}
 
+	async filterByType(name: string) {
+		await this.page.getByRole("button", { name: "Filter by type" }).click();
+		await this.page.getByRole("option", { name }).click();
+	}
+
+	async sortByJobPosted() {
+		await this.page.getByRole("button", { name: "Sort tasks" }).click();
+		await this.page.getByRole("option", { name: "Job posted" }).click();
+	}
+
+	async toggleShowDone() {
+		await this.page.getByRole("button", { name: "Show done" }).click();
+	}
+
 	async markFirstDone() {
 		await this.rows.first().getByRole("checkbox").check();
 	}
