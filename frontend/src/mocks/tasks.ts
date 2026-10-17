@@ -1,5 +1,6 @@
 import { faker } from "@faker-js/faker";
-import type { Task, TaskPage } from "@/types/task";
+import type { Task, TaskPage, TaskType } from "@/types/task";
+import type { TasksQuery } from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -39,13 +40,25 @@ function allTasks(): Task[] {
 	return tasks;
 }
 
-export function getTaskPage(page: number, pageSize: number): TaskPage {
-	const open = allTasks()
-		.filter((t) => t.CompletedAt === null)
-		.sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+export function getTaskTypes(): TaskType[] {
+	return TYPES.map((t) => ({ ...t, CreatedAt: new Date(0).toISOString() }));
+}
+
+const postedMs = (t: Task) =>
+	t.JobPostedAt ? new Date(t.JobPostedAt).getTime() : Number.NEGATIVE_INFINITY;
+
+export function getTaskPage(q: TasksQuery): TaskPage {
+	const rows = allTasks()
+		.filter((t) => (t.CompletedAt !== null) === (q.done ?? false))
+		.filter((t) => !q.typeId || t.TypeID === q.typeId)
+		.sort((a, b) =>
+			q.sort === "job_posted"
+				? postedMs(b) - postedMs(a)
+				: b.CreatedAt.localeCompare(a.CreatedAt),
+		);
 	return {
-		items: open.slice((page - 1) * pageSize, page * pageSize),
-		total: open.length,
+		items: rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
+		total: rows.length,
 	};
 }
 
