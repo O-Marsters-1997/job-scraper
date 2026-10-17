@@ -15,6 +15,7 @@ interface JobActionsMenuProps {
 	job: Job;
 	appSummary: JobApplicationSummary | undefined;
 	onTrack: () => void;
+	onAddTask?: () => void;
 	onGrade?: () => void;
 	onDismiss?: () => void;
 	onExcludeCompany?: () => void;
@@ -65,6 +66,12 @@ export function JobActionsMenu(props: JobActionsMenuProps) {
 							{summary().StatusName || "Edit status"}
 						</DropdownMenuItem>
 					)}
+				</Show>
+				<Show when={props.onAddTask}>
+					<DropdownMenuItem onSelect={() => props.onAddTask?.()}>
+						<Icon name="plus" size={14} />
+						Add task
+					</DropdownMenuItem>
 				</Show>
 				<Show
 					when={

@@ -29,6 +29,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/scripts/migrations"
 )
@@ -85,7 +86,8 @@ func run(ctx context.Context) error {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps, os.Getenv("SESSION_SECRET"),
+	taskModule := tasks.New(pool)
+	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, os.Getenv("SESSION_SECRET"),
 		os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"), os.Getenv("GOOGLE_REDIRECT_URL"))
 	if err != nil {
 		return fmt.Errorf("init identity: %w", err)
@@ -115,7 +117,7 @@ func run(ctx context.Context) error {
 	cvTemplates := cvtemplates.New(pool, idm.DocsClient())
 	cvtailorModule := cvtailor.New(pool, idm.DocsClient(), scoringModule, idm)
 
-	router, err := api.NewRouter(idm, js, apps, cvTemplates, scoringModule, cvtailorModule, eventsModule)
+	router, err := api.NewRouter(idm, js, apps, taskModule, cvTemplates, scoringModule, cvtailorModule, eventsModule)
 	if err != nil {
 		return fmt.Errorf("build router: %w", err)
 	}

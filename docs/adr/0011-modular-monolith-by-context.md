@@ -6,6 +6,7 @@ A single shared DB handle that every service can use gives no locality and no da
   - `jobsearch` decides what to fetch: jobs, job URLs, companies, boards, poll state, candidates and Relevance, harvest runs, source targets with their run state, tracked companies, and the fetch cache (ADR 0016).
   - `scoring` decides how well a job fits: search config, options, answers, scores, `effect_outbox`, Jev and notify. The answer-effect loop is `scoring.Run(ctx)`.
   - `applications`: applications and statuses.
+  - `tasks`: Tasks and Task types. It owns `tasks` and `task_types` and SELECT-joins `jobs` for each Task's title, company and posted date.
   - `events`: the generic `events` log (ADR 0026). It owns `events` and exports `RecordApplicationCreated` and `RecordApplicationStatusChanged`, transaction-scoped ports that `applications` calls in the same transaction. It takes a `ScoreSnapshotter` from scoring so job events carry the score at event time.
   - `cvtemplates`: tracked docs and tabs.
   - `identity`: users, sessions, profile, AI credentials, and the Google Link. The Google Link covers OAuth, tokens and the Docs client, which identity exposes to cvtemplates.
@@ -22,7 +23,7 @@ A single shared DB handle that every service can use gives no locality and no da
 - **Shared kernel.** Packages stay flat under `internal/`: `dto`, `apperr`, `queue`, `telemetry`, `handlers`, `pgtest`, plus existing helpers such as `sourcespec` and `slug`. `dto` keeps only HTTP shapes and types that cross a facade. DB input structs live in their context. The kernel never imports a context: `telemetry.StateCollector` takes an interface that scoring satisfies.
 - **Writes are owned, reads may join.**
   - Only the owning context writes its tables. Any store may SELECT-join another context's tables, which keeps score-sorted job pagination in one query.
-  - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` serves signup.
+  - A write that must change another context's rows in the same transaction goes through a transaction-scoped port that context exports. Scoring exports three: `JobsChanged(ctx, tx, jobIDs)` (a job's content changed), `JobsClosed(ctx, tx, jobIDs)` (a job closed) and `CompanyTracked(ctx, tx, userID, companyID)` (a user started tracking a company). `applications.SeedDefaults(ctx, tx, userID)` and `tasks.SeedDefaults(ctx, tx, userID)` serve signup: identity takes a list of `Seeder`s and calls each in the signup transaction.
 - **Enforcement.**
   - `sqlc.yaml` has one `sql:` block per context. All of them read `scripts/migrations` (ADR 0030).
   - Queries live in `internal/services/<ctx>/store/queries/` and generate into `internal/services/<ctx>/store/sqlc/`, so a context cannot call another context's write queries.

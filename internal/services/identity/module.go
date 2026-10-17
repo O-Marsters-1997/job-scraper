@@ -42,7 +42,7 @@ type googleClient interface {
 // Tests call Build directly with fakes (ADR 0012).
 type Deps struct {
 	Store        Store
-	Seeder       StatusSeeder
+	Seeders      []Seeder
 	GoogleClient googleClient
 	Cipher       *tokencrypt.Cipher
 	KeyUsage     KeyUsageFetcher
@@ -68,7 +68,7 @@ func Build(deps Deps) *Module {
 
 // New wires the full identity context, including the Google Link and AI
 // credentials.
-func New(pool *pgxpool.Pool, seeder StatusSeeder, sessionSecret, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
+func New(pool *pgxpool.Pool, seeders []Seeder, sessionSecret, googleClientID, googleClientSecret, googleRedirectURL string) (*Module, error) {
 	if sessionSecret == "" {
 		return nil, errors.New("identity.New: session secret is empty")
 	}
@@ -83,7 +83,7 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, sessionSecret, googleClientID,
 	st := store.New(pool)
 	return Build(Deps{
 		Store:         st,
-		Seeder:        seeder,
+		Seeders:       seeders,
 		GoogleClient:  google.NewClient(googleClientID, googleClientSecret, googleRedirectURL, st, googleCipher),
 		Cipher:        credCipher,
 		SessionSecret: []byte(sessionSecret),
@@ -93,9 +93,9 @@ func New(pool *pgxpool.Pool, seeder StatusSeeder, sessionSecret, googleClientID,
 // NewFacade wires only identity's user/session store, for cmd/admin and the
 // worker's daily cleanup (ADR 0011). Routes, PublicRoutes and the Google/AI
 // facade methods panic on a Module built this way.
-func NewFacade(pool *pgxpool.Pool, seeder StatusSeeder) *Module {
+func NewFacade(pool *pgxpool.Pool, seeders []Seeder) *Module {
 	st := store.New(pool)
-	return Build(Deps{Store: st, Seeder: seeder})
+	return Build(Deps{Store: st, Seeders: seeders})
 }
 
 // Middleware authenticates requests using the session_id cookie.
@@ -109,7 +109,7 @@ func (m *Module) DeleteExpiredSessions(ctx context.Context) error {
 }
 
 // CreateUser is called by cmd/admin's create-user command; it does not seed
-// default application statuses or start a session.
+// default application statuses or task types or start a session.
 func (m *Module) CreateUser(ctx context.Context, in dto.CreateUserInput) (dto.User, error) {
 	return m.service.CreateUser(ctx, in)
 }

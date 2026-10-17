@@ -17,6 +17,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/events"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 	"github.com/ollymarsters/job-scraper/internal/tokencrypt"
 )
 
@@ -86,7 +87,7 @@ func runCreateUser(args []string) {
 	defer pool.Close()
 
 	apps := applications.New(pool, events.New(pool, scoring.NewFacade(pool)))
-	idm := identity.NewFacade(pool, apps)
+	idm := identity.NewFacade(pool, []identity.Seeder{apps, tasks.New(pool)})
 	user, err := idm.CreateUser(ctx, dto.CreateUserInput{Username: username, Password: string(passwordBytes)})
 	if err != nil {
 		fatal("create user", err)

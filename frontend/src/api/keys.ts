@@ -3,6 +3,7 @@ const scoresAll = ["scores"] as const;
 const applicationsAll = ["applications"] as const;
 const companiesAll = ["companies"] as const;
 const tailoringAll = ["tailoring"] as const;
+const tasksAll = ["tasks"] as const;
 
 export const keys = {
 	jobs: {
@@ -20,6 +21,13 @@ export const keys = {
 		all: applicationsAll,
 		list: (statusId: string | undefined, chase: boolean) =>
 			[...applicationsAll, statusId ?? "all", chase] as const,
+	},
+	tasks: {
+		all: tasksAll,
+		list: (params: object) => [...tasksAll, "list", params] as const,
+		types: [...tasksAll, "types"] as const,
+		count: [...tasksAll, "count"] as const,
+		forJob: (jobId: string) => [...tasksAll, "job", jobId] as const,
 	},
 	statuses: ["application-statuses"] as const,
 	recruiterContacts: (jobId: string) => ["recruiter-contacts", jobId] as const,

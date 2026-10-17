@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
 import { useGoogleStatus } from "../hooks/useGoogle";
+import { useOpenTaskCount } from "../hooks/useTasks";
 import { useUsageWarning } from "../hooks/useUsageWarning";
 import { UsageDot } from "./UsageDot";
 
@@ -52,7 +53,7 @@ interface NavItem {
 	exact?: boolean;
 	includeSearch?: boolean;
 	search?: Record<string, unknown>;
-	badge?: boolean;
+	badge?: "applications" | "tasks";
 	desktopOnly?: boolean;
 	when?: (ctx: { googleConnected: boolean }) => boolean;
 }
@@ -73,7 +74,14 @@ const NAV: NavItem[] = [
 		exact: true,
 		includeSearch: false,
 		search: { status: undefined },
-		badge: true,
+		badge: "applications",
+	},
+	{
+		to: "/tasks",
+		label: "Tasks",
+		icon: "checkSquare",
+		exact: true,
+		badge: "tasks",
 	},
 	{ to: "/companies", label: "Companies", icon: "building", desktopOnly: true },
 	{
@@ -113,6 +121,7 @@ export default function Sidebar(props: SidebarProps) {
 	const navigate = useNavigate();
 
 	const appsQuery = useApplications();
+	const taskCount = useOpenTaskCount();
 	const googleStatus = useGoogleStatus();
 
 	const handleLogout = async () => {
@@ -129,7 +138,7 @@ export default function Sidebar(props: SidebarProps) {
 		props.onMobileClose?.();
 	});
 
-	const links = { appsQuery, googleStatus, handleLogout };
+	const links = { appsQuery, taskCount, googleStatus, handleLogout };
 
 	return (
 		<>
@@ -175,12 +184,23 @@ interface SidebarBodyProps {
 	expanded?: Accessor<boolean>;
 	onCollapseToggle?: () => void;
 	appsQuery: ReturnType<typeof useApplications>;
+	taskCount: ReturnType<typeof useOpenTaskCount>;
 	googleStatus: ReturnType<typeof useGoogleStatus>;
 	handleLogout: () => void;
 }
 
 function SidebarBody(props: SidebarBodyProps) {
 	const usageWarning = useUsageWarning();
+	const badgeCount = (badge: NavItem["badge"]) => {
+		switch (badge) {
+			case "applications":
+				return props.appsQuery.data?.length ?? 0;
+			case "tasks":
+				return props.taskCount.data ?? 0;
+			default:
+				return 0;
+		}
+	};
 	return (
 		<>
 			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
@@ -240,15 +260,11 @@ function SidebarBody(props: SidebarBodyProps) {
 											<Show when={item.to === "/settings"}>
 												<UsageDot level={usageWarning.overall()} />
 											</Show>
-											<Show
-												when={
-													item.badge && (props.appsQuery.data?.length ?? 0) > 0
-												}
-											>
+											<Show when={badgeCount(item.badge) > 0}>
 												<span
 													class={sidebarBadgeVariants({ active: isActive })}
 												>
-													{props.appsQuery.data?.length}
+													{badgeCount(item.badge)}
 												</span>
 											</Show>
 										</Show>

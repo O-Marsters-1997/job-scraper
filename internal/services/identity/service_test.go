@@ -20,6 +20,8 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/applications/applicationstest"
 	"github.com/ollymarsters/job-scraper/internal/services/identity"
 	"github.com/ollymarsters/job-scraper/internal/services/identity/identitytest"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks/taskstest"
 )
 
 func testDeps(t *testing.T, d identity.Deps) identity.Deps {
@@ -27,8 +29,8 @@ func testDeps(t *testing.T, d identity.Deps) identity.Deps {
 	if d.Store == nil {
 		d.Store = identitytest.NewFakeStore()
 	}
-	if d.Seeder == nil {
-		d.Seeder = applications.Build(applications.Deps{Store: applicationstest.NewFakeStore()})
+	if d.Seeders == nil {
+		d.Seeders = []identity.Seeder{applications.Build(applications.Deps{Store: applicationstest.NewFakeStore()})}
 	}
 	if d.GoogleClient == nil {
 		d.GoogleClient = identitytest.Unlinked(false)
@@ -168,9 +170,13 @@ func TestSignupRateLimit(t *testing.T) {
 func TestSignup(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("creates the user and seeds their default statuses", func(t *testing.T) {
+	t.Run("creates the user and seeds their default statuses and task types", func(t *testing.T) {
 		statuses := applicationstest.NewFakeStore()
-		deps := testDeps(t, identity.Deps{Seeder: applications.Build(applications.Deps{Store: statuses})})
+		taskTypes := taskstest.NewFakeStore()
+		deps := testDeps(t, identity.Deps{Seeders: []identity.Seeder{
+			applications.Build(applications.Deps{Store: statuses}),
+			tasks.Build(tasks.Deps{Store: taskTypes}),
+		}})
 
 		session, user, err := identity.NewService(deps).Signup(ctx, "bob", "hunter22", "bob@example.com")
 		if err != nil {
@@ -192,26 +198,33 @@ func TestSignup(t *testing.T) {
 		if diff := cmp.Diff(wantNames, names, cmpopts.SortSlices(func(a, b string) bool { return a < b })); diff != "" {
 			t.Errorf("seeded statuses mismatch (-want +got):\n%s", diff)
 		}
+		types, err := taskTypes.ListTaskTypes(ctx, user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(types) != 4 {
+			t.Errorf("seeded %d task types, want 4", len(types))
+		}
 	})
 
 	seedErr := errors.New("seed boom")
 	errCases := []struct {
 		name             string
 		username, passwd string
-		seeder           identity.StatusSeeder
+		seeders          []identity.Seeder
 		check            func(error) bool
 	}{
 		{"missing credentials", "", "", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindInvalid) }},
 		{"short password", "bob", "1234567", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindInvalid) }},
 		{"duplicate username", "alice", "password1", nil, func(err error) bool { return apperr.IsKind(err, apperr.KindConflict) }},
-		{"seeding fails", "bob", "hunter22", failingSeeder{seedErr}, func(err error) bool { return errors.Is(err, seedErr) }},
+		{"seeding fails", "bob", "hunter22", []identity.Seeder{failingSeeder{seedErr}}, func(err error) bool { return errors.Is(err, seedErr) }},
 	}
 	for _, tt := range errCases {
 		t.Run(tt.name, func(t *testing.T) {
 			st := identitytest.NewFakeStore()
 			seedUser(t, st, "alice", "secret")
 
-			session, _, err := identity.NewService(testDeps(t, identity.Deps{Store: st, Seeder: tt.seeder})).Signup(ctx, tt.username, tt.passwd, "")
+			session, _, err := identity.NewService(testDeps(t, identity.Deps{Store: st, Seeders: tt.seeders})).Signup(ctx, tt.username, tt.passwd, "")
 			if !tt.check(err) {
 				t.Errorf("Signup(%q) err = %v", tt.username, err)
 			}

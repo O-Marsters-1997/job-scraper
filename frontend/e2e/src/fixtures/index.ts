@@ -12,6 +12,8 @@ import { LoginPage } from "../pages/login.page";
 import { OverviewPage } from "../pages/overview.page";
 import { ScoringPage } from "../pages/scoring.page";
 import { StatusesPage } from "../pages/statuses.page";
+import { TaskTypesPage } from "../pages/task-types.page";
+import { TasksPage } from "../pages/tasks.page";
 
 type Fixtures = {
 	loginPage: LoginPage;
@@ -28,6 +30,8 @@ type Fixtures = {
 	tweaksPanel: TweaksPanelComponent;
 	mobileNav: MobileNavComponent;
 	scoringPage: ScoringPage;
+	tasksPage: TasksPage;
+	taskTypesPage: TaskTypesPage;
 };
 
 export const test = base.extend<Fixtures>({
@@ -72,6 +76,12 @@ export const test = base.extend<Fixtures>({
 	},
 	scoringPage: async ({ page }, use) => {
 		await use(new ScoringPage(page));
+	},
+	tasksPage: async ({ page }, use) => {
+		await use(new TasksPage(page));
+	},
+	taskTypesPage: async ({ page }, use) => {
+		await use(new TaskTypesPage(page));
 	},
 });
 
