@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ToggleChip } from "@/components/ToggleChip";
+import { CreateTaskDialog } from "@/components/tasks/CreateTaskDialog";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
 	Select,
@@ -15,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { formatRelative } from "@/lib/datetime";
 import { taskHeadline } from "@/lib/taskHeadline";
-import { taskSortSchema } from "@/types/task";
+import { type Task, taskSortSchema } from "@/types/task";
 import {
 	type TaskListState,
 	useSetTaskDone,
@@ -90,6 +92,12 @@ function TasksPage() {
 		navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true }),
 	);
 	const setDone = useSetTaskDone();
+	const [dialogOpen, setDialogOpen] = createSignal(false);
+	const [editing, setEditing] = createSignal<Task | undefined>();
+	const openDialog = (task?: Task) => {
+		setEditing(task);
+		setDialogOpen(true);
+	};
 	const types = useTaskTypes();
 	const typeChoices = () => [
 		ALL_TYPES,
@@ -98,7 +106,14 @@ function TasksPage() {
 
 	return (
 		<div class="px-7 py-6">
-			<PageHeading title="Tasks" subtitle="Things to do on your job search" />
+			<PageHeading title="Tasks" subtitle="Things to do on your job search">
+				<Button onClick={() => openDialog()}>New task</Button>
+			</PageHeading>
+			<CreateTaskDialog
+				open={dialogOpen()}
+				onOpenChange={setDialogOpen}
+				task={editing()}
+			/>
 
 			<div class="mb-4 flex flex-wrap items-center gap-2">
 				<ChoiceSelect
@@ -183,6 +198,14 @@ function TasksPage() {
 												name={task.TypeName}
 												colour={task.TypeColour}
 											/>
+											<Button
+												variant="outline"
+												size="sm"
+												aria-label={`Edit: ${taskHeadline(task)}`}
+												onClick={() => openDialog(task)}
+											>
+												Edit
+											</Button>
 										</li>
 									)}
 								</For>

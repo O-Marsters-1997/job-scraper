@@ -37,6 +37,7 @@ type Store interface {
 	DeleteTaskType(ctx context.Context, userID, id string) error
 	ListTasks(ctx context.Context, userID string, opts dto.TaskPageOptions) (dto.TaskPage, error)
 	CreateTask(ctx context.Context, userID string, in dto.CreateTaskInput) (dto.Task, error)
+	UpdateTask(ctx context.Context, userID string, in dto.UpdateTaskInput, now time.Time) (dto.Task, error)
 	SetTaskDone(ctx context.Context, userID, id string, done bool, now time.Time) (dto.Task, error)
 	SeedDefaultTaskTypes(ctx context.Context, tx pgx.Tx, userID string) error
 }
@@ -92,22 +93,40 @@ func (s *Service) List(ctx context.Context, userID string, q dto.TasksQuery) (dt
 }
 
 func (s *Service) Create(ctx context.Context, userID string, in dto.CreateTaskInput) (dto.Task, error) {
-	if err := validUUID(in.TypeID, "type_id"); err != nil {
-		return dto.Task{}, err
-	}
 	if in.JobID != nil {
 		if err := validUUID(*in.JobID, "job_id"); err != nil {
 			return dto.Task{}, err
 		}
 	}
-	in.Link = strings.TrimSpace(in.Link)
-	if err := validateLink(in.Link); err != nil {
+	link, err := validateTaskFields(in.TypeID, in.Link, in.Notes)
+	if err != nil {
 		return dto.Task{}, err
 	}
-	if utf8.RuneCountInString(in.Notes) > maxNotesLen {
-		return dto.Task{}, apperr.Invalid("notes are too long")
-	}
+	in.Link = link
 	return s.store.CreateTask(ctx, userID, in)
+}
+
+func (s *Service) Update(ctx context.Context, userID string, in dto.UpdateTaskInput) (dto.Task, error) {
+	link, err := validateTaskFields(in.TypeID, in.Link, in.Notes)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	in.Link = link
+	return s.store.UpdateTask(ctx, userID, in, time.Now())
+}
+
+func validateTaskFields(typeID, link, notes string) (string, error) {
+	if err := validUUID(typeID, "type_id"); err != nil {
+		return "", err
+	}
+	link = strings.TrimSpace(link)
+	if err := validateLink(link); err != nil {
+		return "", err
+	}
+	if utf8.RuneCountInString(notes) > maxNotesLen {
+		return "", apperr.Invalid("notes are too long")
+	}
+	return link, nil
 }
 
 func (s *Service) SetDone(ctx context.Context, userID string, in dto.TaskDoneInput) (dto.Task, error) {

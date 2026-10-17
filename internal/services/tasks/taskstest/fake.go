@@ -194,6 +194,23 @@ func (f *FakeStore) CreateTask(_ context.Context, userID string, in dto.CreateTa
 	return t, nil
 }
 
+func (f *FakeStore) UpdateTask(_ context.Context, userID string, in dto.UpdateTaskInput, now time.Time) (dto.Task, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tasks[in.ID]
+	if !ok || t.userID != userID {
+		return dto.Task{}, data.ErrNotFound
+	}
+	typ, ok := f.types[in.TypeID]
+	if !ok || typ.userID != userID {
+		return dto.Task{}, data.ErrNotFound
+	}
+	t.TypeID, t.TypeName, t.TypeColour = typ.ID, typ.Name, typ.Colour
+	t.Link, t.Notes, t.UpdatedAt = in.Link, in.Notes, now
+	f.tasks[in.ID] = t
+	return t.Task, nil
+}
+
 func (f *FakeStore) SetTaskDone(_ context.Context, userID, id string, done bool, now time.Time) (dto.Task, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

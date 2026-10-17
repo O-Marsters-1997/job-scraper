@@ -100,6 +100,23 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 	);
 }
 
+export interface UpdateTaskInput {
+	id: string;
+	type_id: string;
+	link: string;
+	notes: string;
+}
+
+export async function updateTask({
+	id,
+	...body
+}: UpdateTaskInput): Promise<Task> {
+	return mocked(
+		(db) => db.updateTask(id, body),
+		() => apiFetch(`/tasks/${id}`, taskSchema, jsonInit("PATCH", body)),
+	);
+}
+
 export async function setTaskDone(id: string, done: boolean): Promise<Task> {
 	return mocked(
 		(db) => db.setTaskDone(id, done),

@@ -16,6 +16,7 @@ func (m *Module) Routes(r chi.Router) {
 	r.Route("/tasks", func(r chi.Router) {
 		r.Get("/", handlers.Query(m.service.List))
 		r.Post("/", handlers.Create(m.service.Create))
+		r.Patch("/{id}", handlers.Update(m.service.Update))
 		r.Put("/{id}/done", handlers.Update(m.service.SetDone))
 	})
 }

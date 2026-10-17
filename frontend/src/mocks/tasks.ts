@@ -6,7 +6,11 @@ import {
 	TaskTypeNameTakenError,
 } from "@/types/task";
 import { ApiError } from "../api/apiError";
-import type { CreateTaskInput, TasksQuery } from "../api/tasks";
+import type {
+	CreateTaskInput,
+	TasksQuery,
+	UpdateTaskInput,
+} from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -151,6 +155,33 @@ export function getTaskPage(q: TasksQuery): TaskPage {
 		items: rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
 		total: rows.length,
 	};
+}
+
+export function updateTask(
+	id: string,
+	input: Omit<UpdateTaskInput, "id">,
+): Task {
+	failIfRequested("updateTask");
+	const prev = allTasks().find((t) => t.ID === id);
+	if (!prev) throw new Error("Task not found");
+	const type = types.find((t) => t.ID === input.type_id);
+	if (!type) throw new Error("Unknown task type");
+	if (input.link && !/^https?:\/\//.test(input.link)) {
+		throw new ApiError(400, `/tasks/${id}`, {
+			error: "link must be an http or https URL",
+		});
+	}
+	const updated: Task = {
+		...prev,
+		TypeID: type.ID,
+		TypeName: type.Name,
+		TypeColour: type.Colour,
+		Link: input.link,
+		Notes: input.notes,
+		UpdatedAt: new Date().toISOString(),
+	};
+	tasks = allTasks().map((t) => (t.ID === id ? updated : t));
+	return updated;
 }
 
 export function setTaskDone(id: string, done: boolean): Task {

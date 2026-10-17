@@ -18,8 +18,8 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 	tasks.Build(tasks.Deps{Store: taskstest.NewFakeStore()}).Routes(r)
 
 	handlerstest.RequiresAuth(t, r, "GET /task-types/", "POST /task-types/", "PATCH /task-types/{id}", "DELETE /task-types/{id}",
-		"GET /tasks/", "POST /tasks/", "PUT /tasks/{id}/done")
-	handlerstest.RejectsMalformedBody(t, r, "POST /task-types/", "PATCH /task-types/{id}", "POST /tasks/", "PUT /tasks/{id}/done")
+		"GET /tasks/", "POST /tasks/", "PATCH /tasks/{id}", "PUT /tasks/{id}/done")
+	handlerstest.RejectsMalformedBody(t, r, "POST /task-types/", "PATCH /task-types/{id}", "POST /tasks/", "PATCH /tasks/{id}", "PUT /tasks/{id}/done")
 	handlerstest.RejectsBadPathID(t, r, "DELETE /task-types/{id}", "PUT /tasks/{id}/done")
 }
 
@@ -53,6 +53,18 @@ func TestRoutesHappyPath(t *testing.T) {
 	}
 	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /tasks/",
 		`{"type_id":"`+types[0].ID+`","link":"javascript:alert(1)"}`)
+
+	edited := handlerstest.Do[dto.Task](t, r, http.StatusOK, "PATCH /tasks/"+created.ID,
+		`{"type_id":"`+types[1].ID+`","link":"","notes":"edited"}`)
+	if edited.TypeName != types[1].Name || edited.Link != "" || edited.Notes != "edited" {
+		t.Fatalf("edited task = %+v, want type %q, no link and notes", edited, types[1].Name)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "PATCH /tasks/"+created.ID,
+		`{"type_id":"`+types[1].ID+`","link":"javascript:alert(1)"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "PATCH /tasks/"+created.ID,
+		`{"type_id":"00000000-0000-0000-0000-00000000ffff"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "PATCH /tasks/does-not-exist",
+		`{"type_id":"`+types[1].ID+`"}`)
 
 	open := handlerstest.Do[dto.TaskPage](t, r, http.StatusOK, "GET /tasks/", "")
 	if open.Total != 1 || len(open.Items) != 1 {

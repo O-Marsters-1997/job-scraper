@@ -173,6 +173,60 @@ func TestListErrors(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	t.Parallel()
+	svc, st := newService(t)
+	apply := st.AddType(userID, "Apply")
+	prep := st.AddType(userID, "Prep")
+	created, err := svc.Create(t.Context(), userID, dto.CreateTaskInput{TypeID: apply.ID, JobID: new(validID), Notes: "old"})
+	if err != nil {
+		t.Fatalf("seed Create err = %v", err)
+	}
+
+	got, err := svc.Update(t.Context(), userID, dto.UpdateTaskInput{ID: created.ID, TypeID: prep.ID, Link: " https://example.com/b ", Notes: "new"})
+	if err != nil {
+		t.Fatalf("Update(...) err = %v", err)
+	}
+	if got.TypeName != "Prep" || got.Link != "https://example.com/b" || got.Notes != "new" {
+		t.Errorf("Update(...) = %+v, want Prep, trimmed link and new notes", got)
+	}
+	if got.JobID == nil || *got.JobID != validID {
+		t.Errorf("Update(...) JobID = %v, want %s", got.JobID, validID)
+	}
+}
+
+func TestUpdateErrors(t *testing.T) {
+	t.Parallel()
+	svc, st := newService(t)
+	typeID := st.AddType(userID, "Apply").ID
+	created, err := svc.Create(t.Context(), userID, dto.CreateTaskInput{TypeID: typeID})
+	if err != nil {
+		t.Fatalf("seed Create err = %v", err)
+	}
+
+	tests := []struct {
+		name     string
+		userID   string
+		in       dto.UpdateTaskInput
+		wantKind apperr.Kind
+	}{
+		{"malformed type id", userID, dto.UpdateTaskInput{ID: created.ID, TypeID: "nope"}, apperr.KindInvalid},
+		{"javascript link", userID, dto.UpdateTaskInput{ID: created.ID, TypeID: typeID, Link: "javascript:alert(1)"}, apperr.KindInvalid},
+		{"notes too long", userID, dto.UpdateTaskInput{ID: created.ID, TypeID: typeID, Notes: strings.Repeat("a", 10001)}, apperr.KindInvalid},
+		{"another user's task", "user-2", dto.UpdateTaskInput{ID: created.ID, TypeID: typeID}, apperr.KindNotFound},
+		{"another user's type", userID, dto.UpdateTaskInput{ID: created.ID, TypeID: validID}, apperr.KindNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := svc.Update(t.Context(), tt.userID, tt.in)
+			if !apperr.IsKind(err, tt.wantKind) {
+				t.Errorf("Update(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+			}
+		})
+	}
+}
+
 func TestSetDoneOnMissingTaskReturnsNotFound(t *testing.T) {
 	t.Parallel()
 	svc, _ := newService(t)

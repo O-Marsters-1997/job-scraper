@@ -287,4 +287,55 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("SetTaskDone(other user's task) err = %v, want ErrNotFound", err)
 		}
 	})
+
+	t.Run("update changes type, link and notes but never the job", func(t *testing.T) {
+		f := newStore(t)
+		created := createTask(t, f, dto.CreateTaskInput{JobID: &f.JobID, Link: "https://example.com/a", Notes: "old"})
+		other, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Prep", Colour: "#64748b"})
+		if err != nil {
+			t.Fatalf("CreateTaskType(Prep) err = %v", err)
+		}
+		now := time.Date(2026, 10, 17, 9, 0, 0, 0, time.UTC)
+
+		got, err := f.Store.UpdateTask(t.Context(), f.UserID, dto.UpdateTaskInput{ID: created.ID, TypeID: other.ID, Link: "https://example.org/b", Notes: "new"}, now)
+		if err != nil {
+			t.Fatalf("UpdateTask(...) err = %v", err)
+		}
+		if got.TypeID != other.ID || got.TypeName != "Prep" || got.Link != "https://example.org/b" || got.Notes != "new" || !got.UpdatedAt.Equal(now) {
+			t.Errorf("UpdateTask(...) = %+v, want Prep type, new link and notes, UpdatedAt %v", got, now)
+		}
+		if got.JobID == nil || *got.JobID != f.JobID {
+			t.Errorf("UpdateTask(...) JobID = %v, want %s", got.JobID, f.JobID)
+		}
+
+		cleared, err := f.Store.UpdateTask(t.Context(), f.UserID, dto.UpdateTaskInput{ID: created.ID, TypeID: other.ID}, now)
+		if err != nil {
+			t.Fatalf("UpdateTask(clear) err = %v", err)
+		}
+		if cleared.Link != "" || cleared.Notes != "" {
+			t.Errorf("UpdateTask(clear) = %+v, want empty link and notes", cleared)
+		}
+	})
+
+	t.Run("update with a missing task, another user's task or another user's type returns not found", func(t *testing.T) {
+		f := newStore(t)
+		created := createTask(t, f, dto.CreateTaskInput{Notes: "keep"})
+		cases := map[string]struct {
+			userID string
+			in     dto.UpdateTaskInput
+		}{
+			"missing task":      {f.UserID, dto.UpdateTaskInput{ID: missingID, TypeID: f.TypeID}},
+			"other user's task": {f.OtherUserID, dto.UpdateTaskInput{ID: created.ID, TypeID: f.OtherTypeID}},
+			"other user's type": {f.UserID, dto.UpdateTaskInput{ID: created.ID, TypeID: f.OtherTypeID}},
+		}
+		for name, tc := range cases {
+			if _, err := f.Store.UpdateTask(t.Context(), tc.userID, tc.in, time.Now()); !errors.Is(err, data.ErrNotFound) {
+				t.Errorf("UpdateTask(%s) err = %v, want ErrNotFound", name, err)
+			}
+		}
+		got := listTasks(t, f, dto.TaskPageOptions{Sort: dto.TaskSortCreated})
+		if len(got.Items) != 1 || got.Items[0].Notes != "keep" || got.Items[0].TypeID != f.TypeID {
+			t.Errorf("ListTasks after rejected updates = %+v, want the task untouched", got.Items)
+		}
+	})
 }
