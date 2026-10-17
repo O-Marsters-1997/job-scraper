@@ -10,6 +10,7 @@ const ROUTES = [
 	"/jobs",
 	"/companies",
 	"/applications",
+	"/tasks",
 	"/cv-templates",
 	"/settings/profile",
 	"/settings/scoring/role",

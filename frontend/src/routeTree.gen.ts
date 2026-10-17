@@ -13,6 +13,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthTasksRouteImport } from './routes/_auth/tasks'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview'
 import { Route as AuthJobsRouteImport } from './routes/_auth/jobs'
@@ -56,6 +57,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthTasksRoute = AuthTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AuthRoute,
 } as any)
 const AuthSettingsRoute = AuthSettingsRouteImport.update({
   id: '/settings',
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
   '/settings': typeof AuthSettingsRouteWithChildren
+  '/tasks': typeof AuthTasksRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/insights': typeof AuthInsightsRoute
   '/jobs': typeof AuthJobsRoute
   '/overview': typeof AuthOverviewRoute
+  '/tasks': typeof AuthTasksRoute
   '/companies/$id': typeof AuthCompaniesIdRoute
   '/companies/new': typeof AuthCompaniesNewRoute
   '/jobs/$id': typeof AuthJobsIdRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/_auth/jobs': typeof AuthJobsRoute
   '/_auth/overview': typeof AuthOverviewRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
+  '/_auth/tasks': typeof AuthTasksRoute
   '/_auth/companies_/$id': typeof AuthCompaniesIdRoute
   '/_auth/companies_/new': typeof AuthCompaniesNewRoute
   '/_auth/jobs_/$id': typeof AuthJobsIdRoute
@@ -283,6 +292,7 @@ export interface FileRouteTypes {
     | '/jobs'
     | '/overview'
     | '/settings'
+    | '/tasks'
     | '/companies/$id'
     | '/companies/new'
     | '/jobs/$id'
@@ -311,6 +321,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/jobs'
     | '/overview'
+    | '/tasks'
     | '/companies/$id'
     | '/companies/new'
     | '/jobs/$id'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/_auth/jobs'
     | '/_auth/overview'
     | '/_auth/settings'
+    | '/_auth/tasks'
     | '/_auth/companies_/$id'
     | '/_auth/companies_/new'
     | '/_auth/jobs_/$id'
@@ -394,6 +406,13 @@ declare module '@tanstack/solid-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_auth/tasks': {
+      id: '/_auth/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof AuthTasksRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/_auth/settings': {
       id: '/_auth/settings'
@@ -614,6 +633,7 @@ interface AuthRouteChildren {
   AuthJobsRoute: typeof AuthJobsRoute
   AuthOverviewRoute: typeof AuthOverviewRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
+  AuthTasksRoute: typeof AuthTasksRoute
   AuthCompaniesIdRoute: typeof AuthCompaniesIdRoute
   AuthCompaniesNewRoute: typeof AuthCompaniesNewRoute
   AuthJobsIdRoute: typeof AuthJobsIdRoute
@@ -631,6 +651,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthJobsRoute: AuthJobsRoute,
   AuthOverviewRoute: AuthOverviewRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
+  AuthTasksRoute: AuthTasksRoute,
   AuthCompaniesIdRoute: AuthCompaniesIdRoute,
   AuthCompaniesNewRoute: AuthCompaniesNewRoute,
   AuthJobsIdRoute: AuthJobsIdRoute,

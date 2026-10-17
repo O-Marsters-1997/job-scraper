@@ -25,6 +25,18 @@ build:
     go build -o bin/snapshot ./cmd/snapshot
     go build -o bin/queue    ./cmd/queue
 
+[doc('start postgres and RabbitMQ, migrate, then run the API and frontend together (no worker); Ctrl-C stops both')]
+dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker compose up -d --wait db rabbitmq
+    just migrate-up
+    (cd frontend && bun install)
+    trap 'kill 0' EXIT INT TERM
+    just run-api &
+    (cd frontend && bun run dev) &
+    wait -n
+
 # run the worker
 run *args:
     OTEL_SERVICE_NAME=worker METRICS_ADDR=:9092 LOG_FORMAT=text LOG_LEVEL=debug go run ./cmd/worker {{args}}

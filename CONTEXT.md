@@ -123,6 +123,16 @@ _Avoid_: Submission, app
 A stage in the application pipeline (saved, applied, phone, interview, offer, rejected, plus custom). Each user has their own set.
 _Avoid_: Stage, state, step
 
+### Tasks
+
+**Task**:
+A user's own to-do on their job search. It has a Task type, may relate to a Job (set only at creation), and may carry a link and notes. Open until marked done. A Task relates to a Job but does not belong to one.
+_Avoid_: Todo, reminder, action
+
+**Task type**:
+A label for what kind of Task it is (Apply, Follow up, Reach out, Prep by default, plus custom). Each user has their own set, seeded at signup.
+_Avoid_: Category, kind
+
 ### Scoring & criteria
 
 **Option**:
