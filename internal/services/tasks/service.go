@@ -3,8 +3,10 @@ package tasks
 import (
 	"cmp"
 	"context"
+	"errors"
 	"math"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks/store"
 )
 
 const (
@@ -22,10 +25,16 @@ const (
 	maxPageSize     = 100
 	maxLinkLen      = 2048
 	maxNotesLen     = 10000
+	maxTypeNameLen  = 50
 )
+
+var hexColour = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 type Store interface {
 	ListTaskTypes(ctx context.Context, userID string) ([]dto.TaskType, error)
+	CreateTaskType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error)
+	UpdateTaskType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error)
+	DeleteTaskType(ctx context.Context, userID, id string) error
 	ListTasks(ctx context.Context, userID string, opts dto.TaskPageOptions) (dto.TaskPage, error)
 	CreateTask(ctx context.Context, userID string, in dto.CreateTaskInput) (dto.Task, error)
 	SetTaskDone(ctx context.Context, userID, id string, done bool, now time.Time) (dto.Task, error)
@@ -38,6 +47,40 @@ type Service struct {
 
 func NewService(store Store) *Service {
 	return &Service{store: store}
+}
+
+func (s *Service) CreateType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	in, err := validateTypeInput(in)
+	if err != nil {
+		return dto.TaskType{}, err
+	}
+	return mapTypeExists(s.store.CreateTaskType(ctx, userID, in))
+}
+
+func (s *Service) UpdateType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	in, err := validateTypeInput(in)
+	if err != nil {
+		return dto.TaskType{}, err
+	}
+	return mapTypeExists(s.store.UpdateTaskType(ctx, userID, in))
+}
+
+func mapTypeExists(t dto.TaskType, err error) (dto.TaskType, error) {
+	if errors.Is(err, store.ErrTaskTypeExists) {
+		return t, apperr.Conflict("a task type with that name already exists")
+	}
+	return t, err
+}
+
+func validateTypeInput(in dto.TaskTypeInput) (dto.TaskTypeInput, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	if n := utf8.RuneCountInString(in.Name); n < 1 || n > maxTypeNameLen {
+		return in, apperr.Invalid("name must be 1 to 50 characters")
+	}
+	if !hexColour.MatchString(in.Colour) {
+		return in, apperr.Invalid("colour must be a hex colour like #6366f1")
+	}
+	return in, nil
 }
 
 func (s *Service) List(ctx context.Context, userID string, q dto.TasksQuery) (dto.TaskPage, error) {

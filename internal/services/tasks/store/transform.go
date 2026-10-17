@@ -11,6 +11,7 @@ func toTaskTypeDTO(t sqlc.ListTaskTypesRow) dto.TaskType {
 		ID:        t.ID.String(),
 		Name:      t.Name,
 		Colour:    t.Colour,
+		TaskCount: int(t.TaskCount),
 		CreatedAt: t.CreatedAt.Time,
 	}
 }

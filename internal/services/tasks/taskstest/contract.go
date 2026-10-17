@@ -11,6 +11,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/data"
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/tasks"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks/store"
 )
 
 const missingID = "00000000-0000-0000-0000-000000000000"
@@ -104,6 +105,81 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if len(got) != 1 || got[0].ID != f.TypeID {
 			t.Errorf("ListTaskTypes(...) = %+v, want only type %s", got, f.TypeID)
+		}
+	})
+
+	t.Run("task types are created, renamed and recoloured with their task count", func(t *testing.T) {
+		f := newStore(t)
+		created, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Offer", Colour: "#15803d"})
+		if err != nil {
+			t.Fatalf("CreateTaskType(...) err = %v", err)
+		}
+		if created.ID == "" || created.Name != "Offer" || created.Colour != "#15803d" || created.TaskCount != 0 {
+			t.Errorf("CreateTaskType(...) = %+v, want Offer, #15803d, no tasks", created)
+		}
+		createTask(t, f, dto.CreateTaskInput{TypeID: created.ID})
+		createTask(t, f, dto.CreateTaskInput{TypeID: created.ID})
+
+		updated, err := f.Store.UpdateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{ID: created.ID, Name: "Offers", Colour: "#000000"})
+		if err != nil {
+			t.Fatalf("UpdateTaskType(...) err = %v", err)
+		}
+		want := dto.TaskType{ID: created.ID, Name: "Offers", Colour: "#000000", TaskCount: 2}
+		if diff := cmp.Diff(want, updated, cmpopts.IgnoreFields(dto.TaskType{}, "CreatedAt")); diff != "" {
+			t.Errorf("UpdateTaskType(...) mismatch (-want +got):\n%s", diff)
+		}
+		tasks := listTasks(t, f, dto.TaskPageOptions{TypeID: created.ID, Sort: dto.TaskSortCreated})
+		if tasks.Total != 2 || tasks.Items[0].TypeName != "Offers" || tasks.Items[0].TypeColour != "#000000" {
+			t.Errorf("ListTasks(renamed type) = %+v, want 2 tasks carrying the new name and colour", tasks)
+		}
+	})
+
+	t.Run("task type names are unique per user", func(t *testing.T) {
+		f := newStore(t)
+		if _, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Apply", Colour: "#000000"}); !errors.Is(err, store.ErrTaskTypeExists) {
+			t.Errorf("CreateTaskType(duplicate) err = %v, want ErrTaskTypeExists", err)
+		}
+		if _, err := f.Store.CreateTaskType(t.Context(), f.OtherUserID, dto.TaskTypeInput{Name: "Reach out", Colour: "#000000"}); err != nil {
+			t.Fatalf("CreateTaskType(other user) err = %v", err)
+		}
+		second, err := f.Store.CreateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{Name: "Prep", Colour: "#000000"})
+		if err != nil {
+			t.Fatalf("CreateTaskType(Prep) err = %v", err)
+		}
+		if _, err := f.Store.UpdateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{ID: second.ID, Name: "Apply", Colour: "#000000"}); !errors.Is(err, store.ErrTaskTypeExists) {
+			t.Errorf("UpdateTaskType(duplicate) err = %v, want ErrTaskTypeExists", err)
+		}
+		if _, err := f.Store.UpdateTaskType(t.Context(), f.UserID, dto.TaskTypeInput{ID: second.ID, Name: "Prep", Colour: "#ffffff"}); err != nil {
+			t.Errorf("UpdateTaskType(own name) err = %v, want nil", err)
+		}
+	})
+
+	t.Run("deleting a task type deletes its tasks", func(t *testing.T) {
+		f := newStore(t)
+		createTask(t, f, dto.CreateTaskInput{})
+		if err := f.Store.DeleteTaskType(t.Context(), f.UserID, f.TypeID); err != nil {
+			t.Fatalf("DeleteTaskType(...) err = %v", err)
+		}
+		if got := listTasks(t, f, dto.TaskPageOptions{Sort: dto.TaskSortCreated}); got.Total != 0 {
+			t.Errorf("ListTasks(after delete) = %+v, want empty", got)
+		}
+		types, err := f.Store.ListTaskTypes(t.Context(), f.UserID)
+		if err != nil || len(types) != 0 {
+			t.Errorf("ListTaskTypes(after delete) = %+v, %v, want none", types, err)
+		}
+	})
+
+	t.Run("changing another user's or a missing task type returns not found", func(t *testing.T) {
+		f := newStore(t)
+		in := dto.TaskTypeInput{ID: f.OtherTypeID, Name: "Hijack", Colour: "#000000"}
+		if _, err := f.Store.UpdateTaskType(t.Context(), f.UserID, in); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateTaskType(other user's) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteTaskType(t.Context(), f.UserID, f.OtherTypeID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteTaskType(other user's) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteTaskType(t.Context(), f.UserID, missingID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteTaskType(missing) err = %v, want ErrNotFound", err)
 		}
 	})
 

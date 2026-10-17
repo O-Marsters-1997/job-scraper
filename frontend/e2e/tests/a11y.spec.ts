@@ -19,6 +19,7 @@ const ROUTES = [
 	"/settings/scoring/other",
 	"/settings/ai",
 	"/settings/statuses",
+	"/settings/task-types",
 	"/settings/searches",
 	"/settings/integrations",
 	"/tailoring/drafts/draft-ready",

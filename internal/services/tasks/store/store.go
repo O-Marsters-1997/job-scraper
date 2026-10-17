@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 type DBTX = sqlc.DBTX
+
+var ErrTaskTypeExists = errors.New("task type name already exists")
 
 type Store struct {
 	queries *sqlc.Queries
@@ -50,6 +53,60 @@ func (s *Store) ListTaskTypes(ctx context.Context, userID string) ([]dto.TaskTyp
 		out[i] = toTaskTypeDTO(row)
 	}
 	return out, nil
+}
+
+func (s *Store) CreateTaskType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.TaskType{}, err
+	}
+	row, err := s.queries.CreateTaskType(ctx, sqlc.CreateTaskTypeParams{UserID: uid, Name: in.Name, Colour: in.Colour})
+	if err != nil {
+		return dto.TaskType{}, taskTypeErr("CreateTaskType", err)
+	}
+	return toTaskTypeDTO(sqlc.ListTaskTypesRow(row)), nil
+}
+
+func (s *Store) UpdateTaskType(ctx context.Context, userID string, in dto.TaskTypeInput) (dto.TaskType, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.TaskType{}, err
+	}
+	id, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.TaskType{}, data.ErrNotFound
+	}
+	row, err := s.queries.UpdateTaskType(ctx, sqlc.UpdateTaskTypeParams{ID: id, UserID: uid, Name: in.Name, Colour: in.Colour})
+	if err != nil {
+		return dto.TaskType{}, taskTypeErr("UpdateTaskType", err)
+	}
+	return toTaskTypeDTO(sqlc.ListTaskTypesRow(row)), nil
+}
+
+func (s *Store) DeleteTaskType(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	tid, err := data.UUID(id)
+	if err != nil {
+		return data.ErrNotFound
+	}
+	n, err := s.queries.DeleteTaskType(ctx, sqlc.DeleteTaskTypeParams{ID: tid, UserID: uid})
+	if err != nil {
+		return data.QueryErr("DeleteTaskType", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+func taskTypeErr(op string, err error) error {
+	if data.IsUniqueViolation(err) {
+		return ErrTaskTypeExists
+	}
+	return data.QueryErr(op, err)
 }
 
 func (s *Store) ListTasks(ctx context.Context, userID string, opts dto.TaskPageOptions) (dto.TaskPage, error) {

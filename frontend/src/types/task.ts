@@ -5,6 +5,7 @@ export const taskTypeSchema = z.object({
 	ID: z.string(),
 	Name: z.string(),
 	Colour: z.string(),
+	TaskCount: z.number().int(),
 	CreatedAt: z.string(),
 });
 export const taskSchema = z.object({
@@ -31,3 +32,9 @@ export type TaskSort = z.infer<typeof taskSortSchema>;
 export type TaskType = z.infer<typeof taskTypeSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type TaskPage = z.infer<typeof taskPageSchema>;
+
+export class TaskTypeNameTakenError extends Error {
+	constructor() {
+		super("A task type with that name already exists.");
+	}
+}

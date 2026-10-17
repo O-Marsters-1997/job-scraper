@@ -110,10 +110,62 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 	return i, err
 }
 
+const createTaskType = `-- name: CreateTaskType :one
+INSERT INTO task_types (user_id, name, colour)
+VALUES ($1, $2, $3)
+RETURNING id, name, colour, created_at, 0::int AS task_count
+`
+
+type CreateTaskTypeParams struct {
+	UserID pgtype.UUID
+	Name   string
+	Colour string
+}
+
+type CreateTaskTypeRow struct {
+	ID        pgtype.UUID
+	Name      string
+	Colour    string
+	CreatedAt pgtype.Timestamptz
+	TaskCount int32
+}
+
+func (q *Queries) CreateTaskType(ctx context.Context, arg CreateTaskTypeParams) (CreateTaskTypeRow, error) {
+	row := q.db.QueryRow(ctx, createTaskType, arg.UserID, arg.Name, arg.Colour)
+	var i CreateTaskTypeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Colour,
+		&i.CreatedAt,
+		&i.TaskCount,
+	)
+	return i, err
+}
+
+const deleteTaskType = `-- name: DeleteTaskType :execrows
+DELETE FROM task_types WHERE id = $1 AND user_id = $2
+`
+
+type DeleteTaskTypeParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) DeleteTaskType(ctx context.Context, arg DeleteTaskTypeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTaskType, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listTaskTypes = `-- name: ListTaskTypes :many
-SELECT id, name, colour, created_at FROM task_types
-WHERE user_id = $1
-ORDER BY created_at ASC, name ASC
+SELECT tt.id, tt.name, tt.colour, tt.created_at,
+    (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count
+FROM task_types tt
+WHERE tt.user_id = $1
+ORDER BY tt.created_at ASC, tt.name ASC
 `
 
 type ListTaskTypesRow struct {
@@ -121,6 +173,7 @@ type ListTaskTypesRow struct {
 	Name      string
 	Colour    string
 	CreatedAt pgtype.Timestamptz
+	TaskCount int32
 }
 
 func (q *Queries) ListTaskTypes(ctx context.Context, userID pgtype.UUID) ([]ListTaskTypesRow, error) {
@@ -137,6 +190,7 @@ func (q *Queries) ListTaskTypes(ctx context.Context, userID pgtype.UUID) ([]List
 			&i.Name,
 			&i.Colour,
 			&i.CreatedAt,
+			&i.TaskCount,
 		); err != nil {
 			return nil, err
 		}
@@ -317,6 +371,47 @@ func (q *Queries) SetTaskDone(ctx context.Context, arg SetTaskDoneParams) (SetTa
 		&i.JobTitle,
 		&i.JobCompanySlug,
 		&i.JobPostedAt,
+	)
+	return i, err
+}
+
+const updateTaskType = `-- name: UpdateTaskType :one
+UPDATE task_types tt
+SET name = $1, colour = $2
+WHERE tt.id = $3 AND tt.user_id = $4
+RETURNING tt.id, tt.name, tt.colour, tt.created_at,
+    (SELECT count(*) FROM tasks t WHERE t.type_id = tt.id)::int AS task_count
+`
+
+type UpdateTaskTypeParams struct {
+	Name   string
+	Colour string
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+type UpdateTaskTypeRow struct {
+	ID        pgtype.UUID
+	Name      string
+	Colour    string
+	CreatedAt pgtype.Timestamptz
+	TaskCount int32
+}
+
+func (q *Queries) UpdateTaskType(ctx context.Context, arg UpdateTaskTypeParams) (UpdateTaskTypeRow, error) {
+	row := q.db.QueryRow(ctx, updateTaskType,
+		arg.Name,
+		arg.Colour,
+		arg.ID,
+		arg.UserID,
+	)
+	var i UpdateTaskTypeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Colour,
+		&i.CreatedAt,
+		&i.TaskCount,
 	)
 	return i, err
 }

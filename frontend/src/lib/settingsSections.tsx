@@ -54,6 +54,12 @@ export const SETTINGS_SECTIONS: SettingsGroup[] = [
 				icon: "settings",
 			},
 			{
+				to: "/settings/task-types",
+				label: "Task types",
+				description: "Kinds of task you track",
+				icon: "settings",
+			},
+			{
 				to: "/settings/searches",
 				label: "Searches",
 				description: "Boards and searches to scrape",

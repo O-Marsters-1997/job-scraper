@@ -68,6 +68,43 @@ func TestCreateErrors(t *testing.T) {
 	}
 }
 
+func TestTypeValidation(t *testing.T) {
+	t.Parallel()
+	svc, st := newService(t)
+	existing := st.AddType(userID, "Apply")
+
+	got, err := svc.CreateType(t.Context(), userID, dto.TaskTypeInput{Name: "  Offer ", Colour: "#15803D"})
+	if err != nil {
+		t.Fatalf("CreateType(...) err = %v", err)
+	}
+	if got.Name != "Offer" {
+		t.Errorf("CreateType(padded name) Name = %q, want trimmed", got.Name)
+	}
+
+	tests := []struct {
+		name string
+		in   dto.TaskTypeInput
+	}{
+		{"blank name", dto.TaskTypeInput{Name: "  ", Colour: "#15803d"}},
+		{"name too long", dto.TaskTypeInput{Name: strings.Repeat("a", 51), Colour: "#15803d"}},
+		{"missing colour", dto.TaskTypeInput{Name: "Offer2"}},
+		{"colour not hex", dto.TaskTypeInput{Name: "Offer2", Colour: "red"}},
+		{"colour injects css", dto.TaskTypeInput{Name: "Offer2", Colour: "#15803d;x"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := svc.CreateType(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateType(%+v) err = %v, want invalid", tt.in, err)
+			}
+			tt.in.ID = existing.ID
+			if _, err := svc.UpdateType(t.Context(), userID, tt.in); !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("UpdateType(%+v) err = %v, want invalid", tt.in, err)
+			}
+		})
+	}
+}
+
 func TestList(t *testing.T) {
 	t.Parallel()
 	svc, st := newService(t)
