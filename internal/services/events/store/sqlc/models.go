@@ -586,6 +586,26 @@ type TailoredCv struct {
 	CreatedAt      pgtype.Timestamptz
 }
 
+type Task struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	TypeID      pgtype.UUID
+	JobID       pgtype.UUID
+	Link        pgtype.Text
+	Notes       pgtype.Text
+	CompletedAt pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type TaskType struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	Name      string
+	Colour    string
+	CreatedAt pgtype.Timestamptz
+}
+
 type TrackedCompany struct {
 	UserID               pgtype.UUID
 	CompanyID            pgtype.UUID

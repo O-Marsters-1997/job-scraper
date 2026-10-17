@@ -27,6 +27,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/services/scoring"
 	"github.com/ollymarsters/job-scraper/internal/services/sourcetargets"
+	"github.com/ollymarsters/job-scraper/internal/services/tasks"
 )
 
 const ingestToken = "router-test-ingest-token"
@@ -47,14 +48,15 @@ func newApp(t *testing.T, extra ...api.Module) *app {
 	scoringFacade := scoring.NewFacade(pool)
 	eventsModule := events.New(pool, scoringFacade)
 	apps := applications.New(pool, eventsModule)
-	idm, err := identity.New(pool, apps, "test-session-secret", "", "", "")
+	taskModule := tasks.New(pool)
+	idm, err := identity.New(pool, []identity.Seeder{apps, taskModule}, "test-session-secret", "", "", "")
 	if err != nil {
 		t.Fatalf("identity.New: %v", err)
 	}
 	js := jobsearch.New(pool, &queue.Broker{}, scoringFacade, nil, sourcetargets.DefaultMaxAutomatic)
 	sc := scoring.New(pool, idm, idm, js, js, "", "", scoring.VAPID{})
 	cv := cvtemplates.New(pool, idm.DocsClient())
-	router, err := api.NewRouter(idm, js, append([]api.Module{apps, cv, sc, eventsModule}, extra...)...)
+	router, err := api.NewRouter(idm, js, append([]api.Module{apps, taskModule, cv, sc, eventsModule}, extra...)...)
 	if err != nil {
 		t.Fatalf("api.NewRouter: %v", err)
 	}
@@ -264,6 +266,32 @@ func TestIngestedJobCanBeAppliedToAndMovedThroughStatuses(t *testing.T) {
 	got := do[[]dto.ApplicationWithDetails](u, http.StatusOK, http.MethodGet, "/applications/", nil)
 	if len(got) != 1 || got[0].StatusID != next {
 		t.Fatalf("applications = %+v, want one in status %s", got, next)
+	}
+}
+
+func TestSignupSeedsTaskTypesAndATaskCanBeCompleted(t *testing.T) {
+	t.Parallel()
+	a := newApp(t)
+	u := a.signup()
+
+	res := a.ingest(map[string]string{
+		"title": "Engineer", "location": "Remote", "url": "https://example.com/jobs/task",
+		"company_slug": "acme", "source": "greenhouse",
+	})
+	types := do[[]dto.TaskType](u, http.StatusOK, http.MethodGet, "/task-types", nil)
+	if len(types) != 4 {
+		t.Fatalf("GET /task-types = %+v, want the 4 seeded types", types)
+	}
+
+	created := do[dto.Task](u, http.StatusCreated, http.MethodPost, "/tasks/", map[string]any{"type_id": types[0].ID, "job_id": res.JobID})
+	if created.JobTitle != "Engineer" || created.JobPostedAt == nil {
+		t.Fatalf("created task = %+v, want the job's title and posted date", created)
+	}
+	do[dto.Task](u, http.StatusOK, http.MethodPut, "/tasks/"+created.ID+"/done", map[string]bool{"done": true})
+
+	open := do[dto.TaskPage](u, http.StatusOK, http.MethodGet, "/tasks/", nil)
+	if open.Total != 0 {
+		t.Fatalf("open tasks = %+v, want none after completing", open)
 	}
 }
 

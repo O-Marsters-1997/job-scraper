@@ -40,17 +40,17 @@ type Store interface {
 	ListUserAICredentialProviders(ctx context.Context, userID string) ([]string, error)
 }
 
-// StatusSeeder seeds a new user's default application Statuses inside tx;
-// the applications Module satisfies this (ADR 0011).
-type StatusSeeder interface {
+// Seeder seeds a new user's defaults inside the signup tx; the applications
+// and tasks Modules satisfy this (ADR 0011).
+type Seeder interface {
 	SeedDefaults(ctx context.Context, tx pgx.Tx, userID string) error
 }
 
 type Service struct {
-	store  Store
-	seeder StatusSeeder
-	cipher *tokencrypt.Cipher
-	google googleClient
+	store   Store
+	seeders []Seeder
+	cipher  *tokencrypt.Cipher
+	google  googleClient
 
 	sessionSecret []byte
 
@@ -62,7 +62,7 @@ type Service struct {
 
 func NewService(deps Deps) *Service {
 	s := &Service{
-		store: deps.Store, seeder: deps.Seeder, cipher: deps.Cipher, google: deps.GoogleClient,
+		store: deps.Store, seeders: deps.Seeders, cipher: deps.Cipher, google: deps.GoogleClient,
 		keyUsage: deps.KeyUsage, now: deps.Now,
 		sessionSecret: deps.SessionSecret,
 	}
@@ -178,8 +178,10 @@ func (s *Service) Signup(ctx context.Context, username, password, email string) 
 		}
 		return dto.Session{}, dto.User{}, err
 	}
-	if err := s.seeder.SeedDefaults(ctx, tx, user.ID); err != nil {
-		return dto.Session{}, dto.User{}, err
+	for _, seeder := range s.seeders {
+		if err := seeder.SeedDefaults(ctx, tx, user.ID); err != nil {
+			return dto.Session{}, dto.User{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return dto.Session{}, dto.User{}, err

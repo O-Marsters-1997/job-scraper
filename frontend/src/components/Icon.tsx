@@ -41,6 +41,12 @@ const ICONS = {
 		</>
 	),
 	check: () => <polyline points="20 6 9 17 4 12" />,
+	checkSquare: () => (
+		<>
+			<polyline points="9 11 12 14 22 4" />
+			<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+		</>
+	),
 	chevronDown: () => <polyline points="6 9 12 15 18 9" />,
 	chevronLeft: () => <polyline points="15 18 9 12 15 6" />,
 	chevronRight: () => <polyline points="9 18 15 12 9 6" />,

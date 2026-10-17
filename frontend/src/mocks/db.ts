@@ -14,4 +14,5 @@ export * from "./seen";
 export * from "./settings";
 export * from "./sources";
 export * from "./tailoring";
+export * from "./tasks";
 export * from "./user";
