@@ -6,7 +6,11 @@ import {
 	TaskTypeNameTakenError,
 } from "@/types/task";
 import { ApiError } from "../api/apiError";
-import type { CreateTaskInput, TasksQuery } from "../api/tasks";
+import type {
+	CreateTaskInput,
+	TasksQuery,
+	UpdateTaskInput,
+} from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -155,7 +159,7 @@ export function getTaskPage(q: TasksQuery): TaskPage {
 
 export function updateTask(
 	id: string,
-	input: Pick<CreateTaskInput, "type_id" | "link" | "notes">,
+	input: Omit<UpdateTaskInput, "id">,
 ): Task {
 	failIfRequested("updateTask");
 	const prev = allTasks().find((t) => t.ID === id);
