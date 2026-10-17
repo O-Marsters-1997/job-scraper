@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { formatRelative } from "@/lib/datetime";
 import { taskHeadline } from "@/lib/taskHeadline";
-import type { TaskSort } from "@/types/task";
+import { taskSortSchema } from "@/types/task";
 import {
 	type TaskListState,
 	useSetTaskDone,
@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_auth/tasks")({
 				typeof search.type === "string" && search.type
 					? search.type
 					: undefined,
-			sort: search.sort === "job_posted" ? "job_posted" : undefined,
+			sort: taskSortSchema.safeParse(search.sort).data,
 			done: search.done === true || search.done === "true" ? true : undefined,
 		};
 	},
@@ -114,7 +114,7 @@ function TasksPage() {
 					onChange={(value) =>
 						table.setFilters({
 							sort:
-								value === "job_posted" ? ("job_posted" as TaskSort) : undefined,
+								value === "created" ? undefined : taskSortSchema.parse(value),
 						})
 					}
 				/>
