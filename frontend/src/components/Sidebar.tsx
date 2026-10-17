@@ -191,12 +191,16 @@ interface SidebarBodyProps {
 
 function SidebarBody(props: SidebarBodyProps) {
 	const usageWarning = useUsageWarning();
-	const badgeCount = (badge: NavItem["badge"]) =>
-		badge === "applications"
-			? (props.appsQuery.data?.length ?? 0)
-			: badge === "tasks"
-				? (props.taskCount.data ?? 0)
-				: 0;
+	const badgeCount = (badge: NavItem["badge"]) => {
+		switch (badge) {
+			case "applications":
+				return props.appsQuery.data?.length ?? 0;
+			case "tasks":
+				return props.taskCount.data ?? 0;
+			default:
+				return 0;
+		}
+	};
 	return (
 		<>
 			<div class="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">

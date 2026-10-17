@@ -267,27 +267,17 @@ func TestIngestedJobCanBeAppliedToAndMovedThroughStatuses(t *testing.T) {
 	if len(got) != 1 || got[0].StatusID != next {
 		t.Fatalf("applications = %+v, want one in status %s", got, next)
 	}
-}
 
-func TestSignupSeedsTaskTypesAndATaskCanBeCompleted(t *testing.T) {
-	t.Parallel()
-	a := newApp(t)
-	u := a.signup()
-
-	res := a.ingest(map[string]string{
-		"title": "Engineer", "location": "Remote", "url": "https://example.com/jobs/task",
-		"company_slug": "acme", "source": "greenhouse",
-	})
 	types := do[[]dto.TaskType](u, http.StatusOK, http.MethodGet, "/task-types", nil)
 	if len(types) != 4 {
 		t.Fatalf("GET /task-types = %+v, want the 4 seeded types", types)
 	}
 
-	created := do[dto.Task](u, http.StatusCreated, http.MethodPost, "/tasks/", map[string]any{"type_id": types[0].ID, "job_id": res.JobID})
-	if created.JobTitle != "Engineer" || created.JobPostedAt == nil {
-		t.Fatalf("created task = %+v, want the job's title and posted date", created)
+	task := do[dto.Task](u, http.StatusCreated, http.MethodPost, "/tasks/", map[string]any{"type_id": types[0].ID, "job_id": res.JobID})
+	if task.JobTitle != "Engineer" || task.JobPostedAt == nil {
+		t.Fatalf("created task = %+v, want the job's title and posted date", task)
 	}
-	do[dto.Task](u, http.StatusOK, http.MethodPut, "/tasks/"+created.ID+"/done", map[string]bool{"done": true})
+	do[dto.Task](u, http.StatusOK, http.MethodPut, "/tasks/"+task.ID+"/done", map[string]bool{"done": true})
 
 	open := do[dto.TaskPage](u, http.StatusOK, http.MethodGet, "/tasks/", nil)
 	if open.Total != 0 {
