@@ -5,6 +5,7 @@ import {
 	type TaskType,
 	TaskTypeNameTakenError,
 } from "@/types/task";
+import type { TasksQuery } from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -102,13 +103,21 @@ export function deleteTaskType(id: string): void {
 	tasks = allTasks().filter((t) => t.TypeID !== id);
 }
 
-export function getTaskPage(page: number, pageSize: number): TaskPage {
-	const open = allTasks()
-		.filter((t) => t.CompletedAt === null)
-		.sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+const postedMs = (t: Task) =>
+	t.JobPostedAt ? new Date(t.JobPostedAt).getTime() : Number.NEGATIVE_INFINITY;
+
+export function getTaskPage(q: TasksQuery): TaskPage {
+	const rows = allTasks()
+		.filter((t) => (t.CompletedAt !== null) === (q.done ?? false))
+		.filter((t) => !q.typeId || t.TypeID === q.typeId)
+		.sort((a, b) =>
+			q.sort === "job_posted"
+				? postedMs(b) - postedMs(a)
+				: b.CreatedAt.localeCompare(a.CreatedAt),
+		);
 	return {
-		items: open.slice((page - 1) * pageSize, page * pageSize),
-		total: open.length,
+		items: rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
+		total: rows.length,
 	};
 }
 
