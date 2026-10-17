@@ -2,16 +2,20 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { keys } from "../api/keys";
 import {
 	createTask,
-	fetchOpenTasks,
+	fetchTasks,
 	fetchTaskTypes,
 	setTaskDone,
 	TASKS_PAGE_SIZE,
 } from "../api/tasks";
+import type { TaskSort } from "../types/task";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 import { useServerTable } from "./useServerTable";
 
-interface TaskListState {
+export interface TaskListState {
 	page?: number | undefined;
+	type?: string | undefined;
+	sort?: TaskSort | undefined;
+	done?: boolean | undefined;
 }
 
 export function useTaskPages(
@@ -22,15 +26,22 @@ export function useTaskPages(
 		state,
 		onChange,
 		pageSize: TASKS_PAGE_SIZE,
-		queryKey: (s) => keys.tasks.list(s.page ?? 1),
-		queryFn: (s) => fetchOpenTasks(s.page ?? 1, TASKS_PAGE_SIZE),
+		queryKey: (s) => keys.tasks.list(s),
+		queryFn: (s) =>
+			fetchTasks({
+				page: s.page ?? 1,
+				pageSize: TASKS_PAGE_SIZE,
+				typeId: s.type,
+				sort: s.sort,
+				done: s.done,
+			}),
 		rowId: (task) => task.ID,
 	});
 }
 
 const openTaskCountQueryOptions = queryOptions({
 	queryKey: keys.tasks.count,
-	queryFn: async () => (await fetchOpenTasks(1, 1)).total,
+	queryFn: async () => (await fetchTasks({ page: 1, pageSize: 1 })).total,
 });
 
 export function useOpenTaskCount() {
@@ -42,7 +53,8 @@ const JOB_TASKS_LIMIT = 50;
 export function useJobOpenTasks(jobId: () => string) {
 	return createQuery(() => ({
 		queryKey: keys.tasks.forJob(jobId()),
-		queryFn: () => fetchOpenTasks(1, JOB_TASKS_LIMIT, jobId()),
+		queryFn: () =>
+			fetchTasks({ page: 1, pageSize: JOB_TASKS_LIMIT, jobId: jobId() }),
 	}));
 }
 

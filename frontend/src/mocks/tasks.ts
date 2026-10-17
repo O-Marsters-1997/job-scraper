@@ -1,7 +1,7 @@
 import { faker } from "@faker-js/faker";
 import type { Task, TaskPage, TaskType } from "@/types/task";
-import { ApiError } from "../api/client";
-import type { CreateTaskInput } from "../api/tasks";
+import { ApiError } from "../api/apiError";
+import type { CreateTaskInput, TasksQuery } from "../api/tasks";
 import { failIfRequested } from "./helpers";
 import { getJobs } from "./jobs";
 
@@ -75,18 +75,22 @@ export function createTask(input: CreateTaskInput): Task {
 	return task;
 }
 
-export function getTaskPage(
-	page: number,
-	pageSize: number,
-	jobId?: string,
-): TaskPage {
-	const open = allTasks()
-		.filter((t) => t.CompletedAt === null)
-		.filter((t) => !jobId || t.JobID === jobId)
-		.sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
+const postedMs = (t: Task) =>
+	t.JobPostedAt ? new Date(t.JobPostedAt).getTime() : Number.NEGATIVE_INFINITY;
+
+export function getTaskPage(q: TasksQuery): TaskPage {
+	const rows = allTasks()
+		.filter((t) => (t.CompletedAt !== null) === (q.done ?? false))
+		.filter((t) => !q.typeId || t.TypeID === q.typeId)
+		.filter((t) => !q.jobId || t.JobID === q.jobId)
+		.sort((a, b) =>
+			q.sort === "job_posted"
+				? postedMs(b) - postedMs(a)
+				: b.CreatedAt.localeCompare(a.CreatedAt),
+		);
 	return {
-		items: open.slice((page - 1) * pageSize, page * pageSize),
-		total: open.length,
+		items: rows.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
+		total: rows.length,
 	};
 }
 

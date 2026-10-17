@@ -4,18 +4,84 @@ import { PageHeading } from "@/components/PageHeading";
 import { Pager } from "@/components/Pager";
 import { QueryBoundary } from "@/components/QueryBoundary";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ToggleChip } from "@/components/ToggleChip";
 import { Card } from "@/components/ui/card";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectItemLabel,
+	SelectTrigger,
+} from "@/components/ui/select";
 import { formatRelative } from "@/lib/datetime";
 import { taskHeadline } from "@/lib/taskHeadline";
-import { useSetTaskDone, useTaskPages } from "../../hooks/useTasks";
+import { taskSortSchema } from "@/types/task";
+import {
+	type TaskListState,
+	useSetTaskDone,
+	useTaskPages,
+	useTaskTypes,
+} from "../../hooks/useTasks";
+
+interface Choice {
+	value: string;
+	label: string;
+}
+
+const SORT_CHOICES: Choice[] = [
+	{ value: "created", label: "Newest first" },
+	{ value: "job_posted", label: "Job posted" },
+];
+
+const ALL_TYPES: Choice = { value: "", label: "All types" };
 
 export const Route = createFileRoute("/_auth/tasks")({
-	validateSearch: (search: Record<string, unknown>) => {
+	validateSearch: (search: Record<string, unknown>): TaskListState => {
 		const page = Number(search.page);
-		return { page: Number.isInteger(page) && page > 1 ? page : undefined };
+		return {
+			page: Number.isInteger(page) && page > 1 ? page : undefined,
+			type:
+				typeof search.type === "string" && search.type
+					? search.type
+					: undefined,
+			sort: taskSortSchema.safeParse(search.sort).data,
+			done: search.done === true || search.done === "true" ? true : undefined,
+		};
 	},
 	component: TasksPage,
 });
+
+function ChoiceSelect(props: {
+	label: string;
+	options: Choice[];
+	value: string;
+	onChange: (value: string) => void;
+}) {
+	return (
+		<Select
+			options={props.options}
+			optionValue={(o) => o?.value ?? ""}
+			optionTextValue={(o) => o?.label ?? ""}
+			disallowEmptySelection
+			value={props.options.find((o) => o.value === props.value)}
+			onChange={(opt) => {
+				if (opt) props.onChange(opt.value);
+			}}
+			itemComponent={(itemProps) => (
+				<SelectItem item={itemProps.item}>
+					<SelectItemLabel>{itemProps.item.rawValue?.label}</SelectItemLabel>
+				</SelectItem>
+			)}
+		>
+			<SelectTrigger aria-label={props.label} class="w-44">
+				<Select.Value<Choice>>
+					{(state) => state.selectedOption()?.label}
+				</Select.Value>
+			</SelectTrigger>
+			<SelectContent />
+		</Select>
+	);
+}
 
 function TasksPage() {
 	const search = Route.useSearch();
@@ -24,10 +90,43 @@ function TasksPage() {
 		navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true }),
 	);
 	const setDone = useSetTaskDone();
+	const types = useTaskTypes();
+	const typeChoices = () => [
+		ALL_TYPES,
+		...(types.data ?? []).map((t) => ({ value: t.ID, label: t.Name })),
+	];
 
 	return (
 		<div class="px-7 py-6">
 			<PageHeading title="Tasks" subtitle="Things to do on your job search" />
+
+			<div class="mb-4 flex flex-wrap items-center gap-2">
+				<ChoiceSelect
+					label="Filter by type"
+					options={typeChoices()}
+					value={search().type ?? ""}
+					onChange={(value) => table.setFilters({ type: value || undefined })}
+				/>
+				<ChoiceSelect
+					label="Sort tasks"
+					options={SORT_CHOICES}
+					value={search().sort ?? "created"}
+					onChange={(value) =>
+						table.setFilters({
+							sort:
+								value === "created" ? undefined : taskSortSchema.parse(value),
+						})
+					}
+				/>
+				<ToggleChip
+					active={search().done === true}
+					onClick={() =>
+						table.setFilters({ done: search().done ? undefined : true })
+					}
+				>
+					Show done
+				</ToggleChip>
+			</div>
 
 			<QueryBoundary query={table.query} fallbackRows={5}>
 				{(data) => (
@@ -35,7 +134,9 @@ function TasksPage() {
 						when={data().items.length > 0}
 						fallback={
 							<Card class="p-10 text-center">
-								<p class="text-sm text-muted">Nothing left to do.</p>
+								<p class="text-sm text-muted">
+									{search().done ? "No done tasks." : "Nothing left to do."}
+								</p>
 							</Card>
 						}
 					>
@@ -46,12 +147,15 @@ function TasksPage() {
 										<li class="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-muted">
 											<input
 												type="checkbox"
-												aria-label={`Mark done: ${taskHeadline(task)}`}
+												aria-label={`${task.CompletedAt ? "Mark not done" : "Mark done"}: ${taskHeadline(task)}`}
 												class="size-4 shrink-0 cursor-pointer accent-primary"
-												checked={false}
+												checked={task.CompletedAt !== null}
 												disabled={setDone.isPending}
 												onChange={() =>
-													setDone.mutate({ id: task.ID, done: true })
+													setDone.mutate({
+														id: task.ID,
+														done: task.CompletedAt === null,
+													})
 												}
 											/>
 											<div class="min-w-0 flex-1">
