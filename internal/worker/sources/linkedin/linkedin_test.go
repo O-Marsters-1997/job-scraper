@@ -2,6 +2,7 @@ package linkedin_test
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
@@ -280,6 +282,35 @@ func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 		if got := stamps.times[i].Sub(stamps.times[i-1]); got < gap/2 {
 			t.Errorf("gap before request %d = %v, want at least %v", i+1, got, gap/2)
 		}
+	}
+}
+
+type blockedTransport struct{ calls int }
+
+func (b *blockedTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	b.calls++
+	return nil, proxy.ErrBlocked
+}
+
+func TestResidentialBlockPausesEveryTask(t *testing.T) {
+	t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+	shared := sources.NewGate(0, time.Minute)
+	blocked := &blockedTransport{}
+	first := linkedin.New("go", nil, "", shared)
+	first.Client().Transport = blocked
+	second := linkedin.New("", nil, "", shared)
+	second.Client().Transport = blocked
+
+	if _, _, err := first.FetchPage(t.Context(), ""); !errors.Is(err, proxy.ErrBlocked) {
+		t.Fatalf("FetchPage() error = %v, want ErrBlocked", err)
+	}
+	_, err := second.GetDetails(t.Context(), dto.Job{URL: "https://www.linkedin.com/jobs/view/1"})
+
+	if !errors.Is(err, sources.ErrDeferred) {
+		t.Errorf("GetDetails() error = %v, want ErrDeferred", err)
+	}
+	if blocked.calls != 1 {
+		t.Errorf("requests sent = %d, want 1", blocked.calls)
 	}
 }
 
