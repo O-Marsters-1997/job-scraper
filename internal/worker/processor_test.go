@@ -809,6 +809,33 @@ func TestFailRun(t *testing.T) {
 		}
 	})
 
+	t.Run("a dead-lettered scheduled board check makes the board due again", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		board, err := f.store.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.store.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "discovered", ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.store.MarkBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatal(err)
+		}
+		task := queue.Task{Version: 1, Source: "greenhouse", Kind: queue.BoardCheckTask, BoardID: board.ID}
+		if err := f.processor.FailRun(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+		due, err := f.store.ListDueBoards(ctx)
+		if err != nil || len(due) != 1 || due[0].ID != board.ID {
+			t.Fatalf("ListDueBoards() = %+v, %v, want %s due again", due, err, board.ID)
+		}
+	})
+
 	t.Run("run already gone is not an error", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
 		task := queue.Task{Source: "wis", Kind: queue.ListingPageTask, TargetID: "gone", RunID: "gone"}

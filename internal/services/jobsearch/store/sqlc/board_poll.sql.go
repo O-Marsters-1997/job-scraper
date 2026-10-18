@@ -74,6 +74,7 @@ UPDATE board_poll_state
 SET last_completed_at = NOW(),
     last_scheduled_at = CASE WHEN $1::boolean THEN last_scheduled_at ELSE NOW() END,
     next_due_at = CASE WHEN $1::boolean THEN next_due_at ELSE NOW() + $2::int * INTERVAL '1 minute' END,
+    check_published_at = CASE WHEN $1::boolean THEN check_published_at END,
     consecutive_complete_empty = CASE WHEN $3::boolean THEN consecutive_complete_empty + 1 ELSE 0 END,
     consecutive_failures = 0, lease_owner = NULL, lease_until = NULL,
     last_reported_total = $4::int, last_parsed = $5::int
@@ -264,7 +265,7 @@ GROUP BY b.id, c.slug, s.last_scheduled_at, s.lease_until, s.next_due_at, s.chec
 HAVING (s.last_scheduled_at IS NULL OR s.last_scheduled_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
    AND (s.lease_until IS NULL OR s.lease_until < NOW())
    AND (s.next_due_at IS NULL OR s.next_due_at <= NOW())
-   AND (s.check_published_at IS NULL OR s.check_published_at + MIN(tc.check_interval_minutes) * INTERVAL '1 minute' <= NOW())
+   AND (s.check_published_at IS NULL OR s.check_published_at <= NOW() - INTERVAL '1 day')
 ORDER BY b.id
 `
 
@@ -354,6 +355,15 @@ type ObserveBoardJobParams struct {
 
 func (q *Queries) ObserveBoardJob(ctx context.Context, arg ObserveBoardJobParams) error {
 	_, err := q.db.Exec(ctx, observeBoardJob, arg.BoardID, arg.JobID, arg.LastSnapshotVersion)
+	return err
+}
+
+const releaseBoardCheck = `-- name: ReleaseBoardCheck :exec
+UPDATE board_poll_state SET check_published_at = NULL WHERE board_id = $1
+`
+
+func (q *Queries) ReleaseBoardCheck(ctx context.Context, boardID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, releaseBoardCheck, boardID)
 	return err
 }
 

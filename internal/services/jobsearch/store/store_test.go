@@ -697,6 +697,20 @@ func (e boardEnv) complete(t *testing.T, poll dto.BoardPoll, jobs ...dto.Job) {
 	}
 }
 
+func (e boardEnv) markPublished(t *testing.T) {
+	t.Helper()
+	if err := e.st.MarkBoardCheckPublished(t.Context(), e.board.ID); err != nil {
+		t.Fatalf("MarkBoardCheckPublished() err = %v", err)
+	}
+}
+
+func (e boardEnv) exec(t *testing.T, sql string) {
+	t.Helper()
+	if _, err := e.pool.Exec(t.Context(), sql, e.board.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (e boardEnv) due(t *testing.T) []dto.BoardPoll {
 	t.Helper()
 	due, err := e.st.ListDueBoards(t.Context())
@@ -744,19 +758,46 @@ func TestBoardPolling(t *testing.T) {
 		}
 	})
 
-	t.Run("a published check holds the board back but stays claimable", func(t *testing.T) {
+	t.Run("a published check holds the board back past its interval until it completes", func(t *testing.T) {
 		t.Parallel()
 		env := verifiedBoardFixture(t)
 		if due := env.due(t); len(due) != 1 {
 			t.Fatalf("due = %v, want %s", due, env.board.ID)
 		}
-		if err := env.st.MarkBoardCheckPublished(t.Context(), env.board.ID); err != nil {
-			t.Fatalf("MarkBoardCheckPublished() err = %v", err)
-		}
+		env.markPublished(t)
+		env.markPublished(t)
+		env.exec(t, "UPDATE board_poll_state SET check_published_at = NOW() - INTERVAL '2 hours' WHERE board_id = $1")
 		if due := env.due(t); len(due) != 0 {
 			t.Errorf("published board due = %v, want none", due)
 		}
-		env.claim(t, false)
+
+		env.complete(t, env.claim(t, false))
+		env.exec(t, "UPDATE board_poll_state SET last_scheduled_at = NOW() - INTERVAL '2 hours', next_due_at = NOW() WHERE board_id = $1")
+		if due := env.due(t); len(due) != 1 {
+			t.Errorf("completed board due = %v, want %s", due, env.board.ID)
+		}
+	})
+
+	t.Run("a released check makes the board due again", func(t *testing.T) {
+		t.Parallel()
+		env := verifiedBoardFixture(t)
+		env.markPublished(t)
+		if err := env.st.ReleaseBoardCheck(t.Context(), env.board.ID); err != nil {
+			t.Fatalf("ReleaseBoardCheck() err = %v", err)
+		}
+		if due := env.due(t); len(due) != 1 {
+			t.Errorf("released board due = %v, want %s", due, env.board.ID)
+		}
+	})
+
+	t.Run("a published check stops holding the board back after a day", func(t *testing.T) {
+		t.Parallel()
+		env := verifiedBoardFixture(t)
+		env.markPublished(t)
+		env.exec(t, "UPDATE board_poll_state SET check_published_at = NOW() - INTERVAL '25 hours' WHERE board_id = $1")
+		if due := env.due(t); len(due) != 1 {
+			t.Errorf("stale published board due = %v, want %s", due, env.board.ID)
+		}
 	})
 
 	t.Run("a next-poll hint sets next_due_at and holds the board back", func(t *testing.T) {
