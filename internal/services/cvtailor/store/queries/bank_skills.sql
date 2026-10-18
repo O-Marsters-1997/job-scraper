@@ -17,6 +17,14 @@ SET name = sqlc.arg(name), category = sqlc.arg(category), updated_at = NOW()
 WHERE user_id = sqlc.arg(user_id) AND id = sqlc.arg(id)
 RETURNING *;
 
+-- name: SetBankSkillsCategory :execrows
+UPDATE bank_skills
+SET category = sqlc.arg(category), updated_at = NOW()
+WHERE user_id = sqlc.arg(user_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: DeleteBankSkills :execrows
+DELETE FROM bank_skills WHERE user_id = sqlc.arg(user_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+
 -- name: DeleteBankSkill :execrows
 DELETE FROM bank_skills WHERE user_id = $1 AND id = $2;
 

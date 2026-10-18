@@ -42,6 +42,11 @@ type BankSkill struct {
 	SortOrder int    `json:"sortOrder"`
 }
 
+type BankSkillsBulkInput struct {
+	IDs      []string `json:"ids"`
+	Category string   `json:"category"`
+}
+
 type BankSkillInput struct {
 	ID       string `json:"-" path:"id"`
 	Name     string `json:"name"`

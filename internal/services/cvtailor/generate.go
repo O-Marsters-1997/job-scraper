@@ -209,7 +209,7 @@ func (m *Module) editClean(ctx context.Context, key string, pl plan, in cvedit.I
 		return cvedit.Result{}, err
 	}
 	var reverted []string
-	res.Edits, reverted = pl.revertBlocked(res.Edits)
+	res.Edits, reverted = pl.revertBlocked(pl.orderBullets(res.Edits))
 	if res.Edits.Skills == nil {
 		res.Edits.Skills = pl.swappedSkills()
 	}

@@ -86,6 +86,32 @@ func TestSkillSuggestions(t *testing.T) {
 		}
 	})
 
+	t.Run("a Bank Skill is present when a whole word of a line, placed with its category-mates", func(t *testing.T) {
+		t.Parallel()
+		docs := cvtailortest.Docs{TabJSON: tabJSON(t,
+			head("Skills"),
+			prose("Languages/ Frameworks Typescript, Django"),
+			prose("Cloud AWS"),
+		)}
+		asker := &fakeAsker{answers: skillAnswers(skillLean{"Go", 0.8, 0.1}, skillLean{"Rust", 0.8, 0.1})}
+		svc, st := newService(t, docs, asker)
+		goID := addBank(t, st, "Stack", "Go")["Go"]
+		addBank(t, st, "Stack", "typescript")
+		addBank(t, st, "Cloud", "aws")
+		rustID := addBank(t, st, "Elsewhere", "Rust")["Rust"]
+
+		got, err := svc.SkillSuggestions(t.Context(), userID, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got.Lines[0].Candidates) != 1 || got.Lines[0].Candidates[0].BankSkillID != goID {
+			t.Errorf("SkillSuggestions() line 0 candidates = %+v, want only Go (id %s)", got.Lines[0].Candidates, goID)
+		}
+		if len(got.Unplaced) != 1 || got.Unplaced[0].BankSkillID != rustID {
+			t.Errorf("SkillSuggestions() unplaced = %+v, want only Rust (id %s)", got.Unplaced, rustID)
+		}
+	})
+
 	t.Run("at most three candidates are preselected, each replacing a distinct item", func(t *testing.T) {
 		asker := &fakeAsker{answers: skillAnswers(
 			skillLean{"A", 0.9, 0.0}, skillLean{"B", 0.8, 0.0}, skillLean{"C", 0.7, 0.0}, skillLean{"D", 0.6, 0.0},

@@ -17,6 +17,8 @@ func (m *Module) Routes(r chi.Router) {
 		r.Delete("/positions/{id}", handlers.Delete(m.store.DeletePosition))
 		r.Get("/skills", handlers.GetAll(m.store.ListBankSkills))
 		r.Post("/skills", handlers.Create(m.svc.CreateBankSkill))
+		r.Patch("/skills", handlers.Update(m.svc.SetBankSkillsCategory))
+		r.Post("/skills/delete", handlers.Update(m.svc.DeleteBankSkills))
 		r.Put("/skills/order", handlers.Update(m.svc.ReorderBankSkills))
 		r.Patch("/skills/{id}", handlers.Update(m.svc.UpdateBankSkill))
 		r.Delete("/skills/{id}", handlers.Delete(m.store.DeleteBankSkill))

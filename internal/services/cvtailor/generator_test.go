@@ -256,6 +256,38 @@ func TestGeneratorRunTick(t *testing.T) {
 		}
 	})
 
+	t.Run("writes cited bullets in the order the User chose", func(t *testing.T) {
+		t.Parallel()
+		e := newDraftEnv(t)
+		first, second := e.pos.Achievements[0], e.pos.Achievements[1]
+		e.input.AchievementIDs = []string{second.ID, first.ID}
+		id := e.queue(t)
+		keep := "Built and maintained the public APIs for the platform"
+		res := cvedit.Result{Edits: cvedit.EditSet{Positions: []cvedit.PositionEdit{{
+			PositionID: e.pos.ID,
+			Bullets: []cvedit.Bullet{
+				{Keep: true, Text: keep},
+				{AchievementIDs: []string{first.ID}, Text: "Cut p99"},
+				{AchievementIDs: []string{second.ID}, Text: "Mentored"},
+			},
+		}}}}
+
+		e.run(t, tick{editor: cvtailortest.Editing(res)})
+
+		var got cvedit.EditSet
+		if err := json.Unmarshal(e.store.DraftResult(id).EditSet, &got); err != nil {
+			t.Fatal(err)
+		}
+		var texts []string
+		for _, b := range got.Positions[0].Bullets {
+			texts = append(texts, b.Text)
+		}
+		want := []string{keep, "Mentored", "Cut p99"}
+		if diff := cmp.Diff(want, texts); diff != "" {
+			t.Errorf("recorded bullets (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("puts a blocked bullet back to its original text without another call", func(t *testing.T) {
 		e, id := newQueuedDraft(t)
 		editor := cvtailortest.Editing(e.bulletResult("Leveraged Postgres", 0.25))
