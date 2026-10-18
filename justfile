@@ -25,17 +25,21 @@ build:
     go build -o bin/snapshot ./cmd/snapshot
     go build -o bin/queue    ./cmd/queue
 
-[doc('start postgres and RabbitMQ, migrate, then run the API and frontend together (no worker); Ctrl-C stops both')]
+[doc('rebuild and start db, RabbitMQ, api and worker in docker, then the frontend dev server')]
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
+    docker compose up -d --build --wait db rabbitmq api worker
+    (cd frontend && bun install && bun run dev)
+
+[doc('worker in docker against an api you launch from the editor (Run: api); stops the compose api')]
+dev-debug:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker compose stop api
     docker compose up -d --wait db rabbitmq
-    just migrate-up
-    (cd frontend && bun install)
-    trap 'kill 0' EXIT INT TERM
-    just run-api &
-    (cd frontend && bun run dev) &
-    wait -n
+    WORKER_API_BASE_URL=http://host.docker.internal:8080 docker compose up -d --build --force-recreate worker
+    (cd frontend && bun install && bun run dev)
 
 # run the worker
 run *args:

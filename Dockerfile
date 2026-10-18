@@ -18,5 +18,6 @@ COPY scripts/migrate.sh ./migrate.sh
 CMD ["./migrate.sh"]
 
 FROM alpine:latest
+RUN apk add --no-cache chromium
 WORKDIR /app
 COPY --from=builder /app/worker /app/api /app/queue ./
