@@ -212,7 +212,7 @@ func (c *Chrome) fetch(ctx context.Context, path string) ([]byte, error) {
 	switch {
 	case status == 200:
 		return []byte(res.Value.Get("body").Str()), nil
-	case status == 403, status == 429, status == 503,status == 404 && strings.HasPrefix(path, "/_next/"):
+	case status == 403, status == 429, status == 503, status == 404 && strings.HasPrefix(path, "/_next/"):
 		return nil, errChallenged
 	default:
 		return nil, fmt.Errorf("hiring.cafe %s: status %d", path, status)
