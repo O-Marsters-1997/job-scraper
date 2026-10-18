@@ -55,7 +55,7 @@ type Source interface {
 }
 
 type DetailFetcher interface {
-	GetDetails(ctx context.Context, url string) (dto.Job, error)
+	GetDetails(ctx context.Context, card dto.Job) (dto.Job, error)
 }
 
 // StatusError is returned by Get and PostJSON for any non-200 response other than 404 or 410.

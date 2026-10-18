@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/wis"
@@ -145,7 +146,7 @@ func TestRequests_BrowserHeaders(t *testing.T) {
 	if _, _, err := src.FetchPage(t.Context(), ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); err == nil {
+	if _, err := src.GetDetails(t.Context(), dto.Job{URL: "https://workinstartups.com/details/1"}); err == nil {
 		t.Fatal("GetDetails on a listing body = nil error, want a parse error")
 	}
 	list, detail := tr.requests[0].Header, tr.requests[1].Header
@@ -178,7 +179,7 @@ func TestRateLimit(t *testing.T) {
 			if _, _, err := src.FetchPage(t.Context(), ""); !errors.Is(err, sources.ErrDeferred) {
 				t.Errorf("listing after 429 = %v, want ErrDeferred", err)
 			}
-			if _, err := src.GetDetails(t.Context(), "https://workinstartups.com/details/1"); !errors.Is(err, sources.ErrDeferred) {
+			if _, err := src.GetDetails(t.Context(), dto.Job{URL: "https://workinstartups.com/details/1"}); !errors.Is(err, sources.ErrDeferred) {
 				t.Errorf("detail after 429 = %v, want ErrDeferred", err)
 			}
 			if len(tr.requests) != 1 {

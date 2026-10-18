@@ -1,0 +1,58 @@
+{
+  "ssrIsLastPage": false,
+  "ssrError": null,
+  "ssrHits": [
+    {
+      "id": "hc-1001",
+      "collapse_key": "acme-backend",
+      "apply_url": "https://boards.greenhouse.io/acme/jobs/4001",
+      "is_expired": false,
+      "job_information": {"title": "Backend Engineer"},
+      "v5_processed_job_data": {
+        "formatted_workplace_location": "London, UK",
+        "workplace_type": "Remote",
+        "estimated_publish_date": "2026-10-01T09:30:00.000Z",
+        "is_compensation_transparent": true,
+        "listed_compensation_currency": "GBP",
+        "yearly_min_compensation": 70000,
+        "yearly_max_compensation": 90000
+      },
+      "enriched_company_data": {"name": "Acme Ltd"}
+    },
+    {
+      "id": "hc-1002",
+      "collapse_key": "acme-backend",
+      "apply_url": "https://boards.greenhouse.io/acme/jobs/4002",
+      "is_expired": false,
+      "job_information": {"title": "Backend Engineer"},
+      "v5_processed_job_data": {"formatted_workplace_location": "Leeds, UK", "workplace_type": "Remote", "estimated_publish_date": "2026-10-01T09:30:00.000Z"},
+      "enriched_company_data": {"name": "Acme Ltd"}
+    },
+    {
+      "id": "hc-1003",
+      "collapse_key": "globex-sre",
+      "apply_url": "https://jobs.lever.co/globex/abc",
+      "is_expired": true,
+      "job_information": {"title": "SRE"},
+      "v5_processed_job_data": {"formatted_workplace_location": "Berlin, Germany", "workplace_type": "Hybrid", "estimated_publish_date": "2026-09-20T00:00:00.000Z"},
+      "enriched_company_data": {"name": "Globex"}
+    },
+    {
+      "id": "hc-1004",
+      "collapse_key": "initech-data",
+      "apply_url": "https://careers.initech.example/roles/77",
+      "is_expired": false,
+      "job_information": {"title": "Data Engineer"},
+      "v5_processed_job_data": {
+        "formatted_workplace_location": "Manchester, UK",
+        "workplace_type": "Hybrid",
+        "estimated_publish_date": "not a date",
+        "is_compensation_transparent": false,
+        "listed_compensation_currency": "GBP",
+        "yearly_min_compensation": 50000,
+        "yearly_max_compensation": 60000
+      },
+      "enriched_company_data": {"name": "Initech"}
+    }
+  ]
+}

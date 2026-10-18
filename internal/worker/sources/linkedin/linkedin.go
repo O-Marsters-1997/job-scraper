@@ -153,12 +153,12 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	return jobs, strconv.Itoa(start + len(jobs)), nil
 }
 
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
-	body, err := s.get(ctx, fragmentURL(url))
+func (s *Scraper) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
+	body, err := s.get(ctx, fragmentURL(card.URL))
 	if err != nil {
 		return dto.Job{}, err
 	}
-	job, err := ParseJobDetailAt(bytes.NewReader(body), url, time.Now())
+	job, err := ParseJobDetailAt(bytes.NewReader(body), card.URL, time.Now())
 	if err != nil {
 		return dto.Job{}, err
 	}

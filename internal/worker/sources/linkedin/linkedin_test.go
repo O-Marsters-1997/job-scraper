@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/sourcetest"
@@ -226,7 +227,7 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	recorder := sourcetest.Respond(string(html))
 	src.Client().Transport = recorder
 
-	job, err := src.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/4335312853")
+	job, err := src.GetDetails(t.Context(), dto.Job{URL: "https://www.linkedin.com/jobs/view/4335312853"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +268,7 @@ func TestListingAndDetailFetchesShareOneGap(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"1", "2"} {
-		_, _ = detail.GetDetails(t.Context(), "https://www.linkedin.com/jobs/view/"+id)
+		_, _ = detail.GetDetails(t.Context(), dto.Job{URL: "https://www.linkedin.com/jobs/view/" + id})
 	}
 
 	stamps.mu.Lock()
