@@ -168,7 +168,11 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		slog.WarnContext(ctx, "board discovery failed", slog.String(logger.KeySource, task.Source), slog.String("token", task.BoardToken), slog.Any(logger.KeyErr, err))
 		logBoardDiscover(ctx, task, "failed")
-		return nil
+		return p.recordMiss(ctx, task)
+	}
+	if len(found.Jobs) == 0 && task.RequireUK {
+		logBoardDiscover(ctx, task, "empty")
+		return p.recordMiss(ctx, task)
 	}
 	companyID, err := p.discoveryCompanyID(ctx, task, found.Name)
 	if err != nil {
@@ -224,6 +228,13 @@ func (p *Processor) discoverBoard(ctx context.Context, task queue.Task) error {
 		}
 	}
 	return p.boards.PollPrefetched(ctx, boardID, found.Jobs, 0)
+}
+
+func (p *Processor) recordMiss(ctx context.Context, task queue.Task) error {
+	if !task.RequireUK {
+		return nil
+	}
+	return p.js.Boards().RecordDiscoverMiss(ctx, task.Source, task.BoardToken)
 }
 
 func logBoardDiscover(ctx context.Context, task queue.Task, outcome string) {

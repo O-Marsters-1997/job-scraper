@@ -52,6 +52,7 @@ type FakeStore struct {
 
 	lastScraped map[string]time.Time
 	fetches     map[string]dto.CachedResponse
+	misses      map[string]time.Time
 	profiles    map[string]dto.CompanyProfile
 
 	sourceTargets map[string]dto.SourceTarget
@@ -78,6 +79,7 @@ func NewFakeStore() *FakeStore {
 		pollState:      make(map[string]*boardPollState),
 		lastScraped:    make(map[string]time.Time),
 		fetches:        make(map[string]dto.CachedResponse),
+		misses:         make(map[string]time.Time),
 		profiles:       make(map[string]dto.CompanyProfile),
 		sourceTargets:  make(map[string]dto.SourceTarget),
 		targetByKey:    make(map[string]string),
@@ -1195,3 +1197,17 @@ func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
 }
 
 func (f *FakeStore) DeleteExpiredFetches(context.Context) error { return nil }
+
+func (f *FakeStore) RecordDiscoverMiss(_ context.Context, source, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.misses[source+"/"+token] = time.Now()
+	return nil
+}
+
+func (f *FakeStore) DiscoverMissedSince(_ context.Context, source, token string, since time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	at, ok := f.misses[source+"/"+token]
+	return ok && !at.Before(since), nil
+}
