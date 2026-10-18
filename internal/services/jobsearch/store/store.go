@@ -941,8 +941,8 @@ func (s *Store) GetBoardCompanyID(ctx context.Context, source, token string) (st
 	return id.String(), nil
 }
 
-func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error) {
-	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx)
+func (s *Store) ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error) {
+	rows, err := s.queries.ListUntrackedDiscoveredBoards(ctx, sqlc.ListUntrackedDiscoveredBoardsParams{Uk: uk, UkSince: pgtype.Timestamptz{Time: ukSince, Valid: true}})
 	if err != nil {
 		return nil, fmt.Errorf("store.ListUntrackedDiscoveredBoards: %w", err)
 	}

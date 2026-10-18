@@ -165,11 +165,17 @@ const listUntrackedDiscoveredBoards = `-- name: ListUntrackedDiscoveredBoards :m
 SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status, cb.verification_method, cb.verified_at, cb.last_linked_at, cb.retired_at, cb.superseded_at, cb.discovered_via, cb.uk_jobs_seen_at, cb.created_at FROM company_boards cb
 WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+  AND (COALESCE(cb.uk_jobs_seen_at >= $1::timestamptz, FALSE) = $2::boolean)
 ORDER BY cb.created_at, cb.id
 `
 
-func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context) ([]CompanyBoard, error) {
-	rows, err := q.db.Query(ctx, listUntrackedDiscoveredBoards)
+type ListUntrackedDiscoveredBoardsParams struct {
+	UkSince pgtype.Timestamptz
+	Uk      bool
+}
+
+func (q *Queries) ListUntrackedDiscoveredBoards(ctx context.Context, arg ListUntrackedDiscoveredBoardsParams) ([]CompanyBoard, error) {
+	rows, err := q.db.Query(ctx, listUntrackedDiscoveredBoards, arg.UkSince, arg.Uk)
 	if err != nil {
 		return nil, err
 	}

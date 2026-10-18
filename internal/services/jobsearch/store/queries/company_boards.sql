@@ -53,4 +53,5 @@ WHERE c.slug = ANY($1::text[]);
 SELECT cb.* FROM company_boards cb
 WHERE cb.status = 'verified' AND cb.verification_method = 'discovered'
   AND NOT EXISTS (SELECT 1 FROM tracked_companies tc WHERE tc.company_id = cb.company_id)
+  AND (COALESCE(cb.uk_jobs_seen_at >= @uk_since::timestamptz, FALSE) = @uk::boolean)
 ORDER BY cb.created_at, cb.id;
