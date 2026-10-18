@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -122,10 +122,7 @@ export function JobNotesCard(props: { jobId: string }) {
 
 	return (
 		<Card>
-			<CardHeader class="pb-2">
-				<CardTitle>Notes</CardTitle>
-			</CardHeader>
-			<CardContent class="gap-3">
+			<CardContent class="gap-3 pt-4">
 				<form onSubmit={submit} class="flex flex-col gap-2">
 					<FormFeedback
 						error={create.isError ? "Could not save the note." : null}
@@ -133,7 +130,7 @@ export function JobNotesCard(props: { jobId: string }) {
 					<Label for="job-note-body">Add note</Label>
 					<Textarea
 						id="job-note-body"
-						rows={3}
+						rows={14}
 						maxLength={JOB_NOTE_MAX_LENGTH}
 						value={body()}
 						onInput={(e) => setBody(e.currentTarget.value)}
