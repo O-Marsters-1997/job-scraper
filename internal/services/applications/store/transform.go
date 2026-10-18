@@ -31,7 +31,6 @@ func toApplicationDTO(a sqlc.Application) dto.Application {
 		UserID:     a.UserID.String(),
 		JobID:      a.JobID.String(),
 		StatusID:   a.StatusID.String(),
-		Notes:      a.Notes.String,
 		AppliedAt:  fromOptionalDate(a.AppliedAt),
 		SalaryInfo: a.SalaryInfo.String,
 		CreatedAt:  a.CreatedAt.Time,
@@ -53,7 +52,6 @@ func toApplicationWithDetailsDTO(r sqlc.ListApplicationsRow) dto.ApplicationWith
 		StatusID:       r.StatusID.String(),
 		StatusName:     r.StatusName.String,
 		StatusColour:   r.StatusColour.String,
-		Notes:          r.Notes.String,
 		AppliedAt:      fromOptionalDate(r.AppliedAt),
 		SalaryInfo:     r.SalaryInfo.String,
 		CreatedAt:      r.CreatedAt.Time,
@@ -95,6 +93,20 @@ func fromInt4(n pgtype.Int4) *int {
 	}
 	v := int(n.Int32)
 	return &v
+}
+
+func toJobNoteDTO(n sqlc.JobNote) dto.JobNote {
+	note := dto.JobNote{
+		ID:        n.ID.String(),
+		JobID:     n.JobID.String(),
+		Body:      n.Body,
+		CreatedAt: n.CreatedAt.Time,
+		UpdatedAt: n.UpdatedAt.Time,
+	}
+	if n.Quote.Valid {
+		note.Quote = &dto.NoteQuote{Exact: n.Quote.String, Prefix: n.QuotePrefix, Suffix: n.QuoteSuffix}
+	}
+	return note
 }
 
 func toRecruiterContactDTO(c sqlc.RecruiterContact) dto.RecruiterContact {

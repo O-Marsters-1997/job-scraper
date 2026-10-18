@@ -30,6 +30,11 @@ type Store interface {
 	CreateRecruiterContact(ctx context.Context, userID string, in dto.LogRecruiterContactInput) (dto.RecruiterContact, error)
 	ListRecruiterContacts(ctx context.Context, userID, jobID string) ([]dto.RecruiterContact, error)
 	GetRecruiterContactSummaries(ctx context.Context, userID string, jobIDs []string) (map[string]dto.RecruiterContactSummary, error)
+
+	CreateJobNote(ctx context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error)
+	ListJobNotes(ctx context.Context, userID, jobID string) ([]dto.JobNote, error)
+	UpdateJobNote(ctx context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error)
+	DeleteJobNote(ctx context.Context, userID, id string) error
 }
 
 type Service struct {

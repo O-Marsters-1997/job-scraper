@@ -3,6 +3,7 @@ package applications_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,12 +89,12 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("seed CreateApplication err = %v", err)
 	}
 
-	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
+	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, SalaryInfo: "60k"})
 	if err != nil {
 		t.Fatalf("Update(...) err = %v", err)
 	}
-	if got.Notes != "followed up" {
-		t.Errorf("Update(...) notes = %q, want %q", got.Notes, "followed up")
+	if got.SalaryInfo != "60k" {
+		t.Errorf("Update(...) salary = %q, want %q", got.SalaryInfo, "60k")
 	}
 }
 
@@ -274,6 +275,106 @@ func TestSetChaseErrors(t *testing.T) {
 			_, err := svc.SetChase(t.Context(), userID, tt.in)
 			if !apperr.IsKind(err, tt.wantKind) {
 				t.Errorf("SetChase(%+v) err = %v, want kind %v", tt.in, err, tt.wantKind)
+			}
+		})
+	}
+}
+
+func TestCreateJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("records the note", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		got, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "call back Friday"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		want := dto.JobNote{JobID: "job-1", Body: "call back Friday"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.JobNote{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
+			t.Errorf("CreateJobNote(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	for name, body := range map[string]string{
+		"empty body":    "",
+		"oversize body": strings.Repeat("é", 10001),
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: body})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+
+	t.Run("10000 characters is accepted", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		if _, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: strings.Repeat("é", 10000)}); err != nil {
+			t.Errorf("CreateJobNote(10000 chars) err = %v", err)
+		}
+	})
+
+	t.Run("keeps the quote", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		quote := &dto.NoteQuote{Exact: strings.Repeat("é", 2000), Prefix: strings.Repeat("é", 64), Suffix: "after"}
+		got, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: quote})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		if diff := cmp.Diff(quote, got.Quote); diff != "" {
+			t.Errorf("CreateJobNote(...) quote mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	for name, quote := range map[string]dto.NoteQuote{
+		"empty quote":     {},
+		"oversize quote":  {Exact: strings.Repeat("é", 2001)},
+		"oversize prefix": {Exact: "x", Prefix: strings.Repeat("é", 65)},
+		"oversize suffix": {Exact: "x", Suffix: strings.Repeat("é", 65)},
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: &quote})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+}
+
+func TestUpdateJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("changes the body", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		created, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "before"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		got, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: created.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobNote(...) err = %v", err)
+		}
+		if got.Body != "after" || got.JobID != "job-1" {
+			t.Errorf("UpdateJobNote(...) = %+v, want body after on job-1", got)
+		}
+	})
+
+	for name, body := range map[string]string{
+		"empty body":    "",
+		"oversize body": strings.Repeat("é", 10001),
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: "note-1", Body: body})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("UpdateJobNote(%s) err = %v, want invalid", name, err)
 			}
 		})
 	}

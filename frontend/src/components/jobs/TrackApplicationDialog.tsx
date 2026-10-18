@@ -28,7 +28,6 @@ import type { Job } from "@/types/job";
 export interface ExistingApp {
 	id: string;
 	statusId: string;
-	notes: string;
 	appliedAt: string | null;
 	salaryInfo: string;
 }
@@ -48,7 +47,6 @@ export function toExistingApp(app: Application): ExistingApp {
 	return {
 		id: app.ID,
 		statusId: app.StatusID,
-		notes: app.Notes,
 		appliedAt: app.AppliedAt,
 		salaryInfo: app.SalaryInfo,
 	};
@@ -96,7 +94,6 @@ function TrackApplicationForm(props: {
 	const existingApp = untrack(() => props.existingApp);
 	const isEdit = !!existingApp;
 	const [statusId, setStatusId] = createSignal(existingApp?.statusId ?? "");
-	const [notes, setNotes] = createSignal(existingApp?.notes ?? "");
 	const [appliedAt, setAppliedAt] = createSignal(existingApp?.appliedAt ?? "");
 	const [salary, setSalary] = createSignal(existingApp?.salaryInfo ?? "");
 
@@ -113,7 +110,6 @@ function TrackApplicationForm(props: {
 			const created = await createMutation.mutateAsync({
 				job_id: jobId,
 				status_id: statusId() || undefined,
-				notes: notes(),
 				applied_at: appliedAt() || null,
 				salary_info: salary(),
 			});
@@ -126,7 +122,6 @@ function TrackApplicationForm(props: {
 				id: appId,
 				data: {
 					status_id: statusId() || undefined,
-					notes: notes(),
 					applied_at: appliedAt() || null,
 					salary_info: salary(),
 				},
@@ -196,18 +191,6 @@ function TrackApplicationForm(props: {
 							onInput={(e) => setSalary(e.currentTarget.value)}
 						/>
 					</div>
-				</div>
-
-				<div>
-					<Label for="track-notes">Notes</Label>
-					<textarea
-						id="track-notes"
-						class="field resize-y"
-						rows={3}
-						placeholder="Any notes…"
-						value={notes()}
-						onInput={(e) => setNotes(e.currentTarget.value)}
-					/>
 				</div>
 			</div>
 

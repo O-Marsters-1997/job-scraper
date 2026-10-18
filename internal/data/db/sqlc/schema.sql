@@ -93,7 +93,6 @@ CREATE TABLE IF NOT EXISTS applications (
     user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id      UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     status_id   UUID        REFERENCES application_statuses(id) ON DELETE SET NULL,
-    notes       TEXT,
     applied_at  DATE,
     salary_info TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -562,6 +561,23 @@ CREATE TABLE IF NOT EXISTS recruiter_contacts (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX recruiter_contacts_user_job_idx ON recruiter_contacts (user_id, job_id, contacted_on DESC);
+
+CREATE TABLE IF NOT EXISTS job_notes (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    body       TEXT        NOT NULL
+        CONSTRAINT job_notes_body_check CHECK (length(body) BETWEEN 1 AND 10000),
+    quote        TEXT
+        CONSTRAINT job_notes_quote_check CHECK (length(quote) BETWEEN 1 AND 2000),
+    quote_prefix TEXT NOT NULL DEFAULT ''
+        CONSTRAINT job_notes_quote_prefix_check CHECK (length(quote_prefix) <= 64),
+    quote_suffix TEXT NOT NULL DEFAULT ''
+        CONSTRAINT job_notes_quote_suffix_check CHECK (length(quote_suffix) <= 64),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX job_notes_user_job_idx ON job_notes (user_id, job_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS task_types (
     id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

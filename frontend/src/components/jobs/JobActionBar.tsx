@@ -46,7 +46,6 @@ export function JobActionBar(props: JobActionBarProps) {
 			data: {
 				status_id: status.ID,
 				applied_at,
-				notes: app.Notes,
 				salary_info: app.SalaryInfo,
 			},
 		});

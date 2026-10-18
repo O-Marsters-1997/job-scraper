@@ -169,7 +169,6 @@ type Application struct {
 	UserID     pgtype.UUID
 	JobID      pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 	CreatedAt  pgtype.Timestamptz
@@ -384,6 +383,18 @@ type JobGrade struct {
 	ScoreModel   pgtype.Text
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+}
+
+type JobNote struct {
+	ID          pgtype.UUID
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	Body        string
+	Quote       pgtype.Text
+	QuotePrefix string
+	QuoteSuffix string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type JobRejection struct {

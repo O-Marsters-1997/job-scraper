@@ -75,7 +75,6 @@ func (s *Store) CreateApplication(ctx context.Context, userID string, input dto.
 			UserID:     uid,
 			JobID:      jid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})
@@ -151,7 +150,6 @@ func (s *Store) UpdateApplication(ctx context.Context, userID, id string, input 
 			ID:         aid,
 			UserID:     uid,
 			StatusID:   sid,
-			Notes:      data.Text(input.Notes),
 			AppliedAt:  appliedAt,
 			SalaryInfo: data.Text(input.SalaryInfo),
 		})
@@ -427,4 +425,84 @@ func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string,
 		}
 	}
 	return out, nil
+}
+
+func (s *Store) CreateJobNote(ctx context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	params := sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body}
+	if q := in.Quote; q != nil {
+		params.Quote = pgtype.Text{String: q.Exact, Valid: true}
+		params.QuotePrefix = q.Prefix
+		params.QuoteSuffix = q.Suffix
+	}
+	row, err := s.queries.CreateJobNote(ctx, params)
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "job_notes_job_id_fkey") {
+			return dto.JobNote{}, data.ErrNotFound
+		}
+		return dto.JobNote{}, fmt.Errorf("store.CreateJobNote: %w", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) ListJobNotes(ctx context.Context, userID, jobID string) ([]dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobNotesForJob(ctx, sqlc.ListJobNotesForJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobNotes: %w", err)
+	}
+	out := make([]dto.JobNote, len(rows))
+	for i, row := range rows {
+		out[i] = toJobNoteDTO(row)
+	}
+	return out, nil
+}
+
+func (s *Store) UpdateJobNote(ctx context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	nid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	row, err := s.queries.UpdateJobNoteBody(ctx, sqlc.UpdateJobNoteBodyParams{ID: nid, UserID: uid, Body: in.Body})
+	if err != nil {
+		return dto.JobNote{}, data.QueryErr("UpdateJobNoteBody", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) DeleteJobNote(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	nid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteJobNote(ctx, sqlc.DeleteJobNoteParams{ID: nid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteJobNote: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
 }

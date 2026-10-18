@@ -604,6 +604,10 @@ html[data-size="lg"] {
 	);
 }
 
+::highlight(job-note) {
+	background-color: color-mix(in oklch, var(--color-primary), transparent 75%);
+}
+
 /* Empty-state / section glow: centred ambient wash */
 .brand-ribbon-center {
 	width: 60%;

@@ -24,8 +24,10 @@ type FakeStore struct {
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
+	notes    map[string][]dto.JobNote
 
 	nextContact int
+	nextNote    int
 }
 
 func NewFakeStore() *FakeStore {
@@ -33,6 +35,7 @@ func NewFakeStore() *FakeStore {
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
 		contacts: make(map[string][]dto.RecruiterContact),
+		notes:    make(map[string][]dto.JobNote),
 	}
 }
 
@@ -47,7 +50,6 @@ func (f *FakeStore) CreateApplication(_ context.Context, userID string, in dto.C
 		UserID:     userID,
 		JobID:      in.JobID,
 		StatusID:   in.StatusID,
-		Notes:      in.Notes,
 		AppliedAt:  parseDate(in.AppliedAt),
 		SalaryInfo: in.SalaryInfo,
 	}
@@ -115,7 +117,7 @@ func parseDate(s *string) *time.Time {
 func toDetails(a dto.Application) dto.ApplicationWithDetails {
 	return dto.ApplicationWithDetails{
 		ID: a.ID, UserID: a.UserID, JobID: a.JobID, StatusID: a.StatusID,
-		Notes: a.Notes, AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo, ChaseBy: a.ChaseBy,
+		AppliedAt: a.AppliedAt, SalaryInfo: a.SalaryInfo, ChaseBy: a.ChaseBy,
 	}
 }
 
@@ -133,7 +135,6 @@ func (f *FakeStore) UpdateApplication(_ context.Context, userID, id string, in d
 		app.ChaseBy = nil
 	}
 	app.StatusID = in.StatusID
-	app.Notes = in.Notes
 	app.AppliedAt = parseDate(in.AppliedAt)
 	app.SalaryInfo = in.SalaryInfo
 	f.apps[id] = app
@@ -255,6 +256,53 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 		return cmp.Or(strings.Compare(b.ContactedOn, a.ContactedOn), b.CreatedAt.Compare(a.CreatedAt))
 	})
 	return out, nil
+}
+
+func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	f.nextNote++
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", f.nextNote), JobID: in.JobID, Body: in.Body, Quote: in.Quote, CreatedAt: now, UpdatedAt: now}
+	f.notes[userID] = append(f.notes[userID], n)
+	return n, nil
+}
+
+func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.JobNote{}
+	for _, n := range f.notes[userID] {
+		if n.JobID == jobID {
+			out = append(out, n)
+		}
+	}
+	slices.Reverse(out)
+	return out, nil
+}
+
+func (f *FakeStore) UpdateJobNote(_ context.Context, userID string, in dto.UpdateJobNoteInput) (dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, n := range f.notes[userID] {
+		if n.ID == in.ID {
+			n.Body, n.UpdatedAt = in.Body, time.Now()
+			f.notes[userID][i] = n
+			return n, nil
+		}
+	}
+	return dto.JobNote{}, data.ErrNotFound
+}
+
+func (f *FakeStore) DeleteJobNote(_ context.Context, userID, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	before := len(f.notes[userID])
+	f.notes[userID] = slices.DeleteFunc(f.notes[userID], func(n dto.JobNote) bool { return n.ID == id })
+	if len(f.notes[userID]) == before {
+		return data.ErrNotFound
+	}
+	return nil
 }
 
 var outcomeRank = map[dto.ContactOutcome]int{

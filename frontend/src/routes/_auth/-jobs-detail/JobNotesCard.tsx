@@ -1,0 +1,233 @@
+import { createEffect, createSignal, For, Show } from "solid-js";
+import { FormFeedback } from "@/components/FormFeedback";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+	useCreateJobNote,
+	useDeleteJobNote,
+	useJobNotes,
+	useUpdateJobNote,
+} from "@/hooks/useJobNotes";
+import { formatDate } from "@/lib/datetime";
+import { isOrphanedNote, scrollToHighlight } from "@/lib/noteHighlights";
+
+import {
+	JOB_NOTE_MAX_LENGTH,
+	type JobNote,
+	type NoteQuote,
+} from "@/types/jobNote";
+
+function NoteItem(props: { note: JobNote; jobId: string }) {
+	const update = useUpdateJobNote(() => props.jobId);
+	const remove = useDeleteJobNote(() => props.jobId);
+	const [editing, setEditing] = createSignal(false);
+	const [draft, setDraft] = createSignal("");
+
+	const startEdit = () => {
+		setDraft(props.note.Body);
+		setEditing(true);
+	};
+	const save = (e: SubmitEvent) => {
+		e.preventDefault();
+		update.mutate(
+			{ id: props.note.ID, body: draft() },
+			{ onSuccess: () => setEditing(false) },
+		);
+	};
+
+	return (
+		<li id={`job-note-${props.note.ID}`} class="flex flex-col gap-0.5">
+			<span class="font-mono text-xs tabular-nums text-muted">
+				{formatDate(props.note.CreatedAt)}
+				<Show when={props.note.UpdatedAt !== props.note.CreatedAt}>
+					{" "}
+					(edited)
+				</Show>
+			</span>
+			<Show when={props.note.Quote}>
+				{(q) => (
+					<>
+						<Quote
+							text={q().exact}
+							onClick={() => scrollToHighlight(props.note.ID)}
+						/>
+						<Show when={isOrphanedNote(props.note.ID)}>
+							<span class="text-xs text-muted">
+								passage no longer in description
+							</span>
+						</Show>
+					</>
+				)}
+			</Show>
+			<Show
+				when={editing()}
+				fallback={
+					<>
+						<p class="whitespace-pre-wrap break-words text-sm text-foreground">
+							{props.note.Body}
+						</p>
+						<FormFeedback
+							error={remove.isError ? "Could not delete the note." : null}
+						/>
+						<div class="flex gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								aria-label={`Edit note from ${formatDate(props.note.CreatedAt)}`}
+								onClick={startEdit}
+							>
+								Edit
+							</Button>
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								aria-label={`Delete note from ${formatDate(props.note.CreatedAt)}`}
+								disabled={remove.isPending}
+								onClick={() => remove.mutate(props.note.ID)}
+							>
+								Delete
+							</Button>
+						</div>
+					</>
+				}
+			>
+				<form onSubmit={save} class="flex flex-col gap-2">
+					<FormFeedback
+						error={update.isError ? "Could not save the note." : null}
+					/>
+					<Label for={`job-note-edit-${props.note.ID}`}>Edit note</Label>
+					<Textarea
+						id={`job-note-edit-${props.note.ID}`}
+						rows={3}
+						maxLength={JOB_NOTE_MAX_LENGTH}
+						value={draft()}
+						onInput={(e) => setDraft(e.currentTarget.value)}
+					/>
+					<div class="flex gap-2">
+						<Button
+							type="submit"
+							size="sm"
+							disabled={update.isPending || draft().length === 0}
+						>
+							Save
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							onClick={() => setEditing(false)}
+						>
+							Cancel
+						</Button>
+					</div>
+				</form>
+			</Show>
+		</li>
+	);
+}
+
+function Quote(props: { text: string; onClick?: () => void }) {
+	return (
+		<Show
+			when={props.onClick}
+			fallback={
+				<blockquote class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-sm text-muted">
+					{props.text}
+				</blockquote>
+			}
+		>
+			<button
+				type="button"
+				onClick={() => props.onClick?.()}
+				class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-left text-sm text-muted hover:text-foreground"
+			>
+				{props.text}
+			</button>
+		</Show>
+	);
+}
+
+export function JobNotesCard(props: {
+	jobId: string;
+	quote: NoteQuote | null;
+	onClearQuote: () => void;
+}) {
+	const notes = useJobNotes(() => props.jobId);
+	const create = useCreateJobNote(() => props.jobId);
+	const [body, setBody] = createSignal("");
+	let input!: HTMLTextAreaElement;
+
+	createEffect(() => {
+		if (props.quote) input.focus();
+	});
+
+	const submit = (e: SubmitEvent) => {
+		e.preventDefault();
+		create.mutate(
+			{ body: body(), quote: props.quote },
+			{
+				onSuccess: () => {
+					setBody("");
+					props.onClearQuote();
+				},
+			},
+		);
+	};
+
+	return (
+		<Card>
+			<CardHeader class="pb-2">
+				<CardTitle>Notes</CardTitle>
+			</CardHeader>
+			<CardContent class="gap-3">
+				<form onSubmit={submit} class="flex flex-col gap-2">
+					<FormFeedback
+						error={create.isError ? "Could not save the note." : null}
+					/>
+					<Show when={props.quote}>
+						{(q) => (
+							<div class="flex items-start justify-between gap-2">
+								<Quote text={q().exact} />
+								<Button
+									type="button"
+									size="sm"
+									variant="ghost"
+									onClick={props.onClearQuote}
+								>
+									Remove quote
+								</Button>
+							</div>
+						)}
+					</Show>
+					<Label for="job-note-body">Add note</Label>
+					<Textarea
+						id="job-note-body"
+						ref={input}
+						rows={3}
+						maxLength={JOB_NOTE_MAX_LENGTH}
+						value={body()}
+						onInput={(e) => setBody(e.currentTarget.value)}
+					/>
+					<Button
+						type="submit"
+						size="sm"
+						disabled={create.isPending || body().length === 0}
+					>
+						Save note
+					</Button>
+				</form>
+				<Show when={(notes.data?.length ?? 0) > 0}>
+					<ul class="flex flex-col gap-3">
+						<For each={notes.data}>
+							{(n) => <NoteItem note={n} jobId={props.jobId} />}
+						</For>
+					</ul>
+				</Show>
+			</CardContent>
+		</Card>
+	);
+}

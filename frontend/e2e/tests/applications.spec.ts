@@ -11,14 +11,13 @@ async function openFirstRowApplicationDialog(page: Page) {
 }
 
 test.describe("Applications", () => {
-	test("editing a status from /jobs keeps notes, applied date and salary", async ({
+	test("editing a status from /jobs keeps applied date and salary", async ({
 		page,
 		jobsPage,
 	}) => {
 		await jobsPage.goto();
 
 		let dialog = await openFirstRowApplicationDialog(page);
-		await dialog.getByLabel("Notes").fill("Spoke to the recruiter");
 		await dialog.getByLabel("Applied date").fill("2026-03-04");
 		await dialog.getByLabel("Salary / comp").fill("£90,000");
 		await dialog.getByLabel("Status").selectOption({ label: "Applied" });
@@ -31,9 +30,6 @@ test.describe("Applications", () => {
 		await expect(dialog).toBeHidden();
 
 		dialog = await openFirstRowApplicationDialog(page);
-		await expect(dialog.getByLabel("Notes")).toHaveValue(
-			"Spoke to the recruiter",
-		);
 		await expect(dialog.getByLabel("Applied date")).toHaveValue("2026-03-04");
 		await expect(dialog.getByLabel("Salary / comp")).toHaveValue("£90,000");
 	});
