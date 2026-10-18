@@ -84,13 +84,14 @@ func (g *Gate) Wait(ctx context.Context) error {
 }
 
 // Block makes Wait return ErrDeferred for the next d, or for the gate's blockFor when d is zero.
-func (g *Gate) Block(d time.Duration) {
+func (g *Gate) Block(d time.Duration) (until time.Time) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if d == 0 {
 		d = g.blockFor
 	}
 	g.blockedUntil = later(g.blockedUntil, g.now().Add(d))
+	return g.blockedUntil
 }
 
 func later(a, b time.Time) time.Time {
