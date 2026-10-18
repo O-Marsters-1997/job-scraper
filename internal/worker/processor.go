@@ -91,7 +91,7 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 			return fmt.Errorf("source %s cannot fetch details", task.Source)
 		}
 		ctx, fetches := proxy.WithCollector(ctx)
-		job, err := fetcher.GetDetails(ctx, task.URL)
+		job, err := fetcher.GetDetails(ctx, task.Card)
 		if errors.Is(err, sources.ErrGone) {
 			slog.WarnContext(ctx, "job is gone", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyURL, task.URL), slog.Any(logger.KeyErr, err))
 			return nil

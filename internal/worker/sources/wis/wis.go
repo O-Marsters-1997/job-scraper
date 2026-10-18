@@ -202,16 +202,16 @@ func (s *Scraper) FetchPage(ctx context.Context, cursor string) ([]dto.Job, stri
 	return jobs, fmt.Sprintf("%d:%d", page+1, totalPages), nil
 }
 
-func (s *Scraper) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+func (s *Scraper) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
 	referer := ""
 	if last := s.lastListing.Load(); last != nil {
 		referer = *last
 	}
-	body, err := s.get(ctx, url, referer)
+	body, err := s.get(ctx, card.URL, referer)
 	if err != nil {
 		return dto.Job{}, err
 	}
-	return ParseJobDetail(bytes.NewReader(body), url)
+	return ParseJobDetail(bytes.NewReader(body), card.URL)
 }
 
 func ParseTotalCount(r io.Reader) (int, error) {

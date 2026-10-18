@@ -30,8 +30,8 @@ import (
 
 type detailStub struct{ err error }
 
-func (d detailStub) GetDetails(_ context.Context, url string) (dto.Job, error) {
-	return dto.Job{Source: "wis", Title: "Job", URL: url}, d.err
+func (d detailStub) GetDetails(_ context.Context, card dto.Job) (dto.Job, error) {
+	return dto.Job{Source: "wis", Title: "Job", URL: card.URL}, d.err
 }
 
 const fetchedURL = "https://8.8.8.8/job"
@@ -45,7 +45,7 @@ func newFetchingDetailer(cache proxy.Cache) fetchingDetailer {
 	return fetchingDetailer{client: &http.Client{Transport: proxy.NewFetchTransport(upstream, cache)}}
 }
 
-func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, error) {
+func (d fetchingDetailer) GetDetails(ctx context.Context, card dto.Job) (dto.Job, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fetchedURL, nil)
 	if err != nil {
 		return dto.Job{}, err
@@ -55,7 +55,7 @@ func (d fetchingDetailer) GetDetails(ctx context.Context, url string) (dto.Job, 
 		return dto.Job{}, err
 	}
 	_ = resp.Body.Close()
-	return dto.Job{Source: "wis", Title: "Job", URL: url}, nil
+	return dto.Job{Source: "wis", Title: "Job", URL: card.URL}, nil
 }
 
 type pageSource struct{ next string }
