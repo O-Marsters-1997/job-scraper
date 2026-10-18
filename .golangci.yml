@@ -196,6 +196,10 @@ linters:
         linters:
           - gochecknoglobals
         text: '\b(FetchRequests|FetchBytes|FetchWireBytes|TargetsDisabled|\w+Desc)\b'
+      - path: ^internal/worker/discover/resolve\.go$
+        linters:
+          - gochecknoglobals
+        text: '\bseedPaths\b'
       - path: ^internal/detect/
         linters:
           - gochecknoglobals

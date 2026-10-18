@@ -13,7 +13,9 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/detect"
 )
 
-var careersLink = regexp.MustCompile(`(?i)careers|jobs`)
+var careersLink = regexp.MustCompile(`(?i)careers|jobs|join[- ]us|vacancies|work[- ]with[- ]us|opportunities`)
+
+var seedPaths = []string{"/careers", "/jobs", "/join-us", "/work-with-us", "/vacancies"}
 
 type GetFunc func(ctx context.Context, url string) ([]byte, error)
 
@@ -29,7 +31,8 @@ func ResolveDomain(ctx context.Context, get GetFunc, domain string) (Board, bool
 
 	hop := careersHop(doc, home)
 	if hop == "" {
-		return Board{}, false, nil
+		b, ok := probeSeedPaths(ctx, get, home)
+		return b, ok, nil
 	}
 	doc, body, err = fetchDoc(ctx, get, hop)
 	if err != nil {
@@ -37,6 +40,19 @@ func ResolveDomain(ctx context.Context, get GetFunc, domain string) (Board, bool
 	}
 	b, ok := findBoard(doc, body)
 	return b, ok, nil
+}
+
+func probeSeedPaths(ctx context.Context, get GetFunc, home string) (Board, bool) {
+	for _, path := range seedPaths {
+		doc, body, err := fetchDoc(ctx, get, home+path)
+		if err != nil {
+			continue
+		}
+		if b, ok := findBoard(doc, body); ok {
+			return b, true
+		}
+	}
+	return Board{}, false
 }
 
 func fetchDoc(ctx context.Context, get GetFunc, pageURL string) (*goquery.Document, []byte, error) {
@@ -75,7 +91,7 @@ func careersHop(doc *goquery.Document, home string) string {
 	if err != nil {
 		return ""
 	}
-	hop := ""
+	pathHop, textHop := "", ""
 	doc.Find("a[href]").EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		raw, _ := s.Attr("href")
 		ref, err := url.Parse(raw)
@@ -86,11 +102,17 @@ func careersHop(doc *goquery.Document, home string) string {
 		if abs.Scheme != "https" && abs.Scheme != "http" {
 			return true
 		}
-		if !careersLink.MatchString(abs.Path) && !careersLink.MatchString(strings.TrimSpace(s.Text())) {
-			return true
+		switch {
+		case careersLink.MatchString(abs.Path):
+			pathHop = abs.String()
+			return false
+		case textHop == "" && careersLink.MatchString(strings.TrimSpace(s.Text())):
+			textHop = abs.String()
 		}
-		hop = abs.String()
-		return false
+		return true
 	})
-	return hop
+	if pathHop != "" {
+		return pathHop
+	}
+	return textHop
 }
