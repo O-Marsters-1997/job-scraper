@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -18,12 +19,17 @@ import (
 
 type boardStoreStub struct {
 	board    dto.BoardPoll
+	claimErr error
 	state    string
 	snapshot dto.BoardSnapshot
 }
 
 func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
-	return s.board, nil
+	return s.board, s.claimErr
+}
+func (s *boardStoreStub) ReleaseBoardCheck(context.Context, string) error {
+	s.state = "released"
+	return nil
 }
 func (s *boardStoreStub) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) error {
 	s.snapshot = snapshot
@@ -85,6 +91,33 @@ func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBoardPollReleasesAScheduledCheckItCannotClaim(t *testing.T) {
+	t.Parallel()
+	t.Run("scheduled check is acked and released", func(t *testing.T) {
+		t.Parallel()
+		store := &boardStoreStub{claimErr: jobsearch.ErrBoardClaimUnavailable}
+		poller := scraper.NewBoardPoller(store, boardFetcherStub{}, &boardIngesterStub{})
+		if err := poller.PollBoard(t.Context(), "board", false); err != nil {
+			t.Errorf("PollBoard() = %v, want nil", err)
+		}
+		if store.state != "released" {
+			t.Errorf("board state = %q, want released", store.state)
+		}
+	})
+
+	t.Run("manual check errors without a release", func(t *testing.T) {
+		t.Parallel()
+		store := &boardStoreStub{claimErr: jobsearch.ErrBoardClaimUnavailable}
+		poller := scraper.NewBoardPoller(store, boardFetcherStub{}, &boardIngesterStub{})
+		if err := poller.PollBoard(t.Context(), "board", true); !errors.Is(err, jobsearch.ErrBoardClaimUnavailable) {
+			t.Errorf("PollBoard() = %v, want ErrBoardClaimUnavailable", err)
+		}
+		if store.state != "" {
+			t.Errorf("board state = %q, want untouched", store.state)
+		}
+	})
 }
 
 func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {

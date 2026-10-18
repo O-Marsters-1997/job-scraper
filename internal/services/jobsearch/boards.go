@@ -2,6 +2,7 @@ package jobsearch
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -37,11 +38,14 @@ func (s *Service) PublishBoardChecks(ctx context.Context, manual bool) error {
 }
 
 func (s *Service) publishBoardCheck(ctx context.Context, task queue.Task) error {
-	if err := s.queue.Publish(ctx, task); err != nil {
+	if task.Manual {
+		return s.queue.Publish(ctx, task)
+	}
+	if err := s.store.MarkBoardCheckPublished(ctx, task.BoardID); err != nil {
 		return err
 	}
-	if task.Manual {
-		return nil
+	if err := s.queue.Publish(ctx, task); err != nil {
+		return errors.Join(err, s.store.ReleaseBoardCheck(ctx, task.BoardID))
 	}
-	return s.store.MarkBoardCheckPublished(ctx, task.BoardID)
+	return nil
 }

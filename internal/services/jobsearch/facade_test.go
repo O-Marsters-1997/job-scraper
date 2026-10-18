@@ -107,6 +107,25 @@ func TestPublishBoardChecks(t *testing.T) {
 		}
 	})
 
+	t.Run("scheduled run retries a Board whose publish failed", func(t *testing.T) {
+		t.Parallel()
+		st, q := jobsearchtest.NewFakeStore(), &recordingQueue{}
+		verified, _ := seedBoards(t, st)
+		q.failFor = verified.ID
+		m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: q})
+
+		if err := m.PublishBoardChecks(t.Context(), false); err != nil {
+			t.Fatal(err)
+		}
+		q.failFor = ""
+		if err := m.PublishBoardChecks(t.Context(), false); err != nil {
+			t.Fatal(err)
+		}
+		if got := ids(q); !slices.Equal(got, []string{verified.ID}) {
+			t.Errorf("published = %v, want a retried task for %s", got, verified.ID)
+		}
+	})
+
 	t.Run("manual run publishes every active Board", func(t *testing.T) {
 		st, q := jobsearchtest.NewFakeStore(), &recordingQueue{}
 		verified, candidate := seedBoards(t, st)

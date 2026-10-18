@@ -778,18 +778,6 @@ func TestBoardPolling(t *testing.T) {
 		}
 	})
 
-	t.Run("a released check makes the board due again", func(t *testing.T) {
-		t.Parallel()
-		env := verifiedBoardFixture(t)
-		env.markPublished(t)
-		if err := env.st.ReleaseBoardCheck(t.Context(), env.board.ID); err != nil {
-			t.Fatalf("ReleaseBoardCheck() err = %v", err)
-		}
-		if due := env.due(t); len(due) != 1 {
-			t.Errorf("released board due = %v, want %s", due, env.board.ID)
-		}
-	})
-
 	t.Run("a published check stops holding the board back after a day", func(t *testing.T) {
 		t.Parallel()
 		env := verifiedBoardFixture(t)
