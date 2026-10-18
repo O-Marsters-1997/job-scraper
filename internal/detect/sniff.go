@@ -28,7 +28,7 @@ var sniffPatterns = []sniffPattern{
 
 func reservedSubdomain(label string) bool {
 	switch strings.ToLower(label) {
-	case "www", "jobs", "api", "app", "career", "careers", "support":
+	case "www", "jobs", "api", "app", "career", "careers", "support", "cdn", "static", "assets", "help", "blog", "status", "developers":
 		return true
 	}
 	return false

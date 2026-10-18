@@ -44,6 +44,9 @@ func ResolveDomain(ctx context.Context, get GetFunc, domain string) (Board, bool
 
 func probeSeedPaths(ctx context.Context, get GetFunc, home string) (Board, bool) {
 	for _, path := range seedPaths {
+		if ctx.Err() != nil {
+			break
+		}
 		doc, body, err := fetchDoc(ctx, get, home+path)
 		if err != nil {
 			continue
