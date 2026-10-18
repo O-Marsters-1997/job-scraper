@@ -29,28 +29,6 @@ type FakeStore struct {
 	nextContact int
 }
 
-func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	now := time.Now()
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
-	f.notes[userID] = append(f.notes[userID], n)
-	return n, nil
-}
-
-func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	out := []dto.JobNote{}
-	for _, n := range f.notes[userID] {
-		if n.JobID == jobID {
-			out = append(out, n)
-		}
-	}
-	slices.Reverse(out)
-	return out, nil
-}
-
 func NewFakeStore() *FakeStore {
 	return &FakeStore{
 		apps:     make(map[string]dto.Application),
@@ -281,7 +259,29 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	return out, nil
 }
 
-var outcomeRank = map[dto.ContactOutcome]int{
+func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
+	f.notes[userID] = append(f.notes[userID], n)
+	return n, nil
+}
+
+func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.JobNote{}
+	for _, n := range f.notes[userID] {
+		if n.JobID == jobID {
+			out = append(out, n)
+		}
+	}
+	slices.Reverse(out)
+	return out, nil
+}
+
+var outcomeRank =map[dto.ContactOutcome]int{
 	dto.OutcomeNoReply: 1, dto.OutcomeRejected: 2, dto.OutcomeSpoke: 3, dto.OutcomeSubmitted: 4,
 }
 
