@@ -24,6 +24,7 @@ func (b boards) ListUntrackedDiscoveredBoards(_ context.Context, uk bool, _ time
 }
 
 func TestHarvester(t *testing.T) {
+	t.Parallel()
 	lister := boards{
 		uk:     []dto.CompanyBoard{{Source: "ashby", BoardToken: "acme"}},
 		abroad: []dto.CompanyBoard{{Source: "greenhouse", BoardToken: "globex"}},
@@ -42,6 +43,7 @@ func TestHarvester(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			h := untracked.New(lister, tt.region)
 			got, err := h.Harvest(t.Context())
 			if err != nil {
