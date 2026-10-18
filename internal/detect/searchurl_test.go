@@ -68,6 +68,16 @@ func TestParseSearchURL(t *testing.T) {
 				Dropped: []string{"from", "vjk"},
 			},
 		},
+		{
+			name: "hiring.cafe keeps the search state as the value and drops paging",
+			url:  "https://hiring.cafe/classic?searchState=%7B%22sortBy%22%3A%22date%22%7D&page=2",
+			want: detect.SearchURL{
+				Source:  "hiringcafe",
+				Value:   `{"sortBy":"date"}`,
+				Filters: map[string]string{},
+				Dropped: []string{},
+			},
+		},
 	}
 	t.Run("parses", func(t *testing.T) {
 		for _, tt := range tests {
@@ -145,6 +155,11 @@ func TestBuildSearchURL(t *testing.T) {
 			name:   "indeed keywords and filters",
 			source: "indeed", value: "go", filters: map[string]string{"location": "London", "radius": "25"},
 			want: "https://uk.indeed.com/jobs?l=London&q=go&radius=25",
+		},
+		{
+			name:   "hiring.cafe search state",
+			source: "hiringcafe", value: `{"sortBy":"date"}`,
+			want: "https://hiringcafe.com/?searchState=%7B%22sortBy%22%3A%22date%22%7D",
 		},
 		{name: "source without a search page", source: "greenhouse", value: "acme", want: ""},
 	}
