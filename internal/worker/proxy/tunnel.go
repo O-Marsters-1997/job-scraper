@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,12 +32,17 @@ type Tunnel struct {
 	session   atomic.Pointer[string]
 	rotations atomic.Int64
 	source    string
+	allow     []string
 	closing   context.Context
 	stop      context.CancelFunc
 	handlers  sync.WaitGroup
 }
 
 func NewTunnel(source string) (*Tunnel, error) {
+	return NewRestrictedTunnel(source)
+}
+
+func NewRestrictedTunnel(source string, allowedHosts ...string) (*Tunnel, error) {
 	u, err := proxyURL(residentialEnvKey)
 	if err != nil {
 		return nil, err
@@ -45,7 +52,7 @@ func NewTunnel(source string) (*Tunnel, error) {
 		return nil, fmt.Errorf("listen tunnel: %w", err)
 	}
 	closing, stop := context.WithCancel(context.Background())
-	t := &Tunnel{listener: l, upstream: u, source: source, closing: closing, stop: stop}
+	t := &Tunnel{listener: l, upstream: u, source: source, allow: allowedHosts, closing: closing, stop: stop}
 	t.renewSession()
 	t.handlers.Go(t.serve)
 	return t, nil
@@ -108,6 +115,10 @@ func (t *Tunnel) handle(client net.Conn) {
 		writeStatus(client, http.StatusMethodNotAllowed)
 		return
 	}
+	if !t.permits(req.Host) || !t.permits(req.URL.Host) {
+		writeStatus(client, http.StatusForbidden)
+		return
+	}
 	upstream, err := t.dial(req)
 	if err != nil {
 		writeStatus(client, http.StatusBadGateway)
@@ -119,6 +130,20 @@ func (t *Tunnel) handle(client net.Conn) {
 		_ = upstream.Close()
 	})
 	_, _ = io.Copy(client, upstream)
+}
+
+func (t *Tunnel) permits(authority string) bool {
+	if len(t.allow) == 0 {
+		return true
+	}
+	host, _, err := net.SplitHostPort(authority)
+	if err != nil {
+		host = authority
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	return slices.ContainsFunc(t.allow, func(allowed string) bool {
+		return host == allowed || strings.HasSuffix(host, "."+allowed)
+	})
 }
 
 func (t *Tunnel) dial(req *http.Request) (net.Conn, error) {
