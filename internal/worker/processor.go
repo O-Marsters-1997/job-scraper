@@ -96,6 +96,9 @@ func (p *Processor) Process(ctx context.Context, task queue.Task) error {
 			slog.WarnContext(ctx, "job is gone", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyURL, task.URL), slog.Any(logger.KeyErr, err))
 			return nil
 		}
+		if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+			return &queue.DeferError{Until: until, Err: err}
+		}
 		if err != nil {
 			return err
 		}

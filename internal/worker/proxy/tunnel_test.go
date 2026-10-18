@@ -70,6 +70,26 @@ func openTunnel(t *testing.T, tun *proxy.Tunnel) (net.Conn, *bufio.Reader) {
 	return conn, br
 }
 
+func connectStatus(t *testing.T, tun *proxy.Tunnel, authority string) int {
+	t.Helper()
+	conn, err := new(net.Dialer).DialContext(t.Context(), "tcp", tun.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if _, err := io.WriteString(conn, "CONNECT "+authority+" HTTP/1.1\r\nHost: "+authority+"\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodConnect})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode
+}
+
 func roundTripThrough(t *testing.T, tun *proxy.Tunnel) {
 	t.Helper()
 	conn, br := openTunnel(t, tun)
@@ -121,6 +141,39 @@ func TestTunnel(t *testing.T) {
 			if got := testutil.ToFloat64(counter); got <= 0 {
 				t.Errorf("%s wire bytes = %v, want > 0", direction, got)
 			}
+		}
+	})
+
+	t.Run("a restricted tunnel refuses hosts off its allowlist", func(t *testing.T) {
+		upstream := newFakeProxy(t, connectEcho)
+		t.Setenv("DECODO_PROXY_URL", proxyEnv(upstream))
+		tun, err := proxy.NewRestrictedTunnel(t.Name(), "example.com")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := tun.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		tests := []struct {
+			host string
+			want int
+		}{
+			{"example.com:443", http.StatusOK},
+			{"cdn.example.com:443", http.StatusOK},
+			{"EXAMPLE.com.:443", http.StatusOK},
+			{"evil-example.com:443", http.StatusForbidden},
+			{"example.com.evil.test:443", http.StatusForbidden},
+			{"ads.test:443", http.StatusForbidden},
+		}
+		for _, tt := range tests {
+			if got := connectStatus(t, tun, tt.host); got != tt.want {
+				t.Errorf("CONNECT %s = %d, want %d", tt.host, got, tt.want)
+			}
+		}
+		if got := upstream.hits(); got != 3 {
+			t.Errorf("upstream CONNECTs = %d, want 3: a refused host must never reach it", got)
 		}
 	})
 

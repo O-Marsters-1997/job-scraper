@@ -21,12 +21,16 @@ import (
 )
 
 const (
-	origin         = "https://hiringcafe.com"
-	sourceName     = "hiringcafe"
-	clearTimeout   = 45 * time.Second
-	clearPoll      = time.Second
-	fetchScript    = `async (u) => { const r = await fetch(u, {credentials: 'include'}); return {status: r.status, body: await r.text()}; }`
-	nextDataScript = `() => document.querySelector('script#__NEXT_DATA__')?.textContent ?? ''`
+	origin           = "https://hiringcafe.com"
+	sourceName       = "hiringcafe"
+	clearTimeout     = 45 * time.Second
+	clearPoll        = time.Second
+	fetchScript      = `async (u) => { const r = await fetch(u, {credentials: 'include'}); return {status: r.status, type: r.headers.get('content-type') ?? '', mitigated: r.headers.get('cf-mitigated') ?? '', server: r.headers.get('server') ?? '', body: await r.text()}; }`
+	refusalBodyBytes = 200
+	bodyTextScript   = `() => document.body?.innerText ?? ''`
+
+	cloudflareChallengeCode = "cloudflare_challenge"
+	nextDataScript          = `() => document.querySelector('script#__NEXT_DATA__')?.textContent ?? ''`
 )
 
 var errChallenged = errors.New("cloudflare challenge")
@@ -89,7 +93,7 @@ func (c *Chrome) Search(ctx context.Context, state json.RawMessage, page int) ([
 			PageProps json.RawMessage `json:"pageProps"`
 		}
 		if err := json.Unmarshal(body, &env); err != nil || len(env.PageProps) == 0 {
-			return nil, errChallenged
+			return nil, fmt.Errorf("%w: %s has no pageProps", errChallenged, path)
 		}
 		return env.PageProps, nil
 	})
@@ -105,14 +109,7 @@ func (c *Chrome) Description(ctx context.Context, id string) ([]byte, error) {
 		if c.page == nil {
 			return nil, errChallenged
 		}
-		body, err := c.fetch(ctx, "/api/job-description?id="+url.QueryEscape(id))
-		if err != nil {
-			return nil, err
-		}
-		if !json.Valid(body) {
-			return nil, errChallenged
-		}
-		return body, nil
+		return c.document(ctx, "/api/job-description?id="+url.QueryEscape(id))
 	})
 }
 
@@ -135,6 +132,10 @@ func (c *Chrome) recoverWith(ctx context.Context, op func() ([]byte, error)) ([]
 		out, err = c.load(ctx, c.state)
 		if err == nil && op != nil {
 			out, err = op()
+			if errors.Is(err, errChallenged) {
+				err = fmt.Errorf("refused on a freshly loaded page: %w", err)
+				break
+			}
 		}
 		if !errors.Is(err, errChallenged) {
 			return out, err
@@ -142,8 +143,8 @@ func (c *Chrome) recoverWith(ctx context.Context, op func() ([]byte, error)) ([]
 	}
 	c.stats.Challenges++
 	c.gate.Block(0)
-	if err := c.gate.Wait(ctx); err != nil {
-		return nil, err
+	if waitErr := c.gate.Wait(ctx); waitErr != nil {
+		return nil, fmt.Errorf("%w: %w", waitErr, err)
 	}
 	return nil, errors.New("hiring.cafe challenge persists")
 }
@@ -200,6 +201,41 @@ func (c *Chrome) load(ctx context.Context, state json.RawMessage) ([]byte, error
 	}
 }
 
+func (c *Chrome) document(ctx context.Context, path string) ([]byte, error) {
+	if err := c.gate.Wait(ctx); err != nil {
+		return nil, err
+	}
+	page := c.page.Context(ctx)
+	if err := page.Navigate(origin + path); err != nil {
+		return nil, fmt.Errorf("navigate: %w", err)
+	}
+	deadline := time.Now().Add(clearTimeout)
+	var seen string
+	for {
+		res, err := page.Eval(bodyTextScript)
+		if err == nil {
+			seen = res.Value.Str()
+			var probe struct {
+				Code string `json:"code"`
+			}
+			if json.Unmarshal([]byte(seen), &probe) == nil {
+				if probe.Code == cloudflareChallengeCode {
+					return nil, fmt.Errorf("%w: %s answered with the json challenge %q", errChallenged, path, seen[:min(len(seen), refusalBodyBytes)])
+				}
+				return []byte(seen), nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("%w: %s not json after %s body %q", errChallenged, path, clearTimeout, seen[:min(len(seen), refusalBodyBytes)])
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(clearPoll):
+		}
+	}
+}
+
 func (c *Chrome) fetch(ctx context.Context, path string) ([]byte, error) {
 	if err := c.gate.Wait(ctx); err != nil {
 		return nil, err
@@ -209,13 +245,18 @@ func (c *Chrome) fetch(ctx context.Context, path string) ([]byte, error) {
 		return nil, fmt.Errorf("fetch in page: %w", err)
 	}
 	status := res.Value.Get("status").Int()
+	body := res.Value.Get("body").Str()
+	if status == 200 {
+		return []byte(body), nil
+	}
+	refusal := fmt.Sprintf("%s status %d content-type %q cf-mitigated %q server %q body %q",
+		path, status, res.Value.Get("type").Str(), res.Value.Get("mitigated").Str(),
+		res.Value.Get("server").Str(), body[:min(len(body), refusalBodyBytes)])
 	switch {
-	case status == 200:
-		return []byte(res.Value.Get("body").Str()), nil
 	case status == 403, status == 429, status == 503, status == 404 && strings.HasPrefix(path, "/_next/"):
-		return nil, errChallenged
+		return nil, fmt.Errorf("%w: %s", errChallenged, refusal)
 	default:
-		return nil, fmt.Errorf("hiring.cafe %s: status %d", path, status)
+		return nil, fmt.Errorf("hiring.cafe %s", refusal)
 	}
 }
 
@@ -224,14 +265,17 @@ func (c *Chrome) launch() error {
 		return nil
 	}
 	if c.tunnel == nil {
-		t, err := proxy.NewTunnel(sourceName)
+		t, err := proxy.NewRestrictedTunnel(sourceName, "hiringcafe.com", "challenges.cloudflare.com")
 		if err != nil {
 			return fmt.Errorf("start tunnel: %w", err)
 		}
 		c.tunnel = t
 	}
 	bin, _ := launcher.LookPath()
-	wsURL, err := launcher.New().Bin(bin).Headless(true).Proxy("http://" + c.tunnel.Addr()).Launch()
+	wsURL, err := launcher.New().Bin(bin).Headless(true).Proxy("http://"+c.tunnel.Addr()).
+		Set("disable-component-update").
+		Set("disable-features", "site-per-process", "TranslateUI", "OptimizationHints", "OptimizationGuideModelDownloading", "AutofillServerCommunication").
+		Launch()
 	if err != nil {
 		return fmt.Errorf("launch chrome: %w", err)
 	}

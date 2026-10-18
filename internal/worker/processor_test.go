@@ -206,6 +206,7 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 			"indeed":   newFetchingDetailer(store),
 			"linkedin": detailStub{err: errors.New("page gone")},
 			"gone":     detailStub{err: fmt.Errorf("%w: status 404", sources.ErrGone)},
+			"blocked":  detailStub{err: &sources.DeferredError{Until: time.Now().Add(10 * time.Minute)}},
 		},
 	})
 	return fixture{store: store, processor: processor, ingest: in, published: published}
@@ -887,6 +888,19 @@ func TestProcessRateLimit(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("a blocked gate defers the detail task", func(t *testing.T) {
+		t.Parallel()
+		f := newFixture(t, http.StatusOK, "")
+		err := f.processor.Process(t.Context(), queuetest.DetailTask("blocked"))
+		var deferred *queue.DeferError
+		if !errors.As(err, &deferred) {
+			t.Fatalf("Process() = %v, want a deferral", err)
+		}
+		if got := f.ingest.requests.Load(); got != 0 {
+			t.Errorf("ingest requests = %d, want 0", got)
+		}
+	})
 
 	t.Run("a deferred first page resumes and clears the wait", func(t *testing.T) {
 		f := newFixture(t, http.StatusOK, "")
