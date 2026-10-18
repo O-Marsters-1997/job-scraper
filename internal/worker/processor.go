@@ -79,7 +79,7 @@ type Processor struct {
 }
 
 func NewProcessor(d Deps) *Processor {
-	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify, log: d.Logger}
+	return &Processor{js: d.JS, broker: d.Broker, orchestrator: d.Orchestrator, boards: d.Boards, detailers: d.Detailers, cardComplete: d.CardComplete, exporter: d.Exporter, maxPages: d.MaxPages, scoring: d.Scoring, discover: d.Discover, verify: d.Verify, log: cmp.Or(d.Logger, slog.New(slog.DiscardHandler))}
 }
 
 func (p *Processor) Process(ctx context.Context, task queue.Task) error {
@@ -392,7 +392,7 @@ func (p *Processor) processBoard(ctx context.Context, task queue.Task) error {
 		if !errors.Is(err, sources.ErrUnparseable) {
 			return err
 		}
-		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String("board_id", task.BoardID), slog.Any(logger.KeyErr, err))
+		p.log.WarnContext(ctx, "board page unparseable", slog.String(logger.KeySource, task.Source), slog.String(logger.KeyBoardID, task.BoardID), slog.Any(logger.KeyErr, err))
 		if task.TargetID == "" {
 			return nil
 		}
