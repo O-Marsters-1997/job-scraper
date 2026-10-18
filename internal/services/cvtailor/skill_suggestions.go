@@ -3,6 +3,7 @@ package cvtailor
 import (
 	"cmp"
 	"context"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -39,23 +40,31 @@ func (s *Service) SkillSuggestions(ctx context.Context, userID string, q dto.Ski
 	if err != nil {
 		return dto.SkillSuggestions{}, err
 	}
-	return placeSkills(doc.Skills.Lines, missing, answers), nil
+	return placeSkills(doc.Skills.Lines, bank, missing, answers), nil
 }
 
 func missingBankSkills(bank []dto.BankSkill, lines []docparse.SkillLine) []dto.BankSkill {
-	have := map[string]bool{}
-	for _, l := range lines {
-		for _, item := range l.Items {
-			have[strings.ToLower(item)] = true
-		}
-	}
 	var out []dto.BankSkill
 	for _, b := range bank {
-		if !have[strings.ToLower(b.Name)] {
+		if lineWith(lines, b.Name) < 0 {
 			out = append(out, b)
 		}
 	}
 	return out
+}
+
+func lineWith(lines []docparse.SkillLine, name string) int {
+	if strings.TrimSpace(name) == "" {
+		return -1
+	}
+	return slices.IndexFunc(lines, func(l docparse.SkillLine) bool {
+		return slices.ContainsFunc(l.Items, func(item string) bool { return containsWord(item, name) })
+	})
+}
+
+func containsWord(text, word string) bool {
+	re := regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])` + regexp.QuoteMeta(strings.TrimSpace(word)) + `(?:$|[^\p{L}\p{N}])`)
+	return re.MatchString(text)
 }
 
 func skillQuestions(missing []dto.BankSkill, lines []docparse.SkillLine) []string {
@@ -83,7 +92,21 @@ func skillLean(answers map[string]dto.Answer, name string) float64 {
 	return a.PYes - a.PNo
 }
 
-func placeSkills(lines []docparse.SkillLine, missing []dto.BankSkill, answers map[string]dto.Answer) dto.SkillSuggestions {
+func placementLine(lines []docparse.SkillLine, bank []dto.BankSkill, b dto.BankSkill) int {
+	if strings.TrimSpace(b.Category) == "" {
+		return -1
+	}
+	for _, mate := range bank {
+		if mate.ID != b.ID && strings.EqualFold(mate.Category, b.Category) {
+			if i := lineWith(lines, mate.Name); i >= 0 {
+				return i
+			}
+		}
+	}
+	return slices.IndexFunc(lines, func(l docparse.SkillLine) bool { return containsWord(l.Label, b.Category) })
+}
+
+func placeSkills(lines []docparse.SkillLine, bank, missing []dto.BankSkill, answers map[string]dto.Answer) dto.SkillSuggestions {
 	out := dto.SkillSuggestions{Lines: make([]dto.SkillLineSuggestion, len(lines)), Unplaced: []dto.SkillCandidate{}}
 	for i, l := range lines {
 		out.Lines[i] = dto.SkillLineSuggestion{Label: l.Label, Base: make([]dto.SkillItem, len(l.Items)), Candidates: []dto.SkillCandidate{}}
@@ -95,7 +118,7 @@ func placeSkills(lines []docparse.SkillLine, missing []dto.BankSkill, answers ma
 	for _, b := range missing {
 		lean := skillLean(answers, b.Name)
 		c := dto.SkillCandidate{BankSkillID: b.ID, Name: b.Name, Score: lean, State: suggestionState(lean)}
-		i := slices.IndexFunc(lines, func(l docparse.SkillLine) bool { return strings.EqualFold(l.Label, b.Category) })
+		i := placementLine(lines, bank, b)
 		if i < 0 {
 			out.Unplaced = append(out.Unplaced, c)
 			continue
