@@ -281,7 +281,7 @@ func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto
 	return out, nil
 }
 
-var outcomeRank =map[dto.ContactOutcome]int{
+var outcomeRank = map[dto.ContactOutcome]int{
 	dto.OutcomeNoReply: 1, dto.OutcomeRejected: 2, dto.OutcomeSpoke: 3, dto.OutcomeSubmitted: 4,
 }
 
