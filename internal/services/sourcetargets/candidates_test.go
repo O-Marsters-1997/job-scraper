@@ -102,6 +102,7 @@ func TestCapturePage(t *testing.T) {
 	})
 
 	t.Run("keeps LinkedIn cards whose verified board has never been polled", func(t *testing.T) {
+		t.Parallel()
 		q := queuetest.NewRecorder()
 		boards := verifiedBoards{{CompanySlug: "platformed", Source: "wttj", BoardToken: "Platformed"}}
 		svc := sourcetargets.New(jobsearchtest.NewFakeStore(), fakeSearchConfigReader{}, q, boards, sourcetargets.DefaultMaxAutomatic)
