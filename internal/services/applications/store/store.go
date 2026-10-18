@@ -438,7 +438,13 @@ func (s *Store) CreateJobNote(ctx context.Context, userID string, in dto.CreateJ
 	if err != nil {
 		return dto.JobNote{}, err
 	}
-	row, err := s.queries.CreateJobNote(ctx, sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body})
+	params := sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body}
+	if q := in.Quote; q != nil {
+		params.Quote = pgtype.Text{String: q.Exact, Valid: true}
+		params.QuotePrefix = q.Prefix
+		params.QuoteSuffix = q.Suffix
+	}
+	row, err := s.queries.CreateJobNote(ctx, params)
 	if err != nil {
 		if data.IsForeignKeyViolation(err, "job_notes_job_id_fkey") {
 			return dto.JobNote{}, data.ErrNotFound

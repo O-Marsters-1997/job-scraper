@@ -569,6 +569,12 @@ CREATE TABLE IF NOT EXISTS job_notes (
     job_id     UUID        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
     body       TEXT        NOT NULL
         CONSTRAINT job_notes_body_check CHECK (length(body) BETWEEN 1 AND 10000),
+    quote        TEXT
+        CONSTRAINT job_notes_quote_check CHECK (length(quote) BETWEEN 1 AND 2000),
+    quote_prefix TEXT NOT NULL DEFAULT ''
+        CONSTRAINT job_notes_quote_prefix_check CHECK (length(quote_prefix) <= 64),
+    quote_suffix TEXT NOT NULL DEFAULT ''
+        CONSTRAINT job_notes_quote_suffix_check CHECK (length(quote_suffix) <= 64),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

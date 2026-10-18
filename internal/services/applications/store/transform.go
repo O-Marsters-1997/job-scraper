@@ -98,13 +98,17 @@ func fromInt4(n pgtype.Int4) *int {
 }
 
 func toJobNoteDTO(n sqlc.JobNote) dto.JobNote {
-	return dto.JobNote{
+	note := dto.JobNote{
 		ID:        n.ID.String(),
 		JobID:     n.JobID.String(),
 		Body:      n.Body,
 		CreatedAt: n.CreatedAt.Time,
 		UpdatedAt: n.UpdatedAt.Time,
 	}
+	if n.Quote.Valid {
+		note.Quote = &dto.NoteQuote{Exact: n.Quote.String, Prefix: n.QuotePrefix, Suffix: n.QuoteSuffix}
+	}
+	return note
 }
 
 func toRecruiterContactDTO(c sqlc.RecruiterContact) dto.RecruiterContact {

@@ -12,25 +12,38 @@ import (
 )
 
 const createJobNote = `-- name: CreateJobNote :one
-INSERT INTO job_notes (user_id, job_id, body)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, job_id, body, created_at, updated_at
+INSERT INTO job_notes (user_id, job_id, body, quote, quote_prefix, quote_suffix)
+VALUES ($1, $2, $3, $6, $4, $5)
+RETURNING id, user_id, job_id, body, quote, quote_prefix, quote_suffix, created_at, updated_at
 `
 
 type CreateJobNoteParams struct {
-	UserID pgtype.UUID
-	JobID  pgtype.UUID
-	Body   string
+	UserID      pgtype.UUID
+	JobID       pgtype.UUID
+	Body        string
+	QuotePrefix string
+	QuoteSuffix string
+	Quote       pgtype.Text
 }
 
 func (q *Queries) CreateJobNote(ctx context.Context, arg CreateJobNoteParams) (JobNote, error) {
-	row := q.db.QueryRow(ctx, createJobNote, arg.UserID, arg.JobID, arg.Body)
+	row := q.db.QueryRow(ctx, createJobNote,
+		arg.UserID,
+		arg.JobID,
+		arg.Body,
+		arg.QuotePrefix,
+		arg.QuoteSuffix,
+		arg.Quote,
+	)
 	var i JobNote
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.JobID,
 		&i.Body,
+		&i.Quote,
+		&i.QuotePrefix,
+		&i.QuoteSuffix,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -38,7 +51,7 @@ func (q *Queries) CreateJobNote(ctx context.Context, arg CreateJobNoteParams) (J
 }
 
 const listJobNotesForJob = `-- name: ListJobNotesForJob :many
-SELECT id, user_id, job_id, body, created_at, updated_at FROM job_notes
+SELECT id, user_id, job_id, body, quote, quote_prefix, quote_suffix, created_at, updated_at FROM job_notes
 WHERE user_id = $1 AND job_id = $2
 ORDER BY created_at DESC, id DESC
 LIMIT 1000
@@ -63,6 +76,9 @@ func (q *Queries) ListJobNotesForJob(ctx context.Context, arg ListJobNotesForJob
 			&i.UserID,
 			&i.JobID,
 			&i.Body,
+			&i.Quote,
+			&i.QuotePrefix,
+			&i.QuoteSuffix,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

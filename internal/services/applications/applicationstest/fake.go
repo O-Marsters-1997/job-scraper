@@ -263,7 +263,7 @@ func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.Creat
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	now := time.Now()
-	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, Quote: in.Quote, CreatedAt: now, UpdatedAt: now}
 	f.notes[userID] = append(f.notes[userID], n)
 	return n, nil
 }
