@@ -59,6 +59,14 @@ var searchBoards = []boardSpec{
 		dropped:       []string{"vjk", "from", "advn", "vjs", "sc"},
 		silent:        []string{"start"},
 	},
+	{
+		source:        "hiringcafe",
+		hosts:         []string{"hiringcafe.com", "hiring.cafe"},
+		paths:         []string{"", "/classic"},
+		canonical:     "https://hiringcafe.com/",
+		keywordsParam: "searchState",
+		silent:        []string{"page"},
+	},
 }
 
 var unsupportedBoards = []struct {
@@ -130,7 +138,7 @@ func UnsupportedBoard(raw string) (label string, ok bool) {
 	return "", false
 }
 
-// ParseSearchURL reduces a pasted LinkedIn, Indeed or Work in Startups search
+// ParseSearchURL reduces a pasted LinkedIn, Indeed, hiring.cafe or Work in Startups search
 // URL to its source, keyword query and named filters. Params the adapter would
 // not use are reported in Dropped; paging params are discarded silently.
 func ParseSearchURL(raw string) (SearchURL, bool) {

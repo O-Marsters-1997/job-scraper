@@ -185,6 +185,7 @@ var entries = []registryEntry{
 			{Value: "9", Label: "$200,000+"},
 		}},
 	}},
+	{name: "hiringcafe", label: "hiring.cafe", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://hiringcafe.com"},
 	{name: "indeed", label: "Indeed", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://uk.indeed.com", cardComplete: true, filters: []FilterField{
 		{Name: "location", Param: "l", Label: "Location"},
 		{Name: "radius", Param: "radius", Label: "Radius", Options: []FilterOption{

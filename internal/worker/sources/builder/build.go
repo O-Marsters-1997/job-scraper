@@ -4,6 +4,7 @@
 package builder
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -12,6 +13,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/ashby"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/greenhouse"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/hibob"
+	"github.com/ollymarsters/job-scraper/internal/worker/sources/hiringcafe"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/indeed"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/lever"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources/linkedin"
@@ -44,6 +46,7 @@ func New() *Builder { return &Builder{registry: newRegistry()} }
 
 func newRegistry() map[string]entry {
 	linkedinGate := linkedin.NewGate()
+	hiringcafeChrome := hiringcafe.NewChrome(hiringcafe.NewGate())
 	workableGate := workable.NewGate()
 	recruiteeGate := recruitee.NewGate()
 	wisGate := wis.NewGate()
@@ -64,6 +67,13 @@ func newRegistry() map[string]entry {
 		"indeed": {build: func(t dto.SourceTarget) sources.Source {
 			return indeed.New(t.Value, t.Filters, indeed.Recency(t.Filters["recency"], t.LastSucceededAt, time.Now()))
 		}},
+		"hiringcafe": {
+			build: func(t dto.SourceTarget) sources.Source {
+				state := hiringcafe.Recency(json.RawMessage(t.Value), t.LastSucceededAt, time.Now())
+				return hiringcafe.New(state, hiringcafeChrome)
+			},
+			detail: hiringcafe.New(nil, hiringcafeChrome),
+		},
 		"remoteok": {build: func(t dto.SourceTarget) sources.Source { return remoteok.New(t.Value) }},
 		"remotive": {build: func(t dto.SourceTarget) sources.Source { return remotive.New(t.Value) }},
 		"wis": {
