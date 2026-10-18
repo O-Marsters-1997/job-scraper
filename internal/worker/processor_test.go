@@ -91,6 +91,19 @@ func (s failingPage) FetchPage(context.Context, string) ([]dto.Job, string, erro
 	return nil, "", s.err
 }
 
+type blockedOnce struct {
+	err     error
+	blocked atomic.Bool
+}
+
+func (*blockedOnce) Cfg() sources.Config { return sources.Config{Name: "linkedin"} }
+func (s *blockedOnce) FetchPage(context.Context, string) ([]dto.Job, string, error) {
+	if s.blocked.CompareAndSwap(false, true) {
+		return nil, "", s.err
+	}
+	return []dto.Job{{URL: "https://example.com/job/1"}}, "", nil
+}
+
 type allNewURLs struct{}
 
 func (allNewURLs) NewURLs(_ context.Context, urls []string) ([]string, error) { return urls, nil }
@@ -158,6 +171,7 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 	exporter := scraper.NewAPIExporter(in.server.URL, "token").WithInitialBackoff(0)
 	published := queuetest.NewRecorder()
 	page := fetchingPage{client: newFetchingDetailer(store).client}
+	linkedin := &blockedOnce{err: &sources.DeferredError{Until: time.Now().Add(10 * time.Minute)}}
 	build := func(target dto.SourceTarget) (sources.Source, bool) {
 		switch target.Source {
 		case "fetching":
@@ -166,6 +180,10 @@ func newCappedFixture(t *testing.T, ingestStatus int, nextCursor string, maxPage
 			return failingPage{err: fmt.Errorf("indeed: %w", sources.ErrSourceKeyRejected)}, true
 		case "unavailable":
 			return failingPage{err: &sources.StatusError{Code: http.StatusInternalServerError, Status: "500"}}, true
+		case "limited":
+			return failingPage{err: &sources.StatusError{Code: http.StatusTooManyRequests, Status: "429", RetryAfter: time.Minute}}, true
+		case "linkedin":
+			return linkedin, true
 		case "fetchfail":
 			page.err = errors.New("page failed after fetch")
 			return page, true
@@ -839,6 +857,53 @@ func TestProcessRateLimit(t *testing.T) {
 			}
 		})
 	}
+
+	listings := []struct {
+		name   string
+		source string
+		want   time.Duration
+	}{
+		{"a 429 defers the listing page", "limited", time.Minute},
+		{"a blocked gate defers the listing page", "linkedin", 10 * time.Minute},
+	}
+	for _, tt := range listings {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t, http.StatusOK, "")
+			target := f.target(t, tt.source)
+			task := queuetest.ListingTask(tt.source)
+			task.TargetID, task.RunID = target.ID, target.RunID
+			start := time.Now()
+			err := f.processor.Process(t.Context(), task)
+			var deferred *queue.DeferError
+			if !errors.As(err, &deferred) {
+				t.Fatalf("Process() = %v, want a deferral", err)
+			}
+			if wait := deferred.Until.Sub(start); wait < tt.want-5*time.Second || wait > tt.want+5*time.Second {
+				t.Errorf("deferred for %v, want about %v", wait, tt.want)
+			}
+			got := f.runStatus(t, target)
+			if got.RunStatus != "running" || !strings.HasPrefix(got.LastRunError, "waiting until ") {
+				t.Errorf("run = %q %q, want running and waiting until …", got.RunStatus, got.LastRunError)
+			}
+		})
+	}
+
+	t.Run("a deferred first page resumes and clears the wait", func(t *testing.T) {
+		f := newFixture(t, http.StatusOK, "")
+		target := f.target(t, "linkedin")
+		task := queuetest.ListingTask("linkedin")
+		task.TargetID, task.RunID = target.ID, target.RunID
+		var deferred *queue.DeferError
+		if err := f.processor.Process(t.Context(), task); !errors.As(err, &deferred) {
+			t.Fatalf("first Process() = %v, want a deferral", err)
+		}
+		if err := f.processor.Process(t.Context(), task); err != nil {
+			t.Fatalf("second Process() = %v, want nil", err)
+		}
+		if got := f.runStatus(t, target); got.RunStatus != "succeeded" || got.LastRunError != "" {
+			t.Errorf("run = %q %q, want succeeded with no message", got.RunStatus, got.LastRunError)
+		}
+	})
 
 	boards := []struct {
 		name      string

@@ -298,6 +298,8 @@ func anyPasses(jobs []dto.Job, cfg dto.SearchConfig) bool {
 	return false
 }
 
+const waitingPrefix = "waiting until "
+
 func (p *Processor) currentTarget(ctx context.Context, task queue.Task) (dto.SourceTarget, bool, error) {
 	target, err := p.js.Targets().GetSourceTarget(ctx, task.TargetID)
 	if errors.Is(err, data.ErrNotFound) {
@@ -309,7 +311,8 @@ func (p *Processor) currentTarget(ctx context.Context, task queue.Task) (dto.Sou
 	if !target.Enabled || target.RunID != task.RunID || target.Source != task.Source || target.RunStatus == "succeeded" || target.RunStatus == "failed" {
 		return target, false, nil
 	}
-	if task.Cursor == "" && !task.Redelivered && !task.Recovery && target.RunStatus == "running" && time.Since(target.UpdatedAt) < 30*time.Minute {
+	deferred := strings.HasPrefix(target.LastRunError, waitingPrefix)
+	if task.Cursor == "" && !task.Redelivered && !task.Recovery && !deferred && target.RunStatus == "running" && time.Since(target.UpdatedAt) < 30*time.Minute {
 		return target, false, nil
 	}
 	return target, true, nil
@@ -328,6 +331,13 @@ func (p *Processor) processPage(ctx context.Context, task queue.Task) error {
 	next, err := p.orchestrator.ScrapePage(ctx, target, task.Cursor)
 	if errors.Is(err, sources.ErrSourceKeyRejected) {
 		return p.disableSource(ctx, task.Source, err)
+	}
+	if until, blocked := sources.BlockedUntil(err, time.Now()); blocked {
+		msg := waitingPrefix + until.Format(time.RFC3339)
+		if _, transitionErr := p.js.Targets().TransitionSourceTargetRun(ctx, target.ID, task.RunID, "running", msg); transitionErr != nil {
+			return transitionErr
+		}
+		return &queue.DeferError{Until: until, Err: err}
 	}
 	if err != nil {
 		return err
