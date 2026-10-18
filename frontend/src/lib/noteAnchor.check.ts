@@ -6,7 +6,6 @@ function page(html: string) {
 	const window = new Window();
 	const doc = window.document;
 	doc.body.innerHTML = html;
-	(globalThis as { NodeFilter?: unknown }).NodeFilter = window.NodeFilter;
 	return {
 		doc: doc as unknown as Document,
 		root: doc.body as unknown as Node,
@@ -63,3 +62,13 @@ function select(doc: Document, from: Node, a: number, to: Node, b: number) {
 		null,
 	);
 }
+
+{
+	const { doc, root } = page(`<p>${"a".repeat(2500)}END</p>`);
+	const t = doc.querySelector("p")?.firstChild as Node;
+	const q = quoteFromRange(root, select(doc, t, 0, t, 2500));
+	assert.equal(q.exact.length, 2000);
+	assert.equal(q.suffix, "a".repeat(30));
+}
+
+console.log("✓ noteAnchor checks passed");

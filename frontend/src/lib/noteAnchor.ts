@@ -1,11 +1,15 @@
 import type { NoteQuote } from "../types/jobNote";
 
-const CONTEXT = 30;
+const CONTEXT_CHARS = 30;
 const MAX_EXACT = 2000;
+const SHOW_TEXT = 4;
+
+function docOf(root: Node): Document {
+	return root.ownerDocument ?? (root as Document);
+}
 
 function textNodes(root: Node): Text[] {
-	const doc = root.ownerDocument ?? (root as Document);
-	const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const walker = docOf(root).createTreeWalker(root, SHOW_TEXT);
 	const nodes: Text[] = [];
 	for (let n = walker.nextNode(); n; n = walker.nextNode()) {
 		nodes.push(n as Text);
@@ -13,9 +17,12 @@ function textNodes(root: Node): Text[] {
 	return nodes;
 }
 
-function offsetOf(root: Node, container: Node, offset: number): number {
-	const doc = root.ownerDocument ?? (root as Document);
-	const head = doc.createRange();
+function textOf(nodes: Text[]): string {
+	return nodes.map((n) => n.data).join("");
+}
+
+function textOffsetOf(root: Node, container: Node, offset: number): number {
+	const head = docOf(root).createRange();
 	head.selectNodeContents(root);
 	head.setEnd(container, offset);
 	return head.toString().length;
@@ -52,21 +59,22 @@ function commonPrefix(a: string, b: string): number {
 }
 
 export function quoteFromRange(root: Node, range: Range): NoteQuote {
-	const text = textNodes(root)
-		.map((n) => n.data)
-		.join("");
-	const start = offsetOf(root, range.startContainer, range.startOffset);
-	const end = offsetOf(root, range.endContainer, range.endOffset);
+	const text = textOf(textNodes(root));
+	const start = textOffsetOf(root, range.startContainer, range.startOffset);
+	const end = Math.min(
+		textOffsetOf(root, range.endContainer, range.endOffset),
+		start + MAX_EXACT,
+	);
 	return {
-		exact: text.slice(start, Math.min(end, start + MAX_EXACT)),
-		prefix: text.slice(Math.max(0, start - CONTEXT), start),
-		suffix: text.slice(end, end + CONTEXT),
+		exact: text.slice(start, end),
+		prefix: text.slice(Math.max(0, start - CONTEXT_CHARS), start),
+		suffix: text.slice(end, end + CONTEXT_CHARS),
 	};
 }
 
 export function findQuote(root: Node, quote: NoteQuote): Range | null {
 	const nodes = textNodes(root);
-	const text = nodes.map((n) => n.data).join("");
+	const text = textOf(nodes);
 	if (!quote.exact) return null;
 
 	let best = -1;
@@ -88,8 +96,7 @@ export function findQuote(root: Node, quote: NoteQuote): Range | null {
 	}
 	if (best === -1) return null;
 
-	const doc = root.ownerDocument ?? (root as Document);
-	const range = doc.createRange();
+	const range = docOf(root).createRange();
 	const from = pointAt(nodes, best, false);
 	const to = pointAt(nodes, best + quote.exact.length, true);
 	range.setStart(from.node, from.offset);
