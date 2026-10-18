@@ -1,49 +1,42 @@
-import { createSignal } from "solid-js";
-
-const NAME = "job-note";
+const ALL = "job-comment";
+const ACTIVE = "job-comment-active";
 const ranges = new Map<string, Range>();
-const [highlightedIds, setHighlightedIds] = createSignal<Set<string> | null>(
-	null,
-);
 
-export function setNoteHighlights(next: Map<string, Range>) {
+function paint(name: string, list: Range[]) {
+	if (!("highlights" in CSS)) return;
+	if (list.length === 0) CSS.highlights.delete(name);
+	else CSS.highlights.set(name, new Highlight(...list));
+}
+
+export function setCommentHighlights(next: Map<string, Range>) {
 	ranges.clear();
 	for (const [id, r] of next) ranges.set(id, r);
-	setHighlightedIds(new Set(next.keys()));
-	if ("highlights" in CSS) {
-		CSS.highlights.set(NAME, new Highlight(...next.values()));
-	}
+	paint(ALL, [...next.values()]);
 }
 
-export function clearNoteHighlights() {
+export function setActiveComment(id: string | null) {
+	const r = id ? ranges.get(id) : undefined;
+	paint(ACTIVE, r ? [r] : []);
+}
+
+export function clearCommentHighlights() {
 	ranges.clear();
-	setHighlightedIds(null);
-	if ("highlights" in CSS) CSS.highlights.delete(NAME);
+	paint(ALL, []);
+	paint(ACTIVE, []);
 }
 
-export function isOrphanedNote(id: string): boolean {
-	const ids = highlightedIds();
-	return ids !== null && !ids.has(id);
+export function commentRange(id: string): Range | undefined {
+	return ranges.get(id);
 }
 
-export function noteIdAtCaret(): string | null {
-	const sel = document.getSelection();
-	if (!sel || !sel.isCollapsed || !sel.anchorNode) return null;
+export function commentIdAtPoint(x: number, y: number): string | null {
+	const pos = document.caretPositionFromPoint?.(x, y);
+	const fallback = pos ? null : document.caretRangeFromPoint?.(x, y);
+	const node = pos?.offsetNode ?? fallback?.startContainer;
+	const offset = pos?.offset ?? fallback?.startOffset ?? 0;
+	if (!node) return null;
 	for (const [id, r] of ranges) {
-		if (r.isPointInRange(sel.anchorNode, sel.anchorOffset)) return id;
+		if (r.isPointInRange(node, offset)) return id;
 	}
 	return null;
-}
-
-export function scrollToHighlight(id: string) {
-	ranges.get(id)?.startContainer.parentElement?.scrollIntoView({
-		block: "center",
-		behavior: "smooth",
-	});
-}
-
-export function scrollToNote(id: string) {
-	document
-		.getElementById(`job-note-${id}`)
-		?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }

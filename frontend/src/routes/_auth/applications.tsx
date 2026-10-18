@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
 import { createSignal, For, Show } from "solid-js";
 import {
 	TrackApplicationDialog,
@@ -181,9 +181,13 @@ function ApplicationsPage() {
 										)}
 									>
 										<div class="min-w-0 flex-1">
-											<p class="truncate text-sm font-medium text-foreground">
+											<Link
+												to="/applications/$id"
+												params={{ id: app.ID }}
+												class="block truncate text-sm font-medium text-foreground hover:underline"
+											>
 												{app.JobTitle}
-											</p>
+											</Link>
 											<p class="text-xs text-faint">
 												{app.JobCompanySlug}
 												{app.JobLocation ? ` · ${app.JobLocation}` : ""}

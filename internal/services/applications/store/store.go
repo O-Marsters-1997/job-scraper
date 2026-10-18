@@ -436,13 +436,7 @@ func (s *Store) CreateJobNote(ctx context.Context, userID string, in dto.CreateJ
 	if err != nil {
 		return dto.JobNote{}, err
 	}
-	params := sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body}
-	if q := in.Quote; q != nil {
-		params.Quote = pgtype.Text{String: q.Exact, Valid: true}
-		params.QuotePrefix = q.Prefix
-		params.QuoteSuffix = q.Suffix
-	}
-	row, err := s.queries.CreateJobNote(ctx, params)
+	row, err := s.queries.CreateJobNote(ctx, sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body})
 	if err != nil {
 		if data.IsForeignKeyViolation(err, "job_notes_job_id_fkey") {
 			return dto.JobNote{}, data.ErrNotFound
@@ -500,6 +494,87 @@ func (s *Store) DeleteJobNote(ctx context.Context, userID, id string) error {
 	n, err := s.queries.DeleteJobNote(ctx, sqlc.DeleteJobNoteParams{ID: nid, UserID: uid})
 	if err != nil {
 		return fmt.Errorf("store.DeleteJobNote: %w", err)
+	}
+	if n == 0 {
+		return data.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) CreateJobComment(ctx context.Context, userID string, in dto.CreateJobCommentInput) (dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	row, err := s.queries.CreateJobComment(ctx, sqlc.CreateJobCommentParams{
+		UserID:      uid,
+		JobID:       jid,
+		Body:        in.Body,
+		Quote:       in.Quote.Exact,
+		QuotePrefix: in.Quote.Prefix,
+		QuoteSuffix: in.Quote.Suffix,
+	})
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "job_comments_job_id_fkey") {
+			return dto.JobComment{}, data.ErrNotFound
+		}
+		return dto.JobComment{}, fmt.Errorf("store.CreateJobComment: %w", err)
+	}
+	return toJobCommentDTO(row), nil
+}
+
+func (s *Store) ListJobComments(ctx context.Context, userID, jobID string) ([]dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobCommentsForJob(ctx, sqlc.ListJobCommentsForJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobComments: %w", err)
+	}
+	out := make([]dto.JobComment, len(rows))
+	for i, row := range rows {
+		out[i] = toJobCommentDTO(row)
+	}
+	return out, nil
+}
+
+func (s *Store) UpdateJobComment(ctx context.Context, userID string, in dto.UpdateJobCommentInput) (dto.JobComment, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	cid, err := data.UUID(in.ID)
+	if err != nil {
+		return dto.JobComment{}, err
+	}
+	row, err := s.queries.UpdateJobCommentBody(ctx, sqlc.UpdateJobCommentBodyParams{ID: cid, UserID: uid, Body: in.Body})
+	if err != nil {
+		return dto.JobComment{}, data.QueryErr("UpdateJobCommentBody", err)
+	}
+	return toJobCommentDTO(row), nil
+}
+
+func (s *Store) DeleteJobComment(ctx context.Context, userID, id string) error {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return err
+	}
+	cid, err := data.UUID(id)
+	if err != nil {
+		return err
+	}
+	n, err := s.queries.DeleteJobComment(ctx, sqlc.DeleteJobCommentParams{ID: cid, UserID: uid})
+	if err != nil {
+		return fmt.Errorf("store.DeleteJobComment: %w", err)
 	}
 	if n == 0 {
 		return data.ErrNotFound

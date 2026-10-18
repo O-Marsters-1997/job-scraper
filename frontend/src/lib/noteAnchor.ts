@@ -1,4 +1,4 @@
-import type { NoteQuote } from "../types/jobNote";
+import type { CommentQuote } from "../types/jobComment";
 
 const CONTEXT_CHARS = 30;
 const MAX_EXACT = 2000;
@@ -58,7 +58,7 @@ function commonPrefix(a: string, b: string): number {
 	return n;
 }
 
-export function quoteFromRange(root: Node, range: Range): NoteQuote {
+export function quoteFromRange(root: Node, range: Range): CommentQuote {
 	const text = textOf(textNodes(root));
 	const start = textOffsetOf(root, range.startContainer, range.startOffset);
 	const end = Math.min(
@@ -72,7 +72,7 @@ export function quoteFromRange(root: Node, range: Range): NoteQuote {
 	};
 }
 
-export function findQuote(root: Node, quote: NoteQuote): Range | null {
+export function findQuote(root: Node, quote: CommentQuote): Range | null {
 	const nodes = textNodes(root);
 	const text = textOf(nodes);
 	if (!quote.exact) return null;

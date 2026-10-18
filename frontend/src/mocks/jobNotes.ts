@@ -1,4 +1,4 @@
-import type { JobNote, NoteQuote } from "@/types/jobNote";
+import type { JobNote } from "@/types/jobNote";
 
 let notes: JobNote[] = [];
 let nextId = 1;
@@ -7,17 +7,12 @@ export function getJobNotes(jobId: string): JobNote[] {
 	return notes.filter((n) => n.JobID === jobId).reverse();
 }
 
-export function createJobNote(
-	jobId: string,
-	body: string,
-	quote: NoteQuote | null,
-): JobNote {
+export function createJobNote(jobId: string, body: string): JobNote {
 	const now = new Date().toISOString();
 	const note: JobNote = {
 		ID: `note-${nextId++}`,
 		JobID: jobId,
 		Body: body,
-		Quote: quote,
 		CreatedAt: now,
 		UpdatedAt: now,
 	};

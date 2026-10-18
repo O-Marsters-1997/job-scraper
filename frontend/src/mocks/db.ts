@@ -4,6 +4,7 @@ export * from "./cvs";
 export * from "./experience";
 export * from "./favourites";
 export * from "./grades";
+export * from "./jobComments";
 export * from "./jobNotes";
 export * from "./jobPage";
 export * from "./jobs";

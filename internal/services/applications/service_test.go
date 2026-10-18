@@ -317,33 +317,56 @@ func TestCreateJobNote(t *testing.T) {
 		}
 	})
 
+}
+
+func TestCreateJobComment(t *testing.T) {
+	t.Parallel()
 	t.Run("keeps the quote", func(t *testing.T) {
 		t.Parallel()
 		svc, _ := newService(t)
-		quote := &dto.NoteQuote{Exact: strings.Repeat("é", 2000), Prefix: strings.Repeat("é", 64), Suffix: "after"}
-		got, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: quote})
+		quote := dto.CommentQuote{Exact: strings.Repeat("é", 2000), Prefix: strings.Repeat("é", 64), Suffix: "after"}
+		got, err := svc.CreateJobComment(t.Context(), userID, dto.CreateJobCommentInput{JobID: "job-1", Body: "why", Quote: quote})
 		if err != nil {
-			t.Fatalf("CreateJobNote(...) err = %v", err)
+			t.Fatalf("CreateJobComment(...) err = %v", err)
 		}
 		if diff := cmp.Diff(quote, got.Quote); diff != "" {
-			t.Errorf("CreateJobNote(...) quote mismatch (-want +got):\n%s", diff)
+			t.Errorf("CreateJobComment(...) quote mismatch (-want +got):\n%s", diff)
 		}
 	})
 
-	for name, quote := range map[string]dto.NoteQuote{
-		"empty quote":     {},
-		"oversize quote":  {Exact: strings.Repeat("é", 2001)},
-		"oversize prefix": {Exact: "x", Prefix: strings.Repeat("é", 65)},
-		"oversize suffix": {Exact: "x", Suffix: strings.Repeat("é", 65)},
+	for name, in := range map[string]dto.CreateJobCommentInput{
+		"empty body":      {Body: "", Quote: dto.CommentQuote{Exact: "x"}},
+		"oversize body":   {Body: strings.Repeat("é", 10001), Quote: dto.CommentQuote{Exact: "x"}},
+		"empty quote":     {Body: "why"},
+		"oversize quote":  {Body: "why", Quote: dto.CommentQuote{Exact: strings.Repeat("é", 2001)}},
+		"oversize prefix": {Body: "why", Quote: dto.CommentQuote{Exact: "x", Prefix: strings.Repeat("é", 65)}},
+		"oversize suffix": {Body: "why", Quote: dto.CommentQuote{Exact: "x", Suffix: strings.Repeat("é", 65)}},
 	} {
 		t.Run(name+" is rejected", func(t *testing.T) {
 			t.Parallel()
 			svc, _ := newService(t)
-			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: &quote})
+			in.JobID = "job-1"
+			_, err := svc.CreateJobComment(t.Context(), userID, in)
 			if !apperr.IsKind(err, apperr.KindInvalid) {
-				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+				t.Errorf("CreateJobComment(%s) err = %v, want invalid", name, err)
 			}
 		})
+	}
+}
+
+func TestUpdateJobComment(t *testing.T) {
+	t.Parallel()
+	svc, _ := newService(t)
+	created, err := svc.CreateJobComment(t.Context(), userID, dto.CreateJobCommentInput{JobID: "job-1", Body: "before", Quote: dto.CommentQuote{Exact: "x"}})
+	if err != nil {
+		t.Fatalf("CreateJobComment(...) err = %v", err)
+	}
+	if _, err := svc.UpdateJobComment(t.Context(), userID, dto.UpdateJobCommentInput{ID: created.ID, Body: ""}); !apperr.IsKind(err, apperr.KindInvalid) {
+		t.Errorf("UpdateJobComment(empty body) err = %v, want invalid", err)
+	}
+	got, err := svc.UpdateJobComment(t.Context(), userID, dto.UpdateJobCommentInput{ID: created.ID, Body: "after"})
+	if err != nil || got.Body != "after" {
+		t.Errorf("UpdateJobComment(...) = %+v, %v, want body after", got, err)
 	}
 }
 
