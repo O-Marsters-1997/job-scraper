@@ -1,14 +1,23 @@
-import { createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import JobDescription from "@/components/jobs/JobDescription";
 import { Button } from "@/components/ui/button";
-import { quoteFromRange } from "@/lib/noteAnchor";
+import { useJobNotes } from "@/hooks/useJobNotes";
+import { findQuote, quoteFromRange } from "@/lib/noteAnchor";
+import {
+	clearNoteHighlights,
+	noteIdAtCaret,
+	scrollToNote,
+	setNoteHighlights,
+} from "@/lib/noteHighlights";
 import type { NoteQuote } from "@/types/jobNote";
 
 export function CommentableDescription(props: {
 	html: string;
+	jobId: string;
 	onComment: (quote: NoteQuote) => void;
 }) {
 	let root!: HTMLDivElement;
+	const notes = useJobNotes(() => props.jobId);
 	const [range, setRange] = createSignal<Range | null>(null);
 	const [pos, setPos] = createSignal({ top: 0, left: 0 });
 
@@ -36,6 +45,26 @@ export function CommentableDescription(props: {
 	onCleanup(() =>
 		document.removeEventListener("selectionchange", onSelectionChange),
 	);
+
+	createEffect(() => {
+		void props.html;
+		const found = new Map<string, Range>();
+		for (const n of notes.data ?? []) {
+			const r = n.Quote && findQuote(root, n.Quote);
+			if (r) found.set(n.ID, r);
+		}
+		setNoteHighlights(found);
+	});
+	onCleanup(clearNoteHighlights);
+
+	onMount(() => {
+		const onClick = () => {
+			const id = noteIdAtCaret();
+			if (id) scrollToNote(id);
+		};
+		root.addEventListener("click", onClick);
+		onCleanup(() => root.removeEventListener("click", onClick));
+	});
 
 	const comment = () => {
 		const r = range();
