@@ -95,6 +95,7 @@ type Store interface {
 	PutFetch(ctx context.Context, resp dto.CachedResponse) error
 	ForgetFetches(ctx context.Context, urls []string) error
 	DeleteExpiredFetches(ctx context.Context) error
+	MarkBoardUKJobsSeen(ctx context.Context, source, token string) error
 	RecordDiscoverMiss(ctx context.Context, source, token string) error
 	DiscoverMissedSince(ctx context.Context, source, token string, since time.Time) (bool, error)
 }

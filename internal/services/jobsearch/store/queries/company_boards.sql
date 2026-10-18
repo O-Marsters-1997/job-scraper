@@ -25,6 +25,9 @@ SET status = 'verified', verification_method = $4, verified_at = NOW(), discover
 WHERE company_id = $1 AND source = $2 AND board_token = $3 AND status = 'candidate'
 RETURNING *;
 
+-- name: MarkBoardUKJobsSeen :exec
+UPDATE company_boards SET uk_jobs_seen_at = NOW() WHERE source = $1 AND board_token = $2;
+
 -- name: ListTrackedCompanyBoards :many
 SELECT cb.id, cb.company_id, cb.source, cb.board_token, cb.status
 FROM company_boards cb

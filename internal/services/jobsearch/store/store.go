@@ -1455,6 +1455,13 @@ func (s *Store) RenameCompany(ctx context.Context, id, name string) error {
 	return nil
 }
 
+func (s *Store) MarkBoardUKJobsSeen(ctx context.Context, source, token string) error {
+	if err := s.queries.MarkBoardUKJobsSeen(ctx, sqlc.MarkBoardUKJobsSeenParams{Source: source, BoardToken: token}); err != nil {
+		return fmt.Errorf("store.MarkBoardUKJobsSeen: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) VerifyCompanyBoard(ctx context.Context, companyID, source, token, method, via string) (dto.CompanyBoard, error) {
 	id, err := data.UUID(companyID)
 	if err != nil {

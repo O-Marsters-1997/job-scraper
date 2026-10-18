@@ -1198,6 +1198,19 @@ func (f *FakeStore) ForgetFetches(_ context.Context, urls []string) error {
 
 func (f *FakeStore) DeleteExpiredFetches(context.Context) error { return nil }
 
+func (f *FakeStore) MarkBoardUKJobsSeen(_ context.Context, source, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	for id, b := range f.boards {
+		if b.Source == source && b.BoardToken == token {
+			b.UKJobsSeenAt = &now
+			f.boards[id] = b
+		}
+	}
+	return nil
+}
+
 func (f *FakeStore) RecordDiscoverMiss(_ context.Context, source, token string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

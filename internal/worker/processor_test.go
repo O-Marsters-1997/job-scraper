@@ -646,6 +646,51 @@ func TestProcessBoardDiscover(t *testing.T) {
 		}
 	})
 
+	t.Run("UK gate", func(t *testing.T) {
+		t.Parallel()
+		nonUK := func(context.Context, string, string) (scraper.Discovery, error) {
+			return scraper.Discovery{Name: "Acme Corp", Recheck: true, Jobs: []dto.Job{{Title: "Go Engineer", Location: "Berlin"}}}, nil
+		}
+		for name, tc := range map[string]struct {
+			fn          worker.DiscoverFunc
+			requireUK   bool
+			wantTracked int
+			wantStamped bool
+		}{
+			"required-UK non-UK jobs verify but track nobody": {nonUK, true, 0, false},
+			"ingest-queued non-UK jobs are tracked":           {nonUK, false, 1, false},
+			"required-UK UK jobs are stamped and tracked":     {discover, true, 1, true},
+		} {
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				f := newFixture(t, http.StatusOK, "")
+				tk := task
+				tk.RequireUK = tc.requireUK
+				if err := f.discoverProcessor(tc.fn, configsStub{match}).Process(ctx, tk); err != nil {
+					t.Fatalf("Process() = %v, want nil", err)
+				}
+				tracked, err := f.store.ListTrackedCompaniesForUser(ctx, "match")
+				if err != nil || len(tracked) != tc.wantTracked {
+					t.Errorf("ListTrackedCompaniesForUser(match) = %+v, %v, want %d", tracked, err, tc.wantTracked)
+				}
+				company, err := f.store.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme Corp"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				boards, err := f.store.ListCompanyBoards(ctx, company.ID)
+				if err != nil || len(boards) != 1 {
+					t.Fatalf("ListCompanyBoards() = %+v, %v, want one board", boards, err)
+				}
+				if boards[0].Status != dto.BoardVerified {
+					t.Errorf("board status = %q, want verified", boards[0].Status)
+				}
+				if got := boards[0].UKJobsSeenAt != nil; got != tc.wantStamped {
+					t.Errorf("UKJobsSeenAt set = %v, want %v", got, tc.wantStamped)
+				}
+			})
+		}
+	})
+
 	t.Run("an ingest-queued task with no jobs records no miss and still verifies", func(t *testing.T) {
 		t.Parallel()
 		f := newFixture(t, http.StatusOK, "")
