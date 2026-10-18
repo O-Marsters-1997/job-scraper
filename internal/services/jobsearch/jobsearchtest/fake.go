@@ -59,6 +59,7 @@ type FakeStore struct {
 
 	candidates     map[string]sourcetargets.Candidate
 	candidateByURL map[string]string
+	discoveries    map[string]map[string]discovery
 	detailPending  map[string]bool
 	datedCards     map[string]dto.Job
 }
@@ -83,6 +84,7 @@ func NewFakeStore() *FakeStore {
 		targetByKey:    make(map[string]string),
 		candidates:     make(map[string]sourcetargets.Candidate),
 		candidateByURL: make(map[string]string),
+		discoveries:    make(map[string]map[string]discovery),
 		detailPending:  make(map[string]bool),
 		datedCards:     make(map[string]dto.Job),
 	}
@@ -1065,7 +1067,11 @@ func (f *FakeStore) SaveCards(_ context.Context, target dto.SourceTarget, cards 
 		card.Source = target.Source
 		cand := sourcetargets.Candidate{ID: id, URL: card.URL, Card: card}
 		out = append(out, cand)
-		if !sourcespec.CardComplete(target.Source) {
+		if f.discoveries[id] == nil {
+			f.discoveries[id] = map[string]discovery{}
+		}
+		f.discoveries[id][target.ID] = discovery{userID: target.UserID, filters: target.Filters}
+		if !sourcespec.CardComplete(target.Source) && card.RemoteCheckURL == "" && card.WorkArrangement == "" {
 			cand.Card = dto.Job{URL: card.URL, Title: card.Title, CompanySlug: card.CompanySlug, Location: card.Location, Source: card.Source, PostedAt: card.PostedAt}
 		}
 		f.candidates[id] = cand
@@ -1147,6 +1153,25 @@ func (f *FakeStore) ListForUser(_ context.Context, _, afterID string, limit int)
 		out = append(out, f.candidates[id])
 		if limit > 0 && len(out) >= limit {
 			break
+		}
+	}
+	return out, nil
+}
+
+type discovery struct {
+	userID  string
+	filters map[string]string
+}
+
+func (f *FakeStore) DiscoveryFilters(_ context.Context, userID string, candidateIDs []string) (map[string][]map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string][]map[string]string{}
+	for _, id := range candidateIDs {
+		for _, d := range f.discoveries[id] {
+			if d.userID == userID {
+				out[id] = append(out[id], d.filters)
+			}
 		}
 	}
 	return out, nil

@@ -98,33 +98,8 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 			want: map[string]string{},
 		},
 		{
-			name:     "valid arrangement",
-			keywords: "", filters: map[string]string{"arrangement": "2"},
-			want: map[string]string{"f_WT": "2"},
-		},
-		{
-			name:     "invalid arrangement dropped",
-			keywords: "", filters: map[string]string{"arrangement": "9"},
-			want: map[string]string{},
-		},
-		{
-			name:     "valid experience",
-			keywords: "", filters: map[string]string{"experience": "3"},
-			want: map[string]string{"f_E": "3"},
-		},
-		{
-			name:     "invalid experience dropped",
-			keywords: "", filters: map[string]string{"experience": "7"},
-			want: map[string]string{},
-		},
-		{
-			name:     "valid job_type",
-			keywords: "", filters: map[string]string{"job_type": "F"},
-			want: map[string]string{"f_JT": "F"},
-		},
-		{
-			name:     "invalid job_type dropped",
-			keywords: "", filters: map[string]string{"job_type": "X"},
+			name:     "arrangement and city_cards are enforced locally, not sent",
+			keywords: "", filters: map[string]string{"arrangement": "2", "city_cards": "full_page"},
 			want: map[string]string{},
 		},
 		{
@@ -148,29 +123,15 @@ func TestFetchPage_SearchQuery(t *testing.T) {
 			want: map[string]string{},
 		},
 		{
-			name:     "valid salary_band",
-			keywords: "", filters: map[string]string{"salary_band": "5"},
-			want: map[string]string{"f_SB2": "5"},
-		},
-		{
-			name:     "invalid salary_band dropped",
-			keywords: "", filters: map[string]string{"salary_band": "0"},
-			want: map[string]string{},
-		},
-		{
 			name:     "all filters set together",
-			keywords: "engineer", filters: map[string]string{"location": "London", "company_id": "12345", "recency": "r86400", "arrangement": "2", "experience": "3", "job_type": "F", "geo_id": "103644278", "distance": "25", "salary_band": "5"},
+			keywords: "engineer", filters: map[string]string{"location": "London", "company_id": "12345", "recency": "r86400", "arrangement": "2", "geo_id": "103644278", "distance": "25"},
 			want: map[string]string{
 				"keywords": "engineer",
 				"location": "London",
 				"f_C":      "12345",
 				"f_TPR":    "r86400",
-				"f_WT":     "2",
-				"f_E":      "3",
-				"f_JT":     "F",
 				"geoId":    "103644278",
 				"f_D":      "25",
-				"f_SB2":    "5",
 			},
 		},
 	}
@@ -242,6 +203,61 @@ func TestGetDetails_FetchesGuestFragment(t *testing.T) {
 	if job.URL != wantURL {
 		t.Errorf("Job.URL = %q, want %q", job.URL, wantURL)
 	}
+}
+
+func TestGetDetails_RemoteCheck(t *testing.T) {
+	const (
+		slugPage = "https://uk.linkedin.com/jobs/view/senior-software-developer-stream-processing-at-ibm-4461428214"
+		cardURL  = "https://www.linkedin.com/jobs/view/4461428214"
+	)
+	fetch := func(t *testing.T, snapshot string, card dto.Job) (dto.Job, *sourcetest.Responder, error) {
+		t.Helper()
+		html, err := os.ReadFile("snapshots/" + snapshot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := linkedin.New("", nil, "", noGap())
+		recorder := sourcetest.Respond(string(html))
+		src.Client().Transport = recorder
+		job, err := src.GetDetails(t.Context(), card)
+		return job, recorder, err
+	}
+
+	t.Run("a TELECOMMUTE page is kept as remote and fetched in place of the fragment", func(t *testing.T) {
+		t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+		job, recorder, err := fetch(t, "detail_telecommute.html", dto.Job{URL: cardURL, RemoteCheckURL: slugPage})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := recorder.Last.URL.String(); got != slugPage {
+			t.Errorf("fetched %q, want %q", got, slugPage)
+		}
+		if job.WorkArrangement != "remote" || job.URL != cardURL || job.Description == "" {
+			t.Errorf("job = {WorkArrangement: %q, URL: %q, Description empty: %t}, want remote, %q, a description", job.WorkArrangement, job.URL, job.Description == "", cardURL)
+		}
+	})
+
+	t.Run("a page without TELECOMMUTE is not remote", func(t *testing.T) {
+		t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+		_, _, err := fetch(t, "detail_not_telecommute.html", dto.Job{URL: cardURL, RemoteCheckURL: slugPage})
+		if !errors.Is(err, sources.ErrNotRemote) {
+			t.Errorf("GetDetails() err = %v, want ErrNotRemote", err)
+		}
+	})
+
+	t.Run("a country-only card stays remote on the fragment", func(t *testing.T) {
+		t.Setenv("DECODO_PROXY_URL", "http://user:pass@gate.decodo.com:7000")
+		job, recorder, err := fetch(t, "detail_not_telecommute.html", dto.Job{URL: cardURL, WorkArrangement: "remote"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4461428214"; recorder.Last.URL.String() != want {
+			t.Errorf("fetched %q, want %q", recorder.Last.URL, want)
+		}
+		if job.WorkArrangement != "remote" {
+			t.Errorf("WorkArrangement = %q, want remote", job.WorkArrangement)
+		}
+	})
 }
 
 type stampedResponder struct {

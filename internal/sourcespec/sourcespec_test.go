@@ -8,7 +8,7 @@ import (
 
 func TestSources(t *testing.T) {
 	enumerated := map[string][]string{
-		"linkedin": {"recency", "arrangement", "experience", "job_type", "distance", "salary_band"},
+		"linkedin": {"recency", "arrangement", "city_cards", "distance"},
 		"wis":      {"loc", "remote_only", "category", "contract", "hours", "salary_from"},
 	}
 	byName := map[string]sourcespec.SourceInfo{}

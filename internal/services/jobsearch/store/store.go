@@ -1266,7 +1266,7 @@ func (s *Store) SaveCards(ctx context.Context, target dto.SourceTarget, cards []
 		card.URL = normalized
 		card.Source = target.Source
 		var payload []byte
-		if sourcespec.CardComplete(target.Source) {
+		if sourcespec.CardComplete(target.Source) || card.RemoteCheckURL != "" || card.WorkArrangement != "" {
 			if payload, err = json.Marshal(card); err != nil {
 				return nil, fmt.Errorf("marshal candidate card: %w", err)
 			}
@@ -1343,6 +1343,35 @@ func (s *Store) ListForUser(ctx context.Context, userID, afterID string, limit i
 			}
 		}
 		out = append(out, sourcetargets.Candidate{ID: row.ID.String(), URL: row.NormalizedUrl, Card: card})
+	}
+	return out, nil
+}
+
+func (s *Store) DiscoveryFilters(ctx context.Context, userID string, candidateIDs []string) (map[string][]map[string]string, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]pgtype.UUID, len(candidateIDs))
+	for i, id := range candidateIDs {
+		if ids[i], err = data.UUID(id); err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.queries.ListCandidateDiscoveryFilters(ctx, sqlc.ListCandidateDiscoveryFiltersParams{CandidateIds: ids, UserID: uid})
+	if err != nil {
+		return nil, fmt.Errorf("query candidate discovery filters: %w", err)
+	}
+	out := make(map[string][]map[string]string, len(candidateIDs))
+	for _, row := range rows {
+		filters := map[string]string{}
+		if len(row.Filters) > 0 {
+			if err := json.Unmarshal(row.Filters, &filters); err != nil {
+				return nil, fmt.Errorf("unmarshal target filters: %w", err)
+			}
+		}
+		id := row.CandidateID.String()
+		out[id] = append(out[id], filters)
 	}
 	return out, nil
 }

@@ -100,9 +100,11 @@ func (b boardSpec) matchesPath(path string) bool {
 
 func (b boardSpec) paramSpecs() []paramSpec {
 	fields, _ := sourcespec.LookupFilterFields(b.source)
-	specs := make([]paramSpec, len(fields))
-	for i, f := range fields {
-		specs[i] = paramSpec{param: f.Param, filter: f.Name}
+	specs := make([]paramSpec, 0, len(fields))
+	for _, f := range fields {
+		if f.Param != "" {
+			specs = append(specs, paramSpec{param: f.Param, filter: f.Name})
+		}
 	}
 	return specs
 }

@@ -1221,6 +1221,48 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a card keeps its remote-check page and its discovering targets' filters", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		remote := map[string]string{"arrangement": "2"}
+		first, err := st.CreateSourceTarget(ctx, userID, "linkedin", "remote-search", true, remote, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(remote) = %v", err)
+		}
+		second, err := st.CreateSourceTarget(ctx, userID, "linkedin", "london-search", true, map[string]string{}, dto.RunWindow{}, nil)
+		if err != nil {
+			t.Fatalf("CreateSourceTarget(london) = %v", err)
+		}
+		card := dto.Job{URL: "https://www.linkedin.com/jobs/view/777", Title: "Engineer", RemoteCheckURL: "https://uk.linkedin.com/jobs/view/engineer-777", WorkArrangement: "remote"}
+		var saved []sourcetargets.Candidate
+		for _, target := range []dto.SourceTarget{first, second} {
+			if saved, err = st.SaveCards(ctx, target, []dto.Job{card}); err != nil || len(saved) != 1 {
+				t.Fatalf("SaveCards(%s) = %+v, %v, want one candidate", target.Value, saved, err)
+			}
+		}
+
+		listed, err := st.ListForUser(ctx, userID, "", 10)
+		if err != nil || len(listed) != 1 {
+			t.Fatalf("ListForUser(...) = %+v, %v, want one candidate", listed, err)
+		}
+		if got := listed[0].Card; got.RemoteCheckURL != card.RemoteCheckURL || got.WorkArrangement != "remote" {
+			t.Errorf("listed card = {RemoteCheckURL: %q, WorkArrangement: %q}, want both kept", got.RemoteCheckURL, got.WorkArrangement)
+		}
+
+		got, err := st.DiscoveryFilters(ctx, userID, []string{saved[0].ID})
+		if err != nil {
+			t.Fatalf("DiscoveryFilters(...) = %v", err)
+		}
+		slices.SortFunc(got[saved[0].ID], func(a, b map[string]string) int { return len(b) - len(a) })
+		want := map[string][]map[string]string{saved[0].ID: {remote, {}}}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("DiscoveryFilters(...) (-want +got):\n%s", diff)
+		}
+		if other, err := st.DiscoveryFilters(ctx, missingID, []string{saved[0].ID}); err != nil || len(other) != 0 {
+			t.Errorf("DiscoveryFilters(other user) = %v, %v, want none", other, err)
+		}
+	})
+
 	t.Run("assess a relevant candidate requests detail once", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

@@ -26,10 +26,18 @@ type FilterField struct {
 	Name     string         `json:"name"`
 	Param    string         `json:"-"`
 	Numeric  bool           `json:"-"`
+	Local    bool           `json:"-"`
 	Label    string         `json:"label"`
 	Required bool           `json:"required"`
 	Options  []FilterOption `json:"options,omitempty"` // non-empty for enumerated fields
 }
+
+const (
+	LinkedInOnsite            = "1"
+	LinkedInRemote            = "2"
+	LinkedInHybrid            = "3"
+	LinkedInCityCardsFullPage = "full_page"
+)
 
 // FilterOption is one permitted value of an enumerated FilterField.
 type FilterOption struct {
@@ -145,25 +153,13 @@ var entries = []registryEntry{
 			{Value: "r604800", Label: "Past week"},
 			{Value: "r2592000", Label: "Past month"},
 		}},
-		{Name: "arrangement", Param: "f_WT", Label: "Work Arrangement", Options: []FilterOption{
-			{Value: "1", Label: "On-site"},
-			{Value: "2", Label: "Remote"},
-			{Value: "3", Label: "Hybrid"},
+		{Name: "arrangement", Param: "f_WT", Local: true, Label: "Work Arrangement", Options: []FilterOption{
+			{Value: LinkedInOnsite, Label: "On-site (not remote)"},
+			{Value: LinkedInRemote, Label: "Remote"},
+			{Value: LinkedInHybrid, Label: "Hybrid (not remote)"},
 		}},
-		{Name: "experience", Param: "f_E", Label: "Experience Level", Options: []FilterOption{
-			{Value: "1", Label: "Internship"},
-			{Value: "2", Label: "Entry level"},
-			{Value: "3", Label: "Associate"},
-			{Value: "4", Label: "Mid-Senior level"},
-			{Value: "5", Label: "Director"},
-			{Value: "6", Label: "Executive"},
-		}},
-		{Name: "job_type", Param: "f_JT", Label: "Job Type", Options: []FilterOption{
-			{Value: "F", Label: "Full-time"},
-			{Value: "P", Label: "Part-time"},
-			{Value: "C", Label: "Contract"},
-			{Value: "T", Label: "Temporary"},
-			{Value: "I", Label: "Internship"},
+		{Name: "city_cards", Local: true, Label: "Remote: city-located jobs", Options: []FilterOption{
+			{Value: LinkedInCityCardsFullPage, Label: "Fetch the full page and keep those marked remote"},
 		}},
 		{Name: "geo_id", Param: "geoId", Label: "Geo ID", Numeric: true},
 		{Name: "distance", Param: "f_D", Label: "Distance", Options: []FilterOption{
@@ -172,17 +168,6 @@ var entries = []registryEntry{
 			{Value: "50", Label: "50 miles"},
 			{Value: "75", Label: "75 miles"},
 			{Value: "100", Label: "100 miles"},
-		}},
-		{Name: "salary_band", Param: "f_SB2", Label: "Salary Band", Options: []FilterOption{
-			{Value: "1", Label: "$40,000+"},
-			{Value: "2", Label: "$60,000+"},
-			{Value: "3", Label: "$80,000+"},
-			{Value: "4", Label: "$100,000+"},
-			{Value: "5", Label: "$120,000+"},
-			{Value: "6", Label: "$140,000+"},
-			{Value: "7", Label: "$160,000+"},
-			{Value: "8", Label: "$180,000+"},
-			{Value: "9", Label: "$200,000+"},
 		}},
 	}},
 	{name: "hiringcafe", label: "hiring.cafe", kind: kindFilter, role: RoleDiscovery, incremental: true, urlPrefix: "https://hiringcafe.com"},

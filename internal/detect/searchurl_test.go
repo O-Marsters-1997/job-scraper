@@ -174,7 +174,7 @@ func TestBuildSearchURL(t *testing.T) {
 	t.Run("round trips through ParseSearchURL", func(t *testing.T) {
 		linkedin := map[string]string{
 			"location": "London", "company_id": "1337", "recency": "r86400", "arrangement": "3",
-			"experience": "4", "job_type": "F", "geo_id": "101165590", "distance": "25", "salary_band": "5",
+			"geo_id": "101165590", "distance": "25",
 		}
 		tests := []struct {
 			name    string
