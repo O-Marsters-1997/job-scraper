@@ -67,9 +67,11 @@ func TestBankSkillRejectsBlankName(t *testing.T) {
 }
 
 func TestBulkBankSkillsRejectEmptyOrRepeatedIDs(t *testing.T) {
+	t.Parallel()
 	svc, _ := newService(t, nil, nil)
 	for name, ids := range map[string][]string{"empty": nil, "repeated": {"a", "a"}} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			_, err := svc.SetBankSkillsCategory(t.Context(), userID, dto.BankSkillsBulkInput{IDs: ids})
 			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Fatalf("SetBankSkillsCategory() err = %v, want an invalid error", err)
