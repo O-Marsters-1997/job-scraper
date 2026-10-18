@@ -5,7 +5,6 @@ export const applicationSchema = z.object({
 	UserID: z.string(),
 	JobID: z.string(),
 	StatusID: z.string(),
-	Notes: z.string(),
 	AppliedAt: z.string().nullable(),
 	SalaryInfo: z.string(),
 	CreatedAt: z.string(),
@@ -39,7 +38,6 @@ export interface JobApplicationSummary {
 export interface CreateApplicationPayload {
 	job_id: string;
 	status_id?: string | undefined;
-	notes?: string | undefined;
 	applied_at?: string | null | undefined;
 	salary_info?: string | undefined;
 }

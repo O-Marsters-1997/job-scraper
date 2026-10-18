@@ -50,6 +50,23 @@ func (q *Queries) CreateJobNote(ctx context.Context, arg CreateJobNoteParams) (J
 	return i, err
 }
 
+const deleteJobNote = `-- name: DeleteJobNote :execrows
+DELETE FROM job_notes WHERE id = $1 AND user_id = $2
+`
+
+type DeleteJobNoteParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+}
+
+func (q *Queries) DeleteJobNote(ctx context.Context, arg DeleteJobNoteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteJobNote, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listJobNotesForJob = `-- name: ListJobNotesForJob :many
 SELECT id, user_id, job_id, body, quote, quote_prefix, quote_suffix, created_at, updated_at FROM job_notes
 WHERE user_id = $1 AND job_id = $2
@@ -90,4 +107,30 @@ func (q *Queries) ListJobNotesForJob(ctx context.Context, arg ListJobNotesForJob
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateJobNoteBody = `-- name: UpdateJobNoteBody :one
+UPDATE job_notes SET body = $3, updated_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, job_id, body, created_at, updated_at
+`
+
+type UpdateJobNoteBodyParams struct {
+	ID     pgtype.UUID
+	UserID pgtype.UUID
+	Body   string
+}
+
+func (q *Queries) UpdateJobNoteBody(ctx context.Context, arg UpdateJobNoteBodyParams) (JobNote, error) {
+	row := q.db.QueryRow(ctx, updateJobNoteBody, arg.ID, arg.UserID, arg.Body)
+	var i JobNote
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.JobID,
+		&i.Body,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -47,13 +47,12 @@ test.describe("Job page on a phone", () => {
 		await expect(page.getByText(today)).toBeVisible();
 	});
 
-	test("I applied on a tracked Job keeps notes and salary", async ({
+	test("I applied on a tracked Job keeps salary", async ({
 		page,
 		jobDetailPage,
 	}) => {
 		await jobDetailPage.goto(tracked.JobID);
 		await page.getByRole("button", { name: "Edit", exact: true }).click();
-		await jobDetailPage.dialog.getByLabel("Notes").fill("Spoke to recruiter");
 		await jobDetailPage.dialog.getByLabel("Salary / comp").fill("£90,000");
 		await jobDetailPage.dialog.getByRole("button", { name: "Update" }).click();
 		await expect(jobDetailPage.dialog).toBeHidden();
@@ -63,7 +62,6 @@ test.describe("Job page on a phone", () => {
 		await expect(
 			page.getByText("Applied", { exact: true }).first(),
 		).toBeVisible();
-		await expect(page.getByText("Spoke to recruiter")).toBeVisible();
 		await expect(page.getByText("£90,000")).toBeVisible();
 	});
 

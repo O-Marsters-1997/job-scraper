@@ -1,7 +1,7 @@
 -- name: CreateApplication :one
-INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
+INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
 SELECT sqlc.arg('user_id')::uuid, sqlc.arg('job_id')::uuid, sqlc.narg('status_id')::uuid,
-       sqlc.narg('notes')::text, sqlc.narg('applied_at')::date, sqlc.narg('salary_info')::text
+       sqlc.narg('applied_at')::date, sqlc.narg('salary_info')::text
 WHERE sqlc.narg('status_id')::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
               WHERE s.id = sqlc.narg('status_id')::uuid AND s.user_id = sqlc.arg('user_id')::uuid)
@@ -10,7 +10,7 @@ RETURNING *;
 -- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
+    a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
@@ -30,7 +30,7 @@ ORDER BY
 
 -- name: UpdateApplication :one
 UPDATE applications a
-SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
+SET status_id = $3, applied_at = $4, salary_info = $5, updated_at = NOW(),
     chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
 WHERE a.id = $1 AND a.user_id = $2
   AND ($3::uuid IS NULL

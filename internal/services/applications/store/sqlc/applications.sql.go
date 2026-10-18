@@ -28,20 +28,19 @@ func (q *Queries) ClearApplicationChase(ctx context.Context, arg ClearApplicatio
 }
 
 const createApplication = `-- name: CreateApplication :one
-INSERT INTO applications (user_id, job_id, status_id, notes, applied_at, salary_info)
+INSERT INTO applications (user_id, job_id, status_id, applied_at, salary_info)
 SELECT $1::uuid, $2::uuid, $3::uuid,
-       $4::text, $5::date, $6::text
+       $4::date, $5::text
 WHERE $3::uuid IS NULL
    OR EXISTS (SELECT 1 FROM application_statuses s
               WHERE s.id = $3::uuid AND s.user_id = $1::uuid)
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type CreateApplicationParams struct {
 	UserID     pgtype.UUID
 	JobID      pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 }
@@ -51,7 +50,6 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		arg.UserID,
 		arg.JobID,
 		arg.StatusID,
-		arg.Notes,
 		arg.AppliedAt,
 		arg.SalaryInfo,
 	)
@@ -61,7 +59,6 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,
@@ -162,7 +159,7 @@ func (q *Queries) GetApplicationsForJobs(ctx context.Context, arg GetApplication
 const listApplications = `-- name: ListApplications :many
 SELECT
     a.id, a.user_id, a.job_id, a.status_id,
-    a.notes, a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
+    a.applied_at, a.salary_info, a.created_at, a.updated_at, a.chase_by,
     j.title        AS job_title,
     j.company_slug AS job_company_slug,
     j.location     AS job_location,
@@ -192,7 +189,6 @@ type ListApplicationsRow struct {
 	UserID         pgtype.UUID
 	JobID          pgtype.UUID
 	StatusID       pgtype.UUID
-	Notes          pgtype.Text
 	AppliedAt      pgtype.Date
 	SalaryInfo     pgtype.Text
 	CreatedAt      pgtype.Timestamptz
@@ -221,7 +217,6 @@ func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsPara
 			&i.UserID,
 			&i.JobID,
 			&i.StatusID,
-			&i.Notes,
 			&i.AppliedAt,
 			&i.SalaryInfo,
 			&i.CreatedAt,
@@ -249,7 +244,7 @@ const setApplicationChase = `-- name: SetApplicationChase :one
 UPDATE applications
 SET chase_by = $3
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type SetApplicationChaseParams struct {
@@ -266,7 +261,6 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,
@@ -278,19 +272,18 @@ func (q *Queries) SetApplicationChase(ctx context.Context, arg SetApplicationCha
 
 const updateApplication = `-- name: UpdateApplication :one
 UPDATE applications a
-SET status_id = $3, notes = $4, applied_at = $5, salary_info = $6, updated_at = NOW(),
+SET status_id = $3, applied_at = $4, salary_info = $5, updated_at = NOW(),
     chase_by = CASE WHEN a.status_id IS DISTINCT FROM $3 THEN NULL ELSE a.chase_by END
 WHERE a.id = $1 AND a.user_id = $2
   AND ($3::uuid IS NULL
        OR EXISTS (SELECT 1 FROM application_statuses s WHERE s.id = $3::uuid AND s.user_id = $2))
-RETURNING id, user_id, job_id, status_id, notes, applied_at, salary_info, created_at, updated_at, chase_by
+RETURNING id, user_id, job_id, status_id, applied_at, salary_info, created_at, updated_at, chase_by
 `
 
 type UpdateApplicationParams struct {
 	ID         pgtype.UUID
 	UserID     pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 }
@@ -300,7 +293,6 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		arg.ID,
 		arg.UserID,
 		arg.StatusID,
-		arg.Notes,
 		arg.AppliedAt,
 		arg.SalaryInfo,
 	)
@@ -310,7 +302,6 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		&i.UserID,
 		&i.JobID,
 		&i.StatusID,
-		&i.Notes,
 		&i.AppliedAt,
 		&i.SalaryInfo,
 		&i.CreatedAt,

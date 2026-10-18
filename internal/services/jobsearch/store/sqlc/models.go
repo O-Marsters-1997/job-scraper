@@ -169,7 +169,6 @@ type Application struct {
 	UserID     pgtype.UUID
 	JobID      pgtype.UUID
 	StatusID   pgtype.UUID
-	Notes      pgtype.Text
 	AppliedAt  pgtype.Date
 	SalaryInfo pgtype.Text
 	CreatedAt  pgtype.Timestamptz

@@ -61,8 +61,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 
 	t.Run("create returns the application", func(t *testing.T) {
 		f := newStore(t)
-		got := createApp(t, f, dto.CreateApplicationInput{Notes: "referred by a friend"})
-		want := dto.Application{UserID: f.UserID, JobID: f.JobID, Notes: "referred by a friend"}
+		got := createApp(t, f, dto.CreateApplicationInput{SalaryInfo: "50k"})
+		want := dto.Application{UserID: f.UserID, JobID: f.JobID, SalaryInfo: "50k"}
 		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Application{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
 			t.Errorf("CreateApplication(...) mismatch (-want +got):\n%s", diff)
 		}
@@ -180,15 +180,15 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("update changes notes", func(t *testing.T) {
+	t.Run("update changes salary info", func(t *testing.T) {
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(...) err = %v", err)
 		}
-		if got.Notes != "followed up" {
-			t.Errorf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
+		if got.SalaryInfo != "60k" {
+			t.Errorf("UpdateApplication(...) salary = %q, want %q", got.SalaryInfo, "60k")
 		}
 	})
 
@@ -212,7 +212,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		applied := createStatus(t, f, "Applied")
 		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
 		want := chaseSet(t, f, created.ID)
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(same status) err = %v", err)
 		}
@@ -510,6 +510,37 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 		if len(other) != 0 {
 			t.Errorf("ListJobNotes(other user) = %+v, want none", other)
+		}
+	})
+
+	t.Run("job note update and delete are scoped to the user", func(t *testing.T) {
+		f := newStore(t)
+		note, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: "before"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		if _, err := f.Store.UpdateJobNote(t.Context(), missingID, dto.UpdateJobNoteInput{ID: note.ID, Body: "hijack"}); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateJobNote(other user) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), missingID, note.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobNote(other user) err = %v, want ErrNotFound", err)
+		}
+		got, err := f.Store.UpdateJobNote(t.Context(), f.UserID, dto.UpdateJobNoteInput{ID: note.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobNote(...) err = %v", err)
+		}
+		if got.Body != "after" || !got.UpdatedAt.After(got.CreatedAt) {
+			t.Errorf("UpdateJobNote(...) = %+v, want body after and updated_at past created_at", got)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); err != nil {
+			t.Fatalf("DeleteJobNote(...) err = %v", err)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobNote(again) err = %v, want ErrNotFound", err)
+		}
+		left, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		if err != nil || len(left) != 0 {
+			t.Errorf("ListJobNotes(after delete) = %+v, %v, want none", left, err)
 		}
 	})
 }

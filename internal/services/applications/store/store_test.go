@@ -168,7 +168,7 @@ func TestApplicationEventsShareTheApplicationsTransaction(t *testing.T) {
 		t.Fatalf("CreateApplicationStatus err = %v", err)
 	}
 	for _, in := range []dto.UpdateApplicationInput{
-		{StatusID: status.ID}, {StatusID: status.ID, Notes: "same status, new note"},
+		{StatusID: status.ID}, {StatusID: status.ID, SalaryInfo: "same status, new salary"},
 	} {
 		if _, err := st.UpdateApplication(t.Context(), userID, created.ID, in); err != nil {
 			t.Fatalf("UpdateApplication(%+v) err = %v", in, err)

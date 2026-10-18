@@ -89,12 +89,12 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("seed CreateApplication err = %v", err)
 	}
 
-	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
+	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, SalaryInfo: "60k"})
 	if err != nil {
 		t.Fatalf("Update(...) err = %v", err)
 	}
-	if got.Notes != "followed up" {
-		t.Errorf("Update(...) notes = %q, want %q", got.Notes, "followed up")
+	if got.SalaryInfo != "60k" {
+		t.Errorf("Update(...) salary = %q, want %q", got.SalaryInfo, "60k")
 	}
 }
 
@@ -342,6 +342,39 @@ func TestCreateJobNote(t *testing.T) {
 			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: &quote})
 			if !apperr.IsKind(err, apperr.KindInvalid) {
 				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+}
+
+func TestUpdateJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("changes the body", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		created, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "before"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		got, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: created.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobNote(...) err = %v", err)
+		}
+		if got.Body != "after" || got.JobID != "job-1" {
+			t.Errorf("UpdateJobNote(...) = %+v, want body after on job-1", got)
+		}
+	})
+
+	for name, body := range map[string]string{
+		"empty body":    "",
+		"oversize body": strings.Repeat("é", 10001),
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: "note-1", Body: body})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("UpdateJobNote(%s) err = %v, want invalid", name, err)
 			}
 		})
 	}
