@@ -5,10 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import {
 	useBankSkills,
 	useCreateBankSkill,
 	useDeleteBankSkill,
+	useDeleteBankSkills,
 	useReorderBankSkills,
+	useSetBankSkillsCategory,
 	useUpdateBankSkill,
 } from "../../hooks/useBankSkills";
 import type { BankSkill } from "../../types/experience";
@@ -17,27 +27,9 @@ const iconButton =
 	"inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-accent-subtle hover:text-foreground disabled:opacity-30";
 const dangerIconButton =
 	"inline-flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors hover:bg-destructive-subtle hover:text-destructive-strong disabled:opacity-50";
+const checkbox = "size-4 cursor-pointer align-middle accent-primary";
 
-const UNCATEGORISED = "Uncategorised";
-
-interface Group {
-	category: string;
-	skills: BankSkill[];
-}
-
-function groupByCategory(skills: BankSkill[]): Group[] {
-	const groups = new Map<string, BankSkill[]>();
-	for (const skill of skills) {
-		const key = skill.category.toLowerCase();
-		const members = groups.get(key) ?? [];
-		members.push(skill);
-		groups.set(key, members);
-	}
-	return [...groups.values()].map((members) => ({
-		category: members[0]?.category || UNCATEGORISED,
-		skills: members,
-	}));
-}
+const CATEGORY_LIST_ID = "bank-skill-categories";
 
 function swapIds(all: BankSkill[], a: BankSkill, b: BankSkill): string[] {
 	return all.map((s) => (s.id === a.id ? b.id : s.id === b.id ? a.id : s.id));
@@ -54,11 +46,7 @@ export function BankSkills() {
 		if (!name().trim()) return;
 		create.mutate(
 			{ name: name().trim(), category: category().trim() },
-			{
-				onSuccess: () => {
-					setName("");
-				},
-			},
+			{ onSuccess: () => setName("") },
 		);
 	};
 
@@ -71,7 +59,8 @@ export function BankSkills() {
 				Skills
 			</h2>
 			<p class="mb-3 text-sm text-muted">
-				Technologies you can claim, grouped by category
+				Technologies you can claim. Select several to set their category or
+				delete them together.
 			</p>
 			<Card class="p-4" data-testid="bank-skills">
 				<form onSubmit={add} class="flex gap-2">
@@ -82,8 +71,9 @@ export function BankSkills() {
 						onInput={(e) => setName(e.currentTarget.value)}
 					/>
 					<Input
-						aria-label="New skill category"
-						placeholder="Category, e.g. Languages"
+						aria-label="New skill category (optional)"
+						placeholder="Category (optional)"
+						list={CATEGORY_LIST_ID}
 						value={category()}
 						onInput={(e) => setCategory(e.currentTarget.value)}
 					/>
@@ -104,16 +94,51 @@ export function BankSkills() {
 					)}
 				</Show>
 				<QueryBoundary query={query}>
-					{(skills) => <SkillGroups skills={skills()} />}
+					{(skills) => <SkillTable skills={skills()} />}
 				</QueryBoundary>
 			</Card>
 		</section>
 	);
 }
 
-function SkillGroups(props: { skills: BankSkill[] }) {
+function SkillTable(props: { skills: BankSkill[] }) {
 	const reorder = useReorderBankSkills();
-	const groups = createMemo(() => groupByCategory(props.skills));
+	const setCategory = useSetBankSkillsCategory();
+	const removeMany = useDeleteBankSkills();
+	const [picked, setPicked] = createSignal(new Set<string>());
+	const [bulkCategory, setBulkCategory] = createSignal("");
+
+	const selected = createMemo(() =>
+		props.skills.filter((s) => picked().has(s.id)),
+	);
+	const categories = createMemo(() => [
+		...new Set(props.skills.map((s) => s.category).filter(Boolean)),
+	]);
+	const allSelected = () =>
+		props.skills.length > 0 && selected().length === props.skills.length;
+
+	const toggle = (id: string) =>
+		setPicked((prev) => {
+			const next = new Set(prev);
+			if (!next.delete(id)) next.add(id);
+			return next;
+		});
+	const toggleAll = () =>
+		setPicked(new Set(allSelected() ? [] : props.skills.map((s) => s.id)));
+	const ids = () => selected().map((s) => s.id);
+
+	const applyCategory = (e: SubmitEvent) => {
+		e.preventDefault();
+		setCategory.mutate(
+			{ ids: ids(), category: bulkCategory().trim() },
+			{
+				onSuccess: () => {
+					setBulkCategory("");
+					setPicked(new Set<string>());
+				},
+			},
+		);
+	};
 
 	return (
 		<Show
@@ -124,42 +149,97 @@ function SkillGroups(props: { skills: BankSkill[] }) {
 				</p>
 			}
 		>
-			<div class="mt-3 space-y-3">
-				<For each={groups()}>
-					{(group) => (
-						<div>
-							<h3 class="mb-1 text-xs font-medium uppercase tracking-wide text-faint">
-								{group.category}
-							</h3>
-							<ul class="space-y-1">
-								<For each={group.skills}>
-									{(skill, i) => (
-										<SkillRow
-											skill={skill}
-											first={i() === 0}
-											last={i() === group.skills.length - 1}
-											busy={reorder.isPending}
-											onMove={(delta) => {
-												const neighbour = group.skills[i() + delta];
-												if (neighbour)
-													reorder.mutate(
-														swapIds(props.skills, skill, neighbour),
-													);
-											}}
-										/>
-									)}
-								</For>
-							</ul>
-						</div>
-					)}
-				</For>
-			</div>
+			<datalist id={CATEGORY_LIST_ID}>
+				<For each={categories()}>{(c) => <option value={c} />}</For>
+			</datalist>
+			<Show when={selected().length > 0}>
+				<form
+					onSubmit={applyCategory}
+					class="mt-3 flex flex-wrap items-center gap-2"
+					aria-label="Bulk actions"
+				>
+					<span class="text-sm text-muted">{selected().length} selected</span>
+					<Input
+						class="w-48"
+						aria-label="Category for selected skills"
+						placeholder="Category (blank clears)"
+						list={CATEGORY_LIST_ID}
+						value={bulkCategory()}
+						onInput={(e) => setBulkCategory(e.currentTarget.value)}
+					/>
+					<Button
+						type="submit"
+						variant="secondary"
+						disabled={setCategory.isPending}
+					>
+						Set category
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						disabled={removeMany.isPending}
+						onClick={() =>
+							removeMany.mutate(ids(), {
+								onSuccess: () => setPicked(new Set()),
+							})
+						}
+					>
+						Delete selected
+					</Button>
+					<Show when={setCategory.error ?? removeMany.error}>
+						{(err) => (
+							<p role="alert" class="w-full text-sm text-destructive-strong">
+								{err().message}
+							</p>
+						)}
+					</Show>
+				</form>
+			</Show>
+			<Table class="mt-3">
+				<TableHeader>
+					<TableRow>
+						<TableHead class="w-10">
+							<input
+								type="checkbox"
+								class={checkbox}
+								aria-label="Select all skills"
+								checked={allSelected()}
+								onChange={toggleAll}
+							/>
+						</TableHead>
+						<TableHead>Skill</TableHead>
+						<TableHead>Category</TableHead>
+						<TableHead class="w-36" />
+					</TableRow>
+				</TableHeader>
+				<TableBody>
+					<For each={props.skills}>
+						{(skill, i) => (
+							<SkillRow
+								skill={skill}
+								checked={picked().has(skill.id)}
+								onToggle={() => toggle(skill.id)}
+								first={i() === 0}
+								last={i() === props.skills.length - 1}
+								busy={reorder.isPending}
+								onMove={(delta) => {
+									const neighbour = props.skills[i() + delta];
+									if (neighbour)
+										reorder.mutate(swapIds(props.skills, skill, neighbour));
+								}}
+							/>
+						)}
+					</For>
+				</TableBody>
+			</Table>
 		</Show>
 	);
 }
 
 function SkillRow(props: {
 	skill: BankSkill;
+	checked: boolean;
+	onToggle: () => void;
 	first: boolean;
 	last: boolean;
 	busy: boolean;
@@ -184,91 +264,108 @@ function SkillRow(props: {
 	};
 
 	return (
-		<li class="flex items-center gap-2" data-testid="bank-skill">
+		<TableRow data-testid="bank-skill">
+			<TableCell class="w-10 py-2">
+				<input
+					type="checkbox"
+					class={checkbox}
+					aria-label={`Select ${props.skill.name}`}
+					checked={props.checked}
+					onChange={() => props.onToggle()}
+				/>
+			</TableCell>
 			<Show
 				when={editing()}
 				fallback={
 					<>
-						<p class="flex-1 text-sm text-foreground">{props.skill.name}</p>
-						<div class="flex shrink-0 items-center">
-							<button
-								type="button"
-								class={iconButton}
-								title="Move skill up"
-								aria-label={`Move ${props.skill.name} up`}
-								disabled={props.first || props.busy}
-								onClick={() => props.onMove(-1)}
-							>
-								<Icon name="chevronUp" size={14} />
-							</button>
-							<button
-								type="button"
-								class={iconButton}
-								title="Move skill down"
-								aria-label={`Move ${props.skill.name} down`}
-								disabled={props.last || props.busy}
-								onClick={() => props.onMove(1)}
-							>
-								<Icon name="chevronDown" size={14} />
-							</button>
-							<button
-								type="button"
-								class={iconButton}
-								title="Edit skill"
-								aria-label={`Edit ${props.skill.name}`}
-								onClick={() => {
-									setName(props.skill.name);
-									setCategory(props.skill.category);
-									update.reset();
-									setEditing(true);
-								}}
-							>
-								<Icon name="pen" size={14} />
-							</button>
-							<button
-								type="button"
-								class={dangerIconButton}
-								title="Delete skill"
-								aria-label={`Delete ${props.skill.name}`}
-								disabled={remove.isPending}
-								onClick={() => remove.mutate(props.skill.id)}
-							>
-								<Icon name="trash" size={14} />
-							</button>
-						</div>
+						<TableCell class="py-2">{props.skill.name}</TableCell>
+						<TableCell class="py-2 text-muted">
+							{props.skill.category || "Uncategorised"}
+						</TableCell>
+						<TableCell class="py-2">
+							<div class="flex items-center justify-end">
+								<button
+									type="button"
+									class={iconButton}
+									title="Move skill up"
+									aria-label={`Move ${props.skill.name} up`}
+									disabled={props.first || props.busy}
+									onClick={() => props.onMove(-1)}
+								>
+									<Icon name="chevronUp" size={14} />
+								</button>
+								<button
+									type="button"
+									class={iconButton}
+									title="Move skill down"
+									aria-label={`Move ${props.skill.name} down`}
+									disabled={props.last || props.busy}
+									onClick={() => props.onMove(1)}
+								>
+									<Icon name="chevronDown" size={14} />
+								</button>
+								<button
+									type="button"
+									class={iconButton}
+									title="Edit skill"
+									aria-label={`Edit ${props.skill.name}`}
+									onClick={() => {
+										setName(props.skill.name);
+										setCategory(props.skill.category);
+										update.reset();
+										setEditing(true);
+									}}
+								>
+									<Icon name="pen" size={14} />
+								</button>
+								<button
+									type="button"
+									class={dangerIconButton}
+									title="Delete skill"
+									aria-label={`Delete ${props.skill.name}`}
+									disabled={remove.isPending}
+									onClick={() => remove.mutate(props.skill.id)}
+								>
+									<Icon name="trash" size={14} />
+								</button>
+							</div>
+						</TableCell>
 					</>
 				}
 			>
-				<form onSubmit={save} class="flex flex-1 flex-wrap items-center gap-2">
-					<Input
-						aria-label="Skill name"
-						value={name()}
-						onInput={(e) => setName(e.currentTarget.value)}
-					/>
-					<Input
-						aria-label="Skill category"
-						value={category()}
-						onInput={(e) => setCategory(e.currentTarget.value)}
-					/>
-					<Button type="submit" disabled={!name().trim() || update.isPending}>
-						Save
-					</Button>
-					<Button
-						type="button"
-						variant="ghost"
-						onClick={() => setEditing(false)}
-					>
-						Cancel
-					</Button>
-					<Show when={update.error}>
-						{(err) => (
-							<p role="alert" class="w-full text-sm text-destructive-strong">
-								{err().message}
-							</p>
-						)}
-					</Show>
-				</form>
+				<TableCell colSpan={3} class="py-2">
+					<form onSubmit={save} class="flex flex-wrap items-center gap-2">
+						<Input
+							aria-label="Skill name"
+							value={name()}
+							onInput={(e) => setName(e.currentTarget.value)}
+						/>
+						<Input
+							aria-label="Skill category"
+							list={CATEGORY_LIST_ID}
+							value={category()}
+							onInput={(e) => setCategory(e.currentTarget.value)}
+						/>
+						<Button type="submit" disabled={!name().trim() || update.isPending}>
+							Save
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							onClick={() => setEditing(false)}
+						>
+							Cancel
+						</Button>
+						<Show when={update.error}>
+							{(err) => (
+								<p role="alert" class="w-full text-sm text-destructive-strong">
+									{err().message}
+								</p>
+							)}
+						</Show>
+					</form>
+				</TableCell>
 			</Show>
-		</li>
+		</TableRow>
 	);
 }

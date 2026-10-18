@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/ollymarsters/job-scraper/internal/apperr"
 	"github.com/ollymarsters/job-scraper/internal/data"
@@ -96,6 +97,52 @@ func (s *Store) DeleteBankSkill(ctx context.Context, userID, id string) error {
 		return ErrBankSkillNotFound
 	}
 	return nil
+}
+
+func (s *Store) SetBankSkillsCategory(ctx context.Context, userID string, ids []string, category string) error {
+	uid, uuids, err := bulkIDs(userID, ids)
+	if err != nil {
+		return err
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		n, err := q.SetBankSkillsCategory(ctx, sqlc.SetBankSkillsCategoryParams{UserID: uid, Category: category, Ids: uuids})
+		if err != nil {
+			return fmt.Errorf("store.SetBankSkillsCategory: %w", err)
+		}
+		if int(n) != len(uuids) {
+			return ErrBankSkillNotFound
+		}
+		return nil
+	})
+}
+
+func (s *Store) DeleteBankSkills(ctx context.Context, userID string, ids []string) error {
+	uid, uuids, err := bulkIDs(userID, ids)
+	if err != nil {
+		return err
+	}
+	return s.inTx(ctx, func(q *sqlc.Queries) error {
+		n, err := q.DeleteBankSkills(ctx, sqlc.DeleteBankSkillsParams{UserID: uid, Ids: uuids})
+		if err != nil {
+			return fmt.Errorf("store.DeleteBankSkills: %w", err)
+		}
+		if int(n) != len(uuids) {
+			return ErrBankSkillNotFound
+		}
+		return nil
+	})
+}
+
+func bulkIDs(userID string, ids []string) (pgtype.UUID, []pgtype.UUID, error) {
+	uid, err := parseID(userID, ErrBankSkillNotFound)
+	if err != nil {
+		return pgtype.UUID{}, nil, err
+	}
+	uuids, err := data.UUIDs(ids)
+	if err != nil {
+		return pgtype.UUID{}, nil, ErrBankSkillNotFound
+	}
+	return uid, uuids, nil
 }
 
 // ReorderBankSkills sets the sort order to ids, which must be every one of

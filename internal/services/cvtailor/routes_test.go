@@ -95,7 +95,14 @@ func TestBankSkillsJourney(t *testing.T) {
 	if len(got) != 1 || got[0].Name != "Golang" {
 		t.Fatalf("GET /experience/skills = %+v, want the renamed skill", got)
 	}
-	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /experience/skills/"+sk.ID, "")
+	other := handlerstest.Do[dto.BankSkill](t, r, http.StatusCreated, "POST /experience/skills", `{"name":"Rust"}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "PATCH /experience/skills", `{"ids":["`+sk.ID+`","`+other.ID+`"],"category":" Languages "}`)
+	got = handlerstest.Do[[]dto.BankSkill](t, r, http.StatusOK, "GET /experience/skills", "")
+	if len(got) != 2 || got[0].Category != "Languages" || got[1].Category != "Languages" {
+		t.Fatalf("GET /experience/skills after bulk category = %+v, want both Languages", got)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "POST /experience/skills/delete", `{"ids":["`+sk.ID+`","`+other.ID+`"]}`)
+	handlerstest.Do[struct{}](t, r, http.StatusNotFound, "DELETE /experience/skills/"+sk.ID, "")
 }
 
 func TestExperienceJourney(t *testing.T) {

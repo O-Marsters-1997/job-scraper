@@ -2,8 +2,10 @@ import { createQuery, queryOptions } from "@tanstack/solid-query";
 import {
 	createBankSkill,
 	deleteBankSkill,
+	deleteBankSkills,
 	fetchBankSkills,
 	reorderBankSkills,
+	setBankSkillsCategory,
 	updateBankSkill,
 } from "../api/bankSkills";
 import { keys } from "../api/keys";
@@ -35,6 +37,14 @@ export function useUpdateBankSkill() {
 
 export function useDeleteBankSkill() {
 	return useInvalidatingMutation(deleteBankSkill, invalidate);
+}
+
+export function useSetBankSkillsCategory() {
+	return useInvalidatingMutation(setBankSkillsCategory, invalidate);
+}
+
+export function useDeleteBankSkills() {
+	return useInvalidatingMutation(deleteBankSkills, invalidate);
 }
 
 export function useReorderBankSkills() {
