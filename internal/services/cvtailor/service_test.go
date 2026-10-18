@@ -66,6 +66,22 @@ func TestBankSkillRejectsBlankName(t *testing.T) {
 	}
 }
 
+func TestBulkBankSkillsRejectEmptyOrRepeatedIDs(t *testing.T) {
+	svc, _ := newService(t, nil, nil)
+	for name, ids := range map[string][]string{"empty": nil, "repeated": {"a", "a"}} {
+		t.Run(name, func(t *testing.T) {
+			_, err := svc.SetBankSkillsCategory(t.Context(), userID, dto.BankSkillsBulkInput{IDs: ids})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("SetBankSkillsCategory() err = %v, want an invalid error", err)
+			}
+			_, err = svc.DeleteBankSkills(t.Context(), userID, dto.BankSkillsBulkInput{IDs: ids})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Fatalf("DeleteBankSkills() err = %v, want an invalid error", err)
+			}
+		})
+	}
+}
+
 func TestReorderRejectsRepeatedIDs(t *testing.T) {
 	svc, _ := newService(t, nil, nil)
 	_, err := svc.ReorderPositions(t.Context(), userID, dto.ReorderInput{IDs: []string{"a", "a"}})

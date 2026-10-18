@@ -26,6 +26,8 @@ type Store interface {
 	CreateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
 	UpdateBankSkill(ctx context.Context, userID string, in dto.BankSkillInput) (dto.BankSkill, error)
 	DeleteBankSkill(ctx context.Context, userID, id string) error
+	SetBankSkillsCategory(ctx context.Context, userID string, ids []string, category string) error
+	DeleteBankSkills(ctx context.Context, userID string, ids []string) error
 	ReorderBankSkills(ctx context.Context, userID string, ids []string) error
 	ImportPositions(ctx context.Context, userID string, in []dto.ImportPosition) ([]dto.Position, error)
 	ListHeadingMappings(ctx context.Context, userID, docID, tabID string) ([]dto.HeadingMapping, error)

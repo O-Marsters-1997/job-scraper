@@ -233,6 +233,18 @@ export function deleteBankSkill(id: string): void {
 	bankSkills = renumber(bankSkills.filter((s) => s.id !== id));
 }
 
+export function setBankSkillsCategory(ids: string[], category: string): void {
+	const picked = new Set(ids);
+	bankSkills = bankSkills.map((s) =>
+		picked.has(s.id) ? { ...s, category: category.trim() } : s,
+	);
+}
+
+export function deleteBankSkills(ids: string[]): void {
+	const picked = new Set(ids);
+	bankSkills = renumber(bankSkills.filter((s) => !picked.has(s.id)));
+}
+
 export function reorderBankSkills(ids: string[]): void {
 	bankSkills = renumber(inOrder(bankSkills, ids));
 }

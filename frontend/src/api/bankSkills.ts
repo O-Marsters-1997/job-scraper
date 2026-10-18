@@ -45,6 +45,23 @@ export async function deleteBankSkill(id: string): Promise<void> {
 	);
 }
 
+export async function setBankSkillsCategory(input: {
+	ids: string[];
+	category: string;
+}): Promise<void> {
+	return mocked(
+		(db) => db.setBankSkillsCategory(input.ids, input.category),
+		() => apiFetchVoid("/experience/skills", jsonInit("PATCH", input)),
+	);
+}
+
+export async function deleteBankSkills(ids: string[]): Promise<void> {
+	return mocked(
+		(db) => db.deleteBankSkills(ids),
+		() => apiFetchVoid("/experience/skills/delete", jsonInit("POST", { ids })),
+	);
+}
+
 export async function reorderBankSkills(ids: string[]): Promise<void> {
 	return mocked(
 		(db) => db.reorderBankSkills(ids),
