@@ -5,6 +5,7 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	untrack,
 } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Icon } from "@/components/Icon";
@@ -81,12 +82,20 @@ export function CommentableDescription(props: { html: string; jobId: string }) {
 		});
 	};
 
+	const onKeyDown = (e: KeyboardEvent) => {
+		if (e.key !== "Escape") return;
+		setDraft(null);
+		setOpenId(null);
+	};
+
 	onMount(() => {
+		document.addEventListener("keydown", onKeyDown);
 		document.addEventListener("selectionchange", onSelectionChange);
 		root.addEventListener("mousemove", onPointerMove);
 		root.addEventListener("click", onClick);
 	});
 	onCleanup(() => {
+		document.removeEventListener("keydown", onKeyDown);
 		document.removeEventListener("selectionchange", onSelectionChange);
 		clearTimeout(closeTimer);
 		clearCommentHighlights();
@@ -104,7 +113,8 @@ export function CommentableDescription(props: { html: string; jobId: string }) {
 		}
 		setCommentHighlights(found);
 		setOrphans(lost);
-		if (openId() && !found.has(openId() as string)) setOpenId(null);
+		const id = untrack(openId);
+		if (id && !found.has(id)) setOpenId(null);
 	});
 
 	createEffect(() => setActiveComment(openId()));
@@ -118,27 +128,38 @@ export function CommentableDescription(props: { html: string; jobId: string }) {
 	};
 	const scheduleClose = () => {
 		clearTimeout(closeTimer);
-		closeTimer = setTimeout(() => setOpenId(null), CLOSE_DELAY_MS);
+		closeTimer = setTimeout(() => {
+			const active = document.activeElement;
+			const editing = active?.closest("[data-comment-panel]");
+			if (!editing) setOpenId(null);
+		}, CLOSE_DELAY_MS);
 	};
 
+	const idUnderPointer = (e: MouseEvent): string | null | undefined => {
+		const inPanel =
+			e.target instanceof Element && e.target.closest("[data-comment-panel]");
+		if (draft() || inPanel) return undefined;
+		return commentIdAtPoint(e.clientX, e.clientY);
+	};
 	const onPointerMove = (e: MouseEvent) => {
-		if (draft() || (e.target as Element).closest("[data-comment-panel]"))
-			return;
-		const id = commentIdAtPoint(e.clientX, e.clientY);
+		const id = idUnderPointer(e);
 		if (id) open(id);
-		else if (openId()) scheduleClose();
+		else if (id === null && openId()) scheduleClose();
 	};
 	const onClick = (e: MouseEvent) => {
-		if (draft() || (e.target as Element).closest("[data-comment-panel]"))
-			return;
-		const id = commentIdAtPoint(e.clientX, e.clientY);
+		if (!document.getSelection()?.isCollapsed) return;
+		const id = idUnderPointer(e);
 		if (id) open(id);
 	};
 
 	const startComment = () => {
 		const s = selection();
 		if (!s) return;
-		setDraft({ quote: quoteFromRange(root, s.range), at: s.at });
+		const left = Math.max(0, Math.min(s.at.left - 288, root.clientWidth - 288));
+		setDraft({
+			quote: quoteFromRange(root, s.range),
+			at: { top: s.at.top, left },
+		});
 		setText("");
 		setOpenId(null);
 		setSelection(null);
@@ -202,7 +223,7 @@ export function CommentableDescription(props: { html: string; jobId: string }) {
 								<Button
 									type="submit"
 									size="sm"
-									disabled={create.isPending || text().length === 0}
+									disabled={create.isPending || text().trim().length === 0}
 								>
 									Save
 								</Button>
