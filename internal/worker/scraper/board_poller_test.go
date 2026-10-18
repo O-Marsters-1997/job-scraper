@@ -12,6 +12,7 @@ import (
 
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/services/jobsearch"
+	"github.com/ollymarsters/job-scraper/internal/services/jobsearch/jobsearchtest"
 	"github.com/ollymarsters/job-scraper/internal/telemetry"
 	"github.com/ollymarsters/job-scraper/internal/worker/scraper"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
@@ -19,16 +20,14 @@ import (
 
 type boardStoreStub struct {
 	board    dto.BoardPoll
-	claimErr error
 	state    string
 	snapshot dto.BoardSnapshot
 }
 
 func (s *boardStoreStub) ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error) {
-	return s.board, s.claimErr
+	return s.board, nil
 }
-func (s *boardStoreStub) ReleaseBoardCheck(context.Context, string) error {
-	s.state = "released"
+func (s *boardStoreStub) ClearBoardCheckPublished(context.Context, string) error {
 	return nil
 }
 func (s *boardStoreStub) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot) error {
@@ -93,31 +92,52 @@ func TestBoardPollCompletesOnlyAfterFetchAndIngest(t *testing.T) {
 	}
 }
 
-func TestBoardPollReleasesAScheduledCheckItCannotClaim(t *testing.T) {
+func TestBoardPollUnclaimableCheck(t *testing.T) {
 	t.Parallel()
-	t.Run("scheduled check is acked and released", func(t *testing.T) {
-		t.Parallel()
-		store := &boardStoreStub{claimErr: jobsearch.ErrBoardClaimUnavailable}
-		poller := scraper.NewBoardPoller(store, boardFetcherStub{}, &boardIngesterStub{})
-		if err := poller.PollBoard(t.Context(), "board", false); err != nil {
-			t.Errorf("PollBoard() = %v, want nil", err)
-		}
-		if store.state != "released" {
-			t.Errorf("board state = %q, want released", store.state)
-		}
-	})
+	for _, tc := range []struct {
+		name    string
+		manual  bool
+		wantErr error
+		wantDue int
+	}{
+		{"scheduled check is acked and makes the board due again", false, nil, 1},
+		{"manual check errors and leaves the board held", true, jobsearch.ErrBoardClaimUnavailable, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			st := jobsearchtest.NewFakeStore()
+			company, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "acme", Name: "Acme"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			board, err := st.UpsertCandidateBoard(ctx, company.ID, "greenhouse", "acme")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := st.VerifyCompanyBoard(ctx, company.ID, "greenhouse", "acme", "test", ""); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.MarkBoardCheckPublished(ctx, board.ID); err != nil {
+				t.Fatal(err)
+			}
+			held, err := st.ClaimBoard(ctx, board.ID, true)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	t.Run("manual check errors without a release", func(t *testing.T) {
-		t.Parallel()
-		store := &boardStoreStub{claimErr: jobsearch.ErrBoardClaimUnavailable}
-		poller := scraper.NewBoardPoller(store, boardFetcherStub{}, &boardIngesterStub{})
-		if err := poller.PollBoard(t.Context(), "board", true); !errors.Is(err, jobsearch.ErrBoardClaimUnavailable) {
-			t.Errorf("PollBoard() = %v, want ErrBoardClaimUnavailable", err)
-		}
-		if store.state != "" {
-			t.Errorf("board state = %q, want untouched", store.state)
-		}
-	})
+			poller := scraper.NewBoardPoller(st, boardFetcherStub{}, &boardIngesterStub{})
+			if err := poller.PollBoard(ctx, board.ID, tc.manual); !errors.Is(err, tc.wantErr) {
+				t.Errorf("PollBoard() = %v, want %v", err, tc.wantErr)
+			}
+			if err := st.CompleteBoard(ctx, dto.BoardSnapshot{Poll: held, Complete: true}); err != nil {
+				t.Fatal(err)
+			}
+			if due, err := st.ListDueBoards(ctx); err != nil || len(due) != tc.wantDue {
+				t.Errorf("ListDueBoards() = %+v, %v, want %d due", due, err, tc.wantDue)
+			}
+		})
+	}
 }
 
 func TestBoardPollCarriesVerifiedCompanyIdentity(t *testing.T) {

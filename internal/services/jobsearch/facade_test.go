@@ -107,6 +107,23 @@ func TestPublishBoardChecks(t *testing.T) {
 		}
 	})
 
+	t.Run("manual run does not hold back the next scheduled run", func(t *testing.T) {
+		t.Parallel()
+		st, q := jobsearchtest.NewFakeStore(), &recordingQueue{}
+		verified, _ := seedBoards(t, st)
+		m := jobsearch.Build(jobsearch.Deps{Store: st, Scoring: jobsearchtest.NewNoopScoring(), Queue: q})
+
+		if err := m.PublishBoardChecks(t.Context(), true); err != nil {
+			t.Fatal(err)
+		}
+		if err := m.PublishBoardChecks(t.Context(), false); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.ContainsFunc(q.tasks, func(task queue.Task) bool { return !task.Manual && task.BoardID == verified.ID }) {
+			t.Errorf("tasks = %+v, want a scheduled task for %s", q.tasks, verified.ID)
+		}
+	})
+
 	t.Run("scheduled run retries a Board whose publish failed", func(t *testing.T) {
 		t.Parallel()
 		st, q := jobsearchtest.NewFakeStore(), &recordingQueue{}

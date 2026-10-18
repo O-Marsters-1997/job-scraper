@@ -858,7 +858,7 @@ func (f *FakeStore) MarkBoardCheckPublished(_ context.Context, id string) error 
 	return nil
 }
 
-func (f *FakeStore) ReleaseBoardCheck(_ context.Context, id string) error {
+func (f *FakeStore) ClearBoardCheckPublished(_ context.Context, id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if st := f.pollState[id]; st != nil {

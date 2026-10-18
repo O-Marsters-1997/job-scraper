@@ -45,7 +45,7 @@ func (s *Service) publishBoardCheck(ctx context.Context, task queue.Task) error 
 		return err
 	}
 	if err := s.queue.Publish(ctx, task); err != nil {
-		return errors.Join(err, s.store.ReleaseBoardCheck(ctx, task.BoardID))
+		return errors.Join(err, s.store.ClearBoardCheckPublished(ctx, task.BoardID))
 	}
 	return nil
 }

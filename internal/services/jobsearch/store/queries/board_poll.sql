@@ -17,7 +17,7 @@ ORDER BY b.id;
 INSERT INTO board_poll_state (board_id, check_published_at) VALUES ($1, NOW())
 ON CONFLICT (board_id) DO UPDATE SET check_published_at = EXCLUDED.check_published_at;
 
--- name: ReleaseBoardCheck :exec
+-- name: ClearBoardCheckPublished :exec
 UPDATE board_poll_state SET check_published_at = NULL WHERE board_id = $1;
 
 -- name: ListActiveBoards :many

@@ -47,6 +47,15 @@ func (q *Queries) ClaimPollState(ctx context.Context, arg ClaimPollStateParams) 
 	return i, err
 }
 
+const clearBoardCheckPublished = `-- name: ClearBoardCheckPublished :exec
+UPDATE board_poll_state SET check_published_at = NULL WHERE board_id = $1
+`
+
+func (q *Queries) ClearBoardCheckPublished(ctx context.Context, boardID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearBoardCheckPublished, boardID)
+	return err
+}
+
 const closeMissingBoardJobs = `-- name: CloseMissingBoardJobs :exec
 WITH closed AS (
     UPDATE jobs SET closed_at = NOW()
@@ -355,15 +364,6 @@ type ObserveBoardJobParams struct {
 
 func (q *Queries) ObserveBoardJob(ctx context.Context, arg ObserveBoardJobParams) error {
 	_, err := q.db.Exec(ctx, observeBoardJob, arg.BoardID, arg.JobID, arg.LastSnapshotVersion)
-	return err
-}
-
-const releaseBoardCheck = `-- name: ReleaseBoardCheck :exec
-UPDATE board_poll_state SET check_published_at = NULL WHERE board_id = $1
-`
-
-func (q *Queries) ReleaseBoardCheck(ctx context.Context, boardID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, releaseBoardCheck, boardID)
 	return err
 }
 

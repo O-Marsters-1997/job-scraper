@@ -583,8 +583,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		if got := dueIDs(); len(got) != 0 {
 			t.Errorf("ListDueBoards() after publish = %v, want none", got)
 		}
-		if err := st.ReleaseBoardCheck(ctx, board.ID); err != nil {
-			t.Fatalf("ReleaseBoardCheck(...) = %v", err)
+		if err := st.ClearBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatalf("ClearBoardCheckPublished(...) = %v", err)
 		}
 		if got := dueIDs(); !slices.Equal(got, []string{board.ID}) {
 			t.Errorf("ListDueBoards() after release = %v, want [%s]", got, board.ID)

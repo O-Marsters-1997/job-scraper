@@ -1529,13 +1529,13 @@ func (s *Store) MarkBoardCheckPublished(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *Store) ReleaseBoardCheck(ctx context.Context, id string) error {
+func (s *Store) ClearBoardCheckPublished(ctx context.Context, id string) error {
 	boardID, err := data.UUID(id)
 	if err != nil {
 		return err
 	}
-	if err := s.queries.ReleaseBoardCheck(ctx, boardID); err != nil {
-		return fmt.Errorf("store.ReleaseBoardCheck: %w", err)
+	if err := s.queries.ClearBoardCheckPublished(ctx, boardID); err != nil {
+		return fmt.Errorf("store.ClearBoardCheckPublished: %w", err)
 	}
 	return nil
 }
