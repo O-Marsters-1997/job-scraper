@@ -154,8 +154,8 @@ function Quote(props: { text: string; onClick?: () => void }) {
 
 export function JobNotesCard(props: {
 	jobId: string;
-	quote: NoteQuote | null;
-	onClearQuote: () => void;
+	quote?: NoteQuote | null;
+	onClearQuote?: () => void;
 }) {
 	const notes = useJobNotes(() => props.jobId);
 	const create = useCreateJobNote(() => props.jobId);
@@ -169,11 +169,11 @@ export function JobNotesCard(props: {
 	const submit = (e: SubmitEvent) => {
 		e.preventDefault();
 		create.mutate(
-			{ body: body(), quote: props.quote },
+			{ body: body(), quote: props.quote ?? null },
 			{
 				onSuccess: () => {
 					setBody("");
-					props.onClearQuote();
+					props.onClearQuote?.();
 				},
 			},
 		);

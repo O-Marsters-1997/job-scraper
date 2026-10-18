@@ -216,7 +216,7 @@ function JobDetailPage() {
 								</div>
 							</div>
 						</TabsContent>
-						<TabsContent value="notes">
+						<TabsContent value="notes" forceMount>
 							<JobNotesCard
 								jobId={params().id}
 								quote={quote()}

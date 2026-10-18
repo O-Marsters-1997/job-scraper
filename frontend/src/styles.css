@@ -622,17 +622,16 @@ html[data-size="lg"] {
 }
 
 @layer components {
-  /* tabs — zaidan/style-luma.css */
-  .z-tabs {
-    @apply gap-2;
-  }
-  .z-tabs-list {
-    @apply rounded-full p-1 group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:rounded-2xl data-[variant=line]:rounded-none;
-  }
-  .z-tabs-trigger {
-    @apply gap-2 rounded-full border border-transparent! px-3 py-1 text-sm font-medium group-data-[orientation=vertical]/tabs:px-3 group-data-[orientation=vertical]/tabs:py-1.5 group-data-[orientation=vertical]/tabs:rounded-2xl [&_svg:not([class*='size-'])]:size-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2;
-  }
-  .z-tabs-content {
-    @apply text-sm;
-  }
+	.z-tabs {
+		@apply gap-2;
+	}
+	.z-tabs-list {
+		@apply rounded-full p-1 group-data-[orientation=horizontal]/tabs:h-9 group-data-[orientation=vertical]/tabs:rounded-2xl data-[variant=line]:rounded-none;
+	}
+	.z-tabs-trigger {
+		@apply gap-2 rounded-full border border-transparent! px-3 py-1 text-sm font-medium group-data-[orientation=vertical]/tabs:px-3 group-data-[orientation=vertical]/tabs:py-1.5 group-data-[orientation=vertical]/tabs:rounded-2xl [&_svg:not([class*='size-'])]:size-4 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2;
+	}
+	.z-tabs-content {
+		@apply text-sm;
+	}
 }
