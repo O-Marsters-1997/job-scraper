@@ -504,7 +504,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		if err != nil {
 			t.Fatalf("UpdateJobNote(...) err = %v", err)
 		}
-		if got.Body != "after" || got.UpdatedAt.Before(got.CreatedAt) || got.UpdatedAt.Equal(got.CreatedAt) {
+		if got.Body != "after" || !got.UpdatedAt.After(got.CreatedAt) {
 			t.Errorf("UpdateJobNote(...) = %+v, want body after and updated_at past created_at", got)
 		}
 		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); err != nil {

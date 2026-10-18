@@ -55,6 +55,7 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 								type="button"
 								size="sm"
 								variant="ghost"
+								aria-label={`Edit note from ${formatDate(props.note.CreatedAt)}`}
 								onClick={startEdit}
 							>
 								Edit
@@ -63,6 +64,7 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 								type="button"
 								size="sm"
 								variant="ghost"
+								aria-label={`Delete note from ${formatDate(props.note.CreatedAt)}`}
 								disabled={remove.isPending}
 								onClick={() => remove.mutate(props.note.ID)}
 							>
