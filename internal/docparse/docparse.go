@@ -120,7 +120,7 @@ type paragraph struct {
 type para struct {
 	text       string
 	bold       string
-	lead      int
+	lead       int
 	level      int
 	list       bool
 	start, end int
@@ -327,7 +327,10 @@ func splitLabel(p para) (label, body string, labelled bool) {
 	text := p.text
 	before, after, found := strings.Cut(text, ":")
 	if !found && p.bold != "" && p.bold != text {
-		return p.bold, strings.TrimLeftFunc(text[len(p.bold):], unicode.IsSpace), true
+		rest := strings.TrimLeftFunc(text[len(p.bold):], unicode.IsSpace)
+		if loc := skillSplit.FindStringIndex(rest); loc == nil || loc[0] != 0 {
+			return p.bold, rest, true
+		}
 	}
 	label = strings.TrimSpace(before)
 	if !found || label == "" || skillSplit.MatchString(label) || strings.ContainsAny(label, "()") {

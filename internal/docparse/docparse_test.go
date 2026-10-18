@@ -207,6 +207,11 @@ func TestParseSkillLines(t *testing.T) {
 			want:  []docparse.SkillLine{{Label: "Languages/ Frameworks", Items: []string{"Typescript", "React"}, Separator: ", ", ItemsStart: 23, End: 40}},
 		},
 		{
+			name:  "a bold first item followed by a separator is not a label",
+			paras: []testPara{{text: "Go, SQL", bold: "Go"}},
+			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 1, End: 8}},
+		},
+		{
 			name:  "a line that is bold throughout has no label",
 			paras: []testPara{{text: "Go, SQL", bold: "Go, SQL"}},
 			want:  []docparse.SkillLine{{Items: []string{"Go", "SQL"}, Separator: ", ", ItemsStart: 1, End: 8}},

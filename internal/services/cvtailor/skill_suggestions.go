@@ -3,9 +3,10 @@ package cvtailor
 import (
 	"cmp"
 	"context"
-	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ollymarsters/job-scraper/internal/docparse"
 	"github.com/ollymarsters/job-scraper/internal/dto"
@@ -63,8 +64,22 @@ func lineWith(lines []docparse.SkillLine, name string) int {
 }
 
 func containsWord(text, word string) bool {
-	re := regexp.MustCompile(`(?i)(?:^|[^\p{L}\p{N}])` + regexp.QuoteMeta(strings.TrimSpace(word)) + `(?:$|[^\p{L}\p{N}])`)
-	return re.MatchString(text)
+	text, word = strings.ToLower(text), strings.ToLower(strings.TrimSpace(word))
+	isWordRune := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+	for from := 0; from <= len(text)-len(word); {
+		i := strings.Index(text[from:], word)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(word)
+		before, _ := utf8.DecodeLastRuneInString(text[:start])
+		after, _ := utf8.DecodeRuneInString(text[end:])
+		if (start == 0 || !isWordRune(before)) && (end == len(text) || !isWordRune(after)) {
+			return true
+		}
+		from = start + 1
+	}
+	return false
 }
 
 func skillQuestions(missing []dto.BankSkill, lines []docparse.SkillLine) []string {
