@@ -2,12 +2,14 @@ package proxy_test
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -44,13 +46,13 @@ func newTunnel(t *testing.T) *proxy.Tunnel {
 	return tun
 }
 
-func roundTripThrough(t *testing.T, tun *proxy.Tunnel) {
+func openTunnel(t *testing.T, tun *proxy.Tunnel) (net.Conn, *bufio.Reader) {
 	t.Helper()
 	conn, err := new(net.Dialer).DialContext(t.Context(), "tcp", tun.Addr())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = conn.Close() }()
+	t.Cleanup(func() { _ = conn.Close() })
 	if _, err := io.WriteString(conn, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +67,12 @@ func roundTripThrough(t *testing.T, tun *proxy.Tunnel) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("CONNECT status = %d, want 200", resp.StatusCode)
 	}
+	return conn, br
+}
+
+func roundTripThrough(t *testing.T, tun *proxy.Tunnel) {
+	t.Helper()
+	conn, br := openTunnel(t, tun)
 	if _, err := io.WriteString(conn, "ping"); err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +148,24 @@ func TestTunnel(t *testing.T) {
 		if conn, err := new(net.Dialer).DialContext(t.Context(), "tcp", tun.Addr()); err == nil {
 			_ = conn.Close()
 			t.Fatal("dial after Close succeeded, want refused")
+		}
+	})
+
+	t.Run("close ends open tunnels", func(t *testing.T) {
+		t.Setenv("DECODO_PROXY_URL", proxyEnv(newFakeProxy(t, connectEcho)))
+		tun, err := proxy.NewTunnel(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn, br := openTunnel(t, tun)
+		if err := tun.Close(); err != nil {
+			t.Fatalf("Close() = %v", err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := br.ReadByte(); !errors.Is(err, io.EOF) {
+			t.Fatalf("read after Close = %v, want io.EOF", err)
 		}
 	})
 }

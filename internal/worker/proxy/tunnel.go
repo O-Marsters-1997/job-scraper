@@ -18,7 +18,11 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/logger"
 )
 
-const tunnelDialTimeout = 30 * time.Second
+const (
+	tunnelDialTimeout    = 30 * time.Second
+	tunnelRequestTimeout = 30 * time.Second
+	tunnelAcceptBackoff  = 10 * time.Millisecond
+)
 
 type Tunnel struct {
 	listener  net.Listener
@@ -26,7 +30,9 @@ type Tunnel struct {
 	session   atomic.Pointer[string]
 	rotations atomic.Int64
 	source    string
-	serving   sync.WaitGroup
+	closing   context.Context
+	stop      context.CancelFunc
+	handlers  sync.WaitGroup
 }
 
 func NewTunnel(source string) (*Tunnel, error) {
@@ -38,9 +44,10 @@ func NewTunnel(source string) (*Tunnel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen tunnel: %w", err)
 	}
-	t := &Tunnel{listener: l, upstream: u, source: source}
-	t.newSession()
-	t.serving.Go(t.serve)
+	closing, stop := context.WithCancel(context.Background())
+	t := &Tunnel{listener: l, upstream: u, source: source, closing: closing, stop: stop}
+	t.renewSession()
+	t.handlers.Go(t.serve)
 	return t, nil
 }
 
@@ -49,7 +56,7 @@ func (t *Tunnel) Addr() string {
 }
 
 func (t *Tunnel) Rotate(ctx context.Context, reason string) {
-	t.newSession()
+	t.renewSession()
 	slog.InfoContext(ctx, "residential session rotated", //nolint:forbidigo // NewTunnel's frozen signature (#1020) takes no logger
 		slog.String(logger.KeySource, t.source),
 		slog.String(logger.KeyReason, reason),
@@ -58,12 +65,13 @@ func (t *Tunnel) Rotate(ctx context.Context, reason string) {
 }
 
 func (t *Tunnel) Close() error {
+	t.stop()
 	err := t.listener.Close()
-	t.serving.Wait()
+	t.handlers.Wait()
 	return err
 }
 
-func (t *Tunnel) newSession() {
+func (t *Tunnel) renewSession() {
 	s := newSession()
 	t.session.Store(&s)
 }
@@ -75,17 +83,25 @@ func (t *Tunnel) serve() {
 			return
 		}
 		if err != nil {
+			time.Sleep(tunnelAcceptBackoff)
 			continue
 		}
-		go t.handle(conn)
+		t.handlers.Go(func() { t.handle(conn) })
 	}
 }
 
 func (t *Tunnel) handle(client net.Conn) {
 	defer func() { _ = client.Close() }()
+	defer context.AfterFunc(t.closing, func() { _ = client.Close() })()
 	br := bufio.NewReader(client)
+	if err := client.SetReadDeadline(time.Now().Add(tunnelRequestTimeout)); err != nil {
+		return
+	}
 	req, err := http.ReadRequest(br)
 	if err != nil {
+		return
+	}
+	if err := client.SetReadDeadline(time.Time{}); err != nil {
 		return
 	}
 	if req.Method != http.MethodConnect {
@@ -98,16 +114,16 @@ func (t *Tunnel) handle(client net.Conn) {
 		return
 	}
 	defer func() { _ = upstream.Close() }()
-	go func() {
+	t.handlers.Go(func() {
 		_, _ = io.Copy(upstream, br)
 		_ = upstream.Close()
-	}()
+	})
 	_, _ = io.Copy(client, upstream)
 }
 
 func (t *Tunnel) dial(req *http.Request) (net.Conn, error) {
 	d := net.Dialer{Timeout: tunnelDialTimeout}
-	conn, err := d.DialContext(req.Context(), "tcp", t.upstream.Host)
+	conn, err := d.DialContext(t.closing, "tcp", t.upstream.Host)
 	if err != nil {
 		return nil, fmt.Errorf("dial upstream proxy: %w", err)
 	}
