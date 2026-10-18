@@ -724,7 +724,7 @@ func TestProcessBoardDiscover(t *testing.T) {
 		if err != nil || len(boards) != 1 || boards[0].VerificationMethod != scraper.MethodWTTJOrigin {
 			t.Fatalf("ListCompanyBoards(%s) = %+v, %v, want one board verified wttj-origin", company.ID, boards, err)
 		}
-		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx)
+		untracked, err := f.store.ListUntrackedDiscoveredBoards(ctx, false, time.Now())
 		if err != nil || len(untracked) != 0 {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want none", untracked, err)
 		}

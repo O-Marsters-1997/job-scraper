@@ -911,7 +911,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 				}
 			}
 		}
-		got, err := st.ListUntrackedDiscoveredBoards(ctx)
+		got, err := st.ListUntrackedDiscoveredBoards(ctx, false, time.Now().Add(-30*24*time.Hour))
 		if err != nil || len(got) != 1 || got[0].BoardToken != "untracked-co" {
 			t.Fatalf("ListUntrackedDiscoveredBoards() = %+v, %v, want only untracked-co", got, err)
 		}

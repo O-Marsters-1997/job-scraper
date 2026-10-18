@@ -634,7 +634,7 @@ func (f *FakeStore) RenameCompany(_ context.Context, id, name string) error {
 	return nil
 }
 
-func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context) ([]dto.CompanyBoard, error) {
+func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	tracked := make(map[string]bool, len(f.tracking))
@@ -643,7 +643,8 @@ func (f *FakeStore) ListUntrackedDiscoveredBoards(_ context.Context) ([]dto.Comp
 	}
 	out := make([]dto.CompanyBoard, 0)
 	for _, b := range f.boards {
-		if b.Status == dto.BoardVerified && b.VerificationMethod == "discovered" && !tracked[b.CompanyID] {
+		if b.Status == dto.BoardVerified && b.VerificationMethod == "discovered" && !tracked[b.CompanyID] &&
+			(b.UKJobsSeenAt != nil && !b.UKJobsSeenAt.Before(ukSince)) == uk {
 			out = append(out, b)
 		}
 	}

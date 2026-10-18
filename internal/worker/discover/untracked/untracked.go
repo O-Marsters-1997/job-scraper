@@ -11,25 +11,44 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 )
 
-const interval = 7 * 24 * time.Hour
+type Region int
+
+const (
+	UK     Region = iota // Name "untracked", every 7 days
+	Abroad               // Name "untracked-abroad", every 30 days
+)
+
+const ukWindow = 30 * 24 * time.Hour
 
 type BoardLister interface {
-	ListUntrackedDiscoveredBoards(ctx context.Context) ([]dto.CompanyBoard, error)
+	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
 }
 
 type Harvester struct {
 	boards BoardLister
+	region Region
 }
 
-func New(boards BoardLister) *Harvester {
-	return &Harvester{boards: boards}
+func New(boards BoardLister, region Region) *Harvester {
+	return &Harvester{boards: boards, region: region}
 }
 
-func (h *Harvester) Name() string            { return "untracked" }
-func (h *Harvester) Interval() time.Duration { return interval }
+func (h *Harvester) Name() string {
+	if h.region == Abroad {
+		return "untracked-abroad"
+	}
+	return "untracked"
+}
+
+func (h *Harvester) Interval() time.Duration {
+	if h.region == Abroad {
+		return ukWindow
+	}
+	return 7 * 24 * time.Hour
+}
 
 func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
-	rows, err := h.boards.ListUntrackedDiscoveredBoards(ctx)
+	rows, err := h.boards.ListUntrackedDiscoveredBoards(ctx, h.region == UK, time.Now().Add(-ukWindow))
 	if err != nil {
 		return discover.Harvest{}, fmt.Errorf("list untracked boards: %w", err)
 	}

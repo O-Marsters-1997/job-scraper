@@ -117,7 +117,8 @@ func run(ctx context.Context) error {
 	harvesters := []discover.Harvester{
 		commoncrawl.New(&http.Client{Timeout: 2 * time.Minute}, commoncrawl.CollinfoURL),
 		wttjharvest.New(&http.Client{Timeout: time.Minute}, wttjharvest.SitemapURL),
-		untracked.New(js.Boards()),
+		untracked.New(js.Boards(), untracked.UK),
+		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
 		yc.New(&http.Client{Timeout: time.Minute}, yc.CompaniesURL, domainBase.Get),
 	}
