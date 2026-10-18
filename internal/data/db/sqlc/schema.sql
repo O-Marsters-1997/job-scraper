@@ -382,7 +382,8 @@ CREATE TABLE board_poll_state (
     last_parsed INT NOT NULL DEFAULT 0,
     lease_owner TEXT,
     lease_until TIMESTAMPTZ,
-    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    next_due_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    check_published_at TIMESTAMPTZ
 );
 
 CREATE TABLE board_job_observations (

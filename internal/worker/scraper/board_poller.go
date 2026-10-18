@@ -18,6 +18,7 @@ type BoardPollStore interface {
 	ClaimBoard(context.Context, string, bool) (dto.BoardPoll, error)
 	CompleteBoard(context.Context, dto.BoardSnapshot) error
 	FailBoard(context.Context, dto.BoardPoll) error
+	ClearBoardCheckPublished(context.Context, string) error
 }
 
 type BoardFetcher interface {
@@ -41,7 +42,7 @@ func NewBoardPoller(store BoardPollStore, fetcher BoardFetcher, ingester BoardIn
 func (p *BoardPoller) PollBoard(ctx context.Context, id string, manual bool) error {
 	claim, err := p.store.ClaimBoard(ctx, id, manual)
 	if errors.Is(err, jobsearch.ErrBoardClaimUnavailable) && !manual {
-		return nil
+		return p.store.ClearBoardCheckPublished(ctx, id)
 	}
 	if err != nil {
 		return err

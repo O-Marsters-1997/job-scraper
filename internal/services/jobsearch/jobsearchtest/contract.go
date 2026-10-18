@@ -547,6 +547,50 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a published board check holds the board back until released", func(t *testing.T) {
+		st, userID := newStore(t)
+		ctx := t.Context()
+		c, err := st.UpsertCompany(ctx, dto.CompanyUpsert{Slug: "held-co", Name: "Held Co"})
+		if err != nil {
+			t.Fatalf("UpsertCompany(...) = %v", err)
+		}
+		board, err := st.UpsertCandidateBoard(ctx, c.ID, "greenhouse", "held-co")
+		if err != nil {
+			t.Fatalf("UpsertCandidateBoard(...) = %v", err)
+		}
+		if _, err := st.SetCompanyTracking(ctx, userID, c.ID, true, 60); err != nil {
+			t.Fatalf("SetCompanyTracking(...) = %v", err)
+		}
+		if _, err := st.VerifyCompanyBoard(ctx, c.ID, "greenhouse", "held-co", "test", ""); err != nil {
+			t.Fatalf("VerifyCompanyBoard(...) = %v", err)
+		}
+		dueIDs := func() []string {
+			t.Helper()
+			due, err := st.ListDueBoards(ctx)
+			if err != nil {
+				t.Fatalf("ListDueBoards() = %v", err)
+			}
+			ids := make([]string, 0, len(due))
+			for _, b := range due {
+				ids = append(ids, b.ID)
+			}
+			return ids
+		}
+
+		if err := st.MarkBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatalf("MarkBoardCheckPublished(...) = %v", err)
+		}
+		if got := dueIDs(); len(got) != 0 {
+			t.Errorf("ListDueBoards() after publish = %v, want none", got)
+		}
+		if err := st.ClearBoardCheckPublished(ctx, board.ID); err != nil {
+			t.Fatalf("ClearBoardCheckPublished(...) = %v", err)
+		}
+		if got := dueIDs(); !slices.Equal(got, []string{board.ID}) {
+			t.Errorf("ListDueBoards() after release = %v, want [%s]", got, board.ID)
+		}
+	})
+
 	t.Run("verified boards by slug skip candidates and flag enabled trackers and completed polls", func(t *testing.T) {
 		st, userID := newStore(t)
 		ctx := t.Context()

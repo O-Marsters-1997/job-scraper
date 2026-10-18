@@ -22,12 +22,13 @@ import (
 )
 
 type boardPollState struct {
-	leaseOwner   string
-	leaseExpires time.Time
-	version      int64
-	reported     int
-	parsed       int
-	completedAt  time.Time
+	leaseOwner       string
+	leaseExpires     time.Time
+	version          int64
+	reported         int
+	parsed           int
+	completedAt      time.Time
+	checkPublishedAt time.Time
 }
 
 type FakeStore struct {
@@ -823,6 +824,9 @@ func (f *FakeStore) CompleteBoard(_ context.Context, snapshot dto.BoardSnapshot)
 	}
 	st.reported, st.parsed = snapshot.Reported, len(urls)
 	st.completedAt = time.Now()
+	if !poll.Manual {
+		st.checkPublishedAt = time.Time{}
+	}
 	return nil
 }
 
@@ -838,13 +842,29 @@ func (f *FakeStore) ListDueBoards(context.Context) ([]dto.BoardPoll, error) {
 		if b.Status != dto.BoardVerified {
 			continue
 		}
-		if st := f.pollState[id]; st != nil && st.leaseOwner != "" {
+		if st := f.pollState[id]; st != nil && (st.leaseOwner != "" || time.Since(st.checkPublishedAt) < 24*time.Hour) {
 			continue
 		}
 		out = append(out, boardPollFor(id, b))
 	}
 	slices.SortFunc(out, func(a, b dto.BoardPoll) int { return cmp.Compare(a.ID, b.ID) })
 	return out, nil
+}
+
+func (f *FakeStore) MarkBoardCheckPublished(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.pollStateFor(id).checkPublishedAt = time.Now()
+	return nil
+}
+
+func (f *FakeStore) ClearBoardCheckPublished(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if st := f.pollState[id]; st != nil {
+		st.checkPublishedAt = time.Time{}
+	}
+	return nil
 }
 
 func (f *FakeStore) ListActiveBoards(context.Context) ([]dto.BoardPoll, error) {

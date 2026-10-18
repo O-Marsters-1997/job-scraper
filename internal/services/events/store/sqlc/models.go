@@ -215,6 +215,7 @@ type BoardPollState struct {
 	LeaseOwner               pgtype.Text
 	LeaseUntil               pgtype.Timestamptz
 	NextDueAt                pgtype.Timestamptz
+	CheckPublishedAt         pgtype.Timestamptz
 }
 
 type CandidateAssessment struct {

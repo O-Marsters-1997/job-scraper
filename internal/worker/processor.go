@@ -26,6 +26,11 @@ import (
 )
 
 func (p *Processor) FailRun(ctx context.Context, task queue.Task) error {
+	if task.Kind == queue.BoardCheckTask && !task.Manual {
+		if err := p.js.Boards().ClearBoardCheckPublished(ctx, task.BoardID); err != nil {
+			return err
+		}
+	}
 	if task.Kind == queue.DetailTask || task.TargetID == "" || task.RunID == "" {
 		return nil
 	}
