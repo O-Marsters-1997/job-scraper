@@ -316,6 +316,35 @@ func TestCreateJobNote(t *testing.T) {
 			t.Errorf("CreateJobNote(10000 chars) err = %v", err)
 		}
 	})
+
+	t.Run("keeps the quote", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		quote := &dto.NoteQuote{Exact: strings.Repeat("é", 2000), Prefix: strings.Repeat("é", 64), Suffix: "after"}
+		got, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: quote})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		if diff := cmp.Diff(quote, got.Quote); diff != "" {
+			t.Errorf("CreateJobNote(...) quote mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	for name, quote := range map[string]dto.NoteQuote{
+		"empty quote":     {},
+		"oversize quote":  {Exact: strings.Repeat("é", 2001)},
+		"oversize prefix": {Exact: "x", Prefix: strings.Repeat("é", 65)},
+		"oversize suffix": {Exact: "x", Suffix: strings.Repeat("é", 65)},
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "why", Quote: &quote})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
 }
 
 func TestUpdateJobNote(t *testing.T) {

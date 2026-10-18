@@ -4,7 +4,6 @@ import { recordEvent } from "@/api/events";
 import { Icon } from "@/components/Icon";
 import { CvSheet } from "@/components/jobs/CvSheet";
 import { JobActionBar } from "@/components/jobs/JobActionBar";
-import JobDescription from "@/components/jobs/JobDescription";
 import { SuitabilityPanel } from "@/components/jobs/SuitabilityPanel";
 import { TrackApplicationDialog } from "@/components/jobs/TrackApplicationDialog";
 import { QueryBoundary } from "@/components/QueryBoundary";
@@ -14,12 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
+import type { NoteQuote } from "@/types/jobNote";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
 import { useTrackJobs } from "../../hooks/useTrackJobs";
 import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
+import { CommentableDescription } from "./-jobs-detail/CommentableDescription";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
 import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
@@ -39,6 +40,7 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const [taskOpen, setTaskOpen] = createSignal(false);
+	const [quote, setQuote] = createSignal<NoteQuote | null>(null);
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
 	const { dismiss } = useDismissJob();
@@ -122,7 +124,12 @@ function JobDetailPage() {
 										</p>
 									}
 								>
-									{(desc) => <JobDescription html={desc()} />}
+									{(desc) => (
+										<CommentableDescription
+											html={desc()}
+											onComment={setQuote}
+										/>
+									)}
 								</Show>
 							</CardContent>
 						</Card>
@@ -174,7 +181,11 @@ function JobDetailPage() {
 							</div>
 
 							<div class="max-md:order-4">
-								<JobNotesCard jobId={params().id} />
+								<JobNotesCard
+									jobId={params().id}
+									quote={quote()}
+									onClearQuote={() => setQuote(null)}
+								/>
 							</div>
 
 							<Show when={isAgencyKind(j().CompanyKind)}>

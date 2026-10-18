@@ -1,4 +1,4 @@
-import { type JobNote, jobNoteSchema } from "../types/jobNote";
+import { type JobNote, jobNoteSchema, type NoteQuote } from "../types/jobNote";
 import { apiFetch, apiFetchVoid, jsonInit } from "./client";
 import { mocked } from "./config";
 
@@ -16,14 +16,15 @@ export async function fetchJobNotes(jobId: string): Promise<JobNote[]> {
 export async function createJobNote(
 	jobId: string,
 	body: string,
+	quote: NoteQuote | null,
 ): Promise<JobNote> {
 	return mocked(
-		(db) => db.createJobNote(jobId, body),
+		(db) => db.createJobNote(jobId, body, quote),
 		() =>
 			apiFetch(
 				`/jobs/${encodeURIComponent(jobId)}/notes`,
 				jobNoteSchema,
-				jsonInit("POST", { body }),
+				jsonInit("POST", { body, quote }),
 			),
 	);
 }

@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,12 @@ import {
 	useUpdateJobNote,
 } from "@/hooks/useJobNotes";
 import { formatDate } from "@/lib/datetime";
-import { JOB_NOTE_MAX_LENGTH, type JobNote } from "@/types/jobNote";
+
+import {
+	JOB_NOTE_MAX_LENGTH,
+	type JobNote,
+	type NoteQuote,
+} from "@/types/jobNote";
 
 function NoteItem(props: { note: JobNote; jobId: string }) {
 	const update = useUpdateJobNote(() => props.jobId);
@@ -40,6 +45,7 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 					(edited)
 				</Show>
 			</span>
+			<Show when={props.note.Quote}>{(q) => <Quote text={q().exact} />}</Show>
 			<Show
 				when={editing()}
 				fallback={
@@ -109,14 +115,39 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 	);
 }
 
-export function JobNotesCard(props: { jobId: string }) {
+function Quote(props: { text: string }) {
+	return (
+		<blockquote class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-sm text-muted">
+			{props.text}
+		</blockquote>
+	);
+}
+
+export function JobNotesCard(props: {
+	jobId: string;
+	quote: NoteQuote | null;
+	onClearQuote: () => void;
+}) {
 	const notes = useJobNotes(() => props.jobId);
 	const create = useCreateJobNote(() => props.jobId);
 	const [body, setBody] = createSignal("");
+	let input!: HTMLTextAreaElement;
+
+	createEffect(() => {
+		if (props.quote) input.focus();
+	});
 
 	const submit = (e: SubmitEvent) => {
 		e.preventDefault();
-		create.mutate(body(), { onSuccess: () => setBody("") });
+		create.mutate(
+			{ body: body(), quote: props.quote },
+			{
+				onSuccess: () => {
+					setBody("");
+					props.onClearQuote();
+				},
+			},
+		);
 	};
 
 	return (
@@ -129,9 +160,25 @@ export function JobNotesCard(props: { jobId: string }) {
 					<FormFeedback
 						error={create.isError ? "Could not save the note." : null}
 					/>
+					<Show when={props.quote}>
+						{(q) => (
+							<div class="flex items-start justify-between gap-2">
+								<Quote text={q().exact} />
+								<Button
+									type="button"
+									size="sm"
+									variant="ghost"
+									onClick={props.onClearQuote}
+								>
+									Remove quote
+								</Button>
+							</div>
+						)}
+					</Show>
 					<Label for="job-note-body">Add note</Label>
 					<Textarea
 						id="job-note-body"
+						ref={input}
 						rows={3}
 						maxLength={JOB_NOTE_MAX_LENGTH}
 						value={body()}

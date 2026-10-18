@@ -461,6 +461,31 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
+	t.Run("job note round-trips its quote, general notes have none", func(t *testing.T) {
+		f := newStore(t)
+		quote := &dto.NoteQuote{Exact: "Go", Prefix: "we use ", Suffix: " daily"}
+		for _, in := range []dto.CreateJobNoteInput{
+			{JobID: f.JobID, Body: "general"},
+			{JobID: f.JobID, Body: "comment", Quote: quote},
+		} {
+			if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, in); err != nil {
+				t.Fatalf("CreateJobNote(%q) err = %v", in.Body, err)
+			}
+		}
+		got, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListJobNotes(...) err = %v", err)
+		}
+		want := []*dto.NoteQuote{quote, nil}
+		var quotes []*dto.NoteQuote
+		for _, n := range got {
+			quotes = append(quotes, n.Quote)
+		}
+		if diff := cmp.Diff(want, quotes); diff != "" {
+			t.Errorf("ListJobNotes(...) quotes mismatch (-want +got):\n%s", diff)
+		}
+	})
+
 	t.Run("job notes list newest first and are scoped to the user", func(t *testing.T) {
 		f := newStore(t)
 		for _, body := range []string{"first", "second"} {
