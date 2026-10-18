@@ -37,11 +37,13 @@ func TestRoutesRejectUnauthedAndMalformedRequests(t *testing.T) {
 		"GET /recruiter-contacts/summaries",
 		"GET /jobs/{id}/recruiter-contacts",
 		"POST /jobs/{id}/recruiter-contacts",
+		"GET /jobs/{id}/notes",
+		"POST /jobs/{id}/notes",
 	)
 	handlerstest.RejectsMalformedBody(t, r,
 		"POST /application-statuses/", "PATCH /application-statuses/{id}",
 		"POST /applications/", "PATCH /applications/{id}", "PUT /applications/{id}/chase",
-		"POST /jobs/{id}/recruiter-contacts",
+		"POST /jobs/{id}/recruiter-contacts", "POST /jobs/{id}/notes",
 	)
 	handlerstest.RejectsBadPathID(t, r, "PATCH /applications/{id}")
 }
@@ -116,6 +118,15 @@ func TestRoutesHappyPaths(t *testing.T) {
 	sums := handlerstest.Do[map[string]dto.RecruiterContactSummary](t, r, http.StatusOK, "GET /recruiter-contacts/summaries?job_ids=job-1,job-2", "")
 	if sums["job-1"].Count != 1 || sums["job-1"].BestOutcome != dto.OutcomeSpoke || len(sums) != 1 {
 		t.Fatalf("summaries = %+v, want only job-1 with 1 spoke contact", sums)
+	}
+
+	note := handlerstest.Do[dto.JobNote](t, r, http.StatusCreated, "POST /jobs/job-1/notes", `{"body":"hello"}`)
+	if note.JobID != "job-1" || note.Body != "hello" {
+		t.Fatalf("created note = %+v, want job-1/hello", note)
+	}
+	handlerstest.Do[struct{}](t, r, http.StatusBadRequest, "POST /jobs/job-1/notes", `{"body":""}`)
+	if got := handlerstest.Do[[]dto.JobNote](t, r, http.StatusOK, "GET /jobs/job-1/notes", ""); len(got) != 1 {
+		t.Fatalf("got %d notes, want 1", len(got))
 	}
 
 	handlerstest.Do[struct{}](t, r, http.StatusNoContent, "DELETE /applications/"+app.ID, "")

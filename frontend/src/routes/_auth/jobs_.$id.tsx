@@ -22,6 +22,7 @@ import { queryClient } from "../../lib/queryClient";
 import { ApplicationCard } from "./-jobs-detail/ApplicationCard";
 import { JobFactsCard } from "./-jobs-detail/JobFactsCard";
 import { JobHeader } from "./-jobs-detail/JobHeader";
+import { JobNotesCard } from "./-jobs-detail/JobNotesCard";
 import { JobTasksCard } from "./-jobs-detail/JobTasksCard";
 import { RecruiterContactsCard } from "./-jobs-detail/RecruiterContactsCard";
 
@@ -170,6 +171,10 @@ function JobDetailPage() {
 									jobId={params().id}
 									onAdd={() => setTaskOpen(true)}
 								/>
+							</div>
+
+							<div class="max-md:order-4">
+								<JobNotesCard jobId={params().id} />
 							</div>
 
 							<Show when={isAgencyKind(j().CompanyKind)}>

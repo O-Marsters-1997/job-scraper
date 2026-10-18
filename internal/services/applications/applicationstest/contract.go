@@ -460,4 +460,31 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("GetRecruiterContactSummaries(other user) = %+v, want none", other)
 		}
 	})
+
+	t.Run("job notes list newest first and are scoped to the user", func(t *testing.T) {
+		f := newStore(t)
+		for _, body := range []string{"first", "second"} {
+			if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: body}); err != nil {
+				t.Fatalf("CreateJobNote(%q) err = %v", body, err)
+			}
+		}
+		got, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListJobNotes(...) err = %v", err)
+		}
+		var bodies []string
+		for _, n := range got {
+			bodies = append(bodies, n.Body)
+		}
+		if diff := cmp.Diff([]string{"second", "first"}, bodies); diff != "" {
+			t.Errorf("ListJobNotes(...) bodies mismatch (-want +got):\n%s", diff)
+		}
+		other, err := f.Store.ListJobNotes(t.Context(), missingID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListJobNotes(other user) err = %v", err)
+		}
+		if len(other) != 0 {
+			t.Errorf("ListJobNotes(other user) = %+v, want none", other)
+		}
+	})
 }

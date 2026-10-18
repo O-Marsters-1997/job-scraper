@@ -60,7 +60,6 @@ export const jobSchema = z.object({
 	CompanyKind: companyKindSchema.optional(),
 	Breakdown: z.array(scoreRowSchema).nullable().optional(),
 	Listings: z.array(jobListingSchema).nullable().optional(),
-	// Optional rich fields — populated in demo mode; absent from the live backend
 	Description: z.string().optional(),
 	Skills: z.array(z.string()).optional(),
 	EmploymentType: z.string().optional(),

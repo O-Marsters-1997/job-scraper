@@ -24,6 +24,7 @@ type FakeStore struct {
 	apps     map[string]dto.Application
 	statuses map[string]dto.ApplicationStatus
 	contacts map[string][]dto.RecruiterContact
+	notes    map[string][]dto.JobNote
 
 	nextContact int
 }
@@ -33,6 +34,7 @@ func NewFakeStore() *FakeStore {
 		apps:     make(map[string]dto.Application),
 		statuses: make(map[string]dto.ApplicationStatus),
 		contacts: make(map[string][]dto.RecruiterContact),
+		notes:    make(map[string][]dto.JobNote),
 	}
 }
 
@@ -254,6 +256,28 @@ func (f *FakeStore) ListRecruiterContacts(_ context.Context, userID, jobID strin
 	slices.SortStableFunc(out, func(a, b dto.RecruiterContact) int {
 		return cmp.Or(strings.Compare(b.ContactedOn, a.ContactedOn), b.CreatedAt.Compare(a.CreatedAt))
 	})
+	return out, nil
+}
+
+func (f *FakeStore) CreateJobNote(_ context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	now := time.Now()
+	n := dto.JobNote{ID: fmt.Sprintf("note-%d", len(f.notes[userID])+1), JobID: in.JobID, Body: in.Body, CreatedAt: now, UpdatedAt: now}
+	f.notes[userID] = append(f.notes[userID], n)
+	return n, nil
+}
+
+func (f *FakeStore) ListJobNotes(_ context.Context, userID, jobID string) ([]dto.JobNote, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []dto.JobNote{}
+	for _, n := range f.notes[userID] {
+		if n.JobID == jobID {
+			out = append(out, n)
+		}
+	}
+	slices.Reverse(out)
 	return out, nil
 }
 

@@ -386,6 +386,15 @@ type JobGrade struct {
 	UpdatedAt    pgtype.Timestamptz
 }
 
+type JobNote struct {
+	ID        pgtype.UUID
+	UserID    pgtype.UUID
+	JobID     pgtype.UUID
+	Body      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type JobRejection struct {
 	UserID              pgtype.UUID
 	JobID               pgtype.UUID

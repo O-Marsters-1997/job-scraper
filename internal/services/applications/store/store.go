@@ -428,3 +428,42 @@ func (s *Store) GetRecruiterContactSummaries(ctx context.Context, userID string,
 	}
 	return out, nil
 }
+
+func (s *Store) CreateJobNote(ctx context.Context, userID string, in dto.CreateJobNoteInput) (dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	jid, err := data.UUID(in.JobID)
+	if err != nil {
+		return dto.JobNote{}, err
+	}
+	row, err := s.queries.CreateJobNote(ctx, sqlc.CreateJobNoteParams{UserID: uid, JobID: jid, Body: in.Body})
+	if err != nil {
+		if data.IsForeignKeyViolation(err, "job_notes_job_id_fkey") {
+			return dto.JobNote{}, data.ErrNotFound
+		}
+		return dto.JobNote{}, fmt.Errorf("store.CreateJobNote: %w", err)
+	}
+	return toJobNoteDTO(row), nil
+}
+
+func (s *Store) ListJobNotes(ctx context.Context, userID, jobID string) ([]dto.JobNote, error) {
+	uid, err := data.UUID(userID)
+	if err != nil {
+		return nil, err
+	}
+	jid, err := data.UUID(jobID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.ListJobNotesForJob(ctx, sqlc.ListJobNotesForJobParams{UserID: uid, JobID: jid})
+	if err != nil {
+		return nil, fmt.Errorf("store.ListJobNotes: %w", err)
+	}
+	out := make([]dto.JobNote, len(rows))
+	for i, row := range rows {
+		out[i] = toJobNoteDTO(row)
+	}
+	return out, nil
+}
