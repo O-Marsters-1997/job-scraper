@@ -64,3 +64,9 @@ LIMIT 200;
 
 -- name: DeleteExpiredCandidates :exec
 DELETE FROM job_candidates WHERE expires_at <= NOW();
+
+-- name: ListCandidateDiscoveryFilters :many
+SELECT d.candidate_id, t.filters
+FROM candidate_discoveries d
+JOIN source_targets t ON t.id = d.source_target_id
+WHERE d.candidate_id = ANY(sqlc.arg(candidate_ids)::uuid[]) AND t.user_id = sqlc.arg(user_id) AND t.enabled;

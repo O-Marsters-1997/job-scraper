@@ -22,6 +22,7 @@ type Job struct {
 	Description        string
 	SalaryRaw          string
 	WorkArrangement    string
+	RemoteCheckURL     string
 	SuitabilityScore   *int
 	Band               string
 	Grade              string

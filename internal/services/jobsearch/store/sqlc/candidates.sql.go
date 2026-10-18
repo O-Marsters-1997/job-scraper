@@ -57,6 +57,43 @@ func (q *Queries) DeleteExpiredCandidates(ctx context.Context) error {
 	return err
 }
 
+const listCandidateDiscoveryFilters = `-- name: ListCandidateDiscoveryFilters :many
+SELECT d.candidate_id, t.filters
+FROM candidate_discoveries d
+JOIN source_targets t ON t.id = d.source_target_id
+WHERE d.candidate_id = ANY($1::uuid[]) AND t.user_id = $2 AND t.enabled
+`
+
+type ListCandidateDiscoveryFiltersParams struct {
+	CandidateIds []pgtype.UUID
+	UserID       pgtype.UUID
+}
+
+type ListCandidateDiscoveryFiltersRow struct {
+	CandidateID pgtype.UUID
+	Filters     []byte
+}
+
+func (q *Queries) ListCandidateDiscoveryFilters(ctx context.Context, arg ListCandidateDiscoveryFiltersParams) ([]ListCandidateDiscoveryFiltersRow, error) {
+	rows, err := q.db.Query(ctx, listCandidateDiscoveryFilters, arg.CandidateIds, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCandidateDiscoveryFiltersRow
+	for rows.Next() {
+		var i ListCandidateDiscoveryFiltersRow
+		if err := rows.Scan(&i.CandidateID, &i.Filters); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCandidatesForUser = `-- name: ListCandidatesForUser :many
 SELECT c.id, c.normalized_url, c.card_title, c.card_company, c.card_location, c.card, c.posted_at, c.source
 FROM job_candidates c
