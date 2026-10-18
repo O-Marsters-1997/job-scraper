@@ -3,6 +3,7 @@ package linkedin
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/dto"
 	"github.com/ollymarsters/job-scraper/internal/slug"
 	"github.com/ollymarsters/job-scraper/internal/sourcespec"
+	"github.com/ollymarsters/job-scraper/internal/worker/proxy"
 	"github.com/ollymarsters/job-scraper/internal/worker/sources"
 )
 
@@ -55,15 +57,22 @@ const (
 
 var applyURLRe = regexp.MustCompile(`\?url=([^"]+)`)
 
-const requestGap = 2500 * time.Millisecond
+const (
+	requestGap = 2500 * time.Millisecond
+	blockedFor = time.Minute
+)
 
-func NewGate() *sources.Gate { return sources.NewGate(requestGap, 0) }
+func NewGate() *sources.Gate { return sources.NewGate(requestGap, blockedFor) }
 
 func (s *Scraper) get(ctx context.Context, url string) ([]byte, error) {
 	if err := s.gate.Wait(ctx); err != nil {
 		return nil, err
 	}
-	return s.Get(ctx, url)
+	body, err := s.Get(ctx, url)
+	if errors.Is(err, proxy.ErrBlocked) {
+		s.gate.Block(blockedFor)
+	}
+	return body, err
 }
 
 func pageURL(keywords string, filters map[string]string, recency string, start int) string {
