@@ -87,6 +87,7 @@ func TestSkillSuggestions(t *testing.T) {
 	})
 
 	t.Run("a Bank Skill is present when a whole word of a line, placed with its category-mates", func(t *testing.T) {
+		t.Parallel()
 		docs := cvtailortest.Docs{TabJSON: tabJSON(t,
 			head("Skills"),
 			prose("Languages/ Frameworks Typescript, Django"),
