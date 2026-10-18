@@ -203,6 +203,36 @@ func (pl plan) validate(edits cvedit.EditSet) error {
 	return nil
 }
 
+func (pl plan) orderBullets(edits cvedit.EditSet) cvedit.EditSet {
+	byID := pl.byID()
+	for _, pe := range edits.Positions {
+		rank := map[string]int{}
+		for i, a := range byID[pe.PositionID].Achievements {
+			rank[a.ID] = i
+		}
+		earliest := func(b cvedit.Bullet) int {
+			first := len(rank)
+			for _, id := range b.AchievementIDs {
+				first = min(first, rank[id])
+			}
+			return first
+		}
+		var cited []int
+		var bullets []cvedit.Bullet
+		for i, b := range pe.Bullets {
+			if len(b.AchievementIDs) > 0 {
+				cited = append(cited, i)
+				bullets = append(bullets, b)
+			}
+		}
+		slices.SortStableFunc(bullets, func(a, b cvedit.Bullet) int { return earliest(a) - earliest(b) })
+		for j, i := range cited {
+			pe.Bullets[i] = bullets[j]
+		}
+	}
+	return edits
+}
+
 func (pl plan) revertBlocked(edits cvedit.EditSet) (cvedit.EditSet, []string) {
 	blocks := checks.Blocking(checks.Run(pl.draft(edits, 0, 0)))
 	blocked := make(map[string]bool, len(blocks))
