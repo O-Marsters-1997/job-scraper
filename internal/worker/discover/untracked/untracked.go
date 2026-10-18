@@ -14,11 +14,15 @@ import (
 type Region int
 
 const (
-	UK     Region = iota // Name "untracked", every 7 days
-	Abroad               // Name "untracked-abroad", every 30 days
+	UK Region = iota
+	Abroad
 )
 
-const ukWindow = 30 * 24 * time.Hour
+const (
+	ukWindow       = 30 * 24 * time.Hour
+	ukInterval     = 7 * 24 * time.Hour
+	abroadInterval = 30 * 24 * time.Hour
+)
 
 type BoardLister interface {
 	ListUntrackedDiscoveredBoards(ctx context.Context, uk bool, ukSince time.Time) ([]dto.CompanyBoard, error)
@@ -42,9 +46,9 @@ func (h *Harvester) Name() string {
 
 func (h *Harvester) Interval() time.Duration {
 	if h.region == Abroad {
-		return ukWindow
+		return abroadInterval
 	}
-	return 7 * 24 * time.Hour
+	return ukInterval
 }
 
 func (h *Harvester) Harvest(ctx context.Context) (discover.Harvest, error) {
