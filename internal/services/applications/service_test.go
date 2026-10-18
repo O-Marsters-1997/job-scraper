@@ -3,6 +3,7 @@ package applications_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,44 @@ func TestSetChaseErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("records the note", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		got, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "call back Friday"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		want := dto.JobNote{JobID: "job-1", Body: "call back Friday"}
+		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.JobNote{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
+			t.Errorf("CreateJobNote(...) mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	for name, body := range map[string]string{
+		"empty body":    "",
+		"oversize body": strings.Repeat("é", 10001),
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: body})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("CreateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+
+	t.Run("10000 characters is accepted", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		if _, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: strings.Repeat("é", 10000)}); err != nil {
+			t.Errorf("CreateJobNote(10000 chars) err = %v", err)
+		}
+	})
 }
 
 func TestLogRecruiterContact(t *testing.T) {
