@@ -1,7 +1,6 @@
 \set ON_ERROR_STOP on
 \pset null '-'
 
--- Weeks are ISO weeks starting Monday 00:00 UTC; the last 4 complete weeks.
 CREATE TEMP VIEW weeks AS
 SELECT w AS week_start, w + interval '7 days' AS week_end
 FROM generate_series(
@@ -58,5 +57,5 @@ GROUP BY 1
 ORDER BY 1;
 
 \echo '== Export verified Boards for the hiring.cafe coverage comm =='
-\echo 'Run: psql -At -c "SELECT lower(source || '':'' || board_token) FROM company_boards WHERE status = ''verified''" | sort -u > boards.txt'
+\echo 'Run: psql -At -c "SELECT lower(source || '':'' || board_token) FROM company_boards WHERE status = ''verified''" "$PROD_URL" | LC_ALL=C sort -u > boards.txt'
 \echo 'Then: comm -12 .claude/handoffs/sme-discovery-data/hiringcafe-london-supported-boards.txt boards.txt | wc -l'
