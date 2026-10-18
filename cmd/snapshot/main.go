@@ -48,6 +48,15 @@ func main() {
 			fmt.Fprintf(os.Stderr, "rebase: %v\n", err)
 			os.Exit(1)
 		}
+	case "hiringcafe":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: snapshot hiringcafe <search-url>")
+			os.Exit(1)
+		}
+		if err := hiringcafeSpike(os.Args[2], spikeDuration, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "hiringcafe: %v\n", err)
+			os.Exit(1)
+		}
 	default:
 		usage()
 		os.Exit(1)
@@ -184,4 +193,5 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  snapshot download <source> <name> <url>")
 	fmt.Fprintln(os.Stderr, "  snapshot rebase <source>")
+	fmt.Fprintln(os.Stderr, "  snapshot hiringcafe <search-url>")
 }
