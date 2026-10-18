@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,11 +22,10 @@ func runResolveDomains(args []string) {
 	if len(args) != 1 {
 		usage()
 	}
-	f, err := os.Open(args[0])
+	data, err := os.ReadFile(filepath.Clean(args[0]))
 	if err != nil {
-		fatal("open domains file", err)
+		fatal("read domains file", err)
 	}
-	defer f.Close()
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	get := func(ctx context.Context, url string) ([]byte, error) {
@@ -35,15 +37,16 @@ func runResolveDomains(args []string) {
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes))
+		closeErr := resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return nil, fmt.Errorf("status %d", resp.StatusCode)
 		}
-		return io.ReadAll(io.LimitReader(resp.Body, maxPageBytes))
+		return body, errors.Join(err, closeErr)
 	}
 
 	var resolved, total int
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		domain := strings.TrimSpace(scanner.Text())
 		if domain == "" {
