@@ -61,8 +61,8 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 
 	t.Run("create returns the application", func(t *testing.T) {
 		f := newStore(t)
-		got := createApp(t, f, dto.CreateApplicationInput{Notes: "referred by a friend"})
-		want := dto.Application{UserID: f.UserID, JobID: f.JobID, Notes: "referred by a friend"}
+		got := createApp(t, f, dto.CreateApplicationInput{SalaryInfo: "50k"})
+		want := dto.Application{UserID: f.UserID, JobID: f.JobID, SalaryInfo: "50k"}
 		if diff := cmp.Diff(want, got, cmpopts.IgnoreFields(dto.Application{}, "ID", "CreatedAt", "UpdatedAt")); diff != "" {
 			t.Errorf("CreateApplication(...) mismatch (-want +got):\n%s", diff)
 		}
@@ -180,15 +180,15 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("update changes notes", func(t *testing.T) {
+	t.Run("update changes salary info", func(t *testing.T) {
 		f := newStore(t)
 		created := createApp(t, f, dto.CreateApplicationInput{})
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(...) err = %v", err)
 		}
-		if got.Notes != "followed up" {
-			t.Errorf("UpdateApplication(...) notes = %q, want %q", got.Notes, "followed up")
+		if got.SalaryInfo != "60k" {
+			t.Errorf("UpdateApplication(...) salary = %q, want %q", got.SalaryInfo, "60k")
 		}
 	})
 
@@ -212,7 +212,7 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		applied := createStatus(t, f, "Applied")
 		created := createApp(t, f, dto.CreateApplicationInput{StatusID: applied.ID})
 		want := chaseSet(t, f, created.ID)
-		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, Notes: "followed up"})
+		got, err := f.Store.UpdateApplication(t.Context(), f.UserID, created.ID, dto.UpdateApplicationInput{StatusID: applied.ID, SalaryInfo: "60k"})
 		if err != nil {
 			t.Fatalf("UpdateApplication(same status) err = %v", err)
 		}

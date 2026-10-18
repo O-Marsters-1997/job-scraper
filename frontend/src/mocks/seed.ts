@@ -187,7 +187,6 @@ for (const { statusIndex, count } of APP_DISTRIBUTION) {
 			UserID: "user-1",
 			JobID: job.ID,
 			StatusID: status.ID,
-			Notes: "",
 			AppliedAt: appliedAt,
 			SalaryInfo: "",
 			CreatedAt: faker.date.recent({ days: 25 }).toISOString(),

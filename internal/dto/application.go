@@ -7,7 +7,6 @@ import (
 type CreateApplicationInput struct {
 	JobID      string  `json:"job_id"`
 	StatusID   string  `json:"status_id"`
-	Notes      string  `json:"notes"`
 	SalaryInfo string  `json:"salary_info"`
 	AppliedAt  *string `json:"applied_at"`
 }
@@ -15,7 +14,6 @@ type CreateApplicationInput struct {
 type UpdateApplicationInput struct {
 	ID         string  `json:"-" path:"id"`
 	StatusID   string  `json:"status_id"`
-	Notes      string  `json:"notes"`
 	SalaryInfo string  `json:"salary_info"`
 	AppliedAt  *string `json:"applied_at"`
 }
@@ -48,7 +46,6 @@ type Application struct {
 	UserID     string
 	JobID      string
 	StatusID   string
-	Notes      string
 	AppliedAt  *time.Time
 	SalaryInfo string
 	CreatedAt  time.Time
@@ -68,7 +65,6 @@ type ApplicationWithDetails struct {
 	StatusID       string
 	StatusName     string
 	StatusColour   string
-	Notes          string
 	AppliedAt      *time.Time
 	SalaryInfo     string
 	CreatedAt      time.Time

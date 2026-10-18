@@ -89,12 +89,12 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("seed CreateApplication err = %v", err)
 	}
 
-	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, Notes: "followed up"})
+	got, err := svc.Update(t.Context(), userID, dto.UpdateApplicationInput{ID: created.ID, SalaryInfo: "60k"})
 	if err != nil {
 		t.Fatalf("Update(...) err = %v", err)
 	}
-	if got.Notes != "followed up" {
-		t.Errorf("Update(...) notes = %q, want %q", got.Notes, "followed up")
+	if got.SalaryInfo != "60k" {
+		t.Errorf("Update(...) salary = %q, want %q", got.SalaryInfo, "60k")
 	}
 }
 
