@@ -487,4 +487,35 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 			t.Errorf("ListJobNotes(other user) = %+v, want none", other)
 		}
 	})
+
+	t.Run("job note update and delete are scoped to the user", func(t *testing.T) {
+		f := newStore(t)
+		note, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: "before"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		if _, err := f.Store.UpdateJobNote(t.Context(), missingID, dto.UpdateJobNoteInput{ID: note.ID, Body: "hijack"}); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateJobNote(other user) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), missingID, note.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobNote(other user) err = %v, want ErrNotFound", err)
+		}
+		got, err := f.Store.UpdateJobNote(t.Context(), f.UserID, dto.UpdateJobNoteInput{ID: note.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobNote(...) err = %v", err)
+		}
+		if got.Body != "after" || got.UpdatedAt.Before(got.CreatedAt) || got.UpdatedAt.Equal(got.CreatedAt) {
+			t.Errorf("UpdateJobNote(...) = %+v, want body after and updated_at past created_at", got)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); err != nil {
+			t.Fatalf("DeleteJobNote(...) err = %v", err)
+		}
+		if err := f.Store.DeleteJobNote(t.Context(), f.UserID, note.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobNote(again) err = %v, want ErrNotFound", err)
+		}
+		left, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		if err != nil || len(left) != 0 {
+			t.Errorf("ListJobNotes(after delete) = %+v, %v, want none", left, err)
+		}
+	})
 }

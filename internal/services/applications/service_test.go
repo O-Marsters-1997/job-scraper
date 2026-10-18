@@ -318,6 +318,39 @@ func TestCreateJobNote(t *testing.T) {
 	})
 }
 
+func TestUpdateJobNote(t *testing.T) {
+	t.Parallel()
+	t.Run("changes the body", func(t *testing.T) {
+		t.Parallel()
+		svc, _ := newService(t)
+		created, err := svc.CreateJobNote(t.Context(), userID, dto.CreateJobNoteInput{JobID: "job-1", Body: "before"})
+		if err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
+		}
+		got, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: created.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobNote(...) err = %v", err)
+		}
+		if got.Body != "after" || got.JobID != "job-1" {
+			t.Errorf("UpdateJobNote(...) = %+v, want body after on job-1", got)
+		}
+	})
+
+	for name, body := range map[string]string{
+		"empty body":    "",
+		"oversize body": strings.Repeat("é", 10001),
+	} {
+		t.Run(name+" is rejected", func(t *testing.T) {
+			t.Parallel()
+			svc, _ := newService(t)
+			_, err := svc.UpdateJobNote(t.Context(), userID, dto.UpdateJobNoteInput{ID: "note-1", Body: body})
+			if !apperr.IsKind(err, apperr.KindInvalid) {
+				t.Errorf("UpdateJobNote(%s) err = %v, want invalid", name, err)
+			}
+		})
+	}
+}
+
 func TestLogRecruiterContact(t *testing.T) {
 	valid := dto.LogRecruiterContactInput{JobID: "job-1", ContactedOn: "2026-10-01", Channel: dto.ChannelEmail, Outcome: dto.OutcomeSpoke}
 
