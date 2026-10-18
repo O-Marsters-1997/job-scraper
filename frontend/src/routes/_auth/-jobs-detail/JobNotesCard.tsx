@@ -142,7 +142,7 @@ function Quote(props: { text: string; onClick?: () => void }) {
 		>
 			<button
 				type="button"
-				onClick={props.onClick}
+				onClick={() => props.onClick?.()}
 				class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-left text-sm text-muted hover:text-foreground"
 			>
 				{props.text}
