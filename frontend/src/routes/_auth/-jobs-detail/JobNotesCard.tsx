@@ -1,7 +1,7 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -154,8 +154,8 @@ function Quote(props: { text: string; onClick?: () => void }) {
 
 export function JobNotesCard(props: {
 	jobId: string;
-	quote: NoteQuote | null;
-	onClearQuote: () => void;
+	quote?: NoteQuote | null;
+	onClearQuote?: () => void;
 }) {
 	const notes = useJobNotes(() => props.jobId);
 	const create = useCreateJobNote(() => props.jobId);
@@ -169,11 +169,11 @@ export function JobNotesCard(props: {
 	const submit = (e: SubmitEvent) => {
 		e.preventDefault();
 		create.mutate(
-			{ body: body(), quote: props.quote },
+			{ body: body(), quote: props.quote ?? null },
 			{
 				onSuccess: () => {
 					setBody("");
-					props.onClearQuote();
+					props.onClearQuote?.();
 				},
 			},
 		);
@@ -181,10 +181,7 @@ export function JobNotesCard(props: {
 
 	return (
 		<Card>
-			<CardHeader class="pb-2">
-				<CardTitle>Notes</CardTitle>
-			</CardHeader>
-			<CardContent class="gap-3">
+			<CardContent class="gap-3 pt-4">
 				<form onSubmit={submit} class="flex flex-col gap-2">
 					<FormFeedback
 						error={create.isError ? "Could not save the note." : null}
@@ -208,7 +205,7 @@ export function JobNotesCard(props: {
 					<Textarea
 						id="job-note-body"
 						ref={input}
-						rows={3}
+						rows={14}
 						maxLength={JOB_NOTE_MAX_LENGTH}
 						value={body()}
 						onInput={(e) => setBody(e.currentTarget.value)}
