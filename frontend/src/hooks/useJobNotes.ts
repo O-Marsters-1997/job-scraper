@@ -6,7 +6,6 @@ import {
 	updateJobNote,
 } from "../api/jobNotes";
 import { keys } from "../api/keys";
-import type { NoteQuote } from "../types/jobNote";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
 export const jobNotesQueryOptions = (jobId: string) =>
@@ -21,8 +20,7 @@ export function useJobNotes(jobId: () => string) {
 
 export function useCreateJobNote(jobId: () => string) {
 	return useInvalidatingMutation(
-		(note: { body: string; quote: NoteQuote | null }) =>
-			createJobNote(jobId(), note.body, note.quote),
+		(body: string) => createJobNote(jobId(), body),
 		(note) => [keys.jobNotes(note.JobID)],
 	);
 }

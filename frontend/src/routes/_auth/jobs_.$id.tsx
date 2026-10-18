@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isAgencyKind } from "@/lib/agencyRollup";
 import type { Job } from "@/types/job";
-import type { NoteQuote } from "@/types/jobNote";
 import { applicationStatusesQueryOptions } from "../../hooks/useApplicationStatuses";
 import { applicationsQueryOptions } from "../../hooks/useApplications";
 import { DismissToast, useDismissJob } from "../../hooks/useDismissJob";
 import { gradeQueryOptions } from "../../hooks/useGrades";
+import { jobCommentsQueryOptions } from "../../hooks/useJobComments";
 import { jobNotesQueryOptions } from "../../hooks/useJobNotes";
 import { jobQueryOptions, useJob, useMarkJobsSeen } from "../../hooks/useJobs";
 import {
@@ -39,6 +39,7 @@ export const Route = createFileRoute("/_auth/jobs_/$id")({
 	loader: ({ params }) => {
 		void queryClient.prefetchQuery(jobDraftsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobNotesQueryOptions(params.id));
+		void queryClient.prefetchQuery(jobCommentsQueryOptions(params.id));
 		void queryClient.prefetchQuery(jobOpenTasksQueryOptions(params.id));
 		void queryClient.prefetchQuery(gradeQueryOptions(params.id));
 		void queryClient.prefetchQuery(experienceMatchQueryOptions(params.id));
@@ -55,7 +56,6 @@ function JobDetailPage() {
 	const params = Route.useParams();
 	const [cvOpen, setCvOpen] = createSignal(false);
 	const [taskOpen, setTaskOpen] = createSignal(false);
-	const [quote, setQuote] = createSignal<NoteQuote | null>(null);
 	const jobsQuery = useJob(() => params().id);
 	const navigate = useNavigate();
 	const { dismiss } = useDismissJob();
@@ -140,11 +140,7 @@ function JobDetailPage() {
 									}
 								>
 									{(desc) => (
-										<CommentableDescription
-											html={desc()}
-											jobId={params().id}
-											onComment={setQuote}
-										/>
+										<CommentableDescription html={desc()} jobId={params().id} />
 									)}
 								</Show>
 							</CardContent>
@@ -197,11 +193,7 @@ function JobDetailPage() {
 							</div>
 
 							<div class="max-md:order-4">
-								<JobNotesCard
-									jobId={params().id}
-									quote={quote()}
-									onClearQuote={() => setQuote(null)}
-								/>
+								<JobNotesCard jobId={params().id} />
 							</div>
 
 							<Show when={isAgencyKind(j().CompanyKind)}>

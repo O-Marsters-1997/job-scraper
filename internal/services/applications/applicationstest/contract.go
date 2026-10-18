@@ -461,28 +461,60 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) Fixture) {
 		}
 	})
 
-	t.Run("job note round-trips its quote, general notes have none", func(t *testing.T) {
+	t.Run("job comments round-trip their quote and stay out of the notes list", func(t *testing.T) {
 		f := newStore(t)
-		quote := &dto.NoteQuote{Exact: "Go", Prefix: "we use ", Suffix: " daily"}
-		for _, in := range []dto.CreateJobNoteInput{
-			{JobID: f.JobID, Body: "general"},
-			{JobID: f.JobID, Body: "comment", Quote: quote},
-		} {
-			if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, in); err != nil {
-				t.Fatalf("CreateJobNote(%q) err = %v", in.Body, err)
-			}
+		quote := dto.CommentQuote{Exact: "Go", Prefix: "we use ", Suffix: " daily"}
+		if _, err := f.Store.CreateJobNote(t.Context(), f.UserID, dto.CreateJobNoteInput{JobID: f.JobID, Body: "general"}); err != nil {
+			t.Fatalf("CreateJobNote(...) err = %v", err)
 		}
-		got, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		created, err := f.Store.CreateJobComment(t.Context(), f.UserID, dto.CreateJobCommentInput{JobID: f.JobID, Body: "ask about Go", Quote: quote})
 		if err != nil {
-			t.Fatalf("ListJobNotes(...) err = %v", err)
+			t.Fatalf("CreateJobComment(...) err = %v", err)
 		}
-		want := []*dto.NoteQuote{quote, nil}
-		var quotes []*dto.NoteQuote
-		for _, n := range got {
-			quotes = append(quotes, n.Quote)
+		got, err := f.Store.ListJobComments(t.Context(), f.UserID, f.JobID)
+		if err != nil {
+			t.Fatalf("ListJobComments(...) err = %v", err)
 		}
-		if diff := cmp.Diff(want, quotes); diff != "" {
-			t.Errorf("ListJobNotes(...) quotes mismatch (-want +got):\n%s", diff)
+		if len(got) != 1 || got[0].ID != created.ID || got[0].Body != "ask about Go" {
+			t.Fatalf("ListJobComments(...) = %+v, want only %+v", got, created)
+		}
+		if diff := cmp.Diff(quote, got[0].Quote); diff != "" {
+			t.Errorf("ListJobComments(...) quote mismatch (-want +got):\n%s", diff)
+		}
+		notes, err := f.Store.ListJobNotes(t.Context(), f.UserID, f.JobID)
+		if err != nil || len(notes) != 1 || notes[0].Body != "general" {
+			t.Errorf("ListJobNotes(...) = %+v, %v, want only the general note", notes, err)
+		}
+		other, err := f.Store.ListJobComments(t.Context(), missingID, f.JobID)
+		if err != nil || len(other) != 0 {
+			t.Errorf("ListJobComments(other user) = %+v, %v, want none", other, err)
+		}
+	})
+
+	t.Run("job comment update and delete are scoped to the user", func(t *testing.T) {
+		f := newStore(t)
+		comment, err := f.Store.CreateJobComment(t.Context(), f.UserID, dto.CreateJobCommentInput{JobID: f.JobID, Body: "before", Quote: dto.CommentQuote{Exact: "Go"}})
+		if err != nil {
+			t.Fatalf("CreateJobComment(...) err = %v", err)
+		}
+		if _, err := f.Store.UpdateJobComment(t.Context(), missingID, dto.UpdateJobCommentInput{ID: comment.ID, Body: "hijack"}); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("UpdateJobComment(other user) err = %v, want ErrNotFound", err)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), missingID, comment.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobComment(other user) err = %v, want ErrNotFound", err)
+		}
+		got, err := f.Store.UpdateJobComment(t.Context(), f.UserID, dto.UpdateJobCommentInput{ID: comment.ID, Body: "after"})
+		if err != nil {
+			t.Fatalf("UpdateJobComment(...) err = %v", err)
+		}
+		if got.Body != "after" || got.Quote.Exact != "Go" {
+			t.Errorf("UpdateJobComment(...) = %+v, want body after and quote kept", got)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), f.UserID, comment.ID); err != nil {
+			t.Fatalf("DeleteJobComment(...) err = %v", err)
+		}
+		if err := f.Store.DeleteJobComment(t.Context(), f.UserID, comment.ID); !errors.Is(err, data.ErrNotFound) {
+			t.Errorf("DeleteJobComment(again) err = %v, want ErrNotFound", err)
 		}
 	})
 
