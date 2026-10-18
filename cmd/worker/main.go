@@ -28,6 +28,7 @@ import (
 	"github.com/ollymarsters/job-scraper/internal/worker"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/commoncrawl"
+	"github.com/ollymarsters/job-scraper/internal/worker/discover/sluglist"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/untracked"
 	"github.com/ollymarsters/job-scraper/internal/worker/discover/workablesearch"
 	wttjharvest "github.com/ollymarsters/job-scraper/internal/worker/discover/wttj"
@@ -121,6 +122,7 @@ func run(ctx context.Context) error {
 		untracked.New(js.Boards(), untracked.Abroad),
 		workablesearch.New(&http.Client{Timeout: time.Minute}, workablesearch.SearchURL),
 		yc.New(&http.Client{Timeout: time.Minute}, yc.CompaniesURL, domainBase.Get),
+		sluglist.New(&http.Client{Timeout: time.Minute}, sluglist.Lists),
 	}
 	harvest := discover.NewRunner(harvesters, q, js.Boards(), js.Boards())
 
