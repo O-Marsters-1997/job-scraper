@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,7 +74,7 @@ func (c *Chrome) Search(ctx context.Context, state json.RawMessage, page int) ([
 	c.state = state
 
 	if page == 0 {
-		return c.recoverWith(ctx, func() ([]byte, error) { return c.load(ctx, state) })
+		return c.recoverWith(ctx, nil)
 	}
 	return c.recoverWith(ctx, func() ([]byte, error) {
 		if c.page == nil {
@@ -116,7 +117,11 @@ func (c *Chrome) Description(ctx context.Context, id string) ([]byte, error) {
 }
 
 func (c *Chrome) recoverWith(ctx context.Context, op func() ([]byte, error)) ([]byte, error) {
-	out, err := op()
+	first := op
+	if op == nil {
+		first = func() ([]byte, error) { return c.load(ctx, c.state) }
+	}
+	out, err := first()
 	if !errors.Is(err, errChallenged) {
 		return out, err
 	}
@@ -127,13 +132,11 @@ func (c *Chrome) recoverWith(ctx context.Context, op func() ([]byte, error)) ([]
 				return nil, err
 			}
 		}
-		if _, err := c.load(ctx, c.state); err != nil {
-			if errors.Is(err, errChallenged) {
-				continue
-			}
-			return nil, err
+		out, err = c.load(ctx, c.state)
+		if err == nil && op != nil {
+			out, err = op()
 		}
-		if out, err = op(); !errors.Is(err, errChallenged) {
+		if !errors.Is(err, errChallenged) {
 			return out, err
 		}
 	}
@@ -148,12 +151,14 @@ func (c *Chrome) recoverWith(ctx context.Context, op func() ([]byte, error)) ([]
 func (c *Chrome) rotate(ctx context.Context) error {
 	c.stats.Rotations++
 	c.tunnel.Rotate(ctx, "cloudflare challenge")
-	if c.browser != nil {
-		if err := c.browser.Close(); err != nil {
-			return fmt.Errorf("close browser: %w", err)
-		}
-	}
+	browser := c.browser
 	c.browser, c.page, c.buildID = nil, nil, ""
+	if browser == nil {
+		return nil
+	}
+	if err := browser.Close(); err != nil {
+		return fmt.Errorf("close browser: %w", err)
+	}
 	return nil
 }
 
@@ -203,10 +208,11 @@ func (c *Chrome) fetch(ctx context.Context, path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch in page: %w", err)
 	}
-	switch status := res.Value.Get("status").Int(); status {
-	case 200:
+	status := res.Value.Get("status").Int()
+	switch {
+	case status == 200:
 		return []byte(res.Value.Get("body").Str()), nil
-	case 403, 503:
+	case status == 403, status == 429, status == 503,status == 404 && strings.HasPrefix(path, "/_next/"):
 		return nil, errChallenged
 	default:
 		return nil, fmt.Errorf("hiring.cafe %s: status %d", path, status)
@@ -230,7 +236,7 @@ func (c *Chrome) launch() error {
 	}
 	browser := rod.New().ControlURL(wsURL)
 	if err := browser.Connect(); err != nil {
-		return fmt.Errorf("connect chrome: %w", err)
+		return errors.Join(fmt.Errorf("connect chrome: %w", err), browser.Close())
 	}
 	page, err := stealth.Page(browser)
 	if err != nil {

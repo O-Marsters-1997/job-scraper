@@ -44,7 +44,9 @@ func hiringcafeSpike(searchURL string, d time.Duration, out io.Writer) error {
 		var deferred *sources.DeferredError
 		switch {
 		case errors.As(err, &deferred):
-			_, _ = fmt.Fprintf(out, "deferred until %s\n", deferred.Until.Format(time.RFC3339))
+			if _, err := fmt.Fprintf(out, "deferred until %s\n", deferred.Until.Format(time.RFC3339)); err != nil {
+				return err
+			}
 			select {
 			case <-ctx.Done():
 			case <-time.After(time.Until(deferred.Until)):
@@ -55,9 +57,9 @@ func hiringcafeSpike(searchURL string, d time.Duration, out io.Writer) error {
 	}
 
 	stats := chrome.Stats()
-	_, _ = fmt.Fprintf(out, "pages fetched: %d\ndescriptions fetched: %d\nchallenges met: %d\nrotations: %d\ndecodo bytes: %d\n",
+	_, err = fmt.Fprintf(out, "pages fetched: %d\ndescriptions fetched: %d\nchallenges met: %d\nrotations: %d\ndecodo bytes: %d\n",
 		pages, descriptions, stats.Challenges, stats.Rotations, wireBytes())
-	return nil
+	return err
 }
 
 func sweep(ctx context.Context, tab hiringcafe.Tab, state json.RawMessage) (pages, descriptions int, err error) {
