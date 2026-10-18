@@ -11,6 +11,7 @@ import {
 	useUpdateJobNote,
 } from "@/hooks/useJobNotes";
 import { formatDate } from "@/lib/datetime";
+import { isOrphanedNote, scrollToHighlight } from "@/lib/noteHighlights";
 
 import {
 	JOB_NOTE_MAX_LENGTH,
@@ -37,7 +38,7 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 	};
 
 	return (
-		<li class="flex flex-col gap-0.5">
+		<li id={`job-note-${props.note.ID}`} class="flex flex-col gap-0.5">
 			<span class="font-mono text-xs tabular-nums text-muted">
 				{formatDate(props.note.CreatedAt)}
 				<Show when={props.note.UpdatedAt !== props.note.CreatedAt}>
@@ -45,7 +46,21 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 					(edited)
 				</Show>
 			</span>
-			<Show when={props.note.Quote}>{(q) => <Quote text={q().exact} />}</Show>
+			<Show when={props.note.Quote}>
+				{(q) => (
+					<>
+						<Quote
+							text={q().exact}
+							onClick={() => scrollToHighlight(props.note.ID)}
+						/>
+						<Show when={isOrphanedNote(props.note.ID)}>
+							<span class="text-xs text-muted">
+								passage no longer in description
+							</span>
+						</Show>
+					</>
+				)}
+			</Show>
 			<Show
 				when={editing()}
 				fallback={
@@ -115,11 +130,24 @@ function NoteItem(props: { note: JobNote; jobId: string }) {
 	);
 }
 
-function Quote(props: { text: string }) {
+function Quote(props: { text: string; onClick?: () => void }) {
 	return (
-		<blockquote class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-sm text-muted">
-			{props.text}
-		</blockquote>
+		<Show
+			when={props.onClick}
+			fallback={
+				<blockquote class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-sm text-muted">
+					{props.text}
+				</blockquote>
+			}
+		>
+			<button
+				type="button"
+				onClick={() => props.onClick?.()}
+				class="line-clamp-4 whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-left text-sm text-muted hover:text-foreground"
+			>
+				{props.text}
+			</button>
+		</Show>
 	);
 }
 

@@ -127,6 +127,7 @@ function JobDetailPage() {
 									{(desc) => (
 										<CommentableDescription
 											html={desc()}
+											jobId={params().id}
 											onComment={setQuote}
 										/>
 									)}
