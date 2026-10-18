@@ -62,6 +62,31 @@ func RunStoreContract(t *testing.T, newStore func(t *testing.T) (Store, string))
 		}
 	})
 
+	t.Run("a recorded discover miss is seen only since before it", func(t *testing.T) {
+		st, _ := newStore(t)
+		ctx := t.Context()
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Fatal(err)
+		}
+		for name, tc := range map[string]struct {
+			token string
+			since time.Time
+			want  bool
+		}{
+			"recent window": {"acme", time.Now().Add(-time.Hour), true},
+			"future window": {"acme", time.Now().Add(time.Hour), false},
+			"other board":   {"other", time.Now().Add(-time.Hour), false},
+		} {
+			got, err := st.DiscoverMissedSince(ctx, "greenhouse", tc.token, tc.since)
+			if err != nil || got != tc.want {
+				t.Errorf("%s: DiscoverMissedSince = %v, %v, want %v", name, got, err, tc.want)
+			}
+		}
+		if err := st.RecordDiscoverMiss(ctx, "greenhouse", "acme"); err != nil {
+			t.Errorf("RecordDiscoverMiss(repeat) = %v, want nil", err)
+		}
+	})
+
 	t.Run("get an unknown job returns not found", func(t *testing.T) {
 		st, _ := newStore(t)
 		_, err := st.GetJob(t.Context(), missingID, missingID)

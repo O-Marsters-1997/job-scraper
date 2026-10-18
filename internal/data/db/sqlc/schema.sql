@@ -469,6 +469,13 @@ CREATE TABLE fetch_cache (
 
 CREATE INDEX fetch_cache_fetched_at_idx ON fetch_cache (fetched_at);
 
+CREATE TABLE board_discover_misses (
+    source      TEXT        NOT NULL,
+    board_token TEXT        NOT NULL,
+    missed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, board_token)
+);
+
 CREATE TABLE company_profiles (
     company_id UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     source     TEXT        NOT NULL,

@@ -186,6 +186,64 @@ func TestRunner_RepublishesDiscoveryForCandidateBoards(t *testing.T) {
 	}
 }
 
+func TestRunner_PublishedTasksRequireUK(t *testing.T) {
+	t.Parallel()
+	h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{
+		Boards:    []discover.Board{{Source: "greenhouse", Token: "acme"}},
+		Companies: []discover.Company{wttjCompany("faculty")},
+	}}
+
+	pub, err := runOnce(t, newFakeGate(), h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(pub.tasks) != 2 {
+		t.Fatalf("published = %+v, want two tasks", pub.tasks)
+	}
+	for _, task := range pub.tasks {
+		if !task.RequireUK {
+			t.Errorf("task %+v RequireUK = false, want true", task)
+		}
+	}
+}
+
+func TestRunner_MissedBoardsAreSkippedForThirtyDays(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		recheck bool
+		missed  bool
+		want    int
+	}{
+		"recent miss is skipped":        {missed: true, want: 0},
+		"no miss is published":          {want: 1},
+		"recheck ignores a recent miss": {recheck: true, missed: true, want: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			catalog := jobsearchtest.NewFakeStore()
+			if tc.missed {
+				if err := catalog.RecordDiscoverMiss(t.Context(), "greenhouse", "acme"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			h := &fakeHarvester{name: "wttj", interval: time.Hour, found: discover.Harvest{
+				Boards:  []discover.Board{{Source: "greenhouse", Token: "acme"}},
+				Recheck: tc.recheck,
+			}}
+
+			pub, err := runOnceWith(t, catalog, newFakeGate(), h)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(pub.tasks) != tc.want {
+				t.Errorf("published = %+v, want %d", pub.tasks, tc.want)
+			}
+		})
+	}
+}
+
 func TestRunner_VerifiedBoardIsNotQueuedAgain(t *testing.T) {
 	catalog := jobsearchtest.NewFakeStore()
 	company, _ := catalog.UpsertCompany(t.Context(), dto.CompanyUpsert{Slug: "faculty", Name: "Faculty"})

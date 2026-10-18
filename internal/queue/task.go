@@ -38,6 +38,7 @@ type Task struct {
 	Manual      bool     `json:"manual,omitempty"`
 	Recovery    bool     `json:"recovery,omitempty"`
 	Via         string   `json:"via,omitempty"`
+	RequireUK   bool     `json:"require_uk,omitempty"`
 	Redelivered bool     `json:"-"`
 }
 
