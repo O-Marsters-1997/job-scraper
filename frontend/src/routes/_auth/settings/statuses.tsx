@@ -10,16 +10,19 @@ import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { parseReplyWindow } from "@/lib/replyWindow";
 import { STATUS_FALLBACK_COLOUR, STATUS_PALETTE } from "@/lib/status";
 import {
+	applicationStatusesQueryOptions,
 	useApplicationStatuses,
 	useCreateApplicationStatus,
 	useDeleteApplicationStatus,
 	useUpdateApplicationStatus,
 } from "../../../hooks/useApplicationStatuses";
+import { queryClient } from "../../../lib/queryClient";
 import type { ApplicationStatus } from "../../../types/applicationStatus";
 import { AddStatusForm } from "./-statuses/AddStatusForm";
 import { StatusRow } from "./-statuses/StatusRow";
 
 export const Route = createFileRoute("/_auth/settings/statuses")({
+	loader: () => queryClient.prefetchQuery(applicationStatusesQueryOptions),
 	component: StatusesPage,
 });
 

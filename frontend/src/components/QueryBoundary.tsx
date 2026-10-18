@@ -1,5 +1,5 @@
 import type { Accessor, JSX } from "solid-js";
-import { Show } from "solid-js";
+import { Match, Switch } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
 import { SkeletonList } from "@/components/ui/skeleton";
 
@@ -24,28 +24,20 @@ export function QueryBoundary<Q, T = Q>(props: Props<Q, T>): JSX.Element {
 		return props.select ? props.select(d) : (d as unknown as T);
 	};
 	return (
-		<Show
-			when={data()}
-			fallback={
-				<Show
-					when={props.query.isError}
-					fallback={
-						<Show
-							when={props.notFound && !props.query.isPending}
-							fallback={<SkeletonList rows={props.fallbackRows} />}
-						>
-							{props.notFound}
-						</Show>
-					}
-				>
-					<ErrorState
-						error={props.query.error}
-						onRetry={() => props.query.refetch()}
-					/>
-				</Show>
-			}
-		>
-			{(d) => props.children(d as Accessor<NonNullable<T>>)}
-		</Show>
+		<Switch fallback={<SkeletonList rows={props.fallbackRows} />}>
+			<Match when={props.query.isPending}>
+				<SkeletonList rows={props.fallbackRows} />
+			</Match>
+			<Match when={props.query.isError}>
+				<ErrorState
+					error={props.query.error}
+					onRetry={() => props.query.refetch()}
+				/>
+			</Match>
+			<Match when={data()}>
+				{(d) => props.children(d as Accessor<NonNullable<T>>)}
+			</Match>
+			<Match when={props.notFound}>{props.notFound}</Match>
+		</Switch>
 	);
 }

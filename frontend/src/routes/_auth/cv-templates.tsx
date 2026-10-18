@@ -5,6 +5,7 @@ import { Icon } from "@/components/Icon";
 import { PageHeading } from "@/components/PageHeading";
 import type { SortDir } from "@/components/SortableTableHead";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import {
 	cvTemplatesQueryOptions,
 	useCVTemplates,
@@ -18,7 +19,6 @@ import {
 	CVTemplatesAllHidden,
 	CVTemplatesEmpty,
 	CVTemplatesError,
-	CVTemplatesLoading,
 	CVTemplatesNotConnected,
 } from "./-cv-templates/CVTemplatesStates";
 import {
@@ -45,6 +45,7 @@ function CVTemplatesPage() {
 		showMutation.mutate({ docId: cv.DocID, tabId: cv.TabID });
 	};
 
+	const cvs = (): CV[] => (query.isSuccess ? (query.data ?? []) : []);
 	const [searchQuery, setSearchQuery] = createSignal("");
 	const [showHidden, setShowHidden] = createSignal(false);
 	const [dialogOpen, setDialogOpen] = createSignal(false);
@@ -56,7 +57,7 @@ function CVTemplatesPage() {
 
 	const filteredSorted = createMemo<CV[]>(() => {
 		const q = searchQuery().toLowerCase();
-		const data = query.data ?? [];
+		const data = cvs();
 		const visibilityFiltered = showHidden()
 			? data
 			: data.filter((cv) => cv.Visible);
@@ -78,7 +79,7 @@ function CVTemplatesPage() {
 		});
 	});
 
-	const hasHiddenCVs = () => (query.data ?? []).some((cv) => !cv.Visible);
+	const hasHiddenCVs = () => cvs().some((cv) => !cv.Visible);
 
 	const isNotConnected = () =>
 		!!query.error?.message?.toLowerCase().includes("not connected");
@@ -93,7 +94,7 @@ function CVTemplatesPage() {
 			</PageHeading>
 
 			<Show when={query.isPending}>
-				<CVTemplatesLoading />
+				<SkeletonList rows={3} />
 			</Show>
 
 			<Show when={query.isError && isNotConnected()}>
@@ -105,11 +106,11 @@ function CVTemplatesPage() {
 			</Show>
 
 			<Show when={query.isSuccess}>
-				<Show when={(query.data?.length ?? 0) === 0}>
+				<Show when={cvs().length === 0}>
 					<CVTemplatesEmpty onAdd={() => setDialogOpen(true)} />
 				</Show>
 
-				<Show when={(query.data?.length ?? 0) > 0}>
+				<Show when={cvs().length > 0}>
 					<CVTemplatesToolbar
 						searchQuery={searchQuery()}
 						onSearch={setSearchQuery}

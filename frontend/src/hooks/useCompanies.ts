@@ -30,6 +30,20 @@ import { useServerTable } from "./useServerTable";
 
 export const COMPANY_PAGE_SIZE = 50;
 
+export const companyPageQuery = (s: CompanyListState) => ({
+	queryKey: keys.companies.list(s),
+	queryFn: () =>
+		fetchCompanyPage({
+			poster: s.poster,
+			q: s.q,
+			favourite: s.favourite,
+			noBoard: s.noBoard,
+			sort: s.sort,
+			offset: ((s.page ?? 1) - 1) * COMPANY_PAGE_SIZE,
+			limit: COMPANY_PAGE_SIZE,
+		}),
+});
+
 export function useCompanyPages(
 	state: () => CompanyListState,
 	onChange: (patch: Partial<CompanyListState>) => void,
@@ -38,17 +52,7 @@ export function useCompanyPages(
 		state,
 		onChange,
 		pageSize: COMPANY_PAGE_SIZE,
-		queryKey: (s) => keys.companies.list(s),
-		queryFn: (s) =>
-			fetchCompanyPage({
-				poster: s.poster,
-				q: s.q,
-				favourite: s.favourite,
-				noBoard: s.noBoard,
-				sort: s.sort,
-				offset: ((s.page ?? 1) - 1) * COMPANY_PAGE_SIZE,
-				limit: COMPANY_PAGE_SIZE,
-			}),
+		query: companyPageQuery,
 		rowId: (company) => company.ID,
 	});
 }

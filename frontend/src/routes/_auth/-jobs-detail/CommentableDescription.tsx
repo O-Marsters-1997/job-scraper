@@ -9,6 +9,7 @@ import {
 	scrollToNote,
 	setNoteHighlights,
 } from "@/lib/noteHighlights";
+import { loadedData } from "@/lib/queryData";
 import type { NoteQuote } from "@/types/jobNote";
 
 export function CommentableDescription(props: {
@@ -49,7 +50,7 @@ export function CommentableDescription(props: {
 	createEffect(() => {
 		void props.html;
 		const found = new Map<string, Range>();
-		for (const n of notes.data ?? []) {
+		for (const n of loadedData(notes) ?? []) {
 			const r = n.Quote && findQuote(root, n.Quote);
 			if (r) found.set(n.ID, r);
 		}

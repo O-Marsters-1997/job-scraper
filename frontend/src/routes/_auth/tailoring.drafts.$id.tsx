@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { Icon } from "@/components/Icon";
+import { PageSkeleton } from "@/components/PageSkeleton";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { DraftEditor } from "@/components/tailoring/DraftEditor";
 import { PhoneDraftReview } from "@/components/tailoring/PhoneDraftReview";
 import type { Draft } from "@/types/tailoring";
@@ -16,13 +18,9 @@ function DraftReviewPage() {
 	const draft = useDraft(() => params().id);
 
 	return (
-		<Show
-			when={draft.data}
-			fallback={
-				<p class="px-7 py-6 text-sm text-muted">
-					{draft.isError ? "Draft not found." : "Loading…"}
-				</p>
-			}
+		<QueryBoundary
+			query={draft}
+			notFound={<p class="px-7 py-6 text-sm text-muted">Draft not found.</p>}
 		>
 			{(d) => (
 				<>
@@ -39,7 +37,7 @@ function DraftReviewPage() {
 					</div>
 				</>
 			)}
-		</Show>
+		</QueryBoundary>
 	);
 }
 
@@ -52,10 +50,7 @@ function ReviewableDraft(props: { draft: Draft }) {
 				? "The layout could not be loaded."
 				: undefined;
 	return (
-		<Show
-			when={!layout.isPending}
-			fallback={<p class="px-7 py-6 text-sm text-muted">Loading…</p>}
-		>
+		<Show when={!layout.isPending} fallback={<PageSkeleton />}>
 			<DraftEditor
 				draft={props.draft}
 				layout={layout.data ?? null}

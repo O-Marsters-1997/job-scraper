@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { ErrorState } from "@/components/ErrorState";
 import { Icon } from "@/components/Icon";
+import { Skeleton } from "@/components/ui/skeleton";
+import { loadedData } from "@/lib/queryData";
 import { API_BASE } from "../../../api/config";
 import { useDisconnectGoogle, useGoogleStatus } from "../../../hooks/useGoogle";
 
@@ -25,19 +27,17 @@ function IntegrationsPage() {
 						<p class="text-sm font-medium text-foreground">Google Account</p>
 						<Show
 							when={!status.isPending}
-							fallback={
-								<div class="mt-1 h-3.5 w-40 rounded bg-surface-muted" />
-							}
+							fallback={<Skeleton class="mt-1 h-3.5 w-40" />}
 						>
 							<Show
-								when={status.data?.connected}
+								when={loadedData(status)?.connected}
 								fallback={
 									<p class="mt-0.5 text-xs text-faint">Not connected</p>
 								}
 							>
 								<p class="mt-0.5 text-xs text-faint">
 									Connected as{" "}
-									<span class="text-muted">{status.data?.email}</span>
+									<span class="text-muted">{loadedData(status)?.email}</span>
 								</p>
 							</Show>
 						</Show>
@@ -45,10 +45,10 @@ function IntegrationsPage() {
 
 					<Show
 						when={!status.isPending}
-						fallback={<div class="h-8 w-24 rounded-md bg-surface-muted" />}
+						fallback={<Skeleton class="h-8 w-24 rounded-md" />}
 					>
 						<Show
-							when={status.data?.connected}
+							when={loadedData(status)?.connected}
 							fallback={
 								<a
 									href={`${API_BASE}/google/oauth/start`}

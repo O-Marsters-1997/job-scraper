@@ -9,6 +9,7 @@ import {
 	useRecruiterContacts,
 } from "@/hooks/useRecruiterContacts";
 import { formatDate } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import {
 	type ContactChannel,
 	type ContactOutcome,
@@ -124,9 +125,9 @@ export function RecruiterContactsCard(props: { jobId: string }) {
 						</div>
 					</form>
 				</Show>
-				<Show when={(contacts.data?.length ?? 0) > 0}>
+				<Show when={(loadedData(contacts)?.length ?? 0) > 0}>
 					<ul class="flex flex-col gap-1.5">
-						<For each={contacts.data}>
+						<For each={loadedData(contacts)}>
 							{(c) => (
 								<li class="flex items-baseline justify-between gap-2 text-xs">
 									<span class="font-mono tabular-nums text-foreground">

@@ -1,14 +1,17 @@
-import { createQuery } from "@tanstack/solid-query";
+import { createQuery, queryOptions } from "@tanstack/solid-query";
 import { clearGrade, fetchGrade, setGrade } from "../api/grades";
 import { keys } from "../api/keys";
 import { patchJobPages } from "./patchJobPages";
 import { useInvalidatingMutation } from "./useInvalidatingMutation";
 
+export const gradeQueryOptions = (jobId: string) =>
+	queryOptions({
+		queryKey: keys.grade(jobId),
+		queryFn: () => fetchGrade(jobId),
+	});
+
 export function useGrade(jobId: () => string) {
-	return createQuery(() => ({
-		queryKey: keys.grade(jobId()),
-		queryFn: () => fetchGrade(jobId()),
-	}));
+	return createQuery(() => gradeQueryOptions(jobId()));
 }
 
 export function useSetGrade() {

@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/solid-query";
 import { createRouter, RouterProvider } from "@tanstack/solid-router";
 import { render } from "solid-js/web";
 import { ErrorState, NotFoundState } from "./components/ErrorState";
+import { PageSkeleton } from "./components/PageSkeleton";
 import { queryClient } from "./lib/queryClient";
 import { loadTweaks } from "./lib/tweaks";
 import { applyTweaks } from "./lib/tweaks.apply";
@@ -18,6 +19,9 @@ const router = createRouter({
 	defaultPreload: "intent",
 	defaultPreloadStaleTime: 0,
 	scrollRestoration: true,
+	defaultPendingComponent: PageSkeleton,
+	defaultPendingMs: 0,
+	defaultPendingMinMs: 0,
 	defaultErrorComponent: (props) => (
 		<ErrorState error={props.error} onRetry={props.reset} />
 	),

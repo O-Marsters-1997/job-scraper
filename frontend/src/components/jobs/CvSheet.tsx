@@ -13,6 +13,7 @@ import { useFormSubmit } from "@/hooks/useFormSubmit";
 import { useGoogleStatus } from "@/hooks/useGoogle";
 import { useCreateDraft, useJobDrafts } from "@/hooks/useTailoring";
 import { formatDate } from "@/lib/datetime";
+import { loadedData } from "@/lib/queryData";
 import { sharePdf } from "@/lib/sharePdf";
 import type { Job } from "@/types/job";
 import { fetchCVPdf } from "../../api/cvTemplates";
@@ -55,9 +56,9 @@ export function CvSheet(props: CvSheetProps) {
 		await navigate({ to: "/tailoring/drafts/$id", params: { id: draft.id } });
 	});
 
-	const baseCvs = () => cvs.data?.filter((c) => c.Visible) ?? [];
+	const baseCvs = () => loadedData(cvs)?.filter((c) => c.Visible) ?? [];
 	const keptDrafts = () =>
-		drafts.data?.filter((d) => d.outcome === "kept") ?? [];
+		loadedData(drafts)?.filter((d) => d.outcome === "kept") ?? [];
 
 	return (
 		<Dialog open={props.open} onOpenChange={props.onOpenChange}>

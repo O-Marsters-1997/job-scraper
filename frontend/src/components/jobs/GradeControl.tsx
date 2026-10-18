@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import { Button } from "@/components/ui/button";
 import { useClearGrade, useGrade, useSetGrade } from "@/hooks/useGrades";
 import { BAND_LABEL, gradeDirection } from "@/lib/band";
+import { loadedData } from "@/lib/queryData";
 import { GRADES, type GradeValue } from "@/types/grade";
 import type { Band } from "@/types/job";
 import { GradeChips } from "./GradeChips";
@@ -19,7 +20,7 @@ export function GradeControl(props: {
 	const grade = useGrade(() => props.jobId);
 	const set = useSetGrade();
 	const clear = useClearGrade();
-	const current = () => grade.data ?? undefined;
+	const current = () => loadedData(grade) ?? undefined;
 	const isCurrent = (value: GradeValue) => current()?.grade === value;
 
 	return (

@@ -11,6 +11,7 @@ import { type Accessor, createEffect, createSignal, For, Show } from "solid-js";
 import { FastTrackMark } from "@/components/brand-mark";
 import { Icon, type IconName } from "@/components/Icon";
 import { queryClient } from "@/lib/queryClient";
+import { loadedData } from "@/lib/queryData";
 import { cn } from "@/lib/utils";
 import { logout } from "../api/auth";
 import { useApplications } from "../hooks/useApplications";
@@ -227,7 +228,8 @@ function SidebarBody(props: SidebarBodyProps) {
 							when={
 								!item.when ||
 								item.when({
-									googleConnected: props.googleStatus.data?.connected ?? false,
+									googleConnected:
+										loadedData(props.googleStatus)?.connected ?? false,
 								})
 							}
 						>

@@ -12,8 +12,16 @@ import { formatChaseDate, isChaseOverdue } from "@/lib/chase";
 import { STATUS_FALLBACK_COLOUR } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useApplicationStatuses } from "../../hooks/useApplicationStatuses";
-import { useApplications, useClearChase } from "../../hooks/useApplications";
+import {
+	applicationStatusesQueryOptions,
+	useApplicationStatuses,
+} from "../../hooks/useApplicationStatuses";
+import {
+	applicationsQueryOptions,
+	useApplications,
+	useClearChase,
+} from "../../hooks/useApplications";
+import { queryClient } from "../../lib/queryClient";
 import type { ApplicationWithDetails } from "../../types/application";
 import { DeleteApplicationDialog } from "./-applications/DeleteApplicationDialog";
 import { SetAnotherChase } from "./-applications/SetAnotherChase";
@@ -23,6 +31,14 @@ export const Route = createFileRoute("/_auth/applications")({
 		status: typeof search.status === "string" ? search.status : undefined,
 		chase: search.chase === true || search.chase === "true" ? true : undefined,
 	}),
+	loaderDeps: ({ search }) => search,
+	loader: ({ deps }) =>
+		Promise.all([
+			queryClient.prefetchQuery(
+				applicationsQueryOptions(deps.status, deps.chase === true),
+			),
+			queryClient.prefetchQuery(applicationStatusesQueryOptions),
+		]),
 	component: ApplicationsPage,
 });
 
